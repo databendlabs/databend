@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fmt;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_catalog::table_context::TableContext;
@@ -29,10 +32,13 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_settings::Settings;
+use databend_common_sql::Planner;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
+use futures_util::StreamExt;
 
 use super::InterpreterFactory;
 use super::ShowCreateQuerySettings;
@@ -64,6 +70,8 @@ impl Interpreter for ReportIssueInterpreter {
         // Detection error
         // TODO: begin log collect
         let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
+        let settings = self.ctx.get_settings();
+        report_context.add_setting_changes(settings);
 
         let mut planner = Planner::new_with_query_executor(
             self.ctx.clone(),
@@ -128,6 +136,79 @@ impl Interpreter for ReportIssueInterpreter {
 impl ReportIssueInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, sql: String) -> Result<Self> {
         Ok(ReportIssueInterpreter { ctx, sql })
+    }
+}
+
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
+struct CollectIdentifiersVisitor {
+    index: usize,
+    identifiers: HashSet<String>,
+}
+
+impl CollectIdentifiersVisitor {
+    fn enter_identifier(&mut self, identifier: &mut Identifier) {
+        self.identifiers.insert(identifier.name.clone());
+    }
+
+    pub fn new() -> CollectIdentifiersVisitor {
+        CollectIdentifiersVisitor {
+            index: 1296,
+            identifiers: Default::default(),
+        }
+    }
+
+    fn next_unique_name(&mut self) -> String {
+        let mut result = Vec::new();
+        let digits: Vec<char> = "0123456789abcdefghijklmnopqrstuvwxyz".chars().collect();
+
+        let remainder = self.index % 36;
+        let needed_increment = 10_usize.saturating_sub(remainder);
+        self.index += needed_increment;
+
+        let mut index = self.index;
+
+        while index > 0 {
+            let remainder = index % 36;
+            result.push(digits[remainder]);
+            index /= 36;
+        }
+
+        self.index += 1;
+        result.into_iter().rev().collect()
+    }
+
+    pub fn decimal_to_base36_letter_prefix(&mut self) -> String {
+        let index = self.index;
+        let base36 = self.next_unique_name();
+
+        if let Some(first_char) = base36.chars().next() {
+            if first_char.is_ascii_lowercase() {
+                return base36;
+            }
+        }
+
+        let digits: Vec<char> = "0123456789abcdefghijklmnopqrstuvwxyz".chars().collect();
+        let first_digit_value = digits
+            .iter()
+            .position(|&c| c == base36.chars().next().unwrap())
+            .unwrap();
+
+        let power = 36_usize.pow((base36.len() - 1) as u32);
+        let needed_increment = (10 - first_digit_value) * power;
+
+        self.index = index + needed_increment;
+        self.next_unique_name()
+    }
+
+    fn unique_name(&mut self) -> String {
+        loop {
+            let next_unique_name = self.decimal_to_base36_letter_prefix();
+
+            if !self.identifiers.contains(&next_unique_name) {
+                return next_unique_name;
+            }
+        }
     }
 }
 
@@ -209,6 +290,7 @@ struct ReportContext {
     replication_databases: HashMap<String, String>,
     table_statistics: HashMap<String, TableStatisticsContext>,
     replication_queries: Vec<String>,
+    setting_changes: Option<Arc<Settings>>,
 
     error: Option<ErrorCode>,
     logs: Vec<String>,
@@ -223,17 +305,18 @@ impl ReportContext {
             replication_databases: Default::default(),
             table_statistics: Default::default(),
             replication_queries: vec![],
+            setting_changes: None,
             error: None,
             logs: vec![],
         }
     }
 
-    pub fn add_report_error(&mut self, error_code: ErrorCode) {
-        self.error = Some(error_code);
+    pub fn add_setting_changes(&mut self, changes: Arc<Settings>) {
+        self.setting_changes = Some(changes);
     }
 
-    fn unique_name() -> String {
-        format!("a{}", GlobalUniqName::unique())
+    pub fn add_report_error(&mut self, error_code: ErrorCode) {
+        self.error = Some(error_code);
     }
 
     pub async fn add_obfuscated_table_meta(
@@ -242,6 +325,9 @@ impl ReportContext {
         plan: &Plan,
         statement: &mut Statement,
     ) -> Result<()> {
+        let mut visitor = CollectIdentifiersVisitor::new();
+        statement.drive_mut(&mut visitor);
+
         let settings = ShowCreateQuerySettings {
             sql_dialect: Default::default(),
             force_quoted_ident: false,
@@ -256,7 +342,7 @@ impl ReportContext {
             Plan::Query { metadata, .. } => {
                 let current_database = ctx.get_current_database();
                 if !mapping.contains_key(&current_database) {
-                    mapping.insert(current_database.clone(), Self::unique_name());
+                    mapping.insert(current_database.clone(), visitor.unique_name());
                 }
 
                 let current_database = mapping.get(&current_database).unwrap().clone();
@@ -267,15 +353,15 @@ impl ReportContext {
 
                 for table in metadata.read().tables() {
                     if !mapping.contains_key(table.catalog()) {
-                        mapping.insert(table.catalog().to_string(), Self::unique_name());
+                        mapping.insert(table.catalog().to_string(), visitor.unique_name());
                     }
 
                     if !mapping.contains_key(table.database()) {
-                        mapping.insert(table.database().to_string(), Self::unique_name());
+                        mapping.insert(table.database().to_string(), visitor.unique_name());
                     }
 
                     if !mapping.contains_key(table.name()) {
-                        mapping.insert(table.name().to_string(), Self::unique_name());
+                        mapping.insert(table.name().to_string(), visitor.unique_name());
                     }
 
                     let mut table_info = table.table().get_table_info().clone();
@@ -298,7 +384,7 @@ impl ReportContext {
 
                     for field in table_info.schema().fields() {
                         if !mapping.contains_key(field.name()) {
-                            mapping.insert(field.name().to_string(), Self::unique_name());
+                            mapping.insert(field.name().to_string(), visitor.unique_name());
                         }
 
                         table_schema.fields.push(TableField::new(
@@ -381,12 +467,6 @@ impl ReportContext {
     }
 }
 
-use std::fmt;
-
-use databend_common_base::base::GlobalUniqName;
-use databend_common_sql::Planner;
-use futures_util::StreamExt;
-
 impl fmt::Display for IssueType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -460,6 +540,26 @@ impl fmt::Display for ReportContext {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "# Bug Report: {} Issue", self.typ)?;
         writeln!(f, "**Version**: {}\n", self.version)?;
+
+        if let Some(settings) = self.setting_changes.as_ref() {
+            if settings.is_changed() {
+                writeln!(f, "## Setting Changes")?;
+                writeln!(f, "| Name         | Scope Level  | Change Value |")?;
+                writeln!(f, "|--------------|--------------|--------------|")?;
+
+                for item in settings.into_iter() {
+                    writeln!(
+                        f,
+                        "|{} | {:?} | {} |",
+                        item.name,
+                        item.level,
+                        item.user_value.as_string()
+                    )?;
+                }
+
+                writeln!(f)?;
+            }
+        }
 
         if !self.replication_databases.is_empty() {
             writeln!(f, "## Obfuscated Databases")?;
