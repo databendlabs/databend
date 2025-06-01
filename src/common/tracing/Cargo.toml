@@ -30,6 +30,7 @@ opentelemetry_sdk = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
 tonic = { workspace = true }
 
 [dev-dependencies]
