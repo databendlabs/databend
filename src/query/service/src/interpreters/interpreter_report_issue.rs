@@ -130,18 +130,22 @@ impl ReportIssueInterpreter {
             .add_obfuscated_table_meta(self.ctx.clone(), &plan, &mut extras.statement)
             .await?;
 
-        let Ok(interpreter) = InterpreterFactory::get(self.ctx.clone(), &plan).await else {
-            // TODO: Generate a bug report for the interpreter stage.
-            return Err(ErrorCode::Unimplemented(
-                "Bug Report: Interpreter plan Export Not Supported",
-            ));
+        let interpreter = match InterpreterFactory::get(self.ctx.clone(), &plan).await {
+            Ok(interpreter) => interpreter,
+            Err(error) => {
+                report_context.add_report_error(error);
+                report_context.typ = IssueType::Planner;
+                return Ok(());
+            }
         };
 
-        let Ok(mut data_stream) = interpreter.execute(self.ctx.clone()).await else {
-            // TODO: Generate a bug report for the interpreter stage.
-            return Err(ErrorCode::Unimplemented(
-                "Bug Report: Interpreter plan Export Not Supported",
-            ));
+        let mut data_stream = match interpreter.execute(self.ctx.clone()).await {
+            Ok(data_stream) => data_stream,
+            Err(error) => {
+                report_context.add_report_error(error);
+                report_context.typ = IssueType::Planner;
+                return Ok(());
+            }
         };
 
         while let Some(res) = data_stream.next().await {
