@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::spawn;
+use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
@@ -196,7 +197,7 @@ impl GlobalHistoryLog {
     pub async fn acquire(&self, meta_key: &str, interval: u64) -> Result<Option<Permit>> {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         // prevent log table from logging its own logs
-        tracking_payload.should_log = false;
+        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
         let _guard = ThreadTracker::tracking(tracking_payload);
         let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
             self.meta_client.clone(),
@@ -252,7 +253,7 @@ impl GlobalHistoryLog {
         tracking_payload.query_id = Some(query_id.clone());
         tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
         // prevent log table from logging its own logs
-        tracking_payload.should_log = false;
+        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
         let _guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(self.do_execute(sql, query_id)).await?;
         Ok(())

@@ -12,18 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::ThreadTracker;
-use logforth::filter::CustomFilter;
-use logforth::filter::FilterResult;
+use std::collections::HashMap;
+use derive_visitor::{Drive, DriveMut};
 
-pub fn filter_by_thread_tracker() -> CustomFilter {
-    CustomFilter::new(|metadata| {
-        if let Some(settings) = ThreadTracker::capture_log_settings() {
-            if metadata.level() > settings.level {
-                return FilterResult::Reject;
-            }
-        }
-
-        FilterResult::Neutral
-    })
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
+pub enum ReportKind {
+    Optimize,
 }

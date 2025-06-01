@@ -49,6 +49,8 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
+use concurrent_queue::ConcurrentQueue;
+use log::LevelFilter;
 use pin_project_lite::pin_project;
 
 use crate::runtime::memory::GlobalStatBuffer;
@@ -104,13 +106,37 @@ pub struct ThreadTracker {
     pub(crate) payload: TrackingPayload,
 }
 
+pub struct CaptureLogSettings {
+    pub level: LevelFilter,
+    pub queue: Option<Arc<ConcurrentQueue<String>>>,
+}
+
+impl CaptureLogSettings {
+    pub fn capture_off() -> Arc<CaptureLogSettings> {
+        Arc::new(CaptureLogSettings {
+            level: LevelFilter::Off,
+            queue: None,
+        })
+    }
+
+    pub fn capture_query(
+        level: LevelFilter,
+        queue: Arc<ConcurrentQueue<String>>,
+    ) -> Arc<CaptureLogSettings> {
+        Arc::new(CaptureLogSettings {
+            level,
+            queue: Some(queue),
+        })
+    }
+}
+
 #[derive(Clone)]
 pub struct TrackingPayload {
     pub query_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
-    pub should_log: bool,
+    pub capture_log_settings: Option<Arc<CaptureLogSettings>>,
     pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
 }
@@ -184,7 +210,7 @@ impl ThreadTracker {
                 metrics: None,
                 mem_stat: None,
                 query_id: None,
-                should_log: true,
+                capture_log_settings: None,
                 time_series_profile: None,
                 local_time_series_profile: None,
             },
@@ -272,11 +298,18 @@ impl ThreadTracker {
             .unwrap_or(None)
     }
 
-    pub fn should_log() -> bool {
-        // To prevent crashes, logging will be skipped if thread local storage is inaccessible.
+    pub fn capture_log_settings() -> Option<&'static Arc<CaptureLogSettings>> {
         TRACKER
-            .try_with(|tracker| tracker.borrow().payload.should_log)
-            .unwrap_or(false)
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .capture_log_settings
+                    .as_ref()
+                    .map(|v| unsafe { std::mem::transmute(v) })
+            })
+            .ok()
+            .and_then(|x| x)
     }
 }
 

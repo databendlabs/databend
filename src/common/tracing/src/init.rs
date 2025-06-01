@@ -35,6 +35,7 @@ use crate::filter::filter_by_thread_tracker;
 use crate::loggers::get_layout;
 use crate::loggers::new_rolling_file_appender;
 use crate::predefined_tables::table_to_target;
+use crate::query_log_collector::QueryLogCollector;
 use crate::remote_log::RemoteLog;
 use crate::structlog::StructLogReporter;
 use crate::Config;
@@ -412,6 +413,15 @@ pub fn init_logging(
 
         logger = logger.dispatch(dispatch);
         _drop_guards.push(flush_guard);
+    }
+
+    // Query log collector
+    {
+        let dispatch = Dispatch::new()
+            .filter(filter_by_thread_tracker())
+            .append(QueryLogCollector::new());
+
+        logger = logger.dispatch(dispatch);
     }
 
     // set global logger

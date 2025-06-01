@@ -17,11 +17,14 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
+use concurrent_queue::ConcurrentQueue;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_base::runtime::CaptureLogSettings;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
@@ -39,6 +42,7 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use futures_util::StreamExt;
+use log::LevelFilter;
 
 use super::InterpreterFactory;
 use super::ShowCreateQuerySettings;
@@ -68,11 +72,31 @@ impl Interpreter for ReportIssueInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // Detection error
-        // TODO: begin log collect
         let mut report_context = ReportContext::new(self.ctx.get_fuse_version());
         let settings = self.ctx.get_settings();
         report_context.add_setting_changes(settings);
 
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_query(
+            LevelFilter::Debug,
+            report_context.logs.clone(),
+        ));
+
+        let _guard = ThreadTracker::tracking(tracking_payload);
+        ThreadTracker::tracking_future(self.detection_error(&mut report_context)).await?;
+
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(vec![format!("{}", report_context)]),
+        ])])
+    }
+}
+
+impl ReportIssueInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, sql: String) -> Result<Self> {
+        Ok(ReportIssueInterpreter { ctx, sql })
+    }
+
+    async fn detection_error(&self, report_context: &mut ReportContext) -> Result<()> {
         let mut planner = Planner::new_with_query_executor(
             self.ctx.clone(),
             Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
@@ -127,15 +151,7 @@ impl Interpreter for ReportIssueInterpreter {
             }
         }
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
-            StringType::from_data(vec![format!("{}", report_context)]),
-        ])])
-    }
-}
-
-impl ReportIssueInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, sql: String) -> Result<Self> {
-        Ok(ReportIssueInterpreter { ctx, sql })
+        Ok(())
     }
 }
 
@@ -293,7 +309,7 @@ struct ReportContext {
     setting_changes: Option<Arc<Settings>>,
 
     error: Option<ErrorCode>,
-    logs: Vec<String>,
+    logs: Arc<ConcurrentQueue<String>>,
 }
 
 impl ReportContext {
@@ -307,7 +323,7 @@ impl ReportContext {
             replication_queries: vec![],
             setting_changes: None,
             error: None,
-            logs: vec![],
+            logs: Arc::new(ConcurrentQueue::unbounded()),
         }
     }
 
@@ -548,13 +564,15 @@ impl fmt::Display for ReportContext {
                 writeln!(f, "|--------------|--------------|--------------|")?;
 
                 for item in settings.into_iter() {
-                    writeln!(
-                        f,
-                        "|{} | {:?} | {} |",
-                        item.name,
-                        item.level,
-                        item.user_value.as_string()
-                    )?;
+                    if item.user_value != item.default_value {
+                        writeln!(
+                            f,
+                            "|{} | {:?} | {} |",
+                            item.name,
+                            item.level,
+                            item.user_value.as_string()
+                        )?;
+                    }
                 }
 
                 writeln!(f)?;
@@ -594,19 +612,21 @@ impl fmt::Display for ReportContext {
 
         if !self.replication_queries.is_empty() {
             writeln!(f, "## Obfuscated Queries")?;
-            writeln!(f, "```sql\n")?;
+            writeln!(f, "```sql")?;
             for query in self.replication_queries.iter() {
-                writeln!(f, "{};\n", query)?;
+                writeln!(f, "{};", query)?;
             }
 
-            writeln!(f, "```\n")?;
+            writeln!(f, "```")?;
         }
 
         if !self.logs.is_empty() {
             writeln!(f, "## Logs")?;
-            for log in &self.logs {
+            writeln!(f, "```text")?;
+            while let Ok(log) = self.logs.pop() {
                 writeln!(f, "- {}", log)?;
             }
+            writeln!(f, "```")?;
         }
 
         Ok(())
