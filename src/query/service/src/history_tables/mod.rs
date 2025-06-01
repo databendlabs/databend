@@ -12,4 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod global_persistent_log;
+mod session;
+
+mod global_history_log;
+
+pub use global_history_log::GlobalHistoryLog;

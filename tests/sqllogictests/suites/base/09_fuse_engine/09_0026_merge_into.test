@@ -361,7 +361,7 @@ statement ok
 copy into @s7_merge_into from (select a,b,c from test_stage order by a,b,c);
 
 query TTT
-select $1,$2,$3 from @s7_merge_into order by $1,$2,$3;
+select a,b,c from @s7_merge_into order by a,b,c;
 ----
 1 a1 b1
 2 a2 b2
@@ -377,7 +377,7 @@ select * from target_table order by a,b,c;
 2 a_2 b_2
 
 query TT
-merge into target_table using (select $1,$2,$3 from @s7_merge_into) as cdc on cdc.$1 = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+merge into target_table using (select a,b,c from @s7_merge_into) as cdc on cdc.a = target_table.a when matched then delete when not matched then insert values(cdc.a,cdc.b,cdc.c);
 ----
 1 2
 

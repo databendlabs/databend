@@ -842,13 +842,15 @@ impl Table for FuseTable {
     ) -> Result<()> {
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
+
     fn build_prune_pipeline(
         &self,
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        plan_id: u32,
     ) -> Result<Option<Pipeline>> {
-        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, false)
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, plan_id)
     }
 
     fn commit_insertion(
