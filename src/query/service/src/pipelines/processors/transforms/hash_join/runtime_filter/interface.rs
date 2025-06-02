@@ -32,6 +32,7 @@ pub async fn build_and_push_down_runtime_filter(
         join.runtime_filter_desc(),
         &join.func_ctx,
     )?;
+    log::info!("[RUNTIME-FILTER] build runtime filter packet: {:?}, build_num_rows: {}, runtime_filter_desc: {:?}", packet, build_num_rows, join.runtime_filter_desc());
     if let Some(broadcast_id) = join.broadcast_id {
         packet = get_global_runtime_filter_packet(broadcast_id, packet, &join.ctx).await?;
     }
@@ -42,6 +43,7 @@ pub async fn build_and_push_down_runtime_filter(
         .map(|r| (r.id, r))
         .collect();
     let runtime_filter_infos = build_runtime_filter_infos(packet, runtime_filter_descs)?;
+    log::info!("[RUNTIME-FILTER] runtime_filter_infos: {:?}", runtime_filter_infos);
     join.ctx.set_runtime_filter(runtime_filter_infos);
     join.set_bloom_filter_ready()?;
     Ok(())

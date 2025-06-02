@@ -51,6 +51,7 @@ pub struct HashJoinDesc {
     pub(crate) runtime_filter: RuntimeFiltersDesc,
 }
 
+#[derive(Debug)]
 pub struct RuntimeFilterDesc {
     pub id: usize,
     pub build_key: Expr,
