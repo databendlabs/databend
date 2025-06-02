@@ -12,18 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::ThreadTracker;
-use logforth::filter::CustomFilter;
-use logforth::filter::FilterResult;
+use databend_common_exception::Result;
 
-pub fn filter_by_thread_tracker() -> CustomFilter {
-    CustomFilter::new(|metadata| {
-        if let Some(settings) = ThreadTracker::capture_log_settings() {
-            if metadata.level() > settings.level {
-                return FilterResult::Reject;
-            }
-        }
+use crate::plans::Plan;
+use crate::Binder;
 
-        FilterResult::Neutral
-    })
+impl Binder {
+    pub async fn bind_report_issue(&mut self, sql: &str) -> Result<Plan> {
+        Ok(Plan::ReportIssue(sql.to_string()))
+    }
 }

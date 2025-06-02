@@ -27,6 +27,7 @@ mod remote_log;
 mod structlog;
 
 mod predefined_tables;
+mod query_log_collector;
 
 pub use crash_hook::pipe_file;
 pub use crash_hook::SignalListener;
