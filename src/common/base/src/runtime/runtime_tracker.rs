@@ -65,7 +65,7 @@ use crate::runtime::TimeSeriesProfiles;
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
 thread_local! {
-    static TRACKER: RefCell<ThreadTracker> = const { RefCell::new(ThreadTracker::empty()) };
+    static TRACKER: RefCell<ThreadTracker> = RefCell::new(ThreadTracker::empty());
 }
 
 pub struct LimitMemGuard {
@@ -103,7 +103,7 @@ impl Drop for LimitMemGuard {
 /// A per-thread tracker that tracks memory usage stat.
 pub struct ThreadTracker {
     out_of_limit_desc: Option<String>,
-    pub(crate) payload: TrackingPayload,
+    pub(crate) payload: Arc<TrackingPayload>,
 }
 
 pub struct CaptureLogSettings {
@@ -142,7 +142,7 @@ pub struct TrackingPayload {
 }
 
 pub struct TrackingGuard {
-    saved: TrackingPayload,
+    saved: Arc<TrackingPayload>,
 }
 
 impl TrackingGuard {
@@ -169,11 +169,11 @@ impl Drop for TrackingGuard {
 
 pub struct TrackingFuture<T: Future> {
     inner: Pin<Box<T>>,
-    tracking_payload: TrackingPayload,
+    tracking_payload: Arc<TrackingPayload>,
 }
 
 impl<T: Future> TrackingFuture<T> {
-    pub fn create(inner: T, tracking_payload: TrackingPayload) -> TrackingFuture<T> {
+    pub fn create(inner: T, tracking_payload: Arc<TrackingPayload>) -> TrackingFuture<T> {
         TrackingFuture {
             inner: Box::pin(inner),
             tracking_payload,
@@ -185,7 +185,7 @@ impl<T: Future> Future for TrackingFuture<T> {
     type Output = T::Output;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+        let _guard = ThreadTracker::tracking_inner(self.tracking_payload.clone());
         self.inner.as_mut().poll(cx)
     }
 }
@@ -202,10 +202,10 @@ impl Drop for ThreadTracker {
 /// Every ThreadTracker belongs to one MemStat.
 /// A MemStat might receive memory stat from more than one ThreadTracker.
 impl ThreadTracker {
-    pub(crate) const fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self {
             out_of_limit_desc: None,
-            payload: TrackingPayload {
+            payload: Arc::new(TrackingPayload {
                 profile: None,
                 metrics: None,
                 mem_stat: None,
@@ -213,7 +213,7 @@ impl ThreadTracker {
                 capture_log_settings: None,
                 time_series_profile: None,
                 local_time_series_profile: None,
-            },
+            }),
         }
     }
 
@@ -230,7 +230,7 @@ impl ThreadTracker {
         TRACKER.with(f)
     }
 
-    pub fn tracking(tracking_payload: TrackingPayload) -> TrackingGuard {
+    pub fn tracking_inner(tracking_payload: Arc<TrackingPayload>) -> TrackingGuard {
         let mut guard = TrackingGuard {
             saved: tracking_payload,
         };
@@ -247,6 +247,10 @@ impl ThreadTracker {
         })
     }
 
+    pub fn tracking(tracking_payload: TrackingPayload) -> TrackingGuard {
+        Self::tracking_inner(Arc::new(tracking_payload))
+    }
+
     pub fn tracking_future<T: Future>(future: T) -> TrackingFuture<T> {
         TRACKER.with(move |x| TrackingFuture::create(future, x.borrow().payload.clone()))
     }
@@ -256,14 +260,14 @@ impl ThreadTracker {
         TRACKER.with(move |x| {
             let payload = x.borrow().payload.clone();
             move || {
-                let _guard = ThreadTracker::tracking(payload);
+                let _guard = ThreadTracker::tracking_inner(payload);
                 f()
             }
         })
     }
 
     pub fn new_tracking_payload() -> TrackingPayload {
-        TRACKER.with(|x| x.borrow().payload.clone())
+        TRACKER.with(|x| x.borrow().payload.as_ref().clone())
     }
 
     /// Replace the `out_of_limit_desc` with the current thread's.
