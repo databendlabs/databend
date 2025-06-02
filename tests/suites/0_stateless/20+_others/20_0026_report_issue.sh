@@ -9,20 +9,20 @@ output=$(echo "REPORT ISSUE SELECT text FROM test_report.test_report_1" | $BENDS
 
 if echo "$output" | grep -q "Obfuscated Databases"; then
     echo "Obfuscated Databases"
-else
+fi
 
 if echo "$output" | grep -q "Obfuscated Tables"; then
     echo "Obfuscated Tables"
-else
+fi
 
 if echo "$output" | grep -q "Obfuscated Table Statistics"; then
     echo "Obfuscated Table Statistics"
-else
+fi
 
 if echo "$output" | grep -q "Obfuscated Queries"; then
     echo "Obfuscated Queries"
-else
+fi
 
 if echo "$output" | grep -q "## Logs"; then
     echo "## Logs"
-else
+fi
