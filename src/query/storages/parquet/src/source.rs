@@ -51,6 +51,7 @@ use parquet::arrow::parquet_to_arrow_schema;
 
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
+use crate::parquet_part::DeleteTask;
 use crate::parquet_reader::cached_range_full_read;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_reader::ParquetWholeFileReader;
@@ -78,6 +79,16 @@ pub enum ParquetSourceType {
     Iceberg,
     DeltaLake,
     Hive,
+    StreamingLoad,
+}
+
+impl ParquetSourceType {
+    pub fn need_transformer(&self) -> bool {
+        !matches!(
+            self,
+            ParquetSourceType::StageTable | ParquetSourceType::StreamingLoad
+        )
+    }
 }
 
 pub struct ParquetSource {
@@ -238,11 +249,13 @@ impl Processor for ParquetSource {
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
                 for (buffer, path) in buffers {
-                    let mut bs = self
+                    let bs: Result<Vec<DataBlock>> = self
                         .whole_file_reader
                         .as_ref()
                         .unwrap()
-                        .read_blocks_from_binary(buffer, &path)?;
+                        .read_blocks_from_binary(buffer, &path)?
+                        .collect();
+                    let mut bs = bs?;
 
                     if self.is_copy {
                         let num_rows = bs.iter().map(|b| b.num_rows()).sum();
@@ -332,8 +345,7 @@ impl Processor for ParquetSource {
                             }
                         }
                         ParquetPart::FileWithDeletes { inner, deletes } => {
-                            let readers =
-                                self.get_rows_readers(inner, Some(deletes.clone())).await?;
+                            let readers = self.get_rows_readers(inner, Some(deletes)).await?;
                             if !readers.is_empty() {
                                 self.state = State::ReadRowGroup {
                                     readers,
@@ -357,7 +369,7 @@ impl ParquetSource {
     async fn get_rows_readers(
         &mut self,
         part: &ParquetFilePart,
-        delete_files: Option<Vec<String>>,
+        delete_files: Option<&[DeleteTask]>,
     ) -> Result<VecDeque<(ReadPolicyImpl, u64)>> {
         // Let's read the small file directly
         let (op, path) = self.row_group_reader.operator(part.file.as_str())?;
@@ -418,9 +430,7 @@ impl ParquetSource {
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
         // Deleted files only belong to the same Parquet, so they only need to be loaded once
         let mut buf_delete_selection = None;
-        let delete_info = delete_files
-            .as_ref()
-            .map(|files| (meta.as_ref(), files.as_slice()));
+        let delete_info = delete_files.as_ref().map(|tasks| (meta.as_ref(), *tasks));
 
         for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
             start_row += rg.num_rows() as u64;

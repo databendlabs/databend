@@ -112,7 +112,10 @@ impl Binder {
         inner: &Statement,
     ) -> Result<Plan> {
         let mut builder = ExplainConfigBuilder::default();
-        if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = inner {
+        if let Statement::Explain { .. }
+        | Statement::ExplainAnalyze { .. }
+        | Statement::ReportIssue { .. } = inner
+        {
             return Err(ErrorCode::SyntaxException("Invalid statement"));
         }
 

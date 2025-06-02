@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::pipeline::OptimizerTraceCollector;
 
 /// Trait defining the interface for query optimizers.
 #[async_trait::async_trait]
@@ -30,5 +33,11 @@ pub trait Optimizer: Send + Sync {
     /// Default implementation returns None for optimizers that don't use a memo.
     fn memo(&self) -> Option<&Memo> {
         None
+    }
+
+    /// Set the trace collector for this optimizer.
+    /// Default implementation does nothing.
+    fn set_trace_collector(&mut self, _collector: Arc<OptimizerTraceCollector>) {
+        // Default implementation does nothing
     }
 }

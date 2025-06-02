@@ -17,9 +17,11 @@ use std::sync::Arc;
 
 use arrow_schema::ArrowError;
 use bytes::Bytes;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -48,6 +50,7 @@ use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::transform_record_batch_by_field_paths;
 use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::DataBlockIterator;
 use crate::transformer::RecordBatchTransformer;
 use crate::ParquetPruner;
 
@@ -175,7 +178,7 @@ impl ParquetWholeFileReader {
     }
 
     /// Read a [`DataBlock`] from bytes.
-    pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<Vec<DataBlock>> {
+    pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<DataBlockIterator> {
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
             ArrowReaderOptions::new(),
@@ -229,33 +232,32 @@ impl ParquetWholeFileReader {
             }
         }
         let reader = builder.build()?;
+        let iter = reader.into_iter().map(|r| r.map_err(ErrorCode::from));
+        let output_data_schema: DataSchema = self.output_schema.as_ref().into();
+        let output_data_schema = Arc::new(output_data_schema);
+        let field_paths = self.field_paths.clone();
         let mut transformer = self.transformer.clone();
-        // Write `if` outside iteration to reduce branches.
-        if let Some(field_paths) = self.field_paths.as_ref() {
-            reader
-                .into_iter()
-                .map(|batch| {
-                    let mut batch = batch?;
+
+        if let Some(field_paths) = field_paths.as_ref() {
+            let field_paths = field_paths.clone();
+            let iter = iter.map(move |r| {
+                r.and_then(|mut batch| {
                     if let Some(transformer) = &mut transformer {
-                        batch = transformer.process_record_batch(batch)?
+                        batch = transformer.process_record_batch(batch)?;
                     }
-                    transform_record_batch_by_field_paths(&batch, field_paths)
+                    transform_record_batch_by_field_paths(&batch, &field_paths)
                 })
-                .collect()
+            });
+            Ok(Box::new(iter))
         } else {
-            reader
-                .into_iter()
-                .map(|batch| {
-                    let mut batch = batch?;
+            Ok(Box::new(iter.map(move |r| {
+                r.and_then(|mut batch| {
                     if let Some(transformer) = &mut transformer {
                         batch = transformer.process_record_batch(batch)?
                     }
-                    Ok(
-                        DataBlock::from_record_batch(&self.output_schema.as_ref().into(), &batch)?
-                            .0,
-                    )
+                    DataBlock::from_record_batch(&output_data_schema, &batch).map(|t| t.0)
                 })
-                .collect()
+            })))
         }
     }
 }

@@ -26,15 +26,19 @@ mod panic_hook;
 mod remote_log;
 mod structlog;
 
+mod predefined_tables;
+mod query_log_collector;
+
 pub use crash_hook::pipe_file;
 pub use crash_hook::SignalListener;
 
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
+pub use crate::config::HistoryConfig;
+pub use crate::config::HistoryTableConfig;
 pub use crate::config::OTLPConfig;
 pub use crate::config::OTLPEndpointConfig;
 pub use crate::config::OTLPProtocol;
-pub use crate::config::PersistentLogConfig;
 pub use crate::config::ProfileLogConfig;
 pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
@@ -48,16 +52,16 @@ pub use crate::init::start_trace_for_remote_request;
 pub use crate::init::GlobalLogger;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
+pub use crate::predefined_tables::init_history_tables;
+pub use crate::predefined_tables::HistoryTable;
 pub use crate::remote_log::convert_to_batch;
 pub use crate::remote_log::LogBuffer as RemoteLogBuffer;
 pub use crate::remote_log::LogMessage;
 pub use crate::remote_log::RemoteLog;
 pub use crate::remote_log::RemoteLogElement;
 pub use crate::remote_log::RemoteLogGuard;
-pub use crate::remote_log::PERSISTENT_LOG_SCHEMA_VERSION;
 pub use crate::structlog::DummyReporter;
 pub use crate::structlog::StructLogReporter;
-
 pub fn closure_name<F: std::any::Any>() -> &'static str {
     let func_path = std::any::type_name::<F>();
     func_path

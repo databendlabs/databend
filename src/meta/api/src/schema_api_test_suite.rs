@@ -2611,6 +2611,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2640,6 +2641,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version + 1),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 let res = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2687,6 +2689,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2736,6 +2739,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 mt.update_multi_table_meta(UpdateMultiTableMetaReq {
                     update_table_metas: vec![(req, table.as_ref().clone())],
@@ -2785,6 +2789,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 let result = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2829,6 +2834,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 let err = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2876,6 +2882,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 let _ = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -2933,6 +2940,7 @@ impl SchemaApiTestSuite {
                     table_id,
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
+                    base_snapshot_location: None,
                 };
                 let err = mt
                     .update_multi_table_meta(UpdateMultiTableMetaReq {
@@ -3801,6 +3809,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta.clone(),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -3963,6 +3972,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: create_table_meta.clone(),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -5934,6 +5944,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -5984,6 +5995,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -7553,6 +7565,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -7611,6 +7624,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -7666,6 +7680,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
+                base_snapshot_location: None,
             };
 
             let table = mt
@@ -8083,6 +8098,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             table_id: self.table_id,
             seq: MatchSeq::Any,
             new_table_meta: self.table_meta(),
+            base_snapshot_location: None,
         };
 
         let req = UpdateMultiTableMetaReq {

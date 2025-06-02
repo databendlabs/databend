@@ -154,13 +154,14 @@ impl PredicateAndTopkPolicyBuilder {
 
 #[async_trait::async_trait]
 impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
-    async fn build(
+    async fn fetch_and_build(
         &self,
         mut row_group: InMemoryRowGroup<'_>,
         mut selection: Option<RowSelection>,
         sorter: &mut Option<TopKSorter>,
         transformer: Option<RecordBatchTransformer>,
         batch_size: usize,
+        _filter: Option<Arc<ParquetPredicate>>,
     ) -> Result<Option<ReadPolicyImpl>> {
         let mut num_rows = selection
             .as_ref()
