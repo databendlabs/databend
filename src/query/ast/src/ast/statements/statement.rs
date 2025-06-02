@@ -38,7 +38,6 @@ use crate::ast::statements::workload::ShowWorkloadGroupsStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
-use crate::ast::Literal;
 use crate::ast::Query;
 use crate::Span;
 
@@ -663,7 +662,7 @@ impl Display for Statement {
                 write!(f, " {query}")?;
             }
             Statement::ReportIssue(sql) => {
-                write!(f, "REPORT ISSUE {}", Literal::String(sql.clone()))?;
+                write!(f, "REPORT ISSUE {}", sql)?;
             }
             Statement::StatementWithSettings { settings, stmt } => {
                 if let Some(setting) = settings {

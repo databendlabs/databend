@@ -123,7 +123,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let report = map_res(rule! { REPORT ~ ISSUE ~ #literal_string }, |(_, _, sql)| {
+    let report = map_res(rule! { REPORT ~ ISSUE ~ #rest_str }, |(_, _, (sql, _))| {
         Ok(Statement::ReportIssue(sql))
     });
 
