@@ -25,7 +25,10 @@ use super::packet::SerializableDomain;
 pub fn merge_join_runtime_filter_packets(
     packets: Vec<JoinRuntimeFilterPacket>,
 ) -> Result<JoinRuntimeFilterPacket> {
-    log::info!("[RUNTIME-FILTER] merge_join_runtime_filter_packets input: {:?}", packets);
+    log::info!(
+        "[RUNTIME-FILTER] merge_join_runtime_filter_packets input: {:?}",
+        packets
+    );
     // Skip packets that `JoinRuntimeFilterPacket::packets` is `None`
     let packets = packets
         .into_iter()
@@ -46,7 +49,10 @@ pub fn merge_join_runtime_filter_packets(
         });
     }
 
-    log::info!("[RUNTIME-FILTER] merge_join_runtime_filter_packets output: {:?}", result);
+    log::info!(
+        "[RUNTIME-FILTER] merge_join_runtime_filter_packets output: {:?}",
+        result
+    );
     Ok(JoinRuntimeFilterPacket {
         packets: Some(result),
     })

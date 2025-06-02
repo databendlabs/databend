@@ -12,17 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::{Debug, Formatter};
+
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_expression::Expr;
 use xorf::BinaryFuse16;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone,Default)]
 pub struct RuntimeFilterInfo {
     pub inlist: Vec<Expr<String>>,
     pub min_max: Vec<Expr<String>>,
     pub bloom: Vec<(String, BinaryFuse16)>,
+}
+
+impl Debug for RuntimeFilterInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RuntimeFilterInfo {{ inlist: {}, min_max: {}, bloom: {:?} }}", 
+            self.inlist.iter().map(|e| e.sql_display()).collect::<Vec<String>>().join(","),
+            self.min_max.iter().map(|e| e.sql_display()).collect::<Vec<String>>().join(","),
+            self.bloom
+        )
+    }
 }
 
 impl RuntimeFilterInfo {

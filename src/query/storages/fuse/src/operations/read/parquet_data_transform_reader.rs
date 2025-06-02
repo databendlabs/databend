@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -31,6 +33,7 @@ use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_sql::IndexType;
 use databend_storages_common_io::ReadSettings;
 use log::debug;
+use log::info;
 
 use super::parquet_data_source::ParquetDataSource;
 use crate::fuse_part::FuseBlockPartInfo;
@@ -42,6 +45,11 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 
+pub struct ReadStats {
+    pub blocks_total: AtomicU64,
+    pub blocks_pruned: AtomicU64,
+}
+
 pub struct ReadParquetDataTransform<const BLOCKING_IO: bool> {
     func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
@@ -52,6 +60,8 @@ pub struct ReadParquetDataTransform<const BLOCKING_IO: bool> {
     table_schema: Arc<TableSchema>,
     scan_id: IndexType,
     context: Arc<dyn TableContext>,
+    stats: Arc<ReadStats>,
+    unfinished_processors_count: Arc<AtomicU64>,
 }
 
 impl ReadParquetDataTransform<true> {
@@ -64,6 +74,8 @@ impl ReadParquetDataTransform<true> {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        stats: Arc<ReadStats>,
+        unfinished_processors_count: Arc<AtomicU64>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
         Ok(ProcessorPtr::create(Transformer::create(
@@ -77,6 +89,8 @@ impl ReadParquetDataTransform<true> {
                 table_schema,
                 scan_id,
                 context: ctx,
+                stats,
+                unfinished_processors_count,
             },
         )))
     }
@@ -92,6 +106,8 @@ impl ReadParquetDataTransform<false> {
         virtual_reader: Arc<Option<VirtualColumnReader>>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        stats: Arc<ReadStats>,
+        unfinished_processors_count: Arc<AtomicU64>,
     ) -> Result<ProcessorPtr> {
         let func_ctx = ctx.get_function_context()?;
         Ok(ProcessorPtr::create(AsyncTransformer::create(
@@ -105,6 +121,8 @@ impl ReadParquetDataTransform<false> {
                 table_schema,
                 scan_id: table_index,
                 context: ctx,
+                stats,
+                unfinished_processors_count,
             },
         )))
     }
@@ -126,7 +144,10 @@ impl Transform for ReadParquetDataTransform<true> {
                 );
 
                 let runtime_filter = ExprRuntimePruner::new(filters.clone());
+
+                self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
                 if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
+                    self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
                     return Ok(DataBlock::empty());
                 }
 
@@ -186,6 +207,18 @@ impl Transform for ReadParquetDataTransform<true> {
             "ReadParquetDataTransform get wrong meta data",
         ))
     }
+
+    fn on_finish(&mut self) -> Result<()> {
+        let unfinished_processors_count = self
+            .unfinished_processors_count
+            .fetch_sub(1, Ordering::Relaxed);
+        if unfinished_processors_count == 1 {
+            let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
+            let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
+            info!("[RUNTIME-FILTER]ReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+        }
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -207,7 +240,9 @@ impl AsyncTransform for ReadParquetDataTransform<false> {
 
                     let runtime_filter = ExprRuntimePruner::new(filters.clone());
                     for part in parts.into_iter() {
+                        self.stats.blocks_total.fetch_add(1, Ordering::Relaxed);
                         if runtime_filter.prune(&self.func_ctx, self.table_schema.clone(), &part)? {
+                            self.stats.blocks_pruned.fetch_add(1, Ordering::Relaxed);
                             continue;
                         }
 
@@ -280,5 +315,17 @@ impl AsyncTransform for ReadParquetDataTransform<false> {
         Err(ErrorCode::Internal(
             "AsyncReadParquetDataSource get wrong meta data",
         ))
+    }
+
+    async fn on_finish(&mut self) -> Result<()> {
+        let unfinished_processors_count = self
+            .unfinished_processors_count
+            .fetch_sub(1, Ordering::Relaxed);
+        if unfinished_processors_count == 1 {
+            let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
+            let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
+            info!("[RUNTIME-FILTER]AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+        }
+        Ok(())
     }
 }

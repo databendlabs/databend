@@ -43,7 +43,10 @@ pub async fn build_and_push_down_runtime_filter(
         .map(|r| (r.id, r))
         .collect();
     let runtime_filter_infos = build_runtime_filter_infos(packet, runtime_filter_descs)?;
-    log::info!("[RUNTIME-FILTER] runtime_filter_infos: {:?}", runtime_filter_infos);
+    log::info!(
+        "[RUNTIME-FILTER] runtime_filter_infos: {:?}",
+        runtime_filter_infos
+    );
     join.ctx.set_runtime_filter(runtime_filter_infos);
     join.set_bloom_filter_ready()?;
     Ok(())
