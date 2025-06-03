@@ -19,3 +19,4 @@ mod trace;
 
 pub use pipeline::OptimizerPipeline;
 pub use trace::OptimizerTrace;
+pub use trace::OptimizerTraceCollector;

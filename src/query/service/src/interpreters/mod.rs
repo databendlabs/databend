@@ -92,6 +92,7 @@ mod interpreter_rename_warehouse;
 mod interpreter_rename_warehouse_cluster;
 mod interpreter_rename_workload_group;
 mod interpreter_replace;
+mod interpreter_report_issue;
 mod interpreter_resume_warehouse;
 mod interpreter_role_create;
 mod interpreter_role_drop;

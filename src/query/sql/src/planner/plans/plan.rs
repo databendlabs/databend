@@ -205,6 +205,7 @@ pub enum Plan {
         graphical: bool,
         plan: Box<Plan>,
     },
+    ReportIssue(String),
 
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
@@ -565,6 +566,9 @@ impl Plan {
                 DataField::new("query_queued_timeout", DataType::String),
             ]),
             Plan::DescSequence(plan) => plan.schema(),
+            Plan::ReportIssue { .. } => {
+                DataSchemaRefExt::create(vec![DataField::new("summary", DataType::String)])
+            }
             _ => Arc::new(DataSchema::empty()),
         }
     }

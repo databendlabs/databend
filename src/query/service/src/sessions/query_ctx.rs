@@ -1169,7 +1169,9 @@ impl TableContext for QueryContext {
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         // Queries to non-internal system_history databases require license checks to be enabled.
-        if database.eq_ignore_ascii_case("system_history") && ThreadTracker::should_log() {
+        if database.eq_ignore_ascii_case("system_history")
+            && ThreadTracker::capture_log_settings().is_none()
+        {
             LicenseManagerSwitch::instance().check_enterprise_enabled(
                 unsafe {
                     self.get_settings()
@@ -1918,12 +1920,12 @@ impl TableContext for QueryContext {
         self.shared.get_warehouse_clusters().await
     }
 
-    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         self.shared.get_pruned_partitions_stats()
     }
 
-    fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
-        self.shared.set_pruned_partitions_stats(partitions);
+    fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(plan_id, stats);
     }
 
     fn get_next_broadcast_id(&self) -> u32 {

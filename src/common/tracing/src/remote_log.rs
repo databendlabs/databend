@@ -53,8 +53,6 @@ use serde_json::Map;
 use crate::Config;
 use crate::GlobalLogger;
 
-pub const PERSISTENT_LOG_SCHEMA_VERSION: usize = 1;
-
 /// An appender that sends log records to persistent storage
 #[derive(Debug)]
 pub struct RemoteLog {
@@ -110,8 +108,8 @@ impl RemoteLog {
         cfg: &Config,
     ) -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
         // all interval in RemoteLog is microseconds
-        let interval = Duration::from_secs(cfg.persistentlog.interval as u64).as_micros();
-        let stage_name = cfg.persistentlog.stage_name.clone();
+        let interval = Duration::from_secs(cfg.history.interval as u64).as_micros();
+        let stage_name = cfg.history.stage_name.clone();
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
         let rt = Runtime::with_worker_threads(2, Some("remote-log-writer".to_string()))?;
         let (tx, rx) = bounded(1);
@@ -180,9 +178,8 @@ impl RemoteLog {
         op.as_ref()?;
 
         let path = format!(
-            "stage/internal/{}_v{}/{}.parquet",
+            "stage/internal/{}/{}.parquet",
             stage_name,
-            PERSISTENT_LOG_SCHEMA_VERSION,
             uuid::Uuid::new_v4()
         );
 

@@ -1346,7 +1346,7 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 
 [[package]]
 name = "bendpy"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "arrow",
  "arrow-schema",
@@ -3356,7 +3356,6 @@ dependencies = [
  "rand 0.8.5",
  "rand_distr",
  "recursive",
- "regex",
  "roaring",
  "rust_decimal",
  "rustls 0.23.27",
@@ -4716,6 +4715,7 @@ dependencies = [
  "parquet",
  "serde",
  "serde_json",
+ "toml 0.8.22",
  "tonic",
 ]
 
@@ -5194,6 +5194,7 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz 0.8.6",
+ "concurrent-queue",
  "ctor",
  "dashmap 6.1.0",
  "databend-common-ast",

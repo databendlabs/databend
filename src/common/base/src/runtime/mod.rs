@@ -57,6 +57,7 @@ pub use runtime::JoinHandle;
 pub use runtime::Runtime;
 pub use runtime::TrySpawn;
 pub use runtime::GLOBAL_TASK;
+pub use runtime_tracker::CaptureLogSettings;
 pub use runtime_tracker::LimitMemGuard;
 pub use runtime_tracker::ThreadTracker;
 pub use runtime_tracker::TrackingGuard;

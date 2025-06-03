@@ -555,3 +555,27 @@ DROP TABLE aggr
 
 statement ok
 DROP DATABASE db1
+
+query TT rowsort
+select city,string_agg(var,'|') within group(order by var) as t
+from (
+    select 'a' as city,'123' as var
+    union all
+    select 'a' as city,'456' as var
+    union all
+    select 'b' as city,'aaa' as var
+    union all
+    select 'b' as city,'bbb' as var
+) t
+group by city;
+----
+a 123|456
+b aaa|bbb
+
+query TT rowsort
+select city, string_agg(var, '|') within group(order by var )
+from (values ('a', '123'), ('a', '456'), ('b', 'aaa'), ('b', 'bbb')) t(city, var)
+group by city;
+----
+a 123|456
+b aaa|bbb

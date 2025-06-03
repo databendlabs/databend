@@ -70,6 +70,7 @@ use crate::interpreters::interpreter_refresh_table_cache::RefreshTableCacheInter
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
+use crate::interpreters::interpreter_report_issue::ReportIssueInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_sequence_desc::DescSequenceInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
@@ -254,6 +255,10 @@ impl InterpreterFactory {
                 *graphical,
             )?)),
 
+            Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
+                ctx,
+                sql.clone(),
+            )?)),
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
                 *copy_plan.clone(),

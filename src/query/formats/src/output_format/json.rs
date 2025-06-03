@@ -15,6 +15,7 @@
 use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::number::NumberScalar;
+use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
@@ -157,6 +158,13 @@ fn scalar_to_json(s: ScalarRef<'_>, format: &FormatSettings) -> JsonValue {
         ScalarRef::Geography(x) => {
             let geom = Ewkb(x.0).to_json().expect("failed to convert ewkb to json");
             jsonb::from_slice(geom.as_bytes()).unwrap().into()
+        }
+        ScalarRef::Vector(x) => {
+            let vals = match x {
+                VectorScalarRef::Int8(x) => x.iter().map(|x| (*x as i64).into()).collect(),
+                VectorScalarRef::Float32(x) => x.iter().map(|x| x.0.into()).collect(),
+            };
+            JsonValue::Array(vals)
         }
     }
 }

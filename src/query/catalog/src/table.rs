@@ -240,8 +240,9 @@ pub trait Table: Sync + Send {
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        plan_id: u32,
     ) -> Result<Option<Pipeline>> {
-        let (_, _, _) = (table_ctx, plan, source_pipeline);
+        let (_, _, _, _) = (table_ctx, plan, source_pipeline, plan_id);
 
         Ok(None)
     }
@@ -564,7 +565,7 @@ pub enum NavigationPoint {
     StreamInfo(TableInfo),
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
     pub data_size: Option<u64>,
