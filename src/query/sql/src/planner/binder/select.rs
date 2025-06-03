@@ -457,8 +457,17 @@ impl Binder {
                     left_col.index,
                     Some(ScalarExpr::CastExpr(left_coercion_expr)),
                 ));
+
+                let column_binding = self.create_derived_column_binding(
+                    left_col.column_name.clone(),
+                    coercion_types[idx].clone(),
+                    None,
+                );
+                new_bind_context.add_column_binding(column_binding);
             } else {
                 left_outputs.push((left_col.index, None));
+                // reuse the left column binding
+                new_bind_context.add_column_binding(left_col.clone());
             }
 
             if *right_col.data_type != coercion_types[idx] {
@@ -481,13 +490,6 @@ impl Binder {
             } else {
                 right_outputs.push((right_col.index, None));
             }
-
-            let column_binding = self.create_derived_column_binding(
-                left_col.column_name.clone(),
-                coercion_types[idx].clone(),
-                None,
-            );
-            new_bind_context.add_column_binding(column_binding);
         }
 
         Ok((new_bind_context, left_outputs, right_outputs))
