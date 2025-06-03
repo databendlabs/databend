@@ -572,14 +572,17 @@ impl Decimal for i64 {
         value as i64
     }
 
+    #[inline]
     fn from_i64(value: i64) -> Self {
         value
     }
 
+    #[inline]
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         value.into() as i64
     }
 
+    #[inline]
     fn from_i256(value: i256) -> Self {
         value.as_i64()
     }
@@ -690,6 +693,7 @@ impl Decimal for i64 {
         DecimalColumn::Decimal64(value, size)
     }
 
+    #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
         D::from_i64(self)
     }
@@ -863,6 +867,7 @@ impl Decimal for i128 {
         DecimalColumn::Decimal128(value, size)
     }
 
+    #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
         D::from_i128(self)
     }
@@ -898,14 +903,17 @@ impl Decimal for i128 {
         }
     }
 
+    #[inline]
     fn from_i64(value: i64) -> Self {
         value as _
     }
 
+    #[inline]
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         value.into()
     }
 
+    #[inline]
     fn from_i256(value: i256) -> Self {
         value.as_i128()
     }
@@ -1159,14 +1167,17 @@ impl Decimal for i256 {
         i256(value.as_i256())
     }
 
+    #[inline]
     fn from_i64(value: i64) -> Self {
         i256::from(value)
     }
 
+    #[inline]
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         i256::from(value.into())
     }
 
+    #[inline]
     fn from_i256(value: i256) -> Self {
         value
     }
@@ -1294,6 +1305,7 @@ impl Decimal for i256 {
         DecimalColumn::Decimal256(value, size)
     }
 
+    #[inline]
     fn as_decimal<D: Decimal>(self) -> D {
         D::from_i256(self)
     }
@@ -2814,7 +2826,7 @@ where
     fn compute(value: &F) -> T {
         value.as_decimal::<T>()
     }
-    #[inline]
+
     fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
         SimpleDomain {
             min: domain.min.as_decimal::<T>(),
