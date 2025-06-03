@@ -1169,7 +1169,9 @@ impl TableContext for QueryContext {
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         // Queries to non-internal system_history databases require license checks to be enabled.
-        if database.eq_ignore_ascii_case("system_history") && ThreadTracker::should_log() {
+        if database.eq_ignore_ascii_case("system_history")
+            && ThreadTracker::capture_log_settings().is_none()
+        {
             LicenseManagerSwitch::instance().check_enterprise_enabled(
                 unsafe {
                     self.get_settings()

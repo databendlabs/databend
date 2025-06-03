@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-#[allow(clippy::module_inception)]
-mod pipeline;
-mod trace;
+use databend_common_exception::Result;
 
-pub use pipeline::OptimizerPipeline;
-pub use trace::OptimizerTrace;
-pub use trace::OptimizerTraceCollector;
+use crate::plans::Plan;
+use crate::Binder;
+
+impl Binder {
+    pub async fn bind_report_issue(&mut self, sql: &str) -> Result<Plan> {
+        Ok(Plan::ReportIssue(sql.to_string()))
+    }
+}

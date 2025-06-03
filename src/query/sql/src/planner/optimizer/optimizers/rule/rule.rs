@@ -66,6 +66,10 @@ pub type RulePtr = Box<dyn Rule>;
 pub trait Rule {
     fn id(&self) -> RuleID;
 
+    fn name(&self) -> String {
+        self.id().to_string()
+    }
+
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()>;
 
     fn matchers(&self) -> &[Matcher];

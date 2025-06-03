@@ -61,6 +61,7 @@ pub enum Statement {
         graphical: bool,
         query: Box<Statement>,
     },
+    ReportIssue(String),
 
     CopyIntoTable(CopyIntoTableStmt),
     CopyIntoLocation(CopyIntoLocationStmt),
@@ -427,6 +428,7 @@ impl Statement {
         match self {
             Statement::Query(..)
             | Statement::Explain { .. }
+            | Statement::ReportIssue { .. }
             | Statement::ExplainAnalyze { .. }
             | Statement::CopyIntoTable(..)
             | Statement::CopyIntoLocation(..)
@@ -658,6 +660,9 @@ impl Display for Statement {
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::ReportIssue(sql) => {
+                write!(f, "REPORT ISSUE {}", sql)?;
             }
             Statement::StatementWithSettings { settings, stmt } => {
                 if let Some(setting) = settings {

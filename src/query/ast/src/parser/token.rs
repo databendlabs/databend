@@ -1432,6 +1432,10 @@ pub enum TokenKind {
     WORKLOAD,
     #[token("GROUPS", ignore(ascii_case))]
     GROUPS,
+    #[token("REPORT", ignore(ascii_case))]
+    REPORT,
+    #[token("ISSUE", ignore(ascii_case))]
+    ISSUE,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

@@ -45,6 +45,7 @@ byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+concurrent-queue = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
