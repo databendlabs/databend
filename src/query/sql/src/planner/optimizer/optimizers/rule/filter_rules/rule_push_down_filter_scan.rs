@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
@@ -166,6 +167,10 @@ impl RulePushDownFilterScan {
                 )?;
                 filtered_predicates.push(predicate);
             }
+        }
+        let mut visitor = EquivalentConstantsVisitor::default();
+        for predicate in filtered_predicates.iter_mut() {
+            visitor.visit(predicate)?;
         }
 
         Ok(filtered_predicates)
