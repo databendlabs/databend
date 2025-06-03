@@ -346,7 +346,19 @@ statement ok
 unset max_set_operator_count;
 
 query I
-select * from numbers(100) union all select * from numbers(100) ignore_result;
+select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0 ignore_result;
+----
+
+query I
+select t, sum(number) as number from (select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0) group by t ignore_result;
+----
+
+query I
+select  number::int32 from numbers(100) union all select number::int from numbers(100) where number < 0 ignore_result;
+----
+
+query I
+select number::int32 from numbers(100) union all select number::int from numbers(100) where number > 0 ignore_result;
 ----
 
 statement ok
