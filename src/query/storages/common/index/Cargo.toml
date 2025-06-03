@@ -14,26 +14,38 @@ databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
+databend-common-vector = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 anyerror = { workspace = true }
 bincode = { workspace = true, features = ["serde"] }
+bitvec = "1.0.1"
+bytemuck = { workspace = true }
 bytes = { workspace = true }
 cbordata = { workspace = true }
 fastrace = { workspace = true }
 goldenfile = { workspace = true }
+itertools = { workspace = true }
 jsonb = { workspace = true }
 levenshtein_automata = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
+num_cpus = "1.16"
+num-traits = { workspace = true }
+ordered-float = { workspace = true }
+parking_lot = { workspace = true }
 parquet = { workspace = true }
+rand = { workspace = true }
+rayon = { workspace = true }
 roaring = { workspace = true }
+self_cell = "1.2.0"
 serde = { workspace = true }
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
 xorfilter-rs = { workspace = true, features = ["cbordata"] }
+zerocopy = { version = "0.8.24", features = ["derive"] }
 
 [dev-dependencies]
 divan = { workspace = true }
