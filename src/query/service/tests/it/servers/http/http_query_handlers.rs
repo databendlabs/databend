@@ -1548,7 +1548,6 @@ async fn test_affect() -> Result<()> {
                 need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
-                last_query_result_cache_keys: vec![],
                 internal: None,
             }),
         ),
@@ -1575,7 +1574,6 @@ async fn test_affect() -> Result<()> {
                 need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
-                last_query_result_cache_keys: vec![],
                 internal: None,
             }),
         ),
@@ -1597,7 +1595,6 @@ async fn test_affect() -> Result<()> {
                 need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
-                last_query_result_cache_keys: vec![],
                 internal: None,
             }),
         ),
@@ -1621,7 +1618,6 @@ async fn test_affect() -> Result<()> {
                 need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
-                last_query_result_cache_keys: vec![],
                 internal: None,
             }),
         ),
@@ -1647,7 +1643,6 @@ async fn test_affect() -> Result<()> {
                 need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
-                last_query_result_cache_keys: vec![],
                 internal: None,
             }),
         ),
@@ -1665,7 +1660,6 @@ async fn test_affect() -> Result<()> {
         let session = result.1.session.map(|s| HttpSessionConf {
             last_server_info: None,
             last_query_ids: vec![],
-            last_query_result_cache_keys: vec![],
             ..s
         });
 

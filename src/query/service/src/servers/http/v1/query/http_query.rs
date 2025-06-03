@@ -210,10 +210,11 @@ pub struct ServerInfo {
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     variables: Vec<(String, String)>,
+    pub last_query_result_cache_key: String,
 }
 
 impl HttpSessionStateInternal {
-    fn new(variables: &HashMap<String, Scalar>) -> Self {
+    fn new(variables: &HashMap<String, Scalar>, last_query_result_cache_key: String) -> Self {
         let variables = variables
             .iter()
             .map(|(k, v)| {
@@ -223,7 +224,10 @@ impl HttpSessionStateInternal {
                 )
             })
             .collect();
-        Self { variables }
+        Self {
+            variables,
+            last_query_result_cache_key,
+        }
     }
 
     pub fn get_variables(&self) -> Result<HashMap<String, Scalar>> {
@@ -302,8 +306,6 @@ pub struct HttpSessionConf {
     /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
     #[serde(default)]
     pub last_query_ids: Vec<String>,
-    #[serde(default)]
-    pub last_query_result_cache_keys: Vec<String>,
     /// hide state not useful to clients
     /// so client only need to know there is a String field `internal`,
     /// which need to carry with session/conn
@@ -430,8 +432,8 @@ fn try_set_txn(
 }
 
 impl HttpQuery {
-    //#[async_backtrace::framed]
-    //#[fastrace::trace]
+    #[async_backtrace::framed]
+    #[fastrace::trace]
     pub async fn try_create(ctx: &HttpQueryContext, req: HttpQueryRequest) -> Result<HttpQuery> {
         let http_query_manager = HttpQueryManager::instance();
         let session = ctx.upgrade_session(SessionType::HTTPQuery).map_err(|err| {
@@ -480,23 +482,17 @@ impl HttpQuery {
                 if !state.variables.is_empty() {
                     session.set_all_variables(state.get_variables()?)
                 }
+                if !session_conf.last_query_ids[0].is_empty()
+                    && !state.last_query_result_cache_key.is_empty()
+                {
+                    session.update_query_ids_results(
+                        session_conf.last_query_ids[0].to_string(),
+                        state.last_query_result_cache_key.to_string(),
+                    )
+                }
             }
+
             try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
-            if (session_conf.last_query_ids.len()
-                != session_conf.last_query_result_cache_keys.len())
-                && !session_conf.last_query_ids.is_empty()
-            {
-                return Err(ErrorCode::InvalidSessionState(
-                    format!("[HTTP-QUERY] Invalid transaction state: last_query_ids length is {} is not equal with last_query_result_cache_keys length {}",
-                            session_conf.last_query_ids.len(), session_conf.last_query_result_cache_keys.len())
-                ));
-            }
-            session_conf
-                .last_query_ids
-                .iter()
-                .zip(&session_conf.last_query_result_cache_keys)
-                .filter(|(q, m)| !q.is_empty() && !m.is_empty())
-                .for_each(|(q, m)| session.update_query_ids_results(q.to_string(), m.to_string()));
 
             if session_conf.need_sticky
                 && matches!(session_conf.txn_state, None | Some(TxnState::AutoCommit))
@@ -664,8 +660,13 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        let internal = if !session_state.variables.is_empty() {
-            Some(HttpSessionStateInternal::new(&session_state.variables))
+        let internal = if !session_state.variables.is_empty()
+            || !session_state.last_query_result_cache_key.is_empty()
+        {
+            Some(HttpSessionStateInternal::new(
+                &session_state.variables,
+                session_state.last_query_result_cache_key,
+            ))
         } else {
             None
         };
@@ -746,11 +747,6 @@ impl HttpQuery {
                 vec![self.id.clone()]
             } else {
                 session_state.last_query_ids
-            },
-            last_query_result_cache_keys: if session_state.last_query_result_cache_keys.is_empty() {
-                vec!["".to_string()]
-            } else {
-                session_state.last_query_result_cache_keys
             },
             internal,
         })
