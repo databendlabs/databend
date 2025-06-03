@@ -4143,6 +4143,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-data-mask-feature",
  "databend-storages-common-cache",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "databend_educe",
  "derive-visitor",
@@ -5266,6 +5267,7 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-session",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "derive-visitor",
  "ethnum",
@@ -5523,6 +5525,7 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
+ "databend-common-ast",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",

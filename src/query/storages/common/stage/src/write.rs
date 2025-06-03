@@ -1,4 +1,3 @@
-#![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod read;
-mod write;
+use databend_common_ast::ast::CopyIntoLocationOptions;
+use databend_common_meta_app::principal::StageInfo;
 
-pub use read::SingleFilePartition;
-pub use read::*;
-pub use write::CopyIntoLocationInfo;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CopyIntoLocationInfo {
+    pub stage: Box<StageInfo>,
+    pub path: String,
+    pub options: CopyIntoLocationOptions,
+    pub is_ordered: bool,
+}

@@ -21,6 +21,7 @@ use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storage::init_stage_operator;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::ErrorKind;
 
 use crate::binder::copy_into_table::resolve_file_location;
@@ -142,13 +143,15 @@ impl Binder {
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
-
-        Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
+        let info = CopyIntoLocationInfo {
             stage: Box::new(stage_info),
             path,
-            from: Box::new(query),
             options: stmt.options.clone(),
             is_ordered,
+        };
+        Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
+            from: Box::new(query),
+            info,
         }))
     }
 }

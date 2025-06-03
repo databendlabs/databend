@@ -12,31 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_compress::CompressAlgorithm;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 
 pub fn unload_path(
-    stage_table_info: &StageTableInfo,
+    info: &CopyIntoLocationInfo,
     query_id: &str,
     group_id: usize,
     batch_id: usize,
     compression: Option<CompressAlgorithm>,
 ) -> String {
-    let format_name = format!(
-        "{:?}",
-        stage_table_info.stage_info.file_format_params.get_type()
-    )
-    .to_ascii_lowercase();
+    let format_name =
+        format!("{:?}", info.stage.file_format_params.get_type()).to_ascii_lowercase();
 
     let suffix: &str = &compression
         .map(|c| format!(".{}", c.extension()))
         .unwrap_or_default();
 
-    let path = &stage_table_info.files_info.path;
-    if stage_table_info.copy_into_location_options.use_raw_path {
+    let path = &info.path;
+    if info.options.use_raw_path {
         path.to_string()
     } else {
-        let query_id = if stage_table_info.copy_into_location_options.include_query_id {
+        let query_id = if info.options.include_query_id {
             format!("{query_id}_")
         } else {
             "".to_string()

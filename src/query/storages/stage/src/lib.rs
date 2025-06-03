@@ -27,6 +27,7 @@ mod streaming_load;
 mod transform_generating;
 mod transform_null_if;
 
+pub use append::StageSinkTable;
 pub use compression::get_compression_with_path;
 pub use read::row_based::BytesBatch;
 pub use stage_table::StageTable;

@@ -1244,7 +1244,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::CopyIntoLocation(plan) => {
-                self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
+                self.validate_stage_access(&plan.info.stage, UserPrivilegeType::Write).await?;
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
