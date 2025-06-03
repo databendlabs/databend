@@ -616,6 +616,15 @@ pub struct CacheConfig {
     /// Max percentage of in memory inverted index filters cache relative to whole memory. By default it is 0 (disabled).
     pub inverted_index_filter_memory_ratio: u64,
 
+    /// Max number of cached vector index meta objects. Set it to 0 to disable it.
+    pub vector_index_meta_count: u64,
+
+    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    pub vector_index_filter_size: u64,
+
+    /// Max percentage of in memory vector index filters cache relative to whole memory. By default it is 0 (disabled).
+    pub vector_index_filter_memory_ratio: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -749,6 +758,9 @@ impl Default for CacheConfig {
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
+            vector_index_meta_count: 3000,
+            vector_index_filter_size: 2147483648,
+            vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,

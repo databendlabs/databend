@@ -54,7 +54,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
-use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
@@ -766,7 +766,7 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= SEARCH_SCORE_COLUMN_ID
+        column_id >= VECTOR_SCORE_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {

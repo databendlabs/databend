@@ -19,6 +19,7 @@ use std::fmt::Debug;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchema;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -131,6 +132,23 @@ pub struct InvertedIndexInfo {
     pub inverted_index_option: Option<InvertedIndexOption>,
 }
 
+/// Information about vector index.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct VectorIndexInfo {
+    /// The index name.
+    pub index_name: String,
+    /// The index version.
+    pub index_version: String,
+    /// The index options: m, ef_construct, ..
+    pub index_options: BTreeMap<String, String>,
+    /// The column id of vector column.
+    pub column_id: ColumnId,
+    /// The distance function name: l1_distance, l2_distance, cosine_distance, ..
+    pub func_name: String,
+    /// The query vector value.
+    pub query_values: Vec<F32>,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -161,6 +179,8 @@ pub struct PushDownInfo {
     pub change_type: Option<ChangeType>,
     /// Optional inverted index
     pub inverted_index: Option<InvertedIndexInfo>,
+    /// Optional vector index
+    pub vector_index: Option<VectorIndexInfo>,
     /// Used by table sample
     pub sample: Option<SampleConfig>,
 }
@@ -234,6 +254,10 @@ impl PushDownInfo {
         } else {
             None
         }
+    }
+
+    pub fn vector_topn(&self) -> bool {
+        !self.order_by.is_empty() && self.limit.is_some() && self.vector_index.is_some()
     }
 
     pub fn prewhere_of_push_downs(push_downs: Option<&PushDownInfo>) -> Option<PrewhereInfo> {

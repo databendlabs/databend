@@ -187,6 +187,7 @@ impl Binder {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
