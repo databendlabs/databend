@@ -345,11 +345,11 @@ SELECT COUNT(1), 'numbers(10)' FROM numbers(10)
 statement ok
 unset max_set_operator_count;
 
-statement ok
+query I
 select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0 ignore_result;
 ----
 
-statement ok
+query I
 select t, sum(number) as number from (select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0) group by t ignore_result;
 ----
 
