@@ -41,9 +41,11 @@ use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ReturnType;
 use crate::types::ValueType;
+use crate::types::VectorScalarRef;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
+use crate::with_vector_number_type;
 use crate::ColumnBuilder;
 use crate::TableDataType;
 
@@ -381,6 +383,20 @@ pub fn cast_scalar_to_variant(
                 .write_to_vec(buf);
             return;
         }
+        ScalarRef::Vector(scalar) => with_vector_number_type!(|NUM_TYPE| match scalar {
+            VectorScalarRef::NUM_TYPE(vals) => {
+                let items = cast_scalars_to_variants(
+                    vals.iter()
+                        .map(|n| ScalarRef::Number(NumberScalar::NUM_TYPE(*n))),
+                    tz,
+                    None,
+                );
+                let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
+                    .expect("failed to build jsonb array");
+                buf.extend_from_slice(owned_jsonb.as_ref());
+                return;
+            }
+        }),
     };
     value.write_to_vec(buf);
 }

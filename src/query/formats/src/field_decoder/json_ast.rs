@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::io::Cursor;
 
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::serialize::read_decimal_from_json;
@@ -32,6 +33,8 @@ use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::VectorColumnBuilder;
+use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -40,6 +43,7 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
+use databend_common_io::Interval;
 use databend_functions_scalar_datetime::datetime::int64_to_timestamp;
 use jiff::tz::TimeZone;
 use lexical_core::FromLexical;
@@ -104,7 +108,11 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Variant(c) => self.read_variant(c, value),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, value),
             ColumnBuilder::Geography(c) => self.read_geography(c, value),
-            _ => unimplemented!(),
+            ColumnBuilder::Interval(c) => self.read_interval(c, value),
+            ColumnBuilder::Vector(c) => self.read_vector(c, value),
+            ColumnBuilder::EmptyArray { .. } | ColumnBuilder::EmptyMap { .. } => {
+                Err(ErrorCode::Unimplemented("empty array/map literal"))
+            }
         }
     }
 
@@ -310,6 +318,19 @@ impl FieldJsonAstDecoder {
         }
     }
 
+    fn read_interval(&self, column: &mut Vec<months_days_micros>, value: &Value) -> Result<()> {
+        match value {
+            Value::String(s) => {
+                let i = Interval::from_string(s)?;
+                column.push(months_days_micros::new(i.months, i.days, i.micros));
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes(
+                "Incorrect interval value, must be string",
+            )),
+        }
+    }
+
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
@@ -413,6 +434,36 @@ impl FieldJsonAstDecoder {
                 Ok(())
             }
             _ => Err(ErrorCode::BadBytes("Incorrect json value, must be object")),
+        }
+    }
+
+    fn read_vector(&self, column: &mut VectorColumnBuilder, value: &Value) -> Result<()> {
+        match value {
+            Value::Array(vals) => {
+                let dimension = column.dimension();
+                if dimension != vals.len() {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Incorrect vector value, dimension must be {}",
+                        dimension
+                    )));
+                }
+                let mut values = Vec::with_capacity(dimension);
+                for val in vals {
+                    if let Value::Number(num) = val {
+                        if let Some(v) = num.as_f64() {
+                            let v = v as f32;
+                            values.push(v.into());
+                            continue;
+                        }
+                    }
+                    return Err(ErrorCode::BadArguments(
+                        "Incorrect vector value, must be f32",
+                    ));
+                }
+                column.push(&VectorScalarRef::Float32(&values));
+                Ok(())
+            }
+            _ => Err(ErrorCode::BadBytes("Incorrect json value, must be array")),
         }
     }
 }

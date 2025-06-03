@@ -295,6 +295,7 @@ pub struct TableMeta {
 pub enum TableIndexType {
     Inverted = 0,
     Ngram = 1,
+    Vector = 2,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -510,6 +511,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Ngram => {
                 write!(f, "NGRAM")
+            }
+            TableIndexType::Vector => {
+                write!(f, "VECTOR")
             }
         }
     }
