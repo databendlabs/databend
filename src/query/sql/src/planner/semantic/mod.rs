@@ -25,6 +25,9 @@ mod udf_rewriter;
 mod view_rewriter;
 mod window_check;
 
+#[cfg(test)]
+mod tests;
+
 pub use aggregate_rewriter::AggregateRewriter;
 pub use aggregating_index_visitor::AggregatingIndexChecker;
 pub use aggregating_index_visitor::AggregatingIndexRewriter;
