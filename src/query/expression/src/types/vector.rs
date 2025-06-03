@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
@@ -69,18 +70,6 @@ impl AccessType for VectorType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Vector(scalar)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Vector(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
-    }
-
     fn column_len<'a>(col: &Self::Column) -> usize {
         col.len()
     }
@@ -111,10 +100,26 @@ impl AccessType for VectorType {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.partial_cmp(&rhs).unwrap_or(Ordering::Equal)
+    }
 }
 
 impl ValueType for VectorType {
     type ColumnBuilder = VectorColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Vector(scalar)
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Vector(col)
+    }
+
+    fn upcast_domain(_domain: Self::Domain) -> Domain {
+        Domain::Undefined
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {

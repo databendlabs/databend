@@ -23,6 +23,7 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
+#![feature(likely_unlikely)]
 
 mod arithmetic;
 mod cast;
