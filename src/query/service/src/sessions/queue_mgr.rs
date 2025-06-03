@@ -180,6 +180,7 @@ impl<Data: QueueData> QueueManager<Data> {
                 self.length()
             );
 
+            let start_time = SystemTime::now();
             let instant = Instant::now();
             let mut timeout = data.timeout();
             let mut guards = vec![];
@@ -215,6 +216,9 @@ impl<Data: QueueData> QueueManager<Data> {
             }
 
             guards.push(self.acquire_warehouse_queue(data, timeout).await?);
+
+            inc_session_running_acquired_queries();
+            record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
 
             return Ok(AcquireQueueGuard::create(guards));
         }
@@ -267,7 +271,6 @@ impl<Data: QueueData> QueueManager<Data> {
         data: Arc<Data>,
         timeout: Duration,
     ) -> Result<AcquireQueueGuardInner> {
-        let start_time = SystemTime::now();
         let acquire_res = match self.global_statement_queue {
             true => {
                 let semaphore_acquire = self.meta_store.new_acquired_by_time(
@@ -301,8 +304,6 @@ impl<Data: QueueData> QueueManager<Data> {
                     self.length()
                 );
 
-                inc_session_running_acquired_queries();
-                record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
                 Ok(v)
             }
             Err(e) => {
