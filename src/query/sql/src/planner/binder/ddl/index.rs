@@ -45,6 +45,7 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use itertools::Itertools;
 
 use crate::binder::Binder;
 use crate::optimizer::optimize;
@@ -102,6 +103,19 @@ fn is_valid_filter_values<S: AsRef<str>>(opt_val: S) -> bool {
 
 fn is_valid_index_record_values<S: AsRef<str>>(opt_val: S) -> bool {
     INDEX_RECORD_VALUES.contains(opt_val.as_ref())
+}
+
+// valid values for vector index distance
+static INDEX_DISTANCE_VALUES: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert("cosine");
+    r.insert("l1");
+    r.insert("l2");
+    r
+});
+
+fn is_valid_index_distance_values<S: AsRef<str>>(opt_val: S) -> bool {
+    INDEX_DISTANCE_VALUES.contains(opt_val.as_ref())
 }
 
 impl Binder {
@@ -750,12 +764,35 @@ impl Binder {
                     }
                     options.insert("ef_construct".to_string(), value);
                 }
+                "distance" => {
+                    let raw_distances: Vec<&str> = value.split(',').collect();
+                    let mut distances = BTreeSet::new();
+                    for raw_distance in raw_distances {
+                        let distance = raw_distance.trim();
+                        if !is_valid_index_distance_values(distance) {
+                            return Err(ErrorCode::IndexOptionInvalid(format!(
+                                "value `{distance}` is invalid index distance type",
+                            )));
+                        }
+                        distances.insert(distance);
+                    }
+                    options.insert(
+                        "distance".to_string(),
+                        distances.into_iter().join(",").to_string(),
+                    );
+                }
                 _ => {
                     return Err(ErrorCode::IndexOptionInvalid(format!(
                         "index option `{key}` is invalid key for create vector index statement",
                     )));
                 }
             }
+        }
+        if !options.contains_key("distance") {
+            return Err(ErrorCode::IndexOptionInvalid(
+                "must specify `distance` option, valid values are: `cosine`, `l1` and `l2`"
+                    .to_string(),
+            ));
         }
         Ok(options)
     }

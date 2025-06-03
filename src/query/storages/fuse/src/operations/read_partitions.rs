@@ -51,7 +51,7 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
@@ -157,7 +157,15 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
+                let has_vector_topn = if let Some(ref push_downs) = push_downs {
+                    push_downs.vector_topn()
+                } else {
+                    false
+                };
+
+                if (self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning))
+                    && !has_vector_topn
+                {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
@@ -476,7 +484,7 @@ impl FuseTable {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPrunner::create(schema, sort, limit);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
                 TopNPruneTransform::create(input, output, topn_pruner.clone())

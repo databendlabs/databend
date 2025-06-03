@@ -635,6 +635,8 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             None,
             None,
             None,
+            None,
+            None,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );

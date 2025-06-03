@@ -16,5 +16,7 @@ mod distance;
 
 pub use distance::cosine_distance;
 pub use distance::cosine_distance_64;
+pub use distance::l1_distance;
+pub use distance::l1_distance_64;
 pub use distance::l2_distance;
 pub use distance::l2_distance_64;

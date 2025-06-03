@@ -1105,13 +1105,20 @@ impl<'a> Binder {
                     .to_string(),
             ));
         }
+        let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
 
         for ((table_index, _), column_index) in bound_internal_columns.iter() {
             let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
                 i.has_score = has_score;
                 i
             });
-            s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
+            let vector_index = vector_index_map.shift_remove(table_index);
+            s_expr = s_expr.add_column_index_to_scans(
+                *table_index,
+                *column_index,
+                &inverted_index,
+                &vector_index,
+            );
         }
         Ok(s_expr)
     }
