@@ -287,7 +287,7 @@ async fn plan_sql(
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
         let plan = planner.plan_stmt(&extras.statement).await?;
-        return Ok((plan, extras, AcquireQueueGuard::create_global(None)));
+        return Ok((plan, extras, AcquireQueueGuard::create(vec![])));
     }
 
     let need_acquire_lock = need_acquire_lock(ctx.clone(), &extras.statement);

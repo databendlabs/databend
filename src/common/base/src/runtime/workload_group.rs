@@ -15,7 +15,10 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 use std::time::Duration;
+
+use crate::runtime::MemStat;
 
 pub const CPU_QUOTA_KEY: &str = "cpu_quota";
 pub const MEMORY_QUOTA_KEY: &str = "memory_quota";
@@ -52,5 +55,21 @@ pub struct WorkloadGroup {
 impl WorkloadGroup {
     pub fn get_quota(&self, key: &'static str) -> Option<QuotaValue> {
         self.quotas.get(key).cloned()
+    }
+}
+
+pub struct WorkloadGroupResource {
+    pub meta: WorkloadGroup,
+    pub queue_key: String,
+    pub mem_stat: Arc<MemStat>,
+    #[allow(clippy::type_complexity)]
+    pub destroy_fn: Option<Box<dyn FnOnce(&str) + Send + Sync + 'static>>,
+}
+
+impl Drop for WorkloadGroupResource {
+    fn drop(&mut self) {
+        if let Some(destroy_fn) = self.destroy_fn.take() {
+            destroy_fn(&self.meta.id);
+        }
     }
 }

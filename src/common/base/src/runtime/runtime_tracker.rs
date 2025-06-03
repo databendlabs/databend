@@ -58,6 +58,7 @@ use crate::runtime::memory::MemStat;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
 use crate::runtime::time_series::QueryTimeSeriesProfile;
+use crate::runtime::workload_group::WorkloadGroupResource;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
 use crate::runtime::TimeSeriesProfiles;
@@ -139,6 +140,7 @@ pub struct TrackingPayload {
     pub capture_log_settings: Option<Arc<CaptureLogSettings>>,
     pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
+    pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
 }
 
 pub struct TrackingGuard {
@@ -213,6 +215,7 @@ impl ThreadTracker {
                 capture_log_settings: None,
                 time_series_profile: None,
                 local_time_series_profile: None,
+                workload_group_resource: None,
             }),
         }
     }
@@ -285,6 +288,15 @@ impl ThreadTracker {
             .try_with(|tracker| {
                 let tracker = tracker.borrow();
                 unsafe { std::mem::transmute(tracker.payload.mem_stat.as_ref()) }
+            })
+            .unwrap_or(None)
+    }
+
+    pub fn workload_group() -> Option<&'static Arc<WorkloadGroupResource>> {
+        TRACKER
+            .try_with(|tracker| {
+                let tracker = tracker.borrow();
+                unsafe { std::mem::transmute(tracker.payload.workload_group_resource.as_ref()) }
             })
             .unwrap_or(None)
     }

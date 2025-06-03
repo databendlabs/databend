@@ -13,40 +13,17 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
 use std::sync::Weak;
 
-use databend_common_base::runtime::workload_group::WorkloadGroup;
+use databend_common_base::runtime::workload_group::WorkloadGroupResource;
 use databend_common_base::runtime::MemStat;
 use databend_common_exception::Result;
 
 use crate::workload::workload_mgr::WorkloadMgr;
 use crate::WorkloadApi;
-
-pub struct WorkloadGroupResource {
-    workload: WorkloadGroup,
-    pub mem_stat: Arc<MemStat>,
-    mgr: Weak<WorkloadGroupResourceManagerInner>,
-}
-
-impl Drop for WorkloadGroupResource {
-    fn drop(&mut self) {
-        if let Some(resource_manager) = self.mgr.upgrade() {
-            resource_manager.remove_workload(&self.workload.id);
-        }
-    }
-}
-
-impl Deref for WorkloadGroupResource {
-    type Target = WorkloadGroup;
-
-    fn deref(&self) -> &Self::Target {
-        &self.workload
-    }
-}
 
 struct WorkloadGroupResourceManagerInner {
     workload_mgr: Arc<WorkloadMgr>,
@@ -108,14 +85,21 @@ impl WorkloadGroupResourceManagerInner {
             }
         }
 
+        let mgr_ref = Arc::downgrade(self);
+        let queue_key = format!("__fd_workload_queries_queue/queue/{}", workload.id);
         let workload_resource = Arc::new(WorkloadGroupResource {
-            workload,
+            queue_key,
+            meta: workload,
             mem_stat: MemStat::create_workload_group(),
-            mgr: Arc::downgrade(self),
+            destroy_fn: Some(Box::new(move |id: &str| {
+                if let Some(resource_manager) = mgr_ref.upgrade() {
+                    resource_manager.remove_workload(id);
+                }
+            })),
         });
 
         online_workload_group.insert(
-            workload_resource.workload.id.clone(),
+            workload_resource.meta.id.clone(),
             Arc::downgrade(&workload_resource),
         );
 
@@ -140,6 +124,7 @@ impl WorkloadGroupResourceManager {
 #[cfg(test)]
 mod tests {
     use databend_common_base::base::tokio;
+    use databend_common_base::runtime::workload_group::WorkloadGroup;
     use databend_common_meta_store::MetaStore;
 
     use super::*;
@@ -164,8 +149,8 @@ mod tests {
 
         {
             let workload1 = inner.get_workload(&workload.id).await?;
-            assert_eq!(workload1.id, workload.id);
-            assert_eq!(workload1.name, "test_workload");
+            assert_eq!(workload1.meta.id, workload.id);
+            assert_eq!(workload1.meta.name, "test_workload");
 
             let workload2 = inner.get_workload(&workload.id).await?;
             assert_eq!(Arc::as_ptr(&workload1), Arc::as_ptr(&workload2));

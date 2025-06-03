@@ -262,14 +262,11 @@ impl GlobalHistoryLog {
     async fn do_execute(&self, sql: &str, query_id: String) -> Result<()> {
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         // only need run the sql on the current node
-        let context = session.create_query_context_with_cluster(
-            Arc::new(Cluster {
-                unassign: false,
-                local_id: self.node_id.clone(),
-                nodes: vec![],
-            }),
-            ThreadTracker::mem_stat().cloned(),
-        )?;
+        let context = session.create_query_context_with_cluster(Arc::new(Cluster {
+            unassign: false,
+            local_id: self.node_id.clone(),
+            nodes: vec![],
+        }))?;
         context.update_init_query_id(query_id);
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
