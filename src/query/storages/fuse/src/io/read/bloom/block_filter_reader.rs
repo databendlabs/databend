@@ -88,6 +88,10 @@ async fn load_bloom_filter_by_columns<'a>(
     index_path: &'a str,
     index_length: u64,
 ) -> Result<BlockFilter> {
+    println!("\n\n----dolumn_needed={:?}", column_needed);
+    println!("----index_path={:?}", index_path);
+    println!("----index_length={:?}", index_length);
+
     // 1. load index meta
     let bloom_index_meta = load_index_meta(dal.clone(), index_path, index_length).await?;
 
@@ -96,6 +100,12 @@ async fn load_bloom_filter_by_columns<'a>(
     let column_needed: HashSet<&String> = HashSet::from_iter(column_needed);
     // 2.2 collects the column metas and their column ids
     let index_column_chunk_metas = &bloom_index_meta.columns;
+
+    println!(
+        "\n---bloom_index_meta.columns={:?}",
+        bloom_index_meta.columns
+    );
+
     let mut col_metas = BTreeMap::new();
     for column_name in column_needed {
         for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
