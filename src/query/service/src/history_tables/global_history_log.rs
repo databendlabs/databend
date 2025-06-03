@@ -219,7 +219,7 @@ impl GlobalHistoryLog {
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
-                chrono::Local::now().timestamp_millis() as u64
+                chrono::Utc::now().timestamp_millis() as u64
                     - Duration::from_secs(interval).as_millis() as u64
                     > last
             }
@@ -238,9 +238,7 @@ impl GlobalHistoryLog {
             .upsert_kv(UpsertKV::new(
                 format!("{}/last_timestamp", meta_key),
                 MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(
-                    &chrono::Local::now().timestamp_millis(),
-                )?),
+                Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
                 None,
             ))
             .await?;
