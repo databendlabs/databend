@@ -925,6 +925,8 @@ SELECT * from s;"#,
         r#"CREATE SEQUENCE seq comment='test'"#,
         r#"DESCRIBE SEQUENCE seq"#,
         r#"SHOW SEQUENCES LIKE '%seq%'"#,
+        r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
+        r#"ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
     ];
 
     for case in cases {

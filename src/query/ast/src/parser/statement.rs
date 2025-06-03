@@ -3991,6 +3991,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _)| AlterTableAction::RefreshTableCache,
     );
 
+    let modify_table_connection = map(
+        rule! {
+            CONNECTION ~ ^"=" ~ #connection_options
+        },
+        |(_, _, connection_options)| AlterTableAction::ModifyConnection {
+            new_connection: connection_options,
+        },
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -4005,6 +4014,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #set_table_options
         | #unset_table_options
         | #refresh_cache
+        | #modify_table_connection
     )(i)
 }
 

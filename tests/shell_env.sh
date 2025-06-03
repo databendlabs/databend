@@ -39,6 +39,16 @@ stmt() {
 	return 0
 }
 
+stmt_fail() {
+	echo ">>>> $1"
+	echo "$1" | $BENDSQL_CLIENT_CONNECT > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		return 1
+	fi
+    echo "<<<< expected failure happened"
+	return 0
+}
+
 comment() {
 	echo "#### $1"
 }

@@ -34,6 +34,7 @@ use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
 use super::interpreter_table_index_refresh::RefreshTableIndexInterpreter;
+use super::interpreter_table_modify_connection::ModifyTableConnectionInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -333,6 +334,9 @@ impl InterpreterFactory {
             )?)),
             Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
                 ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,
+            )),
+            Plan::ModifyTableConnection(new_connection) => Ok(Arc::new(
+                ModifyTableConnectionInterpreter::try_create(ctx, *new_connection.clone())?,
             )),
             Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
                 RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,
