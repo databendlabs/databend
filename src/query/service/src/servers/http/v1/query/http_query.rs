@@ -482,13 +482,13 @@ impl HttpQuery {
                 if !state.variables.is_empty() {
                     session.set_all_variables(state.get_variables()?)
                 }
-                if !session_conf.last_query_ids[0].is_empty()
-                    && !state.last_query_result_cache_key.is_empty()
-                {
-                    session.update_query_ids_results(
-                        session_conf.last_query_ids[0].to_string(),
-                        state.last_query_result_cache_key.to_string(),
-                    )
+                if let Some(id) = session_conf.last_query_ids.first() {
+                    if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
+                        session.update_query_ids_results(
+                            id.to_owned(),
+                            state.last_query_result_cache_key.to_owned(),
+                        );
+                    }
                 }
             }
 
