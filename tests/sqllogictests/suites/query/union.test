@@ -358,7 +358,7 @@ select  number::int32 from numbers(100) union all select number::int from number
 ----
 
 query I
-select  number::int32 from numbers(100) union all select number::int from numbers(100) where number > 0 ignore_result;
+select number::int32 from numbers(100) union all select number::int from numbers(100) where number > 0 ignore_result;
 ----
 
 statement ok
