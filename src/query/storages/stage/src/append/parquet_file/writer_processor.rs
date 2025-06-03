@@ -19,11 +19,11 @@ use std::sync::Arc;
 
 use arrow_schema::Schema;
 use async_trait::async_trait;
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -31,6 +31,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_version::DATABEND_SEMVER;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
@@ -48,7 +49,8 @@ pub struct ParquetFileWriter {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    table_info: StageTableInfo,
+    info: CopyIntoLocationInfo,
+    schema: TableSchemaRef,
     arrow_schema: Arc<Schema>,
     compression: Compression,
 
@@ -118,17 +120,17 @@ impl ParquetFileWriter {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        table_info: StageTableInfo,
+        info: CopyIntoLocationInfo,
+        schema: TableSchemaRef,
         data_accessor: Operator,
         query_id: String,
         group_id: usize,
         targe_file_size: Option<usize>,
     ) -> Result<ProcessorPtr> {
-        let unload_output =
-            UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
+        let unload_output = UnloadOutput::create(info.options.detailed_output);
 
-        let arrow_schema = Arc::new(Schema::from(table_info.schema.as_ref()));
-        let compression = table_info.stage_info.file_format_params.compression();
+        let arrow_schema = Arc::new(Schema::from(schema.as_ref()));
+        let compression = info.stage.file_format_params.compression();
         let compression = match &compression {
             StageFileCompression::Zstd => Compression::ZSTD(ZstdLevel::default()),
             StageFileCompression::Snappy => Compression::SNAPPY,
@@ -144,7 +146,8 @@ impl ParquetFileWriter {
         Ok(ProcessorPtr::create(Box::new(ParquetFileWriter {
             input,
             output,
-            table_info,
+            schema,
+            info,
             arrow_schema,
             compression,
             unload_output,
@@ -173,7 +176,7 @@ impl ParquetFileWriter {
     }
 
     fn flush(&mut self) -> Result<()> {
-        _ = self.writer.finish();
+        self.writer.finish().ok();
         let buf = mem::take(self.writer.inner_mut());
         let output_bytes = buf.len();
         self.file_to_write = Some((buf, DataSummary {
@@ -250,7 +253,7 @@ impl Processor for ParquetFileWriter {
         while let Some(b) = self.input_data.pop_front() {
             self.input_bytes += b.memory_size();
             self.row_counts += b.num_rows();
-            let batch = b.to_record_batch(&self.table_info.schema)?;
+            let batch = b.to_record_batch(&self.schema)?;
             self.writer.write(&batch)?;
 
             if let Some(target) = self.targe_file_size {
@@ -277,7 +280,7 @@ impl Processor for ParquetFileWriter {
     async fn async_process(&mut self) -> Result<()> {
         assert!(self.file_to_write.is_some());
         let path = unload_path(
-            &self.table_info,
+            &self.info,
             &self.query_id,
             self.group_id,
             self.batch_id,

@@ -15,28 +15,24 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use databend_common_ast::ast::CopyIntoLocationOptions;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_meta_app::principal::StageInfo;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 
 use crate::plans::Plan;
 
 #[derive(Clone)]
 pub struct CopyIntoLocationPlan {
-    pub stage: Box<StageInfo>,
-    pub path: String,
+    pub info: CopyIntoLocationInfo,
     pub from: Box<Plan>,
-    pub options: CopyIntoLocationOptions,
-    pub is_ordered: bool,
 }
 
 impl CopyIntoLocationPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if self.options.detailed_output {
+        if self.info.options.detailed_output {
             DataSchemaRefExt::create(vec![
                 DataField::new("file_name", DataType::String),
                 DataField::new("file_size", DataType::Number(NumberDataType::UInt64)),
@@ -57,7 +53,7 @@ impl Debug for CopyIntoLocationPlan {
         write!(
             f,
             "Copy into {:?}/{} from {:?}",
-            self.stage, self.path, self.from
+            self.info.stage, self.info.path, self.from
         )?;
         Ok(())
     }

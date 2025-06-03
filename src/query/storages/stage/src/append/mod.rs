@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod do_append;
 mod output;
 mod parquet_file;
 mod path;
 mod row_based_file;
+mod stage_sink_table;
 
 pub use output::UnloadOutput;
+pub use stage_sink_table::StageSinkTable;

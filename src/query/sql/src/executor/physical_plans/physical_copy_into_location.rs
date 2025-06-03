@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 
 use crate::executor::PhysicalPlan;
 use crate::ColumnBinding;
@@ -28,8 +29,9 @@ pub struct CopyIntoLocation {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub project_columns: Vec<ColumnBinding>,
-    pub input_schema: DataSchemaRef,
-    pub to_stage_info: StageTableInfo,
+    pub input_data_schema: DataSchemaRef,
+    pub input_table_schema: TableSchemaRef,
+    pub info: CopyIntoLocationInfo,
 }
 
 impl CopyIntoLocation {

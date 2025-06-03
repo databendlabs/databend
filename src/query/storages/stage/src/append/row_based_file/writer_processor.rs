@@ -18,7 +18,6 @@ use std::mem;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::CompressCodec;
 use databend_common_exception::Result;
@@ -29,6 +28,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 use opendal::Operator;
 
 use super::buffers::FileOutputBuffers;
@@ -39,7 +39,7 @@ use crate::append::UnloadOutput;
 pub struct RowBasedFileWriter {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    table_info: StageTableInfo,
+    info: CopyIntoLocationInfo,
 
     // always blocks for a whole file if not empty
     input_data: Option<DataBlock>,
@@ -63,17 +63,16 @@ impl RowBasedFileWriter {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        table_info: StageTableInfo,
+        info: CopyIntoLocationInfo,
         data_accessor: Operator,
         prefix: Vec<u8>,
         query_id: String,
         group_id: usize,
         compression: Option<CompressAlgorithm>,
     ) -> Result<ProcessorPtr> {
-        let unload_output =
-            UnloadOutput::create(table_info.copy_into_location_options.detailed_output);
+        let unload_output = UnloadOutput::create(info.options.detailed_output);
         Ok(ProcessorPtr::create(Box::new(RowBasedFileWriter {
-            table_info,
+            info,
             input,
             input_data: None,
             data_accessor,
@@ -171,7 +170,7 @@ impl Processor for RowBasedFileWriter {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         let path = unload_path(
-            &self.table_info,
+            &self.info,
             &self.query_id,
             self.group_id,
             self.batch_id,

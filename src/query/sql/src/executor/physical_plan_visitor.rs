@@ -425,8 +425,9 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             project_columns: plan.project_columns.clone(),
-            input_schema: plan.input_schema.clone(),
-            to_stage_info: plan.to_stage_info.clone(),
+            input_data_schema: plan.input_data_schema.clone(),
+            input_table_schema: plan.input_table_schema.clone(),
+            info: plan.info.clone(),
         })))
     }
 
