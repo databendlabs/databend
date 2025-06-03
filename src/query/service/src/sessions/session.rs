@@ -375,6 +375,10 @@ impl Session {
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
 
+    pub fn get_last_query_id(&self, index: i32) -> String {
+        self.session_ctx.get_last_query_id(index)
+    }
+
     pub fn txn_mgr(&self) -> TxnManagerRef {
         self.session_ctx.txn_mgr()
     }
