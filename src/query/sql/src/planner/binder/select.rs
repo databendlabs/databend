@@ -440,8 +440,7 @@ impl Binder {
             .zip(right_bind_context.columns.iter())
             .enumerate()
         {
-            let left_need_cast = *left_col.data_type != coercion_types[idx];
-            if left_need_cast {
+            if *left_col.data_type != coercion_types[idx] {
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,
@@ -460,21 +459,6 @@ impl Binder {
                 ));
             } else {
                 left_outputs.push((left_col.index, None));
-            }
-            let contains = new_bind_context
-                .columns
-                .iter()
-                .any(|col| col.index == left_col.index);
-
-            if !contains && !left_need_cast {
-                new_bind_context.add_column_binding(left_col.clone());
-            } else {
-                let column_binding = self.create_derived_column_binding(
-                    left_col.column_name.clone(),
-                    coercion_types[idx].clone(),
-                    None,
-                );
-                new_bind_context.add_column_binding(column_binding);
             }
 
             if *right_col.data_type != coercion_types[idx] {
@@ -497,6 +481,13 @@ impl Binder {
             } else {
                 right_outputs.push((right_col.index, None));
             }
+
+            let column_binding = self.create_derived_column_binding(
+                left_col.column_name.clone(),
+                coercion_types[idx].clone(),
+                None,
+            );
+            new_bind_context.add_column_binding(column_binding);
         }
 
         Ok((new_bind_context, left_outputs, right_outputs))
