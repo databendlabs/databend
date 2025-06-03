@@ -84,11 +84,14 @@ pub fn init_history_tables(cfg: &HistoryConfig) -> Result<Vec<Arc<HistoryTable>>
     );
 
     let mut history_tables = Vec::with_capacity(cfg.tables.len());
-    history_tables.push(Arc::new(HistoryTable::create(
-        predefined_map.remove("log_history").unwrap(),
-        24 * 7,
-    )));
+    // log_history is the source table, it is always included
+    // if user defined log_history, we will use the user defined retention
+    // if user did not define log_history, we will use the default retention of 24*7 hours
+    let mut user_defined_log_history = false;
     for enable_table in cfg.tables.iter() {
+        if enable_table.table_name == "log_history" {
+            user_defined_log_history = true;
+        }
         if let Some(predefined_table) = predefined_map.remove(&enable_table.table_name) {
             let retention = enable_table.retention;
             history_tables.push(Arc::new(HistoryTable::create(
@@ -101,6 +104,12 @@ pub fn init_history_tables(cfg: &HistoryConfig) -> Result<Vec<Arc<HistoryTable>>
                 enable_table.table_name
             )));
         }
+    }
+    if !user_defined_log_history {
+        history_tables.push(Arc::new(HistoryTable::create(
+            predefined_map.remove("log_history").unwrap(),
+            24 * 7,
+        )));
     }
     Ok(history_tables)
 }
