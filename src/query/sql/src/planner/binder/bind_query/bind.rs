@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::CreateOption;
@@ -22,6 +23,7 @@ use databend_common_ast::ast::ExprReplacer;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
 use databend_common_ast::ast::CTE;
@@ -29,6 +31,8 @@ use databend_common_ast::Span;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
@@ -40,6 +44,25 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::NameResolutionContext;
+
+#[derive(Debug, Default, Visitor)]
+#[visitor(TableReference(enter))]
+struct CTERefCounter {
+    cte_ref_count: HashMap<String, usize>,
+    name_resolution_ctx: NameResolutionContext,
+}
+
+impl CTERefCounter {
+    fn enter_table_reference(&mut self, table_ref: &TableReference) {
+        if let TableReference::Table { table, .. } = table_ref {
+            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+            if let Some(count) = self.cte_ref_count.get_mut(&table_name) {
+                *count += 1;
+            }
+        }
+    }
+}
 
 impl Binder {
     pub(crate) fn bind_query(
@@ -47,8 +70,12 @@ impl Binder {
         bind_context: &mut BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
+        let mut with = query.with.clone();
+        if let Some(with) = &mut with {
+            self.auto_materialize_cte(with, query)?;
+        }
         // Initialize cte map.
-        self.init_cte(bind_context, &query.with)?;
+        self.init_cte(bind_context, &with)?;
 
         // Extract limit and offset from query.
         let (limit, offset) = self.extract_limit_and_offset(query)?;
@@ -64,6 +91,35 @@ impl Binder {
         s_expr = self.bind_query_limit(query, s_expr, limit, offset);
 
         Ok((s_expr, bind_context))
+    }
+
+    fn auto_materialize_cte(&mut self, with: &mut With, query: &Query) -> Result<()> {
+        // Initialize the count of each CTE to 0
+        let mut cte_ref_count: HashMap<String, usize> = HashMap::new();
+        for cte in with.ctes.iter() {
+            let table_name = self.normalize_identifier(&cte.alias.name).name;
+            cte_ref_count.insert(table_name, 0);
+        }
+
+        // Count the number of times each CTE is referenced in the query
+        let mut visitor = CTERefCounter {
+            cte_ref_count,
+            name_resolution_ctx: self.name_resolution_ctx.clone(),
+        };
+        query.drive(&mut visitor);
+        cte_ref_count = visitor.cte_ref_count;
+
+        // Update materialization based on reference count
+        for cte in with.ctes.iter_mut() {
+            let table_name = self.normalize_identifier(&cte.alias.name).name;
+            if let Some(count) = cte_ref_count.get(&table_name) {
+                log::info!("[CTE]cte_ref_count: {table_name} {count}");
+                // Materialize if referenced more than once
+                cte.materialized |= *count > 1;
+            }
+        }
+
+        Ok(())
     }
 
     // Initialize cte map.
