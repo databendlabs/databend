@@ -22,13 +22,9 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::DecimalSize;
-use super::ReturnType;
 use crate::property::Domain;
 use crate::types::AccessType;
-use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::GenericMap;
+use crate::types::DecimalSize;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::ValueType;
@@ -171,24 +167,6 @@ impl ValueType for VectorType {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         builder.build_scalar()
-    }
-}
-
-pub static DEFAULT_VECTOR_DIMENSION: u64 = 128;
-
-impl ArgType for VectorType {
-    fn data_type() -> DataType {
-        let vector_ty = VectorDataType::Float32(DEFAULT_VECTOR_DIMENSION);
-        DataType::Vector(vector_ty)
-    }
-
-    fn full_domain() -> Self::Domain {}
-}
-
-impl ReturnType for VectorType {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        let vector_ty = VectorDataType::Float32(DEFAULT_VECTOR_DIMENSION);
-        VectorColumnBuilder::with_capacity(&vector_ty, capacity)
     }
 }
 
