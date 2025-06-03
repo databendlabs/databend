@@ -615,7 +615,7 @@ pub async fn check_operator(
 
     GlobalIORuntime::instance()
         .spawn(async move {
-            let res = op.stat("/").await;
+            let res = op.stat("databend_storage_checker").await;
             match res {
                 Ok(_) => Ok(()),
                 Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
@@ -626,7 +626,7 @@ pub async fn check_operator(
         .expect("join must succeed")
         .map_err(|cause| {
             ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: config: {:?}, cause: {cause}",
+                "current configured storage is not valid: config: {:?}, cause: {cause}",
                 params
             ))
         })

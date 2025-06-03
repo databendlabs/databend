@@ -135,6 +135,7 @@ message TableIndex {
   enum IndexType {
     INVERTED = 0;
     NGRAM = 1;
+    VECTOR = 2;
   }
 
   string name = 1;

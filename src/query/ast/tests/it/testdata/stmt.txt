@@ -26341,3 +26341,81 @@ ShowSequences {
 }
 
 
+---------- Input ----------
+ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')
+---------- Output ---------
+ALTER TABLE p1 CONNECTION=(connection_name = 'test')
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..14,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..14,
+                ),
+                name: "p1",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyConnection {
+            new_connection: {
+                "connection_name": "test",
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')
+---------- Output ---------
+ALTER TABLE t CONNECTION=(access_key_id = 'x' endpoint_url = 'http://127.0.0.1:9900' secret_access_key = 'y')
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyConnection {
+            new_connection: {
+                "access_key_id": "x",
+                "endpoint_url": "http://127.0.0.1:9900",
+                "secret_access_key": "y",
+            },
+        },
+    },
+)
+
+

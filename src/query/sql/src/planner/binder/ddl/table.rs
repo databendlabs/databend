@@ -124,6 +124,7 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
+use crate::plans::ModifyTableConnectionPlan;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
@@ -957,6 +958,14 @@ impl Binder {
                     table,
                 })))
             }
+            AlterTableAction::ModifyConnection { new_connection } => Ok(
+                Plan::ModifyTableConnection(Box::new(ModifyTableConnectionPlan {
+                    new_connection: new_connection.clone(),
+                    catalog,
+                    database,
+                    table,
+                })),
+            ),
             AlterTableAction::RenameColumn {
                 old_column,
                 new_column,

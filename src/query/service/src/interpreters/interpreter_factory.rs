@@ -34,6 +34,7 @@ use super::interpreter_mutation::MutationInterpreter;
 use super::interpreter_table_index_create::CreateTableIndexInterpreter;
 use super::interpreter_table_index_drop::DropTableIndexInterpreter;
 use super::interpreter_table_index_refresh::RefreshTableIndexInterpreter;
+use super::interpreter_table_modify_connection::ModifyTableConnectionInterpreter;
 use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -69,6 +70,7 @@ use crate::interpreters::interpreter_refresh_table_cache::RefreshTableCacheInter
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_rename_workload_group::RenameWorkloadGroupInterpreter;
+use crate::interpreters::interpreter_report_issue::ReportIssueInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_sequence_desc::DescSequenceInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
@@ -253,6 +255,10 @@ impl InterpreterFactory {
                 *graphical,
             )?)),
 
+            Plan::ReportIssue(sql) => Ok(Arc::new(ReportIssueInterpreter::try_create(
+                ctx,
+                sql.clone(),
+            )?)),
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
                 *copy_plan.clone(),
@@ -328,6 +334,9 @@ impl InterpreterFactory {
             )?)),
             Plan::ModifyTableComment(new_comment) => Ok(Arc::new(
                 ModifyTableCommentInterpreter::try_create(ctx, *new_comment.clone())?,
+            )),
+            Plan::ModifyTableConnection(new_connection) => Ok(Arc::new(
+                ModifyTableConnectionInterpreter::try_create(ctx, *new_connection.clone())?,
             )),
             Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
                 RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,

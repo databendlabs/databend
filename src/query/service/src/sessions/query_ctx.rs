@@ -1169,7 +1169,9 @@ impl TableContext for QueryContext {
         table: &str,
     ) -> Result<Arc<dyn Table>> {
         // Queries to non-internal system_history databases require license checks to be enabled.
-        if database.eq_ignore_ascii_case("system_history") && ThreadTracker::should_log() {
+        if database.eq_ignore_ascii_case("system_history")
+            && ThreadTracker::capture_log_settings().is_none()
+        {
             LicenseManagerSwitch::instance().check_enterprise_enabled(
                 unsafe {
                     self.get_settings()
@@ -1657,30 +1659,56 @@ impl TableContext for QueryContext {
         };
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
-                let mut read_options = ParquetReadOptions::default();
+                if max_column_position > 1 {
+                    Err(ErrorCode::SemanticError(
+                        "[QUERY-CTX] Query from parquet file only support $1 as column position",
+                    ))
+                } else if max_column_position == 0 {
+                    let mut read_options = ParquetReadOptions::default();
+                    let settings = self.query_settings.clone();
 
-                if !self.get_settings().get_enable_parquet_page_index()? {
-                    read_options = read_options.with_prune_pages(false);
+                    if !settings.get_enable_parquet_page_index()? {
+                        read_options = read_options.with_prune_pages(false);
+                    }
+
+                    if !settings.get_enable_parquet_rowgroup_pruning()? {
+                        read_options = read_options.with_prune_row_groups(false);
+                    }
+
+                    if !settings.get_enable_parquet_prewhere()? {
+                        read_options = read_options.with_do_prewhere(false);
+                    }
+                    ParquetTable::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                        self.get_settings(),
+                        self.get_query_kind(),
+                        case_sensitive,
+                    )
+                    .await
+                } else {
+                    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                        "_$1",
+                        TableDataType::Variant,
+                    )]));
+                    let info = StageTableInfo {
+                        schema,
+                        stage_info,
+                        files_info,
+                        files_to_copy,
+                        duplicated_files_detected: vec![],
+                        is_select: true,
+                        default_exprs: None,
+                        copy_into_location_options: Default::default(),
+                        copy_into_table_options: Default::default(),
+                        stage_root,
+                        copy_into_location_ordered: false,
+                        is_variant: true,
+                    };
+                    StageTable::try_create(info)
                 }
-
-                if !self.get_settings().get_enable_parquet_rowgroup_pruning()? {
-                    read_options = read_options.with_prune_row_groups(false);
-                }
-
-                if !self.get_settings().get_enable_parquet_prewhere()? {
-                    read_options = read_options.with_do_prewhere(false);
-                }
-
-                ParquetTable::create(
-                    stage_info.clone(),
-                    files_info,
-                    read_options,
-                    files_to_copy,
-                    self.get_settings(),
-                    self.get_query_kind(),
-                    case_sensitive,
-                )
-                .await
             }
             FileFormatParams::Orc(..) => {
                 let schema = Arc::new(TableSchema::empty());
@@ -1696,6 +1724,7 @@ impl TableContext for QueryContext {
                     copy_into_table_options: Default::default(),
                     stage_root,
                     copy_into_location_ordered: false,
+                    is_variant: false,
                 };
                 OrcTable::try_create(info).await
             }
@@ -1716,6 +1745,7 @@ impl TableContext for QueryContext {
                     copy_into_table_options: Default::default(),
                     stage_root,
                     copy_into_location_ordered: false,
+                    is_variant: true,
                 };
                 StageTable::try_create(info)
             }
@@ -1754,6 +1784,7 @@ impl TableContext for QueryContext {
                     copy_into_table_options: Default::default(),
                     stage_root,
                     copy_into_location_ordered: false,
+                    is_variant: false,
                 };
                 StageTable::try_create(info)
             }
@@ -1889,12 +1920,12 @@ impl TableContext for QueryContext {
         self.shared.get_warehouse_clusters().await
     }
 
-    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         self.shared.get_pruned_partitions_stats()
     }
 
-    fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
-        self.shared.set_pruned_partitions_stats(partitions);
+    fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(plan_id, stats);
     }
 
     fn get_next_broadcast_id(&self) -> u32 {

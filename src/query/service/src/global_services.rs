@@ -49,8 +49,8 @@ use crate::builtin::BuiltinUsers;
 use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::IcebergCreator;
 use crate::clusters::ClusterDiscovery;
+use crate::history_tables::GlobalHistoryLog;
 use crate::locks::LockManager;
-use crate::persistent_log::GlobalPersistentLog;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -176,8 +176,8 @@ impl GlobalServices {
 
         Self::init_workload_mgr(config).await?;
 
-        if config.log.persistentlog.on {
-            GlobalPersistentLog::init(config).await?;
+        if config.log.history.on {
+            GlobalHistoryLog::init(config).await?;
         }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);

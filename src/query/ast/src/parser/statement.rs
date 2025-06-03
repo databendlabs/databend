@@ -123,6 +123,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let report = map_res(rule! { REPORT ~ ISSUE ~ #rest_str }, |(_, _, (sql, _))| {
+        Ok(Statement::ReportIssue(sql))
+    });
+
     let create_task = map_res(
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2524,11 +2528,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
 
     alt((
-        // query, explain,show
+        // query, explain, report, show
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
             | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
+            | #report: "`REPORT ISSUE <statement>`"
             | #show_settings : "`SHOW SETTINGS [<show_limit>]`"
             | #show_variables : "`SHOW VARIABLES [<show_limit>]`"
             | #show_stages : "`SHOW STAGES`"
@@ -3986,6 +3991,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _)| AlterTableAction::RefreshTableCache,
     );
 
+    let modify_table_connection = map(
+        rule! {
+            CONNECTION ~ ^"=" ~ #connection_options
+        },
+        |(_, _, connection_options)| AlterTableAction::ModifyConnection {
+            new_connection: connection_options,
+        },
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -4000,6 +4014,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #set_table_options
         | #unset_table_options
         | #refresh_cache
+        | #modify_table_connection
     )(i)
 }
 

@@ -35,6 +35,7 @@ use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
+use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
 use crate::types::DataType;
@@ -42,6 +43,8 @@ use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::GeographyColumn;
 use crate::types::NumberDataType;
+use crate::types::VectorColumn;
+use crate::types::VectorDataType;
 use crate::with_number_type;
 use crate::Column;
 use crate::DataBlock;
@@ -199,6 +202,17 @@ impl From<&TableField> for Field {
                 );
                 ArrowDataType::Decimal128(38, 0)
             }
+            TableDataType::Vector(ty) => {
+                metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_VECTOR.to_string());
+                let (inner_ty, dimension) = match ty {
+                    VectorDataType::Int8(dimension) => (ArrowDataType::Int8, *dimension as i32),
+                    VectorDataType::Float32(dimension) => {
+                        (ArrowDataType::Float32, *dimension as i32)
+                    }
+                };
+                let inner_field = Arc::new(Field::new_list_field(inner_ty, false));
+                ArrowDataType::FixedSizeList(inner_field, dimension)
+            }
         };
 
         Field::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
@@ -353,7 +367,24 @@ impl From<&Column> for ArrayData {
 
                 unsafe { builder.build_unchecked() }
             }
+            Column::Vector(col) => {
+                let child_builder = match col {
+                    VectorColumn::Int8((values, _)) => ArrayData::builder(ArrowDataType::Int8)
+                        .len(values.len())
+                        .add_buffer(values.clone().into()),
+                    VectorColumn::Float32((values, _)) => {
+                        ArrayData::builder(ArrowDataType::Float32)
+                            .len(values.len())
+                            .add_buffer(values.clone().into())
+                    }
+                };
+                let child_data = unsafe { child_builder.build_unchecked() };
+                let builder = ArrayDataBuilder::new(arrow_type)
+                    .len(value.len())
+                    .child_data(vec![child_data]);
 
+                unsafe { builder.build_unchecked() }
+            }
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)

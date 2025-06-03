@@ -27,6 +27,7 @@ use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
+use super::ModifyTableConnectionPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
@@ -204,6 +205,7 @@ pub enum Plan {
         graphical: bool,
         plan: Box<Plan>,
     },
+    ReportIssue(String),
 
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
@@ -272,6 +274,7 @@ pub enum Plan {
     SetOptions(Box<SetOptionsPlan>),
     UnsetOptions(Box<UnsetOptionsPlan>),
     RefreshTableCache(Box<RefreshTableCachePlan>),
+    ModifyTableConnection(Box<ModifyTableConnectionPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -563,6 +566,9 @@ impl Plan {
                 DataField::new("query_queued_timeout", DataType::String),
             ]),
             Plan::DescSequence(plan) => plan.schema(),
+            Plan::ReportIssue { .. } => {
+                DataSchemaRefExt::create(vec![DataField::new("summary", DataType::String)])
+            }
             _ => Arc::new(DataSchema::empty()),
         }
     }

@@ -17,8 +17,13 @@ use logforth::filter::CustomFilter;
 use logforth::filter::FilterResult;
 
 pub fn filter_by_thread_tracker() -> CustomFilter {
-    CustomFilter::new(|_metadata| match ThreadTracker::should_log() {
-        true => FilterResult::Neutral,
-        false => FilterResult::Reject,
+    CustomFilter::new(|metadata| {
+        if let Some(settings) = ThreadTracker::capture_log_settings() {
+            if metadata.level() > settings.level {
+                return FilterResult::Reject;
+            }
+        }
+
+        FilterResult::Neutral
     })
 }

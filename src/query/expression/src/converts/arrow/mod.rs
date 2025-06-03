@@ -23,3 +23,4 @@ pub const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
 pub const ARROW_EXT_TYPE_GEOMETRY: &str = "Geometry";
 pub const ARROW_EXT_TYPE_GEOGRAPHY: &str = "Geography";
 pub const ARROW_EXT_TYPE_INTERVAL: &str = "Interval";
+pub const ARROW_EXT_TYPE_VECTOR: &str = "Vector";

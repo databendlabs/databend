@@ -1317,47 +1317,146 @@ pub fn previous_or_next_day(dt: &Zoned, target: Weekday, is_previous: bool) -> i
     datetime_to_date_inner_number(dt) + dir * days_diff
 }
 
+/// PostgreSQL to strftime format specifier mappings
+///
+/// The vector contains tuples of (postgres_format, strftime_format):
+/// - For case-insensitive PostgreSQL formats (e.g., "YYYY"), any case variation will match
+/// - For case-sensitive strftime formats (prefixed with '%'), exact case matching is required
+///
+/// Note: The sort order (by descending key length) is critical for correct pattern matching
 static PG_STRFTIME_MAPPINGS: LazyLock<Vec<(&'static str, &'static str)>> = LazyLock::new(|| {
     let mut mappings = vec![
-        ("YYYY", "%Y"),
-        ("YY", "%y"),
-        ("MMMM", "%B"),
-        ("MON", "%b"),
-        ("MM", "%m"),
-        ("DD", "%d"),
-        ("DY", "%a"),
-        ("HH24", "%H"),
-        ("HH12", "%I"),
-        ("AM", "%p"),
-        ("PM", "%p"),
-        ("MI", "%M"),
-        ("SS", "%S"),
-        ("FF", "%f"),
-        ("UUUU", "%G"),
-        ("TZHTZM", "%z"),
-        ("TZH:TZM", "%z"),
-        ("TZH", "%:::z"),
+        // ==============================================
+        // Case-insensitive PostgreSQL format specifiers
+        // (will match regardless of letter case)
+        // ==============================================
+        // Date components
+        ("YYYY", "%Y"), // 4-digit year
+        ("YY", "%y"),   // 2-digit year
+        ("MMMM", "%B"), // Full month name
+        ("MON", "%b"),  // Abbreviated month name (special word boundary handling)
+        ("MM", "%m"),   // Month number (01-12)
+        ("DD", "%d"),   // Day of month (01-31)
+        ("DY", "%a"),   // Abbreviated weekday name
+        // Time components
+        ("HH24", "%H"), // 24-hour format (00-23)
+        ("HH12", "%I"), // 12-hour format (01-12)
+        ("AM", "%p"),   // AM/PM indicator (matches both AM/PM)
+        ("PM", "%p"),   // AM/PM indicator (matches both AM/PM)
+        ("MI", "%M"),   // Minutes (00-59)
+        ("SS", "%S"),   // Seconds (00-59)
+        ("FF", "%f"),   // Fractional seconds
+        // Special cases
+        ("UUUU", "%G"),    // ISO week-numbering year
+        ("TZHTZM", "%z"),  // Timezone as ±HHMM
+        ("TZH:TZM", "%z"), // Timezone as ±HH:MM
+        ("TZH", "%:::z"),  // Timezone hour only
+        // ==============================================
+        // Case-sensitive strftime format specifiers
+        // (must match exactly including case)
+        // ==============================================
+        ("%Y", "%Y"), // Year aliases
+        ("%y", "%y"),
+        ("%B", "%B"), // Month aliases
+        ("%b", "%b"),
+        ("%m", "%m"),
+        ("%d", "%d"), // Day aliases
+        ("%a", "%a"), // Weekday alias
+        ("%H", "%H"), // Hour aliases
+        ("%I", "%I"),
+        ("%p", "%p"),       // AM/PM indicator
+        ("%M", "%M"),       // Minute alias
+        ("%S", "%S"),       // Second alias
+        ("%f", "%f"),       // Fractional second alias
+        ("%G", "%G"),       // ISO year alias
+        ("%z", "%z"),       // Timezone aliases
+        ("%:::z", "%:::z"), // Timezone hour alias
     ];
-    // Sort by key length in descending order to ensure
-    // longer patterns are matched first and to avoid short patterns replacing part of long patterns prematurely.
+
+    // Critical: Sort by descending key length to ensure longest possible matches are found first
+    // This prevents shorter patterns from incorrectly matching parts of longer patterns
     mappings.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
     mappings
 });
 
+static PG_KEY_LENGTHS: LazyLock<Vec<usize>> =
+    LazyLock::new(|| PG_STRFTIME_MAPPINGS.iter().map(|(k, _)| k.len()).collect());
+
+fn starts_with_ignore_case(text: &str, prefix: &str) -> bool {
+    if text.len() < prefix.len() {
+        return false;
+    }
+    text.chars()
+        .zip(prefix.chars())
+        .all(|(c1, c2)| c1.to_lowercase().eq(c2.to_lowercase()))
+}
+
+fn is_word_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
 #[inline]
 pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
-    let mut result = pg_format_string.to_string();
-    for (pg_key, strftime_code) in PG_STRFTIME_MAPPINGS.iter() {
-        let pattern = if *pg_key == "MON" {
-            // should keep "month". Only "MON" as a single string escape it.
-            format!(r"(?i)\b{}\b", regex::escape(pg_key))
-        } else {
-            format!(r"(?i){}", regex::escape(pg_key))
-        };
-        let reg = regex::Regex::new(&pattern).expect("Failed to compile regex for format key");
+    let mut result = String::with_capacity(pg_format_string.len() + 16);
+    let mut current_byte_idx = 0;
+    let format_len = pg_format_string.len();
 
-        // Use replace_all to substitute all occurrences of the PG key with the strftime code.
-        result = reg.replace_all(&result, *strftime_code).to_string();
+    while current_byte_idx < format_len {
+        let remaining_slice = &pg_format_string[current_byte_idx..];
+        let mut matched = false;
+        let first_char = remaining_slice.chars().next().unwrap_or('\0');
+
+        for ((key, value), &key_len) in PG_STRFTIME_MAPPINGS.iter().zip(PG_KEY_LENGTHS.iter()) {
+            if !key.is_empty() && !first_char.eq_ignore_ascii_case(&key.chars().next().unwrap()) {
+                continue;
+            }
+
+            let is_case_sensitive_key = key.starts_with('%');
+            let is_current_match = if is_case_sensitive_key {
+                remaining_slice.starts_with(key)
+            } else {
+                starts_with_ignore_case(remaining_slice, key)
+            };
+
+            if is_current_match {
+                let mut is_valid_match = true;
+                if !is_case_sensitive_key && key.eq_ignore_ascii_case("MON") {
+                    let next_byte_idx = current_byte_idx + key_len;
+
+                    if current_byte_idx > 0 {
+                        if let Some(prev_char) =
+                            pg_format_string[..current_byte_idx].chars().next_back()
+                        {
+                            if is_word_char(prev_char) {
+                                is_valid_match = false;
+                            }
+                        }
+                    }
+
+                    if is_valid_match && next_byte_idx < format_len {
+                        if let Some(next_char) = pg_format_string[next_byte_idx..].chars().next() {
+                            if is_word_char(next_char) {
+                                is_valid_match = false;
+                            }
+                        }
+                    }
+                }
+
+                if is_valid_match {
+                    result.push_str(value);
+                    current_byte_idx += key_len;
+                    matched = true;
+                    break;
+                }
+            }
+        }
+
+        if !matched {
+            let c = first_char;
+            result.push(c);
+            current_byte_idx += c.len_utf8();
+        }
     }
+
     result
 }

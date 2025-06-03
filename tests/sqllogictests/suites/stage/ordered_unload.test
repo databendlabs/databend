@@ -38,7 +38,7 @@ statement ok
 copy /*+ set_var(max_block_size=10) */ INTO @s1 from (select * from numbers(10000) order by number) file_format=(type=parquet) max_file_size=100;
 
 query
-SELECT COUNT(*) FROM (SELECT $1 AS a, rank() OVER (ORDER BY metadata$filename, metadata$file_row_number, $1) AS rank FROM '@s1' ( FILE_FORMAT => 'parquet', )) WHERE a + 1 = rank
+SELECT COUNT(*) FROM (SELECT number AS a, rank() OVER (ORDER BY metadata$filename, metadata$file_row_number, number) AS rank FROM '@s1' ( FILE_FORMAT => 'parquet', )) WHERE a + 1 = rank
 ----
 10000
 

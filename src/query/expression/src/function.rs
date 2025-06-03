@@ -195,7 +195,7 @@ impl Default for FunctionContext {
             enable_strict_datetime_parser: true,
             random_function_seed: false,
             week_start: 0,
-            date_format_style: "mysql".to_string(),
+            date_format_style: "oracle".to_string(),
         }
     }
 }

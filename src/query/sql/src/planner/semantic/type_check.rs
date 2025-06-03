@@ -71,6 +71,7 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::i256;
+use databend_common_expression::types::vector::VectorDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -5798,6 +5799,16 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         TypeName::Variant => TableDataType::Variant,
         TypeName::Geometry => TableDataType::Geometry,
         TypeName::Geography => TableDataType::Geography,
+        TypeName::Vector(dimension) => {
+            if *dimension == 0 || *dimension > 4096 {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Invalid vector dimension '{}'",
+                    dimension
+                )));
+            }
+            // Only support float32 type currently.
+            TableDataType::Vector(VectorDataType::Float32(*dimension))
+        }
         TypeName::NotNull(inner_type) => {
             let data_type = resolve_type_name(inner_type, not_null)?;
             data_type.remove_nullable()

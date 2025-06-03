@@ -412,10 +412,11 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
 
-    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         unimplemented!()
     }
-    fn set_pruned_partitions_stats(&self, _partitions: PartStatistics) {
+
+    fn set_pruned_partitions_stats(&self, _plan_id: u32, _stats: PartStatistics) {
         unimplemented!()
     }
 
