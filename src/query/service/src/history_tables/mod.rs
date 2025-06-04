@@ -14,6 +14,7 @@
 
 mod session;
 
+mod alter_table;
 mod global_history_log;
 
 pub use global_history_log::GlobalHistoryLog;

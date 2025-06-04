@@ -53,8 +53,10 @@ use rand::random;
 use tokio::time::sleep;
 use uuid::Uuid;
 
+use crate::history_tables::alter_table::get_alter_table_sql;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::sessions::QueryContext;
 
 pub struct GlobalHistoryLog {
     meta_client: Arc<ClientHandle>,
@@ -146,6 +148,17 @@ impl GlobalHistoryLog {
                             let _ = log
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
+
+                            // TableSchemaMismatch(1303), if the table schema is changed means
+                            // this node is older version, exit
+                            if e.code() == 1303 {
+                                info!(
+                                    "system history {} log transform exit due to TableSchemaMismatch",
+                                    table_clone.name
+                                );
+                                break;
+                            }
+
                             error!(
                                 "system history {} log transform exit {}",
                                 table_clone.name, e
@@ -258,13 +271,7 @@ impl GlobalHistoryLog {
     }
 
     async fn do_execute(&self, sql: &str, query_id: String) -> Result<()> {
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        // only need run the sql on the current node
-        let context = session.create_query_context_with_cluster(Arc::new(Cluster {
-            unassign: false,
-            local_id: self.node_id.clone(),
-            nodes: vec![],
-        }))?;
+        let context = self.create_context().await?;
         context.update_init_query_id(query_id);
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
@@ -284,6 +291,12 @@ impl GlobalHistoryLog {
         for table in self.tables.iter() {
             let create_table = &table.create;
             self.execute_sql(create_table).await?;
+            let get_alter_sql =
+                get_alter_table_sql(self.create_context().await?, create_table, &table.name)
+                    .await?;
+            for alter_sql in get_alter_sql {
+                self.execute_sql(&alter_sql).await?;
+            }
         }
         Ok(())
     }
@@ -379,6 +392,16 @@ impl GlobalHistoryLog {
             ))
             .await?;
         Ok(())
+    }
+
+    pub async fn create_context(&self) -> Result<Arc<QueryContext>> {
+        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+        // only need run the sql on the current node
+        session.create_query_context_with_cluster(Arc::new(Cluster {
+            unassign: false,
+            local_id: self.node_id.clone(),
+            nodes: vec![],
+        }))
     }
 }
 
