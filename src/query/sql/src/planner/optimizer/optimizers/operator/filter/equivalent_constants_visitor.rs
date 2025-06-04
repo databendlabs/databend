@@ -269,7 +269,7 @@ mod test {
             });
             check(expr, expect)?;
         }
-        // [a = 1 or (b > a and b < (a + 2))] => [a = 1 or (b > 1 and b < (1 + 2))]
+        // [a = 1 or (b > a and b < (a + 2))] => [a = 1 or (b > a and b < (a + 2))]
         {
             let expr = ScalarExpr::FunctionCall(FunctionCall {
                 span: None,
