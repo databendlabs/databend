@@ -149,8 +149,8 @@ impl GlobalHistoryLog {
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
 
-                            // BadArguments(1006), if the table schema is changed means
-                            // this node is older version, exit
+                            // BadArguments(1006), if the table schema is changed
+                            // means this node is older version then exit
                             if e.code() == 1006 {
                                 info!(
                                     "system history {} log transform exit due to schema changed",
