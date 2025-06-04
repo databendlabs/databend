@@ -109,10 +109,14 @@ pub trait Interpreter: Sync + Send {
         {
             Ok(_) => true,
             Err(e) => {
-                log::error!(
-                        "[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
-                        e
-                    );
+                let msg =
+                    format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                e);
+                log::error!("{}", msg);
+
+                // Also log at warning level to ensure the message could be propagated to client applications
+                // (e.g., BendSQL and MySQL interactive sessions)
+                log::warn!("{}", msg);
                 false
             }
         };
