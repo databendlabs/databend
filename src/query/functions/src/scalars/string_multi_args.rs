@@ -528,6 +528,33 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     }));
     registry.register_function_factory("regexp_substr", regexp_substr);
+
+    // char function
+    let char = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+        if args_type.is_empty() {
+            return None;
+        }
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let f = Function {
+            signature: FunctionSignature {
+                name: "char".to_string(),
+                args_type: vec![DataType::Number(NumberDataType::Int64); args_type.len()],
+                return_type: DataType::String,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(char_fn),
+            },
+        };
+
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    }));
+    registry.register_function_factory("char", char);
+    registry.register_aliases("char", &["chr"]);
 }
 
 fn regexp_extract_all(
@@ -1070,6 +1097,48 @@ fn regexp_substr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<Any
             }
             None => Value::Scalar(Scalar::Null),
         },
+    }
+}
+
+fn char_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let args = args
+        .iter()
+        .map(|arg| arg.try_downcast::<Int64Type>().unwrap())
+        .collect::<Vec<_>>();
+
+    let len = args.iter().find_map(|arg| match arg {
+        Value::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let input_rows = len.unwrap_or(1);
+    let mut builder = StringColumnBuilder::with_capacity(input_rows);
+
+    'F: for row in 0..input_rows {
+        for arg in &args {
+            let val = arg.index(row).unwrap();
+            // turn val into unicode char
+            if val < 0 || val > u32::MAX as i64 {
+                builder.put_str("");
+                builder.commit_row();
+                ctx.set_error(row, "Invalid character code in the CHR input");
+                continue 'F;
+            }
+
+            if let Some(c) = std::char::from_u32(val as u32) {
+                builder.put_char(c);
+            } else {
+                builder.put_str("");
+                builder.commit_row();
+                ctx.set_error(row, "Invalid character code in the CHR input");
+                continue 'F;
+            }
+        }
+        builder.commit_row();
+    }
+
+    match len {
+        Some(_) => Value::Column(Column::String(builder.build())),
+        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
     }
 }
 

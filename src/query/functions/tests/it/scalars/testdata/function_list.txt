@@ -15,6 +15,7 @@ bitmap_cardinality -> bitmap_count
 ceiling -> ceil
 char_length -> length
 character_length -> length
+chr -> char
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
@@ -892,7 +893,6 @@ Functions overloads:
 19 ceil(Float64) :: Float64
 20 ceil(Float64 NULL) :: Float64 NULL
 0 char FACTORY
-1 char FACTORY
 0 check_json(Variant) :: String NULL
 1 check_json(Variant NULL) :: String NULL
 2 check_json(String) :: String NULL
