@@ -1435,23 +1435,13 @@ impl TableContext for QueryContext {
         runtime_filters.clear();
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
+    fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
         let mut runtime_filters = self.shared.runtime_filters.write();
-        match runtime_filters.entry(filters.0) {
-            Entry::Vacant(v) => {
-                v.insert(filters.1);
-            }
-            Entry::Occupied(mut v) => {
-                for filter in filters.1.get_inlist() {
-                    v.get_mut().add_inlist(filter.clone());
-                }
-                for filter in filters.1.get_min_max() {
-                    v.get_mut().add_min_max(filter.clone());
-                }
-                for filter in filters.1.blooms() {
-                    v.get_mut().add_bloom(filter);
-                }
-            }
+        for (scan_id, filter) in filters {
+            let entry = runtime_filters.entry(scan_id).or_default();
+            entry.inlist.extend(filter.inlist);
+            entry.min_max.extend(filter.min_max);
+            entry.bloom.extend(filter.bloom);
         }
     }
 
@@ -1500,7 +1490,7 @@ impl TableContext for QueryContext {
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_bloom()).clone(),
+            Some(v) => v.bloom.clone(),
             None => vec![],
         }
     }
@@ -1508,7 +1498,7 @@ impl TableContext for QueryContext {
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_inlist()).clone(),
+            Some(v) => v.inlist.clone(),
             None => vec![],
         }
     }
@@ -1516,14 +1506,14 @@ impl TableContext for QueryContext {
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_min_max()).clone(),
+            Some(v) => v.min_max.clone(),
             None => vec![],
         }
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return !runtime_filter.get_bloom().is_empty();
+            return !runtime_filter.bloom.is_empty();
         }
         false
     }

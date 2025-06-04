@@ -281,7 +281,7 @@ impl HashJoinProbeState {
             None
         };
         let build_block = if build_state.is_build_projected {
-            Some(self.hash_join_state.row_space.gather(
+            Some(self.hash_join_state.gather(
                 &build_indexes[0..matched_idx],
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,

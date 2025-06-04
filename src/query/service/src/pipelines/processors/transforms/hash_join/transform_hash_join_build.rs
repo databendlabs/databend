@@ -22,6 +22,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 
+use super::runtime_filter::build_and_push_down_runtime_filter;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
 use crate::pipelines::processors::Event;
@@ -74,7 +75,6 @@ pub enum AsyncStep {
 pub struct TransformHashJoinBuild {
     input_port: Arc<InputPort>,
     data_blocks: Vec<DataBlock>,
-    data_blocks_memory_size: usize,
 
     build_state: Arc<HashJoinBuildState>,
     hash_table_type: HashTableType,
@@ -127,7 +127,6 @@ impl TransformHashJoinBuild {
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             data_blocks: vec![],
-            data_blocks_memory_size: 0,
             build_state,
             hash_table_type: HashTableType::FirstRound,
             is_spill_happen_checked: false,
@@ -289,6 +288,30 @@ impl Processor for TransformHashJoinBuild {
                     self.set_need_next_round()
                 }
                 self.build_state.barrier.wait().await;
+                if !self
+                    .build_state
+                    .is_runtime_filter_added
+                    .swap(true, Ordering::AcqRel)
+                {
+                    let build_chunks = unsafe {
+                        (*self.build_state.hash_join_state.build_state.get())
+                            .generation_state
+                            .chunks
+                            .clone()
+                    };
+                    let build_num_rows = unsafe {
+                        (*self.build_state.hash_join_state.build_state.get())
+                            .generation_state
+                            .build_num_rows
+                    };
+                    build_and_push_down_runtime_filter(
+                        &build_chunks,
+                        build_num_rows,
+                        &self.build_state,
+                    )
+                    .await?;
+                }
+                self.build_state.barrier.wait().await;
             }
             Step::Async(AsyncStep::Spill) => {
                 self.spiller.spill(&self.data_blocks, None).await?;
@@ -297,7 +320,6 @@ impl Processor for TransformHashJoinBuild {
                     .is_spill_happened
                     .store(true, Ordering::Release);
                 self.data_blocks.clear();
-                self.data_blocks_memory_size = 0;
             }
             Step::Async(AsyncStep::WaitProbe) => {
                 self.build_state.hash_join_state.wait_probe_notify().await?;
@@ -319,7 +341,6 @@ impl Processor for TransformHashJoinBuild {
 
 impl TransformHashJoinBuild {
     fn add_data_block(&mut self, data_block: DataBlock) {
-        self.data_blocks_memory_size += data_block.memory_size();
         self.data_blocks.push(data_block);
     }
 
