@@ -61,27 +61,31 @@ impl WorkloadGroupResourceManagerInner {
     pub async fn get_workload(self: &Arc<Self>, id: &str) -> Result<Arc<WorkloadGroupResource>> {
         self.cleanup_expired();
 
+        let workload = self.workload_mgr.get_by_id(id).await?;
+
         {
             let online_workload_group = self
                 .online_workload_group
                 .lock()
                 .unwrap_or_else(PoisonError::into_inner);
             if let Some(online_workload_group) = online_workload_group.get(id) {
-                if let Some(workload) = online_workload_group.upgrade() {
-                    return Ok(workload);
+                if let Some(online_workload) = online_workload_group.upgrade() {
+                    if online_workload.meta == workload {
+                        return Ok(online_workload);
+                    }
                 }
             }
         }
-
-        let workload = self.workload_mgr.get_by_id(id).await?;
 
         let mut online_workload_group = self
             .online_workload_group
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
         if let Some(online_workload_group) = online_workload_group.get(id) {
-            if let Some(workload) = online_workload_group.upgrade() {
-                return Ok(workload);
+            if let Some(online_workload) = online_workload_group.upgrade() {
+                if online_workload.meta == workload {
+                    return Ok(online_workload);
+                }
             }
         }
 
@@ -98,7 +102,7 @@ impl WorkloadGroupResourceManagerInner {
             })),
         });
 
-        online_workload_group.insert(
+        let _old_workload_group = online_workload_group.insert(
             workload_resource.meta.id.clone(),
             Arc::downgrade(&workload_resource),
         );
