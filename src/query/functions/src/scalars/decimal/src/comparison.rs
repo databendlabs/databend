@@ -72,30 +72,24 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|ctx, d| {
-                    let (s1, s2) = (
-                        d[0].as_decimal().unwrap().decimal_size().scale(),
-                        d[1].as_decimal().unwrap().decimal_size().scale(),
-                    );
+                    let d1 = d[0].as_decimal().unwrap();
+                    let d2 = d[1].as_decimal().unwrap();
+
+                    let (s1, s2) = (d1.decimal_size().scale(), d2.decimal_size().scale());
                     let (m1, m2) = compare_multiplier(s1, s2);
-                    let new_domain = match (&d[0], &d[1]) {
-                        (
-                            Domain::Decimal(DecimalDomain::Decimal128(d1, _)),
-                            Domain::Decimal(DecimalDomain::Decimal128(d2, _)),
-                        ) => {
+                    let new_domain = match (d1, d2) {
+                        (DecimalDomain::Decimal128(d1, _), DecimalDomain::Decimal128(d2, _)) => {
                             let d1 = SimpleDomain {
-                                min: d1.min.checked_mul(i128::e(m1)).unwrap_or(i128::MIN),
-                                max: d1.max.checked_mul(i128::e(m1)).unwrap_or(i128::MAX),
+                                min: d1.min.checked_mul(i128::e(m1)).unwrap_or(i128::DECIMAL_MIN),
+                                max: d1.max.checked_mul(i128::e(m1)).unwrap_or(i128::DECIMAL_MAX),
                             };
                             let d2 = SimpleDomain {
-                                min: d2.min.checked_mul(i128::e(m2)).unwrap_or(i128::MIN),
-                                max: d2.max.checked_mul(i128::e(m2)).unwrap_or(i128::MAX),
+                                min: d2.min.checked_mul(i128::e(m2)).unwrap_or(i128::DECIMAL_MIN),
+                                max: d2.max.checked_mul(i128::e(m2)).unwrap_or(i128::DECIMAL_MAX),
                             };
                             Op::domain_op(&d1, &d2)
                         }
-                        (
-                            Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
-                            Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
-                        ) => {
+                        (DecimalDomain::Decimal256(d1, _), DecimalDomain::Decimal256(d2, _)) => {
                             let d1 = SimpleDomain {
                                 min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
                                 max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
@@ -107,10 +101,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                             };
                             Op::domain_op(&d1, &d2)
                         }
-                        (
-                            Domain::Decimal(DecimalDomain::Decimal128(_, _)),
-                            Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
-                        ) => {
+                        (DecimalDomain::Decimal128(_, _), DecimalDomain::Decimal256(d2, _)) => {
                             let d1 = convert_to_decimal_domain(
                                 ctx,
                                 d[0].clone(),
@@ -133,10 +124,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                             };
                             Op::domain_op(&d1, &d2)
                         }
-                        (
-                            Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
-                            Domain::Decimal(DecimalDomain::Decimal128(_, _)),
-                        ) => {
+                        (DecimalDomain::Decimal256(d1, _), DecimalDomain::Decimal128(_, _)) => {
                             let d2 = convert_to_decimal_domain(
                                 ctx,
                                 d[1].clone(),
@@ -159,7 +147,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                             };
                             Op::domain_op(&d1, &d2)
                         }
-                        _ => unreachable!(),
+                        _ => unimplemented!(),
                     };
                     new_domain.map(Domain::Boolean)
                 }),

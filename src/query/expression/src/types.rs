@@ -516,11 +516,11 @@ pub trait ReturnType: ValueType {
         iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
     ) -> Self::Column {
-        let mut col = Self::create_builder(iter.size_hint().0, generics);
+        let mut builder = Self::create_builder(iter.size_hint().0, generics);
         for item in iter {
-            Self::push_item(&mut col, Self::to_scalar_ref(&item));
+            Self::push_item(&mut builder, Self::to_scalar_ref(&item));
         }
-        Self::build_column(col)
+        Self::build_column(builder)
     }
 
     fn column_from_ref_iter<'a>(
