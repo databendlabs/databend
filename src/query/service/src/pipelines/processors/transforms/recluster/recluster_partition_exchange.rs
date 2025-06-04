@@ -33,8 +33,7 @@ impl ReclusterPartitionExchange {
 
 impl Exchange for ReclusterPartitionExchange {
     const NAME: &'static str = "Recluster";
-    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        let mut data_block = data_block;
+    fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let range_ids = data_block
             .get_last_column()
             .as_number()
