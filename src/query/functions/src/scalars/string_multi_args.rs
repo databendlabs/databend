@@ -1117,13 +1117,21 @@ fn char_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
         for arg in &args {
             let val = arg.index(row).unwrap();
             // turn val into unicode char
-            if val < 0 || val > u32::MAX as i64 || std::char::from_u32(val as u32).is_none() {
+            if val < 0 || val > u32::MAX as i64 {
                 builder.put_str("");
                 builder.commit_row();
                 ctx.set_error(row, "Invalid character code in the CHR input");
                 continue 'F;
             }
-            builder.put_char(unsafe { std::char::from_u32_unchecked(val as u32) });
+
+            if let Some(c) = std::char::from_u32(val as u32) {
+                builder.put_char(c);
+            } else {
+                builder.put_str("");
+                builder.commit_row();
+                ctx.set_error(row, "Invalid character code in the CHR input");
+                continue 'F;
+            }
         }
         builder.commit_row();
     }
