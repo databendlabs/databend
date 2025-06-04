@@ -3011,10 +3011,9 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
-           FROM ~ #at_string ~ #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
         },
-        |(_, stage_name, options, on_error_opt)| InsertSource::StreamingLoad {
-            stage_name,
+        |(options, on_error_opt)| InsertSource::StreamingLoad {
             format_options: options,
             on_error_mode: on_error_opt.map(|v| v.2.to_string()),
         },

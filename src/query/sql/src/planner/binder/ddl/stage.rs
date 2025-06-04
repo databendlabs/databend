@@ -63,10 +63,6 @@ impl Binder {
             None => {
                 if stage_name == "~" {
                     StageInfo::new_user_stage(&self.ctx.get_current_user()?.name)
-                } else if stage_name == "streaming_load" {
-                    return Err(ErrorCode::SemanticError(
-                        "`streaming_load` is a reserved stage name",
-                    ));
                 } else {
                     StageInfo::new_internal_stage(stage_name)
                 }

@@ -157,15 +157,9 @@ impl Binder {
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
             InsertSource::StreamingLoad {
-                stage_name,
                 format_options,
                 on_error_mode,
             } => {
-                if stage_name != "streaming_load" {
-                    return Err(ErrorCode::SemanticError(
-                        "streaming load only support insert from `@streaming_load`",
-                    ));
-                }
                 let file_format_params = FileFormatParams::try_from_reader(
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,

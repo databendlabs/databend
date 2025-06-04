@@ -83,7 +83,6 @@ pub enum InsertSource {
         query: Box<Query>,
     },
     StreamingLoad {
-        stage_name: String,
         format_options: FileFormatOptions,
         on_error_mode: Option<String>,
     },
@@ -107,11 +106,9 @@ impl Display for InsertSource {
             InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
             InsertSource::StreamingLoad {
-                stage_name,
                 format_options,
                 on_error_mode,
             } => {
-                write!(f, " from @{stage_name}")?;
                 write!(f, " FILE_FORMAT = ({})", format_options)?;
                 write!(
                     f,
