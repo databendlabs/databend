@@ -125,7 +125,7 @@ impl GlobalHistoryLog {
             }
         }
         self.prepare().await?;
-        info!("System history prepared successfully");
+        info!("[HISTORY-TABLES] System history prepared successfully");
         // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
         let sleep_time =
             Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000));
@@ -153,14 +153,14 @@ impl GlobalHistoryLog {
                             // means this node is older version then exit
                             if e.code() == 1006 {
                                 info!(
-                                    "system history {} log transform exit due to schema changed",
+                                    "[HISTORY-TABLES] {} log transform failed due to schema changed, exit",
                                     table_clone.name
                                 );
                                 break;
                             }
 
                             error!(
-                                "system history {} log transform exit {}",
+                                "[HISTORY-TABLES] {} log transform failed due to {}, retry",
                                 table_clone.name, e
                             );
                         }
@@ -190,7 +190,10 @@ impl GlobalHistoryLog {
                             let _ = log
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
-                            error!("{} log clean exit {}", table_clone.name, e);
+                            error!(
+                                "[HISTORY-TABLES] {} log clean failed {}",
+                                table_clone.name, e
+                            );
                         }
                     }
                     sleep(sleep_time).await;
@@ -295,6 +298,7 @@ impl GlobalHistoryLog {
                 get_alter_table_sql(self.create_context().await?, create_table, &table.name)
                     .await?;
             for alter_sql in get_alter_sql {
+                info!("[HISTORY-TABLES] executing alter table: {}", alter_sql);
                 self.execute_sql(&alter_sql).await?;
             }
         }
@@ -362,7 +366,7 @@ impl GlobalHistoryLog {
                 let vacuum = format!("VACUUM TABLE system_history.{}", table.name);
                 self.execute_sql(&vacuum).await?;
                 info!(
-                    "Periodic VACUUM operation on history log table '{}' completed successfully.",
+                    "[HISTORY-TABLES] periodic VACUUM operation on history log table '{}' completed successfully.",
                     table.name
                 );
             }
