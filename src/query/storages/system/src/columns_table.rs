@@ -48,7 +48,7 @@ use log::warn;
 use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::find_eq_or_filter;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -269,6 +269,7 @@ pub(crate) async fn dump_tables(
 
     let mut filtered_db_names: Option<Vec<String>> = None;
     let mut filtered_table_names: Option<Vec<String>> = None;
+    let mut invalid_optimize = false;
 
     if let Some(push_downs) = push_downs {
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
@@ -276,22 +277,26 @@ pub(crate) async fn dump_tables(
             let mut databases: Vec<String> = Vec::new();
             let mut tables: Vec<String> = Vec::new();
 
-            find_eq_filter(&expr, &mut |col_name, scalar| {
-                if col_name == "database" {
-                    if let Scalar::String(database) = scalar {
-                        if !databases.contains(database) {
-                            databases.push(database.clone());
+            invalid_optimize = find_eq_or_filter(
+                &expr,
+                &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(database) = scalar {
+                            if !databases.contains(database) {
+                                databases.push(database.clone());
+                            }
+                        }
+                    } else if col_name == "table" {
+                        if let Scalar::String(table) = scalar {
+                            if !tables.contains(table) {
+                                tables.push(table.clone());
+                            }
                         }
                     }
-                } else if col_name == "table" {
-                    if let Scalar::String(table) = scalar {
-                        if !tables.contains(table) {
-                            tables.push(table.clone());
-                        }
-                    }
-                }
-                Ok(())
-            });
+                    Ok(())
+                },
+                invalid_optimize,
+            );
             if !databases.is_empty() {
                 filtered_db_names = Some(databases);
             }
@@ -308,6 +313,11 @@ pub(crate) async fn dump_tables(
     };
 
     let mut final_dbs: Vec<Arc<dyn Database>> = Vec::new();
+
+    if invalid_optimize {
+        filtered_db_names = None;
+        filtered_table_names = None;
+    }
 
     match (filtered_db_names, &visibility_checker) {
         (Some(db_names), Some(checker)) => {
