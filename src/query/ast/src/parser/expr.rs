@@ -1817,68 +1817,153 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
 
     let iso_year_str = value(
         IntervalKind::ISOYear,
-        rule! { #literal_string_eq_ignore_case("ISOYEAR")  },
+        rule! { #literal_string_eq_ignore_case("ISOYEAR") },
     );
+
     let year_str = value(
         IntervalKind::Year,
-        rule! { #literal_string_eq_ignore_case("YEAR")  },
+        rule! { #literal_string_eq_ignore_case("YEAR")
+            | #literal_string_eq_ignore_case("Y")
+            | #literal_string_eq_ignore_case("YY")
+            | #literal_string_eq_ignore_case("YYY")
+            | #literal_string_eq_ignore_case("YYYY")
+            | #literal_string_eq_ignore_case("YR")
+            | #literal_string_eq_ignore_case("YEARS")
+            | #literal_string_eq_ignore_case("YRS")
+        },
     );
+
     let quarter_str = value(
         IntervalKind::Quarter,
-        rule! { #literal_string_eq_ignore_case("QUARTER") },
+        rule! { #literal_string_eq_ignore_case("QUARTER")
+            | #literal_string_eq_ignore_case("Q")
+            | #literal_string_eq_ignore_case("QTR")
+            | #literal_string_eq_ignore_case("QTRS")
+            | #literal_string_eq_ignore_case("QUARTERS")
+        },
     );
+
     let month_str = value(
         IntervalKind::Month,
-        rule! { #literal_string_eq_ignore_case("MONTH")  },
+        rule! { #literal_string_eq_ignore_case("MONTH")
+            | #literal_string_eq_ignore_case("MM")
+            | #literal_string_eq_ignore_case("MON")
+            | #literal_string_eq_ignore_case("MONS")
+            | #literal_string_eq_ignore_case("MONTHS")
+        },
     );
+
     let day_str = value(
         IntervalKind::Day,
-        rule! { #literal_string_eq_ignore_case("DAY")  },
+        rule! { #literal_string_eq_ignore_case("DAY")
+            | #literal_string_eq_ignore_case("D")
+            | #literal_string_eq_ignore_case("DD")
+            | #literal_string_eq_ignore_case("DAYS")
+            | #literal_string_eq_ignore_case("DAYOFMONTH")
+        },
     );
+
     let hour_str = value(
         IntervalKind::Hour,
-        rule! { #literal_string_eq_ignore_case("HOUR")  },
+        rule! { #literal_string_eq_ignore_case("HOUR")
+            | #literal_string_eq_ignore_case("H")
+            | #literal_string_eq_ignore_case("HH")
+            | #literal_string_eq_ignore_case("HR")
+            | #literal_string_eq_ignore_case("HOURS")
+            | #literal_string_eq_ignore_case("HRS")
+        },
     );
+
     let minute_str = value(
         IntervalKind::Minute,
-        rule! { #literal_string_eq_ignore_case("MINUTE")  },
+        rule! { #literal_string_eq_ignore_case("MINUTE")
+            | #literal_string_eq_ignore_case("M")
+            | #literal_string_eq_ignore_case("MI")
+            | #literal_string_eq_ignore_case("MIN")
+            | #literal_string_eq_ignore_case("MINUTES")
+            | #literal_string_eq_ignore_case("MINS")
+        },
     );
+
     let second_str = value(
         IntervalKind::Second,
-        rule! { #literal_string_eq_ignore_case("SECOND")  },
+        rule! { #literal_string_eq_ignore_case("SECOND")
+            | #literal_string_eq_ignore_case("S")
+            | #literal_string_eq_ignore_case("SEC")
+            | #literal_string_eq_ignore_case("SECONDS")
+            | #literal_string_eq_ignore_case("SECS")
+        },
     );
+
     let doy_str = value(
         IntervalKind::Doy,
-        rule! { #literal_string_eq_ignore_case("DOY") | #literal_string_eq_ignore_case("DAYOFYEAR")  },
+        rule! { #literal_string_eq_ignore_case("DOY")
+            | #literal_string_eq_ignore_case("DAYOFYEAR")
+            | #literal_string_eq_ignore_case("YEARDAY")
+            | #literal_string_eq_ignore_case("DY")
+        },
     );
+
     let dow_str = value(
         IntervalKind::Dow,
-        rule! { (#literal_string_eq_ignore_case("DOW") | #literal_string_eq_ignore_case("WEEKDAY") | #literal_string_eq_ignore_case("DAYOFWEEK") )  },
+        rule! { (#literal_string_eq_ignore_case("DOW")
+            | #literal_string_eq_ignore_case("WEEKDAY")
+            | #literal_string_eq_ignore_case("DW")
+            | #literal_string_eq_ignore_case("DAYOFWEEK"))
+        },
     );
+
     let isodow_str = value(
         IntervalKind::ISODow,
-        rule! { #literal_string_eq_ignore_case("ISODOW")  },
+        rule! { #literal_string_eq_ignore_case("ISODOW")
+            | #literal_string_eq_ignore_case("DAYOFWEEK_ISO")
+            | #literal_string_eq_ignore_case("DAYOFWEEKISO")
+            | #literal_string_eq_ignore_case("WEEKDAY_ISO")
+            | #literal_string_eq_ignore_case("DOW_ISO")
+            | #literal_string_eq_ignore_case("DW_ISO")
+        },
     );
+
     let week_str = value(
         IntervalKind::Week,
-        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))  },
+        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))
+            | #literal_string_eq_ignore_case("WK")
+            | #literal_string_eq_ignore_case("WEEKOFYEAR")
+            | #literal_string_eq_ignore_case("WOY")
+            | #literal_string_eq_ignore_case("WY")
+        },
     );
+
     let epoch_str = value(
         IntervalKind::Epoch,
-        rule! { #literal_string_eq_ignore_case("EPOCH")  },
+        rule! { #literal_string_eq_ignore_case("EPOCH")
+            | #literal_string_eq_ignore_case("EPOCH_SECOND")
+            | #literal_string_eq_ignore_case("EPOCH")
+            | #literal_string_eq_ignore_case("EPOCH_SECONDS")
+        },
     );
+
     let microsecond_str = value(
         IntervalKind::MicroSecond,
-        rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+        rule! { #literal_string_eq_ignore_case("MICROSECOND")
+            | #literal_string_eq_ignore_case("MICROSECONDS")
+            | #literal_string_eq_ignore_case("US")
+            | #literal_string_eq_ignore_case("USEC")
+        },
     );
+
     let yearweek_str = value(
         IntervalKind::YearWeek,
-        rule! { #literal_string_eq_ignore_case("YEARWEEK")  },
+        rule! { #literal_string_eq_ignore_case("YEARWEEK")
+            | #literal_string_eq_ignore_case("YEAROFWEEK")
+        },
     );
+
     let millennium_str = value(
         IntervalKind::Millennium,
-        rule! { #literal_string_eq_ignore_case("MILLENNIUM")  },
+        rule! { #literal_string_eq_ignore_case("MILLENNIUM") },
     );
+
     alt((
         rule!(
             #year
