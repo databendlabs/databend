@@ -34,8 +34,8 @@ use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::pruning::create_inverted_index_query;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_enterprise_table_index::get_table_index_handler;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
 use databend_query::test_kits::append_string_sample_data;
@@ -60,7 +60,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
 
     let table = fixture.latest_default_table().await?;
 
-    let handler = get_inverted_index_handler();
+    let handler = get_table_index_handler();
 
     let ctx = fixture.new_query_ctx().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();

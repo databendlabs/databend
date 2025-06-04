@@ -1842,8 +1842,8 @@ CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);
 ---------- Output ---------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b)
 ---------- AST ------------
-CreateInvertedIndex(
-    CreateInvertedIndexStmt {
+CreateTableIndex(
+    CreateTableIndexStmt {
         create_option: CreateOrReplace,
         index_name: Identifier {
             span: Some(
@@ -1853,6 +1853,7 @@ CreateInvertedIndex(
             quote: None,
             ident_type: None,
         },
+        index_type: Inverted,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1892,8 +1893,8 @@ CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b);
 ---------- Output ---------
 CREATE OR REPLACE NGRAM INDEX idx2 ON t1 (a, b)
 ---------- AST ------------
-CreateNgramIndex(
-    CreateNgramIndexStmt {
+CreateTableIndex(
+    CreateTableIndexStmt {
         create_option: CreateOrReplace,
         index_name: Identifier {
             span: Some(
@@ -1903,6 +1904,7 @@ CreateNgramIndex(
             quote: None,
             ident_type: None,
         },
+        index_type: Ngram,
         catalog: None,
         database: None,
         table: Identifier {
@@ -1976,7 +1978,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -2029,7 +2030,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -2096,7 +2096,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -2175,7 +2174,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -2225,7 +2223,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -2312,7 +2309,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -2397,7 +2393,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -2563,7 +2558,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -2642,7 +2636,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -2800,7 +2793,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -2933,7 +2925,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -3007,7 +2998,7 @@ CreateTable(
                 ],
                 Some(
                     [
-                        InvertedIndexDefinition {
+                        TableIndexDefinition {
                             index_name: Identifier {
                                 span: Some(
                                     67..71,
@@ -3016,6 +3007,7 @@ CreateTable(
                                 quote: None,
                                 ident_type: None,
                             },
+                            index_type: Inverted,
                             columns: [
                                 Identifier {
                                     span: Some(
@@ -3041,7 +3033,6 @@ CreateTable(
                         },
                     ],
                 ),
-                None,
             ),
         ),
         engine: None,
@@ -3113,10 +3104,9 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 Some(
                     [
-                        NgramIndexDefinition {
+                        TableIndexDefinition {
                             index_name: Identifier {
                                 span: Some(
                                     64..68,
@@ -3125,6 +3115,7 @@ CreateTable(
                                 quote: None,
                                 ident_type: None,
                             },
+                            index_type: Ngram,
                             columns: [
                                 Identifier {
                                     span: Some(
@@ -3316,7 +3307,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -3764,7 +3754,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -3909,7 +3898,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -5322,7 +5310,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -5405,7 +5392,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -5469,7 +5455,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -5530,7 +5515,6 @@ CreateTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -14629,7 +14613,6 @@ CreateTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         engine: None,
@@ -14683,7 +14666,6 @@ CreateTable(
                         ),
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -21059,7 +21041,6 @@ CreateDynamicTable(
                     },
                 ],
                 None,
-                None,
             ),
         ),
         cluster_by: None,
@@ -21205,7 +21186,6 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -21398,7 +21378,6 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),
@@ -21635,7 +21614,6 @@ CreateDynamicTable(
                         comment: None,
                     },
                 ],
-                None,
                 None,
             ),
         ),

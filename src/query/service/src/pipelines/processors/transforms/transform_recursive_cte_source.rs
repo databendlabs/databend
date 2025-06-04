@@ -307,8 +307,7 @@ async fn create_memory_table_for_cte_scan(
                 field_comments: vec![],
                 cluster_key: None,
                 as_select: None,
-                inverted_indexes: None,
-                ngram_indexes: None,
+                table_indexes: None,
                 attached_columns: None,
             };
             let create_table_interpreter =

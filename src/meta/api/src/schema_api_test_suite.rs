@@ -6264,7 +6264,7 @@ impl SchemaApiTestSuite {
         let index2_drop_start_time;
         let index2_drop_end_time;
         let index_column_ids_2 = vec![2];
-        let index_name_3 = "idx2".to_string();
+        let index_name_3 = "idx3".to_string();
         let index_column_ids_3 = vec![3];
 
         {
@@ -6378,10 +6378,26 @@ impl SchemaApiTestSuite {
         }
 
         {
+            info!("--- create table index with duplicate column id and different index type");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::Create,
+                table_id,
+                tenant: tenant.clone(),
+                name: index_name_3.clone(),
+                column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
+                options: BTreeMap::new(),
+                index_type: TableIndexType::Ngram,
+            };
+            let res = mt.create_table_index(req).await;
+            assert!(res.is_ok());
+        }
+
+        {
             info!("--- check table index");
             let seqv = mt.get_table_by_id(table_id).await?.unwrap();
             let table_meta = seqv.data;
-            assert_eq!(table_meta.indexes.len(), 2);
+            assert_eq!(table_meta.indexes.len(), 3);
 
             let index1 = table_meta.indexes.get(&index_name_1);
             assert!(index1.is_some());
@@ -6392,6 +6408,11 @@ impl SchemaApiTestSuite {
             assert!(index2.is_some());
             let index2 = index2.unwrap();
             assert_eq!(index2.column_ids, index_column_ids_2);
+
+            let index3 = table_meta.indexes.get(&index_name_3);
+            assert!(index3.is_some());
+            let index3 = index3.unwrap();
+            assert_eq!(index3.column_ids, index_column_ids_1);
         }
 
         {
@@ -6424,6 +6445,27 @@ impl SchemaApiTestSuite {
                 if_exists: true,
                 table_id,
                 name: index_name_1.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_ok());
+
+            info!("--- drop table index with different index type");
+            let req = DropTableIndexReq {
+                index_type: TableIndexType::Inverted,
+                tenant: tenant.clone(),
+                if_exists: true,
+                table_id,
+                name: index_name_3.clone(),
+            };
+            let res = mt.drop_table_index(req).await;
+            assert!(res.is_err());
+
+            let req = DropTableIndexReq {
+                index_type: TableIndexType::Ngram,
+                tenant: tenant.clone(),
+                if_exists: true,
+                table_id,
+                name: index_name_3.clone(),
             };
             let res = mt.drop_table_index(req).await;
             assert!(res.is_ok());

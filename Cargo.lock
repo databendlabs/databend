@@ -4831,32 +4831,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-enterprise-inverted-index"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-meta-app",
-]
-
-[[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
-
-[[package]]
-name = "databend-enterprise-ngram-index"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-meta-app",
-]
 
 [[package]]
 name = "databend-enterprise-query"
@@ -4895,12 +4871,11 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
- "databend-enterprise-inverted-index",
- "databend-enterprise-ngram-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-query",
@@ -4962,6 +4937,18 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-sql",
+]
+
+[[package]]
+name = "databend-enterprise-table-index"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-meta-app",
 ]
 
 [[package]]
@@ -5256,10 +5243,9 @@ dependencies = [
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
- "databend-enterprise-inverted-index",
- "databend-enterprise-ngram-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-storages-common-blocks",

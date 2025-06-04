@@ -1021,12 +1021,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             IndexColumnIdNotFound::new(*column_id, &index.name),
                         )));
                     }
-                    if index_column_ids.contains(column_id) {
+                    if index_column_ids.contains(&(*column_id, index.index_type.clone())) {
                         return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
                             DuplicatedIndexColumnId::new(*column_id, &index.name),
                         )));
                     }
-                    index_column_ids.insert(column_id);
+                    index_column_ids.insert((*column_id, index.index_type.clone()));
                 }
             }
         }
@@ -2450,7 +2450,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // column_id can not be duplicated
             for (name, index) in indexes.iter() {
-                if *name == req.name {
+                if *name == req.name || index.index_type != req.index_type {
                     continue;
                 }
                 for column_id in &req.column_ids {
@@ -2545,12 +2545,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let indexes = &mut table_meta.indexes;
             if !indexes.contains_key(&req.name) && !req.if_exists {
                 return Err(KVAppError::AppError(AppError::UnknownIndex(
-                    UnknownError::<IndexName>::new(req.name.clone(), "drop table index"),
+                    UnknownError::<IndexName>::new(
+                        req.name.clone(),
+                        format!("drop {} index", req.index_type),
+                    ),
                 )));
             }
             let Some(index) = indexes.remove(&req.name) else {
                 return Ok(());
             };
+            if index.index_type != req.index_type {
+                return Err(KVAppError::AppError(AppError::UnknownIndex(
+                    UnknownError::<IndexName>::new(
+                        req.name.clone(),
+                        format!(
+                            "drop {} index, but the index is {}",
+                            req.index_type, index.index_type
+                        ),
+                    ),
+                )));
+            }
 
             let (m_key, m_value) =
                 mark_table_index_as_deleted(&req.tenant, req.table_id, &req.name, &index.version)?;
