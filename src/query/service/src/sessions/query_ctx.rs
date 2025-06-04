@@ -1543,7 +1543,7 @@ impl TableContext for QueryContext {
                     let duration = if fuse_table.is_transient() {
                         Duration::from_secs(0)
                     } else {
-                        let settings = &self.query_settings;
+                        let settings = self.get_settings();
                         let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
                         if max_exec_time_secs != 0 {
                             Duration::from_secs(max_exec_time_secs)
@@ -1654,8 +1654,8 @@ impl TableContext for QueryContext {
                         "[QUERY-CTX] Query from parquet file only support $1 as column position",
                     ))
                 } else if max_column_position == 0 {
+                    let settings = self.get_settings();
                     let mut read_options = ParquetReadOptions::default();
-                    let settings = self.query_settings.clone();
 
                     if !settings.get_enable_parquet_page_index()? {
                         read_options = read_options.with_prune_pages(false);
