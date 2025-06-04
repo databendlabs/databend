@@ -1119,6 +1119,7 @@ fn char_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
             // turn val into unicode char
             if val < 0 || val > u32::MAX as i64 || std::char::from_u32(val as u32).is_none() {
                 builder.put_str("");
+                builder.commit_row();
                 ctx.set_error(row, "Invalid character code in the CHR input");
                 continue 'F;
             }
