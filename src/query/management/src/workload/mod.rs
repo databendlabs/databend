@@ -18,5 +18,4 @@ mod workload_resource;
 
 pub use workload_api::WorkloadApi;
 pub use workload_mgr::WorkloadMgr;
-pub use workload_resource::WorkloadGroupResource;
 pub use workload_resource::WorkloadGroupResourceManager;

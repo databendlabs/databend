@@ -6,6 +6,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "create or replace DATABASE workloadgroup" |  $BENDSQL_CLIENT_CONNECT
 echo "create table workloadgroup.t(a int)" | $BENDSQL_CLIENT_CONNECT
 echo "insert into workloadgroup.t values(1)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "DROP USER IF EXISTS test_user_workload_group2;" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "DROP WORKLOAD GROUP IF EXISTS valid_mem;" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "CREATE WORKLOAD GROUP valid_mem WITH memory_quota = '4GB';" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "create user test_user_workload_group2 identified by '123' with SET WORKLOAD GROUP='valid_mem'" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "grant select on workloadgroup.t to test_user_workload_group2" | $BENDSQL_CLIENT_OUTPUT_NULL

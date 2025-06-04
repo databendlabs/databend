@@ -148,6 +148,10 @@ impl OptimizerPipeline {
         // Generate and log the report only if tracing is enabled
         if self.opt_ctx.get_enable_trace() {
             self.trace_collector.log_report();
+            info!(
+                "Final s_expr:\n {}",
+                current_expr.pretty_format(&self.opt_ctx.get_metadata().read())?
+            );
         }
 
         Ok(current_expr)

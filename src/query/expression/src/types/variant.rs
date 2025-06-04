@@ -86,18 +86,6 @@ impl AccessType for VariantType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Variant(scalar)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Variant(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -137,6 +125,18 @@ impl AccessType for VariantType {
 
 impl ValueType for VariantType {
     type ColumnBuilder = BinaryColumnBuilder;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Variant(scalar)
+    }
+
+    fn upcast_domain(_domain: Self::Domain) -> Domain {
+        Domain::Undefined
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Variant(col)
+    }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         match builder {
@@ -241,6 +241,14 @@ pub fn cast_scalar_to_variant(
             NumberScalar::Float64(n) => n.0.into(),
         },
         ScalarRef::Decimal(x) => match x {
+            DecimalScalar::Decimal64(value, size) => {
+                let dec = jsonb::Decimal128 {
+                    precision: size.precision(),
+                    scale: size.scale(),
+                    value: value as i128,
+                };
+                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+            }
             DecimalScalar::Decimal128(value, size) => {
                 let dec = jsonb::Decimal128 {
                     precision: size.precision(),

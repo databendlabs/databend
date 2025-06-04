@@ -371,6 +371,7 @@ impl DataType {
     }
 }
 
+/// AccessType defines a series of access methods for a data type
 pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
@@ -382,12 +383,9 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_>;
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>>;
-    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain>;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
-    fn upcast_column(col: Self::Column) -> Column;
-    fn upcast_domain(domain: Self::Domain) -> Domain;
+    fn try_downcast_column(col: &Column) -> Option<Self::Column>;
 
     fn column_len(col: &Self::Column) -> usize;
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>>;
@@ -415,12 +413,8 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    /// This is default implementation yet it's not efficient.
-    #[inline(always)]
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        Self::upcast_scalar(Self::to_owned_scalar(lhs))
-            .cmp(&Self::upcast_scalar(Self::to_owned_scalar(rhs)))
-    }
+    /// Compare two scalar values.
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering;
 
     /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
@@ -459,8 +453,18 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
+/// ValueType includes the builder method of a data type based on AccessType.
 pub trait ValueType: AccessType {
     type ColumnBuilder: Debug + Clone;
+
+    /// Convert a scalar value to the generic Scalar type
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+
+    /// Convert a domain value to the generic Domain type
+    fn upcast_domain(domain: Self::Domain) -> Domain;
+
+    /// Convert a column value to the generic Column type
+    fn upcast_column(col: Self::Column) -> Column;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
     ///
@@ -500,11 +504,7 @@ pub trait ValueType: AccessType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 }
 
-pub trait ArgType: ReturnType {
-    fn data_type() -> DataType;
-    fn full_domain() -> Self::Domain;
-}
-
+/// Almost all ValueType implement ReturnType, except AnyType.
 pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
@@ -516,11 +516,11 @@ pub trait ReturnType: ValueType {
         iter: impl Iterator<Item = Self::Scalar>,
         generics: &GenericMap,
     ) -> Self::Column {
-        let mut col = Self::create_builder(iter.size_hint().0, generics);
+        let mut builder = Self::create_builder(iter.size_hint().0, generics);
         for item in iter {
-            Self::push_item(&mut col, Self::to_scalar_ref(&item));
+            Self::push_item(&mut builder, Self::to_scalar_ref(&item));
         }
-        Self::build_column(col)
+        Self::build_column(builder)
     }
 
     fn column_from_ref_iter<'a>(
@@ -533,4 +533,10 @@ pub trait ReturnType: ValueType {
         }
         Self::build_column(col)
     }
+}
+
+/// Almost all ReturnType implement ArgType, except Decimal.
+pub trait ArgType: ReturnType {
+    fn data_type() -> DataType;
+    fn full_domain() -> Self::Domain;
 }

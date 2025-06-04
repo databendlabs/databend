@@ -18,11 +18,14 @@ use databend_common_expression::types::decimal::DecimalColumn;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
+use super::run_ast_with_context;
+use super::TestContext;
 
 #[test]
 fn test_arithmetic() {
@@ -266,4 +269,55 @@ fn test_bitwise_shift_right(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a2 >> 1", columns);
     run_ast(file, "a2 >> 2", columns);
     run_ast(file, "c >> 2", columns);
+}
+
+#[test]
+fn test_decimal() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("arithmetic_decimal.txt").unwrap();
+
+    let columns = [
+        (
+            "l_extendedprice",
+            Decimal64Type::from_data_with_size(
+                [
+                    7029081, 3988040, 2696083, 8576832, 3179020, 1941184, 6911822, 4874825,
+                    4207270, 4425444,
+                ],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+        (
+            "l_discount",
+            Decimal64Type::from_data_with_size(
+                [8, 8, 0, 9, 7, 7, 7, 9, 9, 2],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+        (
+            "ps_supplycost",
+            Decimal64Type::from_data_with_size(
+                [
+                    32776, 34561, 52627, 45035, 65850, 11521, 34965, 79552, 42880, 48615,
+                ],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+        (
+            "l_quantity",
+            Decimal64Type::from_data_with_size(
+                [4300, 4000, 2300, 4800, 2000, 1600, 4600, 2500, 3700, 3600],
+                Some(DecimalSize::new_unchecked(15, 2)),
+            ),
+        ),
+    ];
+
+    run_ast_with_context(
+        file,
+        "l_extendedprice + (1 - l_discount) - l_quantity",
+        TestContext {
+            columns: &columns,
+            ..Default::default()
+        },
+    )
 }

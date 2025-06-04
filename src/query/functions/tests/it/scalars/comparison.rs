@@ -484,15 +484,15 @@ fn test_decimal(file: &mut impl Write) {
     let decimals = &[
         (
             "a",
-            Decimal128Type::from_data_with_size(&data_a, DecimalSize::new_unchecked(10, 2)),
+            Decimal128Type::from_data_with_size(&data_a, Some(DecimalSize::new_unchecked(10, 2))),
         ),
         (
             "b",
-            Decimal256Type::from_data_with_size(&data_b, DecimalSize::new_unchecked(10, 2)),
+            Decimal256Type::from_data_with_size(&data_b, Some(DecimalSize::new_unchecked(10, 2))),
         ),
         (
             "c",
-            Decimal256Type::from_data_with_size(&data_b, DecimalSize::new_unchecked(10, 3)),
+            Decimal256Type::from_data_with_size(&data_b, Some(DecimalSize::new_unchecked(10, 3))),
         ),
     ];
     run_ast(file, "a > b", decimals);

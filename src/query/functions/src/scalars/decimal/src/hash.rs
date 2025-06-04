@@ -16,16 +16,10 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::Decimal;
-use databend_common_expression::types::Decimal128As256Type;
-use databend_common_expression::types::Decimal128Type;
-use databend_common_expression::types::Decimal256As128Type;
-use databend_common_expression::types::Decimal256Type;
-use databend_common_expression::types::DecimalDataType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
@@ -199,8 +193,12 @@ where
     let size = decimal_type.size();
     if size.can_carried_by_128() {
         match decimal_type {
+            DecimalDataType::Decimal64(_) => {
+                let arg = arg.try_downcast::<Decimal64As128Type>().unwrap();
+                decimal_hash_typed::<H, R, _, _>(arg, ctx, size.scale(), cast)
+            }
             DecimalDataType::Decimal128(_) => {
-                let arg: Value<Decimal128Type> = arg.try_downcast().unwrap();
+                let arg = arg.try_downcast::<Decimal128Type>().unwrap();
                 decimal_hash_typed::<H, R, _, _>(arg, ctx, size.scale(), cast)
             }
             DecimalDataType::Decimal256(_) => {
@@ -210,6 +208,10 @@ where
         }
     } else {
         match decimal_type {
+            DecimalDataType::Decimal64(_) => {
+                let arg = arg.try_downcast::<Decimal64As256Type>().unwrap();
+                decimal_hash_typed::<H, R, _, _>(arg, ctx, size.scale(), cast)
+            }
             DecimalDataType::Decimal128(_) => {
                 let arg = arg.try_downcast::<Decimal128As256Type>().unwrap();
                 decimal_hash_typed::<H, R, _, _>(arg, ctx, size.scale(), cast)
@@ -259,8 +261,13 @@ where
     let scale = size.scale();
     if size.can_carried_by_128() {
         match decimal_type {
+            DecimalDataType::Decimal64(_) => {
+                let arg = arg.try_downcast::<Decimal64As128Type>().unwrap();
+                let seed: Value<S> = seed.try_downcast().unwrap();
+                decimal_hash_typed_with_seed::<H, S, _, _>(arg, seed, ctx, scale, cast)
+            }
             DecimalDataType::Decimal128(_) => {
-                let arg: Value<Decimal128Type> = arg.try_downcast().unwrap();
+                let arg = arg.try_downcast::<Decimal128Type>().unwrap();
                 let seed: Value<S> = seed.try_downcast().unwrap();
                 decimal_hash_typed_with_seed::<H, S, _, _>(arg, seed, ctx, scale, cast)
             }
@@ -272,6 +279,11 @@ where
         }
     } else {
         match decimal_type {
+            DecimalDataType::Decimal64(_) => {
+                let arg = arg.try_downcast::<Decimal64As256Type>().unwrap();
+                let seed: Value<S> = seed.try_downcast().unwrap();
+                decimal_hash_typed_with_seed::<H, S, _, _>(arg, seed, ctx, size.scale(), cast)
+            }
             DecimalDataType::Decimal128(_) => {
                 let arg = arg.try_downcast::<Decimal128As256Type>().unwrap();
                 let seed: Value<S> = seed.try_downcast().unwrap();

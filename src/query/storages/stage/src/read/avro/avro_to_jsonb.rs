@@ -186,7 +186,7 @@ mod tests {
         let cases = vec![
             (7, 4, 1234567i128, 7),
             (7, 4, 123456i128, 6),
-            (38, 10, i128::MAX, 38),
+            (38, 10, i128::DECIMAL_MAX, 38),
         ];
         for (p, s, v, digits) in cases {
             let (value, schema) = create_avro_decimal(&v.to_string(), p, s);
@@ -224,7 +224,7 @@ mod tests {
                 i256::from_i128(i128::MAX).mul(i256::from_i128(10)),
                 39,
             ),
-            (72, 10, i256::MAX, 72),
+            (72, 10, i256::DECIMAL_MAX, 72),
         ];
         for (p, s, v, digits) in cases {
             let (value, schema) = create_avro_decimal(&v.to_string(), p, s);

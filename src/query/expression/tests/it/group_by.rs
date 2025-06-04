@@ -74,10 +74,10 @@ fn test_group_by_hash_decimal() -> Result<()> {
     ];
 
     let block = new_block(&vec![
-        Decimal128Type::from_data_with_size(decimal_128_values, size_128),
-        Decimal256Type::from_data_with_size(decimal_256_values, size_128),
-        Decimal128Type::from_data_with_size(decimal_128_values, size_256),
-        Decimal256Type::from_data_with_size(decimal_256_values, size_256),
+        Decimal128Type::from_data_with_size(decimal_128_values, Some(size_128)),
+        Decimal256Type::from_data_with_size(decimal_256_values, Some(size_128)),
+        Decimal128Type::from_data_with_size(decimal_128_values, Some(size_256)),
+        Decimal256Type::from_data_with_size(decimal_256_values, Some(size_256)),
     ]);
 
     let method = DataBlock::choose_hash_method(&block, &[0])?;

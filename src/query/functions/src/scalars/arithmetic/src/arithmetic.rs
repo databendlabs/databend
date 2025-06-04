@@ -18,22 +18,15 @@ use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::BitXor;
 use std::str::FromStr;
-use std::sync::Arc;
 
 use databend_common_expression::serialize::read_decimal_with_size;
-use databend_common_expression::types::decimal::DecimalDomain;
-use databend_common_expression::types::decimal::DecimalType;
-use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::NumberType;
 use databend_common_expression::types::number::F64;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::Decimal;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
@@ -52,14 +45,8 @@ use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_number_mapped_type_without_64;
 use databend_common_expression::with_unsigned_integer_mapped_type;
-use databend_common_expression::Domain;
-use databend_common_expression::EvalContext;
-use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
-use databend_common_expression::FunctionEval;
-use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
-use databend_common_expression::FunctionSignature;
 use databend_functions_scalar_decimal::register_decimal_to_float;
 use databend_functions_scalar_decimal::register_decimal_to_int;
 use databend_functions_scalar_decimal::register_decimal_to_string;
@@ -292,83 +279,8 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                         ),
                     );
             }
-
-            NumberClass::Decimal128 => {
-                register_decimal_minus(registry)
-            }
-            NumberClass::Decimal256 => {
-                // already registered in Decimal128 branch
-            }
+            NumberClass::Decimal128 | NumberClass::Decimal256 => {}
         });
-    }
-}
-
-pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("minus", FunctionFactory::Closure(Box::new(|_params, args_type| {
-        if args_type.len() != 1 {
-            return None;
-        }
-
-        let is_nullable = args_type[0].is_nullable();
-        let arg_type = args_type[0].remove_nullable();
-        if !arg_type.is_decimal() {
-            return None;
-        }
-
-        let function = Function {
-            signature: FunctionSignature {
-                name: "minus".to_string(),
-                args_type: vec![arg_type.clone()],
-                return_type: arg_type.clone(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, d| match &d[0] {
-                    Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
-                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
-                            SimpleDomain {
-                                min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i128::MAX), // Only -MIN could overflow
-                            },
-                            *size,
-                        )))
-                    }
-                    Domain::Decimal(DecimalDomain::Decimal256(d, size)) => {
-                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
-                            SimpleDomain {
-                                min: -d.max,
-                                max: d.min.checked_neg().unwrap_or(i256::MAX), // Only -MIN could overflow
-                            },
-                            *size,
-                        )))
-                    }
-                    _ => unreachable!(),
-                }),
-                eval: Box::new(unary_minus_decimal),
-            },
-        };
-
-        if is_nullable {
-            Some(Arc::new(function.passthrough_nullable()))
-        } else {
-            Some(Arc::new(function))
-        }
-    })));
-}
-
-fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    let arg = &args[0];
-    let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
-    match decimal {
-        DecimalDataType::Decimal128(size) => {
-            let arg = arg.try_downcast().unwrap();
-            type T = DecimalType<i128>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
-        }
-        DecimalDataType::Decimal256(size) => {
-            let arg = arg.try_downcast().unwrap();
-            type T = DecimalType<i256>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
-        }
     }
 }
 

@@ -2929,78 +2929,87 @@ evaluation (internal):
 
 ast            : char(65,66,67)
 raw expr       : char(65, 66, 67)
-checked expr   : char<UInt8, UInt8, UInt8>(65_u8, 66_u8, 67_u8)
-optimized expr : 414243
-output type    : Binary
-output domain  : Undefined
-output         : 414243
+checked expr   : char<Int64, Int64, Int64>(CAST<UInt8>(65_u8 AS Int64), CAST<UInt8>(66_u8 AS Int64), CAST<UInt8>(67_u8 AS Int64))
+optimized expr : "ABC"
+output type    : String
+output domain  : {"ABC"..="ABC"}
+output         : 'ABC'
 
 
 ast            : char(65, null)
 raw expr       : char(65, NULL)
-checked expr   : char<UInt8 NULL, UInt8 NULL>(CAST<UInt8>(65_u8 AS UInt8 NULL), CAST<NULL>(NULL AS UInt8 NULL))
+checked expr   : char<Int64 NULL, Int64 NULL>(CAST<UInt8>(65_u8 AS Int64 NULL), CAST<NULL>(NULL AS Int64 NULL))
 optimized expr : NULL
-output type    : Binary NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
 
 ast            : char(a, b, c)
 raw expr       : char(a::UInt8, b::UInt8, c::UInt8)
-checked expr   : char<UInt8, UInt8, UInt8>(a, b, c)
+checked expr   : char<Int64, Int64, Int64>(CAST<UInt8>(a AS Int64), CAST<UInt8>(b AS Int64), CAST<UInt8>(c AS Int64))
 evaluation:
-+--------+-----------+-----------+-----------+-----------+
-|        | a         | b         | c         | Output    |
-+--------+-----------+-----------+-----------+-----------+
-| Type   | UInt8     | UInt8     | UInt8     | Binary    |
-| Domain | {66..=67} | {98..=99} | {68..=69} | Undefined |
-| Row 0  | 66        | 98        | 68        | 426244    |
-| Row 1  | 67        | 99        | 69        | 426244    |
-+--------+-----------+-----------+-----------+-----------+
++--------+-----------+-----------+-----------+--------+
+|        | a         | b         | c         | Output |
++--------+-----------+-----------+-----------+--------+
+| Type   | UInt8     | UInt8     | UInt8     | String |
+| Domain | {66..=67} | {98..=99} | {68..=69} | {""..} |
+| Row 0  | 66        | 98        | 68        | 'BbD'  |
+| Row 1  | 67        | 99        | 69        | 'CcE'  |
++--------+-----------+-----------+-----------+--------+
 evaluation (internal):
-+--------+------------------------------+
-| Column | Data                         |
-+--------+------------------------------+
-| a      | UInt8([66, 67])              |
-| b      | UInt8([98, 99])              |
-| c      | UInt8([68, 69])              |
-| Output | Binary([0x426244, 0x426244]) |
-+--------+------------------------------+
++--------+------------------------+
+| Column | Data                   |
++--------+------------------------+
+| a      | UInt8([66, 67])        |
+| b      | UInt8([98, 99])        |
+| c      | UInt8([68, 69])        |
+| Output | StringColumn[BbD, CcE] |
++--------+------------------------+
 
 
 ast            : char(a2, b, c)
 raw expr       : char(a2::UInt8 NULL, b::UInt8, c::UInt8)
-checked expr   : char<UInt8 NULL, UInt8 NULL, UInt8 NULL>(a2, CAST<UInt8>(b AS UInt8 NULL), CAST<UInt8>(c AS UInt8 NULL))
+checked expr   : char<Int64 NULL, Int64 NULL, Int64 NULL>(CAST<UInt8 NULL>(a2 AS Int64 NULL), CAST<UInt8>(b AS Int64 NULL), CAST<UInt8>(c AS Int64 NULL))
 evaluation:
-+--------+-----------+-----------+--------------------+--------------------+
-|        | b         | c         | a2                 | Output             |
-+--------+-----------+-----------+--------------------+--------------------+
-| Type   | UInt8     | UInt8     | UInt8 NULL         | Binary NULL        |
-| Domain | {98..=99} | {68..=69} | {66..=66} ∪ {NULL} | Undefined ∪ {NULL} |
-| Row 0  | 98        | 68        | 66                 | 426244             |
-| Row 1  | 99        | 69        | NULL               | NULL               |
-+--------+-----------+-----------+--------------------+--------------------+
++--------+-----------+-----------+--------------------+-----------------+
+|        | b         | c         | a2                 | Output          |
++--------+-----------+-----------+--------------------+-----------------+
+| Type   | UInt8     | UInt8     | UInt8 NULL         | String NULL     |
+| Domain | {98..=99} | {68..=69} | {66..=66} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 98        | 68        | 66                 | 'BbD'           |
+| Row 1  | 99        | 69        | NULL               | NULL            |
++--------+-----------+-----------+--------------------+-----------------+
 evaluation (internal):
-+--------+---------------------------------------------------------------------------------+
-| Column | Data                                                                            |
-+--------+---------------------------------------------------------------------------------+
-| b      | UInt8([98, 99])                                                                 |
-| c      | UInt8([68, 69])                                                                 |
-| a2     | NullableColumn { column: UInt8([66, 67]), validity: [0b______01] }              |
-| Output | NullableColumn { column: Binary([0x426244, 0x426244]), validity: [0b______01] } |
-+--------+---------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------+
+| Column | Data                                                                      |
++--------+---------------------------------------------------------------------------+
+| b      | UInt8([98, 99])                                                           |
+| c      | UInt8([68, 69])                                                           |
+| a2     | NullableColumn { column: UInt8([66, 67]), validity: [0b______01] }        |
+| Output | NullableColumn { column: StringColumn[BbD, CcE], validity: [0b______01] } |
++--------+---------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | char(c2)
-  | ^^^^^^^^ no function matches signature `char(UInt16)`, you might need to add explicit type casts.
-
-candidate functions:
-  char(UInt8) :: Binary            : unable to unify `UInt16` with `UInt8`
-  char(UInt8 NULL) :: Binary NULL  : unable to unify `UInt16` with `UInt8`
-
+ast            : char(c2)
+raw expr       : char(c2::UInt16)
+checked expr   : char<Int64>(CAST<UInt16>(c2 AS Int64))
+evaluation:
++--------+-----------+--------+
+|        | c2        | Output |
++--------+-----------+--------+
+| Type   | UInt16    | String |
+| Domain | {68..=69} | {""..} |
+| Row 0  | 68        | 'D'    |
+| Row 1  | 69        | 'E'    |
++--------+-----------+--------+
+evaluation (internal):
++--------+--------------------+
+| Column | Data               |
++--------+--------------------+
+| c2     | UInt16([68, 69])   |
+| Output | StringColumn[D, E] |
++--------+--------------------+
 
 
 ast            : soundex('你好中国北京')

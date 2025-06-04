@@ -19,6 +19,8 @@ use std::ops::Range;
 
 use super::AccessType;
 use super::DecimalSize;
+use super::GenericMap;
+use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::Column;
@@ -57,22 +59,13 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         T::downcast_scalar(scalar)
     }
-    fn upcast_scalar(_: ()) -> Scalar {
-        T::upcast_scalar()
-    }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         T::downcast_column(col)
     }
-    fn upcast_column(col: Self::Column) -> Column {
-        T::upcast_column(col)
-    }
 
     fn try_downcast_domain(domain: &Domain) -> Option<()> {
         T::downcast_domain(domain)
-    }
-    fn upcast_domain(_: ()) -> Domain {
-        T::upcast_domain()
     }
 
     fn column_len(len: &usize) -> usize {
@@ -140,6 +133,18 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
 impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
     type ColumnBuilder = usize;
 
+    fn upcast_scalar(_: ()) -> Scalar {
+        T::upcast_scalar()
+    }
+
+    fn upcast_domain(_: ()) -> Domain {
+        T::upcast_domain()
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        T::upcast_column(col)
+    }
+
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut usize> {
         T::downcast_builder(builder)
     }
@@ -182,5 +187,22 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
 
     fn build_scalar(builder: usize) {
         assert_eq!(builder, 1);
+    }
+}
+
+impl<T: ZeroSizeType> ReturnType for ZeroSizeValueType<T> {
+    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        0
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
+        iter.count()
     }
 }

@@ -113,6 +113,9 @@ impl From<&TableField> for Field {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
+            TableDataType::Decimal(DecimalDataType::Decimal64(size)) => {
+                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
+            }
             TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
                 ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
             }
@@ -315,7 +318,7 @@ impl From<&Column> for ArrayData {
             Column::Decimal(c) => {
                 let c = c.clone().strict_decimal_data_type();
                 let arrow_type = match c {
-                    DecimalColumn::Decimal128(_, size) => {
+                    DecimalColumn::Decimal64(_, size) | DecimalColumn::Decimal128(_, size) => {
                         ArrowDataType::Decimal128(size.precision(), size.scale() as _)
                     }
                     DecimalColumn::Decimal256(_, size) => {

@@ -15,6 +15,7 @@ bitmap_cardinality -> bitmap_count
 ceiling -> ceil
 char_length -> length
 character_length -> length
+chr -> char
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
@@ -892,7 +893,6 @@ Functions overloads:
 19 ceil(Float64) :: Float64
 20 ceil(Float64 NULL) :: Float64 NULL
 0 char FACTORY
-1 char FACTORY
 0 check_json(Variant) :: String NULL
 1 check_json(Variant NULL) :: String NULL
 2 check_json(String) :: String NULL
@@ -2541,23 +2541,23 @@ Functions overloads:
 1 minus(Variant NULL, Int32 NULL) :: Variant NULL
 2 minus(Variant, String) :: Variant
 3 minus(Variant NULL, String NULL) :: Variant NULL
-4 minus(UInt8) :: Int16
-5 minus(UInt8 NULL) :: Int16 NULL
-6 minus(Int8) :: Int16
-7 minus(Int8 NULL) :: Int16 NULL
-8 minus(UInt16) :: Int32
-9 minus(UInt16 NULL) :: Int32 NULL
-10 minus(Int16) :: Int32
-11 minus(Int16 NULL) :: Int32 NULL
-12 minus(UInt32) :: Int64
-13 minus(UInt32 NULL) :: Int64 NULL
-14 minus(Int32) :: Int64
-15 minus(Int32 NULL) :: Int64 NULL
-16 minus(UInt64) :: Int64
-17 minus(UInt64 NULL) :: Int64 NULL
-18 minus(Int64) :: Int64
-19 minus(Int64 NULL) :: Int64 NULL
-20 minus FACTORY
+4 minus FACTORY
+5 minus(UInt8) :: Int16
+6 minus(UInt8 NULL) :: Int16 NULL
+7 minus(Int8) :: Int16
+8 minus(Int8 NULL) :: Int16 NULL
+9 minus(UInt16) :: Int32
+10 minus(UInt16 NULL) :: Int32 NULL
+11 minus(Int16) :: Int32
+12 minus(Int16 NULL) :: Int32 NULL
+13 minus(UInt32) :: Int64
+14 minus(UInt32 NULL) :: Int64 NULL
+15 minus(Int32) :: Int64
+16 minus(Int32 NULL) :: Int64 NULL
+17 minus(UInt64) :: Int64
+18 minus(UInt64 NULL) :: Int64 NULL
+19 minus(Int64) :: Int64
+20 minus(Int64 NULL) :: Int64 NULL
 21 minus(Float32) :: Float32
 22 minus(Float32 NULL) :: Float32 NULL
 23 minus(Float64) :: Float64

@@ -66,7 +66,6 @@ use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
-use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
@@ -5733,9 +5732,9 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         TypeName::Int64 => TableDataType::Number(NumberDataType::Int64),
         TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
         TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
-        TypeName::Decimal { precision, scale } => TableDataType::Decimal(
-            DecimalDataType::from_size(DecimalSize::new_unchecked(*precision, *scale))?,
-        ),
+        TypeName::Decimal { precision, scale } => {
+            TableDataType::Decimal(DecimalSize::new(*precision, *scale)?.into())
+        }
         TypeName::Binary => TableDataType::Binary,
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,

@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_base::runtime::MemStat;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -159,7 +158,7 @@ impl QueryEnv {
         Ok(())
     }
 
-    pub async fn create_query_ctx(&self, mem_stat: Arc<MemStat>) -> Result<Arc<QueryContext>> {
+    pub async fn create_query_ctx(&self) -> Result<Arc<QueryContext>> {
         let session_manager = SessionManager::instance();
 
         let session = session_manager.register_session(
@@ -170,14 +169,11 @@ impl QueryEnv {
             session.set_current_workload_group(workload_group.clone());
         }
 
-        let query_ctx = session.create_query_context_with_cluster(
-            Arc::new(Cluster {
-                unassign: self.cluster.unassign,
-                nodes: self.cluster.nodes.clone(),
-                local_id: GlobalConfig::instance().query.node_id.clone(),
-            }),
-            Some(mem_stat),
-        )?;
+        let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            unassign: self.cluster.unassign,
+            nodes: self.cluster.nodes.clone(),
+            local_id: GlobalConfig::instance().query.node_id.clone(),
+        }))?;
 
         query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());
