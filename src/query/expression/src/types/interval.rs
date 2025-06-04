@@ -20,12 +20,10 @@ use databend_common_column::types::months_days_micros;
 use databend_common_io::Interval;
 
 use super::number::SimpleDomain;
-use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::DecimalSize;
-use crate::types::GenericMap;
 use crate::types::SimpleType;
 use crate::types::SimpleValueType;
 use crate::values::Column;
@@ -129,27 +127,6 @@ impl ArgType for IntervalType {
             min: months_days_micros::new(-12 * 200, -365 * 200, -7200000000000000000),
             max: months_days_micros::new(12 * 200, 365 * 200, 7200000000000000000),
         }
-    }
-}
-
-impl ReturnType for IntervalType {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
     }
 }
 

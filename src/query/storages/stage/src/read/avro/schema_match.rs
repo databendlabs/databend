@@ -103,12 +103,8 @@ impl SchemaMatcher {
                 if (d1.leading_digits() as usize) >= d2.precision - d2.scale
                     && (d1.scale() as usize) >= d2.scale =>
             {
-                let diff = (d1.scale() as usize) - d2.scale;
-                let multiplier = if diff > 0 {
-                    Some(i256::e(diff as u32))
-                } else {
-                    None
-                };
+                let diff = d1.scale() - d2.scale as u8;
+                let multiplier = if diff > 0 { Some(i256::e(diff)) } else { None };
                 Ok(MatchedSchema::Decimal { multiplier })
             }
             (TableDataType::Number(NumberDataType::Int32), Schema::Int)

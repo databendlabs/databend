@@ -33,6 +33,7 @@ use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;

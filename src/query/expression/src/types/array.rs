@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
@@ -55,7 +56,7 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Array(array) => <T as AccessType>::try_downcast_column(array),
+            ScalarRef::Array(array) => T::try_downcast_column(array),
             _ => None,
         }
     }
@@ -66,24 +67,10 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Array(Some(domain)) => {
-                Some(Some(<T as AccessType>::try_downcast_domain(domain)?))
-            }
+            Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),
             Domain::Array(None) => Some(None),
             _ => None,
         }
-    }
-
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Array(<T as AccessType>::upcast_column(scalar))
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Array(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Array(domain.map(|domain| Box::new(<T as AccessType>::upcast_domain(domain))))
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -114,10 +101,37 @@ impl<T: AccessType> AccessType for ArrayType<T> {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(a: T::Column, b: T::Column) -> Ordering {
+        let ord = T::column_len(&a).cmp(&T::column_len(&b));
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        for (l, r) in T::iter_column(&a).zip(T::iter_column(&b)) {
+            let ord = T::compare(l, r);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        Ordering::Equal
+    }
 }
 
 impl<T: ValueType> ValueType for ArrayType<T> {
     type ColumnBuilder = ArrayColumnBuilder<T>;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Scalar::Array(T::upcast_column(scalar))
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Domain::Array(domain.map(|domain| Box::new(T::upcast_domain(domain))))
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Column::Array(Box::new(col.upcast()))
+    }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
         None
@@ -201,7 +215,7 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     }
 }
 
-impl<T: ArgType> ReturnType for ArrayType<T> {
+impl<T: ReturnType> ReturnType for ArrayType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }
@@ -255,13 +269,6 @@ impl<T: AccessType> ArrayColumn<T> {
         ArrayIterator {
             values: &self.values,
             offsets: self.offsets.windows(2),
-        }
-    }
-
-    pub fn upcast(self) -> ArrayColumn<AnyType> {
-        ArrayColumn {
-            values: T::upcast_column(self.values),
-            offsets: self.offsets,
         }
     }
 
@@ -321,6 +328,15 @@ impl<T: AccessType> ArrayColumn<T> {
             }
         }
         Ok(())
+    }
+}
+
+impl<T: ValueType> ArrayColumn<T> {
+    pub fn upcast(self) -> ArrayColumn<AnyType> {
+        ArrayColumn {
+            values: T::upcast_column(self.values),
+            offsets: self.offsets,
+        }
     }
 }
 
@@ -461,7 +477,7 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
     }
 }
 
-impl<T: ArgType> ArrayColumnBuilder<T> {
+impl<T: ReturnType> ArrayColumnBuilder<T> {
     pub fn with_capacity(len: usize, values_capacity: usize, generics: &GenericMap) -> Self {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);

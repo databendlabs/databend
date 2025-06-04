@@ -27,6 +27,7 @@ use crate::types::number::SimpleDomain;
 use crate::types::number::F32;
 use crate::types::number::F64;
 use crate::types::string::StringDomain;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BooleanType;
@@ -37,7 +38,6 @@ use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::types::ValueType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::ColumnBuilder;
@@ -97,7 +97,7 @@ pub enum FunctionKind {
 /// Describe the behavior of a function to eliminate the runtime
 /// evaluation of the function if possible.
 #[derive(Debug, Clone, PartialEq, EnumAsInner)]
-pub enum FunctionDomain<T: ValueType> {
+pub enum FunctionDomain<T: AccessType> {
     /// The function may return error.
     MayThrow,
     /// The function must not return error, and the return value can be
@@ -130,8 +130,8 @@ pub enum Domain {
     Undefined,
 }
 
-impl<T: ValueType> FunctionDomain<T> {
-    pub fn map<U: ValueType>(self, f: impl Fn(T::Domain) -> U::Domain) -> FunctionDomain<U> {
+impl<T: AccessType> FunctionDomain<T> {
+    pub fn map<U: AccessType>(self, f: impl Fn(T::Domain) -> U::Domain) -> FunctionDomain<U> {
         match self {
             FunctionDomain::MayThrow => FunctionDomain::MayThrow,
             FunctionDomain::Full => FunctionDomain::Full,
@@ -198,12 +198,12 @@ impl Domain {
             DataType::Decimal(size) => {
                 if size.can_carried_by_128() {
                     Domain::Decimal(DecimalDomain::Decimal128(
-                        Decimal128Type::full_domain(),
+                        Decimal128Type::full_domain(size),
                         *size,
                     ))
                 } else {
                     Domain::Decimal(DecimalDomain::Decimal256(
-                        Decimal256Type::full_domain(),
+                        Decimal256Type::full_domain(size),
                         *size,
                     ))
                 }
@@ -487,14 +487,20 @@ impl Domain {
                 Scalar::Number(NumberScalar::Float64(*min)),
                 Scalar::Number(NumberScalar::Float64(*max)),
             ),
-            Domain::Decimal(DecimalDomain::Decimal128(SimpleDomain { min, max }, sz)) => (
-                Scalar::Decimal(DecimalScalar::Decimal128(*min, *sz)),
-                Scalar::Decimal(DecimalScalar::Decimal128(*max, *sz)),
-            ),
-            Domain::Decimal(DecimalDomain::Decimal256(SimpleDomain { min, max }, sz)) => (
-                Scalar::Decimal(DecimalScalar::Decimal256(*min, *sz)),
-                Scalar::Decimal(DecimalScalar::Decimal256(*max, *sz)),
-            ),
+            Domain::Decimal(decimal_domain) => match decimal_domain {
+                DecimalDomain::Decimal64(SimpleDomain { min, max }, size) => (
+                    Scalar::Decimal(DecimalScalar::Decimal64(*min, *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal64(*max, *size)),
+                ),
+                DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => (
+                    Scalar::Decimal(DecimalScalar::Decimal128(*min, *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal128(*max, *size)),
+                ),
+                DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => (
+                    Scalar::Decimal(DecimalScalar::Decimal256(*min, *size)),
+                    Scalar::Decimal(DecimalScalar::Decimal256(*max, *size)),
+                ),
+            },
             Domain::Boolean(BooleanDomain {
                 has_false,
                 has_true,
@@ -561,7 +567,7 @@ const ALL_FALSE_DOMAIN: BooleanDomain = BooleanDomain {
     has_false: true,
 };
 
-impl<T: Ord + PartialOrd> SimpleDomainCmp for SimpleDomain<T> {
+impl<T: Ord> SimpleDomainCmp for SimpleDomain<T> {
     fn domain_eq(&self, other: &Self) -> FunctionDomain<BooleanType> {
         if self.min > other.max || self.max < other.min {
             FunctionDomain::Domain(ALL_FALSE_DOMAIN)

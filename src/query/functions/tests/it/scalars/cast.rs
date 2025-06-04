@@ -17,11 +17,14 @@ use std::io::Write;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use goldenfile::Mint;
 use itertools::Itertools;
 use roaring::RoaringTreemap;
 
 use super::run_ast;
+use super::run_ast_with_context;
+use super::TestContext;
 
 #[test]
 fn test_cast() {
@@ -751,6 +754,358 @@ fn test_cast_between_binary_and_string(file: &mut impl Write, is_try: bool) {
                 true, true, false,
             ]),
         )],
+    );
+}
+
+#[test]
+fn test_decimal_to_decimal() {
+    let mut mint = Mint::new("tests/it/scalars/testdata");
+    let file = &mut mint.new_goldenfile("decimal_to_decimal_cast.txt").unwrap();
+
+    for is_try in [false, true] {
+        test_cast_decimal_basic(file, is_try);
+        test_cast_decimal_scale_reduction(file, is_try, true);
+        test_cast_decimal_scale_reduction(file, is_try, false);
+        test_cast_decimal_precision_reduction(file, is_try);
+        test_cast_decimal_cross_type(file, is_try);
+        test_cast_decimal_with_columns(file, is_try);
+    }
+}
+
+fn test_cast_decimal_basic(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    // Test basic decimal to decimal casting with same precision/scale
+    run_ast(
+        file,
+        format!("{prefix}CAST(123.45::DECIMAL(5,2) AS DECIMAL(5,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(0.00::DECIMAL(3,2) AS DECIMAL(3,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(-999.99::DECIMAL(5,2) AS DECIMAL(5,2))"),
+        &[],
+    );
+
+    // Test expanding precision (same scale)
+    run_ast(
+        file,
+        format!("{prefix}CAST(123.45::DECIMAL(5,2) AS DECIMAL(10,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(-123.45::DECIMAL(5,2) AS DECIMAL(15,2))"),
+        &[],
+    );
+
+    // Test expanding scale (same precision)
+    run_ast(
+        file,
+        format!("{prefix}CAST(123.45::DECIMAL(5,2) AS DECIMAL(5,4))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(123::DECIMAL(3,0) AS DECIMAL(3,2))"),
+        &[],
+    );
+
+    // Test expanding both precision and scale
+    run_ast(
+        file,
+        format!("{prefix}CAST(123.45::DECIMAL(5,2) AS DECIMAL(10,4))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(1.2::DECIMAL(2,1) AS DECIMAL(20,10))"),
+        &[],
+    );
+
+    // Test edge cases with zero
+    run_ast(
+        file,
+        format!("{prefix}CAST(0::DECIMAL(1,0) AS DECIMAL(10,5))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(0.00000::DECIMAL(6,5) AS DECIMAL(2,1))"),
+        &[],
+    );
+}
+
+fn test_cast_decimal_scale_reduction(file: &mut impl Write, is_try: bool, rounding_mode: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+    let func_ctx = FunctionContext {
+        rounding_mode,
+        ..FunctionContext::default()
+    };
+    let test_ctx = TestContext {
+        func_ctx: func_ctx.clone(),
+        ..TestContext::default()
+    };
+
+    // Test shrinking scale (same precision) - precision loss with rounding
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(123.456::DECIMAL(6,3) AS DECIMAL(6,1))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(123.999::DECIMAL(6,3) AS DECIMAL(6,2))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(999.995::DECIMAL(6,3) AS DECIMAL(6,1))"),
+        test_ctx.clone(),
+    );
+
+    // Test scale reduction with different rounding scenarios
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(12.345::DECIMAL(5,3) AS DECIMAL(5,0))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(12.567::DECIMAL(5,3) AS DECIMAL(5,1))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(-12.345::DECIMAL(6,3) AS DECIMAL(6,1))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(-12.567::DECIMAL(6,3) AS DECIMAL(6,2))"),
+        test_ctx.clone(),
+    );
+
+    // Test scale reduction with edge cases
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(0.999::DECIMAL(4,3) AS DECIMAL(4,0))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(0.001::DECIMAL(4,3) AS DECIMAL(4,1))"),
+        test_ctx.clone(),
+    );
+
+    // Test scale reduction with column data
+    let test_ctx = TestContext {
+        columns: &[(
+            "c",
+            Decimal128Type::from_data_with_size(
+                [12345i128, 67890, -11111, 99999, 0, -99999, 123456],
+                Some(DecimalSize::new_unchecked(8, 3)),
+            ),
+        )],
+        func_ctx,
+        ..TestContext::default()
+    };
+
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(c AS DECIMAL(8,0))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(c AS DECIMAL(8,1))"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(c AS DECIMAL(8,2))"),
+        test_ctx.clone(),
+    );
+}
+
+fn test_cast_decimal_precision_reduction(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    // Test shrinking precision (same scale) - potential overflow
+    run_ast(
+        file,
+        format!("{prefix}CAST(12345.67::DECIMAL(7,2) AS DECIMAL(5,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(999.99::DECIMAL(5,2) AS DECIMAL(4,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(99.9::DECIMAL(3,1) AS DECIMAL(2,1))"),
+        &[],
+    );
+
+    // Test negative numbers with precision reduction
+    run_ast(
+        file,
+        format!("{prefix}CAST(-999.999::DECIMAL(6,3) AS DECIMAL(4,1))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(-123.45::DECIMAL(5,2) AS DECIMAL(4,2))"),
+        &[],
+    );
+
+    // Test edge cases - maximum values for target precision
+    run_ast(
+        file,
+        format!("{prefix}CAST(99.99::DECIMAL(4,2) AS DECIMAL(3,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(9.99::DECIMAL(3,2) AS DECIMAL(2,2))"),
+        &[],
+    );
+}
+
+fn test_cast_decimal_cross_type(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    // Test cross-type casting (different decimal storage types)
+    run_ast(
+        file,
+        format!("{prefix}CAST(123.45::DECIMAL(5,2) AS DECIMAL(38,10))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(123456789.123456789::DECIMAL(18,9) AS DECIMAL(38,20))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(12345678901234567890.123456789::DECIMAL(38,9) AS DECIMAL(18,4))"),
+        &[],
+    );
+
+    // Test maximum values for different precisions
+    run_ast(
+        file,
+        format!("{prefix}CAST(99.99::DECIMAL(4,2) AS DECIMAL(6,2))"),
+        &[],
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(999999.999::DECIMAL(9,3) AS DECIMAL(15,6))"),
+        &[],
+    );
+}
+
+fn test_cast_decimal_with_columns(file: &mut impl Write, is_try: bool) {
+    let prefix = if is_try { "TRY_" } else { "" };
+
+    // Test with column data - similar to comparison.rs test_decimal pattern
+    let decimal_128_data = vec![0i128, 1, -1, 123456789, -987654321, 999999];
+    let decimal_256_data = vec![
+        i256::zero(),
+        2.into(),
+        (-2).into(),
+        123456780.into(),
+        (-987654320).into(),
+        1000000.into(),
+    ];
+
+    let decimal_columns = &[
+        (
+            "a",
+            Decimal128Type::from_data_with_size(
+                &decimal_128_data,
+                Some(DecimalSize::new_unchecked(10, 2)),
+            ),
+        ),
+        (
+            "b",
+            Decimal256Type::from_data_with_size(
+                &decimal_256_data,
+                Some(DecimalSize::new_unchecked(15, 3)),
+            ),
+        ),
+    ];
+
+    // Test casting between different decimal column types
+    run_ast(
+        file,
+        format!("{prefix}CAST(a AS DECIMAL(15,3))"),
+        decimal_columns,
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(a AS DECIMAL(20,5))"),
+        decimal_columns,
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(b AS DECIMAL(10,2))"),
+        decimal_columns,
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(b AS DECIMAL(38,10))"),
+        decimal_columns,
+    );
+
+    // Test casting with potential overflow/underflow
+    run_ast(
+        file,
+        format!("{prefix}CAST(a AS DECIMAL(5,1))"),
+        decimal_columns,
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(b AS DECIMAL(8,2))"),
+        decimal_columns,
+    );
+
+    // Test edge cases with very large numbers
+    let large_decimal_data = vec![
+        i256::from(999999999999999999i128),
+        i256::from(-999999999999999999i128),
+        i256::zero(),
+        i256::from(123456789012345i128),
+        i256::from(-123456789012345i128),
+    ];
+    let large_columns = &[(
+        "d",
+        Decimal256Type::from_data_with_size(
+            &large_decimal_data,
+            Some(DecimalSize::new_unchecked(38, 10)),
+        ),
+    )];
+
+    run_ast(
+        file,
+        format!("{prefix}CAST(d AS DECIMAL(20,5))"),
+        large_columns,
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(d AS DECIMAL(38,15))"),
+        large_columns,
+    );
+    run_ast(
+        file,
+        format!("{prefix}CAST(d AS DECIMAL(15,2))"),
+        large_columns,
     );
 }
 

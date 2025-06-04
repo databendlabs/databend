@@ -1,0 +1,1491 @@
+ast            : CAST(123.45::DECIMAL(5,2) AS DECIMAL(5,2))
+raw expr       : CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(5, 2))
+checked expr   : 123.45_d128(5,2)
+output type    : Decimal(5, 2)
+output domain  : {123.45..=123.45}
+output         : 123.45
+
+
+ast            : CAST(0.00::DECIMAL(3,2) AS DECIMAL(3,2))
+raw expr       : CAST(CAST(0.00 AS Decimal(3, 2)) AS Decimal(3, 2))
+checked expr   : CAST<Decimal(2, 2)>(0.00_d128(2,2) AS Decimal(3, 2))
+optimized expr : 0.00_d128(3,2)
+output type    : Decimal(3, 2)
+output domain  : {0.00..=0.00}
+output         : 0.00
+
+
+ast            : CAST(-999.99::DECIMAL(5,2) AS DECIMAL(5,2))
+raw expr       : CAST(minus(CAST(999.99 AS Decimal(5, 2))) AS Decimal(5, 2))
+checked expr   : minus<Decimal(5, 2)>(999.99_d128(5,2))
+optimized expr : -999.99_d128(5,2)
+output type    : Decimal(5, 2)
+output domain  : {-999.99..=-999.99}
+output         : -999.99
+
+
+ast            : CAST(123.45::DECIMAL(5,2) AS DECIMAL(10,2))
+raw expr       : CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(10, 2))
+checked expr   : CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(10, 2))
+optimized expr : 123.45_d128(10,2)
+output type    : Decimal(10, 2)
+output domain  : {123.45..=123.45}
+output         : 123.45
+
+
+ast            : CAST(-123.45::DECIMAL(5,2) AS DECIMAL(15,2))
+raw expr       : CAST(minus(CAST(123.45 AS Decimal(5, 2))) AS Decimal(15, 2))
+checked expr   : CAST<Decimal(5, 2)>(minus<Decimal(5, 2)>(123.45_d128(5,2)) AS Decimal(15, 2))
+optimized expr : -123.45_d128(15,2)
+output type    : Decimal(15, 2)
+output domain  : {-123.45..=-123.45}
+output         : -123.45
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(123.45::DECIMAL(5,2) AS DECIMAL(5,4))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(5, 4)(123.45)` in expr `CAST(123.45 AS Decimal(5, 4))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(123::DECIMAL(3,0) AS DECIMAL(3,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(3, 2)(123)` in expr `CAST(CAST(123 AS Decimal(3, 0)) AS Decimal(3, 2))`
+
+
+
+ast            : CAST(123.45::DECIMAL(5,2) AS DECIMAL(10,4))
+raw expr       : CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(10, 4))
+checked expr   : CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(10, 4))
+optimized expr : 123.4500_d128(10,4)
+output type    : Decimal(10, 4)
+output domain  : {123.4500..=123.4500}
+output         : 123.4500
+
+
+ast            : CAST(1.2::DECIMAL(2,1) AS DECIMAL(20,10))
+raw expr       : CAST(CAST(1.2 AS Decimal(2, 1)) AS Decimal(20, 10))
+checked expr   : CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(20, 10))
+optimized expr : 1.2000000000_d128(20,10)
+output type    : Decimal(20, 10)
+output domain  : {1.2000000000..=1.2000000000}
+output         : 1.2000000000
+
+
+ast            : CAST(0::DECIMAL(1,0) AS DECIMAL(10,5))
+raw expr       : CAST(CAST(0 AS Decimal(1, 0)) AS Decimal(10, 5))
+checked expr   : CAST<Decimal(1, 0)>(CAST<UInt8>(0_u8 AS Decimal(1, 0)) AS Decimal(10, 5))
+optimized expr : 0.00000_d128(10,5)
+output type    : Decimal(10, 5)
+output domain  : {0.00000..=0.00000}
+output         : 0.00000
+
+
+ast            : CAST(0.00000::DECIMAL(6,5) AS DECIMAL(2,1))
+raw expr       : CAST(CAST(0.00000 AS Decimal(6, 5)) AS Decimal(2, 1))
+checked expr   : CAST<Decimal(6, 5)>(CAST<Decimal(5, 5)>(0.00000_d128(5,5) AS Decimal(6, 5)) AS Decimal(2, 1))
+optimized expr : 0.0_d128(2,1)
+output type    : Decimal(2, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : CAST(123.456::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : CAST(CAST(123.456 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : CAST<Decimal(6, 3)>(123.456_d128(6,3) AS Decimal(6, 1))
+optimized expr : 123.5_d128(6,1)
+func ctx       : (modified)
+output type    : Decimal(6, 1)
+output domain  : {123.5..=123.5}
+output         : 123.5
+
+
+ast            : CAST(123.999::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : CAST(CAST(123.999 AS Decimal(6, 3)) AS Decimal(6, 2))
+checked expr   : CAST<Decimal(6, 3)>(123.999_d128(6,3) AS Decimal(6, 2))
+optimized expr : 124.00_d128(6,2)
+func ctx       : (modified)
+output type    : Decimal(6, 2)
+output domain  : {124.00..=124.00}
+output         : 124.00
+
+
+ast            : CAST(999.995::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : CAST(CAST(999.995 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : CAST<Decimal(6, 3)>(999.995_d128(6,3) AS Decimal(6, 1))
+optimized expr : 1000.0_d128(6,1)
+func ctx       : (modified)
+output type    : Decimal(6, 1)
+output domain  : {1000.0..=1000.0}
+output         : 1000.0
+
+
+ast            : CAST(12.345::DECIMAL(5,3) AS DECIMAL(5,0))
+raw expr       : CAST(CAST(12.345 AS Decimal(5, 3)) AS Decimal(5, 0))
+checked expr   : CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(5, 0))
+optimized expr : 12_d128(5,0)
+func ctx       : (modified)
+output type    : Decimal(5, 0)
+output domain  : {12..=12}
+output         : 12
+
+
+ast            : CAST(12.567::DECIMAL(5,3) AS DECIMAL(5,1))
+raw expr       : CAST(CAST(12.567 AS Decimal(5, 3)) AS Decimal(5, 1))
+checked expr   : CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(5, 1))
+optimized expr : 12.6_d128(5,1)
+func ctx       : (modified)
+output type    : Decimal(5, 1)
+output domain  : {12.6..=12.6}
+output         : 12.6
+
+
+ast            : CAST(-12.345::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : CAST(minus(CAST(12.345 AS Decimal(6, 3))) AS Decimal(6, 1))
+checked expr   : CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 1))
+optimized expr : -12.3_d128(6,1)
+func ctx       : (modified)
+output type    : Decimal(6, 1)
+output domain  : {-12.3..=-12.3}
+output         : -12.3
+
+
+ast            : CAST(-12.567::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : CAST(minus(CAST(12.567 AS Decimal(6, 3))) AS Decimal(6, 2))
+checked expr   : CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 2))
+optimized expr : -12.57_d128(6,2)
+func ctx       : (modified)
+output type    : Decimal(6, 2)
+output domain  : {-12.57..=-12.57}
+output         : -12.57
+
+
+ast            : CAST(0.999::DECIMAL(4,3) AS DECIMAL(4,0))
+raw expr       : CAST(CAST(0.999 AS Decimal(4, 3)) AS Decimal(4, 0))
+checked expr   : CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.999_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 0))
+optimized expr : 1_d128(4,0)
+func ctx       : (modified)
+output type    : Decimal(4, 0)
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : CAST(0.001::DECIMAL(4,3) AS DECIMAL(4,1))
+raw expr       : CAST(CAST(0.001 AS Decimal(4, 3)) AS Decimal(4, 1))
+checked expr   : CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.001_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 1))
+optimized expr : 0.0_d128(4,1)
+func ctx       : (modified)
+output type    : Decimal(4, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : CAST(c AS DECIMAL(8,0))
+raw expr       : CAST(c::Decimal(8, 3) AS Decimal(8, 0))
+checked expr   : CAST<Decimal(8, 3)>(c AS Decimal(8, 0))
+func ctx       : (modified)
+evaluation:
++--------+---------------------+---------------+
+|        | c                   | Output        |
++--------+---------------------+---------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 0) |
+| Domain | {-99.999..=123.456} | {-100..=123}  |
+| Row 0  | 12.345              | 12            |
+| Row 1  | 67.890              | 68            |
+| Row 2  | -11.111             | -11           |
+| Row 3  | 99.999              | 100           |
+| Row 4  | 0.000               | 0             |
+| Row 5  | -99.999             | -100          |
+| Row 6  | 123.456             | 123           |
++--------+---------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456]) |
+| Output | Decimal128([12, 68, -11, 100, 0, -100, 123])                           |
++--------+------------------------------------------------------------------------+
+
+
+ast            : CAST(c AS DECIMAL(8,1))
+raw expr       : CAST(c::Decimal(8, 3) AS Decimal(8, 1))
+checked expr   : CAST<Decimal(8, 3)>(c AS Decimal(8, 1))
+func ctx       : (modified)
+evaluation:
++--------+---------------------+------------------+
+|        | c                   | Output           |
++--------+---------------------+------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 1)    |
+| Domain | {-99.999..=123.456} | {-100.0..=123.5} |
+| Row 0  | 12.345              | 12.3             |
+| Row 1  | 67.890              | 67.9             |
+| Row 2  | -11.111             | -11.1            |
+| Row 3  | 99.999              | 100.0            |
+| Row 4  | 0.000               | 0.0              |
+| Row 5  | -99.999             | -100.0           |
+| Row 6  | 123.456             | 123.5            |
++--------+---------------------+------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456]) |
+| Output | Decimal128([12.3, 67.9, -11.1, 100.0, 0.0, -100.0, 123.5])             |
++--------+------------------------------------------------------------------------+
+
+
+ast            : CAST(c AS DECIMAL(8,2))
+raw expr       : CAST(c::Decimal(8, 3) AS Decimal(8, 2))
+checked expr   : CAST<Decimal(8, 3)>(c AS Decimal(8, 2))
+func ctx       : (modified)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 2)      |
+| Domain | {-99.999..=123.456} | {-100.00..=123.46} |
+| Row 0  | 12.345              | 12.35              |
+| Row 1  | 67.890              | 67.89              |
+| Row 2  | -11.111             | -11.11             |
+| Row 3  | 99.999              | 100.00             |
+| Row 4  | 0.000               | 0.00               |
+| Row 5  | -99.999             | -100.00            |
+| Row 6  | 123.456             | 123.46             |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456]) |
+| Output | Decimal128([12.35, 67.89, -11.11, 100.00, 0.00, -100.00, 123.46])      |
++--------+------------------------------------------------------------------------+
+
+
+ast            : CAST(123.456::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : CAST(CAST(123.456 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : CAST<Decimal(6, 3)>(123.456_d128(6,3) AS Decimal(6, 1))
+optimized expr : 123.4_d128(6,1)
+output type    : Decimal(6, 1)
+output domain  : {123.4..=123.4}
+output         : 123.4
+
+
+ast            : CAST(123.999::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : CAST(CAST(123.999 AS Decimal(6, 3)) AS Decimal(6, 2))
+checked expr   : CAST<Decimal(6, 3)>(123.999_d128(6,3) AS Decimal(6, 2))
+optimized expr : 123.99_d128(6,2)
+output type    : Decimal(6, 2)
+output domain  : {123.99..=123.99}
+output         : 123.99
+
+
+ast            : CAST(999.995::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : CAST(CAST(999.995 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : CAST<Decimal(6, 3)>(999.995_d128(6,3) AS Decimal(6, 1))
+optimized expr : 999.9_d128(6,1)
+output type    : Decimal(6, 1)
+output domain  : {999.9..=999.9}
+output         : 999.9
+
+
+ast            : CAST(12.345::DECIMAL(5,3) AS DECIMAL(5,0))
+raw expr       : CAST(CAST(12.345 AS Decimal(5, 3)) AS Decimal(5, 0))
+checked expr   : CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(5, 0))
+optimized expr : 12_d128(5,0)
+output type    : Decimal(5, 0)
+output domain  : {12..=12}
+output         : 12
+
+
+ast            : CAST(12.567::DECIMAL(5,3) AS DECIMAL(5,1))
+raw expr       : CAST(CAST(12.567 AS Decimal(5, 3)) AS Decimal(5, 1))
+checked expr   : CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(5, 1))
+optimized expr : 12.5_d128(5,1)
+output type    : Decimal(5, 1)
+output domain  : {12.5..=12.5}
+output         : 12.5
+
+
+ast            : CAST(-12.345::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : CAST(minus(CAST(12.345 AS Decimal(6, 3))) AS Decimal(6, 1))
+checked expr   : CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 1))
+optimized expr : -12.3_d128(6,1)
+output type    : Decimal(6, 1)
+output domain  : {-12.3..=-12.3}
+output         : -12.3
+
+
+ast            : CAST(-12.567::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : CAST(minus(CAST(12.567 AS Decimal(6, 3))) AS Decimal(6, 2))
+checked expr   : CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 2))
+optimized expr : -12.56_d128(6,2)
+output type    : Decimal(6, 2)
+output domain  : {-12.56..=-12.56}
+output         : -12.56
+
+
+ast            : CAST(0.999::DECIMAL(4,3) AS DECIMAL(4,0))
+raw expr       : CAST(CAST(0.999 AS Decimal(4, 3)) AS Decimal(4, 0))
+checked expr   : CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.999_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 0))
+optimized expr : 0_d128(4,0)
+output type    : Decimal(4, 0)
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : CAST(0.001::DECIMAL(4,3) AS DECIMAL(4,1))
+raw expr       : CAST(CAST(0.001 AS Decimal(4, 3)) AS Decimal(4, 1))
+checked expr   : CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.001_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 1))
+optimized expr : 0.0_d128(4,1)
+output type    : Decimal(4, 1)
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : CAST(c AS DECIMAL(8,0))
+raw expr       : CAST(c::Decimal(8, 3) AS Decimal(8, 0))
+checked expr   : CAST<Decimal(8, 3)>(c AS Decimal(8, 0))
+evaluation:
++--------+---------------------+---------------+
+|        | c                   | Output        |
++--------+---------------------+---------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 0) |
+| Domain | {-99.999..=123.456} | {-99..=123}   |
+| Row 0  | 12.345              | 12            |
+| Row 1  | 67.890              | 67            |
+| Row 2  | -11.111             | -11           |
+| Row 3  | 99.999              | 99            |
+| Row 4  | 0.000               | 0             |
+| Row 5  | -99.999             | -99           |
+| Row 6  | 123.456             | 123           |
++--------+---------------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456]) |
+| Output | Decimal128([12, 67, -11, 99, 0, -99, 123])                             |
++--------+------------------------------------------------------------------------+
+
+
+ast            : CAST(c AS DECIMAL(8,1))
+raw expr       : CAST(c::Decimal(8, 3) AS Decimal(8, 1))
+checked expr   : CAST<Decimal(8, 3)>(c AS Decimal(8, 1))
+evaluation:
++--------+---------------------+-----------------+
+|        | c                   | Output          |
++--------+---------------------+-----------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 1)   |
+| Domain | {-99.999..=123.456} | {-99.9..=123.4} |
+| Row 0  | 12.345              | 12.3            |
+| Row 1  | 67.890              | 67.8            |
+| Row 2  | -11.111             | -11.1           |
+| Row 3  | 99.999              | 99.9            |
+| Row 4  | 0.000               | 0.0             |
+| Row 5  | -99.999             | -99.9           |
+| Row 6  | 123.456             | 123.4           |
++--------+---------------------+-----------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456]) |
+| Output | Decimal128([12.3, 67.8, -11.1, 99.9, 0.0, -99.9, 123.4])               |
++--------+------------------------------------------------------------------------+
+
+
+ast            : CAST(c AS DECIMAL(8,2))
+raw expr       : CAST(c::Decimal(8, 3) AS Decimal(8, 2))
+checked expr   : CAST<Decimal(8, 3)>(c AS Decimal(8, 2))
+evaluation:
++--------+---------------------+-------------------+
+|        | c                   | Output            |
++--------+---------------------+-------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 2)     |
+| Domain | {-99.999..=123.456} | {-99.99..=123.45} |
+| Row 0  | 12.345              | 12.34             |
+| Row 1  | 67.890              | 67.89             |
+| Row 2  | -11.111             | -11.11            |
+| Row 3  | 99.999              | 99.99             |
+| Row 4  | 0.000               | 0.00              |
+| Row 5  | -99.999             | -99.99            |
+| Row 6  | 123.456             | 123.45            |
++--------+---------------------+-------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------+
+| Column | Data                                                                   |
++--------+------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456]) |
+| Output | Decimal128([12.34, 67.89, -11.11, 99.99, 0.00, -99.99, 123.45])        |
++--------+------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(12345.67::DECIMAL(7,2) AS DECIMAL(5,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(5, 2)(12345.67)` in expr `CAST(12345.67 AS Decimal(5, 2))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(999.99::DECIMAL(5,2) AS DECIMAL(4,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(4, 2)(999.99)` in expr `CAST(999.99 AS Decimal(4, 2))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(99.9::DECIMAL(3,1) AS DECIMAL(2,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(2, 1)(99.9)` in expr `CAST(99.9 AS Decimal(2, 1))`
+
+
+
+ast            : CAST(-999.999::DECIMAL(6,3) AS DECIMAL(4,1))
+raw expr       : CAST(minus(CAST(999.999 AS Decimal(6, 3))) AS Decimal(4, 1))
+checked expr   : CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(999.999_d128(6,3)) AS Decimal(4, 1))
+optimized expr : -999.9_d128(4,1)
+output type    : Decimal(4, 1)
+output domain  : {-999.9..=-999.9}
+output         : -999.9
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(-123.45::DECIMAL(5,2) AS DECIMAL(4,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(4, 2)(-123.45)` in expr `CAST(- 123.45 AS Decimal(4, 2))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(99.99::DECIMAL(4,2) AS DECIMAL(3,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(3, 2)(99.99)` in expr `CAST(99.99 AS Decimal(3, 2))`
+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(9.99::DECIMAL(3,2) AS DECIMAL(2,2))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 881 while evaluating function `to_decimal(2, 2)(9.99)` in expr `CAST(9.99 AS Decimal(2, 2))`
+
+
+
+ast            : CAST(123.45::DECIMAL(5,2) AS DECIMAL(38,10))
+raw expr       : CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(38, 10))
+checked expr   : CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(38, 10))
+optimized expr : 123.4500000000_d128(38,10)
+output type    : Decimal(38, 10)
+output domain  : {123.4500000000..=123.4500000000}
+output         : 123.4500000000
+
+
+ast            : CAST(123456789.123456789::DECIMAL(18,9) AS DECIMAL(38,20))
+raw expr       : CAST(CAST(123456789.123456789 AS Decimal(18, 9)) AS Decimal(38, 20))
+checked expr   : CAST<Decimal(18, 9)>(123456789.123456789_d128(18,9) AS Decimal(38, 20))
+optimized expr : 123456789.12345678900000000000_d128(38,20)
+output type    : Decimal(38, 20)
+output domain  : {123456789.12345678900000000000..=123456789.12345678900000000000}
+output         : 123456789.12345678900000000000
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(12345678901234567890.123456789::DECIMAL(38,9) AS DECIMAL(18,4))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 860 while evaluating function `to_decimal(18, 4)(12345678901234567890.123456789)` in expr `CAST(CAST(12345678901234567890.123456789 AS Decimal(38, 9)) AS Decimal(18, 4))`
+
+
+
+ast            : CAST(99.99::DECIMAL(4,2) AS DECIMAL(6,2))
+raw expr       : CAST(CAST(99.99 AS Decimal(4, 2)) AS Decimal(6, 2))
+checked expr   : CAST<Decimal(4, 2)>(99.99_d128(4,2) AS Decimal(6, 2))
+optimized expr : 99.99_d128(6,2)
+output type    : Decimal(6, 2)
+output domain  : {99.99..=99.99}
+output         : 99.99
+
+
+ast            : CAST(999999.999::DECIMAL(9,3) AS DECIMAL(15,6))
+raw expr       : CAST(CAST(999999.999 AS Decimal(9, 3)) AS Decimal(15, 6))
+checked expr   : CAST<Decimal(9, 3)>(999999.999_d128(9,3) AS Decimal(15, 6))
+optimized expr : 999999.999000_d128(15,6)
+output type    : Decimal(15, 6)
+output domain  : {999999.999000..=999999.999000}
+output         : 999999.999000
+
+
+ast            : CAST(a AS DECIMAL(15,3))
+raw expr       : CAST(a::Decimal(10, 2) AS Decimal(15, 3))
+checked expr   : CAST<Decimal(10, 2)>(a AS Decimal(15, 3))
+evaluation:
++--------+----------------------------+------------------------------+
+|        | a                          | Output                       |
++--------+----------------------------+------------------------------+
+| Type   | Decimal(10, 2)             | Decimal(15, 3)               |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.210..=1234567.890} |
+| Row 0  | 0.00                       | 0.000                        |
+| Row 1  | 0.01                       | 0.010                        |
+| Row 2  | -0.01                      | -0.010                       |
+| Row 3  | 1234567.89                 | 1234567.890                  |
+| Row 4  | -9876543.21                | -9876543.210                 |
+| Row 5  | 9999.99                    | 9999.990                     |
++--------+----------------------------+------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------+
+| Column | Data                                                                    |
++--------+-------------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 9999.99])       |
+| Output | Decimal128([0.000, 0.010, -0.010, 1234567.890, -9876543.210, 9999.990]) |
++--------+-------------------------------------------------------------------------+
+
+
+ast            : CAST(a AS DECIMAL(20,5))
+raw expr       : CAST(a::Decimal(10, 2) AS Decimal(20, 5))
+checked expr   : CAST<Decimal(10, 2)>(a AS Decimal(20, 5))
+evaluation:
++--------+----------------------------+----------------------------------+
+|        | a                          | Output                           |
++--------+----------------------------+----------------------------------+
+| Type   | Decimal(10, 2)             | Decimal(20, 5)                   |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.21000..=1234567.89000} |
+| Row 0  | 0.00                       | 0.00000                          |
+| Row 1  | 0.01                       | 0.01000                          |
+| Row 2  | -0.01                      | -0.01000                         |
+| Row 3  | 1234567.89                 | 1234567.89000                    |
+| Row 4  | -9876543.21                | -9876543.21000                   |
+| Row 5  | 9999.99                    | 9999.99000                       |
++--------+----------------------------+----------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------+
+| Column | Data                                                                                |
++--------+-------------------------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 9999.99])                   |
+| Output | Decimal128([0.00000, 0.01000, -0.01000, 1234567.89000, -9876543.21000, 9999.99000]) |
++--------+-------------------------------------------------------------------------------------+
+
+
+ast            : CAST(b AS DECIMAL(10,2))
+raw expr       : CAST(b::Decimal(15, 3) AS Decimal(10, 2))
+checked expr   : CAST<Decimal(15, 3)>(b AS Decimal(10, 2))
+evaluation:
++--------+----------------------------+--------------------------+
+|        | b                          | Output                   |
++--------+----------------------------+--------------------------+
+| Type   | Decimal(15, 3)             | Decimal(10, 2)           |
+| Domain | {-987654.320..=123456.780} | {-987654.32..=123456.78} |
+| Row 0  | 0.000                      | 0.00                     |
+| Row 1  | 0.002                      | 0.00                     |
+| Row 2  | -0.002                     | 0.00                     |
+| Row 3  | 123456.780                 | 123456.78                |
+| Row 4  | -987654.320                | -987654.32               |
+| Row 5  | 1000.000                   | 1000.00                  |
++--------+----------------------------+--------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| b      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 1000.000]) |
+| Output | Decimal128([0.00, 0.00, 0.00, 123456.78, -987654.32, 1000.00])        |
++--------+-----------------------------------------------------------------------+
+
+
+ast            : CAST(b AS DECIMAL(38,10))
+raw expr       : CAST(b::Decimal(15, 3) AS Decimal(38, 10))
+checked expr   : CAST<Decimal(15, 3)>(b AS Decimal(38, 10))
+evaluation:
++--------+----------------------------+------------------------------------------+
+|        | b                          | Output                                   |
++--------+----------------------------+------------------------------------------+
+| Type   | Decimal(15, 3)             | Decimal(38, 10)                          |
+| Domain | {-987654.320..=123456.780} | {-987654.3200000000..=123456.7800000000} |
+| Row 0  | 0.000                      | 0.0000000000                             |
+| Row 1  | 0.002                      | 0.0020000000                             |
+| Row 2  | -0.002                     | -0.0020000000                            |
+| Row 3  | 123456.780                 | 123456.7800000000                        |
+| Row 4  | -987654.320                | -987654.3200000000                       |
+| Row 5  | 1000.000                   | 1000.0000000000                          |
++--------+----------------------------+------------------------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                            |
++--------+-----------------------------------------------------------------------------------------------------------------+
+| b      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 1000.000])                                           |
+| Output | Decimal128([0.0000000000, 0.0020000000, -0.0020000000, 123456.7800000000, -987654.3200000000, 1000.0000000000]) |
++--------+-----------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS DECIMAL(5,1))
+  | ^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow at line : 860 while evaluating function `to_decimal(5, 1)(1234567.89)` in expr `CAST(a AS Decimal(5, 1))`
+
+
+
+ast            : CAST(b AS DECIMAL(8,2))
+raw expr       : CAST(b::Decimal(15, 3) AS Decimal(8, 2))
+checked expr   : CAST<Decimal(15, 3)>(b AS Decimal(8, 2))
+evaluation:
++--------+----------------------------+--------------------------+
+|        | b                          | Output                   |
++--------+----------------------------+--------------------------+
+| Type   | Decimal(15, 3)             | Decimal(8, 2)            |
+| Domain | {-987654.320..=123456.780} | {-987654.32..=123456.78} |
+| Row 0  | 0.000                      | 0.00                     |
+| Row 1  | 0.002                      | 0.00                     |
+| Row 2  | -0.002                     | 0.00                     |
+| Row 3  | 123456.780                 | 123456.78                |
+| Row 4  | -987654.320                | -987654.32               |
+| Row 5  | 1000.000                   | 1000.00                  |
++--------+----------------------------+--------------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------+
+| Column | Data                                                                  |
++--------+-----------------------------------------------------------------------+
+| b      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 1000.000]) |
+| Output | Decimal128([0.00, 0.00, 0.00, 123456.78, -987654.32, 1000.00])        |
++--------+-----------------------------------------------------------------------+
+
+
+ast            : CAST(d AS DECIMAL(20,5))
+raw expr       : CAST(d::Decimal(38, 10) AS Decimal(20, 5))
+checked expr   : CAST<Decimal(38, 10)>(d AS Decimal(20, 5))
+evaluation:
++--------+----------------------------------------------+------------------------------------+
+|        | d                                            | Output                             |
++--------+----------------------------------------------+------------------------------------+
+| Type   | Decimal(38, 10)                              | Decimal(20, 5)                     |
+| Domain | {-99999999.9999999999..=99999999.9999999999} | {-99999999.99999..=99999999.99999} |
+| Row 0  | 99999999.9999999999                          | 99999999.99999                     |
+| Row 1  | -99999999.9999999999                         | -99999999.99999                    |
+| Row 2  | 0.0000000000                                 | 0.00000                            |
+| Row 3  | 12345.6789012345                             | 12345.67890                        |
+| Row 4  | -12345.6789012345                            | -12345.67890                       |
++--------+----------------------------------------------+------------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| d      | Decimal256([99999999.9999999999, -99999999.9999999999, 0.0000000000, 12345.6789012345, -12345.6789012345]) |
+| Output | Decimal128([99999999.99999, -99999999.99999, 0.00000, 12345.67890, -12345.67890])                          |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(d AS DECIMAL(38,15))
+raw expr       : CAST(d::Decimal(38, 10) AS Decimal(38, 15))
+checked expr   : CAST<Decimal(38, 10)>(d AS Decimal(38, 15))
+evaluation:
++--------+----------------------------------------------+--------------------------------------------------------+
+|        | d                                            | Output                                                 |
++--------+----------------------------------------------+--------------------------------------------------------+
+| Type   | Decimal(38, 10)                              | Decimal(38, 15)                                        |
+| Domain | {-99999999.9999999999..=99999999.9999999999} | {-99999999.999999999900000..=99999999.999999999900000} |
+| Row 0  | 99999999.9999999999                          | 99999999.999999999900000                               |
+| Row 1  | -99999999.9999999999                         | -99999999.999999999900000                              |
+| Row 2  | 0.0000000000                                 | 0.000000000000000                                      |
+| Row 3  | 12345.6789012345                             | 12345.678901234500000                                  |
+| Row 4  | -12345.6789012345                            | -12345.678901234500000                                 |
++--------+----------------------------------------------+--------------------------------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                |
++--------+-------------------------------------------------------------------------------------------------------------------------------------+
+| d      | Decimal256([99999999.9999999999, -99999999.9999999999, 0.0000000000, 12345.6789012345, -12345.6789012345])                          |
+| Output | Decimal128([99999999.999999999900000, -99999999.999999999900000, 0.000000000000000, 12345.678901234500000, -12345.678901234500000]) |
++--------+-------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : CAST(d AS DECIMAL(15,2))
+raw expr       : CAST(d::Decimal(38, 10) AS Decimal(15, 2))
+checked expr   : CAST<Decimal(38, 10)>(d AS Decimal(15, 2))
+evaluation:
++--------+----------------------------------------------+------------------------------+
+|        | d                                            | Output                       |
++--------+----------------------------------------------+------------------------------+
+| Type   | Decimal(38, 10)                              | Decimal(15, 2)               |
+| Domain | {-99999999.9999999999..=99999999.9999999999} | {-99999999.99..=99999999.99} |
+| Row 0  | 99999999.9999999999                          | 99999999.99                  |
+| Row 1  | -99999999.9999999999                         | -99999999.99                 |
+| Row 2  | 0.0000000000                                 | 0.00                         |
+| Row 3  | 12345.6789012345                             | 12345.67                     |
+| Row 4  | -12345.6789012345                            | -12345.67                    |
++--------+----------------------------------------------+------------------------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------+
+| d      | Decimal256([99999999.9999999999, -99999999.9999999999, 0.0000000000, 12345.6789012345, -12345.6789012345]) |
+| Output | Decimal128([99999999.99, -99999999.99, 0.00, 12345.67, -12345.67])                                         |
++--------+------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(123.45::DECIMAL(5,2) AS DECIMAL(5,2))
+raw expr       : TRY_CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(5, 2))
+checked expr   : TRY_CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(5, 2) NULL)
+optimized expr : 123.45_d128(5,2)
+output type    : Decimal(5, 2) NULL
+output domain  : {123.45..=123.45}
+output         : 123.45
+
+
+ast            : TRY_CAST(0.00::DECIMAL(3,2) AS DECIMAL(3,2))
+raw expr       : TRY_CAST(CAST(0.00 AS Decimal(3, 2)) AS Decimal(3, 2))
+checked expr   : TRY_CAST<Decimal(3, 2)>(CAST<Decimal(2, 2)>(0.00_d128(2,2) AS Decimal(3, 2)) AS Decimal(3, 2) NULL)
+optimized expr : 0.00_d128(3,2)
+output type    : Decimal(3, 2) NULL
+output domain  : {0.00..=0.00}
+output         : 0.00
+
+
+ast            : TRY_CAST(-999.99::DECIMAL(5,2) AS DECIMAL(5,2))
+raw expr       : TRY_CAST(minus(CAST(999.99 AS Decimal(5, 2))) AS Decimal(5, 2))
+checked expr   : TRY_CAST<Decimal(5, 2)>(minus<Decimal(5, 2)>(999.99_d128(5,2)) AS Decimal(5, 2) NULL)
+optimized expr : -999.99_d128(5,2)
+output type    : Decimal(5, 2) NULL
+output domain  : {-999.99..=-999.99}
+output         : -999.99
+
+
+ast            : TRY_CAST(123.45::DECIMAL(5,2) AS DECIMAL(10,2))
+raw expr       : TRY_CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(10, 2))
+checked expr   : TRY_CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(10, 2) NULL)
+optimized expr : 123.45_d128(10,2)
+output type    : Decimal(10, 2) NULL
+output domain  : {123.45..=123.45}
+output         : 123.45
+
+
+ast            : TRY_CAST(-123.45::DECIMAL(5,2) AS DECIMAL(15,2))
+raw expr       : TRY_CAST(minus(CAST(123.45 AS Decimal(5, 2))) AS Decimal(15, 2))
+checked expr   : TRY_CAST<Decimal(5, 2)>(minus<Decimal(5, 2)>(123.45_d128(5,2)) AS Decimal(15, 2) NULL)
+optimized expr : -123.45_d128(15,2)
+output type    : Decimal(15, 2) NULL
+output domain  : {-123.45..=-123.45}
+output         : -123.45
+
+
+ast            : TRY_CAST(123.45::DECIMAL(5,2) AS DECIMAL(5,4))
+raw expr       : TRY_CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(5, 4))
+checked expr   : TRY_CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(5, 4) NULL)
+optimized expr : NULL
+output type    : Decimal(5, 4) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(123::DECIMAL(3,0) AS DECIMAL(3,2))
+raw expr       : TRY_CAST(CAST(123 AS Decimal(3, 0)) AS Decimal(3, 2))
+checked expr   : TRY_CAST<Decimal(3, 0)>(CAST<UInt8>(123_u8 AS Decimal(3, 0)) AS Decimal(3, 2) NULL)
+optimized expr : NULL
+output type    : Decimal(3, 2) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(123.45::DECIMAL(5,2) AS DECIMAL(10,4))
+raw expr       : TRY_CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(10, 4))
+checked expr   : TRY_CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(10, 4) NULL)
+optimized expr : 123.4500_d128(10,4)
+output type    : Decimal(10, 4) NULL
+output domain  : {123.4500..=123.4500}
+output         : 123.4500
+
+
+ast            : TRY_CAST(1.2::DECIMAL(2,1) AS DECIMAL(20,10))
+raw expr       : TRY_CAST(CAST(1.2 AS Decimal(2, 1)) AS Decimal(20, 10))
+checked expr   : TRY_CAST<Decimal(2, 1)>(1.2_d128(2,1) AS Decimal(20, 10) NULL)
+optimized expr : 1.2000000000_d128(20,10)
+output type    : Decimal(20, 10) NULL
+output domain  : {1.2000000000..=1.2000000000}
+output         : 1.2000000000
+
+
+ast            : TRY_CAST(0::DECIMAL(1,0) AS DECIMAL(10,5))
+raw expr       : TRY_CAST(CAST(0 AS Decimal(1, 0)) AS Decimal(10, 5))
+checked expr   : TRY_CAST<Decimal(1, 0)>(CAST<UInt8>(0_u8 AS Decimal(1, 0)) AS Decimal(10, 5) NULL)
+optimized expr : 0.00000_d128(10,5)
+output type    : Decimal(10, 5) NULL
+output domain  : {0.00000..=0.00000}
+output         : 0.00000
+
+
+ast            : TRY_CAST(0.00000::DECIMAL(6,5) AS DECIMAL(2,1))
+raw expr       : TRY_CAST(CAST(0.00000 AS Decimal(6, 5)) AS Decimal(2, 1))
+checked expr   : TRY_CAST<Decimal(6, 5)>(CAST<Decimal(5, 5)>(0.00000_d128(5,5) AS Decimal(6, 5)) AS Decimal(2, 1) NULL)
+optimized expr : 0.0_d128(2,1)
+output type    : Decimal(2, 1) NULL
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : TRY_CAST(123.456::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : TRY_CAST(CAST(123.456 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(123.456_d128(6,3) AS Decimal(6, 1) NULL)
+optimized expr : 123.5_d128(6,1)
+func ctx       : (modified)
+output type    : Decimal(6, 1) NULL
+output domain  : {123.5..=123.5}
+output         : 123.5
+
+
+ast            : TRY_CAST(123.999::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : TRY_CAST(CAST(123.999 AS Decimal(6, 3)) AS Decimal(6, 2))
+checked expr   : TRY_CAST<Decimal(6, 3)>(123.999_d128(6,3) AS Decimal(6, 2) NULL)
+optimized expr : 124.00_d128(6,2)
+func ctx       : (modified)
+output type    : Decimal(6, 2) NULL
+output domain  : {124.00..=124.00}
+output         : 124.00
+
+
+ast            : TRY_CAST(999.995::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : TRY_CAST(CAST(999.995 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(999.995_d128(6,3) AS Decimal(6, 1) NULL)
+optimized expr : 1000.0_d128(6,1)
+func ctx       : (modified)
+output type    : Decimal(6, 1) NULL
+output domain  : {1000.0..=1000.0}
+output         : 1000.0
+
+
+ast            : TRY_CAST(12.345::DECIMAL(5,3) AS DECIMAL(5,0))
+raw expr       : TRY_CAST(CAST(12.345 AS Decimal(5, 3)) AS Decimal(5, 0))
+checked expr   : TRY_CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(5, 0) NULL)
+optimized expr : 12_d128(5,0)
+func ctx       : (modified)
+output type    : Decimal(5, 0) NULL
+output domain  : {12..=12}
+output         : 12
+
+
+ast            : TRY_CAST(12.567::DECIMAL(5,3) AS DECIMAL(5,1))
+raw expr       : TRY_CAST(CAST(12.567 AS Decimal(5, 3)) AS Decimal(5, 1))
+checked expr   : TRY_CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(5, 1) NULL)
+optimized expr : 12.6_d128(5,1)
+func ctx       : (modified)
+output type    : Decimal(5, 1) NULL
+output domain  : {12.6..=12.6}
+output         : 12.6
+
+
+ast            : TRY_CAST(-12.345::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : TRY_CAST(minus(CAST(12.345 AS Decimal(6, 3))) AS Decimal(6, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 1) NULL)
+optimized expr : -12.3_d128(6,1)
+func ctx       : (modified)
+output type    : Decimal(6, 1) NULL
+output domain  : {-12.3..=-12.3}
+output         : -12.3
+
+
+ast            : TRY_CAST(-12.567::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : TRY_CAST(minus(CAST(12.567 AS Decimal(6, 3))) AS Decimal(6, 2))
+checked expr   : TRY_CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 2) NULL)
+optimized expr : -12.57_d128(6,2)
+func ctx       : (modified)
+output type    : Decimal(6, 2) NULL
+output domain  : {-12.57..=-12.57}
+output         : -12.57
+
+
+ast            : TRY_CAST(0.999::DECIMAL(4,3) AS DECIMAL(4,0))
+raw expr       : TRY_CAST(CAST(0.999 AS Decimal(4, 3)) AS Decimal(4, 0))
+checked expr   : TRY_CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.999_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 0) NULL)
+optimized expr : 1_d128(4,0)
+func ctx       : (modified)
+output type    : Decimal(4, 0) NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : TRY_CAST(0.001::DECIMAL(4,3) AS DECIMAL(4,1))
+raw expr       : TRY_CAST(CAST(0.001 AS Decimal(4, 3)) AS Decimal(4, 1))
+checked expr   : TRY_CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.001_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 1) NULL)
+optimized expr : 0.0_d128(4,1)
+func ctx       : (modified)
+output type    : Decimal(4, 1) NULL
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : TRY_CAST(c AS DECIMAL(8,0))
+raw expr       : TRY_CAST(c::Decimal(8, 3) AS Decimal(8, 0))
+checked expr   : TRY_CAST<Decimal(8, 3)>(c AS Decimal(8, 0) NULL)
+func ctx       : (modified)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 0) NULL |
+| Domain | {-99.999..=123.456} | Unknown            |
+| Row 0  | 12.345              | 12                 |
+| Row 1  | 67.890              | 68                 |
+| Row 2  | -11.111             | -11                |
+| Row 3  | 99.999              | 100                |
+| Row 4  | 0.000               | 0                  |
+| Row 5  | -99.999             | -100               |
+| Row 6  | 123.456             | 123                |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                            |
++--------+-------------------------------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456])                          |
+| Output | NullableColumn { column: Decimal128([12, 68, -11, 100, 0, -100, 123]), validity: [0b_1111111] } |
++--------+-------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(c AS DECIMAL(8,1))
+raw expr       : TRY_CAST(c::Decimal(8, 3) AS Decimal(8, 1))
+checked expr   : TRY_CAST<Decimal(8, 3)>(c AS Decimal(8, 1) NULL)
+func ctx       : (modified)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 1) NULL |
+| Domain | {-99.999..=123.456} | Unknown            |
+| Row 0  | 12.345              | 12.3               |
+| Row 1  | 67.890              | 67.9               |
+| Row 2  | -11.111             | -11.1              |
+| Row 3  | 99.999              | 100.0              |
+| Row 4  | 0.000               | 0.0                |
+| Row 5  | -99.999             | -100.0             |
+| Row 6  | 123.456             | 123.5              |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456])                                        |
+| Output | NullableColumn { column: Decimal128([12.3, 67.9, -11.1, 100.0, 0.0, -100.0, 123.5]), validity: [0b_1111111] } |
++--------+---------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(c AS DECIMAL(8,2))
+raw expr       : TRY_CAST(c::Decimal(8, 3) AS Decimal(8, 2))
+checked expr   : TRY_CAST<Decimal(8, 3)>(c AS Decimal(8, 2) NULL)
+func ctx       : (modified)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 2) NULL |
+| Domain | {-99.999..=123.456} | Unknown            |
+| Row 0  | 12.345              | 12.35              |
+| Row 1  | 67.890              | 67.89              |
+| Row 2  | -11.111             | -11.11             |
+| Row 3  | 99.999              | 100.00             |
+| Row 4  | 0.000               | 0.00               |
+| Row 5  | -99.999             | -100.00            |
+| Row 6  | 123.456             | 123.46             |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                 |
++--------+----------------------------------------------------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456])                                               |
+| Output | NullableColumn { column: Decimal128([12.35, 67.89, -11.11, 100.00, 0.00, -100.00, 123.46]), validity: [0b_1111111] } |
++--------+----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(123.456::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : TRY_CAST(CAST(123.456 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(123.456_d128(6,3) AS Decimal(6, 1) NULL)
+optimized expr : 123.4_d128(6,1)
+output type    : Decimal(6, 1) NULL
+output domain  : {123.4..=123.4}
+output         : 123.4
+
+
+ast            : TRY_CAST(123.999::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : TRY_CAST(CAST(123.999 AS Decimal(6, 3)) AS Decimal(6, 2))
+checked expr   : TRY_CAST<Decimal(6, 3)>(123.999_d128(6,3) AS Decimal(6, 2) NULL)
+optimized expr : 123.99_d128(6,2)
+output type    : Decimal(6, 2) NULL
+output domain  : {123.99..=123.99}
+output         : 123.99
+
+
+ast            : TRY_CAST(999.995::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : TRY_CAST(CAST(999.995 AS Decimal(6, 3)) AS Decimal(6, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(999.995_d128(6,3) AS Decimal(6, 1) NULL)
+optimized expr : 999.9_d128(6,1)
+output type    : Decimal(6, 1) NULL
+output domain  : {999.9..=999.9}
+output         : 999.9
+
+
+ast            : TRY_CAST(12.345::DECIMAL(5,3) AS DECIMAL(5,0))
+raw expr       : TRY_CAST(CAST(12.345 AS Decimal(5, 3)) AS Decimal(5, 0))
+checked expr   : TRY_CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(5, 0) NULL)
+optimized expr : 12_d128(5,0)
+output type    : Decimal(5, 0) NULL
+output domain  : {12..=12}
+output         : 12
+
+
+ast            : TRY_CAST(12.567::DECIMAL(5,3) AS DECIMAL(5,1))
+raw expr       : TRY_CAST(CAST(12.567 AS Decimal(5, 3)) AS Decimal(5, 1))
+checked expr   : TRY_CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(5, 1) NULL)
+optimized expr : 12.5_d128(5,1)
+output type    : Decimal(5, 1) NULL
+output domain  : {12.5..=12.5}
+output         : 12.5
+
+
+ast            : TRY_CAST(-12.345::DECIMAL(6,3) AS DECIMAL(6,1))
+raw expr       : TRY_CAST(minus(CAST(12.345 AS Decimal(6, 3))) AS Decimal(6, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.345_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 1) NULL)
+optimized expr : -12.3_d128(6,1)
+output type    : Decimal(6, 1) NULL
+output domain  : {-12.3..=-12.3}
+output         : -12.3
+
+
+ast            : TRY_CAST(-12.567::DECIMAL(6,3) AS DECIMAL(6,2))
+raw expr       : TRY_CAST(minus(CAST(12.567 AS Decimal(6, 3))) AS Decimal(6, 2))
+checked expr   : TRY_CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(CAST<Decimal(5, 3)>(12.567_d128(5,3) AS Decimal(6, 3))) AS Decimal(6, 2) NULL)
+optimized expr : -12.56_d128(6,2)
+output type    : Decimal(6, 2) NULL
+output domain  : {-12.56..=-12.56}
+output         : -12.56
+
+
+ast            : TRY_CAST(0.999::DECIMAL(4,3) AS DECIMAL(4,0))
+raw expr       : TRY_CAST(CAST(0.999 AS Decimal(4, 3)) AS Decimal(4, 0))
+checked expr   : TRY_CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.999_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 0) NULL)
+optimized expr : 0_d128(4,0)
+output type    : Decimal(4, 0) NULL
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : TRY_CAST(0.001::DECIMAL(4,3) AS DECIMAL(4,1))
+raw expr       : TRY_CAST(CAST(0.001 AS Decimal(4, 3)) AS Decimal(4, 1))
+checked expr   : TRY_CAST<Decimal(4, 3)>(CAST<Decimal(3, 3)>(0.001_d128(3,3) AS Decimal(4, 3)) AS Decimal(4, 1) NULL)
+optimized expr : 0.0_d128(4,1)
+output type    : Decimal(4, 1) NULL
+output domain  : {0.0..=0.0}
+output         : 0.0
+
+
+ast            : TRY_CAST(c AS DECIMAL(8,0))
+raw expr       : TRY_CAST(c::Decimal(8, 3) AS Decimal(8, 0))
+checked expr   : TRY_CAST<Decimal(8, 3)>(c AS Decimal(8, 0) NULL)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 0) NULL |
+| Domain | {-99.999..=123.456} | Unknown            |
+| Row 0  | 12.345              | 12                 |
+| Row 1  | 67.890              | 67                 |
+| Row 2  | -11.111             | -11                |
+| Row 3  | 99.999              | 99                 |
+| Row 4  | 0.000               | 0                  |
+| Row 5  | -99.999             | -99                |
+| Row 6  | 123.456             | 123                |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------+
+| Column | Data                                                                                          |
++--------+-----------------------------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456])                        |
+| Output | NullableColumn { column: Decimal128([12, 67, -11, 99, 0, -99, 123]), validity: [0b_1111111] } |
++--------+-----------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(c AS DECIMAL(8,1))
+raw expr       : TRY_CAST(c::Decimal(8, 3) AS Decimal(8, 1))
+checked expr   : TRY_CAST<Decimal(8, 3)>(c AS Decimal(8, 1) NULL)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 1) NULL |
+| Domain | {-99.999..=123.456} | Unknown            |
+| Row 0  | 12.345              | 12.3               |
+| Row 1  | 67.890              | 67.8               |
+| Row 2  | -11.111             | -11.1              |
+| Row 3  | 99.999              | 99.9               |
+| Row 4  | 0.000               | 0.0                |
+| Row 5  | -99.999             | -99.9              |
+| Row 6  | 123.456             | 123.4              |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                        |
++--------+-------------------------------------------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456])                                      |
+| Output | NullableColumn { column: Decimal128([12.3, 67.8, -11.1, 99.9, 0.0, -99.9, 123.4]), validity: [0b_1111111] } |
++--------+-------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(c AS DECIMAL(8,2))
+raw expr       : TRY_CAST(c::Decimal(8, 3) AS Decimal(8, 2))
+checked expr   : TRY_CAST<Decimal(8, 3)>(c AS Decimal(8, 2) NULL)
+evaluation:
++--------+---------------------+--------------------+
+|        | c                   | Output             |
++--------+---------------------+--------------------+
+| Type   | Decimal(8, 3)       | Decimal(8, 2) NULL |
+| Domain | {-99.999..=123.456} | Unknown            |
+| Row 0  | 12.345              | 12.34              |
+| Row 1  | 67.890              | 67.89              |
+| Row 2  | -11.111             | -11.11             |
+| Row 3  | 99.999              | 99.99              |
+| Row 4  | 0.000               | 0.00               |
+| Row 5  | -99.999             | -99.99             |
+| Row 6  | 123.456             | 123.45             |
++--------+---------------------+--------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                               |
++--------+--------------------------------------------------------------------------------------------------------------------+
+| c      | Decimal128([12.345, 67.890, -11.111, 99.999, 0.000, -99.999, 123.456])                                             |
+| Output | NullableColumn { column: Decimal128([12.34, 67.89, -11.11, 99.99, 0.00, -99.99, 123.45]), validity: [0b_1111111] } |
++--------+--------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(12345.67::DECIMAL(7,2) AS DECIMAL(5,2))
+raw expr       : TRY_CAST(CAST(12345.67 AS Decimal(7, 2)) AS Decimal(5, 2))
+checked expr   : TRY_CAST<Decimal(7, 2)>(12345.67_d128(7,2) AS Decimal(5, 2) NULL)
+optimized expr : NULL
+output type    : Decimal(5, 2) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(999.99::DECIMAL(5,2) AS DECIMAL(4,2))
+raw expr       : TRY_CAST(CAST(999.99 AS Decimal(5, 2)) AS Decimal(4, 2))
+checked expr   : TRY_CAST<Decimal(5, 2)>(999.99_d128(5,2) AS Decimal(4, 2) NULL)
+optimized expr : NULL
+output type    : Decimal(4, 2) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(99.9::DECIMAL(3,1) AS DECIMAL(2,1))
+raw expr       : TRY_CAST(CAST(99.9 AS Decimal(3, 1)) AS Decimal(2, 1))
+checked expr   : TRY_CAST<Decimal(3, 1)>(99.9_d128(3,1) AS Decimal(2, 1) NULL)
+optimized expr : NULL
+output type    : Decimal(2, 1) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(-999.999::DECIMAL(6,3) AS DECIMAL(4,1))
+raw expr       : TRY_CAST(minus(CAST(999.999 AS Decimal(6, 3))) AS Decimal(4, 1))
+checked expr   : TRY_CAST<Decimal(6, 3)>(minus<Decimal(6, 3)>(999.999_d128(6,3)) AS Decimal(4, 1) NULL)
+optimized expr : -999.9_d128(4,1)
+output type    : Decimal(4, 1) NULL
+output domain  : {-999.9..=-999.9}
+output         : -999.9
+
+
+ast            : TRY_CAST(-123.45::DECIMAL(5,2) AS DECIMAL(4,2))
+raw expr       : TRY_CAST(minus(CAST(123.45 AS Decimal(5, 2))) AS Decimal(4, 2))
+checked expr   : TRY_CAST<Decimal(5, 2)>(minus<Decimal(5, 2)>(123.45_d128(5,2)) AS Decimal(4, 2) NULL)
+optimized expr : NULL
+output type    : Decimal(4, 2) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(99.99::DECIMAL(4,2) AS DECIMAL(3,2))
+raw expr       : TRY_CAST(CAST(99.99 AS Decimal(4, 2)) AS Decimal(3, 2))
+checked expr   : TRY_CAST<Decimal(4, 2)>(99.99_d128(4,2) AS Decimal(3, 2) NULL)
+optimized expr : NULL
+output type    : Decimal(3, 2) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(9.99::DECIMAL(3,2) AS DECIMAL(2,2))
+raw expr       : TRY_CAST(CAST(9.99 AS Decimal(3, 2)) AS Decimal(2, 2))
+checked expr   : TRY_CAST<Decimal(3, 2)>(9.99_d128(3,2) AS Decimal(2, 2) NULL)
+optimized expr : NULL
+output type    : Decimal(2, 2) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(123.45::DECIMAL(5,2) AS DECIMAL(38,10))
+raw expr       : TRY_CAST(CAST(123.45 AS Decimal(5, 2)) AS Decimal(38, 10))
+checked expr   : TRY_CAST<Decimal(5, 2)>(123.45_d128(5,2) AS Decimal(38, 10) NULL)
+optimized expr : 123.4500000000_d128(38,10)
+output type    : Decimal(38, 10) NULL
+output domain  : {123.4500000000..=123.4500000000}
+output         : 123.4500000000
+
+
+ast            : TRY_CAST(123456789.123456789::DECIMAL(18,9) AS DECIMAL(38,20))
+raw expr       : TRY_CAST(CAST(123456789.123456789 AS Decimal(18, 9)) AS Decimal(38, 20))
+checked expr   : TRY_CAST<Decimal(18, 9)>(123456789.123456789_d128(18,9) AS Decimal(38, 20) NULL)
+optimized expr : 123456789.12345678900000000000_d128(38,20)
+output type    : Decimal(38, 20) NULL
+output domain  : {123456789.12345678900000000000..=123456789.12345678900000000000}
+output         : 123456789.12345678900000000000
+
+
+ast            : TRY_CAST(12345678901234567890.123456789::DECIMAL(38,9) AS DECIMAL(18,4))
+raw expr       : TRY_CAST(CAST(12345678901234567890.123456789 AS Decimal(38, 9)) AS Decimal(18, 4))
+checked expr   : TRY_CAST<Decimal(38, 9)>(CAST<Decimal(29, 9)>(12345678901234567890.123456789_d128(29,9) AS Decimal(38, 9)) AS Decimal(18, 4) NULL)
+optimized expr : NULL
+output type    : Decimal(18, 4) NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(99.99::DECIMAL(4,2) AS DECIMAL(6,2))
+raw expr       : TRY_CAST(CAST(99.99 AS Decimal(4, 2)) AS Decimal(6, 2))
+checked expr   : TRY_CAST<Decimal(4, 2)>(99.99_d128(4,2) AS Decimal(6, 2) NULL)
+optimized expr : 99.99_d128(6,2)
+output type    : Decimal(6, 2) NULL
+output domain  : {99.99..=99.99}
+output         : 99.99
+
+
+ast            : TRY_CAST(999999.999::DECIMAL(9,3) AS DECIMAL(15,6))
+raw expr       : TRY_CAST(CAST(999999.999 AS Decimal(9, 3)) AS Decimal(15, 6))
+checked expr   : TRY_CAST<Decimal(9, 3)>(999999.999_d128(9,3) AS Decimal(15, 6) NULL)
+optimized expr : 999999.999000_d128(15,6)
+output type    : Decimal(15, 6) NULL
+output domain  : {999999.999000..=999999.999000}
+output         : 999999.999000
+
+
+ast            : TRY_CAST(a AS DECIMAL(15,3))
+raw expr       : TRY_CAST(a::Decimal(10, 2) AS Decimal(15, 3))
+checked expr   : TRY_CAST<Decimal(10, 2)>(a AS Decimal(15, 3) NULL)
+evaluation:
++--------+----------------------------+---------------------+
+|        | a                          | Output              |
++--------+----------------------------+---------------------+
+| Type   | Decimal(10, 2)             | Decimal(15, 3) NULL |
+| Domain | {-9876543.21..=1234567.89} | Unknown             |
+| Row 0  | 0.00                       | 0.000               |
+| Row 1  | 0.01                       | 0.010               |
+| Row 2  | -0.01                      | -0.010              |
+| Row 3  | 1234567.89                 | 1234567.890         |
+| Row 4  | -9876543.21                | -9876543.210        |
+| Row 5  | 9999.99                    | 9999.990            |
++--------+----------------------------+---------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                       |
++--------+----------------------------------------------------------------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 9999.99])                                                          |
+| Output | NullableColumn { column: Decimal128([0.000, 0.010, -0.010, 1234567.890, -9876543.210, 9999.990]), validity: [0b__111111] } |
++--------+----------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(a AS DECIMAL(20,5))
+raw expr       : TRY_CAST(a::Decimal(10, 2) AS Decimal(20, 5))
+checked expr   : TRY_CAST<Decimal(10, 2)>(a AS Decimal(20, 5) NULL)
+evaluation:
++--------+----------------------------+---------------------+
+|        | a                          | Output              |
++--------+----------------------------+---------------------+
+| Type   | Decimal(10, 2)             | Decimal(20, 5) NULL |
+| Domain | {-9876543.21..=1234567.89} | Unknown             |
+| Row 0  | 0.00                       | 0.00000             |
+| Row 1  | 0.01                       | 0.01000             |
+| Row 2  | -0.01                      | -0.01000            |
+| Row 3  | 1234567.89                 | 1234567.89000       |
+| Row 4  | -9876543.21                | -9876543.21000      |
+| Row 5  | 9999.99                    | 9999.99000          |
++--------+----------------------------+---------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                   |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 9999.99])                                                                      |
+| Output | NullableColumn { column: Decimal128([0.00000, 0.01000, -0.01000, 1234567.89000, -9876543.21000, 9999.99000]), validity: [0b__111111] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(b AS DECIMAL(10,2))
+raw expr       : TRY_CAST(b::Decimal(15, 3) AS Decimal(10, 2))
+checked expr   : TRY_CAST<Decimal(15, 3)>(b AS Decimal(10, 2) NULL)
+evaluation:
++--------+----------------------------+---------------------+
+|        | b                          | Output              |
++--------+----------------------------+---------------------+
+| Type   | Decimal(15, 3)             | Decimal(10, 2) NULL |
+| Domain | {-987654.320..=123456.780} | Unknown             |
+| Row 0  | 0.000                      | 0.00                |
+| Row 1  | 0.002                      | 0.00                |
+| Row 2  | -0.002                     | 0.00                |
+| Row 3  | 123456.780                 | 123456.78           |
+| Row 4  | -987654.320                | -987654.32          |
+| Row 5  | 1000.000                   | 1000.00             |
++--------+----------------------------+---------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                              |
++--------+-------------------------------------------------------------------------------------------------------------------+
+| b      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 1000.000])                                             |
+| Output | NullableColumn { column: Decimal128([0.00, 0.00, 0.00, 123456.78, -987654.32, 1000.00]), validity: [0b__111111] } |
++--------+-------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(b AS DECIMAL(38,10))
+raw expr       : TRY_CAST(b::Decimal(15, 3) AS Decimal(38, 10))
+checked expr   : TRY_CAST<Decimal(15, 3)>(b AS Decimal(38, 10) NULL)
+evaluation:
++--------+----------------------------+----------------------+
+|        | b                          | Output               |
++--------+----------------------------+----------------------+
+| Type   | Decimal(15, 3)             | Decimal(38, 10) NULL |
+| Domain | {-987654.320..=123456.780} | Unknown              |
+| Row 0  | 0.000                      | 0.0000000000         |
+| Row 1  | 0.002                      | 0.0020000000         |
+| Row 2  | -0.002                     | -0.0020000000        |
+| Row 3  | 123456.780                 | 123456.7800000000    |
+| Row 4  | -987654.320                | -987654.3200000000   |
+| Row 5  | 1000.000                   | 1000.0000000000      |
++--------+----------------------------+----------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                               |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| b      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 1000.000])                                                                                              |
+| Output | NullableColumn { column: Decimal128([0.0000000000, 0.0020000000, -0.0020000000, 123456.7800000000, -987654.3200000000, 1000.0000000000]), validity: [0b__111111] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(a AS DECIMAL(5,1))
+raw expr       : TRY_CAST(a::Decimal(10, 2) AS Decimal(5, 1))
+checked expr   : TRY_CAST<Decimal(10, 2)>(a AS Decimal(5, 1) NULL)
+evaluation:
++--------+----------------------------+--------------------+
+|        | a                          | Output             |
++--------+----------------------------+--------------------+
+| Type   | Decimal(10, 2)             | Decimal(5, 1) NULL |
+| Domain | {-9876543.21..=1234567.89} | Unknown            |
+| Row 0  | 0.00                       | 0.0                |
+| Row 1  | 0.01                       | 0.0                |
+| Row 2  | -0.01                      | 0.0                |
+| Row 3  | 1234567.89                 | NULL               |
+| Row 4  | -9876543.21                | NULL               |
+| Row 5  | 9999.99                    | 9999.9             |
++--------+----------------------------+--------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                             |
++--------+--------------------------------------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 9999.99])                                |
+| Output | NullableColumn { column: Decimal128([0.0, 0.0, 0.0, 0.1, 0.1, 9999.9]), validity: [0b__100111] } |
++--------+--------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(b AS DECIMAL(8,2))
+raw expr       : TRY_CAST(b::Decimal(15, 3) AS Decimal(8, 2))
+checked expr   : TRY_CAST<Decimal(15, 3)>(b AS Decimal(8, 2) NULL)
+evaluation:
++--------+----------------------------+--------------------+
+|        | b                          | Output             |
++--------+----------------------------+--------------------+
+| Type   | Decimal(15, 3)             | Decimal(8, 2) NULL |
+| Domain | {-987654.320..=123456.780} | Unknown            |
+| Row 0  | 0.000                      | 0.00               |
+| Row 1  | 0.002                      | 0.00               |
+| Row 2  | -0.002                     | 0.00               |
+| Row 3  | 123456.780                 | 123456.78          |
+| Row 4  | -987654.320                | -987654.32         |
+| Row 5  | 1000.000                   | 1000.00            |
++--------+----------------------------+--------------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                              |
++--------+-------------------------------------------------------------------------------------------------------------------+
+| b      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 1000.000])                                             |
+| Output | NullableColumn { column: Decimal128([0.00, 0.00, 0.00, 123456.78, -987654.32, 1000.00]), validity: [0b__111111] } |
++--------+-------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(d AS DECIMAL(20,5))
+raw expr       : TRY_CAST(d::Decimal(38, 10) AS Decimal(20, 5))
+checked expr   : TRY_CAST<Decimal(38, 10)>(d AS Decimal(20, 5) NULL)
+evaluation:
++--------+----------------------------------------------+---------------------+
+|        | d                                            | Output              |
++--------+----------------------------------------------+---------------------+
+| Type   | Decimal(38, 10)                              | Decimal(20, 5) NULL |
+| Domain | {-99999999.9999999999..=99999999.9999999999} | Unknown             |
+| Row 0  | 99999999.9999999999                          | 99999999.99999      |
+| Row 1  | -99999999.9999999999                         | -99999999.99999     |
+| Row 2  | 0.0000000000                                 | 0.00000             |
+| Row 3  | 12345.6789012345                             | 12345.67890         |
+| Row 4  | -12345.6789012345                            | -12345.67890        |
++--------+----------------------------------------------+---------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------+
+| d      | Decimal256([99999999.9999999999, -99999999.9999999999, 0.0000000000, 12345.6789012345, -12345.6789012345])                           |
+| Output | NullableColumn { column: Decimal128([99999999.99999, -99999999.99999, 0.00000, 12345.67890, -12345.67890]), validity: [0b___11111] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(d AS DECIMAL(38,15))
+raw expr       : TRY_CAST(d::Decimal(38, 10) AS Decimal(38, 15))
+checked expr   : TRY_CAST<Decimal(38, 10)>(d AS Decimal(38, 15) NULL)
+evaluation:
++--------+----------------------------------------------+---------------------------+
+|        | d                                            | Output                    |
++--------+----------------------------------------------+---------------------------+
+| Type   | Decimal(38, 10)                              | Decimal(38, 15) NULL      |
+| Domain | {-99999999.9999999999..=99999999.9999999999} | Unknown                   |
+| Row 0  | 99999999.9999999999                          | 99999999.999999999900000  |
+| Row 1  | -99999999.9999999999                         | -99999999.999999999900000 |
+| Row 2  | 0.0000000000                                 | 0.000000000000000         |
+| Row 3  | 12345.6789012345                             | 12345.678901234500000     |
+| Row 4  | -12345.6789012345                            | -12345.678901234500000    |
++--------+----------------------------------------------+---------------------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                   |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| d      | Decimal256([99999999.9999999999, -99999999.9999999999, 0.0000000000, 12345.6789012345, -12345.6789012345])                                                                             |
+| Output | NullableColumn { column: Decimal128([99999999.999999999900000, -99999999.999999999900000, 0.000000000000000, 12345.678901234500000, -12345.678901234500000]), validity: [0b___11111] } |
++--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(d AS DECIMAL(15,2))
+raw expr       : TRY_CAST(d::Decimal(38, 10) AS Decimal(15, 2))
+checked expr   : TRY_CAST<Decimal(38, 10)>(d AS Decimal(15, 2) NULL)
+evaluation:
++--------+----------------------------------------------+---------------------+
+|        | d                                            | Output              |
++--------+----------------------------------------------+---------------------+
+| Type   | Decimal(38, 10)                              | Decimal(15, 2) NULL |
+| Domain | {-99999999.9999999999..=99999999.9999999999} | Unknown             |
+| Row 0  | 99999999.9999999999                          | 99999999.99         |
+| Row 1  | -99999999.9999999999                         | -99999999.99        |
+| Row 2  | 0.0000000000                                 | 0.00                |
+| Row 3  | 12345.6789012345                             | 12345.67            |
+| Row 4  | -12345.6789012345                            | -12345.67           |
++--------+----------------------------------------------+---------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| d      | Decimal256([99999999.9999999999, -99999999.9999999999, 0.0000000000, 12345.6789012345, -12345.6789012345])            |
+| Output | NullableColumn { column: Decimal128([99999999.99, -99999999.99, 0.00, 12345.67, -12345.67]), validity: [0b___11111] } |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+

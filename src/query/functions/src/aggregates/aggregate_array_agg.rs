@@ -111,6 +111,9 @@ where
                     let val = T::upcast_scalar(value);
                     let decimal_val = val.as_decimal().unwrap();
                     let new_val = match decimal_val {
+                        DecimalScalar::Decimal64(v, _) => {
+                            ScalarRef::Decimal(DecimalScalar::Decimal64(*v, size))
+                        }
                         DecimalScalar::Decimal128(v, _) => {
                             ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
                         }
@@ -215,6 +218,9 @@ where
                             let val = T::upcast_scalar(value.clone());
                             let decimal_val = val.as_decimal().unwrap();
                             let new_val = match decimal_val {
+                                DecimalScalar::Decimal64(v, _) => {
+                                    ScalarRef::Decimal(DecimalScalar::Decimal64(*v, size))
+                                }
                                 DecimalScalar::Decimal128(v, _) => {
                                     ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
                                 }

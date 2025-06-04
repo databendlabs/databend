@@ -31,7 +31,6 @@ use crate::types::decimal::DecimalSize;
 use crate::types::decimal::MAX_DECIMAL128_PRECISION;
 use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
 use crate::types::Number;
 use crate::visit_expr;
 use crate::AutoCastRules;
@@ -715,20 +714,14 @@ pub fn common_super_type(
         | (DataType::Decimal(a), DataType::Number(num_ty))
             if !num_ty.is_float() =>
         {
-            let b = DecimalDataType::from_size(num_ty.get_decimal_properties().unwrap()).unwrap();
+            let b = num_ty.get_decimal_properties().unwrap();
 
             let scale = a.scale().max(b.scale());
-            let mut precision = a.leading_digits().max(b.leading_digits()) + scale;
+            let precision = a.leading_digits().max(b.leading_digits()) + scale;
 
-            if a.precision() <= MAX_DECIMAL128_PRECISION
-                && b.precision() <= MAX_DECIMAL128_PRECISION
-            {
-                precision = precision.min(MAX_DECIMAL128_PRECISION);
-            } else {
-                precision = precision.min(MAX_DECIMAL256_PRECISION);
-            }
-
-            Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
+            Some(DataType::Decimal(
+                DecimalSize::new(precision.min(MAX_DECIMAL256_PRECISION), scale).ok()?,
+            ))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
         | (DataType::Decimal(_), DataType::Number(num_ty))

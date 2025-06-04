@@ -111,7 +111,7 @@ where
 
 impl<T> UnaryState<T, T> for QuantileState<T>
 where
-    T: ArgType + Sync + Send,
+    T: ValueType + Sync + Send,
     T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
 {
     fn add(
