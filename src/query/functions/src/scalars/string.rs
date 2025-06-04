@@ -395,6 +395,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |val, _| val.as_bytes().first().map_or(0, |v| *v),
     );
 
+    registry.register_1_arg::<StringType, NumberType<u32>, _, _>(
+        "unicode",
+        |_, _| FunctionDomain::Full,
+        |val, _| val.chars().next().map_or(0, |c| c as u32),
+    );
+
     // Trim functions
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "ltrim",
