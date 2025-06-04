@@ -1929,6 +1929,135 @@ DateTrunc {
 
 
 ---------- Input ----------
+trunc(to_timestamp(1630812366), 'y')
+---------- Output ---------
+DATE_TRUNC(YEAR, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..36,
+    ),
+    unit: Year,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+trunc(to_timestamp(1630812366), 'mm')
+---------- Output ---------
+DATE_TRUNC(MONTH, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..37,
+    ),
+    unit: Month,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+trunc(to_timestamp(1630812366), 'Q')
+---------- Output ---------
+DATE_TRUNC(QUARTER, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..36,
+    ),
+    unit: Quarter,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
 DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
 ---------- Output ---------
 DATE_DIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
