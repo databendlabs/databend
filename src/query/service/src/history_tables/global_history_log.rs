@@ -149,11 +149,11 @@ impl GlobalHistoryLog {
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
 
-                            // TableSchemaMismatch(1303), if the table schema is changed means
+                            // BadArguments(1006), if the table schema is changed means
                             // this node is older version, exit
-                            if e.code() == 1303 {
+                            if e.code() == 1006 {
                                 info!(
-                                    "system history {} log transform exit due to TableSchemaMismatch",
+                                    "system history {} log transform exit due to schema changed",
                                     table_clone.name
                                 );
                                 break;
