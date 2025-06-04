@@ -17,13 +17,11 @@ use std::sync::Arc;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
-use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 
-use crate::history_tables::session::create_session;
 use crate::sessions::QueryContext;
 
 pub async fn get_alter_table_sql(
