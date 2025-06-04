@@ -145,6 +145,7 @@ impl RulePushDownFilterScan {
         let is_source_of_view = table_entries.iter().any(|t| t.is_source_of_view());
 
         let mut filtered_predicates = vec![];
+        let mut visitor = EquivalentConstantsVisitor::default();
         for predicate in predicates {
             let used_columns = predicate.used_columns();
             let mut contain_derived_column = false;
@@ -159,18 +160,15 @@ impl RulePushDownFilterScan {
                 }
             }
             if !contain_derived_column {
-                let predicate = Self::replace_predicate_column(
+                let mut predicate = Self::replace_predicate_column(
                     predicate,
                     table_entries,
                     &column_entries,
                     is_source_of_view,
                 )?;
+                visitor.visit(&mut predicate)?;
                 filtered_predicates.push(predicate);
             }
-        }
-        let mut visitor = EquivalentConstantsVisitor::default();
-        for predicate in filtered_predicates.iter_mut() {
-            visitor.visit(predicate)?;
         }
 
         Ok(filtered_predicates)

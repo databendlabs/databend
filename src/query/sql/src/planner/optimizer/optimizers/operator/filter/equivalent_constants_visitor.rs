@@ -18,10 +18,10 @@ use databend_common_exception::Result;
 
 use crate::optimizer::optimizers::operator::filter::remove_trivial_type_cast;
 use crate::plans::walk_expr_mut;
+use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::VisitorMut;
-use crate::IndexType;
 use crate::ScalarExpr;
 
 // EquivalentConstantsVisitor is used to collect the equivalent relationship between Column and Scalar from the bottom to the bottom,
@@ -29,7 +29,14 @@ use crate::ScalarExpr;
 // e.g. [b = 3 and a between b and b + 2] => [b = 3 and a between 3 and 5]
 #[derive(Default)]
 pub struct EquivalentConstantsVisitor {
-    pub eq_constants: HashMap<IndexType, ScalarExpr>,
+    pub eq_constants: HashMap<BoundColumnRef, ScalarExpr>,
+}
+
+impl EquivalentConstantsVisitor {
+    fn eq_constants(mut self, eq_constants: HashMap<BoundColumnRef, ScalarExpr>) -> Self {
+        self.eq_constants = eq_constants;
+        self
+    }
 }
 
 impl VisitorMut<'_> for EquivalentConstantsVisitor {
@@ -37,7 +44,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitor {
         walk_expr_mut(self, expr)?;
 
         if let ScalarExpr::BoundColumnRef(column) = expr {
-            if let Some(eq_expr) = self.eq_constants.get(&column.column.index) {
+            if let Some(eq_expr) = self.eq_constants.get(column) {
                 *expr = eq_expr.clone();
             }
         }
@@ -59,7 +66,9 @@ impl VisitorMut<'_> for EquivalentConstantsVisitor {
             }
             _ => {
                 for expr in &mut func.arguments {
-                    self.visit(expr)?;
+                    let mut visitor = EquivalentConstantsVisitor::default()
+                        .eq_constants(self.eq_constants.clone());
+                    visitor.visit(expr)?;
                 }
                 let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) else {
                     return Ok(());
@@ -82,24 +91,21 @@ impl VisitorMut<'_> for EquivalentConstantsVisitor {
                         ScalarExpr::BoundColumnRef(left_column),
                         ScalarExpr::BoundColumnRef(right_column),
                     ) => {
-                        let left_index = left_column.column.index;
-                        let right_index = right_column.column.index;
-
                         match (
-                            self.eq_constants.get(&left_index).cloned(),
-                            self.eq_constants.get(&right_index).cloned(),
+                            self.eq_constants.get(&left_column).cloned(),
+                            self.eq_constants.get(&right_column).cloned(),
                         ) {
                             (Some(left_eq_expr), Some(right_eq_expr)) => {
                                 if left_eq_expr != right_eq_expr {
-                                    self.eq_constants.remove(&left_index);
-                                    self.eq_constants.remove(&right_index);
+                                    self.eq_constants.remove(&left_column);
+                                    self.eq_constants.remove(&right_column);
                                 }
                             }
                             (Some(left_eq_expr), None) => {
-                                self.eq_constants.insert(right_index, left_eq_expr);
+                                self.eq_constants.insert(right_column, left_eq_expr);
                             }
                             (None, Some(right_eq_expr)) => {
-                                self.eq_constants.insert(left_index, right_eq_expr);
+                                self.eq_constants.insert(left_column, right_eq_expr);
                             }
                             (None, None) => (),
                         }
@@ -107,7 +113,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitor {
                     (ScalarExpr::BoundColumnRef(column), expr)
                     | (expr, ScalarExpr::BoundColumnRef(column)) => {
                         if expr.used_columns().is_empty() {
-                            self.eq_constants.insert(column.column.index, expr);
+                            self.eq_constants.insert(column, expr);
                         }
                     }
                     _ => (),
