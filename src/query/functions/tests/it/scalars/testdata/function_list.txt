@@ -2144,6 +2144,10 @@ Functions overloads:
 1 insert(String NULL, Int64 NULL, Int64 NULL, String NULL) :: String NULL
 0 instr(String, String) :: UInt64
 1 instr(String NULL, String NULL) :: UInt64 NULL
+2 instr(String, String, Int64) :: UInt64
+3 instr(String NULL, String NULL, Int64 NULL) :: UInt64 NULL
+4 instr(String, String, Int64, UInt64) :: UInt64
+5 instr(String NULL, String NULL, Int64 NULL, UInt64 NULL) :: UInt64 NULL
 0 is_array(Variant) :: Boolean
 1 is_array(Variant NULL) :: Boolean NULL
 0 is_binary(Variant) :: Boolean
