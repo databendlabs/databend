@@ -249,6 +249,7 @@ impl Column {
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Column {
+        let data_type = columns[0].data_type();
         match &columns[0] {
             Column::Null { .. } => Column::Null { len: result_size },
             Column::EmptyArray { .. } => Column::EmptyArray { len: result_size },
@@ -256,7 +257,9 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
+                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(
+                        columns, &data_type, builder, indices,
+                    )
                 }
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -281,27 +284,27 @@ impl Column {
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BooleanType>(columns, builder, indices)
+                Self::take_block_value_types::<BooleanType>(columns, &data_type, builder, indices)
             }
             Column::Binary(_) => {
                 let builder = BinaryType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BinaryType>(columns, builder, indices)
+                Self::take_block_value_types::<BinaryType>(columns, &data_type, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<StringType>(columns, builder, indices)
+                Self::take_block_value_types::<StringType>(columns, &data_type, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<TimestampType>(columns, builder, indices)
+                Self::take_block_value_types::<TimestampType>(columns, &data_type, builder, indices)
             }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<DateType>(columns, builder, indices)
+                Self::take_block_value_types::<DateType>(columns, &data_type, builder, indices)
             }
             Column::Interval(_) => {
                 let builder = IntervalType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<IntervalType>(columns, builder, indices)
+                Self::take_block_value_types::<IntervalType>(columns, &data_type, builder, indices)
             }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -309,7 +312,9 @@ impl Column {
                 let builder =
                     ColumnBuilder::with_capacity(&column.values().data_type(), result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+                Self::take_block_value_types::<ArrayType<AnyType>>(
+                    columns, &data_type, builder, indices,
+                )
             }
             Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -326,11 +331,13 @@ impl Column {
                     values: val_builder,
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_value_types::<MapType<AnyType, AnyType>>(columns, builder, indices)
+                Self::take_block_value_types::<MapType<AnyType, AnyType>>(
+                    columns, &data_type, builder, indices,
+                )
             }
             Column::Bitmap(_) => {
                 let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BitmapType>(columns, builder, indices)
+                Self::take_block_value_types::<BitmapType>(columns, &data_type, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_columns = columns
@@ -370,15 +377,15 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<VariantType>(columns, builder, indices)
+                Self::take_block_value_types::<VariantType>(columns, &data_type, builder, indices)
             }
             Column::Geometry(_) => {
                 let builder = GeometryType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<GeometryType>(columns, builder, indices)
+                Self::take_block_value_types::<GeometryType>(columns, &data_type, builder, indices)
             }
             Column::Geography(_) => {
                 let builder = GeographyType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<GeographyType>(columns, builder, indices)
+                Self::take_block_value_types::<GeographyType>(columns, &data_type, builder, indices)
             }
             Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
                 VectorColumn::NUM_TYPE((_, dimension)) => {
@@ -885,6 +892,7 @@ impl Column {
 
     fn take_block_value_types<T: ValueType>(
         columns: &[Column],
+        data_type: &DataType,
         mut builder: T::ColumnBuilder,
         indices: &[BlockRowIndex],
     ) -> Column {
@@ -899,6 +907,6 @@ impl Column {
                 T::push_item(&mut builder, val.clone())
             }
         }
-        T::upcast_column_with_type(T::build_column(builder), &DataType::Null)
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 }

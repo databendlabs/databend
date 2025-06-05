@@ -368,10 +368,6 @@ impl<T: ValueType> NullableColumn<T> {
     // todo: make column and validity private
     pub fn new(column: T::Column, validity: Bitmap) -> Self {
         debug_assert_eq!(T::column_len(&column), validity.len());
-        debug_assert!(!matches!(
-            T::upcast_column_with_type(column.clone(), &DataType::Null),
-            Column::Nullable(_)
-        ));
         NullableColumn { column, validity }
     }
 

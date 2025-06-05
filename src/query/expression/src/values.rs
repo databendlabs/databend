@@ -288,7 +288,7 @@ impl<T: AccessType> Value<T> {
     }
 }
 
-impl<T: ReturnType> Value<T> {
+impl<T: ValueType> Value<T> {
     pub fn upcast_with_type(self, data_type: &DataType) -> Value<AnyType> {
         match self {
             Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar_with_type(scalar, data_type)),

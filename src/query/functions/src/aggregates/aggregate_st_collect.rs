@@ -22,6 +22,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GeometryType;
@@ -77,7 +78,7 @@ where
 
 impl<T> ScalarStateFunc<T> for StCollectState<T>
 where
-    T: ValueType,
+    T: ArgType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
 {
     fn new() -> Self {
@@ -130,9 +131,8 @@ where
         let mut srid = None;
         let mut geos = Vec::with_capacity(self.values.len());
         let values = mem::take(&mut self.values);
-        let data_type = builder.data_type();
         for (i, value) in values.into_iter().enumerate() {
-            let val = T::upcast_scalar_with_type(value, &data_type);
+            let val = T::upcast_scalar(value);
             let v = val.as_geometry().unwrap();
             let (geo, geo_srid) = ewkb_to_geo(&mut Ewkb(v))?;
             if i == 0 {

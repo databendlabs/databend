@@ -241,7 +241,10 @@ where
                 for value in &self.values {
                     match value {
                         Some(value) => {
-                            let val = T::upcast_scalar_with_type(value.clone(), inner_type);
+                            let val = T::upcast_scalar_with_type(
+                                value.clone(),
+                                &inner_type.remove_nullable(),
+                            );
                             inner_builder.push(val.as_ref());
                         }
                         None => {

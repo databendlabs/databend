@@ -453,7 +453,8 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     }
 
     fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
-        Column::Map(Box::new(col.upcast(data_type)))
+        let data_type = DataType::Array(data_type.as_map().unwrap().to_owned());
+        Column::Map(Box::new(col.upcast(&data_type)))
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {

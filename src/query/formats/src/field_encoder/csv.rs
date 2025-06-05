@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::ValueType;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
@@ -175,20 +174,16 @@ impl FieldEncoderCSV {
         }
     }
 
-    fn write_nullable<T: ValueType>(
+    fn write_nullable(
         &self,
-        column: &NullableColumn<T>,
+        column: &NullableColumn<AnyType>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
         if !column.validity.get_bit(row_index) {
             self.simple.write_null(out_buf)
         } else {
-            self.write_field(
-                &T::upcast_column_with_type(column.column.clone(), &DataType::Null),
-                row_index,
-                out_buf,
-            )
+            self.write_field(&column.column, row_index, out_buf)
         }
     }
 }

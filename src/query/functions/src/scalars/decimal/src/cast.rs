@@ -490,7 +490,7 @@ where
         DataType::Variant => {
             let arg = arg.try_downcast().unwrap();
             let result = variant_to_decimal::<T>(arg, ctx, dest_type, false);
-            return result.upcast_with_type(&DataType::Decimal(size));
+            return result.upcast_with_type(&DataType::Decimal(size).wrap_nullable());
         }
         _ => unreachable!("to_decimal not support this DataType"),
     }
@@ -506,8 +506,8 @@ fn convert_as_decimal(
     with_decimal_mapped_type!(|DECIMAL_TYPE| match dest_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
             let arg = arg.try_downcast().unwrap();
-            let result = variant_to_decimal::<DECIMAL_TYPE>(arg, ctx, dest_type, true);
-            result.upcast_with_type(&DataType::Decimal(size))
+            variant_to_decimal::<DECIMAL_TYPE>(arg, ctx, dest_type, true)
+                .upcast_with_type(&DataType::Decimal(size).wrap_nullable())
         }
     })
 }
