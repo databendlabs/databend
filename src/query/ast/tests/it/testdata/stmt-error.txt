@@ -50,20 +50,6 @@ error:
 
 
 ---------- Input ----------
-create table a (c decimal)
----------- Output ---------
-error: 
-  --> SQL:1:26
-  |
-1 | create table a (c decimal)
-  | ------          - -------^ unexpected `)`, expecting `(`
-  | |               | |       
-  | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
-  | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
-
-
----------- Input ----------
 create table a (b tuple(c int, uint64));
 ---------- Output ---------
 error: 

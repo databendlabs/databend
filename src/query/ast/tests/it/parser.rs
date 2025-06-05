@@ -958,7 +958,6 @@ fn test_statement_error() {
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
-        r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"create table a (c1 decimal(38), c2 int) partition by ();"#,
