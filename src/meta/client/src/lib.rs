@@ -27,6 +27,7 @@ mod grpc_metrics;
 mod kv_api_impl;
 mod message;
 pub mod required;
+pub(crate) mod rpc_handler;
 
 use std::sync::LazyLock;
 

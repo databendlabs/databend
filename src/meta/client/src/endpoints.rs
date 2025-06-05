@@ -14,8 +14,14 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::fmt::Display;
+use std::sync::Arc;
 
+use display_more::display_option::DisplayOptionExt;
 use itertools::Itertools;
+use log::info;
+use log::warn;
+use parking_lot::Mutex;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Status {}
@@ -89,9 +95,19 @@ impl Endpoints {
     ) -> Result<Option<String>, String> {
         let current = current.map(|x| x.to_string());
 
+        info!(
+            "MetaClient Endpoints set_current: prev: {:?}, new: {:?}, current nodes: {:?}",
+            self.current, current, self.nodes,
+        );
+
         if let Some(c) = current.as_deref() {
             if !self.nodes.contains_key(c) {
-                return Err(format!("node({}) to set is not in the nodes list", c));
+                let msg = format!(
+                    "node({}) to set is not in the nodes list, current nodes: {:?}",
+                    c, self.nodes
+                );
+                warn!("{msg}");
+                return Err(msg);
             }
         }
         let prev = std::mem::replace(&mut self.current, current);
@@ -124,6 +140,45 @@ impl fmt::Display for Endpoints {
         let keys = self.nodes.keys().map(|x| x.as_str()).join(", ");
         write!(f, "current:{:?}, all:[{}]", self.current, keys)
     }
+}
+
+/// Rotates to the next endpoint if the current one matches the failing endpoint.
+///
+/// If the current endpoint is no longer the failing one, it means another thread
+/// already rotated away from it, so we skip to avoid unnecessary endpoint switching.
+pub(crate) fn rotate_failing_endpoint(
+    all_endpoints: &Arc<Mutex<Endpoints>>,
+    failing: Option<&str>,
+    ctx: impl Display,
+) {
+    let next_endpoint = {
+        let mut endpoints = all_endpoints.lock();
+
+        if failing.is_some() {
+            let current = endpoints.current();
+            if current != failing {
+                let current = current.map(|x| x.to_string());
+
+                // Release the lock before doing anything that may take long time.
+                drop(endpoints);
+
+                info!(
+                    "{ctx} rotate_failing_endpoint: current {} is no longer {}; skip rotation",
+                    current.display(),
+                    failing.display()
+                );
+
+                return;
+            }
+        }
+
+        endpoints.choose_next().to_string()
+    };
+
+    info!(
+        "{ctx} rotate_failing_endpoint: switched to {}",
+        next_endpoint
+    );
 }
 
 #[cfg(test)]
