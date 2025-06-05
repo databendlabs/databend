@@ -163,8 +163,9 @@ impl PipelineBuilder {
             )?))
         })?;
 
+        let before_partial = self.settings.get_group_by_shuffle_mode()?.to_lowercase() == "before_partial";
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !self.is_exchange_neighbor {
+        if !self.is_exchange_neighbor || before_partial {
             let operator = DataOperator::instance().spill_operator();
             let location_prefix = self.ctx.query_id_spill_prefix();
 
