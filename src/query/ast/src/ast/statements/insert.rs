@@ -85,6 +85,7 @@ pub enum InsertSource {
     StreamingLoad {
         format_options: FileFormatOptions,
         on_error_mode: Option<String>,
+        value: Option<Vec<Expr>>,
     },
 }
 
@@ -106,9 +107,15 @@ impl Display for InsertSource {
             InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
             InsertSource::StreamingLoad {
+                value,
                 format_options,
                 on_error_mode,
             } => {
+                if let Some(value) = value {
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, value)?;
+                    write!(f, ")")?;
+                }
                 write!(f, " FILE_FORMAT = ({})", format_options)?;
                 write!(
                     f,

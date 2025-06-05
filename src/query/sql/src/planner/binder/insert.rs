@@ -157,9 +157,15 @@ impl Binder {
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
             InsertSource::StreamingLoad {
+                value,
                 format_options,
                 on_error_mode,
             } => {
+                if value.is_some() {
+                    return Err(ErrorCode::BadArguments(
+                        "streaming load with values placeholder not supported yet.".to_string(),
+                    ));
+                }
                 let file_format_params = FileFormatParams::try_from_reader(
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
@@ -24,7 +25,6 @@ use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
 use pyo3::prelude::*;
 

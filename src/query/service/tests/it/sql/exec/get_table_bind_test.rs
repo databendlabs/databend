@@ -32,6 +32,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::ContextError;
@@ -1012,6 +1013,10 @@ impl TableContext for CtxDelegation {
 
     fn get_next_broadcast_id(&self) -> u32 {
         self.ctx.get_next_broadcast_id()
+    }
+
+    fn get_session_type(&self) -> SessionType {
+        SessionType::HTTPQuery
     }
 }
 

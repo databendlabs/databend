@@ -2605,7 +2605,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
             | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
-            | #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #insert_stmt(false, false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`"
             | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
@@ -2798,10 +2798,15 @@ pub fn parse_create_option(
     }
 }
 
-pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+pub fn insert_stmt(
+    allow_raw: bool,
+    in_streaming_load: bool,
+) -> impl FnMut(Input) -> IResult<Statement> {
     move |i| {
-        let insert_source_parser = if allow_raw {
-            raw_insert_source
+        let insert_source_parser = if in_streaming_load {
+            insert_source_file
+        } else if allow_raw {
+            insert_source_fast_values
         } else {
             insert_source
         };
@@ -2935,7 +2940,7 @@ fn else_clause(i: Input) -> IResult<ElseClause> {
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
     move |i| {
         let insert_source_parser = if allow_raw {
-            raw_insert_source
+            insert_source_fast_values
         } else {
             insert_source
         };
@@ -3004,20 +3009,38 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
+pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
+    let value = map(
+        rule! {
+            "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(_, values, _)| values,
+    );
+    map(
+        rule! {
+           VALUES ~ #value? ~ #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+        },
+        |(_, value, options, on_error_opt)| InsertSource::StreamingLoad {
+            format_options: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+            value,
+        },
+    )(i)
+    // TODO: support query later
+    // let query = map(query, |query| InsertSource::Select {
+    //     query: Box::new(query),
+    // });
+    // rule!(
+    //     #file
+    //     | #query
+    // )(i)
+}
+
 // `INSERT INTO ... VALUES` statement will
 // stop the parser immediately and return the rest tokens in `InsertSource`.
 //
 // This is a hack to parse large insert statements.
-pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
-        },
-        |(options, on_error_opt)| InsertSource::StreamingLoad {
-            format_options: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-        },
-    );
+pub fn insert_source_fast_values(i: Input) -> IResult<InsertSource> {
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -3036,7 +3059,6 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #values
         | #query
-        | #streaming
     )(i)
 }
 

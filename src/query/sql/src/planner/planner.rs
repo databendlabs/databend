@@ -29,6 +29,7 @@ use databend_common_ast::parser::token::Tokenizer;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -118,9 +119,6 @@ impl Planner {
         // Step 1: Tokenize the SQL.
         let mut tokenizer = Tokenizer::new(&final_sql).peekable();
 
-        // Only tokenize the beginning tokens for `INSERT INTO` statement because the rest tokens after `VALUES` is unused.
-        // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be valid for the tokenizer.
-        // See also: https://github.com/datafuselabs/databend/issues/6669
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
@@ -149,12 +147,17 @@ impl Planner {
         } else {
             (&mut tokenizer).collect::<databend_common_ast::Result<_>>()?
         };
+        let session_type = self.ctx.get_session_type();
+        let in_streaming_load = session_type == SessionType::HTTPStreamingLoad;
 
         loop {
             let res = try {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = if is_insert_stmt {
-                    (parse_raw_insert_stmt(&tokens, sql_dialect)?, None)
+                    (
+                        parse_raw_insert_stmt(&tokens, sql_dialect, in_streaming_load)?,
+                        None,
+                    )
                 } else if is_replace_stmt {
                     (parse_raw_replace_stmt(&tokens, sql_dialect)?, None)
                 } else {

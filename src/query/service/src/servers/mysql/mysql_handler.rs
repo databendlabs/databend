@@ -21,6 +21,7 @@ use databend_common_base::base::tokio::net::TcpStream;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use futures::future::AbortHandle;
@@ -42,7 +43,6 @@ use crate::servers::mysql::tls::MySQLTlsConfig;
 use crate::servers::server::ListeningStream;
 use crate::servers::server::Server;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 pub struct MySQLHandler {
     abort_handle: AbortHandle,

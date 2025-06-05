@@ -27,6 +27,7 @@ use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -71,7 +72,6 @@ use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 fn default_as_true() -> bool {

@@ -76,6 +76,7 @@ use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
+use crate::session_type::SessionType;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
@@ -428,6 +429,9 @@ pub trait TableContext: Send + Sync {
     fn get_next_broadcast_id(&self) -> u32;
 
     fn reset_broadcast_id(&self) {
+        unimplemented!()
+    }
+    fn get_session_type(&self) -> SessionType {
         unimplemented!()
     }
 }

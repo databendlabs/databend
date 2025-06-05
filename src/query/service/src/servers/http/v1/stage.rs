@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use async_compat::CompatExt;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
@@ -28,7 +29,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug)]
