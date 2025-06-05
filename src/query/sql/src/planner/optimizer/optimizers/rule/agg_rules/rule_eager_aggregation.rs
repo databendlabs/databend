@@ -1445,8 +1445,11 @@ fn update_aggregate_and_eval(
     if !avg_components.contains_key(&old_index) {
         for eval_scalar in eval_scalars {
             for scalar_item in eval_scalar.items.iter_mut() {
-                // If it's already a column, we can just update the column_binding index
                 if let ScalarExpr::BoundColumnRef(column) = &mut scalar_item.scalar {
+                    if column.column.index != old_index {
+                        continue;
+                    }
+                    // If it's already a column, we can just update the column_binding index
                     let column_binding = &mut column.column;
                     column_binding.index = new_index;
 
