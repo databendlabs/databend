@@ -40,6 +40,7 @@ impl Binder {
             catalog,
             database,
             table,
+            is_conflict: _,
             on_conflict_columns,
             columns,
             source,

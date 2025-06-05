@@ -195,6 +195,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             catalog: None,
             database: table.db_name.clone(),
             table: table.name.clone(),
+            is_conflict: true,
             on_conflict_columns,
             columns,
             source,
