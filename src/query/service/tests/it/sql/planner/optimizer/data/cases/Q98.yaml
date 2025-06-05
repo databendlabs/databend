@@ -1,0 +1,23 @@
+name: "Q99"
+description: "TPC-DS Query 99 optimizer test"
+
+sql: |
+  SELECT t.sell_mnt = 0 FROM (SELECT a.a0d, a.a0k, a.a0m, c.a5m, avg(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) + 3 AS sell_mnt FROM a0c AS a LEFT OUTER JOIN a1z AS b ON a.a0k = b.a0k AND a.a0n = b.a0n AND b.a2c <= a.a0d AND b.a2k > a.a0d LEFT OUTER JOIN a2x AS c ON a.a0m = c.a0m LEFT OUTER JOIN a5r AS d ON a.a0l = d.a5t WHERE a.a0d BETWEEN '20240526' AND '20250525' AND b.a2t = '624100' AND SUBSTRING(c.a4m FROM 20 FOR 1) = '1' AND SUBSTRING(d.a5w FROM 1 FOR 1) = '1' GROUP BY a.a0d, a.a0k, a.a0m, c.a5m) AS t;
+
+# Reference to external statistics file
+statistics_file: tpcds_obfuscated.yaml
+
+# Expected good plan after optimization
+good_plan: |
+  Result
+  └── Project [t.sell_mnt = 0]
+      └── SubqueryAlias [t]
+          └── Aggregate [aggExprs: [AVG(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) + 3 AS sell_mnt], groupKeys: [a.a0d, a.a0k, a.a0m, c.a5m]]
+              └── Filter [a.a0d BETWEEN '20240526' AND '20250525' AND b.a2t = '624100' AND SUBSTRING(c.a4m FROM 20 FOR 1) = '1' AND SUBSTRING(d.a5w FROM 1 FOR 1) = '1']
+                  └── LeftJoin [joinKey: (a.a0l = d.a5t)]
+                      ├── LeftJoin [joinKey: (a.a0m = c.a0m)]
+                      │   ├── LeftJoin [joinKey: (a.a0k = b.a0k AND a.a0n = b.a0n), joinFilter: (b.a2c <= a.a0d AND b.a2k > a.a0d)]
+                      │   │   ├── TableScan [a0c] [a0d, a0k, a0m, a0n, a0l] [partitions: 35/35, bytes: 5,772,964,979,745]
+                      │   │   └── TableScan [a1z] [a0k, a0n, a2c, a2k, a2t] [partitions: 1/1, bytes: 43,826,881,850]
+                      │   └── TableScan [a2x] [a0m, a4m, a5m] [partitions: 1/1, bytes: 375,779,508]
+                      └── TableScan [a5r] [a5t, a1v, a5w] [partitions: 1/1, bytes: 1,017,281]

@@ -1445,12 +1445,10 @@ fn update_aggregate_and_eval(
     if !avg_components.contains_key(&old_index) {
         for eval_scalar in eval_scalars {
             for scalar_item in eval_scalar.items.iter_mut() {
-                scalar_item.scalar.replace_column(old_index, new_index)?;
-
+                // If it's already a column, we can just update the column_binding index
                 if let ScalarExpr::BoundColumnRef(column) = &mut scalar_item.scalar {
                     let column_binding = &mut column.column;
                     column_binding.index = new_index;
-                    scalar_item.index = new_index;
 
                     if func_name == "count" {
                         column_binding.data_type = Box::new(DataType::Nullable(Box::new(
@@ -1462,6 +1460,9 @@ fn update_aggregate_and_eval(
                         );
                     }
                     success = true;
+                } else {
+                    // Otherwise, we need to replace the column index recursively.
+                    scalar_item.scalar.replace_column(old_index, new_index)?;
                 }
             }
         }

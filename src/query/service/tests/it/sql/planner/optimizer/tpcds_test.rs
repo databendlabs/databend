@@ -66,6 +66,8 @@ struct YamlTestCase {
     column_statistics: HashMap<String, YamlColumnStatistics>,
     #[serde(default)]
     statistics_file: Option<String>,
+    #[serde(default)]
+    auto_statistics: bool,
     good_plan: Option<String>,
 }
 
@@ -94,6 +96,7 @@ struct TestCase {
     pub sql: &'static str,
     pub table_statistics: HashMap<String, YamlTableStatistics>,
     pub column_statistics: HashMap<String, YamlColumnStatistics>,
+    pub auto_statistics: bool,
 }
 
 /// Setup TPC-DS tables with required schema
@@ -152,10 +155,11 @@ fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
     }
 
     Ok(TestCase {
-        name: Box::leak(yaml.name.into_boxed_str()),
-        sql: Box::leak(yaml.sql.into_boxed_str()),
+        name: Box::leak(yaml.name.clone().into_boxed_str()),
+        sql: Box::leak(yaml.sql.clone().into_boxed_str()),
         table_statistics,
         column_statistics,
+        auto_statistics: yaml.auto_statistics,
     })
 }
 
@@ -378,9 +382,6 @@ async fn test_optimizer() -> Result<()> {
     // Create a test fixture with a query context
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let settings = ctx.get_settings();
-    settings.set_optimizer_skip_list("CollectStatisticsOptimizer".to_string())?;
-
     // Setup tables needed for TPC-DS queries
     setup_tpcds_tables(&ctx).await?;
 
@@ -401,6 +402,14 @@ async fn test_optimizer() -> Result<()> {
 
     // Run all test cases
     for test in tests {
+        let settings = ctx.get_settings();
+
+        if !test.auto_statistics {
+            settings.set_optimizer_skip_list("CollectStatisticsOptimizer".to_string())?;
+        } else {
+            settings.set_optimizer_skip_list("".to_string())?;
+        }
+
         println!("\n\n========== Testing: {} ==========", test.name);
         let file = &mut mint
             .new_goldenfile(format!("{}_raw.txt", test.name))
