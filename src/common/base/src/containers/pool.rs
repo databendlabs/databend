@@ -98,7 +98,7 @@ where
         &self.manager
     }
 
-    /// Return an raw pool item.
+    /// Return a raw pool item.
     ///
     /// The returned one may be an uninitialized one, i.e., it contains a None.
     /// The lock for `items` should not be held for long, e.g. when `build()` a new connection, it takes dozen ms.
@@ -154,7 +154,7 @@ where
                     return Ok(x);
                 }
                 Err(err) => {
-                    warn!("RaftNetwork build new item failed: {:?}", err);
+                    warn!("MetaGrpcClient Pool build new item failed: {:?}", err);
                     if i == self.n_retries - 1 {
                         return Err(err);
                     }

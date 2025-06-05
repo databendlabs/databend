@@ -80,6 +80,7 @@ use tonic::Code;
 use tonic::Request;
 use tonic::Status;
 
+use crate::endpoints::rotate_failing_endpoint;
 use crate::endpoints::Endpoints;
 use crate::errors::CreationError;
 use crate::established_client::EstablishedClient;
@@ -92,6 +93,8 @@ use crate::required::features;
 use crate::required::std;
 use crate::required::supported_features;
 use crate::required::Features;
+use crate::rpc_handler::ResponseAction;
+use crate::rpc_handler::RpcHandler;
 use crate::to_digit_ver;
 use crate::ClientHandle;
 use crate::ClientWorkerRequest;
@@ -419,6 +422,8 @@ impl MetaGrpcClient {
         start: Instant,
         resp_err: Option<&(dyn std::error::Error + 'static)>,
     ) {
+        // TODO: this current endpoint is not stable, may be modified by other thread.
+        //       The caller should pasing the in use endpoint.
         let current_endpoint = self.get_current_endpoint();
 
         let Some(endpoint) = current_endpoint else {
@@ -481,7 +486,9 @@ impl MetaGrpcClient {
                         addr, client_err
                     );
                     grpc_metrics::incr_meta_grpc_make_client_fail(&addr);
-                    self.choose_next_endpoint();
+
+                    rotate_failing_endpoint(&self.endpoints, Some(&addr), self);
+
                     last_err = Some(client_err);
                     continue;
                 }
@@ -538,17 +545,20 @@ impl MetaGrpcClient {
     #[fastrace::trace]
     #[async_backtrace::framed]
     pub async fn sync_endpoints(&self) -> Result<(), MetaError> {
-        let mut client = self.get_established_client().await?;
-        let result = client
+        let mut established_client = self.get_established_client().await?;
+
+        let result = established_client
             .member_list(Request::new(MemberListRequest {
                 data: "".to_string(),
             }))
             .await;
+
         let endpoints: Result<MemberListReply, Status> = match result {
             Ok(r) => Ok(r.into_inner()),
             Err(s) => {
                 if is_status_retryable(&s) {
-                    self.choose_next_endpoint();
+                    established_client.rotate_failing_target();
+
                     let mut client = self.get_established_client().await?;
                     let req = Request::new(MemberListRequest {
                         data: "".to_string(),
@@ -559,6 +569,7 @@ impl MetaGrpcClient {
                 }
             }
         };
+
         let result: Vec<String> = endpoints?.data;
         debug!("received meta endpoints: {:?}", result);
 
@@ -810,66 +821,40 @@ impl MetaGrpcClient {
         T: Into<MetaGrpcReq>,
         T::Reply: DeserializeOwned,
     {
+        let service_spec = features::KV_API;
         let grpc_req: MetaGrpcReq = v.into();
 
         debug!("{}::kv_api request: {:?}", self, grpc_req);
 
-        let raft_req: RaftRequest = grpc_req.into();
+        let raft_req: RaftRequest = grpc_req.clone().into();
+        let mut rpc_handler = RpcHandler::new(self, service_spec);
 
-        let mut failures = vec![];
-
-        for i in 0..RPC_RETRIES {
-            let mut client = self
-                .get_established_client()
-                .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::make_client"))
-                .await?;
-
-            client.ensure_feature("kv_api")?;
-
+        for _i in 0..RPC_RETRIES {
             let req = traced_req(raft_req.clone());
 
-            let result = client
+            let established = rpc_handler.new_established_client().await?;
+
+            let result = established
                 .kv_api(req)
-                .with_timing_threshold(threshold(), info_spent("client::kv_api"))
+                .with_timing_threshold(threshold(), info_spent(service_spec.0))
                 .await;
 
-            debug!(
-                result :? =(&result);
-                "MetaGrpcClient::kv_api result, {}-th try", i
-            );
+            let retryable = rpc_handler.process_response_result(&grpc_req, result)?;
 
-            if let Err(ref e) = result {
-                warn!(
-                    req :? =(&raft_req),
-                    error :? =(&e);
-                    "MetaGrpcClient::kv_api error");
-
-                if is_status_retryable(e) {
-                    warn!(
-                        req :? =(&raft_req),
-                        error :? =(&e);
-                        "MetaGrpcClient::kv_api error is retryable");
-
-                    self.choose_next_endpoint();
-                    failures.push(e.clone());
+            let response = match retryable {
+                ResponseAction::Success(resp) => resp,
+                ResponseAction::ShouldRetry => {
                     continue;
                 }
-            }
+            };
 
-            let raft_reply = result?.into_inner();
+            let raft_reply = response.into_inner();
 
             let resp: T::Reply = reply_to_api_result(raft_reply)?;
             return Ok(resp);
         }
 
-        let net_err = MetaNetworkError::ConnectionError(ConnectionError::new(
-            AnyError::error(format_args!(
-                "failed after {} retries: {:?}",
-                RPC_RETRIES, failures
-            )),
-            "failed to connect to meta-service",
-        ));
-
+        let net_err = rpc_handler.create_network_error();
         Err(net_err.into())
     }
 
@@ -879,115 +864,79 @@ impl MetaGrpcClient {
         &self,
         grpc_req: MetaGrpcReadReq,
     ) -> Result<BoxStream<pb::StreamItem>, MetaError> {
+        let service_spec = features::KV_READ_V1;
+
         debug!("{}::kv_read_v1 request: {:?}", self, grpc_req);
 
-        let mut failures = vec![];
+        let raft_req: RaftRequest = grpc_req.clone().into();
+        let mut rpc_handler = RpcHandler::new(self, service_spec);
 
-        for i in 0..RPC_RETRIES {
-            let mut established_client = self
-                .get_established_client()
-                .with_timing_threshold(
-                    threshold(),
-                    info_spent("MetaGrpcClient::get_established_client"),
-                )
-                .await?;
-
-            established_client.ensure_feature("kv_read_v1")?;
-
-            let raft_req: RaftRequest = grpc_req.clone().into();
+        for _i in 0..RPC_RETRIES {
             let req = traced_req(raft_req.clone());
 
-            let result = established_client
+            let established = rpc_handler.new_established_client().await?;
+
+            let result = established
                 .kv_read_v1(req)
-                .with_timing_threshold(threshold(), info_spent("client::kv_read_v1"))
+                .with_timing_threshold(threshold(), info_spent(service_spec.0))
                 .await;
 
-            debug!(
-                "{}::kv_read_v1 result, {}-th try; result: {:?}",
-                self, i, result
-            );
+            let retryable = rpc_handler.process_response_result(&grpc_req, result)?;
 
-            if let Err(ref e) = result {
-                warn!(
-                    "{}::kv_read_v1 error, retryable: {}, target={}; error: {:?}; request: {:?}",
-                    self,
-                    is_status_retryable(e),
-                    established_client.target_endpoint(),
-                    e,
-                    grpc_req
-                );
-
-                if is_status_retryable(e) {
-                    self.choose_next_endpoint();
-                    failures.push(e.clone());
+            let response = match retryable {
+                ResponseAction::Success(resp) => resp,
+                ResponseAction::ShouldRetry => {
                     continue;
                 }
-            }
+            };
 
-            let strm = result?.into_inner();
-
+            let strm = response.into_inner();
             return Ok(strm.boxed());
         }
 
-        let net_err = MetaNetworkError::ConnectionError(ConnectionError::new(
-            AnyError::error(format_args!(
-                "failed after {} retries: {:?}",
-                RPC_RETRIES, failures
-            )),
-            "failed to connect to meta-service",
-        ));
-
+        let net_err = rpc_handler.create_network_error();
         Err(net_err.into())
     }
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, MetaError> {
-        let txn: TxnRequest = req;
+    pub(crate) async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError> {
+        let service_spec = features::TRANSACTION;
 
-        debug!("{}::transaction request: {}", self, txn);
+        debug!("{self}::transaction request: {txn}");
 
-        let req = traced_req(txn.clone());
+        let mut rpc_handler = RpcHandler::new(self, service_spec);
 
-        let mut client = self.get_established_client().await?;
-        client.ensure_feature("transaction")?;
+        for _i in 0..RPC_RETRIES {
+            let req = traced_req(txn.clone());
 
-        let result = client.transaction(req).await;
+            let established = rpc_handler.new_established_client().await?;
 
-        let result: Result<TxnReply, Status> = match result {
-            Ok(r) => return Ok(r.into_inner()),
-            Err(s) => {
-                if is_status_retryable(&s) {
-                    self.choose_next_endpoint();
-                    let mut client = self.get_established_client().await?;
-                    let req = traced_req(txn);
-                    let ret = client.transaction(req).await?.into_inner();
-                    return Ok(ret);
-                } else {
-                    Err(s)
+            let result = established
+                .transaction(req)
+                .with_timing_threshold(threshold(), info_spent(service_spec.0))
+                .await;
+
+            let retryable = rpc_handler.process_response_result(&txn, result)?;
+
+            let response = match retryable {
+                ResponseAction::Success(resp) => resp,
+                ResponseAction::ShouldRetry => {
+                    continue;
                 }
-            }
-        };
+            };
 
-        let reply = result?;
+            let txn_reply = response.into_inner();
+            return Ok(txn_reply);
+        }
 
-        debug!("{}::transaction reply: {}", self, reply);
-
-        Ok(reply)
+        let net_err = rpc_handler.create_network_error();
+        Err(net_err.into())
     }
 
     fn get_current_endpoint(&self) -> Option<String> {
         let es = self.endpoints.lock();
         es.current().map(|x| x.to_string())
-    }
-
-    fn choose_next_endpoint(&self) {
-        let next = {
-            let mut es = self.endpoints.lock();
-            es.choose_next().to_string()
-        };
-
-        info!("{} choose_next_endpoint: {}", self, next);
     }
 }
 
