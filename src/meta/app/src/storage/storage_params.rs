@@ -200,6 +200,8 @@ impl StorageParams {
                 s1.access_key_id = s2.access_key_id;
                 s1.secret_access_key = s2.secret_access_key;
                 s1.security_token = s2.security_token;
+                s1.role_arn = s2.role_arn;
+                s1.external_id = s2.external_id;
                 s1.master_key = s2.master_key;
                 s1.network_config = s2.network_config;
                 Ok(Self::S3(s1))
