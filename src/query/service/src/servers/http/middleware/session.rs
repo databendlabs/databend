@@ -400,6 +400,14 @@ impl<E> HTTPSessionEndpoint<E> {
             .await?;
         login_history.user_name = user_name.clone();
 
+        // If cookie_session_id is set, we disable writing to login_history.
+        // The cookie_session_id is initially issued by the server to the client upon the first successful login.
+        // For all subsequent requests, the client includes this session_id with each request.
+        // This indicates the user is already logged in, so we skip recording another login event.
+        if cookie_session_id.is_some() {
+            login_history.disable_write = true;
+        }
+
         let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
             (Some(id1), Some(id2)) => {
                 if id1 != id2 {
