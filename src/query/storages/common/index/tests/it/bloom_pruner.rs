@@ -148,7 +148,7 @@ fn test_base(file: &mut impl Write) {
                     },
                     Buffer::<u64>::from(vec![0, 2, 3]),
                 )
-                .upcast(&DataType::Map(Box::new(DataType::Tuple(vec![
+                .upcast(&DataType::Array(Box::new(DataType::Tuple(vec![
                     DataType::Number(NumberDataType::UInt8),
                     DataType::String,
                 ])))),
@@ -165,7 +165,7 @@ fn test_base(file: &mut impl Write) {
                     },
                     Buffer::<u64>::from(vec![0, 2, 3]),
                 )
-                .upcast(&DataType::Map(Box::new(DataType::Tuple(vec![
+                .upcast(&DataType::Array(Box::new(DataType::Tuple(vec![
                     DataType::String,
                     DataType::Variant,
                 ])))),

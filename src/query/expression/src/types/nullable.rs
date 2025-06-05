@@ -370,11 +370,12 @@ impl<T: ValueType> NullableColumn<T> {
         debug_assert_eq!(T::column_len(&column), validity.len());
         NullableColumn { column, validity }
     }
+}
 
+impl<T: ArgType> NullableColumn<T> {
     pub fn upcast(self) -> NullableColumn<AnyType> {
-        let data_type = &DataType::Null;
         NullableColumn::new(
-            T::upcast_column_with_type(self.column, data_type),
+            T::upcast_column_with_type(self.column, &T::data_type()),
             self.validity,
         )
     }
