@@ -179,6 +179,8 @@ pub struct QueryLogElement {
     pub txn_state: String,
     pub txn_id: String,
     pub peek_memory_usage: HashMap<String, usize>,
+
+    pub session_id: String,
 }
 
 impl SystemLogElement for QueryLogElement {
@@ -321,6 +323,7 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("extra", TableDataType::String),
             TableField::new("has_profile", TableDataType::Boolean),
             TableField::new("peek_memory_usage", TableDataType::Variant),
+            TableField::new("session_id", TableDataType::String),
         ])
     }
 
@@ -582,6 +585,10 @@ impl SystemLogElement for QueryLogElement {
             )
             .as_ref(),
         );
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.session_id.clone()).as_ref());
         Ok(())
     }
 }
