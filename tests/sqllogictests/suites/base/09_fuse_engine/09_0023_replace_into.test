@@ -514,7 +514,7 @@ select * from t order by c;
 3
 
 statement ok
-create or replace table test (c int);
+create or replace table test (c int64);
 
 statement ok
 create or replace table source (c int, v string);
