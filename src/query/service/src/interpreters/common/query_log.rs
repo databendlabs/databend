@@ -139,6 +139,7 @@ impl InterpreterQueryLog {
         // Session settings
         let mut session_settings = String::new();
         let current_session = ctx.get_current_session();
+        let session_id = current_session.get_client_session_id().unwrap_or_default();
         for item in current_session.get_settings().into_iter() {
             write!(session_settings, "{}={:?}, ", item.name, item.user_value)
                 .expect("write to string must succeed");
@@ -226,6 +227,8 @@ impl InterpreterQueryLog {
             txn_state,
             txn_id,
             peek_memory_usage: HashMap::new(),
+
+            session_id,
         })
     }
 
@@ -311,6 +314,7 @@ impl InterpreterQueryLog {
         // Session settings
         let mut session_settings = String::new();
         let current_session = ctx.get_current_session();
+        let session_id = current_session.get_client_session_id().unwrap_or_default();
 
         for item in current_session.get_settings().into_iter() {
             write!(session_settings, "{}={:?}, ", item.name, item.user_value)
@@ -403,6 +407,7 @@ impl InterpreterQueryLog {
             txn_state,
             txn_id,
             peek_memory_usage,
+            session_id,
         })
     }
 }
