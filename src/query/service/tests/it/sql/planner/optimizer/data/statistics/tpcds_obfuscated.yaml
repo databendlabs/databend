@@ -155,6 +155,12 @@ column_statistics:
   a2x.a4f:
     ndv: 252677
     null_count: 0
+  a2x.a4l:
+    ndv: 252677
+    null_count: 0
+  a2x.a5h:
+    ndv: 252677
+    null_count: 0
   a2x.a2z:
     ndv: 244076
     null_count: 0
