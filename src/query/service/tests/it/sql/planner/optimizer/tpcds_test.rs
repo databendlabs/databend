@@ -388,7 +388,8 @@ async fn test_optimizer() -> Result<()> {
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
     let mut mint = Mint::new(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data/cases"),
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/it/sql/planner/optimizer/data/cases/results"),
     );
 
     let tests = load_test_cases(&base_path)?;
