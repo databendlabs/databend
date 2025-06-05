@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use chrono::Utc;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -41,6 +45,7 @@ use tonic::transport::Channel;
 use tonic::Response;
 use tonic::Status;
 
+use crate::endpoints::rotate_failing_endpoint;
 use crate::endpoints::Endpoints;
 use crate::grpc_client::AuthInterceptor;
 use crate::grpc_client::RealClient;
@@ -63,7 +68,7 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
             // `leader` is set iff the request is forwarded by a follower to a leader
             if let Some(leader) = forwarded_leader {
                 info!(
-                    "EstablishedClient update_client: received forward_to_leader({}) for further RPC, endpoints: {}",
+                    "{client} update_client: received forward_to_leader({}) for further RPC, endpoints: {}",
                     leader,
                     &*client.endpoints.lock(),
                 );
@@ -80,15 +85,15 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
                 };
 
                 info!(
-                    "EstablishedClient update_client: switch to use leader({}) for further RPC, result: {:?}",
+                    "{client} update_client: switch to use leader({}) for further RPC, result: {:?}",
                     leader, update_leader_res,
                 );
             }
         })
-        .inspect_err(|status| {
-            warn!("EstablishedClient update_client: set received error: {:?}", status);
-            client.set_error(status.clone());
-        })
+            .inspect_err(|status| {
+                warn!("{client} update_client: set received error: {:?}", status);
+                client.set_error(status.clone());
+            })
     }
 }
 
@@ -114,6 +119,26 @@ pub struct EstablishedClient {
     ///
     /// The client with error will be dropped by the client pool.
     error: Arc<Mutex<Option<Status>>>,
+
+    /// A unique identifier for the client, used to distinguish between different clients.
+    uniq: u64,
+
+    /// The timestamp when this client was created.
+    created_at: String,
+}
+
+impl fmt::Display for EstablishedClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "EstablishedClient[uniq={}, {}]{{ target: {}, server_version: {}, endpoints: {} }}",
+            self.uniq,
+            self.created_at,
+            self.target_endpoint,
+            self.server_protocol_version,
+            self.endpoints.lock()
+        )
+    }
 }
 
 impl EstablishedClient {
@@ -124,14 +149,27 @@ impl EstablishedClient {
         target_endpoint: impl ToString,
         endpoints: Arc<Mutex<Endpoints>>,
     ) -> Self {
-        Self {
+        // Generate a unique identifier for the client.
+        static UNIQ_COUNTER: AtomicU64 = AtomicU64::new(0);
+        let uniq = UNIQ_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+        // Get current timestamp in human-readable string
+        let utc_time = Utc::now();
+        let created_at = utc_time.format("%Y-%m-%d-%H:%M:%S-UTC").to_string();
+
+        let client = Self {
             client,
             server_protocol_version,
             features,
             target_endpoint: target_endpoint.to_string(),
             endpoints,
             error: Arc::new(Mutex::new(None)),
-        }
+            uniq,
+            created_at,
+        };
+
+        info!("Created: {client}, features={:?}", client.features);
+        client
     }
 
     pub fn target_endpoint(&self) -> &str {
@@ -171,6 +209,11 @@ impl EstablishedClient {
 
     pub(crate) fn take_error(&self) -> Option<Status> {
         self.error.lock().take()
+    }
+
+    /// A shortcut to [`rotate_failing_endpoint`]
+    pub(crate) fn rotate_failing_target(&self) {
+        rotate_failing_endpoint(&self.endpoints, Some(self.target_endpoint()), self);
     }
 
     #[async_backtrace::framed]
