@@ -180,40 +180,37 @@ impl Planner {
             let mut maybe_partial_insert = false;
 
             if is_insert_or_replace_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
-                if let Ok(PlanExtras {
-                    statement:
-                        Statement::Insert(InsertStmt {
-                            source: InsertSource::Select { .. },
-                            ..
-                        }),
-                    ..
-                }) = &res
-                {
-                    maybe_partial_insert = true;
+                match res {
+                    Ok(PlanExtras {
+                        statement:
+                            Statement::Insert(InsertStmt {
+                                source: InsertSource::Select { .. },
+                                ..
+                            }),
+                        ..
+                    }) | Ok(PlanExtras {
+                        statement:
+                            Statement::Replace(ReplaceStmt {
+                                source: InsertSource::Select { .. },
+                                ..
+                            }),
+                        ..
+                    }) => {
+                        maybe_partial_insert = true;
+                    }
                 }
             }
 
             if (maybe_partial_insert || res.is_err()) && matches!(tokenizer.peek(), Some(Ok(_))) {
                 // Remove the EOI.
                 tokens.pop();
-                // Tokenize more and try again.
-                if !maybe_partial_insert && tokens.len() < PROBE_INSERT_MAX_TOKENS {
-                    let iter = (&mut tokenizer)
-                        .take(tokens.len() * 2)
-                        .take_while(|token| token.is_ok())
-                        .map(|token| token.unwrap())
-                        // Make sure the tokens stream is always ended with EOI.
-                        .chain(std::iter::once(Token::new_eoi(&final_sql)));
-                    tokens.extend(iter);
-                } else {
-                    // Take the whole tokenizer
-                    let iter = (&mut tokenizer)
-                        .take_while(|token| token.is_ok())
-                        .map(|token| token.unwrap())
-                        // Make sure the tokens stream is always ended with EOI.
-                        .chain(std::iter::once(Token::new_eoi(&final_sql)));
-                    tokens.extend(iter);
-                };
+                // Take the whole tokenizer
+                let iter = (&mut tokenizer)
+                    .take_while(|token| token.is_ok())
+                    .map(|token| token.unwrap())
+                    // Make sure the tokens stream is always ended with EOI.
+                    .chain(std::iter::once(Token::new_eoi(&final_sql)));
+                tokens.extend(iter);
             } else {
                 return res;
             }
