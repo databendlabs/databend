@@ -19,6 +19,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::InsertStmt;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_raw_insert_stmt;
 use databend_common_ast::parser::parse_raw_replace_stmt;
@@ -50,7 +51,6 @@ use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
-const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
@@ -188,7 +188,8 @@ impl Planner {
                                 ..
                             }),
                         ..
-                    }) | Ok(PlanExtras {
+                    })
+                    | Ok(PlanExtras {
                         statement:
                             Statement::Replace(ReplaceStmt {
                                 source: InsertSource::Select { .. },
@@ -198,6 +199,7 @@ impl Planner {
                     }) => {
                         maybe_partial_insert = true;
                     }
+                    _ => {}
                 }
             }
 
