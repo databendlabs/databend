@@ -26,6 +26,7 @@ use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::BinaryColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::VectorColumn;
@@ -221,7 +222,7 @@ impl FieldEncoderValues {
             self.write_null(out_buf)
         } else {
             self.write_field(
-                &T::upcast_column(column.column.clone()),
+                &T::upcast_column_with_type(column.column.clone(), &DataType::Null),
                 row_index,
                 out_buf,
                 in_nested,
@@ -385,7 +386,7 @@ impl FieldEncoderValues {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &T::upcast_column(column.values().clone());
+        let inner = &T::upcast_column_with_type(column.values().clone(), &DataType::Null);
         for i in start..end {
             if i != start {
                 out_buf.push(b',');
@@ -404,7 +405,7 @@ impl FieldEncoderValues {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
-        let inner = &T::upcast_column(column.values().clone());
+        let inner = &T::upcast_column_with_type(column.values().clone(), &DataType::Null);
         match inner {
             Column::Tuple(fields) => {
                 for i in start..end {

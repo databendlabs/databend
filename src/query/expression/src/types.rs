@@ -371,7 +371,7 @@ impl DataType {
     }
 }
 
-/// AccessType defines a series of access methods for a data type
+/// [AccessType] defines a series of access methods for a data type
 pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
@@ -453,18 +453,18 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
     }
 }
 
-/// ValueType includes the builder method of a data type based on AccessType.
+/// [ValueType] includes the builder method of a data type based on [AccessType].
 pub trait ValueType: AccessType {
     type ColumnBuilder: Debug + Clone;
 
-    /// Convert a scalar value to the generic Scalar type
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+    /// Convert a scalar value to the generic [Scalar] type
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar;
 
     /// Convert a domain value to the generic Domain type
-    fn upcast_domain(domain: Self::Domain) -> Domain;
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain;
 
     /// Convert a column value to the generic Column type
-    fn upcast_column(col: Self::Column) -> Column;
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column;
 
     /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
     ///
@@ -490,7 +490,7 @@ pub trait ValueType: AccessType {
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder>;
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
@@ -504,7 +504,7 @@ pub trait ValueType: AccessType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
 }
 
-/// Almost all ValueType implement ReturnType, except AnyType.
+/// Almost all [ValueType] implement [ReturnType], except [AnyType].
 pub trait ReturnType: ValueType {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder;
 
@@ -535,8 +535,20 @@ pub trait ReturnType: ValueType {
     }
 }
 
-/// Almost all ReturnType implement ArgType, except Decimal.
+/// The [DataType] of [ArgType] is a unit type, so we can omit [DataType].
 pub trait ArgType: ReturnType {
     fn data_type() -> DataType;
     fn full_domain() -> Self::Domain;
+
+    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+        Self::upcast_scalar_with_type(scalar, &Self::data_type())
+    }
+
+    fn upcast_domain(domain: Self::Domain) -> Domain {
+        Self::upcast_domain_with_type(domain, &Self::data_type())
+    }
+
+    fn upcast_column(col: Self::Column) -> Column {
+        Self::upcast_column_with_type(col, &Self::data_type())
+    }
 }

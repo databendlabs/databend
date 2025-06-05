@@ -32,6 +32,7 @@ use crate::types::number::NumberColumn;
 use crate::types::vector::VectorColumnBuilder;
 use crate::types::AccessType;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -128,6 +129,7 @@ impl Column {
             Some(col) => col,
         };
         let capacity = columns_iter_clone.fold(first_column.len(), |acc, x| acc + x.len());
+        let data_type = first_column.data_type();
         let column = match first_column {
             Column::Null { .. } => Column::Null { len: capacity },
             Column::EmptyArray { .. } => Column::EmptyArray { len: capacity },
@@ -182,7 +184,7 @@ impl Column {
                 offsets.push(0);
                 let builder = ColumnBuilder::with_capacity(&col.values().data_type(), capacity);
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
+                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns, &data_type)
             }
             Column::Map(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
@@ -199,7 +201,7 @@ impl Column {
                     values: val_builder,
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
+                Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns, &data_type)
             }
             Column::Nullable(_) => {
                 let column: Vec<Column> = columns
@@ -291,11 +293,12 @@ impl Column {
     fn concat_value_types<T: ValueType>(
         mut builder: T::ColumnBuilder,
         columns: impl Iterator<Item = Column>,
+        data_type: &DataType,
     ) -> Column {
         let columns = columns.map(|c| T::try_downcast_column(&c).unwrap());
         for col in columns {
             T::append_column(&mut builder, &col);
         }
-        T::upcast_column(T::build_column(builder))
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 }

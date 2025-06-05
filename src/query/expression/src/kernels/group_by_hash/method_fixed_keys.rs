@@ -32,6 +32,7 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::AccessType;
+use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::Decimal128As256Type;
 use crate::types::Decimal128Type;
@@ -39,7 +40,6 @@ use crate::types::Decimal256As128Type;
 use crate::types::Decimal256Type;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
-use crate::types::ValueType;
 use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
@@ -251,7 +251,6 @@ macro_rules! impl_hash_method_fixed_keys {
                 &self,
                 key_state: &'a KeysState,
             ) -> Result<Self::HashKeyIter<'a>> {
-                use crate::types::ArgType;
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => Ok(col.iter()),
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
@@ -262,7 +261,6 @@ macro_rules! impl_hash_method_fixed_keys {
                 &self,
                 keys_state: KeysState,
             ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-                use crate::types::ArgType;
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
                         Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
@@ -272,7 +270,6 @@ macro_rules! impl_hash_method_fixed_keys {
             }
 
             fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
-                use crate::types::ArgType;
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
                         hashes.extend(col.iter().map(|key| key.fast_hash()));

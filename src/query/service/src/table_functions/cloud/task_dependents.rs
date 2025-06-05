@@ -33,6 +33,7 @@ use databend_common_cloud_control::task_utils;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -219,12 +220,15 @@ impl TaskDependentsSource {
             StringType::from_opt_data(comment),
             StringType::from_opt_data(warehouse),
             StringType::from_opt_data(schedule),
-            ArrayType::upcast_column(ArrayType::<StringType>::column_from_iter(
-                predecessors
-                    .into_iter()
-                    .map(|children| StringType::column_from_iter(children.into_iter(), &[])),
-                &[],
-            )),
+            ArrayType::upcast_column_with_type(
+                ArrayType::<StringType>::column_from_iter(
+                    predecessors
+                        .into_iter()
+                        .map(|children| StringType::column_from_iter(children.into_iter(), &[])),
+                    &[],
+                ),
+                &DataType::Array(Box::new(DataType::String)),
+            ),
             StringType::from_data(state),
             StringType::from_data(definition),
             StringType::from_data(condition_text),

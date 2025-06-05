@@ -18,6 +18,7 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NullableColumn;
@@ -78,7 +79,7 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
         unreachable!()
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, _column: T::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(&mut self, _: T::Column, _: &DataType) -> Result<()> {
         unreachable!()
     }
 

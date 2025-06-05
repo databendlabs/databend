@@ -20,7 +20,6 @@ use crate::property::Domain;
 use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ValueType;
 use crate::values::Column;
@@ -97,15 +96,15 @@ impl<const INDEX: usize> AccessType for GenericType<INDEX> {
 impl<const INDEX: usize> ValueType for GenericType<INDEX> {
     type ColumnBuilder = ColumnBuilder;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar_with_type(scalar: Self::Scalar, _: &DataType) -> Scalar {
         scalar
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
+    fn upcast_domain_with_type(domain: Self::Domain, _: &DataType) -> Domain {
         domain
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column_with_type(col: Self::Column, _: &DataType) -> Column {
         col
     }
 
@@ -119,7 +118,7 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        _: &DataType,
     ) -> Option<ColumnBuilder> {
         Some(builder)
     }

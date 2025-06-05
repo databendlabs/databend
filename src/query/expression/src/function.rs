@@ -320,7 +320,8 @@ impl Function {
         debug_assert!(!self.signature.return_type.is_nullable_or_null());
 
         let mut signature = self.signature;
-        signature.return_type = signature.return_type.wrap_nullable();
+        let return_type = signature.return_type;
+        signature.return_type = return_type.wrap_nullable();
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -332,7 +333,10 @@ impl Function {
                         has_null: false,
                         value: Some(Box::new(domain)),
                     };
-                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(new_domain))
+                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain_with_type(
+                        new_domain,
+                        &return_type,
+                    ))
                 }
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
             }

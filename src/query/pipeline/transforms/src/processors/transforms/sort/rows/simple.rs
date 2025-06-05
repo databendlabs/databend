@@ -57,7 +57,7 @@ where
     }
 
     fn to_column(&self) -> Column {
-        T::upcast_column(self.inner.clone())
+        T::upcast_column_with_type(self.inner.clone(), &T::data_type())
     }
 
     fn try_from_column(col: &Column) -> Option<Self> {
@@ -100,7 +100,7 @@ where
     }
 
     fn to_column(&self) -> Column {
-        T::upcast_column(self.inner.clone())
+        T::upcast_column_with_type(self.inner.clone(), &T::data_type())
     }
 
     fn try_from_column(col: &Column) -> Option<Self> {

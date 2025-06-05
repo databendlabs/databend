@@ -307,7 +307,7 @@ where
             }
         }
     }
-    .upcast_decimal(return_size)
+    .upcast_with_type(&DataType::Decimal(return_size))
 }
 
 #[inline(always)]
@@ -562,22 +562,23 @@ fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<
             if ctx.strict_eval {
                 let arg = arg.try_downcast().unwrap();
                 vectorize_1_arg::<Decimal64As128Type, Decimal128Type>(|t, _| -t)(arg, ctx)
-                    .upcast_decimal(size)
+                    .upcast_with_type(&DataType::Decimal(size))
             } else {
                 let arg = arg.try_downcast().unwrap();
                 type T = DecimalType<i64>;
-                vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+                vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx)
+                    .upcast_with_type(&DataType::Decimal(size))
             }
         }
         DecimalDataType::Decimal128(size) => {
             let arg = arg.try_downcast().unwrap();
             type T = DecimalType<i128>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_with_type(&DataType::Decimal(size))
         }
         DecimalDataType::Decimal256(size) => {
             let arg = arg.try_downcast().unwrap();
             type T = DecimalType<i256>;
-            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_decimal(size)
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_with_type(&DataType::Decimal(size))
         }
     }
 }

@@ -426,7 +426,7 @@ pub fn other_to_decimal(
             None?
         }
         let buffer = arg.as_column()?.as_number()?.as_int64()?;
-        Value::<Decimal64Type>::Column(buffer.clone()).upcast_decimal(*size)
+        Value::<Decimal64Type>::Column(buffer.clone()).upcast_with_type(&DataType::Decimal(*size))
     } {
         return v;
     }
@@ -490,11 +490,11 @@ where
         DataType::Variant => {
             let arg = arg.try_downcast().unwrap();
             let result = variant_to_decimal::<T>(arg, ctx, dest_type, false);
-            return result.upcast_decimal(size);
+            return result.upcast_with_type(&DataType::Decimal(size));
         }
         _ => unreachable!("to_decimal not support this DataType"),
     }
-    .upcast_decimal(size)
+    .upcast_with_type(&DataType::Decimal(size))
 }
 
 fn convert_as_decimal(
@@ -507,7 +507,7 @@ fn convert_as_decimal(
         DecimalDataType::DECIMAL_TYPE(_) => {
             let arg = arg.try_downcast().unwrap();
             let result = variant_to_decimal::<DECIMAL_TYPE>(arg, ctx, dest_type, true);
-            result.upcast_decimal(size)
+            result.upcast_with_type(&DataType::Decimal(size))
         }
     })
 }
@@ -826,7 +826,10 @@ where
     if from_size.scale() == dest_size.scale() && from_size.precision() <= dest_size.precision() {
         return if F::mem_size() == T::mem_size() {
             // 128 -> 128 or 256 -> 256
-            buffer.upcast_decimal(dest_size).try_downcast().unwrap()
+            buffer
+                .upcast_with_type(&DataType::Decimal(dest_size))
+                .try_downcast()
+                .unwrap()
         } else {
             // 128 -> 256
             vectorize_1_arg::<DecimalType<F>, DecimalType<T>>(|x: F, _: &mut EvalContext| {
@@ -902,7 +905,7 @@ pub fn decimal_to_decimal(
             with_decimal_mapped_type!(|OUT| match dest_type {
                 DecimalDataType::OUT(_) => {
                     decimal_expand_cast::<i64, OUT>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
             })
         }
@@ -911,15 +914,15 @@ pub fn decimal_to_decimal(
             match dest_type {
                 DecimalDataType::Decimal64(_) => {
                     decimal_shrink_cast::<i128, i64, I128ToI64>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
                 DecimalDataType::Decimal128(_) => {
                     decimal_expand_cast::<i128, i128>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
                 DecimalDataType::Decimal256(_) => {
                     decimal_expand_cast::<i128, i256>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
             }
         }
@@ -928,15 +931,15 @@ pub fn decimal_to_decimal(
             match dest_type {
                 DecimalDataType::Decimal64(_) => {
                     decimal_shrink_cast::<i256, i64, I256ToI64>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
                 DecimalDataType::Decimal128(_) => {
                     decimal_shrink_cast::<i256, i128, I256ToI128>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
                 DecimalDataType::Decimal256(_) => {
                     decimal_expand_cast::<i256, i256>(from_size, dest_size, value, ctx)
-                        .upcast_decimal(dest_size)
+                        .upcast_with_type(&DataType::Decimal(dest_size))
                 }
             }
         }
@@ -1020,7 +1023,7 @@ where
             )
         }
     }
-    .upcast()
+    .upcast_with_type(&DataType::Number(T::data_type()))
 }
 
 fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
@@ -1042,7 +1045,7 @@ fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Val
             }
         }
     )
-    .upcast()
+    .upcast_with_type(&DataType::Number(T::data_type()))
 }
 
 pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String> {

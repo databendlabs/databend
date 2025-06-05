@@ -33,7 +33,6 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
@@ -187,7 +186,7 @@ where
             avg_values.push(avg_val.into());
         }
 
-        let inner_col = NumberType::<F64>::upcast_column(avg_values.into());
+        let inner_col = Float64Type::upcast_column(avg_values.into());
         let array_value = ScalarRef::Array(inner_col);
         builder.push(array_value);
 

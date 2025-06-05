@@ -24,19 +24,16 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -263,38 +260,15 @@ impl AsyncSource for InspectParquetSource {
         }
         let block = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(StringType::upcast_scalar(created)),
+                BlockEntry::from_arg_scalar::<StringType>(created),
+                BlockEntry::from_arg_scalar::<UInt64Type>(num_columns),
+                BlockEntry::from_arg_scalar::<UInt64Type>(
+                    parquet_schema.file_metadata().num_rows() as u64,
                 ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(UInt64Type::upcast_scalar(num_columns)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(UInt64Type::upcast_scalar(
-                        parquet_schema.file_metadata().num_rows() as u64,
-                    )),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(UInt64Type::upcast_scalar(
-                        parquet_schema.num_row_groups() as u64
-                    )),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(UInt64Type::upcast_scalar(serialized_size)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::Int64),
-                    Value::Scalar(Int64Type::upcast_scalar(max_compressed)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::Int64),
-                    Value::Scalar(Int64Type::upcast_scalar(max_uncompressed)),
-                ),
+                BlockEntry::from_arg_scalar::<UInt64Type>(parquet_schema.num_row_groups() as u64),
+                BlockEntry::from_arg_scalar::<UInt64Type>(serialized_size),
+                BlockEntry::from_arg_scalar::<Int64Type>(max_compressed),
+                BlockEntry::from_arg_scalar::<Int64Type>(max_uncompressed),
             ],
             1,
         );

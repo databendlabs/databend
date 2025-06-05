@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -71,6 +72,14 @@ impl BlockEntry {
         Self { data_type, value }
     }
 
+    pub fn from_arg_value<T: ArgType>(value: Value<T>) -> Self {
+        Self::new(T::data_type(), value.upcast())
+    }
+
+    pub fn from_arg_scalar<T: ArgType>(scalar: T::Scalar) -> Self {
+        Self::new(T::data_type(), Value::Scalar(T::upcast_scalar(scalar)))
+    }
+
     pub fn remove_nullable(self) -> Self {
         match self.value {
             Value::Column(Column::Nullable(col)) => {
@@ -86,6 +95,12 @@ impl BlockEntry {
 
     pub fn into_column(self, num_rows: usize) -> Column {
         self.value.into_full_column(&self.data_type, num_rows)
+    }
+}
+
+impl From<Column> for BlockEntry {
+    fn from(v: Column) -> Self {
+        Self::new(v.data_type(), Value::Column(v))
     }
 }
 

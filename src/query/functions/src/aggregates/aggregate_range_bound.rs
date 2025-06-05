@@ -199,7 +199,8 @@ where
                 weights.push(weight);
             });
         }
-        let col = T::upcast_column(T::column_from_vec(data.clone(), &[]));
+        let col =
+            T::upcast_column_with_type(T::column_from_vec(data.clone(), &[]), &DataType::Null);
         let indices = compare_columns(vec![col], self.total_samples)?;
 
         let mut cum_weight = 0.0;

@@ -2646,7 +2646,11 @@ impl ValueVisitor for CheckStrictValue {
         self.visit_column(column.column)
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, _: T::Column) -> std::result::Result<(), ()> {
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        _: T::Column,
+        _: &DataType,
+    ) -> std::result::Result<(), ()> {
         Ok(())
     }
 }

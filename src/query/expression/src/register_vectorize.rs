@@ -334,7 +334,7 @@ pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>
     }
 }
 
-pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: ArgType, O: ReturnType>(
+pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
         + Copy
         + Send

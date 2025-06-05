@@ -20,12 +20,12 @@ use std::ops::Range;
 use databend_common_column::buffer::Buffer;
 
 use super::AccessType;
-use super::DecimalSize;
 use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::arrow::buffer_into_mut;
+use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -36,19 +36,19 @@ pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     type Domain: Debug + Clone + Copy + PartialEq;
 
     fn downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::Scalar>;
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar;
 
     fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>>;
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column;
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column;
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain>;
-    fn upcast_domain(domain: Self::Domain) -> Domain;
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain;
 
     fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>>;
     fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>>;
     fn upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder>;
 
     fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering;
@@ -178,16 +178,16 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
 impl<T: SimpleType> ValueType for SimpleValueType<T> {
     type ColumnBuilder = Vec<Self::Scalar>;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        T::upcast_scalar(scalar)
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        T::upcast_scalar(scalar, data_type)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        T::upcast_domain(domain)
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        T::upcast_domain(domain, data_type)
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        T::upcast_column(col)
+    fn upcast_column_with_type(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        T::upcast_column(col, data_type)
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
@@ -200,9 +200,9 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
 
     fn try_upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        T::upcast_column_builder(builder, decimal_size)
+        T::upcast_column_builder(builder, data_type)
     }
 
     fn column_to_builder(buffer: Buffer<Self::Scalar>) -> Vec<Self::Scalar> {

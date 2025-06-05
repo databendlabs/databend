@@ -103,9 +103,12 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        let c = T::upcast_column(column.clone());
-        let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        let builder = ColumnBuilder::with_capacity(data_type, T::column_len(&column));
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();
 
         for range in self.ranges {
@@ -115,7 +118,10 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
                 });
             }
         }
-        self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
+        self.result = Some(Value::Column(T::upcast_column_with_type(
+            T::build_column(builder),
+            data_type,
+        )));
 
         Ok(())
     }

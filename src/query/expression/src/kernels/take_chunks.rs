@@ -653,56 +653,43 @@ impl Column {
                 Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
             }
             ColumnVec::Binary(columns) => {
-                BinaryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+                Column::Binary(Self::take_block_vec_binary_types(columns, indices))
             }
             ColumnVec::String(columns) => {
-                StringType::upcast_column(Self::take_block_vec_string_types(columns, indices))
+                Column::String(Self::take_block_vec_string_types(columns, indices))
             }
             ColumnVec::Timestamp(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let ts = NumberType::<i64>::upcast_column(NumberType::<i64>::column_from_vec(
-                    builder,
-                    &[],
-                ))
-                .into_number()
-                .unwrap()
-                .into_int64()
-                .unwrap();
+                let ts = Int64Type::column_from_vec(builder, &[]);
                 Column::Timestamp(ts)
             }
             ColumnVec::Date(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let d = NumberType::<i32>::upcast_column(NumberType::<i32>::column_from_vec(
-                    builder,
-                    &[],
-                ))
-                .into_number()
-                .unwrap()
-                .into_int32()
-                .unwrap();
+                let d = Int32Type::column_from_vec(builder, &[]);
                 Column::Date(d)
             }
             ColumnVec::Interval(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let i = IntervalType::upcast_column(IntervalType::column_from_vec(builder, &[]))
-                    .into_interval()
-                    .unwrap();
+                let i = IntervalType::column_from_vec(builder, &[]);
                 Column::Interval(i)
             }
             ColumnVec::Array(columns) => {
-                let data_type = data_type.as_array().unwrap();
+                let item_type = data_type.as_array().unwrap();
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::with_capacity(data_type, result_size);
+                let builder = ColumnBuilder::with_capacity(item_type, result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_vec_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+                Self::take_block_vec_value_types::<ArrayType<AnyType>>(
+                    columns, builder, indices, &data_type,
+                )
             }
             ColumnVec::Map(columns) => {
-                let data_type = data_type.as_map().unwrap();
+                let kv_type = data_type.as_map().unwrap();
+
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    ColumnBuilder::with_capacity(data_type, result_size).build(),
+                    ColumnBuilder::with_capacity(kv_type, result_size).build(),
                 );
                 let (key_builder, val_builder) = match builder {
                     ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
@@ -714,7 +701,7 @@ impl Column {
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_vec_value_types::<MapType<AnyType, AnyType>>(
-                    columns, builder, indices,
+                    columns, builder, indices, &data_type,
                 )
             }
             ColumnVec::Bitmap(columns) => {
@@ -882,6 +869,7 @@ impl Column {
         columns: &[T::Column],
         mut builder: T::ColumnBuilder,
         indices: &[RowPtr],
+        data_type: &DataType,
     ) -> Column {
         for row_ptr in indices {
             let val = unsafe {
@@ -892,7 +880,7 @@ impl Column {
             };
             T::push_item(&mut builder, val.clone());
         }
-        T::upcast_column(T::build_column(builder))
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 
     fn take_block_value_types<T: ValueType>(
@@ -911,6 +899,6 @@ impl Column {
                 T::push_item(&mut builder, val.clone())
             }
         }
-        T::upcast_column(T::build_column(builder))
+        T::upcast_column_with_type(T::build_column(builder), &DataType::Null)
     }
 }

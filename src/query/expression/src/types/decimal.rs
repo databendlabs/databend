@@ -57,6 +57,7 @@ use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
+use crate::types::DataType;
 use crate::utils::arrow::buffer_into_mut;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
@@ -100,26 +101,26 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
         Num::try_downcast_owned_builder(builder)
     }
 
-    fn upcast_column_builder(
-        builder: Vec<Num>,
-        decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
+    fn upcast_column_builder(builder: Vec<Num>, data_type: &DataType) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Decimal(Num::upcast_builder(
             builder,
-            decimal_size.unwrap(),
+            *data_type.as_decimal().unwrap(),
         )))
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Num::upcast_scalar(scalar, Num::default_decimal_size())
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_scalar(scalar, size)
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        Num::upcast_column(col, Num::default_decimal_size())
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_column(col, size)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Num::upcast_domain(domain, Num::default_decimal_size())
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_domain(domain, size)
     }
 
     #[inline(always)]

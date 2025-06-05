@@ -19,7 +19,6 @@ use std::ops::Range;
 
 use super::AccessType;
 use super::ArrayType;
-use super::DecimalSize;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
@@ -124,19 +123,43 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
 impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type ColumnBuilder = KvColumnBuilder<K, V>;
 
-    fn upcast_scalar((k, v): Self::Scalar) -> Scalar {
-        Scalar::Tuple(vec![K::upcast_scalar(k), V::upcast_scalar(v)])
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        match data_type {
+            DataType::Tuple(fields) if fields.len() == 2 => {
+                let (key_type, value_type) = (&fields[0], &fields[1]);
+                Scalar::Tuple(vec![
+                    K::upcast_scalar_with_type(scalar.0, key_type),
+                    V::upcast_scalar_with_type(scalar.1, value_type),
+                ])
+            }
+            _ => unreachable!(),
+        }
     }
 
-    fn upcast_domain((k, v): Self::Domain) -> Domain {
-        Domain::Tuple(vec![K::upcast_domain(k), V::upcast_domain(v)])
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        match data_type {
+            DataType::Tuple(fields) if fields.len() == 2 => {
+                let (key_type, value_type) = (&fields[0], &fields[1]);
+                Domain::Tuple(vec![
+                    K::upcast_domain_with_type(domain.0, key_type),
+                    V::upcast_domain_with_type(domain.1, value_type),
+                ])
+            }
+            _ => unreachable!(),
+        }
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Tuple(vec![
-            K::upcast_column(col.keys),
-            V::upcast_column(col.values),
-        ])
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        match data_type {
+            DataType::Tuple(fields) if fields.len() == 2 => {
+                let (key_type, value_type) = (&fields[0], &fields[1]);
+                Column::Tuple(vec![
+                    K::upcast_column_with_type(col.keys, key_type),
+                    V::upcast_column_with_type(col.values, value_type),
+                ])
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -157,7 +180,7 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn try_upcast_column_builder(
         _builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        _data_type: &DataType,
     ) -> Option<ColumnBuilder> {
         None
     }
@@ -416,16 +439,21 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
 impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Map(KvPair::<K, V>::upcast_column(scalar))
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let data_type = data_type.as_map().unwrap();
+        Scalar::Map(KvPair::<K, V>::upcast_column_with_type(scalar, data_type))
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Map(domain.map(|domain| Box::new(KvPair::<K, V>::upcast_domain(domain))))
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        let data_type = data_type.as_map().unwrap();
+        Domain::Map(
+            domain
+                .map(|domain| Box::new(KvPair::<K, V>::upcast_domain_with_type(domain, data_type))),
+        )
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Map(Box::new(col.upcast()))
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        Column::Map(Box::new(col.upcast(data_type)))
     }
 
     fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -438,9 +466,9 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        MapInternal::<K, V>::try_upcast_column_builder(builder, decimal_size)
+        MapInternal::<K, V>::try_upcast_column_builder(builder, data_type)
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {

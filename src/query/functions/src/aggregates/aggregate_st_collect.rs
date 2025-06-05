@@ -130,8 +130,9 @@ where
         let mut srid = None;
         let mut geos = Vec::with_capacity(self.values.len());
         let values = mem::take(&mut self.values);
+        let data_type = builder.data_type();
         for (i, value) in values.into_iter().enumerate() {
-            let val = T::upcast_scalar(value);
+            let val = T::upcast_scalar_with_type(value, &data_type);
             let v = val.as_geometry().unwrap();
             let (geo, geo_srid) = ewkb_to_geo(&mut Ewkb(v))?;
             if i == 0 {
