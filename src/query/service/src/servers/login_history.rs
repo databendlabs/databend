@@ -49,6 +49,9 @@ pub struct LoginHistory {
     pub session_id: String,
     pub node_id: String,
     pub error_message: String,
+
+    #[serde(skip)]
+    pub disable_write: bool,
 }
 
 impl LoginHistory {
@@ -57,6 +60,9 @@ impl LoginHistory {
     }
 
     pub fn write_to_log(&self) {
+        if self.disable_write {
+            return;
+        }
         let event_str = serde_json::to_string(&self).unwrap();
         info!(target: "databend::log::login", "{}", event_str);
     }
@@ -75,6 +81,7 @@ impl Default for LoginHistory {
             session_id: "".to_string(),
             node_id: "".to_string(),
             error_message: "".to_string(),
+            disable_write: false,
         }
     }
 }
