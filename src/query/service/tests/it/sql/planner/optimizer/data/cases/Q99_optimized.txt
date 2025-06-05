@@ -1,6 +1,6 @@
 Exchange(Merge)
 └── EvalScalar
-    ├── scalars: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), c.a5m (#144) AS (#144), sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#173) AS (#167), eq(t.sell_mnt (#167), 0) AS (#168)]
+    ├── scalars: [eq(t.sell_mnt (#173), 0) AS (#168), a.a0d (#173) AS (#173), a.a0k (#173) AS (#173), a.a0m (#173) AS (#173), c.a5m (#173) AS (#173), sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#173) AS (#173)]
     └── Aggregate(Final)
         ├── group items: [a.a0d (#0) AS (#0), a.a0k (#7) AS (#7), a.a0m (#9) AS (#9), c.a5m (#144) AS (#144)]
         ├── aggregate functions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) AS (#173)]
