@@ -87,7 +87,7 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     visitor.visit(expr)?;
                 }
             }
-            "and" => {
+            "and" | "and_filters" => {
                 if self.left_visit_order {
                     for expr in func.arguments.iter_mut() {
                         self.visit(expr)?;
@@ -533,6 +533,102 @@ mod test {
                                                 arguments: vec![number(2), number(2)],
                                             }),
                                         ],
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                ],
+            });
+            check(expr, expect)?;
+        }
+        // [a = 1 or (a = 2 and b > a and b < (a + 2))] => [a = 1 or (a = 2 and b > 2 and b < (2 + 2))] for `and_filters`
+        {
+            let expr = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "or".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "eq".to_string(),
+                        params: vec![],
+                        arguments: vec![column_a(), number(1)],
+                    }),
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and_filters".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "eq".to_string(),
+                                params: vec![],
+                                arguments: vec![column_a(), number(2)],
+                            }),
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "gt".to_string(),
+                                params: vec![],
+                                arguments: vec![column_b(), column_a()],
+                            }),
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "lt".to_string(),
+                                params: vec![],
+                                arguments: vec![
+                                    column_b(),
+                                    ScalarExpr::FunctionCall(FunctionCall {
+                                        span: None,
+                                        func_name: "add".to_string(),
+                                        params: vec![],
+                                        arguments: vec![column_a(), number(2)],
+                                    }),
+                                ],
+                            }),
+                        ],
+                    }),
+                ],
+            });
+            let expect = ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "or".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "eq".to_string(),
+                        params: vec![],
+                        arguments: vec![column_a(), number(1)],
+                    }),
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and_filters".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "eq".to_string(),
+                                params: vec![],
+                                arguments: vec![column_a(), number(2)],
+                            }),
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "gt".to_string(),
+                                params: vec![],
+                                arguments: vec![column_b(), number(2)],
+                            }),
+                            ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "lt".to_string(),
+                                params: vec![],
+                                arguments: vec![
+                                    column_b(),
+                                    ScalarExpr::FunctionCall(FunctionCall {
+                                        span: None,
+                                        func_name: "add".to_string(),
+                                        params: vec![],
+                                        arguments: vec![number(2), number(2)],
                                     }),
                                 ],
                             }),
