@@ -2898,7 +2898,7 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
                 (catalog, database, table),
                 opt_columns,
                 _,
-                _,
+                opt_conflict,
                 _,
                 on_conflict_columns,
                 _,
@@ -2910,6 +2910,7 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
                     catalog,
                     database,
                     table,
+                    is_conflict: opt_conflict.is_some(),
                     on_conflict_columns,
                     columns: opt_columns
                         .map(|(_, columns, _)| columns)

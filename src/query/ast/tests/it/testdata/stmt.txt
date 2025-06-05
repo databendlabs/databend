@@ -777,7 +777,7 @@ Some(
 ---------- Input ----------
 replace into test on(c) select sum(c) as c from source group by v;
 ---------- Output ---------
-REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
+REPLACE INTO test ON (c) SELECT sum(c) AS c FROM source GROUP BY v
 ---------- AST ------------
 Replace(
     ReplaceStmt {
@@ -792,6 +792,7 @@ Replace(
             quote: None,
             ident_type: None,
         },
+        is_conflict: false,
         on_conflict_columns: [
             Identifier {
                 span: Some(
@@ -1028,7 +1029,7 @@ Explain {
 ---------- Input ----------
 explain replace into test on(c) select sum(c) as c from source group by v;
 ---------- Output ---------
-EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
+EXPLAIN REPLACE INTO test ON (c) SELECT sum(c) AS c FROM source GROUP BY v
 ---------- AST ------------
 Explain {
     kind: Plan,
@@ -1049,6 +1050,7 @@ Explain {
                 quote: None,
                 ident_type: None,
             },
+            is_conflict: false,
             on_conflict_columns: [
                 Identifier {
                     span: Some(
