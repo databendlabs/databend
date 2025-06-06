@@ -127,5 +127,12 @@ SELECT `SOME_NAME`(2)
 ----
 5
 
+
+statement ok
+create or replace function SOME_NAME as (d) -> date_diff(year, d ,now());
+
+statement ok
+select SOME_NAME(now());
+
 statement ok
 drop function `SOME_NAME`

@@ -109,7 +109,9 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
@@ -4632,16 +4634,16 @@ impl<'a> TypeChecker<'a> {
                 args_map.insert(parameter.as_str(), (*argument).clone());
             }
         });
-        let udf_expr = self
-            .clone_expr_with_replacement(&expr, &|nest_expr| {
-                if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(column.column.name()) {
-                        return Ok(Some(arg.clone()));
-                    }
+
+        let udf_expr = Self::clone_expr_with_replacement(&expr, |nest_expr| {
+            if let Expr::ColumnRef { column, .. } = nest_expr {
+                if let Some(arg) = args_map.get(column.column.name()) {
+                    return Ok(Some(arg.clone()));
                 }
-                Ok(None)
-            })
-            .map_err(|e| e.set_span(span))?;
+            }
+            Ok(None)
+        })
+        .map_err(|e| e.set_span(span))?;
         let scalar = self.resolve(&udf_expr)?;
         Ok(Box::new((
             UDFLambdaCall {
@@ -5386,295 +5388,24 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn clone_expr_with_replacement<F>(
-        &self,
-        original_expr: &Expr,
-        replacement_fn: &F,
-    ) -> Result<Expr>
-    where
-        F: Fn(&Expr) -> Result<Option<Expr>>,
-    {
-        let replacement_opt = replacement_fn(original_expr)?;
-        match replacement_opt {
-            Some(replacement) => Ok(replacement),
-            None => match original_expr {
-                Expr::IsNull { span, expr, not } => Ok(Expr::IsNull {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    not: *not,
-                }),
-                Expr::InList {
-                    span,
-                    expr,
-                    list,
-                    not,
-                } => Ok(Expr::InList {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    list: list
-                        .iter()
-                        .map(|item| self.clone_expr_with_replacement(item, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    not: *not,
-                }),
-                Expr::Between {
-                    span,
-                    expr,
-                    low,
-                    high,
-                    not,
-                } => Ok(Expr::Between {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    low: Box::new(self.clone_expr_with_replacement(low.as_ref(), replacement_fn)?),
-                    high: Box::new(
-                        self.clone_expr_with_replacement(high.as_ref(), replacement_fn)?,
-                    ),
-                    not: *not,
-                }),
-                Expr::BinaryOp {
-                    span,
-                    op,
-                    left,
-                    right,
-                } => Ok(Expr::BinaryOp {
-                    span: *span,
-                    op: op.clone(),
-                    left: Box::new(
-                        self.clone_expr_with_replacement(left.as_ref(), replacement_fn)?,
-                    ),
-                    right: Box::new(
-                        self.clone_expr_with_replacement(right.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::UnaryOp { span, op, expr } => Ok(Expr::UnaryOp {
-                    span: *span,
-                    op: op.clone(),
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::Cast {
-                    span,
-                    expr,
-                    target_type,
-                    pg_style,
-                } => Ok(Expr::Cast {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    target_type: target_type.clone(),
-                    pg_style: *pg_style,
-                }),
-                Expr::TryCast {
-                    span,
-                    expr,
-                    target_type,
-                } => Ok(Expr::TryCast {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    target_type: target_type.clone(),
-                }),
-                Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
-                    span: *span,
-                    kind: *kind,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::DatePart { span, kind, expr } => Ok(Expr::DatePart {
-                    span: *span,
-                    kind: *kind,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::Position {
-                    span,
-                    substr_expr,
-                    str_expr,
-                } => Ok(Expr::Position {
-                    span: *span,
-                    substr_expr: Box::new(
-                        self.clone_expr_with_replacement(substr_expr.as_ref(), replacement_fn)?,
-                    ),
-                    str_expr: Box::new(
-                        self.clone_expr_with_replacement(str_expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::Substring {
-                    span,
-                    expr,
-                    substring_from,
-                    substring_for,
-                } => Ok(Expr::Substring {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    substring_from: Box::new(
-                        self.clone_expr_with_replacement(substring_from.as_ref(), replacement_fn)?,
-                    ),
-                    substring_for: if let Some(substring_for_expr) = substring_for {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            substring_for_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
-                }),
-                Expr::Trim {
-                    span,
-                    expr,
-                    trim_where,
-                } => {
-                    Ok(Expr::Trim {
-                        span: *span,
-                        expr: Box::new(
-                            self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                        ),
-                        trim_where: if let Some((trim, trim_expr)) = trim_where {
-                            Some((
-                                trim.clone(),
-                                Box::new(self.clone_expr_with_replacement(
-                                    trim_expr.as_ref(),
-                                    replacement_fn,
-                                )?),
-                            ))
-                        } else {
-                            None
-                        },
-                    })
+    fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
+    where F: Fn(&Expr) -> Result<Option<Expr>> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter))]
+        struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
+
+        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                let replacement_opt = (self.0)(expr);
+                if let Ok(Some(replacement)) = replacement_opt {
+                    *expr = replacement;
                 }
-                Expr::Tuple { span, exprs } => Ok(Expr::Tuple {
-                    span: *span,
-                    exprs: exprs
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                }),
-                Expr::FunctionCall {
-                    span,
-                    func:
-                        ASTFunctionCall {
-                            distinct,
-                            name,
-                            args,
-                            params,
-                            order_by,
-                            window,
-                            lambda,
-                        },
-                } => Ok(Expr::FunctionCall {
-                    span: *span,
-                    func: ASTFunctionCall {
-                        distinct: *distinct,
-                        name: name.clone(),
-                        args: args
-                            .iter()
-                            .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
-                            .collect::<Result<Vec<Expr>>>()?,
-                        params: params.clone(),
-                        order_by: order_by.clone(),
-                        window: window.clone(),
-                        lambda: if let Some(lambda) = lambda {
-                            Some(Lambda {
-                                params: lambda.params.clone(),
-                                expr: Box::new(
-                                    self.clone_expr_with_replacement(&lambda.expr, replacement_fn)?,
-                                ),
-                            })
-                        } else {
-                            None
-                        },
-                    },
-                }),
-                Expr::Case {
-                    span,
-                    operand,
-                    conditions,
-                    results,
-                    else_result,
-                } => Ok(Expr::Case {
-                    span: *span,
-                    operand: if let Some(operand_expr) = operand {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            operand_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
-                    conditions: conditions
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    results: results
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    else_result: if let Some(else_result_expr) = else_result {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            else_result_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
-                }),
-                Expr::MapAccess {
-                    span,
-                    expr,
-                    accessor,
-                } => Ok(Expr::MapAccess {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    accessor: accessor.clone(),
-                }),
-                Expr::Array { span, exprs } => Ok(Expr::Array {
-                    span: *span,
-                    exprs: exprs
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                }),
-                Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    unit: *unit,
-                }),
-                Expr::DateAdd {
-                    span,
-                    unit,
-                    interval,
-                    date,
-                } => Ok(Expr::DateAdd {
-                    span: *span,
-                    unit: *unit,
-                    interval: Box::new(
-                        self.clone_expr_with_replacement(interval.as_ref(), replacement_fn)?,
-                    ),
-                    date: Box::new(
-                        self.clone_expr_with_replacement(date.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                _ => Ok(original_expr.clone()),
-            },
+            }
         }
+        let mut visitor = ReplacerVisitor(replacement_fn);
+        let mut expr = original_expr.clone();
+        expr.drive_mut(&mut visitor);
+        Ok(expr)
     }
 
     fn try_fold_constant<Index: ColumnIndex>(
