@@ -14,12 +14,14 @@
 
 mod common;
 mod deduplicate_join_condition;
+mod equivalent_constants_visitor;
 mod infer_filter;
 mod normalize_disjunctive_filter;
 mod pull_up_filter;
 
 pub use common::*;
 pub use deduplicate_join_condition::DeduplicateJoinConditionOptimizer;
+pub use equivalent_constants_visitor::EquivalentConstantsVisitor;
 pub use infer_filter::InferFilterOptimizer;
 pub use infer_filter::JoinProperty;
 pub use normalize_disjunctive_filter::NormalizeDisjunctiveFilterOptimizer;
