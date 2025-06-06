@@ -79,6 +79,7 @@ use tonic::transport::Channel;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
+use tonic::Streaming;
 
 use crate::endpoints::rotate_failing_endpoint;
 use crate::endpoints::Endpoints;
@@ -729,7 +730,7 @@ impl MetaGrpcClient {
     pub(crate) async fn watch(
         &self,
         watch_request: WatchRequest,
-    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
+    ) -> Result<Streaming<WatchResponse>, MetaClientError> {
         debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
@@ -751,7 +752,7 @@ impl MetaGrpcClient {
     pub(crate) async fn watch_with_initialization(
         &self,
         watch_request: WatchRequest,
-    ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaClientError> {
+    ) -> Result<Streaming<WatchResponse>, MetaClientError> {
         debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
@@ -769,7 +770,7 @@ impl MetaGrpcClient {
     pub(crate) async fn export(
         &self,
         export_request: message::ExportReq,
-    ) -> Result<tonic::codec::Streaming<ExportedChunk>, MetaError> {
+    ) -> Result<Streaming<ExportedChunk>, MetaError> {
         debug!(
             "{} worker: handle export request: {:?}",
             self, export_request
@@ -876,10 +877,14 @@ impl MetaGrpcClient {
 
             let established = rpc_handler.new_established_client().await?;
 
+            debug!("{}::kv_read_v1 established client: {:?}", self, established);
+
             let result = established
                 .kv_read_v1(req)
                 .with_timing_threshold(threshold(), info_spent(service_spec.0))
                 .await;
+
+            debug!("{self}::kv_read_v1 result: {:?}", result);
 
             let retryable = rpc_handler.process_response_result(&grpc_req, result)?;
 
