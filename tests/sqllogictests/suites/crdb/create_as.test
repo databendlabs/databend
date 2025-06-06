@@ -70,6 +70,26 @@ SELECT * FROM smtng.something ORDER BY 1 LIMIT 1
 ----
 cups 10
 
-# CREATE TABLE itemTypes AS (SELECT item, color FROM stock, itemColors)
-# CREATE TABLE unionstock AS SELECT * FROM stock UNION VALUES ('spoons', 25), ('knives', 50)
+statement ok
+CREATE or REPLACE TABLE itemTypes AS (SELECT item, color FROM stock, itemColors)
+
+statement ok
+CREATE or REPLACE TABLE unionstock AS SELECT * FROM stock UNION VALUES ('spoons', 25), ('knives', 50)
+
 # CREATE TABLE t AS SELECT a, b, EXISTS(SELECT c FROM cd WHERE cd.c=ab.a) FROM ab
+
+statement error (?s)1006.*?Duplicated column name: number
+create or replace table t01 as select number::varchar ,number::int, number::float  from numbers(10);
+
+statement ok
+create or replace table t01 as select number::varchar::int ,number::varchar as n1, number::float as n2  from numbers(10);
+
+query T
+desc t01
+----
+number INT YES NULL (empty)
+n1 VARCHAR YES NULL (empty)
+n2 FLOAT YES NULL (empty)
+
+statement ok
+drop table t01;
