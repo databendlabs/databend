@@ -26,7 +26,7 @@ sql: |
   LIMIT 100
 
 # Reference to external statistics file
-statistics_file: statistics.yaml
+statistics_file: tpcds/tpcds_100g.yaml
 
 # Converted from tabular format to tree format based on parent-child relationships
 good_plan: |

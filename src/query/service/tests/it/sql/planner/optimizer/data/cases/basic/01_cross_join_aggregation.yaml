@@ -1,9 +1,8 @@
-name: "Q04"
-description: "Cross test"
+name: "01_cross_join_aggregation"
+description: "Test for cross join with aggregation functions"
 
 sql: |
   SELECT SUM(i1.i),  MIN(i1.i), MAX(i2.i) FROM integers i1, integers i2;
-
 
 auto_statistics: true
 
@@ -19,12 +18,3 @@ good_plan: |
                   │       └── columns: [D_DATE_SK, D_YEAR, D_MOY]
                   └── Aggregate [group by: ITEM.I_BRAND_ID, ITEM.I_BRAND, STORE_SALES.SS_SOLD_DATE_SK]
                       └── InnerJoin [join key: (ITEM.I_ITEM_SK = STORE_SALES.SS_ITEM_SK)]
-                          ├── Aggregate [group by: ITEM.I_ITEM_SK, ITEM.I_BRAND_ID, ITEM.I_BRAND]
-                          │   └── Filter [condition: ITEM.I_MANUFACT_ID = 128]
-                          │       └── TableScan (ITEM) [partitions: 2/2, bytes: 23,811,584]
-                          │           └── columns: [I_ITEM_SK, I_BRAND_ID, I_BRAND, I_MANUFACT_ID]
-                          └── Aggregate [group by: STORE_SALES.SS_SOLD_DATE_SK, STORE_SALES.SS_ITEM_SK]
-                              └── Filter [condition: STORE_SALES.SS_SOLD_DATE_SK IS NOT NULL]
-                                  └── JoinFilter [join key: (DT.D_DATE_SK = STORE_SALES.SS_SOLD_DATE_SK)]
-                                      └── TableScan (STORE_SALES) [partitions: 70,412/72,718, bytes: 1,212,628,258,304]
-                                          └── columns: [SS_SOLD_DATE_SK, SS_ITEM_SK, SS_EXT_SALES_PRICE]

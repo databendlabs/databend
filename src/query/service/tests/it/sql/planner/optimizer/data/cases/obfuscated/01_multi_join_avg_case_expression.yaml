@@ -1,0 +1,8 @@
+name: "01_multi_join_avg_case_expression"
+description: "Test for multiple left outer joins with AVG and CASE expression"
+
+sql: |
+  SELECT t.sell_mnt = 0 FROM (SELECT a.a0d, a.a0k, a.a0m, c.a5m, avg(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) + 3 AS sell_mnt FROM a0c AS a LEFT OUTER JOIN a1z AS b ON a.a0k = b.a0k AND a.a0n = b.a0n AND b.a2c <= a.a0d AND b.a2k > a.a0d LEFT OUTER JOIN a2x AS c ON a.a0m = c.a0m LEFT OUTER JOIN a5r AS d ON a.a0l = d.a5t WHERE a.a0d BETWEEN '20240526' AND '20250525' AND b.a2t = '624100' AND SUBSTRING(c.a4m FROM 20 FOR 1) = '1' AND SUBSTRING(d.a5w FROM 1 FOR 1) = '1' GROUP BY a.a0d, a.a0k, a.a0m, c.a5m) AS t;
+
+# Reference to external statistics file
+statistics_file: obfuscated/01_multi_join_case_expression_stats.yaml

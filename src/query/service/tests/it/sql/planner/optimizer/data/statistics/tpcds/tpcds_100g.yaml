@@ -1,5 +1,5 @@
-name: "TPC-DS 100G Statistics"
-description: "select * from table_statistics('tpcds_100')"
+name: "TPC-DS 100G Standard Statistics"
+description: "Table and column statistics for TPC-DS 100G dataset used for optimizer testing"
 
 table_statistics:
   call_center:

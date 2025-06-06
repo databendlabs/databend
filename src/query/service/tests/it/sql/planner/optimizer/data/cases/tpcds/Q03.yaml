@@ -14,7 +14,7 @@ sql: |
   LIMIT 100
 
 # Reference to external statistics file
-statistics_file: statistics.yaml
+statistics_file: tpcds/tpcds_100g.yaml
 
 good_plan: |
   Result [output: DT.D_YEAR, ITEM.I_BRAND_ID, ITEM.I_BRAND, SUM(...)]
