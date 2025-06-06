@@ -74,6 +74,12 @@ pub struct GlobalHistoryLog {
 impl GlobalHistoryLog {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         setup_operator().await?;
+        if cfg.log.history.log_only {
+            info!(
+                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
+            );
+            return Ok(());
+        }
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let stage_name = cfg.log.history.stage_name.clone();
@@ -135,10 +141,12 @@ impl GlobalHistoryLog {
             let meta_key = format!("{}/history_log_transform", self.tenant_id).clone();
             let log = GlobalHistoryLog::instance();
             let handle = spawn(async move {
+                let mut consecutive_error = 0;
                 loop {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
+                                consecutive_error = 0;
                                 let _ = log
                                     .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                     .await;
@@ -148,21 +156,18 @@ impl GlobalHistoryLog {
                             let _ = log
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
-
-                            // BadArguments(1006), if the table schema is changed
-                            // means this node is older version then exit
-                            if e.code() == 1006 {
-                                info!(
-                                    "[HISTORY-TABLES] {} log transform failed due to schema changed, exit",
+                            error!(
+                                "[HISTORY-TABLES] {} log transform failed due to {}, retry {}",
+                                table_clone.name, e, consecutive_error
+                            );
+                            consecutive_error += 1;
+                            if consecutive_error > 3 {
+                                error!(
+                                    "[HISTORY-TABLES] {} log transform failed too many times, exit",
                                     table_clone.name
                                 );
                                 break;
                             }
-
-                            error!(
-                                "[HISTORY-TABLES] {} log transform failed due to {}, retry",
-                                table_clone.name, e
-                            );
                         }
                     }
                     sleep(sleep_time).await;

@@ -2724,6 +2724,21 @@ pub struct HistoryLogConfig {
     #[serde(rename = "on")]
     pub log_history_on: bool,
 
+    /// Enables log-only mode for the history feature.
+    ///
+    /// When set to true, this node will only record raw log data to the specified stage,
+    /// but will not perform the transform and clean process.
+    /// Please make sure that the transform and clean process is handled by other nodes
+    /// otherwise the raw log data will not be processed and cleaned up.
+    ///
+    /// Note: This is useful for nodes that should avoid the performance overhead of the
+    /// transform and clean process
+    #[clap(
+        long = "log-history-log-only", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "log_only")]
+    pub log_history_log_only: bool,
+
     /// Specifies the interval in seconds for how often the history log is flushed
     #[clap(
         long = "log-history-interval",
@@ -2819,6 +2834,7 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
     fn try_into(self) -> Result<InnerHistoryConfig> {
         Ok(InnerHistoryConfig {
             on: self.log_history_on,
+            log_only: self.log_history_log_only,
             interval: self.log_history_interval,
             stage_name: self.log_history_stage_name,
             level: self.log_history_level,
@@ -2836,6 +2852,7 @@ impl From<InnerHistoryConfig> for HistoryLogConfig {
     fn from(inner: InnerHistoryConfig) -> Self {
         Self {
             log_history_on: inner.on,
+            log_history_log_only: inner.log_only,
             log_history_interval: inner.interval,
             log_history_stage_name: inner.stage_name,
             log_history_level: inner.level,
