@@ -152,42 +152,41 @@ impl<'a> RpcHandler<'a> {
             result
         );
 
-        match result {
-            Err(e) => {
-                if is_status_retryable(&e) {
-                    warn!(
-                        "MetaGrpcClient::{} retryable error: {:?}; with {}: request: {:?}",
-                        self.required_feature.0,
-                        e,
-                        self.established_client.display(),
-                        request
-                    );
+        let status = match result {
+            Err(e) => e,
+            Ok(x) => return Ok(ResponseAction::Success(x)),
+        };
 
-                    let established_client = self
-                        .established_client
-                        .as_mut()
-                        .expect("established client should be set before processing response");
+        if is_status_retryable(&status) {
+            warn!(
+                "MetaGrpcClient::{} retryable error: {:?}; with {}: request: {:?}",
+                self.required_feature.0,
+                status,
+                self.established_client.display(),
+                request
+            );
 
-                    self.rpc_failures
-                        .push((established_client.to_string(), e.clone()));
+            let established_client = self
+                .established_client
+                .as_mut()
+                .expect("established client should be set before processing response");
 
-                    established_client.rotate_failing_target();
+            self.rpc_failures
+                .push((established_client.to_string(), status));
 
-                    Ok(ResponseAction::ShouldRetry)
-                } else {
-                    warn!(
-                        "MetaGrpcClient::{} non-retryable error: {:?}; with {}: request: {:?}",
-                        self.required_feature.0,
-                        e,
-                        self.established_client.display(),
-                        request
-                    );
+            established_client.rotate_failing_target();
 
-                    Err(e)
-                }
-            }
+            Ok(ResponseAction::ShouldRetry)
+        } else {
+            warn!(
+                "MetaGrpcClient::{} non-retryable error: {:?}; with {}: request: {:?}",
+                self.required_feature.0,
+                status,
+                self.established_client.display(),
+                request
+            );
 
-            Ok(x) => Ok(ResponseAction::Success(x)),
+            Err(status)
         }
     }
 
