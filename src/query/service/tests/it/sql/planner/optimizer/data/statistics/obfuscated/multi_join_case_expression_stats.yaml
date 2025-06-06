@@ -1,5 +1,5 @@
-name: "TPC-DS Obfuscated Statistics"
-description: "Statistics for obfuscated TPC-DS tables"
+name: "Multi-Join Case Expression Statistics"
+description: "Statistics for obfuscated tables used in multi-join case expression tests"
 
 table_statistics:
   a1z:

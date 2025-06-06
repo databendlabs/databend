@@ -224,8 +224,25 @@ fn load_statistics_file(
         column_statistics: HashMap<String, YamlColumnStatistics>,
     }
 
-    // Statistics files are located in the statistics directory
-    let stats_path = base_path.join("statistics").join(file_name);
+    // Parse the file name to extract subdirectory path
+    let parts: Vec<&str> = file_name.split('/').collect();
+    let (subdir_path, stats_file_name) = if parts.len() > 1 {
+        // If there's a subdirectory path
+        let name = parts.last().unwrap();
+        let subdir = parts[..parts.len() - 1].join("/");
+        (Some(subdir), name.to_string())
+    } else {
+        // If there's no subdirectory
+        (None, file_name.to_string())
+    };
+    
+    // Generate the full path to the statistics file
+    let stats_path = if let Some(subdir) = subdir_path {
+        base_path.join("statistics").join(subdir).join(stats_file_name)
+    } else {
+        base_path.join("statistics").join(stats_file_name)
+    };
+    
     if !stats_path.exists() {
         return Err(ErrorCode::Internal(format!(
             "Statistics file not found: {}",

@@ -11,6 +11,9 @@ data
 │   ├── tpcds/       # TPC-DS table definitions
 │   └── obfuscated/  # Obfuscated table definitions
 ├── statistics/      # Statistics files
+│   ├── basic/       # Basic statistics
+│   ├── tpcds/       # TPC-DS statistics
+│   └── obfuscated/  # Obfuscated statistics
 ├── cases/           # YAML test case definitions
 │   ├── basic/       # Basic test cases
 │   ├── tpcds/       # TPC-DS test cases
