@@ -35,6 +35,7 @@ use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::MetaHandshakeError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use log::debug;
 use log::error;
 use log::info;
 use log::warn;
@@ -62,11 +63,17 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
         // - Set the `current` node in endpoints to the leader if the request is forwarded by a follower to a leader.
         // - Store the error if received an error.
 
+        debug!(
+            "{client} update_client: received response, endpoints: {}",
+            &*client.endpoints.lock(),
+        );
+
         self.inspect(|response| {
             let forwarded_leader = GrpcHelper::get_response_meta_leader(response);
 
             // `leader` is set iff the request is forwarded by a follower to a leader
             if let Some(leader) = forwarded_leader {
+                // TODO: here there is a lock?
                 info!(
                     "{client} update_client: received forward_to_leader({}) for further RPC, endpoints: {}",
                     leader,
@@ -115,6 +122,11 @@ pub struct EstablishedClient {
     /// The endpoints shared in a client pool.
     endpoints: Arc<Mutex<Endpoints>>,
 
+    /// For implementing `Display`, without acquiring the lock in `endpoints`, which might lead to deadlock.
+    ///
+    /// For example, to implement `Display` with `endpoints`, `format!("{self} {self}")` will deadlock.
+    endpoints_string: String,
+
     /// The error that occurred when sending an RPC.
     ///
     /// The client with error will be dropped by the client pool.
@@ -136,7 +148,7 @@ impl fmt::Display for EstablishedClient {
             self.created_at,
             self.target_endpoint,
             self.server_protocol_version,
-            self.endpoints.lock()
+            self.endpoints_string
         )
     }
 }
@@ -157,12 +169,15 @@ impl EstablishedClient {
         let utc_time = Utc::now();
         let created_at = utc_time.format("%Y-%m-%d-%H:%M:%S-UTC").to_string();
 
+        let endpoints_string = format!("{}", &*endpoints.lock());
+
         let client = Self {
             client,
             server_protocol_version,
             features,
             target_endpoint: target_endpoint.to_string(),
             endpoints,
+            endpoints_string,
             error: Arc::new(Mutex::new(None)),
             uniq,
             created_at,
