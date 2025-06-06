@@ -854,33 +854,77 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(
         "like",
         |_, _, _| FunctionDomain::Full,
-        variant_vectorize_like(|val, pattern_type| match pattern_type {
-            LikePattern::OrdinalStr(_)
-            | LikePattern::StartOfPercent(_)
-            | LikePattern::EndOfPercent(_)
-            | LikePattern::Constant(_) => {
-                let raw_jsonb = RawJsonb::new(val);
-                match raw_jsonb.as_str() {
-                    Ok(Some(s)) => pattern_type.compare(s.as_bytes()),
-                    Ok(None) => false,
-                    Err(_) => {
-                        let s = raw_jsonb.to_string();
-                        pattern_type.compare(s.as_bytes())
-                    }
-                }
-            }
-            _ => {
-                let raw_jsonb = RawJsonb::new(val);
-                match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
-                    Ok(res) => res,
-                    Err(_) => {
-                        let s = raw_jsonb.to_string();
-                        pattern_type.compare(s.as_bytes())
-                    }
-                }
-            }
-        }),
+        variant_vectorize_like_jsonb(),
     );
+
+    registry.register_function_factory("like_any", FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        let is_nullable = args_type[0].is_nullable();
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_string() && !arg_type.is_variant() {
+            return None;
+        }
+        let DataType::Tuple(patterns_ty) = &args_type[1] else {
+            return None;
+        };
+        if patterns_ty.iter().any(|ty| !ty.is_string() && !ty.is_variant()) {
+            return None;
+        }
+
+        let function = Function {
+            signature: FunctionSignature {
+                name: "like_any".to_string(),
+                args_type: vec![arg_type, DataType::Tuple(vec![DataType::String; patterns_ty.len()])],
+                return_type: DataType::Boolean,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(move |args, ctx| {
+                    let arg = &args[0];
+                    let input_all_scalars = arg.as_scalar().is_some();
+                    let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+
+                    let Some(Scalar::Tuple(patterns)) = &args[1].as_scalar() else {
+                        ctx.set_error(1, "The second parameter of `like_any` must be of Tuple type");
+                        return Value::Scalar(Scalar::Boolean(Default::default()));
+                    };
+
+                    let result = if let Some(value) = arg.try_downcast::<StringType>() {
+                        let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
+                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), ctx))
+                            .collect::<Vec<_>>()
+                    } else if let Some(value) = arg.try_downcast::<VariantType>() {
+                        let like = variant_vectorize_like_jsonb();
+                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), ctx))
+                            .collect::<Vec<_>>()
+                    } else {
+                        ctx.set_error(1, "The first parameter of 'like_any' can only be of type String or Variant");
+                        return Value::Scalar(Scalar::Boolean(Default::default()));
+                    };
+
+                    let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
+
+                    let patterns_len = patterns.len();
+                    for like_result in result {
+                        builder.push((0..patterns_len).any(|i| like_result.index(i).unwrap()));
+                    }
+                    if input_all_scalars {
+                        Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
+                    } else {
+                        Value::<BooleanType>::Column(BooleanType::build_column(builder))
+                    }.upcast()
+                }),
+            },
+        };
+
+        if is_nullable {
+            Some(Arc::new(function.passthrough_nullable()))
+        } else {
+            Some(Arc::new(function))
+        }
+    })));
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
@@ -955,6 +999,37 @@ fn register_like(registry: &mut FunctionRegistry) {
             },
         ),
     );
+}
+
+fn variant_vectorize_like_jsonb(
+) -> impl Fn(Value<VariantType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy + Sized
+{
+    variant_vectorize_like(|val, pattern_type| match pattern_type {
+        LikePattern::OrdinalStr(_)
+        | LikePattern::StartOfPercent(_)
+        | LikePattern::EndOfPercent(_)
+        | LikePattern::Constant(_) => {
+            let raw_jsonb = RawJsonb::new(val);
+            match raw_jsonb.as_str() {
+                Ok(Some(s)) => pattern_type.compare(s.as_bytes()),
+                Ok(None) => false,
+                Err(_) => {
+                    let s = raw_jsonb.to_string();
+                    pattern_type.compare(s.as_bytes())
+                }
+            }
+        }
+        _ => {
+            let raw_jsonb = RawJsonb::new(val);
+            match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
+                Ok(res) => res,
+                Err(_) => {
+                    let s = raw_jsonb.to_string();
+                    pattern_type.compare(s.as_bytes())
+                }
+            }
+        }
+    })
 }
 
 fn vectorize_like(

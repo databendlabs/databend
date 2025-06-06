@@ -141,7 +141,6 @@ use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::DictionarySource;
@@ -154,6 +153,7 @@ use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SqlSource;
+use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
@@ -527,31 +527,14 @@ impl<'a> TypeChecker<'a> {
                     ..
                 } = &**right
                 {
-                    match subquery_modifier {
-                        SubqueryModifier::Any | SubqueryModifier::Some => {
-                            let comparison_op = ComparisonOp::try_from(op)?;
-                            self.resolve_subquery(
-                                SubqueryType::Any,
-                                subquery,
-                                Some(*left.clone()),
-                                Some(comparison_op),
-                            )?
-                        }
-                        SubqueryModifier::All => {
-                            let contrary_op = op.to_contrary()?;
-                            let rewritten_subquery = Expr::Subquery {
-                                span: right.span(),
-                                modifier: Some(SubqueryModifier::Any),
-                                subquery: (*subquery).clone(),
-                            };
-                            self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
-                                span: *span,
-                                op: contrary_op,
-                                left: (*left).clone(),
-                                right: Box::new(rewritten_subquery),
-                            })?
-                        }
-                    }
+                    self.resolve_scalar_subquery(
+                        subquery,
+                        left,
+                        span,
+                        &right.span(),
+                        subquery_modifier,
+                        op,
+                    )?
                 } else {
                     self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())?
                 }
@@ -1006,9 +989,22 @@ impl<'a> TypeChecker<'a> {
                     SubqueryType::Any,
                     subquery,
                     Some(*expr.clone()),
-                    Some(ComparisonOp::Equal),
+                    Some(SubqueryComparisonOp::Equal),
                 )?
             }
+            Expr::LikeSubquery {
+                subquery,
+                expr,
+                span,
+                modifier,
+            } => self.resolve_scalar_subquery(
+                subquery,
+                expr,
+                span,
+                span,
+                modifier,
+                &BinaryOperator::Like,
+            )?,
 
             expr @ Expr::MapAccess { span, .. } => {
                 let mut expr = expr;
@@ -1173,6 +1169,42 @@ impl<'a> TypeChecker<'a> {
             }
         };
         Ok(Box::new((scalar, data_type)))
+    }
+
+    fn resolve_scalar_subquery(
+        &mut self,
+        subquery: &Box<Query>,
+        expr: &Box<Expr>,
+        span: &Span,
+        right_span: &Span,
+        modifier: &SubqueryModifier,
+        op: &BinaryOperator,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        Ok(match modifier {
+            SubqueryModifier::Any | SubqueryModifier::Some => {
+                let comparison_op = SubqueryComparisonOp::try_from(op)?;
+                self.resolve_subquery(
+                    SubqueryType::Any,
+                    subquery,
+                    Some(*expr.clone()),
+                    Some(comparison_op),
+                )?
+            }
+            SubqueryModifier::All => {
+                let contrary_op = op.to_contrary()?;
+                let rewritten_subquery = Expr::Subquery {
+                    span: *right_span,
+                    modifier: Some(SubqueryModifier::Any),
+                    subquery: (*subquery).clone(),
+                };
+                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
+                    span: *span,
+                    op: contrary_op,
+                    left: (*expr).clone(),
+                    right: Box::new(rewritten_subquery),
+                })?
+            }
+        })
     }
 
     // TODO: remove this function
@@ -3369,7 +3401,7 @@ impl<'a> TypeChecker<'a> {
         typ: SubqueryType,
         subquery: &Query,
         child_expr: Option<Expr>,
-        compare_op: Option<ComparisonOp>,
+        compare_op: Option<SubqueryComparisonOp>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
@@ -5262,7 +5294,7 @@ impl<'a> TypeChecker<'a> {
             span: None,
             subquery: Box::new(distinct_const_scan),
             child_expr: child_scalar,
-            compare_op: Some(ComparisonOp::Equal),
+            compare_op: Some(SubqueryComparisonOp::Equal),
             output_column: ctx.columns[0].clone(),
             projection_index: None,
             data_type: Box::new(data_type),

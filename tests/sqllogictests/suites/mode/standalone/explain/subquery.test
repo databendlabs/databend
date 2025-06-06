@@ -746,3 +746,75 @@ EmptyResultScan
 
 statement ok
 drop table if exists t;
+
+statement ok
+create table t (i string);
+
+statement ok
+insert into t values('database'), ('databend');
+
+query T
+explain select * from t where i like any ('data%', '%bend');
+----
+Filter
+├── output columns: [t.i (#0)]
+├── filters: [is_true(like_any(t.i (#0), ('data%', '%bend')))]
+├── estimated rows: 0.40
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(like_any(t.i (#0), ('data%', '%bend')))], limit: NONE]
+    └── estimated rows: 2.00
+
+query T
+explain select * from t where i like any (select 'data%');
+----
+Filter
+├── output columns: [t.i (#0)]
+├── filters: [is_true(like(t.i (#0), 'data%'))]
+├── estimated rows: 0.40
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(like(t.i (#0), 'data%'))], limit: NONE]
+    └── estimated rows: 2.00
+
+query T
+explain select * from t where i like any (SELECT c1 FROM (VALUES ('data')) words(c1));
+----
+HashJoin
+├── output columns: [t.i (#0)]
+├── join type: LEFT SEMI
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL))]
+├── build join filters:
+├── estimated rows: 2.00
+├── ConstantTableScan(Build)
+│   ├── output columns: [c1 (#1)]
+│   └── column 0: ['data']
+└── TableScan(Probe)
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 2.00
+
+statement ok
+drop table if exists t;
+

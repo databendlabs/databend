@@ -37,7 +37,6 @@ use crate::optimizer::optimizers::operator::SubqueryDecorrelatorOptimizer;
 use crate::optimizer::optimizers::operator::UnnestResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -47,6 +46,7 @@ use crate::plans::JoinType;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::ColumnSet;
@@ -671,7 +671,10 @@ impl SubqueryDecorrelatorOptimizer {
             if let RelOperator::ProjectSet(project_set) = project_set_expr.plan() {
                 if project_set.srfs.len() != 1
                     || project_set.srfs[0].index != srf_column_index
-                    || subquery.compare_op != Some(ComparisonOp::Equal)
+                    || !matches!(
+                        subquery.compare_op,
+                        Some(SubqueryComparisonOp::Equal) | Some(SubqueryComparisonOp::Like)
+                    )
                     || subquery.typ != SubqueryType::Any
                 {
                     return Ok(None);
