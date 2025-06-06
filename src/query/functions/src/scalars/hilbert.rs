@@ -267,7 +267,7 @@ fn calc_range_partition_id(val: ScalarRef, arr: &Column) -> u64 {
     while low < high {
         let mid = low + ((high - low) / 2);
         let bound = unsafe { arr.index_unchecked(mid) };
-        if val > bound {
+        if val >= bound {
             low = mid + 1;
         } else {
             high = mid;

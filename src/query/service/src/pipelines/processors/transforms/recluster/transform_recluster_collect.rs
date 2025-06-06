@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;

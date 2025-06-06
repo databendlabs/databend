@@ -137,7 +137,7 @@ where
                 while low < high {
                     let mid = low + ((high - low) / 2);
                     let bound = unsafe { self.bounds.get_unchecked(mid) }.clone();
-                    if val > bound {
+                    if val >= bound {
                         low = mid + 1;
                     } else {
                         high = mid;

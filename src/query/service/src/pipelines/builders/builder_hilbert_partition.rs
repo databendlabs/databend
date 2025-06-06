@@ -71,6 +71,8 @@ impl PipelineBuilder {
             let properties = StreamBlockProperties::try_create(
                 self.ctx.clone(),
                 table,
+                MutationKind::Recluster,
+                None,
                 partition.table_meta_timestamps,
             )?;
 
