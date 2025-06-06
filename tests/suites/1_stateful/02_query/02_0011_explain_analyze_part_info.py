@@ -25,7 +25,6 @@ prepare_sqls = [
 ]
 
 
-
 with NativeClient(name="client1>") as client1:
     mycursor = mydb.cursor(buffered=True)
 
@@ -45,16 +44,21 @@ with NativeClient(name="client1>") as client1:
                 cnt += 1
         print(cnt)
 
-    mycursor.execute("""EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5""")
+    mycursor.execute(
+        """EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5"""
+    )
     explain_analyze_res = mycursor.fetchall()
     explain_output(explain_analyze_res)
 
     # Same query to test if include pruning cache
-    mycursor.execute("""EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5""")
+    mycursor.execute(
+        """EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5"""
+    )
     explain_analyze_res = mycursor.fetchall()
     explain_output(explain_analyze_res)
 
-
-    mycursor.execute("""EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5 AND a.id < 8""")
+    mycursor.execute(
+        """EXPLAIN ANALYZE SELECT * FROM test_explain_analyze_0011_1 a WHERE a.id > 5 AND a.id < 8"""
+    )
     explain_analyze_res = mycursor.fetchall()
     explain_output(explain_analyze_res)
