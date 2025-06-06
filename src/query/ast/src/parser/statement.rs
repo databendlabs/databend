@@ -1442,12 +1442,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_inverted_index = map_res(
+    let create_table_index = map_res(
         rule! {
             CREATE
             ~ ( OR ~ ^REPLACE )?
             ~ ASYNC?
-            ~ INVERTED ~ INDEX
+            ~ #index_type ~ ^INDEX
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
@@ -1458,7 +1458,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             opt_or_replace,
             opt_async,
-            _,
+            index_type,
             _,
             opt_if_not_exists,
             index_name,
@@ -1471,9 +1471,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateInvertedIndex(CreateInvertedIndexStmt {
+            Ok(Statement::CreateTableIndex(CreateTableIndexStmt {
                 create_option,
                 index_name,
+                index_type,
                 catalog,
                 database,
                 table,
@@ -1484,15 +1485,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let drop_inverted_index = map(
+    let drop_table_index = map(
         rule! {
-            DROP ~ INVERTED ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ #index_type ~ ^INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
-            Statement::DropInvertedIndex(DropInvertedIndexStmt {
+        |(_, index_type, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+            Statement::DropTableIndex(DropTableIndexStmt {
                 if_exists: opt_if_exists.is_some(),
                 index_name,
+                index_type,
                 catalog,
                 database,
                 table,
@@ -1500,76 +1502,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let drop_ngram_index = map(
+    let refresh_table_index = map(
         rule! {
-            DROP ~ NGRAM ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
-            ~ ON ~ #dot_separated_idents_1_to_3
+            REFRESH ~ #index_type ~ ^INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
-            Statement::DropNgramIndex(DropNgramIndexStmt {
-                if_exists: opt_if_exists.is_some(),
+        |(_, index_type, _, index_name, _, (catalog, database, table), opt_limit)| {
+            Statement::RefreshTableIndex(RefreshTableIndexStmt {
                 index_name,
-                catalog,
-                database,
-                table,
-            })
-        },
-    );
-
-    let refresh_inverted_index = map(
-        rule! {
-            REFRESH ~ INVERTED ~ INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, _, index_name, _, (catalog, database, table), opt_limit)| {
-            Statement::RefreshInvertedIndex(RefreshInvertedIndexStmt {
-                index_name,
+                index_type,
                 catalog,
                 database,
                 table,
                 limit: opt_limit.map(|(_, limit)| limit),
             })
-        },
-    );
-
-    let create_ngram_index = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ ASYNC?
-            ~ NGRAM ~ INDEX
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident
-            ~ ON ~ #dot_separated_idents_1_to_3
-            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
-            ~ ( #table_option )?
-        },
-        |(
-            _,
-            opt_or_replace,
-            opt_async,
-            _,
-            _,
-            opt_if_not_exists,
-            index_name,
-            _,
-            (catalog, database, table),
-            _,
-            columns,
-            _,
-            opt_index_options,
-        )| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateNgramIndex(CreateNgramIndexStmt {
-                create_option,
-                index_name,
-                catalog,
-                database,
-                table,
-                columns,
-                sync_creation: opt_async.is_none(),
-                index_options: opt_index_options.unwrap_or_default(),
-            }))
         },
     );
 
@@ -2670,11 +2615,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
-            | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
-            | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
-            | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
-            | #create_ngram_index: "`CREATE [OR REPLACE] NGRAM INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
-            | #drop_ngram_index: "`DROP NGRAM INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
@@ -3294,38 +3237,19 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     Ok((i, def))
 }
 
-pub fn inverted_index_def(i: Input) -> IResult<InvertedIndexDefinition> {
+pub fn table_index_def(i: Input) -> IResult<TableIndexDefinition> {
     map_res(
         rule! {
             ASYNC?
-            ~ INVERTED ~ ^INDEX
+            ~ #index_type ~ ^INDEX
             ~ #ident
             ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
             ~ ( #table_option )?
         },
-        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
-            Ok(InvertedIndexDefinition {
+        |(opt_async, index_type, _, index_name, _, columns, _, opt_index_options)| {
+            Ok(TableIndexDefinition {
                 index_name,
-                columns,
-                sync_creation: opt_async.is_none(),
-                index_options: opt_index_options.unwrap_or_default(),
-            })
-        },
-    )(i)
-}
-
-pub fn ngram_index_def(i: Input) -> IResult<NgramIndexDefinition> {
-    map_res(
-        rule! {
-            ASYNC?
-            ~ NGRAM ~ ^INDEX
-            ~ #ident
-            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
-            ~ ( #table_option )?
-        },
-        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
-            Ok(NgramIndexDefinition {
-                index_name,
+                index_type,
                 columns,
                 sync_creation: opt_async.is_none(),
                 index_options: opt_index_options.unwrap_or_default(),
@@ -3337,11 +3261,7 @@ pub fn ngram_index_def(i: Input) -> IResult<NgramIndexDefinition> {
 pub fn create_def(i: Input) -> IResult<CreateDefinition> {
     alt((
         map(rule! { #column_def }, CreateDefinition::Column),
-        map(
-            rule! { #inverted_index_def },
-            CreateDefinition::InvertedIndex,
-        ),
-        map(rule! { #ngram_index_def }, CreateDefinition::NgramIndex),
+        map(rule! { #table_index_def }, CreateDefinition::TableIndex),
     ))(i)
 }
 
@@ -3733,32 +3653,23 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
         },
         |(_, create_defs, _)| {
             let mut columns = Vec::with_capacity(create_defs.len());
-            let mut inverted_indexes = Vec::new();
-            let mut ngram_indexes = Vec::new();
+            let mut table_indexes = Vec::new();
             for create_def in create_defs {
                 match create_def {
                     CreateDefinition::Column(column) => {
                         columns.push(column);
                     }
-                    CreateDefinition::InvertedIndex(inverted_index) => {
-                        inverted_indexes.push(inverted_index);
-                    }
-                    CreateDefinition::NgramIndex(ngram_index) => {
-                        ngram_indexes.push(ngram_index);
+                    CreateDefinition::TableIndex(table_index) => {
+                        table_indexes.push(table_index);
                     }
                 }
             }
-            let opt_inverted_indexes = if !inverted_indexes.is_empty() {
-                Some(inverted_indexes)
+            let opt_table_indexes = if !table_indexes.is_empty() {
+                Some(table_indexes)
             } else {
                 None
             };
-            let opt_ngram_indexes = if !ngram_indexes.is_empty() {
-                Some(ngram_indexes)
-            } else {
-                None
-            };
-            CreateTableSource::Columns(columns, opt_inverted_indexes, opt_ngram_indexes)
+            CreateTableSource::Columns(columns, opt_table_indexes)
         },
     );
     let like = map(
@@ -5281,4 +5192,12 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
         },
         |opts| opts,
     )(i)
+}
+
+fn index_type(i: Input) -> IResult<TableIndexType> {
+    alt((
+        value(TableIndexType::Inverted, rule! { INVERTED }),
+        value(TableIndexType::Ngram, rule! { NGRAM }),
+        value(TableIndexType::Vector, rule! { VECTOR }),
+    ))(i)
 }

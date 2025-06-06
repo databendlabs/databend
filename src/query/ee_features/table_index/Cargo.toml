@@ -1,6 +1,6 @@
 [package]
-name = "databend-enterprise-inverted-index"
-description = "inverted index handler"
+name = "databend-enterprise-table-index"
+description = "table index handler, include inverted index, ngram index and vector index"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }

@@ -19,13 +19,13 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
-use databend_enterprise_inverted_index::InvertedIndexHandler;
-use databend_enterprise_inverted_index::InvertedIndexHandlerWrapper;
+use databend_enterprise_table_index::TableIndexHandler;
+use databend_enterprise_table_index::TableIndexHandlerWrapper;
 
-pub struct RealInvertedIndexHandler {}
+pub struct RealTableIndexHandler {}
 
 #[async_trait::async_trait]
-impl InvertedIndexHandler for RealInvertedIndexHandler {
+impl TableIndexHandler for RealTableIndexHandler {
     #[async_backtrace::framed]
     async fn do_create_table_index(
         &self,
@@ -45,10 +45,10 @@ impl InvertedIndexHandler for RealInvertedIndexHandler {
     }
 }
 
-impl RealInvertedIndexHandler {
+impl RealTableIndexHandler {
     pub fn init() -> Result<()> {
-        let rm = RealInvertedIndexHandler {};
-        let wrapper = InvertedIndexHandlerWrapper::new(Box::new(rm));
+        let rm = RealTableIndexHandler {};
+        let wrapper = TableIndexHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
     }

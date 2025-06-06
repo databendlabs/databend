@@ -21,14 +21,13 @@ use crate::attach_table::RealAttachTableHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
 use crate::hilbert_clustering::RealHilbertClusteringHandler;
-use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::license_mgr::RealLicenseManager;
-use crate::ngram_index::RealNgramIndexHandler;
 use crate::resource_management::init_resources_management;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::stream::RealStreamHandler;
+use crate::table_index::RealTableIndexHandler;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct EnterpriseServices;
@@ -43,12 +42,11 @@ impl EnterpriseServices {
         RealVirtualColumnHandler::init()?;
         RealStreamHandler::init()?;
         RealAttachTableHandler::init()?;
-        RealInvertedIndexHandler::init()?;
+        RealTableIndexHandler::init()?;
         RealStorageQuotaHandler::init(&cfg)?;
         RealFailSafeHandler::init()?;
         init_resources_management(&cfg).await?;
         RealHilbertClusteringHandler::init()?;
-        RealNgramIndexHandler::init()?;
         Ok(())
     }
 }

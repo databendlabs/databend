@@ -105,10 +105,9 @@ databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
-databend-enterprise-inverted-index = { workspace = true }
-databend-enterprise-ngram-index = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
+databend-enterprise-table-index = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
 databend-storages-common-blocks = { workspace = true }

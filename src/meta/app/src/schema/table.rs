@@ -290,7 +290,14 @@ pub struct TableMeta {
 }
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
+    Hash,
 )]
 pub enum TableIndexType {
     Inverted = 0,

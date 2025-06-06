@@ -23,8 +23,7 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTableIndexPlan;
 use databend_common_storages_fuse::TableContext;
-use databend_enterprise_inverted_index::get_inverted_index_handler;
-use databend_enterprise_ngram_index::get_ngram_index_handler;
+use databend_enterprise_table_index::get_table_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -62,6 +61,10 @@ impl Interpreter for CreateTableIndexInterpreter {
                 LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), Feature::NgramIndex)?;
             }
+            ast::TableIndexType::Vector => {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VectorIndex)?;
+            }
             ast::TableIndexType::Aggregating => (),
         }
 
@@ -79,6 +82,7 @@ impl Interpreter for CreateTableIndexInterpreter {
             }
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
+            ast::TableIndexType::Vector => TableIndexType::Vector,
         };
 
         let create_index_req = CreateTableIndexReq {
@@ -92,21 +96,10 @@ impl Interpreter for CreateTableIndexInterpreter {
             options: self.plan.index_options.clone(),
         };
 
-        match create_index_req.index_type {
-            TableIndexType::Inverted => {
-                let handler = get_inverted_index_handler();
-                let _ = handler
-                    .do_create_table_index(catalog, create_index_req)
-                    .await?;
-            }
-            TableIndexType::Ngram => {
-                let handler = get_ngram_index_handler();
-                let _ = handler
-                    .do_create_table_index(catalog, create_index_req)
-                    .await?;
-            }
-            TableIndexType::Vector => todo!(),
-        }
+        let handler = get_table_index_handler();
+        let _ = handler
+            .do_create_table_index(catalog, create_index_req)
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

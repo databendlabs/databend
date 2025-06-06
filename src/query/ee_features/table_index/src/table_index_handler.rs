@@ -21,26 +21,26 @@ use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 
 #[async_trait::async_trait]
-pub trait NgramIndexHandler: Sync + Send {
+pub trait TableIndexHandler: Sync + Send {
     async fn do_create_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateTableIndexReq,
-    ) -> databend_common_exception::Result<()>;
+    ) -> Result<()>;
 
     async fn do_drop_table_index(
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropTableIndexReq,
-    ) -> databend_common_exception::Result<()>;
+    ) -> Result<()>;
 }
 
-pub struct NgramIndexHandlerWrapper {
-    handler: Box<dyn NgramIndexHandler>,
+pub struct TableIndexHandlerWrapper {
+    handler: Box<dyn TableIndexHandler>,
 }
 
-impl NgramIndexHandlerWrapper {
-    pub fn new(handler: Box<dyn NgramIndexHandler>) -> Self {
+impl TableIndexHandlerWrapper {
+    pub fn new(handler: Box<dyn TableIndexHandler>) -> Self {
         Self { handler }
     }
 
@@ -63,6 +63,6 @@ impl NgramIndexHandlerWrapper {
     }
 }
 
-pub fn get_ngram_index_handler() -> Arc<NgramIndexHandlerWrapper> {
+pub fn get_table_index_handler() -> Arc<TableIndexHandlerWrapper> {
     GlobalInstance::get()
 }

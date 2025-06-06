@@ -219,11 +219,9 @@ pub enum Statement {
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
     RefreshIndex(RefreshIndexStmt),
-    CreateInvertedIndex(CreateInvertedIndexStmt),
-    DropInvertedIndex(DropInvertedIndexStmt),
-    RefreshInvertedIndex(RefreshInvertedIndexStmt),
-    CreateNgramIndex(CreateNgramIndexStmt),
-    DropNgramIndex(DropNgramIndexStmt),
+    CreateTableIndex(CreateTableIndexStmt),
+    DropTableIndex(DropTableIndexStmt),
+    RefreshTableIndex(RefreshTableIndexStmt),
 
     // VirtualColumns
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
@@ -482,7 +480,7 @@ impl Statement {
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
             | Statement::RefreshIndex(..)
-            | Statement::RefreshInvertedIndex(..)
+            | Statement::RefreshTableIndex(..)
             | Statement::RefreshVirtualColumn(..)
             | Statement::ShowVirtualColumns(..)
             | Statement::ShowUsers { .. }
@@ -551,10 +549,8 @@ impl Statement {
             | Statement::RenameDictionary(..)
             | Statement::CreateStream(..)
             | Statement::DropStream(..)
-            | Statement::CreateInvertedIndex(..)
-            | Statement::DropInvertedIndex(..)
-            | Statement::CreateNgramIndex(..)
-            | Statement::DropNgramIndex(..)
+            | Statement::CreateTableIndex(..)
+            | Statement::DropTableIndex(..)
             | Statement::CreateUser(..)
             | Statement::DropUser { .. }
             | Statement::CreateRole { .. }
@@ -837,11 +833,9 @@ impl Display for Statement {
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::DropInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateNgramIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::DropNgramIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateTableIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropTableIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshTableIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers { show_options } => {

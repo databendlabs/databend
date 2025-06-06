@@ -81,6 +81,8 @@ pub enum Feature {
     WorkloadGroup,
     #[serde(alias = "system_history", alias = "SYSTEM_HISTORY")]
     SystemHistory,
+    #[serde(alias = "vector_index", alias = "VECTOR_INDEX")]
+    VectorIndex,
     #[serde(other)]
     Unknown,
 }
@@ -131,6 +133,7 @@ impl fmt::Display for Feature {
             Feature::NgramIndex => write!(f, "ngram_index"),
             Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::SystemHistory => write!(f, "system_history"),
+            Feature::VectorIndex => write!(f, "vector_index"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -179,7 +182,8 @@ impl Feature {
             | (Feature::AttacheTable, Feature::AttacheTable)
             | (Feature::StorageEncryption, Feature::StorageEncryption)
             | (Feature::HilbertClustering, Feature::HilbertClustering)
-            | (Feature::NgramIndex, Feature::NgramIndex) => Ok(true),
+            | (Feature::NgramIndex, Feature::NgramIndex)
+            | (Feature::VectorIndex, Feature::VectorIndex) => Ok(true),
             (_, _) => Ok(false),
         }
     }
@@ -361,6 +365,11 @@ mod tests {
         assert_eq!(
             Feature::SystemHistory,
             serde_json::from_str::<Feature>("\"system_history\"").unwrap()
+        );
+
+        assert_eq!(
+            Feature::VectorIndex,
+            serde_json::from_str::<Feature>("\"VectorIndex\"").unwrap()
         );
 
         assert_eq!(

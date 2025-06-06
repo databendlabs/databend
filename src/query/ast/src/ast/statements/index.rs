@@ -43,6 +43,7 @@ pub enum TableIndexType {
     // Join
     Inverted,
     Ngram,
+    Vector,
 }
 
 impl Display for TableIndexType {
@@ -56,6 +57,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Ngram => {
                 write!(f, "NGRAM")
+            }
+            TableIndexType::Vector => {
+                write!(f, "VECTOR")
             }
         }
     }
@@ -115,10 +119,11 @@ impl Display for RefreshIndexStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct CreateInvertedIndexStmt {
+pub struct CreateTableIndexStmt {
     pub create_option: CreateOption,
 
     pub index_name: Identifier,
+    pub index_type: TableIndexType,
 
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -129,7 +134,7 @@ pub struct CreateInvertedIndexStmt {
     pub index_options: BTreeMap<String, String>,
 }
 
-impl Display for CreateInvertedIndexStmt {
+impl Display for CreateTableIndexStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE ")?;
         if let CreateOption::CreateOrReplace = self.create_option {
@@ -138,7 +143,7 @@ impl Display for CreateInvertedIndexStmt {
         if !self.sync_creation {
             write!(f, "ASYNC ")?;
         }
-        write!(f, "INVERTED INDEX")?;
+        write!(f, "{} INDEX", self.index_type)?;
         if let CreateOption::CreateIfNotExists = self.create_option {
             write!(f, " IF NOT EXISTS")?;
         }
@@ -166,68 +171,18 @@ impl Display for CreateInvertedIndexStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct CreateNgramIndexStmt {
-    pub create_option: CreateOption,
-
-    pub index_name: Identifier,
-
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
-
-    pub columns: Vec<Identifier>,
-    pub sync_creation: bool,
-    pub index_options: BTreeMap<String, String>,
-}
-
-impl Display for CreateNgramIndexStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
-        if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, "OR REPLACE ")?;
-        }
-        if !self.sync_creation {
-            write!(f, "ASYNC ")?;
-        }
-        write!(f, "NGRAM INDEX")?;
-        if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, " IF NOT EXISTS")?;
-        }
-
-        write!(f, " {}", self.index_name)?;
-        write!(f, " ON ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
-        write!(f, " (")?;
-        write_comma_separated_list(f, &self.columns)?;
-        write!(f, ")")?;
-
-        if !self.index_options.is_empty() {
-            write!(f, " ")?;
-            write_space_separated_string_map(f, &self.index_options)?;
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct DropNgramIndexStmt {
+pub struct DropTableIndexStmt {
     pub if_exists: bool,
     pub index_name: Identifier,
+    pub index_type: TableIndexType,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
 }
 
-impl Display for DropNgramIndexStmt {
+impl Display for DropTableIndexStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DROP NGRAM INDEX")?;
+        write!(f, "DROP {} INDEX", self.index_type)?;
         if self.if_exists {
             write!(f, " IF EXISTS")?;
         }
@@ -246,46 +201,18 @@ impl Display for DropNgramIndexStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct DropInvertedIndexStmt {
-    pub if_exists: bool,
+pub struct RefreshTableIndexStmt {
     pub index_name: Identifier,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
-}
-
-impl Display for DropInvertedIndexStmt {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "DROP INVERTED INDEX")?;
-        if self.if_exists {
-            write!(f, " IF EXISTS")?;
-        }
-
-        write!(f, " {}", self.index_name)?;
-        write!(f, " ON ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct RefreshInvertedIndexStmt {
-    pub index_name: Identifier,
+    pub index_type: TableIndexType,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub limit: Option<u64>,
 }
 
-impl Display for RefreshInvertedIndexStmt {
+impl Display for RefreshTableIndexStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "REFRESH INVERTED INDEX")?;
+        write!(f, "REFRESH {} INDEX", self.index_type)?;
         write!(f, " {}", self.index_name)?;
         write!(f, " ON ")?;
         write_dot_separated_list(
