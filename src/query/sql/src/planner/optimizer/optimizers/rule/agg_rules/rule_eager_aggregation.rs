@@ -557,7 +557,6 @@ impl Rule for RuleEagerAggregation {
                         func_name,
                         self.metadata.clone(),
                         &mut eval_scalars,
-                        &eval_scalar_items,
                         &avg_components,
                     )?;
                     success |= cur_success;
@@ -877,7 +876,6 @@ impl Rule for RuleEagerAggregation {
                     func_name,
                     self.metadata.clone(),
                     &mut eval_scalars,
-                    &eval_scalar_items,
                     &avg_components,
                 )?;
                 success |= cur_success;
@@ -1224,7 +1222,7 @@ fn get_eager_aggregation_functions(
 
 // Final aggregate functions's data type = eager aggregate functions's return_type
 // For COUNT, func_name: count => sum, return_type: Nullable(UInt64)
-fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usize) {
+fn modify_final_aggregate_function(agg: &mut AggregateFunction, old_index: usize) {
     if agg.func_name.as_str() == "count" {
         agg.func_name = "sum".to_string();
         agg.return_type = Box::new(DataType::Nullable(Box::new(DataType::Number(
@@ -1235,7 +1233,7 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
         span: None,
         column: ColumnBindingBuilder::new(
             "_eager".to_string(),
-            args_index,
+            old_index,
             agg.return_type.clone(),
             Visibility::Visible,
         )
@@ -1422,7 +1420,6 @@ fn update_aggregate_and_eval(
     func_name: &String,
     metadata: MetadataRef,
     eval_scalars: &mut Vec<&mut EvalScalar>,
-    eval_scalar_items: &HashMap<usize, Vec<usize>>,
     avg_components: &HashMap<usize, usize>,
 ) -> databend_common_exception::Result<(bool, usize, usize)> {
     let final_aggregate_function = &mut final_agg.aggregate_functions[index];
@@ -1443,26 +1440,32 @@ fn update_aggregate_and_eval(
     }
 
     let mut success = false;
+
     // Modify the eval scalars of all aggregate functions that are not AVG components.
-    if let Some(indexes) = eval_scalar_items.get(&old_index)
-        && !avg_components.contains_key(&old_index)
-    {
+    if !avg_components.contains_key(&old_index) {
         for eval_scalar in eval_scalars {
-            for item_idx in indexes {
-                let eval_scalar_item = &mut (eval_scalar).items[*item_idx];
-                if let ScalarExpr::BoundColumnRef(column) = &mut eval_scalar_item.scalar {
+            for scalar_item in eval_scalar.items.iter_mut() {
+                if let ScalarExpr::BoundColumnRef(column) = &mut scalar_item.scalar {
+                    if column.column.index != old_index {
+                        continue;
+                    }
+                    // If it's already a column, we can just update the column_binding index
                     let column_binding = &mut column.column;
                     column_binding.index = new_index;
+
                     if func_name == "count" {
                         column_binding.data_type = Box::new(DataType::Nullable(Box::new(
                             DataType::Number(NumberDataType::UInt64),
                         )));
-                        eval_scalar_item.scalar = wrap_cast(
-                            &eval_scalar_item.scalar,
+                        scalar_item.scalar = wrap_cast(
+                            &scalar_item.scalar,
                             &DataType::Number(NumberDataType::UInt64),
                         );
                     }
                     success = true;
+                } else {
+                    // Otherwise, we need to replace the column index recursively.
+                    scalar_item.scalar.replace_column(old_index, new_index)?;
                 }
             }
         }
