@@ -104,24 +104,26 @@ pub trait Interpreter: Sync + Send {
         ctx.set_status_info("[INTERPRETER] Building execution pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        let enable_disk_cache = match LicenseManagerSwitch::instance()
-            .check_license(ctx.get_license_key())
+        let mut allow_disk_cache = false;
         {
-            Ok(_) => true,
-            Err(e) => {
-                let msg =
-                    format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
-                e);
-                log::error!("{}", msg);
+            let license_key = ctx.get_license_key();
+            if !license_key.is_empty() {
+                let validate_result = LicenseManagerSwitch::instance().check_license(license_key);
+                allow_disk_cache = validate_result.is_ok();
+                if let Err(e) = validate_result {
+                    let msg =
+                            format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                                    e);
+                    log::error!("{}", msg);
 
-                // Also log at warning level to ensure the message could be propagated to client applications
-                // (e.g., BendSQL and MySQL interactive sessions)
-                log::warn!("{}", msg);
-                false
+                    // Also log at warning level to ensure the message could be propagated to client applications
+                    // (e.g., BendSQL and MySQL interactive sessions)
+                    log::warn!("{}", msg);
+                };
             }
-        };
+        }
 
-        CacheManager::instance().set_allows_disk_cache(enable_disk_cache);
+        CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
 
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
