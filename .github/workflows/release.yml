@@ -348,7 +348,7 @@ jobs:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
           category: docker
-          artifacts: ${{ matrix.service }},metactl
+          artifacts: meta,metactl,query,query.debug
           path: distro/linux/amd64
       - name: Download artifacts for aarch64
         uses: ./.github/actions/artifact_download
@@ -356,7 +356,7 @@ jobs:
           sha: ${{ github.sha }}
           target: aarch64-unknown-linux-gnu
           category: docker
-          artifacts: ${{ matrix.service }},metactl
+          artifacts: meta,metactl,query,query.debug
           path: distro/linux/arm64
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -397,6 +397,43 @@ jobs:
           platforms: linux/amd64,linux/arm64
           context: .
           file: ./docker/service/${{ matrix.service }}.Dockerfile
+      - name: Process debug image
+        id: debug_image
+        uses: actions/github-script@v7
+        env:
+          DOCKERFILE_PATH: ./docker/service/${{ matrix.service }}-dbg.Dockerfile
+          ORIGINAL_TAGS: ${{ steps.tags.outputs.tags }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { DOCKERFILE_PATH, ORIGINAL_TAGS } = process.env;
+
+            const debugExists = fs.existsSync(DOCKERFILE_PATH);
+            core.setOutput('debug-exists', debugExists.toString());
+
+            if (!debugExists) {
+              core.info('Debug Dockerfile not found, skipping debug image processing');
+              return;
+            }
+
+            const debugTags = ORIGINAL_TAGS.split(',')
+              .map(tag => {
+                const [repo, tagPart] = tag.split(':');
+                return `${repo}-dbg:${tagPart}`;
+              })
+              .join(',');
+
+            core.setOutput('tags', debugTags);
+            core.info(`Generated debug tags: ${debugTags}`);
+      - name: Push debug service image
+        if: steps.debug_image.outputs.debug-exists == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          tags: ${{ steps.debug_image.outputs.tags }}
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/service/${{ matrix.service }}-dbg.Dockerfile
 
   distribution:
     runs-on: [self-hosted, X64, Linux, 2c8g, aws]
