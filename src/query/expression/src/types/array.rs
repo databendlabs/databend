@@ -23,7 +23,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::AnyType;
-use super::DecimalSize;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::AccessType;
@@ -121,16 +120,20 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 impl<T: ValueType> ValueType for ArrayType<T> {
     type ColumnBuilder = ArrayColumnBuilder<T>;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Array(T::upcast_column(scalar))
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let values_type = data_type.as_array().unwrap();
+        Scalar::Array(T::upcast_column_with_type(scalar, values_type))
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Array(domain.map(|domain| Box::new(T::upcast_domain(domain))))
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        Domain::Array(domain.map(|domain| {
+            let values_type = data_type.as_array().unwrap();
+            Box::new(T::upcast_domain_with_type(domain, values_type))
+        }))
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Array(Box::new(col.upcast()))
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        Column::Array(Box::new(col.upcast(data_type)))
     }
 
     fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
@@ -167,9 +170,10 @@ impl<T: ValueType> ValueType for ArrayType<T> {
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Array(Box::new(builder.upcast(decimal_size))))
+        let values_type = data_type.as_array()?;
+        Some(ColumnBuilder::Array(Box::new(builder.upcast(values_type))))
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -332,9 +336,10 @@ impl<T: AccessType> ArrayColumn<T> {
 }
 
 impl<T: ValueType> ArrayColumn<T> {
-    pub fn upcast(self) -> ArrayColumn<AnyType> {
+    pub fn upcast(self, data_type: &DataType) -> ArrayColumn<AnyType> {
+        let values_type = data_type.as_array().unwrap();
         ArrayColumn {
-            values: T::upcast_column(self.values),
+            values: T::upcast_column_with_type(self.values, values_type),
             offsets: self.offsets,
         }
     }
@@ -469,9 +474,9 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         )
     }
 
-    pub fn upcast(self, decimal_size: Option<DecimalSize>) -> ArrayColumnBuilder<AnyType> {
+    pub fn upcast(self, data_type: &DataType) -> ArrayColumnBuilder<AnyType> {
         ArrayColumnBuilder {
-            builder: T::try_upcast_column_builder(self.builder, decimal_size).unwrap(),
+            builder: T::try_upcast_column_builder(self.builder, data_type).unwrap(),
             offsets: self.offsets,
         }
     }

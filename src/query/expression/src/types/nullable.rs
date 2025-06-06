@@ -22,7 +22,6 @@ use databend_common_column::bitmap::MutableBitmap;
 
 use super::AccessType;
 use super::AnyType;
-use super::DecimalSize;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -160,23 +159,28 @@ impl<T: AccessType> AccessType for NullableType<T> {
 impl<T: ValueType> ValueType for NullableType<T> {
     type ColumnBuilder = NullableColumnBuilder<T>;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let value_type = data_type.as_nullable().unwrap();
         match scalar {
-            Some(scalar) => T::upcast_scalar(scalar),
+            Some(scalar) => T::upcast_scalar_with_type(scalar, value_type),
             None => Scalar::Null,
         }
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        let value_type = data_type.as_nullable().unwrap();
         Domain::Nullable(NullableDomain {
             has_null: domain.has_null,
-            value: domain.value.map(|value| Box::new(T::upcast_domain(*value))),
+            value: domain
+                .value
+                .map(|value| Box::new(T::upcast_domain_with_type(*value, value_type))),
         })
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        let value_type = data_type.as_nullable().unwrap();
         Column::Nullable(Box::new(NullableColumn::new(
-            T::upcast_column(col.column),
+            T::upcast_column_with_type(col.column, value_type),
             col.validity,
         )))
     }
@@ -215,11 +219,9 @@ impl<T: ValueType> ValueType for NullableType<T> {
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Nullable(Box::new(
-            builder.upcast(decimal_size),
-        )))
+        Some(ColumnBuilder::Nullable(Box::new(builder.upcast(data_type))))
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -297,11 +299,6 @@ pub struct NullableColumnVec {
 }
 
 impl<T: AccessType> NullableColumn<T> {
-    pub fn new_access_type(column: T::Column, validity: Bitmap) -> Self {
-        debug_assert_eq!(T::column_len(&column), validity.len());
-        NullableColumn { column, validity }
-    }
-
     pub fn len(&self) -> usize {
         self.validity.len()
     }
@@ -360,21 +357,30 @@ impl<T: AccessType> NullableColumn<T> {
     }
 }
 
-impl<T: ValueType> NullableColumn<T> {
+impl<T: ReturnType> NullableColumn<T> {
     // though column and validity are public
     // we should better use new to create a new instance to ensure the validity and column are consistent
     // todo: make column and validity private
-    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+    pub fn new_unchecked(column: T::Column, validity: Bitmap) -> Self {
         debug_assert_eq!(T::column_len(&column), validity.len());
-        debug_assert!(!matches!(
-            T::upcast_column(column.clone()),
-            Column::Nullable(_)
-        ));
         NullableColumn { column, validity }
     }
+}
 
+impl NullableColumn<AnyType> {
+    pub fn new(column: Column, validity: Bitmap) -> Self {
+        debug_assert_eq!(column.len(), validity.len());
+        debug_assert!(!column.is_nullable());
+        NullableColumn { column, validity }
+    }
+}
+
+impl<T: ArgType> NullableColumn<T> {
     pub fn upcast(self) -> NullableColumn<AnyType> {
-        NullableColumn::new(T::upcast_column(self.column), self.validity)
+        NullableColumn::new(
+            T::upcast_column_with_type(self.column, &T::data_type()),
+            self.validity,
+        )
     }
 }
 
@@ -473,7 +479,10 @@ impl<T: ValueType> NullableColumnBuilder<T> {
 
     pub fn build(self) -> NullableColumn<T> {
         assert_eq!(self.validity.len(), T::builder_len(&self.builder));
-        NullableColumn::new(T::build_column(self.builder), self.validity.into())
+        NullableColumn {
+            column: T::build_column(self.builder),
+            validity: self.validity.into(),
+        }
     }
 
     pub fn build_scalar(self) -> Option<T::Scalar> {
@@ -486,9 +495,10 @@ impl<T: ValueType> NullableColumnBuilder<T> {
         }
     }
 
-    pub fn upcast(self, decimal_size: Option<DecimalSize>) -> NullableColumnBuilder<AnyType> {
+    pub fn upcast(self, data_type: &DataType) -> NullableColumnBuilder<AnyType> {
+        let value_type = data_type.as_nullable().unwrap();
         NullableColumnBuilder {
-            builder: T::try_upcast_column_builder(self.builder, decimal_size).unwrap(),
+            builder: T::try_upcast_column_builder(self.builder, value_type).unwrap(),
             validity: self.validity,
         }
     }

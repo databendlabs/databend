@@ -181,7 +181,8 @@ where
                 if let Some(inner) = A::try_downcast_builder(builder) {
                     A::push_item(inner, A::to_scalar_ref(arg));
                 } else {
-                    builder.push(A::upcast_scalar(arg.clone()).as_ref());
+                    let data_type = builder.data_type();
+                    builder.push(A::upcast_scalar_with_type(arg.clone(), &data_type).as_ref());
                 }
             }
             None => {

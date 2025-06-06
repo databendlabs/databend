@@ -81,7 +81,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Scalar(val) => Value::Scalar(Some(val.to_vec())),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col, validity))
+                Value::Column(NullableColumn::new_unchecked(col, validity))
             }
         },
     );
@@ -102,7 +102,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Scalar(val) => Value::Scalar(Some(val.to_vec())),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col, validity))
+                Value::Column(NullableColumn::new_unchecked(col, validity))
             }
         },
     );
@@ -123,7 +123,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Scalar(val) => Value::Scalar(Some(val.0.to_vec())),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col.0, validity))
+                Value::Column(NullableColumn::new_unchecked(col.0, validity))
             }
         },
     );
@@ -144,7 +144,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Scalar(val) => Value::Scalar(Some(val.as_bytes().to_vec())),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col.into(), validity))
+                Value::Column(NullableColumn::new_unchecked(col.into(), validity))
             }
         },
     );

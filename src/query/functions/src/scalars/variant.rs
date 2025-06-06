@@ -1173,7 +1173,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     _ => Bitmap::new_constant(true, col.len()),
                 };
                 let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
-                Value::Column(NullableColumn::new(new_col, validity))
+                Value::Column(NullableColumn::new_unchecked(new_col, validity))
             }
         },
     );

@@ -18,11 +18,11 @@ use std::marker::PhantomData;
 use std::ops::Range;
 
 use super::AccessType;
-use super::DecimalSize;
 use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
+use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -133,15 +133,15 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
 impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
     type ColumnBuilder = usize;
 
-    fn upcast_scalar(_: ()) -> Scalar {
+    fn upcast_scalar_with_type(_: (), _: &DataType) -> Scalar {
         T::upcast_scalar()
     }
 
-    fn upcast_domain(_: ()) -> Domain {
+    fn upcast_domain_with_type(_domain: Self::Domain, _: &DataType) -> Domain {
         T::upcast_domain()
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column_with_type(col: Self::Column, _: &DataType) -> Column {
         T::upcast_column(col)
     }
 
@@ -153,7 +153,7 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
         T::downcast_owned_builder(builder)
     }
 
-    fn try_upcast_column_builder(builder: usize, _: Option<DecimalSize>) -> Option<ColumnBuilder> {
+    fn try_upcast_column_builder(builder: usize, _: &DataType) -> Option<ColumnBuilder> {
         T::upcast_column_builder(builder)
     }
 

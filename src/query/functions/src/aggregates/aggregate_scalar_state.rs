@@ -234,7 +234,8 @@ where
             if let Some(inner) = T::try_downcast_builder(builder) {
                 T::push_item(inner, T::to_scalar_ref(v));
             } else {
-                builder.push(T::upcast_scalar(v.clone()).as_ref());
+                let data_type = builder.data_type();
+                builder.push(T::upcast_scalar_with_type(v.clone(), &data_type).as_ref());
             }
         } else if let Some(inner) = T::try_downcast_builder(builder) {
             T::push_default(inner);

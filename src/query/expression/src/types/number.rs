@@ -135,21 +135,25 @@ impl<Num: Number> SimpleType for CoreNumber<Num> {
 
     fn upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_number());
         Num::try_upcast_column_builder(builder)
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_number());
         Scalar::Number(Num::upcast_scalar(scalar))
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        Column::Number(Num::upcast_column(col))
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_number());
+        Domain::Number(Num::upcast_domain(domain))
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Number(Num::upcast_domain(domain))
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_number());
+        Column::Number(Num::upcast_column(col))
     }
 
     fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering {

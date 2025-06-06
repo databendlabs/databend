@@ -15,7 +15,6 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::F32;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
@@ -226,35 +225,17 @@ impl InternalColumn {
                     }
                 }
 
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(UInt64Type::from_data(row_ids)),
-                )
+                UInt64Type::from_data(row_ids).into()
             }
             InternalColumnType::BlockName => {
-                let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_and_commit(&meta.block_location);
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(builder.build_scalar())),
-                )
+                BlockEntry::from_arg_scalar::<StringType>(meta.block_location.clone())
             }
             InternalColumnType::SegmentName => {
-                let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_and_commit(&meta.segment_location);
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(builder.build_scalar())),
-                )
+                BlockEntry::from_arg_scalar::<StringType>(meta.segment_location.clone())
             }
-            InternalColumnType::SnapshotName => {
-                let mut builder = StringColumnBuilder::with_capacity(1);
-                builder.put_and_commit(meta.snapshot_location.clone().unwrap_or("".to_string()));
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(builder.build_scalar())),
-                )
-            }
+            InternalColumnType::SnapshotName => BlockEntry::from_arg_scalar::<StringType>(
+                meta.snapshot_location.clone().unwrap_or_default(),
+            ),
             InternalColumnType::BaseRowId => {
                 let uuid =
                     try_extract_uuid_str_from_path(&meta.block_location).unwrap_or_else(|e| {
@@ -275,10 +256,7 @@ impl InternalColumn {
                         row_ids.push(row_id);
                     }
                 }
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(StringType::from_data(row_ids)),
-                )
+                StringType::from_data(row_ids).into()
             }
             InternalColumnType::BaseBlockIds => {
                 assert!(meta.base_block_ids.is_some());
@@ -295,10 +273,7 @@ impl InternalColumn {
                 for (idx, _) in matched_rows.iter() {
                     bitmap.set(*idx, true);
                 }
-                BlockEntry::new(
-                    DataType::Boolean,
-                    Value::Column(Column::Boolean(bitmap.into())),
-                )
+                Column::Boolean(bitmap.into()).into()
             }
             InternalColumnType::SearchScore => {
                 assert!(meta.matched_rows.is_some());
@@ -311,10 +286,7 @@ impl InternalColumn {
                         *val = F32::from(*score.unwrap());
                     }
                 }
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::Float32),
-                    Value::Column(Float32Type::from_data(scores)),
-                )
+                Float32Type::from_data(scores).into()
             }
             InternalColumnType::FileName | InternalColumnType::FileRowNumber => {
                 todo!("generate_column_values not support for file related")

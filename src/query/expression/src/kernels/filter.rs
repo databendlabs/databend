@@ -203,8 +203,12 @@ impl ValueVisitor for FilterVisitor<'_> {
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        let c = T::upcast_column(column.clone());
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        let c = T::upcast_column_with_type(column.clone(), data_type);
         let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();
         match self.strategy {
@@ -224,7 +228,10 @@ impl ValueVisitor for FilterVisitor<'_> {
             }
         }
 
-        self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
+        self.result = Some(Value::Column(T::upcast_column_with_type(
+            T::build_column(builder),
+            data_type,
+        )));
         Ok(())
     }
 

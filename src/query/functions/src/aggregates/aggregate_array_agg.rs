@@ -108,7 +108,7 @@ where
             DataType::Decimal(size) => {
                 let values = mem::take(&mut self.values);
                 for value in values.into_iter() {
-                    let val = T::upcast_scalar(value);
+                    let val = T::upcast_scalar_with_type(value, &DataType::Decimal(size));
                     let decimal_val = val.as_decimal().unwrap();
                     let new_val = match decimal_val {
                         DecimalScalar::Decimal64(v, _) => {
@@ -127,7 +127,7 @@ where
             _ => {
                 let values = mem::take(&mut self.values);
                 for value in values.into_iter() {
-                    let val = T::upcast_scalar(value);
+                    let val = T::upcast_scalar_with_type(value, inner_type);
                     inner_builder.push(val.as_ref());
                 }
             }
@@ -215,7 +215,8 @@ where
                 for value in &self.values {
                     match value {
                         Some(value) => {
-                            let val = T::upcast_scalar(value.clone());
+                            let val =
+                                T::upcast_scalar_with_type(value.clone(), &DataType::Decimal(size));
                             let decimal_val = val.as_decimal().unwrap();
                             let new_val = match decimal_val {
                                 DecimalScalar::Decimal64(v, _) => {
@@ -240,7 +241,10 @@ where
                 for value in &self.values {
                     match value {
                         Some(value) => {
-                            let val = T::upcast_scalar(value.clone());
+                            let val = T::upcast_scalar_with_type(
+                                value.clone(),
+                                &inner_type.remove_nullable(),
+                            );
                             inner_builder.push(val.as_ref());
                         }
                         None => {

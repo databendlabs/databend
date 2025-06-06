@@ -60,8 +60,6 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
-use crate::types::decimal::DecimalSize;
-use crate::types::decimal::DecimalType;
 use crate::types::geography::Geography;
 use crate::types::geography::GeographyColumn;
 use crate::types::geography::GeographyRef;
@@ -290,11 +288,21 @@ impl<T: AccessType> Value<T> {
     }
 }
 
-impl<T: ReturnType> Value<T> {
-    pub fn upcast(self) -> Value<AnyType> {
+impl<T: ValueType> Value<T> {
+    pub fn upcast_with_type(self, data_type: &DataType) -> Value<AnyType> {
         match self {
-            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar)),
-            Value::Column(col) => Value::Column(T::upcast_column(col)),
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar_with_type(scalar, data_type)),
+            Value::Column(col) => Value::Column(T::upcast_column_with_type(col, data_type)),
+        }
+    }
+}
+
+impl<T: ArgType> Value<T> {
+    pub fn upcast(self) -> Value<AnyType> {
+        let data_type = T::data_type();
+        match self {
+            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar_with_type(scalar, &data_type)),
+            Value::Column(col) => Value::Column(T::upcast_column_with_type(col, &data_type)),
         }
     }
 }
@@ -313,29 +321,6 @@ impl<T: AccessType> Value<NullableType<T>> {
             Value::Scalar(None) => None,
             Value::Scalar(Some(s)) => Some(Value::Scalar(s.clone())),
             Value::Column(col) => Some(Value::Column(col.column.clone())),
-        }
-    }
-}
-
-impl<T: Decimal> Value<DecimalType<T>> {
-    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
-        match self {
-            Value::Scalar(scalar) => Value::Scalar(T::upcast_scalar(scalar, size)),
-            Value::Column(col) => Value::Column(T::upcast_column(col, size)),
-        }
-    }
-}
-
-impl<T: Decimal> Value<NullableType<DecimalType<T>>> {
-    pub fn upcast_decimal(self, size: DecimalSize) -> Value<AnyType> {
-        match self {
-            Value::Scalar(Some(scalar)) => Value::Scalar(T::upcast_scalar(scalar, size)),
-            Value::Scalar(None) => Value::Scalar(Scalar::Null),
-            Value::Column(col) => {
-                let nullable_column =
-                    NullableColumn::new(T::upcast_column(col.column, size), col.validity);
-                Value::Column(Column::Nullable(Box::new(nullable_column)))
-            }
         }
     }
 }
@@ -2677,7 +2662,7 @@ impl ColumnBuilder {
             ],
             match self {
                 ColumnBuilder::T(b) => {
-                    Self::type_build::<T>(b)
+                    Self::type_build::<T>(b, &T::data_type())
                 }
                 ColumnBuilder::Null { len } => Column::Null { len },
                 ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
@@ -2704,8 +2689,8 @@ impl ColumnBuilder {
         }
     }
 
-    fn type_build<T: ValueType>(builder: T::ColumnBuilder) -> Column {
-        T::upcast_column(T::build_column(builder))
+    fn type_build<T: ValueType>(builder: T::ColumnBuilder, data_type: &DataType) -> Column {
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 
     pub fn build_scalar(self) -> Scalar {

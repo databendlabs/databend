@@ -122,11 +122,16 @@ where I: databend_common_column::types::Index
 
     fn visit_column(&mut self, column: Column) -> Result<()> {
         match column {
-            Column::Date(buffer) => self.visit_simple_type::<CoreDate>(buffer),
-            Column::Timestamp(buffer) => self.visit_simple_type::<CoreTimestamp>(buffer),
+            Column::Date(buffer) => self.visit_simple_type::<CoreDate>(buffer, &DataType::Date),
+            Column::Timestamp(buffer) => {
+                self.visit_simple_type::<CoreTimestamp>(buffer, &DataType::Timestamp)
+            }
             Column::Number(number) => {
                 with_number_mapped_type!(|NUM_TYPE| match number {
-                    NumberColumn::NUM_TYPE(b) => self.visit_simple_type::<CoreNumber<NUM_TYPE>>(b),
+                    NumberColumn::NUM_TYPE(b) => self.visit_simple_type::<CoreNumber<NUM_TYPE>>(
+                        b,
+                        &DataType::Number(NUM_TYPE::data_type())
+                    ),
                 })
             }
             _ => Self::default_visit_column(column, self),
@@ -149,8 +154,12 @@ where I: databend_common_column::types::Index
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        let c = T::upcast_column(column.clone());
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        let c = T::upcast_column_with_type(column.clone(), data_type);
         let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
         let mut builder = T::try_downcast_owned_builder(builder).unwrap();
 
@@ -159,13 +168,21 @@ where I: databend_common_column::types::Index
                 T::index_column_unchecked(&column, index.to_usize())
             });
         }
-        self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
+        self.result = Some(Value::Column(T::upcast_column_with_type(
+            T::build_column(builder),
+            data_type,
+        )));
         Ok(())
     }
 
-    fn visit_simple_type<T: SimpleType>(&mut self, buffer: Buffer<T::Scalar>) -> Result<()> {
+    fn visit_simple_type<T: SimpleType>(
+        &mut self,
+        buffer: Buffer<T::Scalar>,
+        data_type: &DataType,
+    ) -> Result<()> {
         self.result = Some(Value::Column(T::upcast_column(
             self.take_primitive_types(buffer),
+            data_type,
         )));
         Ok(())
     }

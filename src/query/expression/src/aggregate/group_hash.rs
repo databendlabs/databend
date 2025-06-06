@@ -27,6 +27,7 @@ use crate::types::BinaryColumn;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::Decimal64As128Type;
 use crate::types::DecimalColumn;
@@ -85,8 +86,14 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
         unreachable!()
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        self.combine_group_hash_type_column::<AnyType>(&T::upcast_column(column));
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        self.combine_group_hash_type_column::<AnyType>(&T::upcast_column_with_type(
+            column, data_type,
+        ));
         Ok(())
     }
 
@@ -386,11 +393,16 @@ where I: Index
         }
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
         self.visit_indices(|i| {
-            let x = T::upcast_scalar(T::to_owned_scalar(
-                T::index_column(&column, i.to_usize()).unwrap(),
-            ));
+            let x = T::upcast_scalar_with_type(
+                T::to_owned_scalar(T::index_column(&column, i.to_usize()).unwrap()),
+                data_type,
+            );
             x.as_ref().agg_hash()
         })
     }
@@ -628,8 +640,11 @@ mod tests {
 
         {
             let c = Int32Type::from_data(vec![3, 1, 2]);
-            let c = NullableColumn::<AnyType>::new(c, Bitmap::from([true, true, false]));
-            let nc = NullableType::<AnyType>::upcast_column(c);
+            let c = NullableColumn::new(c, Bitmap::from([true, true, false]));
+            let nc = NullableType::<AnyType>::upcast_column_with_type(
+                c,
+                &Int32Type::data_type().wrap_nullable(),
+            );
 
             let indices = [0, 1, 2];
             let mut target = vec![0; 3];

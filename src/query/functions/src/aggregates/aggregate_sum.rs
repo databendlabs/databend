@@ -122,7 +122,7 @@ where
 
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
-    T: ValueType + Sync + Send,
+    T: ArgType + Sync + Send,
     N: ValueType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
@@ -166,50 +166,35 @@ where
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct DecimalSumState<const SHOULD_CHECK_OVERFLOW: bool, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal,
-    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
+where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
 {
-    pub value: <T::Scalar as Decimal>::U64Array,
+    pub value: T::U64Array,
 }
 
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> Default for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign,
-    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
+where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
 {
     fn default() -> Self {
         Self {
-            value: <T::Scalar as Decimal>::U64Array::default(),
+            value: T::U64Array::default(),
         }
     }
 }
 
-impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<T, T>
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
     for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign,
-    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
+where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAssign
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let mut value = T::Scalar::from_u64_array(self.value);
-        value += T::to_owned_scalar(other);
+    fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
+        let mut value = T::from_u64_array(self.value);
+        value += other;
 
-        if SHOULD_CHECK_OVERFLOW
-            && (value > T::Scalar::DECIMAL_MAX || value < T::Scalar::DECIMAL_MIN)
-        {
+        if SHOULD_CHECK_OVERFLOW && (value > T::DECIMAL_MAX || value < T::DECIMAL_MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 value,
-                T::Scalar::DECIMAL_MIN,
-                T::Scalar::DECIMAL_MAX,
+                T::DECIMAL_MIN,
+                T::DECIMAL_MAX,
             )));
         }
         self.value = value.to_u64_array();
@@ -218,14 +203,13 @@ where
 
     fn add_batch(
         &mut self,
-        other: T::Column,
+        other: Buffer<T>,
         validity: Option<&Bitmap>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if !SHOULD_CHECK_OVERFLOW {
-            let mut sum = T::Scalar::from_u64_array(self.value);
-            let col = T::upcast_column(other);
-            let buffer = DecimalType::<T::Scalar>::try_downcast_column(&col).unwrap();
+            let mut sum = T::from_u64_array(self.value);
+            let buffer = other;
             match validity {
                 Some(validity) if validity.null_count() > 0 => {
                     buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
@@ -244,15 +228,15 @@ where
         } else {
             match validity {
                 Some(validity) => {
-                    for (data, valid) in T::iter_column(&other).zip(validity.iter()) {
+                    for (data, valid) in other.iter().zip(validity.iter()) {
                         if valid {
-                            self.add(data, function_data)?;
+                            self.add(*data, function_data)?;
                         }
                     }
                 }
                 None => {
-                    for value in T::iter_column(&other) {
-                        self.add(value, function_data)?;
+                    for value in other.iter() {
+                        self.add(*value, function_data)?;
                     }
                 }
             }
@@ -261,17 +245,17 @@ where
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        let v = T::Scalar::from_u64_array(rhs.value);
-        self.add(T::to_scalar_ref(&v), None)
+        let v = T::from_u64_array(rhs.value);
+        self.add(v, None)
     }
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        builder: &mut Vec<T>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let v = T::Scalar::from_u64_array(self.value);
-        T::push_item(builder, T::to_scalar_ref(&v));
+        let v = T::from_u64_array(self.value);
+        builder.push(v);
         Ok(())
     }
 }
@@ -297,7 +281,7 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
         validity: Option<&Bitmap>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let col = IntervalType::upcast_column(other);
+        let col = IntervalType::upcast_column_with_type(other, &DataType::Interval);
         let buffer = IntervalType::try_downcast_column(&col).unwrap();
         match validity {
             Some(validity) if validity.null_count() > 0 => {
@@ -357,31 +341,6 @@ pub fn try_create_aggregate_sum_function(
                 NumberType<TSum>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
-
-            // DecimalWidth<int64_t> = 18
-            let should_check_overflow = s.precision() > 18;
-            let return_type = DataType::Decimal(decimal_size);
-
-            if should_check_overflow {
-                AggregateUnaryFunction::<
-                    DecimalSumState<true, Decimal128Type>,
-                    Decimal128Type,
-                    Decimal128Type,
-                >::try_create_unary(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-            } else {
-                AggregateUnaryFunction::<
-                    DecimalSumState<false, Decimal128Type>,
-                    Decimal128Type,
-                    Decimal128Type,
-                >::try_create_unary(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-            }
-        }
         DataType::Interval => {
             let return_type = DataType::Interval;
             AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::try_create_unary(
@@ -391,6 +350,30 @@ pub fn try_create_aggregate_sum_function(
                 arguments[0].clone(),
             )
         }
+        DataType::Decimal(s) if s.can_carried_by_128() => {
+            let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
+
+            // DecimalWidth<int64_t> = 18
+            let should_check_overflow = s.precision() > 18;
+            let return_type = DataType::Decimal(decimal_size);
+            if should_check_overflow {
+                AggregateUnaryFunction::<
+                    DecimalSumState<true, i128>,
+                    Decimal128Type,
+                    Decimal128Type,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
+                )
+            } else {
+                AggregateUnaryFunction::<
+                    DecimalSumState<false, i128>,
+                    Decimal128Type,
+                    Decimal128Type,
+                >::try_create_unary(
+                    display_name, return_type, params, arguments[0].clone()
+                )
+            }
+        }
         DataType::Decimal(s) => {
             let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
 
@@ -399,7 +382,7 @@ pub fn try_create_aggregate_sum_function(
 
             if should_check_overflow {
                 AggregateUnaryFunction::<
-                    DecimalSumState<true, Decimal256Type>,
+                    DecimalSumState<true, i256>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create_unary(
@@ -407,7 +390,7 @@ pub fn try_create_aggregate_sum_function(
                 )
             } else {
                 AggregateUnaryFunction::<
-                    DecimalSumState<false, Decimal256Type>,
+                    DecimalSumState<false, i256>,
                     Decimal256Type,
                     Decimal256Type,
                 >::try_create_unary(

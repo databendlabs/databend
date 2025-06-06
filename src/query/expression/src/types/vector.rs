@@ -25,7 +25,7 @@ use serde::Serialize;
 
 use crate::property::Domain;
 use crate::types::AccessType;
-use crate::types::DecimalSize;
+use crate::types::DataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::ValueType;
@@ -109,15 +109,18 @@ impl AccessType for VectorType {
 impl ValueType for VectorType {
     type ColumnBuilder = VectorColumnBuilder;
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_vector());
         Scalar::Vector(scalar)
     }
 
-    fn upcast_column(col: Self::Column) -> Column {
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_vector());
         Column::Vector(col)
     }
 
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
+    fn upcast_domain_with_type(_domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_vector());
         Domain::Undefined
     }
 
@@ -137,8 +140,9 @@ impl ValueType for VectorType {
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_vector());
         Some(ColumnBuilder::Vector(builder))
     }
 

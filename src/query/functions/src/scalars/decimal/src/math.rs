@@ -336,7 +336,7 @@ fn decimal_rounds(
                     target_scale,
                     mode
                 )
-                .upcast_decimal(size),
+                .upcast_with_type(&DataType::Decimal(size)),
             })
         }
     })
@@ -398,7 +398,7 @@ fn decimal_abs(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
                     vectorize_1_arg::<ComputeView<DecimalConvert<IN, OUT>, _, _>, DecimalType<OUT>>(
                         |a, _| a.abs(),
                     )(value, ctx)
-                    .upcast_decimal(size)
+                    .upcast_with_type(&DataType::Decimal(size))
                 }
             })
         }

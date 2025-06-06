@@ -19,11 +19,11 @@ use std::sync::Arc;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::F32;
@@ -168,7 +168,7 @@ fn decimal_hash_typed<H, R, D, T>(
 where
     T: Decimal + Hash,
     H: Hasher + Default,
-    R: ReturnType,
+    R: ArgType,
     D: for<'a> AccessType<ScalarRef<'a> = T>,
 {
     vectorize_with_builder_1_arg::<D, R>(|arg, output, _| {
@@ -187,7 +187,7 @@ fn decimal_hash<H, R>(
 ) -> Value<AnyType>
 where
     H: Hasher + Default,
-    R: ReturnType,
+    R: ArgType,
 {
     let (decimal_type, _) = DecimalDataType::from_value(&arg).unwrap();
     let size = decimal_type.size();

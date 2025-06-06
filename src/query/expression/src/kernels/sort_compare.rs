@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use memchr::memchr;
 
 use crate::types::AnyType;
+use crate::types::DataType;
 use crate::types::NullableColumn;
 use crate::types::Number;
 use crate::types::StringColumn;
@@ -306,7 +307,7 @@ impl ValueVisitor for SortCompare {
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, col: T::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(&mut self, col: T::Column, _: &DataType) -> Result<()> {
         assert!(T::column_len(&col) == self.rows);
         self.generic_sort(
             &col,

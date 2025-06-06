@@ -30,7 +30,6 @@ use super::number::SimpleDomain;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::DecimalSize;
 use crate::types::SimpleType;
 use crate::types::SimpleValueType;
 use crate::utils::date_helper::DateConverter;
@@ -105,20 +104,24 @@ impl SimpleType for CoreTimestamp {
 
     fn upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_timestamp());
         Some(ColumnBuilder::Timestamp(builder))
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_timestamp());
         Scalar::Timestamp(scalar)
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_timestamp());
         Column::Timestamp(col)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_timestamp());
         Domain::Timestamp(domain)
     }
 

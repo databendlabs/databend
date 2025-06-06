@@ -28,7 +28,6 @@ use num_traits::AsPrimitive;
 use super::number::SimpleDomain;
 use super::ArgType;
 use super::DataType;
-use super::DecimalSize;
 use super::SimpleType;
 use super::SimpleValueType;
 use crate::date_helper::DateConverter;
@@ -100,20 +99,24 @@ impl SimpleType for CoreDate {
 
     fn upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_date());
         Some(ColumnBuilder::Date(builder))
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_date());
         Scalar::Date(scalar)
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_date());
         Column::Date(col)
     }
 
-    fn upcast_domain(domain: SimpleDomain<i32>) -> Domain {
+    fn upcast_domain(domain: SimpleDomain<i32>, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_date());
         Domain::Date(domain)
     }
 
