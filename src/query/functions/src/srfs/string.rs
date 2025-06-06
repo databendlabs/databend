@@ -16,9 +16,10 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::AnyType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
@@ -126,38 +127,59 @@ pub fn regexp_split_to_table(
     match builder.build() {
         Ok(re) => {
             let mut result = Vec::new();
+            // The starting index of the current segment to be captured
             let mut current_segment_start_idx = 0;
-            let mut last_delimiter_end_idx = 0;
 
+            // The end index of the previous valid delimiter
+            let mut last_valid_match_end_idx = 0;
+            // Mark whether a valid partition is caused by zero-length matching
+            let mut last_split_was_zlm = false;
             for m in re.find_iter(text) {
                 let match_start = m.start();
                 let match_end = m.end();
-                let is_zero_length_match = match_start == match_end;
+                let is_current_match_zlm = match_start == match_end;
 
-                // PostgreSQL rule: Ignore zero-length matches occurring at the start/end of the string
-                // or immediately after a previous match. This means these zero-length matches do not
-                // act as delimiters.
-                if is_zero_length_match
+                // Zero-length matching suppression rules of PostgreSQL:
+                // Zero-length matching is ignored in the following situations:
+                // 1. Occurs at the beginning of the string (' match_start == 0 ')
+                // 2. Occurs at the end of the string (' match_start == text.len() ')
+                // 3. Immediately following the previous valid match (' match_start == last_valid_match_end_idx ')
+                if is_current_match_zlm
                     && (match_start == 0
                         || match_start == text.len()
-                        || match_start == last_delimiter_end_idx)
+                        || match_start == last_valid_match_end_idx)
                 {
                     continue;
                 }
 
-                if match_start > current_segment_start_idx
-                    || (match_start == current_segment_start_idx && is_zero_length_match)
-                {
-                    result.push(text[current_segment_start_idx..match_start].to_string());
+                let segment = &text[current_segment_start_idx..match_start];
+
+                // https://www.postgresql.org/docs/9.1/functions-matching.html#POSIX-EMBEDDED-OPTIONS-TABLE
+                // Special behaviors of PostgreSQL in the '\s*' mode (Perl-compatible) :
+                // If the current match is a non-zero-length match (such as an actual space), And the previous text segment it separates is empty.
+                // And this blank text paragraph is caused by * the previous zero-length match *.
+                // Then this blank text paragraph should be suppressed (that is, not added to the result).
+                if !is_current_match_zlm && segment.is_empty() && last_split_was_zlm {
+                    // Suppress this blank segment and do not add it to the result.
+                    // But 'current_segment_start_idx' and 'last_valid_match_end_idx' still need to be updated.
+                } else {
+                    result.push(segment.to_string());
                 }
 
                 current_segment_start_idx = match_end;
-                last_delimiter_end_idx = match_end;
+                last_valid_match_end_idx = match_end;
+                last_split_was_zlm = is_current_match_zlm;
             }
 
-            if current_segment_start_idx <= text.len() {
-                result.push(text[current_segment_start_idx..].to_string());
+            let final_segment = text[current_segment_start_idx..].to_string();
+
+            // Special rule of PostgreSQL: If the last valid delimiter is a zero-length match and results in the final empty string,
+            // Then this empty string should not be added (for example, 'abc' with 'b?') When splitting, there should be no empty string at the end.
+            // However, for non-zero-length delimiters (such as', '), they should be added even if they result in an empty string at the end (for example, 'abc,').
+            if !(final_segment.is_empty() && last_split_was_zlm) {
+                result.push(final_segment);
             }
+
             if result.is_empty() && !text.is_empty() {
                 return vec![text.to_string()];
             }
@@ -207,17 +229,7 @@ fn build_regexp_split_to_table(
                                     ) => {
                                         let res =
                                             regexp_split_to_table(text, pattern, Some(flag), ctx);
-                                        let mut builder =
-                                            StringColumnBuilder::with_capacity(res.len());
-                                        for v in res {
-                                            builder.put_and_commit(v.as_str());
-                                        }
-                                        let col = builder.build();
-                                        let col = StringType::upcast_column(col);
-                                        let len = col.len();
-                                        max_nums_per_row[row] =
-                                            std::cmp::max(max_nums_per_row[row], len);
-                                        (Value::Column(Column::Tuple(vec![col])), len)
+                                        process_regexp_split_output(res, row, max_nums_per_row)
                                     }
                                     _ => unreachable!(),
                                 }
@@ -243,17 +255,7 @@ fn build_regexp_split_to_table(
                             |row| match (arg.index(row).unwrap(), delimiter.index(row).unwrap()) {
                                 (ScalarRef::String(text), ScalarRef::String(pattern)) => {
                                     let res = regexp_split_to_table(text, pattern, None, ctx);
-                                    let mut builder = StringColumnBuilder::with_capacity(res.len());
-                                    for v in res {
-                                        builder.put_and_commit(v.as_str());
-                                    }
-
-                                    let col = builder.build();
-                                    let col = StringType::upcast_column(col);
-                                    let len = col.len();
-                                    max_nums_per_row[row] =
-                                        std::cmp::max(max_nums_per_row[row], len);
-                                    (Value::Column(Column::Tuple(vec![col])), len)
+                                    process_regexp_split_output(res, row, max_nums_per_row)
                                 }
                                 _ => unreachable!(),
                             },
@@ -265,4 +267,20 @@ fn build_regexp_split_to_table(
         }),
         _ => unreachable!(),
     }
+}
+
+fn process_regexp_split_output(
+    res: Vec<String>,
+    row_idx: usize,
+    max_nums_per_row: &mut [usize],
+) -> (Value<AnyType>, usize) {
+    let mut builder = StringColumnBuilder::with_capacity(res.len());
+    for v in res {
+        builder.put_and_commit(v.as_str());
+    }
+    let col = builder.build();
+    let col = StringType::upcast_column(col);
+    let len = col.len();
+    max_nums_per_row[row_idx] = std::cmp::max(max_nums_per_row[row_idx], len);
+    (Value::Column(Column::Tuple(vec![col])), len)
 }

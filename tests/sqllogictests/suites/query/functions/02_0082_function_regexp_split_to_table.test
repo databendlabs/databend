@@ -51,3 +51,42 @@ SELECT regexp_split_to_table('helloTworld', 't', 'i') AS word;
 ----
 hello
 world
+
+query T
+select count(regexp_split_to_table(',apple,,banana,', ','));
+----
+5
+
+query T
+SELECT count(regexp_split_to_table('the quick brown fox', '\\s*'));
+----
+16
+
+query T
+select regexp_split_to_table(',apple,,banana,', ',');
+----
+(empty)
+apple
+(empty)
+banana
+(empty)
+
+query T
+SELECT  regexp_split_to_table('the quick brown fox', '\\s*') AS foo;
+----
+t
+h
+e
+q
+u
+i
+c
+k
+b
+r
+o
+w
+n
+f
+o
+x
