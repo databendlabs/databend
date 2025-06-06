@@ -6266,6 +6266,9 @@ impl SchemaApiTestSuite {
         let index_column_ids_2 = vec![2];
         let index_name_3 = "idx3".to_string();
         let index_column_ids_3 = vec![3];
+        let index_version_3;
+        let index3_drop_start_time;
+        let index3_drop_end_time;
 
         {
             info!("--- create table index 1");
@@ -6391,6 +6394,12 @@ impl SchemaApiTestSuite {
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
+
+            index_version_3 = {
+                let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+                let index = seqv.data.indexes.get(&index_name_3).unwrap();
+                index.version.clone()
+            };
         }
 
         {
@@ -6467,7 +6476,9 @@ impl SchemaApiTestSuite {
                 table_id,
                 name: index_name_3.clone(),
             };
+            index3_drop_start_time = Utc::now();
             let res = mt.drop_table_index(req).await;
+            index3_drop_end_time = Utc::now();
             assert!(res.is_ok());
         }
 
@@ -6482,7 +6493,7 @@ impl SchemaApiTestSuite {
                 let table_indexes = res.table_indexes.get(&table_id);
                 assert!(table_indexes.is_some());
                 let table_indexes = table_indexes.unwrap();
-                assert_eq!(table_indexes.len(), 1);
+                assert_eq!(table_indexes.len(), 2);
                 let (index_name, index_version, index_meta) = table_indexes[0].clone();
                 assert_eq!(index_name, index_name_1);
                 assert_eq!(index_version, index_version_1);
@@ -6492,6 +6503,16 @@ impl SchemaApiTestSuite {
                 ));
                 assert!(index_meta.dropped_on > index1_drop_start_time);
                 assert!(index_meta.dropped_on < index1_drop_end_time);
+
+                let (index_name, index_version, index_meta) = table_indexes[1].clone();
+                assert_eq!(index_name, index_name_3);
+                assert_eq!(index_version, index_version_3);
+                assert!(matches!(
+                    index_meta.index_type,
+                    MarkedDeletedIndexType::NGRAM
+                ));
+                assert!(index_meta.dropped_on > index3_drop_start_time);
+                assert!(index_meta.dropped_on < index3_drop_end_time);
             }
         }
 
@@ -6540,16 +6561,20 @@ impl SchemaApiTestSuite {
                 let table_indexes = res.table_indexes.get(&table_id);
                 assert!(table_indexes.is_some());
                 let mut table_indexes = table_indexes.unwrap().clone();
-                assert_eq!(table_indexes.len(), 2);
+                assert_eq!(table_indexes.len(), 3);
                 table_indexes.sort_by(|a, b| a.0.cmp(&b.0));
                 let (actual_index_name_1, actual_index_version_1, actual_index_meta_1) =
                     table_indexes[0].clone();
                 let (actual_index_name_2, actual_index_version_2, actual_index_meta_2) =
                     table_indexes[1].clone();
+                let (actual_index_name_3, actual_index_version_3, actual_index_meta_3) =
+                    table_indexes[2].clone();
                 assert_eq!(actual_index_name_1, index_name_1);
                 assert_eq!(actual_index_name_2, index_name_2);
+                assert_eq!(actual_index_name_3, index_name_3);
                 assert_eq!(actual_index_version_1, index_version_1);
                 assert_eq!(actual_index_version_2, index_version_2);
+                assert_eq!(actual_index_version_3, index_version_3);
                 assert!(matches!(
                     actual_index_meta_1.index_type,
                     MarkedDeletedIndexType::INVERTED
@@ -6558,10 +6583,16 @@ impl SchemaApiTestSuite {
                     actual_index_meta_2.index_type,
                     MarkedDeletedIndexType::INVERTED
                 ));
+                assert!(matches!(
+                    actual_index_meta_3.index_type,
+                    MarkedDeletedIndexType::NGRAM
+                ));
                 assert!(actual_index_meta_1.dropped_on > index1_drop_start_time);
                 assert!(actual_index_meta_1.dropped_on < index1_drop_end_time);
                 assert!(actual_index_meta_2.dropped_on > index2_drop_start_time);
                 assert!(actual_index_meta_2.dropped_on < index2_drop_end_time);
+                assert!(actual_index_meta_3.dropped_on > index3_drop_start_time);
+                assert!(actual_index_meta_3.dropped_on < index3_drop_end_time);
             }
 
             {
@@ -6569,6 +6600,7 @@ impl SchemaApiTestSuite {
                 mt.remove_marked_deleted_table_indexes(&tenant, table_id, &[
                     (index_name_1, index_version_1),
                     (index_name_2, index_version_2),
+                    (index_name_3, index_version_3),
                 ])
                 .await?;
 
