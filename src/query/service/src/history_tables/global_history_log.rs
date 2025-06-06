@@ -74,6 +74,12 @@ pub struct GlobalHistoryLog {
 impl GlobalHistoryLog {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         setup_operator().await?;
+        if cfg.log.history.log_only {
+            info!(
+                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
+            );
+            return Ok(());
+        }
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let stage_name = cfg.log.history.stage_name.clone();

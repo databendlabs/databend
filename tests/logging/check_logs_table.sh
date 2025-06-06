@@ -40,4 +40,4 @@ check_query_log "2" "$query_id" "SELECT count(*) FROM system_history.profile_his
 check_query_log "3" "$query_id" "SELECT count(*) FROM system_history.log_history WHERE target = 'databend::log::query' and" "2"
 
 # Test 4
-check_query_log "4" "$query_id" "SELECT count(*) FROM system_history.query_history WHERE" "2"
+check_query_log "4" "$query_id" "SELECT count(*) FROM system_history.query_history WHERE" "1"

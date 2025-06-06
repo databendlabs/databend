@@ -340,6 +340,7 @@ impl Default for OTLPEndpointConfig {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct HistoryConfig {
     pub on: bool,
+    pub log_only: bool,
     pub interval: usize,
     pub stage_name: String,
     pub level: String,
@@ -357,8 +358,9 @@ impl Display for HistoryConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}]",
+            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}]",
             self.on,
+            self.log_only,
             self.interval,
             self.stage_name,
             self.level,
@@ -376,6 +378,7 @@ impl Default for HistoryConfig {
         Self {
             on: false,
             interval: 2,
+            log_only: false,
             // The default value of stage name uses an uuid to avoid conflicts with existing stages
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
             level: "WARN".to_string(),
