@@ -3527,6 +3527,7 @@ Functions overloads:
 0 regexp_instr FACTORY
 0 regexp_like FACTORY
 0 regexp_replace FACTORY
+0 regexp_split_to_table FACTORY
 0 regexp_substr FACTORY
 0 repeat(String, UInt64) :: String
 1 repeat(String NULL, UInt64 NULL) :: String NULL
