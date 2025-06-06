@@ -19,15 +19,22 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
+use databend_common_column::binview::ViewType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::F64;
 use databend_common_expression::Scalar;
+use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::optimize;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::VisitAction;
+use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Statistics;
@@ -35,6 +42,7 @@ use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::FormatOptions;
 use databend_common_sql::IndexType;
+use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_storage::Datum;
 use databend_query::sessions::QueryContext;
@@ -44,7 +52,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::sql::planner::optimizer::test_utils::execute_sql;
-use crate::sql::planner::optimizer::test_utils::optimize_plan;
 use crate::sql::planner::optimizer::test_utils::raw_plan;
 
 /// YAML representation of a test case
@@ -59,6 +66,8 @@ struct YamlTestCase {
     column_statistics: HashMap<String, YamlColumnStatistics>,
     #[serde(default)]
     statistics_file: Option<String>,
+    #[serde(default)]
+    auto_statistics: bool,
     good_plan: Option<String>,
 }
 
@@ -87,6 +96,7 @@ struct TestCase {
     pub sql: &'static str,
     pub table_statistics: HashMap<String, YamlTableStatistics>,
     pub column_statistics: HashMap<String, YamlColumnStatistics>,
+    pub auto_statistics: bool,
 }
 
 /// Setup TPC-DS tables with required schema
@@ -145,10 +155,11 @@ fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
     }
 
     Ok(TestCase {
-        name: Box::leak(yaml.name.into_boxed_str()),
-        sql: Box::leak(yaml.sql.into_boxed_str()),
+        name: Box::leak(yaml.name.clone().into_boxed_str()),
+        sql: Box::leak(yaml.sql.clone().into_boxed_str()),
         table_statistics,
         column_statistics,
+        auto_statistics: yaml.auto_statistics,
     })
 }
 
@@ -283,14 +294,42 @@ impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
                         let column_name = format!("{}.{}", table_name, column_name);
                         if let Some(col_stats_option) = self.column_statistics.get(&column_name) {
                             let col_stats = BasicColumnStatistics {
-                                min: convert_to_datum(&col_stats_option.min),
-                                max: convert_to_datum(&col_stats_option.max),
+                                min: match convert_to_datum(&col_stats_option.min) {
+                                    Some(v) => Some(v),
+                                    None => {
+                                        if column.data_type().is_floating() {
+                                            Some(Datum::Float(F64::MIN))
+                                        } else if column.data_type().is_signed_numeric() {
+                                            Some(Datum::Int(i64::MIN))
+                                        } else if column.data_type().is_unsigned_numeric() {
+                                            Some(Datum::UInt(u64::MIN))
+                                        } else {
+                                            Some(Datum::Bytes(
+                                                "\0\0\0\0\0\0\0\0".to_bytes().to_vec(),
+                                            ))
+                                        }
+                                    }
+                                },
+                                max: match convert_to_datum(&col_stats_option.max) {
+                                    Some(v) => Some(v),
+                                    None => {
+                                        if column.data_type().is_floating() {
+                                            Some(Datum::Float(F64::MAX))
+                                        } else if column.data_type().is_signed_numeric() {
+                                            Some(Datum::Int(i64::MAX))
+                                        } else if column.data_type().is_unsigned_numeric() {
+                                            Some(Datum::UInt(u64::MAX))
+                                        } else {
+                                            Some(Datum::Bytes("\u{FFFF}\u{FFFF}\u{FFFF}\u{FFFF}\u{FFFF}\u{FFFF}\u{FFFF}\u{FFFF}".to_bytes().to_vec()))
+                                        }
+                                    }
+                                },
                                 ndv: col_stats_option.ndv,
                                 null_count: col_stats_option.null_count.unwrap_or(0),
                             };
                             column_stats.insert(column_idx as IndexType, Some(col_stats));
                         } else {
-                            println!(
+                            eprintln!(
                                 "Column statistics not found from yaml for column: {}",
                                 column_name
                             );
@@ -318,16 +357,16 @@ impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
 
                 let new_plan = Arc::new(RelOperator::Scan(new_scan));
                 let new_expr = expr.replace_plan(new_plan);
-                println!(
-                    "Set statistics for table: {}, table_idx:{}, new stats:\n{:#?}",
-                    table_name,
-                    table_index,
-                    new_stats.clone()
-                );
+                // println!(
+                //     "Set statistics for table: {}, table_idx:{}, new stats:\n{:#?}",
+                //     table_name,
+                //     table_index,
+                //     new_stats.clone()
+                // );
 
                 return Ok(VisitAction::Replace(new_expr));
             } else {
-                println!(
+                eprintln!(
                     "Table statistics not found from yaml for table: {}, table_idx: {}",
                     table_name, table_index
                 );
@@ -339,18 +378,20 @@ impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_tpcds_optimizer() -> Result<()> {
+async fn test_optimizer() -> Result<()> {
     // Create a test fixture with a query context
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-
     // Setup tables needed for TPC-DS queries
     setup_tpcds_tables(&ctx).await?;
 
     // Load test cases from YAML files
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
-    let mut mint = Mint::new("tests/it/sql/planner/optimizer/data/cases");
+    let mut mint = Mint::new(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/it/sql/planner/optimizer/data/cases/results"),
+    );
 
     let tests = load_test_cases(&base_path)?;
 
@@ -361,8 +402,18 @@ async fn test_tpcds_optimizer() -> Result<()> {
 
     // Run all test cases
     for test in tests {
+        let settings = ctx.get_settings();
+
+        if !test.auto_statistics {
+            settings.set_optimizer_skip_list("CollectStatisticsOptimizer".to_string())?;
+        } else {
+            settings.set_optimizer_skip_list("".to_string())?;
+        }
+
         println!("\n\n========== Testing: {} ==========", test.name);
-        let file = &mut mint.new_goldenfile(format!("{}.txt", test.name)).unwrap();
+        let file = &mut mint
+            .new_goldenfile(format!("{}_raw.txt", test.name))
+            .unwrap();
 
         // Parse SQL to get raw plan
         let mut raw_plan = raw_plan(&ctx, test.sql).await?;
@@ -375,12 +426,53 @@ async fn test_tpcds_optimizer() -> Result<()> {
         let raw_plan_str = raw_plan.format_indent(format_option)?;
 
         // Verify raw plan matches expected
-        writeln!(file, "Raw plan:\n{}", raw_plan_str)?;
+        writeln!(file, "{}", raw_plan_str)?;
 
         // Optimize the plan
-        let optimized_plan = optimize_plan(&ctx, raw_plan).await?;
-        let optimized_plan_str = optimized_plan.format_indent(Default::default())?;
-        writeln!(file, "Optimized plan:\n{}", optimized_plan_str)?;
+        let metadata = match &raw_plan {
+            Plan::Query { metadata, .. } => metadata.clone(),
+            _ => {
+                // If it's not a Query, we still need to provide a metadata, but log a warning
+                eprintln!("Warning: Plan is not a Query variant, creating new metadata");
+                Arc::new(parking_lot::RwLock::new(Metadata::default()))
+            }
+        };
+        let optimized_plan = {
+            let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone())
+                .set_enable_distributed_optimization(true)
+                .set_enable_join_reorder(true)
+                .set_enable_dphyp(true)
+                .set_max_push_down_limit(10000)
+                .set_enable_trace(true)
+                .clone();
+
+            optimize(opt_ctx, raw_plan).await?
+        };
+
+        let file = &mut mint
+            .new_goldenfile(format!("{}_optimized.txt", test.name))
+            .unwrap();
+        let optimized_plan_str = optimized_plan.format_indent(FormatOptions::default())?;
+        writeln!(file, "{}", optimized_plan_str)?;
+        if let Plan::Query {
+            metadata,
+            bind_context,
+            s_expr,
+            ..
+        } = optimized_plan
+        {
+            let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+            let physical_plan = builder.build(&s_expr, bind_context.column_set()).await?;
+
+            let file = &mut mint
+                .new_goldenfile(format!("{}_physical.txt", test.name))
+                .unwrap();
+
+            let result = physical_plan
+                .format(metadata.clone(), Default::default())?
+                .format_pretty()?;
+            writeln!(file, "{}", result)?;
+        }
 
         println!("✅ {} test passed!", test.name);
     }

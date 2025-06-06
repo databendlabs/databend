@@ -1,0 +1,536 @@
+name: "TPC-DS Obfuscated Statistics"
+description: "Statistics for obfuscated TPC-DS tables"
+
+table_statistics:
+  a1z:
+    num_rows: 113734630
+    data_size: 43826881850
+    data_size_compressed: 4767338479
+    index_size: 556703289
+    number_of_blocks: 347
+    number_of_segments: 1
+
+  a2x:
+    num_rows: 318868
+    data_size: 375779508
+    data_size_compressed: 39714522
+    index_size: 2652424
+    number_of_blocks: 3
+    number_of_segments: 1
+
+  a0c:
+    num_rows: 6208604942
+    data_size: 5772964979745
+    data_size_compressed: 552956511782
+    index_size: 26808530459
+    number_of_blocks: 31176
+    number_of_segments: 35
+
+  a5r:
+    num_rows: 4033
+    data_size: 1017281
+    data_size_compressed: 108094
+    index_size: 18638
+    number_of_blocks: 1
+    number_of_segments: 1
+
+column_statistics:
+  # a1z table columns
+  a1z.a2t:
+    ndv: 10
+    null_count: 51
+  a1z.a2u:
+    ndv: 7
+    null_count: 0
+  a1z.a2f:
+    ndv: 1
+    null_count: 0
+  a1z.a2k:
+    ndv: 2524
+    null_count: 0
+  a1z.a2m:
+    ndv: 1874785
+    null_count: 109760859
+  a1z.a2i:
+    ndv: 9764
+    null_count: 898
+  a1z.a0k:
+    ndv: 38235694
+    null_count: 0
+  a1z.a2e:
+    ndv: 10
+    null_count: 0
+  a1z.a1p:
+    ndv: 529
+    null_count: 103983928
+  a1z.a2l:
+    ndv: 7
+    null_count: 109921642
+  a1z.a2q:
+    ndv: 752823
+    null_count: 112941831
+  a1z.a2v:
+    ndv: 5
+    null_count: 27972227
+  a1z.a0n:
+    ndv: 47362624
+    null_count: 0
+  a1z.a2w:
+    ndv: 4
+    null_count: 37723835
+  a1z.a2g:
+    ndv: 10
+    null_count: 51
+  a1z.a2s:
+    ndv: 2
+    null_count: 111588716
+  a1z.a2p:
+    ndv: 181
+    null_count: 113701537
+  a1z.a2n:
+    ndv: 7
+    null_count: 0
+  a1z.a2a:
+    ndv: 38568587
+    null_count: 0
+  a1z.a2b:
+    ndv: 39695863
+    null_count: 0
+  a1z.a2j:
+    ndv: 2
+    null_count: 0
+  a1z.a2h:
+    ndv: 10
+    null_count: 8464834
+  a1z.a2d:
+    ndv: 3
+    null_count: 0
+  a1z.a2c:
+    ndv: 9803
+    null_count: 0
+  a1z.a2o:
+    ndv: 6289
+    null_count: 107796283
+  a1z.a2r:
+    ndv: 5
+    null_count: 31945998
+
+  # a2x table columns
+  a2x.a3t:
+    ndv: 11
+    null_count: 288492
+  a2x.a4o:
+    ndv: 5
+    null_count: 30879
+  a2x.a4x:
+    ndv: 4
+    null_count: 315969
+  a2x.a5o:
+    ndv: 115
+    null_count: 295691
+  a2x.a5k:
+    ndv: 5
+    null_count: 163725
+  a2x.a3a:
+    ndv: 12
+    null_count: 309175
+  a2x.a3n:
+    ndv: 5
+    null_count: 2
+  a2x.a3q:
+    ndv: 1
+    null_count: 309177
+  a2x.a3s:
+    ndv: 12
+    null_count: 29186
+  a2x.a0m:
+    ndv: 325974
+    null_count: 0
+  a2x.a3l:
+    ndv: 11
+    null_count: 9179
+  a2x.a4b:
+    ndv: 50092
+    null_count: 267039
+  a2x.a4f:
+    ndv: 252677
+    null_count: 0
+  a2x.a4l:
+    ndv: 252677
+    null_count: 0
+  a2x.a5h:
+    ndv: 252677
+    null_count: 0
+  a2x.a2z:
+    ndv: 244076
+    null_count: 0
+  a2x.a4t:
+    ndv: 3
+    null_count: 306603
+  a2x.a4y:
+    ndv: 4
+    null_count: 315969
+  a2x.a4u:
+    ndv: 6280
+    null_count: 303100
+  a2x.a5f:
+    ndv: 2
+    null_count: 0
+  a2x.a3o:
+    ndv: 243414
+    null_count: 9179
+  a2x.a3e:
+    ndv: 43648
+    null_count: 281
+  a2x.a3x:
+    ndv: 3
+    null_count: 267039
+  a2x.a3k:
+    ndv: 57
+    null_count: 9177
+  a2x.a3p:
+    ndv: 1
+    null_count: 2
+  a2x.a4m:
+    ndv: 53
+    null_count: 0
+  a2x.a5b:
+    ndv: 156
+    null_count: 297701
+  a2x.a5d:
+    ndv: 344
+    null_count: 268738
+  a2x.a5n:
+    ndv: 10
+    null_count: 0
+  a2x.a3g:
+    ndv: 9
+    null_count: 309175
+  a2x.a3h:
+    ndv: 325751
+    null_count: 0
+  a2x.a3f:
+    ndv: 39386
+    null_count: 281
+  a2x.a3d:
+    ndv: 12
+    null_count: 1114
+  a2x.a3w:
+    ndv: 10
+    null_count: 30879
+  a2x.a4i:
+    ndv: 12
+    null_count: 270845
+  a2x.a2k:
+    ndv: 258
+    null_count: 0
+  a2x.a5m:
+    ndv: 1
+    null_count: 316314
+  a2x.a1w:
+    ndv: 18
+    null_count: 2
+  a2x.a3r:
+    ndv: 1
+    null_count: 9177
+  a2x.a3j:
+    ndv: 56
+    null_count: 9179
+  a2x.a5a:
+    ndv: 156
+    null_count: 297701
+  a2x.a4c:
+    ndv: 5
+    null_count: 267039
+  a2x.a4k:
+    ndv: 2
+    null_count: 269201
+  a2x.a3z:
+    ndv: 30
+    null_count: 267039
+  a2x.a5e:
+    ndv: 1
+    null_count: 318646
+  a2x.a4s:
+    ndv: 6
+    null_count: 109261
+  a2x.a2c:
+    ndv: 2277
+    null_count: 0
+  a2x.a4d:
+    ndv: 2
+    null_count: 0
+  a2x.a3v:
+    ndv: 2248
+    null_count: 288012
+  a2x.a4j:
+    ndv: 3
+    null_count: 270159
+  a2x.a4a:
+    ndv: 2306
+    null_count: 267041
+  a2x.a2y:
+    ndv: 247864
+    null_count: 0
+  a2x.a4v:
+    ndv: 5034
+    null_count: 313723
+  a2x.a3i:
+    ndv: 53
+    null_count: 59469
+  a2x.a3b:
+    ndv: 4
+    null_count: 309175
+  a2x.a4p:
+    ndv: 4
+    null_count: 303317
+  a2x.a4z:
+    ndv: 10
+    null_count: 315969
+  a2x.a3c:
+    ndv: 244162
+    null_count: 279
+  a2x.a4q:
+    ndv: 2
+    null_count: 0
+  a2x.a5j:
+    ndv: 4
+    null_count: 222179
+  a2x.a4h:
+    ndv: 48
+    null_count: 318559
+  a2x.a5i:
+    ndv: 8
+    null_count: 9690
+  a2x.a4w:
+    ndv: 10
+    null_count: 315969
+  a2x.a4g:
+    ndv: 6
+    null_count: 9690
+  a2x.a3u:
+    ndv: 90
+    null_count: 267042
+  a2x.a4n:
+    ndv: 5
+    null_count: 267039
+  a2x.a5c:
+    ndv: 3
+    null_count: 16170
+  a2x.a4e:
+    ndv: 21
+    null_count: 288602
+  a2x.a4r:
+    ndv: 2
+    null_count: 75160
+  a2x.a3y:
+    ndv: 10
+    null_count: 267042
+  a2x.a5p:
+    ndv: 8
+    null_count: 0
+  a2x.a5q:
+    ndv: 4677
+    null_count: 311746
+  a2x.a3m:
+    ndv: 12
+    null_count: 9177
+  a2x.a5l:
+    ndv: 2
+    null_count: 0
+
+  # a0c table columns
+  a0c.a0d:
+    ndv: 278
+    null_count: 0
+  a0c.a1q:
+    ndv: 10
+    null_count: 6073006066
+  a0c.a1g:
+    ndv: 11178
+    null_count: 0
+  a0c.a1m:
+    ndv: 52
+    null_count: 2940065786
+  a0c.a0u:
+    ndv: 256811
+    null_count: 0
+  a0c.a1i:
+    ndv: 4
+    null_count: 3949883432
+  a0c.a0j:
+    ndv: 3
+    null_count: 0
+  a0c.a0m:
+    ndv: 34024
+    null_count: 31837678
+  a0c.a1j:
+    ndv: 12820792
+    null_count: 3784467770
+  a0c.a1l:
+    ndv: 1009655525
+    null_count: 347170086
+  a0c.a0e:
+    ndv: 6
+    null_count: 0
+  a0c.a1r:
+    ndv: 690785
+    null_count: 6186420024
+  a0c.a1x:
+    ndv: 108812
+    null_count: 6207279729
+  a0c.a0n:
+    ndv: 12031751
+    null_count: 0
+  a0c.a0r:
+    ndv: 74220138
+    null_count: 0
+  a0c.a0w:
+    ndv: 115
+    null_count: 0
+  a0c.a0o:
+    ndv: 3704397
+    null_count: 830066
+  a0c.a0p:
+    ndv: 24627782
+    null_count: 0
+  a0c.a0x:
+    ndv: 47763
+    null_count: 0
+  a0c.a0v:
+    ndv: 23900
+    null_count: 0
+  a0c.a1b:
+    ndv: 23897
+    null_count: 0
+  a0c.a1c:
+    ndv: 16593
+    null_count: 0
+  a0c.a0s:
+    ndv: 317307
+    null_count: 0
+  a0c.a0g:
+    ndv: 6195104947
+    null_count: 0
+  a0c.a0q:
+    ndv: 49300141
+    null_count: 0
+  a0c.a0f:
+    ndv: 6
+    null_count: 0
+  a0c.a1k:
+    ndv: 3
+    null_count: 109195885
+  a0c.a0h:
+    ndv: 602
+    null_count: 3380913314
+  a0c.a0y:
+    ndv: 286248
+    null_count: 0
+  a0c.a1n:
+    ndv: 9419134
+    null_count: 2958393549
+  a0c.a1a:
+    ndv: 256811
+    null_count: 0
+  a0c.a1v:
+    ndv: 4
+    null_count: 631620322
+  a0c.a0z:
+    ndv: 32658
+    null_count: 0
+  a0c.a0t:
+    ndv: 125488
+    null_count: 0
+  a0c.a1u:
+    ndv: 8639093
+    null_count: 0
+  a0c.a1e:
+    ndv: 423
+    null_count: 0
+  a0c.a0i:
+    ndv: 15897330
+    null_count: 3271717429
+  a0c.a1f:
+    ndv: 115
+    null_count: 0
+  a0c.a1w:
+    ndv: 150
+    null_count: 415
+  a0c.a1y:
+    ndv: 6470248
+    null_count: 3904123411
+  a0c.a1d:
+    ndv: 868
+    null_count: 0
+  a0c.a0k:
+    ndv: 10485978
+    null_count: 0
+  a0c.a1o:
+    ndv: 1
+    null_count: 0
+  a0c.a1h:
+    ndv: 1
+    null_count: 0
+  a0c.a1s:
+    ndv: 1810324
+    null_count: 6186420026
+  a0c.a0l:
+    ndv: 312
+    null_count: 0
+  a0c.a1p:
+    ndv: 336
+    null_count: 5912432605
+  a0c.a1t:
+    ndv: 490
+    null_count: 0
+
+  # a5r table columns
+  a5r.a5s:
+    ndv: 2
+    null_count: 0
+  a5r.a6e:
+    ndv: 13
+    null_count: 3965
+  a5r.a5t:
+    ndv: 3976
+    null_count: 0
+  a5r.a5w:
+    ndv: 21
+    null_count: 0
+  a5r.a5x:
+    ndv: 4
+    null_count: 3938
+  a5r.a6d:
+    ndv: 1
+    null_count: 3985
+  a5r.a1v:
+    ndv: 5
+    null_count: 3853
+  a5r.a6b:
+    ndv: 1
+    null_count: 4005
+  a5r.a6c:
+    ndv: 10
+    null_count: 4010
+  a5r.a1l:
+    ndv: 1
+    null_count: 4014
+  a5r.a6a:
+    ndv: 1
+    null_count: 3988
+  a5r.a5v:
+    ndv: 3800
+    null_count: 0
+  a5r.a5z:
+    ndv: 1
+    null_count: 3943
+  a5r.a5y:
+    ndv: 248
+    null_count: 3754
+  a5r.a5u:
+    ndv: 3957
+    null_count: 22
+  a5r.a3b:
+    ndv: 5
+    null_count: 3907
