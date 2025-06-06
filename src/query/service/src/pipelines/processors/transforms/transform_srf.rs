@@ -344,7 +344,7 @@ impl BlockingTransform for TransformSRF {
                         result.add_column(block_entry);
                     }
                 }
-                "unnest" => {
+                "unnest" | "regexp_split_to_table" => {
                     let mut result_data_blocks = Vec::with_capacity(used);
                     for (i, (mut row_result, repeat_times)) in
                         srf_results.drain(0..used).enumerate()
@@ -409,6 +409,71 @@ impl BlockingTransform for TransformSRF {
                         result.add_column(block_entry);
                     }
                 }
+                /*"regexp_split_to_table" => {
+                    let mut result_data_blocks = Vec::with_capacity(used);
+                    for (i, (mut row_result, repeat_times)) in
+                        srf_results.drain(0..used).enumerate()
+                    {
+                        if let Value::Column(Column::Tuple(fields)) = &mut row_result {
+                            // If the current result set has less rows than the max number of rows,
+                            // we need to pad the result set with null values.
+                            // TODO(leiysky): this can be optimized by using a `zip` array function
+                            if repeat_times < self.num_rows[i] {
+                                for field in fields {
+                                    match field {
+                                        Column::Null { .. } => {
+                                            *field = ColumnBuilder::repeat(
+                                                &ScalarRef::Null,
+                                                self.num_rows[i],
+                                                &DataType::Null,
+                                            )
+                                            .build();
+                                        }
+                                        Column::Nullable(box nullable_column) => {
+                                            let mut column_builder =
+                                                NullableColumnBuilder::from_column(
+                                                    (*nullable_column).clone(),
+                                                );
+                                            (0..(self.num_rows[i] - repeat_times)).for_each(|_| {
+                                                column_builder.push_null();
+                                            });
+                                            *field =
+                                                Column::Nullable(Box::new(column_builder.build()));
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }
+                            }
+                        } else {
+                            let data_type = &srf_expr.return_type;
+                            let inner_tys = data_type.as_tuple().unwrap();
+                            let inner_vals = vec![ScalarRef::Null; inner_tys.len()];
+                            row_result = Value::Column(
+                                ColumnBuilder::repeat(
+                                    &ScalarRef::Tuple(inner_vals),
+                                    self.num_rows[i],
+                                    data_type,
+                                )
+                                .build(),
+                            );
+                        }
+
+                        let block_entry = BlockEntry::new(srf_expr.return_type.clone(), row_result);
+                        result_data_blocks.push(DataBlock::new(vec![block_entry], self.num_rows[i]))
+                    }
+                    let data_block = DataBlock::concat(&result_data_blocks)?;
+                    debug_assert!(data_block.num_rows() == result_size);
+                    let block_entry = BlockEntry::new(
+                        data_block.get_by_offset(0).data_type.clone(),
+                        data_block.get_by_offset(0).value.clone(),
+                    );
+                    if block_is_empty {
+                        result = DataBlock::new(vec![block_entry], result_size);
+                        block_is_empty = false;
+                    } else {
+                        result.add_column(block_entry);
+                    }
+                }*/
                 _ => todo!(
                     "unsupported set-returning function: {}",
                     srf_expr.function.signature.name
