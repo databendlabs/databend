@@ -860,7 +860,7 @@ impl DefaultSettings {
                     desc: "Sets the maximum byte size of blocks for recluster",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(0..=80 * 1024 * 1024 * 1024)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),

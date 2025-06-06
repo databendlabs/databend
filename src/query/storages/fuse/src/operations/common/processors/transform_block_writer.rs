@@ -34,7 +34,6 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
 use crate::io::BlockSerialization;
@@ -77,13 +76,12 @@ impl TransformBlockBuilder {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
-        table_meta_timestamps: TableMetaTimestamps,
+        properties: Arc<StreamBlockProperties>,
     ) -> Result<ProcessorPtr> {
         let max_block_rows = std::cmp::min(
             ctx.get_settings().get_max_block_size()? as usize,
             table.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT),
         );
-        let properties = StreamBlockProperties::try_create(ctx, table, table_meta_timestamps)?;
         Ok(ProcessorPtr::create(Box::new(TransformBlockBuilder {
             state: State::Consume,
             input,

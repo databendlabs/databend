@@ -12,29 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic;
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
+
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::row::RowConverter as CommonConverter;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
 use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::build_compact_block_no_split_pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
+use databend_common_pipeline_transforms::sort::CommonRows;
+use databend_common_pipeline_transforms::sort::RowConverter;
+use databend_common_pipeline_transforms::sort::Rows;
+use databend_common_pipeline_transforms::sort::SimpleRowConverter;
+use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::StreamContext;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::io::StreamBlockProperties;
+use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use match_template::match_template;
 
 use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::processors::transforms::ReclusterPartitionExchange;
+use crate::pipelines::processors::transforms::ReclusterPartitionStrategy;
+use crate::pipelines::processors::transforms::SampleState;
+use crate::pipelines::processors::transforms::TransformAddOrderColumn;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
+use crate::pipelines::processors::transforms::TransformPartitionCollect;
+use crate::pipelines::processors::transforms::TransformRangePartitionIndexer;
+use crate::pipelines::processors::transforms::TransformReclusterCollect;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -71,7 +104,7 @@ impl PipelineBuilder {
                 let recluster_block_nums = task.parts.len();
                 let block_thresholds = table.get_block_thresholds();
                 let table_info = table.get_table_info();
-                let schema = table.schema_with_stream();
+                let schema = Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
                 let description = task.stats.get_description(&table_info.desc);
                 let plan = DataSourcePlan {
                     source_info: DataSourceInfo::TableSource(table_info.clone()),
@@ -117,76 +150,248 @@ impl PipelineBuilder {
                         .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
                 }
 
-                let cluster_stats_gen = table.get_cluster_stats_gen(
-                    self.ctx.clone(),
-                    task.level + 1,
-                    block_thresholds,
-                    None,
-                )?;
-                let operators = cluster_stats_gen.operators.clone();
-                if !operators.is_empty() {
-                    let func_ctx2 = cluster_stats_gen.func_ctx.clone();
-                    self.main_pipeline.add_transformer(move || {
-                        CompoundBlockOperator::new(
-                            operators.clone(),
-                            func_ctx2.clone(),
-                            num_input_columns,
+                let level = task.level + 1;
+                let enable_stream_writer =
+                    self.ctx.get_settings().get_enable_block_stream_write()?
+                        && table.storage_format_as_parquet();
+                if enable_stream_writer {
+                    let properties = StreamBlockProperties::try_create(
+                        self.ctx.clone(),
+                        table,
+                        MutationKind::Recluster,
+                        Some(level),
+                        recluster.table_meta_timestamps,
+                    )?;
+                    let operators = properties.cluster_operators();
+                    if !operators.is_empty() {
+                        let func_ctx = self.ctx.get_function_context()?;
+                        self.main_pipeline.add_transformer(move || {
+                            CompoundBlockOperator::new(
+                                operators.clone(),
+                                func_ctx.clone(),
+                                num_input_columns,
+                            )
+                        });
+                    }
+
+                    let fields_with_cluster_key = properties.fields_with_cluster_key();
+                    let schema = DataSchemaRefExt::create(fields_with_cluster_key);
+                    let sort_descs: Vec<_> = properties
+                        .cluster_key_index()
+                        .iter()
+                        .map(|&offset| SortColumnDescription {
+                            offset,
+                            asc: true,
+                            nulls_first: false,
+                        })
+                        .collect();
+
+                    let num_processors = self.main_pipeline.output_len();
+                    let sample_rate = 0.01;
+                    let partitions = block_thresholds.calc_partitions_for_recluster(
+                        task.total_rows,
+                        task.total_bytes,
+                        task.total_compressed,
+                    );
+                    let state = SampleState::new(num_processors, partitions);
+                    let recluster_pipeline_builder =
+                        ReclusterPipelineBuilder::create(schema, sort_descs.into(), sample_rate)
+                            .with_state(state);
+                    recluster_pipeline_builder
+                        .build_recluster_sample_pipeline(&mut self.main_pipeline)?;
+
+                    self.main_pipeline.exchange(
+                        num_processors,
+                        ReclusterPartitionExchange::create(0, partitions),
+                    );
+                    let processor_id = AtomicUsize::new(0);
+                    let settings = self.ctx.get_settings();
+                    let memory_settings = MemorySettings::disable_spill();
+                    self.main_pipeline.add_transform(|input, output| {
+                        Ok(ProcessorPtr::create(Box::new(
+                            TransformPartitionCollect::new(
+                                self.ctx.clone(),
+                                input,
+                                output,
+                                &settings,
+                                processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                                num_processors,
+                                partitions,
+                                memory_settings.clone(),
+                                None,
+                                ReclusterPartitionStrategy::new(properties.clone()),
+                            )?,
+                        )))
+                    })?;
+
+                    self.main_pipeline.add_async_accumulating_transformer(|| {
+                        TransformBlockWriter::create(
+                            self.ctx.clone(),
+                            MutationKind::Recluster,
+                            table,
+                            false,
                         )
                     });
+                    Ok(())
+                } else {
+                    let cluster_stats_gen = table.get_cluster_stats_gen(
+                        self.ctx.clone(),
+                        level,
+                        block_thresholds,
+                        None,
+                    )?;
+                    let operators = cluster_stats_gen.operators.clone();
+                    if !operators.is_empty() {
+                        let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+                        self.main_pipeline.add_transformer(move || {
+                            CompoundBlockOperator::new(
+                                operators.clone(),
+                                func_ctx2.clone(),
+                                num_input_columns,
+                            )
+                        });
+                    }
+
+                    // construct output fields
+                    let output_fields = cluster_stats_gen.out_fields.clone();
+                    let schema = DataSchemaRefExt::create(output_fields);
+                    let sort_descs: Vec<_> = cluster_stats_gen
+                        .cluster_key_index
+                        .iter()
+                        .map(|offset| SortColumnDescription {
+                            offset: *offset,
+                            asc: true,
+                            nulls_first: false,
+                        })
+                        .collect();
+
+                    // merge sort
+                    let sort_block_size = block_thresholds.calc_rows_for_recluster(
+                        task.total_rows,
+                        task.total_bytes,
+                        task.total_compressed,
+                    );
+
+                    let sort_pipeline_builder =
+                        SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs.into())?
+                            .with_block_size_hit(sort_block_size)
+                            .remove_order_col_at_last();
+                    // Todo(zhyass): Recluster will no longer perform sort in the near future.
+                    sort_pipeline_builder.build_full_sort_pipeline(&mut self.main_pipeline)?;
+
+                    // Compact after merge sort.
+                    let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+                    build_compact_block_no_split_pipeline(
+                        &mut self.main_pipeline,
+                        block_thresholds,
+                        max_threads,
+                    )?;
+
+                    self.main_pipeline.add_transform(
+                        |transform_input_port, transform_output_port| {
+                            let proc = TransformSerializeBlock::try_create(
+                                self.ctx.clone(),
+                                transform_input_port,
+                                transform_output_port,
+                                table,
+                                cluster_stats_gen.clone(),
+                                MutationKind::Recluster,
+                                recluster.table_meta_timestamps,
+                            )?;
+                            proc.into_processor()
+                        },
+                    )
                 }
-
-                // construct output fields
-                let output_fields = cluster_stats_gen.out_fields.clone();
-                let schema = DataSchemaRefExt::create(output_fields);
-                let sort_descs: Vec<_> = cluster_stats_gen
-                    .cluster_key_index
-                    .iter()
-                    .map(|offset| SortColumnDescription {
-                        offset: *offset,
-                        asc: true,
-                        nulls_first: false,
-                    })
-                    .collect();
-
-                // merge sort
-                let sort_block_size = block_thresholds.calc_rows_for_recluster(
-                    task.total_rows,
-                    task.total_bytes,
-                    task.total_compressed,
-                );
-
-                let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs.into())?
-                        .with_block_size_hit(sort_block_size)
-                        .remove_order_col_at_last();
-                // Todo(zhyass): Recluster will no longer perform sort in the near future.
-                sort_pipeline_builder.build_full_sort_pipeline(&mut self.main_pipeline)?;
-
-                // Compact after merge sort.
-                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-                build_compact_block_no_split_pipeline(
-                    &mut self.main_pipeline,
-                    block_thresholds,
-                    max_threads,
-                )?;
-
-                self.main_pipeline
-                    .add_transform(|transform_input_port, transform_output_port| {
-                        let proc = TransformSerializeBlock::try_create(
-                            self.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            table,
-                            cluster_stats_gen.clone(),
-                            MutationKind::Recluster,
-                            recluster.table_meta_timestamps,
-                        )?;
-                        proc.into_processor()
-                    })
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),
             )),
         }
+    }
+}
+
+struct ReclusterPipelineBuilder {
+    schema: DataSchemaRef,
+    sort_desc: Arc<[SortColumnDescription]>,
+    state: Option<Arc<SampleState>>,
+    sample_rate: f64,
+    seed: u64,
+}
+
+impl ReclusterPipelineBuilder {
+    fn create(
+        schema: DataSchemaRef,
+        sort_desc: Arc<[SortColumnDescription]>,
+        sample_rate: f64,
+    ) -> Self {
+        Self {
+            schema,
+            sort_desc,
+            state: None,
+            sample_rate,
+            seed: rand::random(),
+        }
+    }
+
+    #[allow(unused)]
+    fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = seed;
+        self
+    }
+
+    fn with_state(mut self, state: Arc<SampleState>) -> Self {
+        self.state = Some(state);
+        self
+    }
+
+    fn build_recluster_sample_pipeline(&self, pipeline: &mut Pipeline) -> Result<()> {
+        match self.sort_desc.as_ref() {
+            [desc] => {
+                let schema = self.schema.clone();
+                let sort_type = schema.field(desc.offset).data_type();
+                assert!(desc.asc);
+
+                match_template! {
+                    T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
+                    match sort_type {
+                        DataType::T => {
+                            self.visit_type::<SimpleRowsAsc<T>, SimpleRowConverter<T>>(pipeline)
+                        },
+                        DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                            NumberDataType::NUM_TYPE => {
+                                self.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>(pipeline)
+                            }
+                        }),
+                        _ => self.visit_type::<CommonRows, CommonConverter>(pipeline)
+                    }
+                }
+            }
+            _ => self.visit_type::<CommonRows, CommonConverter>(pipeline),
+        }
+    }
+
+    fn visit_type<R, C>(&self, pipeline: &mut Pipeline) -> Result<()>
+    where
+        R: Rows + 'static,
+        C: RowConverter<R> + Send + 'static,
+        R::Type: ArgType + Send + Sync,
+        <R::Type as AccessType>::Scalar: Ord + Send + Sync,
+    {
+        pipeline.try_add_transformer(|| {
+            TransformAddOrderColumn::<R, C>::try_new(self.sort_desc.clone(), self.schema.clone())
+        })?;
+        let offset = self.schema.num_fields();
+        pipeline.add_accumulating_transformer(|| {
+            TransformReclusterCollect::<R::Type>::new(offset, self.sample_rate, self.seed)
+        });
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(TransformRangePartitionIndexer::<
+                R::Type,
+            >::create(
+                input,
+                output,
+                self.state.clone().unwrap(),
+            )))
+        })
     }
 }

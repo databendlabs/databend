@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod builder;
 mod range_bound_sampler;
 mod recluster_partition_exchange;
 mod recluster_partition_strategy;
@@ -25,7 +24,8 @@ pub use range_bound_sampler::RangeBoundSampler;
 pub use recluster_partition_exchange::ReclusterPartitionExchange;
 pub use recluster_partition_strategy::CompactPartitionStrategy;
 pub use recluster_partition_strategy::ReclusterPartitionStrategy;
-pub(crate) use recluster_sample_state::SampleState;
+pub use recluster_sample_state::SampleState;
+pub use transform_add_order_column::TransformAddOrderColumn;
 pub use transform_range_partition_indexer::TransformRangePartitionIndexer;
-pub(crate) use transform_recluster_collect::ReclusterSampleMeta;
+pub use transform_recluster_collect::ReclusterSampleMeta;
 pub use transform_recluster_collect::TransformReclusterCollect;

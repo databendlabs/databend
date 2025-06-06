@@ -259,7 +259,7 @@ impl FormatDisplay<'_> {
                 rows_str,
                 self.start.elapsed().as_secs_f64(),
                 humanize_count(stats.total_rows as f64),
-                HumanBytes(stats.total_rows as u64),
+                HumanBytes(stats.total_bytes as u64),
                 humanize_count(stats.total_rows as f64 / self.start.elapsed().as_secs_f64()),
                 HumanBytes((stats.total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
             );
