@@ -1,4 +1,4 @@
-name: "cross_join_aggregation"
+name: "01_cross_join_aggregation"
 description: "Test for cross join with aggregation functions"
 
 sql: |

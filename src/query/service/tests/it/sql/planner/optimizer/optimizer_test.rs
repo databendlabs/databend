@@ -13,13 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
-use std::io;
 use std::io::Write;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
-
-use async_recursion::async_recursion;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
@@ -99,72 +98,213 @@ struct TestCase {
     pub table_statistics: HashMap<String, YamlTableStatistics>,
     pub column_statistics: HashMap<String, YamlColumnStatistics>,
     pub auto_statistics: bool,
+    pub original_file_name: String, // Store the original file name without extension
 }
 
-/// Setup tables with required schema, supporting subdirectories
-async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
-    // Get the base path for table definitions
-    let base_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data/tables");
+/// Enum representing different types of directories in the test data
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum DirectoryType {
+    Tables,
+    Cases,
+    Statistics,
+    Results,
+}
 
-    // Check if the directory exists
-    if !base_path.exists() {
-        return Err(ErrorCode::UnknownException(format!(
-            "Tables directory not found at {:?}",
-            base_path
-        )));
+/// Struct to hold all test files organized by directory type
+struct TestFiles {
+    /// Files organized by directory type and subdirectory
+    files: HashMap<DirectoryType, HashMap<String, Vec<PathBuf>>>,
+    /// Base path for all test data
+    base_path: PathBuf,
+    /// Subdirectory filter used when collecting files
+    subdir_filter: Option<String>,
+}
+
+impl TestFiles {
+    /// Create a new TestFiles instance and collect all files
+    fn new(base_path: &Path, subdir_filter: Option<&str>) -> Result<Self> {
+        // Create a map for each directory type
+        let mut files = HashMap::new();
+        files.insert(DirectoryType::Tables, HashMap::new());
+        files.insert(DirectoryType::Cases, HashMap::new());
+        files.insert(DirectoryType::Statistics, HashMap::new());
+        files.insert(DirectoryType::Results, HashMap::new());
+
+        // Create the TestFiles instance
+        let mut test_files = Self {
+            files,
+            base_path: base_path.to_path_buf(),
+            subdir_filter: subdir_filter.map(|s| s.to_string()),
+        };
+
+        // Collect files for each directory type
+        Self::collect_directory_files(
+            base_path,
+            DirectoryType::Tables,
+            &mut test_files.files,
+            subdir_filter,
+            &["sql"],
+        )?;
+        Self::collect_directory_files(
+            base_path,
+            DirectoryType::Cases,
+            &mut test_files.files,
+            subdir_filter,
+            &["yaml", "yml"],
+        )?;
+        Self::collect_directory_files(
+            base_path,
+            DirectoryType::Statistics,
+            &mut test_files.files,
+            subdir_filter,
+            &["yaml", "yml"],
+        )?;
+        Self::collect_directory_files(
+            base_path,
+            DirectoryType::Results,
+            &mut test_files.files,
+            subdir_filter,
+            &["txt"],
+        )?;
+
+        Ok(test_files)
     }
 
-    // Recursively process all SQL files in the tables directory and its subdirectories
-    let mut created_tables = std::collections::HashSet::new();
-    setup_tables_recursive(ctx, &base_path, &mut created_tables).await?;
-    
-    Ok(())
-}
+    /// Collect files from a specific directory type
+    fn collect_directory_files(
+        base_path: &Path,
+        dir_type: DirectoryType,
+        files_map: &mut HashMap<DirectoryType, HashMap<String, Vec<PathBuf>>>,
+        subdir_filter: Option<&str>,
+        extensions: &[&str],
+    ) -> Result<()> {
+        // Get the directory name based on directory type
+        let dir_name = match dir_type {
+            DirectoryType::Tables => "tables",
+            DirectoryType::Cases => "cases",
+            DirectoryType::Statistics => "statistics",
+            DirectoryType::Results => "results",
+        };
 
-/// Recursively process SQL files in a directory and its subdirectories
-/// Uses a HashSet to track tables that have already been created to avoid duplicates
-#[async_recursion(#[recursive::recursive])]
-async fn setup_tables_recursive(ctx: &Arc<QueryContext>, dir_path: &Path, created_tables: &mut std::collections::HashSet<String>) -> Result<()> {
-    // Read all entries from the directory
-    for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
+        let dir_path = base_path.join(dir_name);
+        if !dir_path.exists() {
+            return Ok(());
+        }
 
-        if path.is_dir() {
-            // Recursively process subdirectories
-            setup_tables_recursive(ctx, &path, created_tables).await?;
-        } else if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
-            // Extract table name from filename (without extension)
-            if let Some(file_stem) = path.file_stem() {
-                if let Some(table_name) = file_stem.to_str() {
-                    // Skip if table has already been created
-                    if created_tables.contains(table_name) {
-                        println!("Skipping duplicate table: {}", table_name);
-                        continue;
-                    }
-                    
-                    let sql = fs::read_to_string(&path)?;
-                    println!("Creating table: {}", table_name);
-                    execute_sql(ctx, &sql).await?;
-                    
-                    // Mark table as created
-                    created_tables.insert(table_name.to_string());
+        // Determine the directory to scan based on subdir_filter
+        let scan_dirs = if let Some(subdir) = subdir_filter {
+            let subdir_path = dir_path.join(subdir);
+            if !subdir_path.exists() {
+                // If the specific subdirectory doesn't exist, return empty
+                return Ok(());
+            }
+            vec![subdir_path]
+        } else {
+            // If no filter, scan all immediate subdirectories
+            let mut subdirs = Vec::new();
+            for entry in fs::read_dir(&dir_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    subdirs.push(path);
                 }
             }
+            // If no subdirectories found, use the main directory
+            if subdirs.is_empty() {
+                subdirs.push(dir_path);
+            }
+            subdirs
+        };
+
+        // Get the files map for this directory type
+        let type_files = files_map.get_mut(&dir_type).unwrap();
+
+        // Process each scan directory
+        for scan_dir in scan_dirs {
+            // Get subdirectory name (or "root" if it's the main directory)
+            let subdir_name = if let Some(file_name) = scan_dir.file_name() {
+                if let Some(name_str) = file_name.to_str() {
+                    name_str.to_string()
+                } else {
+                    "root".to_string()
+                }
+            } else {
+                "root".to_string()
+            };
+
+            // Create entry for this subdirectory if it doesn't exist
+            let subdir_files = type_files.entry(subdir_name).or_default();
+
+            // Collect all files with the specified extensions
+            let mut collected_files = Vec::new();
+            Self::collect_files(&scan_dir, &mut collected_files, extensions)?;
+
+            // Sort files for consistent ordering
+            collected_files.sort();
+
+            // Add collected files to the map
+            subdir_files.extend(collected_files);
+        }
+
+        Ok(())
+    }
+
+    /// Recursively collect files with specific extensions
+    fn collect_files(dir: &Path, files: &mut Vec<PathBuf>, extensions: &[&str]) -> Result<()> {
+        for entry in fs::read_dir(dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::collect_files(&path, files, extensions)?;
+            } else if path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|s| s.to_str().is_some_and(|s_str| extensions.contains(&s_str)))
+            {
+                files.push(path);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get files of a specific type and subdirectory
+    fn get_files(&self, dir_type: DirectoryType, subdir: Option<&str>) -> Vec<PathBuf> {
+        let type_files = match self.files.get(&dir_type) {
+            Some(files) => files,
+            None => return Vec::new(),
+        };
+
+        if let Some(subdir_name) = subdir {
+            if let Some(files) = type_files.get(subdir_name) {
+                files.clone()
+            } else {
+                Vec::new()
+            }
+        } else {
+            // If no subdirectory specified, return all files from all subdirectories
+            let mut all_files = Vec::new();
+            for files in type_files.values() {
+                all_files.extend(files.clone());
+            }
+            all_files.sort();
+            all_files
         }
     }
-    Ok(())
+
 }
 
 /// Convert a YAML test case to a TestCase
-fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
+fn create_test_case(yaml: YamlTestCase, base_path: &Path, file_path: &Path) -> Result<TestCase> {
     let mut table_statistics = yaml.table_statistics;
     let mut column_statistics = yaml.column_statistics;
 
     // If there's a statistics file reference, load it and merge with inline statistics
     if let Some(stats_file) = yaml.statistics_file {
-        let (file_table_stats, file_column_stats) = load_statistics_file(base_path, &stats_file)?;
+        // Create a TestFiles instance for loading statistics
+        let test_files = TestFiles::new(base_path, None)?;
+        let (file_table_stats, file_column_stats) = load_statistics_file(&test_files, &stats_file)?;
 
         // Merge table statistics (file stats take precedence)
         for (table_name, stats) in file_table_stats {
@@ -177,13 +317,208 @@ fn create_test_case(yaml: YamlTestCase, base_path: &Path) -> Result<TestCase> {
         }
     }
 
+    // Extract the file name without extension to use for result file paths
+    let file_name = file_path.file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+
     Ok(TestCase {
         name: Box::leak(yaml.name.clone().into_boxed_str()),
         sql: Box::leak(yaml.sql.clone().into_boxed_str()),
         table_statistics,
         column_statistics,
         auto_statistics: yaml.auto_statistics,
+        original_file_name: file_name,
     })
+}
+
+/// Setup tables with required schema using TestFiles
+async fn setup_tables(ctx: &Arc<QueryContext>, test_files: &TestFiles) {
+    // Get SQL files for table definitions from TestFiles
+    let table_files =
+        test_files.get_files(DirectoryType::Tables, test_files.subdir_filter.as_deref());
+
+    // Process each SQL file to create tables
+    for file_path in table_files {
+        // Read the SQL file content
+        let sql = match fs::read_to_string(&file_path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error reading table file {:?}: {}", file_path, e);
+                continue;
+            }
+        };
+
+        // Execute each SQL statement to create tables
+        for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
+            match execute_sql(ctx, statement).await {
+                Ok(_) => println!("Created table: {}", file_path.display()),
+                Err(e) => eprintln!("Error creating table {}: {}", file_path.display(), e),
+            }
+        }
+    }
+}
+
+
+
+/// Load statistics from an external YAML file
+fn load_statistics_file(
+    test_files: &TestFiles,
+    file_name: &str,
+) -> Result<(
+    HashMap<String, YamlTableStatistics>,
+    HashMap<String, YamlColumnStatistics>,
+)> {
+    #[derive(Debug, Serialize, Deserialize)]
+    struct StatisticsFile {
+        table_statistics: HashMap<String, YamlTableStatistics>,
+        column_statistics: HashMap<String, YamlColumnStatistics>,
+    }
+
+    // Parse the file name to extract subdirectory path and file name
+    let parts: Vec<&str> = file_name.split('/').collect();
+    let (subdir_path, stats_file_name) = if parts.len() > 1 {
+        // If there's a subdirectory path
+        let name = parts.last().unwrap();
+        let subdir = parts[..parts.len() - 1].join("/");
+        (Some(subdir), name.to_string())
+    } else {
+        // If there's no subdirectory
+        (None, file_name.to_string())
+    };
+    
+    // Extract the file stem (without extension) for comparison
+    let stats_file_stem = Path::new(&stats_file_name)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&stats_file_name);
+
+    // Get all statistics files for the specified subdirectory
+    let stats_files = test_files.get_files(DirectoryType::Statistics, subdir_path.as_deref());
+
+    // First try exact match
+    for path in &stats_files {
+        if let Some(file_stem) = path.file_stem() {
+            if let Some(name) = file_stem.to_str() {
+                // Compare file stem to file stem (without extensions)
+                if name == stats_file_stem {
+                    let content = fs::read_to_string(path)?;
+                    let stats: StatisticsFile = serde_yaml::from_str(&content).map_err(|e| {
+                        ErrorCode::Internal(format!("Failed to parse statistics YAML: {}", e))
+                    })?;
+
+                    return Ok((stats.table_statistics, stats.column_statistics));
+                }
+            }
+        }
+    }
+
+    // If exact match not found, try to find a file with numeric prefix
+    for path in stats_files {
+        if let Some(file_stem) = path.file_stem() {
+            if let Some(name) = file_stem.to_str() {
+                // Check if the file name contains our target name (ignoring numeric prefixes)
+                // For example, "01_tpcds_100g.yaml" should match "tpcds_100g"
+                // Compare file stem to file stem (without extensions)
+                if name.ends_with(stats_file_stem) || name.contains(stats_file_stem) {
+                    let content = fs::read_to_string(&path)?;
+                    let stats: StatisticsFile = serde_yaml::from_str(&content).map_err(|e| {
+                        ErrorCode::Internal(format!("Failed to parse statistics YAML: {}", e))
+                    })?;
+
+                    println!("Found statistics file with prefix: {}", path.display());
+                    return Ok((stats.table_statistics, stats.column_statistics));
+                }
+            }
+        }
+    }
+
+    // If we get here, the file wasn't found
+    Err(ErrorCode::Internal(format!(
+        "Statistics file not found: {} (also tried with numeric prefixes)",
+        file_name
+    )))
+}
+
+/// Load test cases from YAML files using TestFiles
+fn load_test_cases(test_files: &TestFiles) -> Result<Vec<TestCase>> {
+    // Get YAML test case files from TestFiles
+    let yaml_files =
+        test_files.get_files(DirectoryType::Cases, test_files.subdir_filter.as_deref());
+
+    if yaml_files.is_empty() {
+        if let Some(subdir) = &test_files.subdir_filter {
+            println!("No test case files found for subdirectory: {}", subdir);
+        } else {
+            println!("No test case files found");
+        }
+        return Ok(Vec::new());
+    }
+
+    // Log what we're doing
+    if let Some(subdir) = &test_files.subdir_filter {
+        println!("Loading test cases from subdirectory: {}", subdir);
+    } else {
+        println!("Loading all test cases");
+    }
+
+    // Load test cases from YAML files
+    let mut test_cases = Vec::new();
+    let cases_dir = test_files.base_path.join("cases");
+
+    for file in yaml_files {
+        // Read the YAML file
+        let yaml_content = fs::read_to_string(&file)?;
+
+        // Parse the YAML content
+        let yaml_test_case: YamlTestCase = serde_yaml::from_str(&yaml_content)
+            .map_err(|e| ErrorCode::Internal(format!("Failed to parse YAML: {}", e)))?;
+
+        // Convert to TestCase
+        let mut test_case = create_test_case(yaml_test_case, &test_files.base_path, &file)?;
+
+        // Extract subdirectory information from the path
+        if let Ok(rel_path) = file.strip_prefix(&cases_dir) {
+            let parent_path = rel_path.parent();
+            if let Some(parent) = parent_path {
+                if !parent.as_os_str().is_empty() {
+                    // Store the subdirectory path as part of the test case name
+                    let subdir = parent.to_string_lossy().to_string();
+                    let test_name = test_case.name;
+                    let full_name = format!("{}/{}", subdir, test_name);
+                    test_case.name = Box::leak(full_name.into_boxed_str());
+                }
+            }
+        }
+
+        test_cases.push(test_case);
+    }
+
+    Ok(test_cases)
+}
+
+fn apply_scan_stats(
+    plan: &mut Plan,
+    table_statistics: HashMap<String, YamlTableStatistics>,
+    column_statistics: HashMap<String, YamlColumnStatistics>,
+) -> Result<()> {
+    if let Plan::Query {
+        s_expr, metadata, ..
+    } = plan
+    {
+        let mut visitor = ScanStatsVisitor {
+            metadata,
+            table_statistics: &table_statistics,
+            column_statistics: &column_statistics,
+        };
+
+        if let Some(new_s_expr) = s_expr.accept(&mut visitor)? {
+            *s_expr = Box::new(new_s_expr);
+        }
+    }
+
+    Ok(())
 }
 
 /// Convert a JSON value to a Datum
@@ -210,165 +545,7 @@ fn convert_to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
     None
 }
 
-/// Load statistics from an external YAML file
-fn load_statistics_file(
-    base_path: &Path,
-    file_name: &str,
-) -> Result<(
-    HashMap<String, YamlTableStatistics>,
-    HashMap<String, YamlColumnStatistics>,
-)> {
-    #[derive(Debug, Serialize, Deserialize)]
-    struct StatisticsFile {
-        table_statistics: HashMap<String, YamlTableStatistics>,
-        column_statistics: HashMap<String, YamlColumnStatistics>,
-    }
 
-    // Parse the file name to extract subdirectory path
-    let parts: Vec<&str> = file_name.split('/').collect();
-    let (subdir_path, stats_file_name) = if parts.len() > 1 {
-        // If there's a subdirectory path
-        let name = parts.last().unwrap();
-        let subdir = parts[..parts.len() - 1].join("/");
-        (Some(subdir), name.to_string())
-    } else {
-        // If there's no subdirectory
-        (None, file_name.to_string())
-    };
-    
-    // Generate the full path to the statistics file
-    let stats_path = if let Some(subdir) = subdir_path {
-        base_path.join("statistics").join(subdir).join(stats_file_name)
-    } else {
-        base_path.join("statistics").join(stats_file_name)
-    };
-    
-    if !stats_path.exists() {
-        return Err(ErrorCode::Internal(format!(
-            "Statistics file not found: {}",
-            stats_path.display()
-        )));
-    }
-
-    let content = fs::read_to_string(&stats_path)?;
-    let stats: StatisticsFile = serde_yaml::from_str(&content)
-        .map_err(|e| ErrorCode::Internal(format!("Failed to parse statistics YAML: {}", e)))?;
-
-    Ok((stats.table_statistics, stats.column_statistics))
-}
-
-/// Load test cases from YAML files
-fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
-    let cases_dir = base_path.join("cases");
-    let mut test_cases = Vec::new();
-
-    if !cases_dir.exists() {
-        return Ok(Vec::new());
-    }
-
-    // Recursively load test cases from the cases directory and its subdirectories
-    load_test_cases_recursive(&cases_dir, &cases_dir, &mut test_cases, base_path)?;
-
-    Ok(test_cases)
-}
-
-/// Recursively load test cases from a directory and its subdirectories
-fn load_test_cases_recursive(
-    cases_dir: &Path,
-    current_dir: &Path,
-    test_cases: &mut Vec<TestCase>,
-    base_path: &Path,
-) -> Result<()> {
-    let mut entries = fs::read_dir(current_dir)?.collect::<io::Result<Vec<_>>>()?;
-    entries.sort_by_key(fs::DirEntry::file_name);
-
-    for entry in entries {
-        let path = entry.path();
-
-        if path.is_dir() {
-            // Recursively process subdirectories
-            load_test_cases_recursive(cases_dir, &path, test_cases, base_path)?;
-        } else if path.is_file()
-            && path
-                .extension()
-                .is_some_and(|ext| ext == "yaml" || ext == "yml")
-        {
-            let content = fs::read_to_string(&path)?;
-            let yaml_test_case: YamlTestCase = serde_yaml::from_str(&content)
-                .map_err(|e| ErrorCode::Internal(format!("Failed to parse YAML: {}", e)))?;
-            
-            // Extract path parts and create the test case
-            let (subdir_path, _file_name) = extract_path_parts(&path, &cases_dir)?;
-            let mut test_case = create_test_case(yaml_test_case, base_path)?;
-            
-            // Store the subdirectory path as part of the test case name if it exists
-            if let Some(subdir) = subdir_path {
-                let test_name = test_case.name;
-                let full_name = format!("{}/{}", subdir, test_name);
-                test_case.name = Box::leak(full_name.into_boxed_str());
-            }
-            
-            test_cases.push(test_case);
-        }
-    }
-
-    Ok(())
-}
-
-/// Extract subdirectory path and test name from a full path
-fn extract_path_parts(path: &Path, base_dir: &Path) -> Result<(Option<String>, String)> {
-    // Get the file stem (filename without extension)
-    let file_name = path.file_stem()
-        .ok_or_else(|| ErrorCode::Internal("Failed to get file stem".to_string()))?
-        .to_string_lossy()
-        .to_string();
-    
-    // Get the parent directory
-    if let Some(parent) = path.parent() {
-        if parent != base_dir {
-            // If the file is in a subdirectory, extract the relative path
-            if let Ok(rel_path) = parent.strip_prefix(base_dir) {
-                let subdir_path = rel_path.to_string_lossy().to_string();
-                return Ok((Some(subdir_path), file_name));
-            }
-        }
-    }
-    
-    // If no subdirectory or error extracting it
-    Ok((None, file_name))
-}
-
-/// Generate a result file path based on subdirectory path, test name, and result type
-fn generate_result_path(subdir_path: &Option<String>, test_name: &str, result_type: &str) -> String {
-    if let Some(subdir) = subdir_path {
-        format!("{}/{}_{}.txt", subdir, test_name, result_type)
-    } else {
-        format!("{}_{}.txt", test_name, result_type)
-    }
-}
-
-fn apply_scan_stats(
-    plan: &mut Plan,
-    table_statistics: HashMap<String, YamlTableStatistics>,
-    column_statistics: HashMap<String, YamlColumnStatistics>,
-) -> Result<()> {
-    if let Plan::Query {
-        s_expr, metadata, ..
-    } = plan
-    {
-        let mut visitor = ScanStatsVisitor {
-            metadata,
-            table_statistics: &table_statistics,
-            column_statistics: &column_statistics,
-        };
-
-        if let Some(new_s_expr) = s_expr.accept(&mut visitor)? {
-            *s_expr = Box::new(new_s_expr);
-        }
-    }
-
-    Ok(())
-}
 
 struct ScanStatsVisitor<'a> {
     metadata: &'a MetadataRef,
@@ -479,30 +656,44 @@ impl<'a> SExprVisitor for ScanStatsVisitor<'a> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_optimizer() -> Result<()> {
+    // Check if a subdirectory filter is specified via environment variable
+    let subdir = std::env::var("TEST_SUBDIR").ok();
+    let subdir_ref = subdir.as_deref();
+
+    // Get the base path for test data
+    let base_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
+
+    // Collect all test files, filtered by subdirectory if specified
+    let test_files = TestFiles::new(&base_path, subdir_ref)?;
+
     // Create a test fixture with a query context
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    // Setup tables needed for TPC-DS queries
-    setup_tpcds_tables(&ctx).await?;
 
-    // Load test cases from YAML files
-    let base_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
-    let results_dir = base_path.join("results");
-    
-    // Create the results directory if it doesn't exist
-    if !results_dir.exists() {
-        fs::create_dir_all(&results_dir)?;
-    }
-    
-    let mut mint = Mint::new(&results_dir);
+    // Setup tables needed for queries using TestFiles
+    setup_tables(&ctx, &test_files).await;
 
-    let tests = load_test_cases(&base_path)?;
+    // Load test cases from YAML files using TestFiles
+    let tests = load_test_cases(&test_files)?;
 
     if tests.is_empty() {
-        println!("No test cases found in {:?}", base_path);
+        if let Some(subdir) = subdir_ref {
+            println!("No test cases found for subdirectory: {}", subdir);
+        } else {
+            println!("No test cases found in {:?}", base_path);
+        }
         return Ok(());
     }
+
+    // Get the results directory path
+    let results_dir = base_path.join("results");
+    
+    // Create a HashMap to store Mint instances for each subdirectory
+    let mut subdirectory_mints: HashMap<String, Mint> = HashMap::new();
+    
+    // Create a root Mint instance for tests without subdirectory
+    let mut root_mint = Mint::new(&results_dir);
 
     // Run all test cases
     for test in tests {
@@ -515,10 +706,10 @@ async fn test_optimizer() -> Result<()> {
         }
 
         println!("\n\n========== Testing: {} ==========", test.name);
-        
-        // Extract the subdirectory path and test name
+
+        // Split the test name to extract subdirectory and actual test name
         let parts: Vec<&str> = test.name.split('/').collect();
-        let (subdir_path, test_name) = if parts.len() > 1 {
+        let (subdir_path, _test_name) = if parts.len() > 1 {
             // If there's a subdirectory path
             let name = parts.last().unwrap();
             let subdir = parts[..parts.len() - 1].join("/");
@@ -527,19 +718,22 @@ async fn test_optimizer() -> Result<()> {
             // If there's no subdirectory
             (None, test.name)
         };
+
+        let result_path = format!("{}_raw.txt", test.original_file_name);
+        println!("Test: {}, Subdirectory: {:?}, Original file name: {}, Result path: {}", 
+                 test.name, subdir_path, test.original_file_name, result_path);
         
-        // Create subdirectory in results if needed
-        if let Some(subdir) = &subdir_path {
-            let full_subdir_path = results_dir.join(subdir);
-            if !full_subdir_path.exists() {
-                fs::create_dir_all(&full_subdir_path)?;
+        // Get the appropriate Mint instance based on subdirectory
+        let file = if let Some(subdir) = &subdir_path {
+            // Get or create a Mint instance for this subdirectory
+            if !subdirectory_mints.contains_key(subdir) {
+                let subdir_results = results_dir.join(subdir);
+                subdirectory_mints.insert(subdir.clone(), Mint::new(&subdir_results));
             }
-        }
-        
-        // Generate raw plan result path
-        let result_path = generate_result_path(&subdir_path, test_name, "raw");
-        
-        let file = &mut mint.new_goldenfile(&result_path).unwrap();
+            &mut subdirectory_mints.get_mut(subdir).unwrap().new_goldenfile(&result_path).unwrap()
+        } else {
+            &mut root_mint.new_goldenfile(&result_path).unwrap()
+        };
 
         // Parse SQL to get raw plan
         let mut raw_plan = raw_plan(&ctx, test.sql).await?;
@@ -576,9 +770,14 @@ async fn test_optimizer() -> Result<()> {
         };
 
         // Generate optimized plan result path
-        let optimized_path = generate_result_path(&subdir_path, test_name, "optimized");
-        
-        let file = &mut mint.new_goldenfile(&optimized_path).unwrap();
+        let result_path = format!("{}_optimized.txt", test.original_file_name);
+
+        // Get the appropriate Mint instance based on subdirectory
+        let file = if let Some(subdir) = &subdir_path {
+            &mut subdirectory_mints.get_mut(subdir).unwrap().new_goldenfile(&result_path).unwrap()
+        } else {
+            &mut root_mint.new_goldenfile(&result_path).unwrap()
+        };
         let optimized_plan_str = optimized_plan.format_indent(FormatOptions::default())?;
         writeln!(file, "{}", optimized_plan_str)?;
         if let Plan::Query {
@@ -592,9 +791,14 @@ async fn test_optimizer() -> Result<()> {
             let physical_plan = builder.build(&s_expr, bind_context.column_set()).await?;
 
             // Generate physical plan result path
-            let physical_path = generate_result_path(&subdir_path, test_name, "physical");
-            
-            let file = &mut mint.new_goldenfile(&physical_path).unwrap();
+            let result_path = format!("{}_physical.txt", test.original_file_name);
+
+            // Get the appropriate Mint instance based on subdirectory
+            let file = if let Some(subdir) = &subdir_path {
+                &mut subdirectory_mints.get_mut(subdir).unwrap().new_goldenfile(&result_path).unwrap()
+            } else {
+                &mut root_mint.new_goldenfile(&result_path).unwrap()
+            };
 
             let result = physical_plan
                 .format(metadata.clone(), Default::default())?
