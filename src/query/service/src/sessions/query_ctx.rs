@@ -57,6 +57,7 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -149,7 +150,6 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
@@ -1918,6 +1918,10 @@ impl TableContext for QueryContext {
 
     fn reset_broadcast_id(&self) {
         self.shared.next_broadcast_id.store(0, Ordering::Release);
+    }
+
+    fn get_session_type(&self) -> SessionType {
+        self.shared.session.get_type()
     }
 }
 

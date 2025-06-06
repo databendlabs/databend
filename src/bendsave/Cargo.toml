@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 databend-common-base = { workspace = true }
+databend-common-catalog = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-meta-client = { workspace = true }

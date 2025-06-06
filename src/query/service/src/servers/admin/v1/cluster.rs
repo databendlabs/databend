@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use http::StatusCode;
@@ -22,7 +23,6 @@ use poem::web::Json;
 
 use crate::clusters::ClusterHelper;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 // GET /v1/cluster/list

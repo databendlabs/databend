@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
@@ -22,7 +23,6 @@ use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 /// Create a user for history log with necessary privileges
 pub fn get_history_log_user(tenant_id: &str, cluster_id: &str) -> UserInfo {

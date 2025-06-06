@@ -1102,7 +1102,7 @@ fn test_raw_insert_stmt() {
     ];
 
     for case in cases {
-        run_parser(file, insert_stmt(true), case);
+        run_parser(file, insert_stmt(true, false), case);
     }
 }
 

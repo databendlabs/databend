@@ -19,6 +19,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -34,7 +35,6 @@ use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use super::SessionType;
 use crate::sessions::QueryContextShared;
 
 pub struct SessionContext {

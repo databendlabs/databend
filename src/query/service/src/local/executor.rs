@@ -20,6 +20,7 @@ use databend_common_ast::parser::token::Tokenizer;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io::AsyncRead;
 use databend_common_base::base::tokio::time::Instant;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
@@ -49,7 +50,6 @@ use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 /// Session to execute local commands.
 pub(crate) struct SessionExecutor {

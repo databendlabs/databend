@@ -21,6 +21,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -52,7 +53,6 @@ use crate::servers::http::middleware::sanitize_request_headers;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug)]

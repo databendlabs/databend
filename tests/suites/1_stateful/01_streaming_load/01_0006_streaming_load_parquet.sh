@@ -14,7 +14,7 @@ function run() {
   echo "--$2"
   stmt "copy into @streaming_load_parquet/$1.parquet from (select $2)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;"
   echo ">>>> streaming load: $1.parquet $4 $5:"
-  curl -sS -H "x-databend-query-id:load-$1" -H "sql:insert into streaming_load_parquet($3) file_format = (type='parquet', missing_field_as=$4, null_if=($5))" -F "upload=@$DATA/$1.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
+  curl -sS -H "x-databend-query-id:load-$1" -H "sql:insert into streaming_load_parquet($3) values file_format = (type='parquet', missing_field_as=$4, null_if=($5))" -F "upload=@$DATA/$1.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
   echo
   echo "<<<<"
   query "select * from streaming_load_parquet;"

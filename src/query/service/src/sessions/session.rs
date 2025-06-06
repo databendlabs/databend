@@ -22,6 +22,7 @@ use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,7 +51,6 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
-use crate::sessions::SessionType;
 
 pub struct Session {
     pub(in crate::sessions) id: String,

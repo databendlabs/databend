@@ -13,12 +13,12 @@
 //  limitations under the License.
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
-use databend_query::sessions::SessionType;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
