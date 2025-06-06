@@ -5,7 +5,7 @@ select (number % 2) as a from numbers(5) group by grouping sets (a) order by a;
 1
 
 query IIIITTT rowsort
-select number a, number % 3 as b, number % 5 as c, a + 8, b::string,  c::string, (b+c)::string from numbers(1) group by rollup(a, b, c)
+select number a, number % 3 as b, number % 5 as c, a + 8, b::string as b_str, c::string as c_str, (b+c)::string from numbers(1) group by rollup(a, b, c)
 ----
 0 0 0 8 0 0 0
 0 0 NULL 8 0 NULL NULL

@@ -34,22 +34,20 @@ SELECT * FROM tbl3
 statement ok
 drop table tbl1
 
-# statement ok
-# CREATE TABLE tbl1 AS SELECT 'hello' UNION ALL SELECT 'world'
+statement ok
+CREATE TABLE tbl1 AS SELECT 'hello' UNION ALL SELECT 'world'
 
-# query I
-# SELECT * FROM tbl1
+query I
+SELECT * FROM tbl1 order by `'hello'`
+----
+hello
+world
 
-# ----
-# hello
-# world
-
-# statement ok
-# drop table tbl1
+statement ok
+drop table tbl1
 
 statement ok
 CREATE TABLE tbl1 AS SELECT 5 WHERE false
 
 statement ok
 SELECT * FROM tbl1
-
