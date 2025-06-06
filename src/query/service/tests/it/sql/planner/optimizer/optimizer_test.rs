@@ -19,6 +19,8 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 
+use async_recursion::async_recursion;
+
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
@@ -99,7 +101,7 @@ struct TestCase {
     pub auto_statistics: bool,
 }
 
-/// Setup TPC-DS tables with required schema
+/// Setup tables with required schema, supporting subdirectories
 async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
     // Get the base path for table definitions
     let base_path =
@@ -113,24 +115,45 @@ async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
         )));
     }
 
-    // Read all SQL files from the tables directory
-    for entry in fs::read_dir(&base_path)? {
+    // Recursively process all SQL files in the tables directory and its subdirectories
+    let mut created_tables = std::collections::HashSet::new();
+    setup_tables_recursive(ctx, &base_path, &mut created_tables).await?;
+    
+    Ok(())
+}
+
+/// Recursively process SQL files in a directory and its subdirectories
+/// Uses a HashSet to track tables that have already been created to avoid duplicates
+#[async_recursion(#[recursive::recursive])]
+async fn setup_tables_recursive(ctx: &Arc<QueryContext>, dir_path: &Path, created_tables: &mut std::collections::HashSet<String>) -> Result<()> {
+    // Read all entries from the directory
+    for entry in fs::read_dir(dir_path)? {
         let entry = entry?;
         let path = entry.path();
 
-        // Only process SQL files
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
+        if path.is_dir() {
+            // Recursively process subdirectories
+            setup_tables_recursive(ctx, &path, created_tables).await?;
+        } else if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
             // Extract table name from filename (without extension)
             if let Some(file_stem) = path.file_stem() {
                 if let Some(table_name) = file_stem.to_str() {
+                    // Skip if table has already been created
+                    if created_tables.contains(table_name) {
+                        println!("Skipping duplicate table: {}", table_name);
+                        continue;
+                    }
+                    
                     let sql = fs::read_to_string(&path)?;
                     println!("Creating table: {}", table_name);
                     execute_sql(ctx, &sql).await?;
+                    
+                    // Mark table as created
+                    created_tables.insert(table_name.to_string());
                 }
             }
         }
     }
-
     Ok(())
 }
 
@@ -226,12 +249,29 @@ fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
         return Ok(Vec::new());
     }
 
-    let mut entrys = fs::read_dir(cases_dir)?.collect::<io::Result<Vec<_>>>()?;
-    entrys.sort_by_key(fs::DirEntry::file_name);
-    for entry in entrys {
+    // Recursively load test cases from the cases directory and its subdirectories
+    load_test_cases_recursive(&cases_dir, &cases_dir, &mut test_cases, base_path)?;
+
+    Ok(test_cases)
+}
+
+/// Recursively load test cases from a directory and its subdirectories
+fn load_test_cases_recursive(
+    cases_dir: &Path,
+    current_dir: &Path,
+    test_cases: &mut Vec<TestCase>,
+    base_path: &Path,
+) -> Result<()> {
+    let mut entries = fs::read_dir(current_dir)?.collect::<io::Result<Vec<_>>>()?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+
+    for entry in entries {
         let path = entry.path();
 
-        if path.is_file()
+        if path.is_dir() {
+            // Recursively process subdirectories
+            load_test_cases_recursive(cases_dir, &path, test_cases, base_path)?;
+        } else if path.is_file()
             && path
                 .extension()
                 .is_some_and(|ext| ext == "yaml" || ext == "yml")
@@ -239,12 +279,55 @@ fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
             let content = fs::read_to_string(&path)?;
             let yaml_test_case: YamlTestCase = serde_yaml::from_str(&content)
                 .map_err(|e| ErrorCode::Internal(format!("Failed to parse YAML: {}", e)))?;
-            let test_case = create_test_case(yaml_test_case, base_path)?;
+            
+            // Extract path parts and create the test case
+            let (subdir_path, _file_name) = extract_path_parts(&path, &cases_dir)?;
+            let mut test_case = create_test_case(yaml_test_case, base_path)?;
+            
+            // Store the subdirectory path as part of the test case name if it exists
+            if let Some(subdir) = subdir_path {
+                let test_name = test_case.name;
+                let full_name = format!("{}/{}", subdir, test_name);
+                test_case.name = Box::leak(full_name.into_boxed_str());
+            }
+            
             test_cases.push(test_case);
         }
     }
 
-    Ok(test_cases)
+    Ok(())
+}
+
+/// Extract subdirectory path and test name from a full path
+fn extract_path_parts(path: &Path, base_dir: &Path) -> Result<(Option<String>, String)> {
+    // Get the file stem (filename without extension)
+    let file_name = path.file_stem()
+        .ok_or_else(|| ErrorCode::Internal("Failed to get file stem".to_string()))?
+        .to_string_lossy()
+        .to_string();
+    
+    // Get the parent directory
+    if let Some(parent) = path.parent() {
+        if parent != base_dir {
+            // If the file is in a subdirectory, extract the relative path
+            if let Ok(rel_path) = parent.strip_prefix(base_dir) {
+                let subdir_path = rel_path.to_string_lossy().to_string();
+                return Ok((Some(subdir_path), file_name));
+            }
+        }
+    }
+    
+    // If no subdirectory or error extracting it
+    Ok((None, file_name))
+}
+
+/// Generate a result file path based on subdirectory path, test name, and result type
+fn generate_result_path(subdir_path: &Option<String>, test_name: &str, result_type: &str) -> String {
+    if let Some(subdir) = subdir_path {
+        format!("{}/{}_{}.txt", subdir, test_name, result_type)
+    } else {
+        format!("{}_{}.txt", test_name, result_type)
+    }
 }
 
 fn apply_scan_stats(
@@ -388,10 +471,14 @@ async fn test_optimizer() -> Result<()> {
     // Load test cases from YAML files
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
-    let mut mint = Mint::new(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/it/sql/planner/optimizer/data/cases/results"),
-    );
+    let results_dir = base_path.join("results");
+    
+    // Create the results directory if it doesn't exist
+    if !results_dir.exists() {
+        fs::create_dir_all(&results_dir)?;
+    }
+    
+    let mut mint = Mint::new(&results_dir);
 
     let tests = load_test_cases(&base_path)?;
 
@@ -411,9 +498,31 @@ async fn test_optimizer() -> Result<()> {
         }
 
         println!("\n\n========== Testing: {} ==========", test.name);
-        let file = &mut mint
-            .new_goldenfile(format!("{}_raw.txt", test.name))
-            .unwrap();
+        
+        // Extract the subdirectory path and test name
+        let parts: Vec<&str> = test.name.split('/').collect();
+        let (subdir_path, test_name) = if parts.len() > 1 {
+            // If there's a subdirectory path
+            let name = parts.last().unwrap();
+            let subdir = parts[..parts.len() - 1].join("/");
+            (Some(subdir), *name)
+        } else {
+            // If there's no subdirectory
+            (None, test.name)
+        };
+        
+        // Create subdirectory in results if needed
+        if let Some(subdir) = &subdir_path {
+            let full_subdir_path = results_dir.join(subdir);
+            if !full_subdir_path.exists() {
+                fs::create_dir_all(&full_subdir_path)?;
+            }
+        }
+        
+        // Generate raw plan result path
+        let result_path = generate_result_path(&subdir_path, test_name, "raw");
+        
+        let file = &mut mint.new_goldenfile(&result_path).unwrap();
 
         // Parse SQL to get raw plan
         let mut raw_plan = raw_plan(&ctx, test.sql).await?;
@@ -449,9 +558,10 @@ async fn test_optimizer() -> Result<()> {
             optimize(opt_ctx, raw_plan).await?
         };
 
-        let file = &mut mint
-            .new_goldenfile(format!("{}_optimized.txt", test.name))
-            .unwrap();
+        // Generate optimized plan result path
+        let optimized_path = generate_result_path(&subdir_path, test_name, "optimized");
+        
+        let file = &mut mint.new_goldenfile(&optimized_path).unwrap();
         let optimized_plan_str = optimized_plan.format_indent(FormatOptions::default())?;
         writeln!(file, "{}", optimized_plan_str)?;
         if let Plan::Query {
@@ -464,9 +574,10 @@ async fn test_optimizer() -> Result<()> {
             let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
             let physical_plan = builder.build(&s_expr, bind_context.column_set()).await?;
 
-            let file = &mut mint
-                .new_goldenfile(format!("{}_physical.txt", test.name))
-                .unwrap();
+            // Generate physical plan result path
+            let physical_path = generate_result_path(&subdir_path, test_name, "physical");
+            
+            let file = &mut mint.new_goldenfile(&physical_path).unwrap();
 
             let result = physical_plan
                 .format(metadata.clone(), Default::default())?

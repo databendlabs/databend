@@ -16,4 +16,4 @@ mod histogram;
 mod ir;
 mod optimizers;
 pub mod test_utils;
-mod tpcds_test;
+mod optimizer_test;

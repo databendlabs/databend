@@ -6,10 +6,22 @@ This directory contains test data for TPC-DS optimizer tests. The tests are stru
 
 ```
 data
-├── tables/     # SQL table definitions
-├── statistics/ # SQL table definitions
-└── cases/      # YAML test case definitions and golden files
+├── tables/          # SQL table definitions
+│   ├── basic/       # Basic table definitions
+│   ├── tpcds/       # TPC-DS table definitions
+│   └── obfuscated/  # Obfuscated table definitions
+├── statistics/      # Statistics files
+├── cases/           # YAML test case definitions
+│   ├── basic/       # Basic test cases
+│   ├── tpcds/       # TPC-DS test cases
+│   └── obfuscated/  # Obfuscated test cases
+└── results/         # Test result files
+    ├── basic/       # Results for basic test cases
+    ├── tpcds/       # Results for TPC-DS test cases
+    └── obfuscated/  # Results for obfuscated test cases
 ```
+
+The test framework supports hierarchical subdirectory structures for better organization of test cases, tables, and results.
 
 ## YAML Test Case Format
 
@@ -50,13 +62,19 @@ Table definitions are stored in SQL files in the `tables` directory. Each file c
 
 To add a new test case:
 
-1. Create a new YAML file in the `yaml` directory with the test case definition.
-2. If the test uses new tables, add the table definitions to the `tables` directory.
-3. The test runner will automatically discover and run all test cases in the `yaml` directory.
+1. Create a new YAML file in the appropriate subdirectory under `cases/` (e.g., `basic/`, `tpcds/`, or `obfuscated/`).
+2. If the test uses new tables, add the table definitions to the corresponding subdirectory under `tables/`.
+3. The test runner will automatically discover and run all test cases recursively in all subdirectories.
+4. Test results will be saved in a matching subdirectory structure under the main `results/` directory (e.g., `results/basic/`, `results/tpcds/`, etc.).
 
 ## Updating Existing Tests
 
 If the expected output of a test changes (e.g., due to optimizer improvements):
 
-1. Run the test with UPDATE_GOLDENFILES to generate new file.
-2. Checking that changes to files are as expected.
+1. Run the test with UPDATE_GOLDENFILES to generate new result files.
+2. The new result files will be automatically saved in the correct subdirectory structure under the main `results/` directory.
+3. Review the changes to ensure they are as expected.
+
+## Test Case Naming
+
+When tests are organized in subdirectories, the test name displayed during test execution will include the subdirectory path as a prefix (e.g., `tpcds/Q01` instead of just `Q01`). This helps to identify which category a test belongs to when viewing test results.
