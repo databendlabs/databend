@@ -499,8 +499,9 @@ impl Dataframe {
         let (s_expr, bind_context) = self.binder.bind_union(
             None,
             None,
-            self.bind_context,
-            dataframe.bind_context,
+            None,
+            &self.bind_context,
+            &dataframe.bind_context,
             self.s_expr,
             dataframe.s_expr,
             false,
@@ -515,8 +516,9 @@ impl Dataframe {
         let (s_expr, bind_context) = self.binder.bind_union(
             None,
             None,
-            self.bind_context,
-            dataframe.bind_context,
+            None,
+            &self.bind_context,
+            &dataframe.bind_context,
             self.s_expr,
             dataframe.s_expr,
             true,

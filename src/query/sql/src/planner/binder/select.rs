@@ -157,8 +157,8 @@ impl Binder {
             ));
         }
 
-        match (op, all) {
-            (SetOperator::Intersect, false) => {
+        match op {
+            SetOperator::Intersect if !all => {
                 // Transfer Intersect to Semi join
                 self.bind_intersect(
                     left.span(),
@@ -169,7 +169,7 @@ impl Binder {
                     right_expr,
                 )
             }
-            (SetOperator::Except, false) => {
+            SetOperator::Except if !all => {
                 // Transfer Except to Anti join
                 self.bind_except(
                     left.span(),
@@ -180,24 +180,15 @@ impl Binder {
                     right_expr,
                 )
             }
-            (SetOperator::Union, true) => self.bind_union(
+            SetOperator::Union => self.bind_union(
                 left.span(),
                 right.span(),
-                left_bind_context,
-                right_bind_context,
+                Some(bind_context),
+                &left_bind_context,
+                &right_bind_context,
                 left_expr,
                 right_expr,
-                false,
-                cte_name,
-            ),
-            (SetOperator::Union, false) => self.bind_union(
-                left.span(),
-                right.span(),
-                left_bind_context,
-                right_bind_context,
-                left_expr,
-                right_expr,
-                true,
+                !all,
                 cte_name,
             ),
             _ => Err(ErrorCode::Unimplemented(
@@ -211,8 +202,9 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_context: BindContext,
-        right_context: BindContext,
+        parent_context: Option<&BindContext>,
+        left_context: &BindContext,
+        right_context: &BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
@@ -258,8 +250,9 @@ impl Binder {
         let (mut new_bind_context, left_outputs, right_outputs) = self.coercion_union_type(
             left_span,
             right_span,
+            parent_context,
             left_context,
-            right_context.clone(),
+            right_context,
             coercion_types,
         )?;
 
@@ -418,8 +411,9 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_bind_context: BindContext,
-        right_bind_context: BindContext,
+        parent_context: Option<&BindContext>,
+        left_bind_context: &BindContext,
+        right_bind_context: &BindContext,
         coercion_types: Vec<DataType>,
     ) -> Result<(
         BindContext,
@@ -428,11 +422,11 @@ impl Binder {
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
-        let mut new_bind_context = BindContext::new();
+        let mut new_bind_context = BindContext::with_opt_parent(parent_context)?;
 
         new_bind_context
             .cte_context
-            .set_cte_context(right_bind_context.cte_context);
+            .set_cte_context(right_bind_context.cte_context.clone());
 
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
