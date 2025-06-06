@@ -5397,11 +5397,8 @@ impl<'a> TypeChecker<'a> {
         impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
             fn enter_expr(&mut self, expr: &mut Expr) {
                 let replacement_opt = (self.0)(expr);
-                match replacement_opt {
-                    Ok(Some(replacement)) => {
-                        *expr = replacement;
-                    }
-                    _ => {}
+                if let Ok(Some(replacement)) = replacement_opt {
+                    *expr = replacement;
                 }
             }
         }
