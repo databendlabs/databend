@@ -49,8 +49,8 @@ async fn test_grpc_client_timeout() -> anyhow::Result<()> {
     if let Err(err) = res {
         let got = err.to_string();
         assert!(got.starts_with(
-            "ConnectionError: failed to connect to meta-service source: failed after 4 retries:"
-        ));
+            "ConnectionError: failed to send RPC 'kv_api' to meta-service source: after 4 retries:"
+        ), "actually got: {}", got);
     } else {
         panic!("expect error, but got ok");
     }
