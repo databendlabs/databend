@@ -263,9 +263,9 @@ impl AsyncSource for InspectParquetSource {
                 BlockEntry::from_arg_scalar::<StringType>(created),
                 BlockEntry::from_arg_scalar::<UInt64Type>(num_columns),
                 BlockEntry::from_arg_scalar::<UInt64Type>(
-                    parquet_schema.file_metadata().num_rows() as u64,
+                    parquet_schema.file_metadata().num_rows() as _,
                 ),
-                BlockEntry::from_arg_scalar::<UInt64Type>(parquet_schema.num_row_groups() as u64),
+                BlockEntry::from_arg_scalar::<UInt64Type>(parquet_schema.num_row_groups() as _),
                 BlockEntry::from_arg_scalar::<UInt64Type>(serialized_size),
                 BlockEntry::from_arg_scalar::<Int64Type>(max_compressed),
                 BlockEntry::from_arg_scalar::<Int64Type>(max_uncompressed),

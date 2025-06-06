@@ -234,7 +234,7 @@ impl InternalColumn {
                 BlockEntry::from_arg_scalar::<StringType>(meta.segment_location.clone())
             }
             InternalColumnType::SnapshotName => BlockEntry::from_arg_scalar::<StringType>(
-                meta.snapshot_location.clone().unwrap_or("".to_string()),
+                meta.snapshot_location.clone().unwrap_or_default(),
             ),
             InternalColumnType::BaseRowId => {
                 let uuid =

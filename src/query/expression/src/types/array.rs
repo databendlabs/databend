@@ -126,11 +126,10 @@ impl<T: ValueType> ValueType for ArrayType<T> {
     }
 
     fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
-        let values_type = data_type.as_array().unwrap();
-        Domain::Array(Some(Box::new(T::upcast_domain_with_type(
-            domain.unwrap(),
-            values_type,
-        ))))
+        Domain::Array(domain.map(|domain| {
+            let values_type = data_type.as_array().unwrap();
+            Box::new(T::upcast_domain_with_type(domain, values_type))
+        }))
     }
 
     fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {

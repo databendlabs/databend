@@ -428,7 +428,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                                 }
                             }
                             let result = builder.build();
-                            Value::Column(NullableColumn::new(
+                            Value::Column(NullableColumn::new_unchecked(
                                 result,
                                 Bitmap::new_constant(true, from.len()),
                             ))

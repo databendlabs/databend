@@ -791,13 +791,13 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
             match output {
                 Value::Scalar(_) => Value::Scalar(None),
                 Value::Column(column) => {
-                    Value::Column(NullableColumn::new(column, validity.into()))
+                    Value::Column(NullableColumn::new_unchecked(column, validity.into()))
                 }
             }
         } else {
             match output {
                 Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn::new(
+                Value::Column(column) => Value::Column(NullableColumn::new_unchecked(
                     column,
                     Bitmap::new_constant(true, ctx.num_rows),
                 )),

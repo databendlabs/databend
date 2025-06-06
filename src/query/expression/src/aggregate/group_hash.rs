@@ -640,7 +640,7 @@ mod tests {
 
         {
             let c = Int32Type::from_data(vec![3, 1, 2]);
-            let c = NullableColumn::<AnyType>::new(c, Bitmap::from([true, true, false]));
+            let c = NullableColumn::new(c, Bitmap::from([true, true, false]));
             let nc = NullableType::<AnyType>::upcast_column_with_type(
                 c,
                 &Int32Type::data_type().wrap_nullable(),

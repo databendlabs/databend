@@ -162,6 +162,9 @@ where
     }
 
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
+        // some `ValueType` like `NullableType` need ownership to downcast builder,
+        // so here we using an unsafe way to take the ownership of builder.
+        // See [`take_mut`] for details.
         if let Some(builder) = R::try_downcast_builder(builder) {
             state.merge_result(builder, self.function_data.as_deref())
         } else {

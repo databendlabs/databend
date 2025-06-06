@@ -299,11 +299,6 @@ pub struct NullableColumnVec {
 }
 
 impl<T: AccessType> NullableColumn<T> {
-    pub fn new_access_type(column: T::Column, validity: Bitmap) -> Self {
-        debug_assert_eq!(T::column_len(&column), validity.len());
-        NullableColumn { column, validity }
-    }
-
     pub fn len(&self) -> usize {
         self.validity.len()
     }
@@ -362,12 +357,20 @@ impl<T: AccessType> NullableColumn<T> {
     }
 }
 
-impl<T: ValueType> NullableColumn<T> {
+impl<T: ReturnType> NullableColumn<T> {
     // though column and validity are public
     // we should better use new to create a new instance to ensure the validity and column are consistent
     // todo: make column and validity private
-    pub fn new(column: T::Column, validity: Bitmap) -> Self {
+    pub fn new_unchecked(column: T::Column, validity: Bitmap) -> Self {
         debug_assert_eq!(T::column_len(&column), validity.len());
+        NullableColumn { column, validity }
+    }
+}
+
+impl NullableColumn<AnyType> {
+    pub fn new(column: Column, validity: Bitmap) -> Self {
+        debug_assert_eq!(column.len(), validity.len());
+        debug_assert!(!column.is_nullable());
         NullableColumn { column, validity }
     }
 }
@@ -476,7 +479,10 @@ impl<T: ValueType> NullableColumnBuilder<T> {
 
     pub fn build(self) -> NullableColumn<T> {
         assert_eq!(self.validity.len(), T::builder_len(&self.builder));
-        NullableColumn::new(T::build_column(self.builder), self.validity.into())
+        NullableColumn {
+            column: T::build_column(self.builder),
+            validity: self.validity.into(),
+        }
     }
 
     pub fn build_scalar(self) -> Option<T::Scalar> {
