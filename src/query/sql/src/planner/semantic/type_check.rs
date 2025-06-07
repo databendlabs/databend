@@ -1173,8 +1173,8 @@ impl<'a> TypeChecker<'a> {
 
     fn resolve_scalar_subquery(
         &mut self,
-        subquery: &Box<Query>,
-        expr: &Box<Expr>,
+        subquery: &Query,
+        expr: &Expr,
         span: &Span,
         right_span: &Span,
         modifier: &SubqueryModifier,
@@ -1186,7 +1186,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_subquery(
                     SubqueryType::Any,
                     subquery,
-                    Some(*expr.clone()),
+                    Some(expr.clone()),
                     Some(comparison_op),
                 )?
             }
@@ -1195,12 +1195,12 @@ impl<'a> TypeChecker<'a> {
                 let rewritten_subquery = Expr::Subquery {
                     span: *right_span,
                     modifier: Some(SubqueryModifier::Any),
-                    subquery: (*subquery).clone(),
+                    subquery: Box::new(subquery.clone()),
                 };
                 self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
                     span: *span,
                     op: contrary_op,
-                    left: (*expr).clone(),
+                    left: Box::new(expr.clone()),
                     right: Box::new(rewritten_subquery),
                 })?
             }

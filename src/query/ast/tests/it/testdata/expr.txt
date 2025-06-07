@@ -3533,7 +3533,7 @@ BinaryOp {
 ---------- Input ----------
 '中文'::text LIKE ANY (SELECT 'a', 'b')
 ---------- Output ---------
-'中文'::STRING LIKE(SELECT 'a', 'b')
+'中文'::STRING LIKE ANY (SELECT 'a', 'b')
 ---------- AST ------------
 LikeSubquery {
     span: Some(
@@ -3611,7 +3611,7 @@ LikeSubquery {
 ---------- Input ----------
 '中文'::text LIKE ALL (SELECT 'a', 'b')
 ---------- Output ---------
-'中文'::STRING LIKE(SELECT 'a', 'b')
+'中文'::STRING LIKE ALL (SELECT 'a', 'b')
 ---------- AST ------------
 LikeSubquery {
     span: Some(
@@ -3689,7 +3689,7 @@ LikeSubquery {
 ---------- Input ----------
 '中文'::text LIKE SOME (SELECT 'a', 'b')
 ---------- Output ---------
-'中文'::STRING LIKE(SELECT 'a', 'b')
+'中文'::STRING LIKE SOME (SELECT 'a', 'b')
 ---------- AST ------------
 LikeSubquery {
     span: Some(
