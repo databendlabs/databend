@@ -2123,7 +2123,7 @@ impl ColumnBuilder {
             (ColumnBuilder::Number(builder), ScalarRef::Number(value)) => builder.push(value),
             (ColumnBuilder::Decimal(builder), ScalarRef::Decimal(value)) => builder.push(value),
             (ColumnBuilder::Boolean(builder), ScalarRef::Boolean(value)) => {
-                BooleanType::push_item(builder, value);
+                BooleanType::push_item_mut(&mut builder.into(), value);
             }
             (ColumnBuilder::Binary(builder), ScalarRef::Binary(value)) => {
                 BinaryType::push_item(builder, value);
