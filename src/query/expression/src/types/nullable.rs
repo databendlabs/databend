@@ -158,6 +158,7 @@ impl<T: AccessType> AccessType for NullableType<T> {
 
 impl<T: ValueType> ValueType for NullableType<T> {
     type ColumnBuilder = NullableColumnBuilder<T>;
+    type ColumnBuilderMut<'a> = NullableColumnBuilderMut<'a, T>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
         let value_type = data_type.as_nullable().unwrap();
@@ -185,35 +186,11 @@ impl<T: ValueType> ValueType for NullableType<T> {
         )))
     }
 
-    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        None
-    }
-
-    #[allow(clippy::manual_map)]
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Nullable(inner) => {
-                let builder = T::try_downcast_owned_builder(inner.builder);
-                // ```
-                // builder.map(|builder| NullableColumnBuilder {
-                //     builder,
-                //     validity: inner.validity,
-                // })
-                // ```
-                // If we using the clippy recommend way like above, the compiler will complain:
-                // use of partially moved value: `inner`.
-                // That's rust borrow checker error, if we using the new borrow checker named polonius,
-                // everything goes fine, but polonius is very slow, so we allow manual map here.
-                if let Some(builder) = builder {
-                    Some(NullableColumnBuilder {
-                        builder,
-                        validity: inner.validity,
-                    })
-                } else {
-                    None
-                }
-            }
-            _ => None,
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        let any_nullable = builder.as_nullable_mut().unwrap();
+        NullableColumnBuilderMut {
+            builder: T::downcast_builder(&mut any_nullable.builder),
+            validity: &mut any_nullable.validity,
         }
     }
 
@@ -232,30 +209,44 @@ impl<T: ValueType> ValueType for NullableType<T> {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.validity.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         match item {
             Some(item) => builder.push(item),
             None => builder.push_null(),
         }
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         match item {
-            Some(item) => builder.push_repeat(item, n),
+            Some(item) => {
+                T::push_item_repeat_mut(&mut builder.builder, item, n);
+                builder.validity.extend_constant(n, true);
+            }
             None => {
                 for _ in 0..n {
-                    builder.push_null()
+                    T::push_default_mut(&mut builder.builder);
                 }
+                builder.validity.extend_constant(n, false);
             }
         }
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push_null();
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        T::push_default_mut(&mut builder.builder);
+        builder.validity.push(false);
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        builder.append_column(other);
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        T::append_column_mut(&mut builder.builder, &other.column);
+        builder.validity.extend_from_bitmap(&other.validity);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -521,6 +512,33 @@ impl NullableColumnBuilder<AnyType> {
             self.builder.pop().unwrap();
             Some(None)
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct NullableColumnBuilderMut<'a, T: ValueType> {
+    builder: T::ColumnBuilderMut<'a>,
+    validity: &'a mut MutableBitmap,
+}
+
+impl<'a, T: ValueType> From<&'a mut NullableColumnBuilder<T>> for NullableColumnBuilderMut<'a, T> {
+    fn from(builder: &'a mut NullableColumnBuilder<T>) -> Self {
+        NullableColumnBuilderMut {
+            builder: (&mut builder.builder).into(),
+            validity: &mut builder.validity,
+        }
+    }
+}
+
+impl<T: ValueType> NullableColumnBuilderMut<'_, T> {
+    pub fn push(&mut self, item: T::ScalarRef<'_>) {
+        T::push_item_mut(&mut self.builder, item);
+        self.validity.push(true);
+    }
+
+    pub fn push_null(&mut self) {
+        T::push_default_mut(&mut self.builder);
+        self.validity.push(false);
     }
 }
 

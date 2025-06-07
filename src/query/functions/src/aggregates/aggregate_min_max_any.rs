@@ -136,13 +136,13 @@ where C: ChangeIf<StringType> + Default
 
     fn merge_result(
         &mut self,
-        builder: &mut <StringType as ValueType>::ColumnBuilder,
+        mut builder: <StringType as ValueType>::ColumnBuilderMut<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if let Some(v) = &self.value {
-            StringType::push_item(builder, v.as_str());
+            StringType::push_item_mut(&mut builder, v.as_str());
         } else {
-            StringType::push_default(builder);
+            StringType::push_default_mut(&mut builder);
         }
         Ok(())
     }
@@ -244,13 +244,13 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if let Some(v) = &self.value {
-            T::push_item(builder, T::to_scalar_ref(v));
+            T::push_item_mut(&mut builder, T::to_scalar_ref(v));
         } else {
-            T::push_default(builder);
+            T::push_default_mut(&mut builder);
         }
 
         Ok(())

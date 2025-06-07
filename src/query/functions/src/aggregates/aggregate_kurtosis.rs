@@ -72,7 +72,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<F64>,
+        mut builder: BuilderMut<'_, Vec<F64>>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.n <= 3 {

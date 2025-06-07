@@ -255,7 +255,7 @@ where
     #[allow(unused_mut)]
     fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
+        let mut builder = NumberType::<F64>::downcast_builder(builder);
         builder.push(R::apply(state).into());
         Ok(())
     }

@@ -231,16 +231,11 @@ where
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
         if let Some(v) = &self.value {
-            if let Some(inner) = T::try_downcast_builder(builder) {
-                T::push_item(inner, T::to_scalar_ref(v));
-            } else {
-                let data_type = builder.data_type();
-                builder.push(T::upcast_scalar_with_type(v.clone(), &data_type).as_ref());
-            }
-        } else if let Some(inner) = T::try_downcast_builder(builder) {
-            T::push_default(inner);
+            let mut inner = T::downcast_builder(builder);
+            T::push_item_mut(&mut inner, T::to_scalar_ref(v))
         } else {
-            builder.push_default();
+            let mut inner = T::downcast_builder(builder);
+            T::push_default_mut(&mut inner);
         }
         Ok(())
     }
