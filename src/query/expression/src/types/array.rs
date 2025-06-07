@@ -137,6 +137,14 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         Column::Array(Box::new(col.upcast(data_type)))
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        let any_array = builder.as_array_mut().unwrap();
+        ArrayColumnBuilderMut {
+            builder: T::downcast_builder(&mut any_array.builder),
+            offsets: &mut any_array.offsets,
+        }
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         data_type: &DataType,
@@ -151,14 +159,6 @@ impl<T: ValueType> ValueType for ArrayType<T> {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        let any_array = builder.as_array_mut().unwrap();
-        ArrayColumnBuilderMut {
-            builder: T::downcast_builder(&mut any_array.builder),
-            offsets: &mut any_array.offsets,
-        }
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {

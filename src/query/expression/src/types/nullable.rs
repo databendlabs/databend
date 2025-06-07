@@ -186,6 +186,14 @@ impl<T: ValueType> ValueType for NullableType<T> {
         )))
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        let any_nullable = builder.as_nullable_mut().unwrap();
+        NullableColumnBuilderMut {
+            builder: T::downcast_builder(&mut any_nullable.builder),
+            validity: &mut any_nullable.validity,
+        }
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         data_type: &DataType,
@@ -199,14 +207,6 @@ impl<T: ValueType> ValueType for NullableType<T> {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        let any_nullable = builder.as_nullable_mut().unwrap();
-        NullableColumnBuilderMut {
-            builder: T::downcast_builder(&mut any_nullable.builder),
-            validity: &mut any_nullable.validity,
-        }
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {

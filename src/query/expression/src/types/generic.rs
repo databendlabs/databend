@@ -110,6 +110,10 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         col
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.into()
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         _: &DataType,
@@ -125,12 +129,8 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         builder.len()
     }
 
-    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
-        builder.build()
-    }
-
-    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
-        builder.build_scalar()
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
     }
 
     fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
@@ -153,12 +153,12 @@ impl<const INDEX: usize> ValueType for GenericType<INDEX> {
         builder.append_column(other);
     }
 
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        builder.into()
+    fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
+        builder.build()
     }
 
-    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
-        builder.len()
+    fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
+        builder.build_scalar()
     }
 }
 

@@ -108,6 +108,10 @@ impl ValueType for AnyType {
         col
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.into()
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         _data_type: &DataType,
@@ -121,10 +125,6 @@ impl ValueType for AnyType {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        builder.into()
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {

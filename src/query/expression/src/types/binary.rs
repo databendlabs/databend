@@ -119,6 +119,10 @@ impl ValueType for BinaryType {
         Column::Binary(col)
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_binary_mut().unwrap().into()
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         data_type: &DataType,
@@ -133,10 +137,6 @@ impl ValueType for BinaryType {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        builder.as_binary_mut().unwrap().into()
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {

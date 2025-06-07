@@ -192,6 +192,10 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
         T::upcast_column(col, data_type)
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        T::downcast_builder(builder).unwrap().into()
+    }
+
     fn try_upcast_column_builder(
         builder: Vec<Self::Scalar>,
         data_type: &DataType,
@@ -205,10 +209,6 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
 
     fn builder_len(builder: &Vec<Self::Scalar>) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        T::downcast_builder(builder).unwrap().into()
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {

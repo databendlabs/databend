@@ -146,6 +146,10 @@ impl ValueType for BooleanType {
         Column::Boolean(col)
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_boolean_mut().unwrap().into()
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         data_type: &DataType,
@@ -160,10 +164,6 @@ impl ValueType for BooleanType {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        builder.as_boolean_mut().unwrap().into()
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
@@ -241,13 +241,4 @@ impl ReturnType for BooleanType {
 pub struct BooleanDomain {
     pub has_false: bool,
     pub has_true: bool,
-}
-
-#[test]
-fn test_builder_mut() {
-    let builder = &mut MutableBitmap::new();
-    let mut builder = builder.into();
-    for _ in 0..10 {
-        BooleanType::push_item_mut(&mut builder, true);
-    }
 }

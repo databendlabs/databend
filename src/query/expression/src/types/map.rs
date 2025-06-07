@@ -164,6 +164,19 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         }
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        match builder {
+            ColumnBuilder::Tuple(kv) => {
+                let [k, v] = kv.as_mut_array().unwrap();
+                KvColumnBuilderMut {
+                    keys: K::downcast_builder(k),
+                    values: V::downcast_builder(v),
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+
     fn try_upcast_column_builder(
         _builder: Self::ColumnBuilder,
         _data_type: &DataType,
@@ -177,19 +190,6 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         builder.len()
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        match builder {
-            ColumnBuilder::Tuple(kv) => {
-                let [k, v] = kv.as_mut_array().unwrap();
-                KvColumnBuilderMut {
-                    keys: K::downcast_builder(k),
-                    values: V::downcast_builder(v),
-                }
-            }
-            _ => unreachable!(),
-        }
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
@@ -493,6 +493,10 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         Column::Map(Box::new(col.upcast(&data_type)))
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        MapInternal::<K, V>::downcast_builder(builder)
+    }
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         data_type: &DataType,
@@ -506,10 +510,6 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn builder_len(builder: &Self::ColumnBuilder) -> usize {
         MapInternal::<K, V>::builder_len(builder)
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        MapInternal::<K, V>::downcast_builder(builder)
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {

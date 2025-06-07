@@ -147,6 +147,10 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
         T::upcast_column(col)
     }
 
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        T::downcast_builder(builder).unwrap().into()
+    }
+
     fn try_upcast_column_builder(builder: usize, _: &DataType) -> Option<ColumnBuilder> {
         T::upcast_column_builder(builder)
     }
@@ -157,10 +161,6 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
 
     fn builder_len(builder: &usize) -> usize {
         *builder
-    }
-
-    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
-        T::downcast_builder(builder).unwrap().into()
     }
 
     fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
