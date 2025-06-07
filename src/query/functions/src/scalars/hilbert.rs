@@ -257,17 +257,17 @@ pub fn register(registry: &mut FunctionRegistry) {
 ///
 /// # Example
 /// For boundaries [10, 20, 30]:
-/// - Values < 10 get partition ID 0
-/// - Values >= 10 and < 20 get partition ID 1
-/// - Values >= 20 and < 30 get partition ID 2
-/// - Values >= 30 get partition ID 3
+/// - Values <= 10 get partition ID 0
+/// - Values > 10 and <= 20 get partition ID 1
+/// - Values > 20 and <= 30 get partition ID 2
+/// - Values > 30 get partition ID 3
 fn calc_range_partition_id(val: ScalarRef, arr: &Column) -> u64 {
     let mut low = 0;
     let mut high = arr.len();
     while low < high {
         let mid = low + ((high - low) / 2);
         let bound = unsafe { arr.index_unchecked(mid) };
-        if val >= bound {
+        if val > bound {
             low = mid + 1;
         } else {
             high = mid;

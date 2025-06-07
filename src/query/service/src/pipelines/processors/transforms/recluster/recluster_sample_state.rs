@@ -35,6 +35,7 @@ impl SampleState {
                 completed_inputs: 0,
                 values: vec![],
                 bounds: vec![],
+                max_value: None,
             }),
             done: Arc::new(WatchNotify::new()),
         })
@@ -56,17 +57,22 @@ impl SampleState {
         Ok(())
     }
 
-    pub fn get_bounds<T>(&self) -> Vec<T::Scalar>
+    pub fn get_bounds<T>(&self) -> (Vec<T::Scalar>, Option<T::Scalar>)
     where
         T: ArgType,
         T::Scalar: Ord,
     {
         let inner = self.inner.read().unwrap();
-        inner
+        let bounds = inner
             .bounds
             .iter()
             .map(|v| T::to_owned_scalar(T::try_downcast_scalar(&v.as_ref()).unwrap()))
-            .collect()
+            .collect();
+        let max_value = inner
+            .max_value
+            .as_ref()
+            .map(|v| T::to_owned_scalar(T::try_downcast_scalar(&v.as_ref()).unwrap()));
+        (bounds, max_value)
     }
 }
 
@@ -76,6 +82,7 @@ pub struct SampleStateInner {
 
     completed_inputs: usize,
     bounds: Vec<Scalar>,
+    max_value: Option<Scalar>,
 
     values: Vec<(u64, Vec<Scalar>)>,
 }
@@ -112,6 +119,9 @@ impl SampleStateInner {
         let col = T::upcast_column(T::column_from_vec(data.clone(), &[]));
         let indices = compare_columns(vec![col], total_samples)?;
 
+        let max_index = indices[total_samples - 1] as usize;
+        let max_val = data[max_index].clone();
+
         let mut cum_weight = 0.0;
         let mut target = step;
         let mut bounds = Vec::with_capacity(self.partitions - 1);
@@ -126,7 +136,13 @@ impl SampleStateInner {
             if cum_weight >= target {
                 let data = &data[idx];
                 if previous_bound.as_ref().is_none_or(|prev| data > prev) {
-                    bounds.push(T::upcast_scalar(data.clone()));
+                    if data == &max_val {
+                        self.max_value = Some(T::upcast_scalar(max_val));
+                        break;
+                    }
+
+                    let bound = T::upcast_scalar(data.clone());
+                    bounds.push(bound);
                     target += step;
                     j += 1;
                     previous_bound = Some(data.clone());
