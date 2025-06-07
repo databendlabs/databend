@@ -34,7 +34,6 @@ pub mod number_class;
 pub mod simple_type;
 pub mod string;
 pub mod timestamp;
-pub mod tuple;
 pub mod variant;
 pub mod vector;
 pub mod zero_size_type;
