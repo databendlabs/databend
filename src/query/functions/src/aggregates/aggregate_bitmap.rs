@@ -100,7 +100,7 @@ struct BitmapRawResult;
 
 impl BitmapAggResult for BitmapCountResult {
     fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = UInt64Type::try_downcast_builder(builder).unwrap();
+        let mut builder = UInt64Type::downcast_builder(builder);
         let state = place.get::<BitmapAggState>();
         builder.push(state.rb.as_ref().map(|rb| rb.len()).unwrap_or(0));
         Ok(())
@@ -113,7 +113,7 @@ impl BitmapAggResult for BitmapCountResult {
 
 impl BitmapAggResult for BitmapRawResult {
     fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = BitmapType::try_downcast_builder(builder).unwrap();
+        let mut builder = BitmapType::downcast_builder(builder);
         let state = place.get::<BitmapAggState>();
         if let Some(rb) = state.rb.as_ref() {
             rb.serialize_into(&mut builder.data)?;

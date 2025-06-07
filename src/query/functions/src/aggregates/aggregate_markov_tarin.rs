@@ -150,9 +150,9 @@ impl AggregateFunction for MarkovTarin {
         else {
             unreachable!()
         };
-        let hash_builder = UInt32Type::try_downcast_builder(hash_builder).unwrap();
-        let total_builder = UInt32Type::try_downcast_builder(total_builder).unwrap();
-        let end_builder = UInt32Type::try_downcast_builder(end_builder).unwrap();
+        let mut hash_builder = UInt32Type::downcast_builder(hash_builder);
+        let mut total_builder = UInt32Type::downcast_builder(total_builder);
+        let mut end_builder = UInt32Type::downcast_builder(end_builder);
 
         let ArrayColumnBuilder::<AnyType> {
             builder: ColumnBuilder::Tuple(kv),
@@ -164,8 +164,8 @@ impl AggregateFunction for MarkovTarin {
         let [keys, values] = &mut kv[..] else {
             unreachable!()
         };
-        let keys = UInt32Type::try_downcast_builder(keys).unwrap();
-        let values = UInt32Type::try_downcast_builder(values).unwrap();
+        let mut keys = UInt32Type::downcast_builder(keys);
+        let mut values = UInt32Type::downcast_builder(values);
 
         for (hash, histogram) in model.table.iter() {
             hash_builder.push(*hash);

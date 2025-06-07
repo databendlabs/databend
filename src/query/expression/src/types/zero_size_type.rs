@@ -22,6 +22,7 @@ use super::GenericMap;
 use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
+use crate::types::BuilderMut;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -132,6 +133,7 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
 
 impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
     type ColumnBuilder = usize;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
     fn upcast_scalar_with_type(_: (), _: &DataType) -> Scalar {
         T::upcast_scalar()
@@ -145,12 +147,8 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
         T::upcast_column(col)
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut usize> {
-        T::downcast_builder(builder)
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<usize> {
-        T::downcast_owned_builder(builder)
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        T::downcast_builder(builder).unwrap().into()
     }
 
     fn try_upcast_column_builder(builder: usize, _: &DataType) -> Option<ColumnBuilder> {
@@ -165,20 +163,24 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
         *builder
     }
 
-    fn push_item(builder: &mut usize, _: ()) {
-        *builder += 1
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        **builder
     }
 
-    fn push_item_repeat(builder: &mut usize, _: (), n: usize) {
-        *builder += n
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, _: ()) {
+        **builder += 1
     }
 
-    fn push_default(builder: &mut usize) {
-        *builder += 1
+    fn push_item_repeat_mut(builder: &mut Self::ColumnBuilderMut<'_>, _: (), n: usize) {
+        **builder += n
     }
 
-    fn append_column(builder: &mut usize, other: &usize) {
-        *builder += *other
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        **builder += 1
+    }
+
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        **builder += *other
     }
 
     fn build_column(builder: usize) -> usize {

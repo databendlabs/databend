@@ -17,6 +17,7 @@ use std::ops::Range;
 
 use crate::property::Domain;
 use crate::types::AccessType;
+use crate::types::BuilderMut;
 use crate::types::DataType;
 use crate::types::ValueType;
 use crate::values::Column;
@@ -92,6 +93,7 @@ impl AccessType for AnyType {
 
 impl ValueType for AnyType {
     type ColumnBuilder = ColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, _: &DataType) -> Scalar {
         scalar
@@ -106,12 +108,8 @@ impl ValueType for AnyType {
         col
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        Some(builder)
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        Some(builder)
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.into()
     }
 
     fn try_upcast_column_builder(
@@ -129,19 +127,27 @@ impl ValueType for AnyType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.push(item);
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         builder.push_repeat(&item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.push_default();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
         builder.append_column(other);
     }
 

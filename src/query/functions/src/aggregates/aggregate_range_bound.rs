@@ -20,7 +20,7 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_columns;
-use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
@@ -179,7 +179,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut ArrayColumnBuilder<T>,
+        mut builder: ArrayColumnBuilderMut<'_, T>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let range_bound_data = unsafe {

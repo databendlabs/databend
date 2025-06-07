@@ -25,6 +25,7 @@ use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::arrow::buffer_into_mut;
+use crate::types::BuilderMut;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -177,6 +178,7 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
 
 impl<T: SimpleType> ValueType for SimpleValueType<T> {
     type ColumnBuilder = Vec<Self::Scalar>;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
         T::upcast_scalar(scalar, data_type)
@@ -190,12 +192,8 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
         T::upcast_column(col, data_type)
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
-        T::downcast_builder(builder)
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
-        T::downcast_owned_builder(builder)
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        T::downcast_builder(builder).unwrap().into()
     }
 
     fn try_upcast_column_builder(
@@ -213,23 +211,32 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
         builder.len()
     }
 
-    fn push_item(builder: &mut Vec<Self::Scalar>, item: Self::Scalar) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.push(item);
     }
 
-    fn push_item_repeat(builder: &mut Vec<Self::Scalar>, item: Self::Scalar, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         if n == 1 {
             builder.push(item)
         } else {
-            builder.resize(builder.len() + n, item)
+            let new_len = builder.len() + n;
+            builder.resize(new_len, item)
         }
     }
 
-    fn push_default(builder: &mut Vec<Self::Scalar>) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.push(Self::Scalar::default());
     }
 
-    fn append_column(builder: &mut Vec<Self::Scalar>, other: &Buffer<Self::Scalar>) {
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
         builder.extend_from_slice(other);
     }
 

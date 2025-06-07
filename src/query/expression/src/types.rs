@@ -40,6 +40,8 @@ pub mod zero_size_type;
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::iter::TrustedLen;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::ops::Range;
 
 use borsh::BorshDeserialize;
@@ -456,6 +458,7 @@ pub trait AccessType: Debug + Clone + PartialEq + Sized + 'static {
 /// [ValueType] includes the builder method of a data type based on [AccessType].
 pub trait ValueType: AccessType {
     type ColumnBuilder: Debug + Clone;
+    type ColumnBuilderMut<'a>: Debug + From<&'a mut Self::ColumnBuilder> + BuilderExt<Self>;
 
     /// Convert a scalar value to the generic [Scalar] type
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar;
@@ -466,27 +469,7 @@ pub trait ValueType: AccessType {
     /// Convert a column value to the generic Column type
     fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column;
 
-    /// Downcast `ColumnBuilder` to a mutable reference of its inner builder type.
-    ///
-    /// Not every builder can be downcasted successfully.
-    /// For example: `ArrayType<T: ValueType>`, `NullableType<T: ValueType>`, and `KvPair<K: ValueType, V: ValueType>`
-    /// cannot be downcasted and this method will return `None`.
-    ///
-    /// So when using this method, we cannot unwrap the returned value directly.
-    /// We should:
-    ///
-    /// ```ignore
-    /// // builder: ColumnBuilder
-    /// // T: ValueType
-    /// if let Some(inner) = T::try_downcast_builder(&mut builder) {
-    ///     inner.push(...);
-    /// } else {
-    ///     builder.push(...);
-    /// }
-    /// ```
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder>;
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_>;
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
@@ -495,13 +478,90 @@ pub trait ValueType: AccessType {
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
 
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize;
     fn builder_len(builder: &Self::ColumnBuilder) -> usize;
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>);
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize);
-    fn push_default(builder: &mut Self::ColumnBuilder);
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column);
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>);
+    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+        Self::push_item_mut(&mut builder.into(), item);
+    }
+
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    );
+    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+        Self::push_item_repeat_mut(&mut builder.into(), item, n);
+    }
+
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>);
+    fn push_default(builder: &mut Self::ColumnBuilder) {
+        Self::push_default_mut(&mut builder.into())
+    }
+
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column);
+    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
+        Self::append_column_mut(&mut builder.into(), other);
+    }
+
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column;
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar;
+}
+
+impl<'a, T: ValueType> From<&'a mut T::ColumnBuilder> for BuilderMut<'a, T> {
+    fn from(value: &'a mut T::ColumnBuilder) -> Self {
+        BuilderMut(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct BuilderMut<'a, T: ValueType>(&'a mut T::ColumnBuilder);
+
+impl<T: ValueType> Deref for BuilderMut<'_, T> {
+    type Target = T::ColumnBuilder;
+
+    fn deref(&self) -> &Self::Target {
+        self.0
+    }
+}
+
+impl<T: ValueType> DerefMut for BuilderMut<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.0
+    }
+}
+
+impl<'a, T> BuilderExt<T> for BuilderMut<'a, T>
+where T: ValueType<ColumnBuilderMut<'a> = Self>
+{
+    fn len(&self) -> usize {
+        T::builder_len(self.0)
+    }
+
+    fn push_item(&mut self, item: <T>::ScalarRef<'_>) {
+        T::push_item_mut(self, item);
+    }
+
+    fn push_repeat(&mut self, item: <T>::ScalarRef<'_>, n: usize) {
+        T::push_item_repeat_mut(self, item, n);
+    }
+
+    fn push_default(&mut self) {
+        T::push_default_mut(self);
+    }
+
+    fn append_column(&mut self, other: &<T>::Column) {
+        T::append_column_mut(self, other);
+    }
+}
+
+pub trait BuilderExt<T: ValueType> {
+    fn len(&self) -> usize;
+    fn push_item(&mut self, item: T::ScalarRef<'_>);
+    fn push_repeat(&mut self, item: T::ScalarRef<'_>, n: usize);
+    fn push_default(&mut self);
+    fn append_column(&mut self, other: &T::Column);
 }
 
 /// Almost all [ValueType] implement [ReturnType], except [AnyType].

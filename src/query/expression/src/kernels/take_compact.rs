@@ -106,21 +106,17 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
         data_type: &DataType,
     ) -> Result<()> {
         let c = T::upcast_column_with_type(column.clone(), data_type);
-        let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
-        let mut builder = T::try_downcast_owned_builder(builder).unwrap();
+        let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+        let mut inner_builder = T::downcast_builder(&mut builder);
 
         for (index, cnt) in self.indices {
             for _ in 0..*cnt {
-                T::push_item(&mut builder, unsafe {
-                    T::index_column_unchecked(&column, *index as usize)
-                });
+                inner_builder
+                    .push_item(unsafe { T::index_column_unchecked(&column, *index as usize) });
             }
         }
-        self.result = Some(Value::Column(T::upcast_column_with_type(
-            T::build_column(builder),
-            data_type,
-        )));
-
+        drop(inner_builder);
+        self.result = Some(Value::Column(builder.build()));
         Ok(())
     }
 

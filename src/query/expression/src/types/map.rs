@@ -22,14 +22,16 @@ use super::ArrayType;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::array::ArrayColumn;
+use crate::types::array::ArrayColumnBuilderMut;
 use crate::types::ArgType;
+use crate::types::BuilderExt;
 use crate::types::DataType;
 use crate::types::GenericMap;
+use crate::types::Scalar;
+use crate::types::ScalarRef;
 use crate::types::ValueType;
 use crate::values::Column;
-use crate::values::Scalar;
 use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 // Structurally equals to `Tuple(K, V)`
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +124,7 @@ impl<K: AccessType, V: AccessType> AccessType for KvPair<K, V> {
 
 impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
     type ColumnBuilder = KvColumnBuilder<K, V>;
+    type ColumnBuilderMut<'a> = KvColumnBuilderMut<'a, K, V>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
         match data_type {
@@ -162,20 +165,17 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         }
     }
 
-    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        None
-    }
-
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        let ColumnBuilder::Tuple(mut kv) = builder else {
-            return None;
-        };
-        if kv.len() != 2 {
-            return None;
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        match builder {
+            ColumnBuilder::Tuple(kv) => {
+                let [k, v] = kv.as_mut_array().unwrap();
+                KvColumnBuilderMut {
+                    keys: K::downcast_builder(k),
+                    values: V::downcast_builder(v),
+                }
+            }
+            _ => unreachable!(),
         }
-        let values = V::try_downcast_owned_builder(kv.pop()?)?;
-        let keys = K::try_downcast_owned_builder(kv.pop()?)?;
-        Some(KvColumnBuilder { keys, values })
     }
 
     fn try_upcast_column_builder(
@@ -193,20 +193,28 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        K::builder_len_mut(&builder.keys)
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.push(item);
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.push_repeat(item, n)
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
+        builder.push_repeat(item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.push_default();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder);
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -283,11 +291,54 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct KvColumnBuilder<K: ValueType, V: ValueType> {
-    pub keys: K::ColumnBuilder,
-    pub values: V::ColumnBuilder,
+    pub(crate) keys: K::ColumnBuilder,
+    pub(crate) values: V::ColumnBuilder,
+}
+
+#[derive(Debug)]
+pub struct KvColumnBuilderMut<'a, K: ValueType, V: ValueType> {
+    keys: K::ColumnBuilderMut<'a>,
+    values: V::ColumnBuilderMut<'a>,
+}
+
+impl<'a, K: ValueType, V: ValueType> From<&'a mut KvColumnBuilder<K, V>>
+    for KvColumnBuilderMut<'a, K, V>
+{
+    fn from(value: &'a mut KvColumnBuilder<K, V>) -> Self {
+        Self {
+            keys: (&mut value.keys).into(),
+            values: (&mut value.values).into(),
+        }
+    }
+}
+
+impl<K: ValueType, V: ValueType> BuilderExt<KvPair<K, V>> for KvColumnBuilderMut<'_, K, V> {
+    fn len(&self) -> usize {
+        self.keys.len()
+    }
+
+    fn push_item(&mut self, item: <KvPair<K, V> as AccessType>::ScalarRef<'_>) {
+        self.push(item);
+    }
+
+    fn push_repeat(&mut self, item: <KvPair<K, V> as AccessType>::ScalarRef<'_>, n: usize) {
+        self.push_repeat(item, n);
+    }
+
+    fn push_default(&mut self) {
+        self.push_default();
+    }
+
+    fn append_column(&mut self, other: &<KvPair<K, V> as AccessType>::Column) {
+        self.append_column(other);
+    }
 }
 
 impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
+    pub fn as_mut(&mut self) -> KvColumnBuilderMut<'_, K, V> {
+        self.into()
+    }
+
     pub fn from_column(col: KvColumn<K, V>) -> Self {
         Self {
             keys: K::column_to_builder(col.keys),
@@ -299,24 +350,20 @@ impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
         K::builder_len(&self.keys)
     }
 
-    pub fn push(&mut self, (k, v): (K::ScalarRef<'_>, V::ScalarRef<'_>)) {
-        K::push_item(&mut self.keys, k);
-        V::push_item(&mut self.values, v);
+    pub fn push(&mut self, item: (K::ScalarRef<'_>, V::ScalarRef<'_>)) {
+        self.as_mut().push(item);
     }
 
-    pub fn push_repeat(&mut self, (k, v): (K::ScalarRef<'_>, V::ScalarRef<'_>), n: usize) {
-        K::push_item_repeat(&mut self.keys, k, n);
-        V::push_item_repeat(&mut self.values, v, n);
+    pub fn push_repeat(&mut self, item: (K::ScalarRef<'_>, V::ScalarRef<'_>), n: usize) {
+        self.as_mut().push_repeat(item, n);
     }
 
     pub fn push_default(&mut self) {
-        K::push_default(&mut self.keys);
-        V::push_default(&mut self.values);
+        self.as_mut().push_default();
     }
 
     pub fn append_column(&mut self, other: &KvColumn<K, V>) {
-        K::append_column(&mut self.keys, &other.keys);
-        V::append_column(&mut self.values, &other.values);
+        self.as_mut().append_column(other);
     }
 
     pub fn build(self) -> KvColumn<K, V> {
@@ -328,6 +375,28 @@ impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
 
     pub fn build_scalar(self) -> (K::Scalar, V::Scalar) {
         (K::build_scalar(self.keys), V::build_scalar(self.values))
+    }
+}
+
+impl<'a, K: ValueType, V: ValueType> KvColumnBuilderMut<'a, K, V> {
+    pub fn push(&mut self, (k, v): (K::ScalarRef<'_>, V::ScalarRef<'_>)) {
+        K::push_item_mut(&mut self.keys, k);
+        V::push_item_mut(&mut self.values, v);
+    }
+
+    pub fn push_repeat(&mut self, (k, v): (K::ScalarRef<'_>, V::ScalarRef<'_>), n: usize) {
+        K::push_item_repeat_mut(&mut self.keys, k, n);
+        V::push_item_repeat_mut(&mut self.values, v, n);
+    }
+
+    pub fn push_default(&mut self) {
+        K::push_default_mut(&mut self.keys);
+        V::push_default_mut(&mut self.values);
+    }
+
+    pub fn append_column(&mut self, other: &KvColumn<K, V>) {
+        K::append_column_mut(&mut self.keys, &other.keys);
+        V::append_column_mut(&mut self.values, &other.values);
     }
 }
 
@@ -438,6 +507,7 @@ impl<K: AccessType, V: AccessType> AccessType for MapType<K, V> {
 
 impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
     type ColumnBuilder = <MapInternal<K, V> as ValueType>::ColumnBuilder;
+    type ColumnBuilderMut<'a> = ArrayColumnBuilderMut<'a, KvPair<K, V>>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
         let data_type = data_type.as_map().unwrap();
@@ -457,12 +527,12 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         Column::Map(Box::new(col.upcast(&data_type)))
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        MapInternal::<K, V>::try_downcast_builder(builder)
-    }
-
-    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        MapInternal::<K, V>::try_downcast_owned_builder(builder)
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        let any_array = builder.as_map_mut().unwrap();
+        ArrayColumnBuilderMut {
+            builder: KvPair::<K, V>::downcast_builder(&mut any_array.builder),
+            offsets: &mut any_array.offsets,
+        }
     }
 
     fn try_upcast_column_builder(
@@ -480,20 +550,28 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
         MapInternal::<K, V>::builder_len(builder)
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
-        MapInternal::<K, V>::push_item(builder, item)
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        MapInternal::<K, V>::builder_len_mut(builder)
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        MapInternal::<K, V>::push_item_repeat(builder, item, n)
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
+        MapInternal::<K, V>::push_item_mut(builder, item)
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        MapInternal::<K, V>::push_default(builder)
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
+        MapInternal::<K, V>::push_item_repeat_mut(builder, item, n)
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        MapInternal::<K, V>::append_column(builder, other)
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        MapInternal::<K, V>::push_default_mut(builder)
+    }
+
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        MapInternal::<K, V>::append_column_mut(builder, other)
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -502,6 +580,30 @@ impl<K: ValueType, V: ValueType> ValueType for MapType<K, V> {
 
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         MapInternal::<K, V>::build_scalar(builder)
+    }
+}
+
+impl<K: ValueType, V: ValueType> BuilderExt<MapType<K, V>>
+    for ArrayColumnBuilderMut<'_, KvPair<K, V>>
+{
+    fn len(&self) -> usize {
+        self.len()
+    }
+
+    fn push_item(&mut self, item: <MapType<K, V> as AccessType>::ScalarRef<'_>) {
+        self.push(item);
+    }
+
+    fn push_repeat(&mut self, item: <MapType<K, V> as AccessType>::ScalarRef<'_>, n: usize) {
+        self.push_repeat(&item, n);
+    }
+
+    fn push_default(&mut self) {
+        self.push_default();
+    }
+
+    fn append_column(&mut self, other: &<MapType<K, V> as AccessType>::Column) {
+        self.append_column(other);
     }
 }
 

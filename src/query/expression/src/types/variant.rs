@@ -35,6 +35,7 @@ use crate::property::Domain;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
+use crate::types::BuilderMut;
 use crate::types::DataType;
 use crate::types::DecimalScalar;
 use crate::types::GenericMap;
@@ -124,6 +125,7 @@ impl AccessType for VariantType {
 
 impl ValueType for VariantType {
     type ColumnBuilder = BinaryColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
         debug_assert!(data_type.is_variant());
@@ -140,18 +142,8 @@ impl ValueType for VariantType {
         Column::Variant(col)
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Variant(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Variant(builder) => Some(builder),
-            _ => None,
-        }
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_variant_mut().unwrap().into()
     }
 
     fn try_upcast_column_builder(
@@ -170,21 +162,29 @@ impl ValueType for VariantType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.put_slice(item);
         builder.commit_row();
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         builder.push_repeat(item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.commit_row();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

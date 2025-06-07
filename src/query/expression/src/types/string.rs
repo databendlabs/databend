@@ -24,13 +24,14 @@ use super::AccessType;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::ArgType;
+use crate::types::BuilderMut;
+use crate::types::ColumnBuilder;
 use crate::types::DataType;
 use crate::types::GenericMap;
 use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,6 +131,7 @@ impl AccessType for StringType {
 
 impl ValueType for StringType {
     type ColumnBuilder = StringColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
     fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
         debug_assert!(data_type.is_string());
@@ -146,18 +148,8 @@ impl ValueType for StringType {
         Column::String(col)
     }
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::String(builder) => Some(builder),
-            _ => None,
-        }
-    }
-
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::String(builder) => Some(builder),
-            _ => None,
-        }
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_string_mut().unwrap().into()
     }
 
     fn try_upcast_column_builder(
@@ -176,20 +168,28 @@ impl ValueType for StringType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.put_and_commit(item);
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         builder.push_repeat(item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.put_and_commit("");
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

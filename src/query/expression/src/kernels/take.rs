@@ -160,18 +160,15 @@ where I: databend_common_column::types::Index
         data_type: &DataType,
     ) -> Result<()> {
         let c = T::upcast_column_with_type(column.clone(), data_type);
-        let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
-        let mut builder = T::try_downcast_owned_builder(builder).unwrap();
+        let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+        let mut inner_builder = T::downcast_builder(&mut builder);
 
         for index in self.indices {
-            T::push_item(&mut builder, unsafe {
-                T::index_column_unchecked(&column, index.to_usize())
-            });
+            inner_builder
+                .push_item(unsafe { T::index_column_unchecked(&column, index.to_usize()) });
         }
-        self.result = Some(Value::Column(T::upcast_column_with_type(
-            T::build_column(builder),
-            data_type,
-        )));
+        drop(inner_builder);
+        self.result = Some(Value::Column(builder.build()));
         Ok(())
     }
 
