@@ -29,6 +29,7 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
@@ -65,6 +66,7 @@ pub enum FragmentType {
     Compact,
     Recluster,
     MutationSource,
+    HilbertRecluster,
 }
 
 #[derive(Clone)]
@@ -136,6 +138,9 @@ impl PlanFragment {
             }
             FragmentType::Recluster => {
                 self.redistribute_recluster(ctx, &mut fragment_actions)?;
+            }
+            FragmentType::HilbertRecluster => {
+                self.redistribute_hilbert(ctx, &mut fragment_actions)?;
             }
         }
 
@@ -381,6 +386,40 @@ impl PlanFragment {
         Ok(())
     }
 
+    fn redistribute_hilbert(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
+        let exchange_sink = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let hilbert = match exchange_sink.input.as_ref() {
+            PhysicalPlan::HilbertPartition(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+
+        let total_ranges = hilbert.range_width;
+        let executors = Fragmenter::get_executors(ctx);
+        let num_executors = executors.len();
+        let base_width = total_ranges / num_executors;
+        let remainder = total_ranges % num_executors;
+        for (executor_idx, executor) in executors.into_iter().enumerate() {
+            let width = base_width + if executor_idx < remainder { 1 } else { 0 };
+            let min = executor_idx * base_width + std::cmp::min(executor_idx, remainder);
+            let mut plan = self.plan.clone();
+            let mut replace_hilbert = ReplaceHilbert {
+                range_width: width,
+                range_start: min as u64,
+            };
+            plan = replace_hilbert.replace(&plan)?;
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
+        }
+
+        Ok(())
+    }
+
     fn reshuffle<T: Clone>(
         executors: Vec<String>,
         partitions: Vec<T>,
@@ -556,8 +595,25 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
     }
 }
 
+struct ReplaceHilbert {
+    range_width: usize,
+    range_start: u64,
+}
+
+impl PhysicalPlanReplacer for ReplaceHilbert {
+    fn replace_hilbert_serialize(&mut self, plan: &HilbertPartition) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
+            input: Box::new(input),
+            range_width: self.range_width,
+            range_start: self.range_start,
+            ..plan.clone()
+        })))
+    }
+}
+
 struct ReplaceRecluster {
-    pub tasks: Vec<ReclusterTask>,
+    tasks: Vec<ReclusterTask>,
 }
 
 impl PhysicalPlanReplacer for ReplaceRecluster {
@@ -570,7 +626,7 @@ impl PhysicalPlanReplacer for ReplaceRecluster {
 }
 
 struct ReplaceMutationSource {
-    pub partitions: Partitions,
+    partitions: Partitions,
 }
 
 impl PhysicalPlanReplacer for ReplaceMutationSource {
@@ -583,7 +639,7 @@ impl PhysicalPlanReplacer for ReplaceMutationSource {
 }
 
 struct ReplaceCompactBlock {
-    pub partitions: Partitions,
+    partitions: Partitions,
 }
 
 impl PhysicalPlanReplacer for ReplaceCompactBlock {
@@ -596,10 +652,10 @@ impl PhysicalPlanReplacer for ReplaceCompactBlock {
 }
 
 struct ReplaceReplaceInto {
-    pub partitions: Vec<(usize, Location)>,
+    partitions: Vec<(usize, Location)>,
     // for standalone mode, slot is None
-    pub slot: Option<BlockSlotDescription>,
-    pub need_insert: bool,
+    slot: Option<BlockSlotDescription>,
+    need_insert: bool,
 }
 
 impl PhysicalPlanReplacer for ReplaceReplaceInto {

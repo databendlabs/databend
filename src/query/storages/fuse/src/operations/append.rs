@@ -37,10 +37,11 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::io::StreamBlockProperties;
+use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -50,24 +51,48 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let enable_stream_block_write = ctx.get_settings().get_enable_block_stream_write()?
-            && matches!(self.storage_format, FuseStorageFormat::Parquet);
+        let enable_stream_block_write =
+            ctx.get_settings().get_enable_block_stream_write()? && self.storage_format_as_parquet();
         if enable_stream_block_write {
+            let properties = StreamBlockProperties::try_create(
+                ctx.clone(),
+                self,
+                MutationKind::Insert,
+                None,
+                table_meta_timestamps,
+            )?;
+
+            let cluster_operators = properties.cluster_operators();
+            if !cluster_operators.is_empty() {
+                let num_input_columns = self.table_info.schema().num_fields();
+                let func_ctx = ctx.get_function_context()?;
+                pipeline.add_transformer(move || {
+                    CompoundBlockOperator::new(
+                        cluster_operators.clone(),
+                        func_ctx.clone(),
+                        num_input_columns,
+                    )
+                });
+            }
+
             pipeline.add_transform(|input, output| {
-                TransformBlockWriter::try_create(
+                TransformBlockBuilder::try_create(
                     ctx.clone(),
                     input,
                     output,
                     self,
-                    table_meta_timestamps,
-                    false,
+                    properties.clone(),
                 )
             })?;
+
+            pipeline.add_async_accumulating_transformer(|| {
+                TransformBlockWriter::create(ctx.clone(), MutationKind::Insert, self, false)
+            });
         } else {
             let block_thresholds = self.get_block_thresholds();
             build_compact_block_pipeline(pipeline, block_thresholds)?;
 
-            let schema = DataSchema::from(self.schema()).into();
+            let schema = DataSchema::from(&self.schema().remove_virtual_computed_fields()).into();
             let cluster_stats_gen =
                 self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;
             pipeline.add_transform(|input, output| {
@@ -100,7 +125,7 @@ impl FuseTable {
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
-            let num_input_columns = self.table_info.schema().fields().len();
+            let num_input_columns = self.table_info.schema().num_fields();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             let mut builder = pipeline.try_create_transform_pipeline_builder_with_len(
                 move || {
@@ -159,7 +184,7 @@ impl FuseTable {
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
-            let num_input_columns = self.table_info.schema().fields().len();
+            let num_input_columns = self.table_info.schema().num_fields();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transformer(move || {
@@ -196,8 +221,9 @@ impl FuseTable {
             return Ok(ClusterStatsGenerator::default());
         }
 
-        let input_schema =
-            modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
+        let input_schema = modified_schema.unwrap_or(
+            DataSchema::from(&self.schema_with_stream().remove_virtual_computed_fields()).into(),
+        );
         let mut merged = input_schema.fields().clone();
 
         let cluster_keys = self.linear_cluster_keys(ctx.clone());
