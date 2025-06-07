@@ -44,6 +44,7 @@ where T: ArgType
     input_data: Vec<DataBlock>,
     output_data: VecDeque<DataBlock>,
     bounds: Vec<T::Scalar>,
+    max_value: Option<T::Scalar>,
 }
 
 impl<T> TransformRangePartitionIndexer<T>
@@ -63,6 +64,7 @@ where
             input_data: vec![],
             output_data: VecDeque::new(),
             bounds: vec![],
+            max_value: None,
         })
     }
 }
@@ -124,6 +126,7 @@ where
 
     fn process(&mut self) -> Result<()> {
         if let Some(mut block) = self.input_data.pop() {
+            let bound_len = self.bounds.len();
             let num_rows = block.num_rows();
             let last = block.get_last_column().clone();
             block.pop_columns(1);
@@ -132,12 +135,18 @@ where
             for index in 0..num_rows {
                 let val =
                     T::to_owned_scalar(unsafe { T::index_column_unchecked(&last_col, index) });
+                if self.max_value.as_ref().is_some_and(|v| val >= *v) {
+                    let range_id = bound_len + 1;
+                    builder.push(range_id as u64);
+                    continue;
+                }
+
                 let mut low = 0;
-                let mut high = self.bounds.len();
+                let mut high = bound_len;
                 while low < high {
                     let mid = low + ((high - low) / 2);
                     let bound = unsafe { self.bounds.get_unchecked(mid) }.clone();
-                    if val >= bound {
+                    if val > bound {
                         low = mid + 1;
                     } else {
                         high = mid;
@@ -158,7 +167,7 @@ where
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         self.state.done.notified().await;
-        self.bounds = self.state.get_bounds::<T>();
+        (self.bounds, self.max_value) = self.state.get_bounds::<T>();
         Ok(())
     }
 }
