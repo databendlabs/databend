@@ -517,8 +517,8 @@ impl NullableColumnBuilder<AnyType> {
 
 #[derive(Debug)]
 pub struct NullableColumnBuilderMut<'a, T: ValueType> {
-    pub builder: T::ColumnBuilderMut<'a>,
-    pub validity: &'a mut MutableBitmap,
+    builder: T::ColumnBuilderMut<'a>,
+    validity: &'a mut MutableBitmap,
 }
 
 impl<'a, T: ValueType> From<&'a mut NullableColumnBuilder<T>> for NullableColumnBuilderMut<'a, T> {

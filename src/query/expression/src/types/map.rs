@@ -294,8 +294,8 @@ impl<K: AccessType, V: AccessType> KvColumn<K, V> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct KvColumnBuilder<K: ValueType, V: ValueType> {
-    pub keys: K::ColumnBuilder,
-    pub values: V::ColumnBuilder,
+    pub(crate) keys: K::ColumnBuilder,
+    pub(crate) values: V::ColumnBuilder,
 }
 
 impl<K: ValueType, V: ValueType> KvColumnBuilder<K, V> {
