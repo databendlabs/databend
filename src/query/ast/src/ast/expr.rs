@@ -85,6 +85,13 @@ pub enum Expr {
         subquery: Box<Query>,
         not: bool,
     },
+    /// `LIKE (SELECT ...)`
+    LikeSubquery {
+        span: Span,
+        expr: Box<Expr>,
+        subquery: Box<Query>,
+        modifier: SubqueryModifier,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         span: Span,
@@ -284,6 +291,7 @@ impl Expr {
             | Expr::IsDistinctFrom { span, .. }
             | Expr::InList { span, .. }
             | Expr::InSubquery { span, .. }
+            | Expr::LikeSubquery { span, .. }
             | Expr::Between { span, .. }
             | Expr::BinaryOp { span, .. }
             | Expr::JsonOp { span, .. }
@@ -336,6 +344,12 @@ impl Expr {
                 span
             }
             Expr::InSubquery {
+                span,
+                expr,
+                subquery,
+                ..
+            }
+            | Expr::LikeSubquery {
                 span,
                 expr,
                 subquery,
@@ -590,6 +604,15 @@ impl Display for Expr {
                         write!(f, " NOT")?;
                     }
                     write!(f, " IN({subquery})")?;
+                }
+                Expr::LikeSubquery {
+                    expr,
+                    subquery,
+                    modifier,
+                    ..
+                } => {
+                    write_expr(expr, Some(affix), true, f)?;
+                    write!(f, " LIKE {modifier} ({subquery})")?;
                 }
                 Expr::Between {
                     expr,
@@ -1447,6 +1470,7 @@ pub enum BinaryOperator {
     Or,
     Xor,
     Like,
+    LikeAny,
     NotLike,
     Regexp,
     RLike,
@@ -1487,6 +1511,7 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
             BinaryOperator::L2Distance => "l2_distance".to_string(),
+            BinaryOperator::LikeAny => "like_any".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -1554,6 +1579,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::Like => {
                 write!(f, "LIKE")
+            }
+            BinaryOperator::LikeAny => {
+                write!(f, "LIKE ANY")
             }
             BinaryOperator::NotLike => {
                 write!(f, "NOT LIKE")
@@ -2033,7 +2061,7 @@ impl ExprReplacer {
                     self.replace_expr(expr);
                 }
             }
-            Expr::InSubquery { expr, subquery, .. } => {
+            Expr::InSubquery { expr, subquery, .. } | Expr::LikeSubquery { expr, subquery, .. } => {
                 self.replace_expr(expr);
                 self.replace_query(subquery);
             }

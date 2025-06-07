@@ -3609,6 +3609,291 @@ BinaryOp {
 
 
 ---------- Input ----------
+'中文'::text LIKE ANY ('a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE ANY ('a', 'b')
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        15..23,
+    ),
+    op: LikeAny,
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            24..34,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    25..28,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    30..33,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ANY (SELECT 'a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE ANY (SELECT 'a', 'b')
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..41,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            25..40,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    25..40,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                32..35,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                37..40,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: Any,
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ALL (SELECT 'a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE ALL (SELECT 'a', 'b')
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..41,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            25..40,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    25..40,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                32..35,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                37..40,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: All,
+}
+
+
+---------- Input ----------
+'中文'::text LIKE SOME (SELECT 'a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE SOME (SELECT 'a', 'b')
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..42,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            26..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    26..41,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                33..36,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                38..41,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: Some,
+}
+
+
+---------- Input ----------
 nullif(1, 1)
 ---------- Output ---------
 nullif(1, 1)

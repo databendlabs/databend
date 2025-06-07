@@ -168,6 +168,11 @@ pub enum ExprElement {
         subquery: Box<Query>,
         not: bool,
     },
+    /// `LIKE (SELECT ...)`
+    LikeSubquery {
+        modifier: SubqueryModifier,
+        subquery: Box<Query>,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         low: Box<Expr>,
@@ -346,6 +351,7 @@ const BETWEEN_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IS_DISTINCT_FROM_AFFIX: Affix = Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left);
 const IN_LIST_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IN_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const LIKE_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const JSON_OP_AFFIX: Affix = Affix::Infix(Precedence(40), Associativity::Left);
 const PG_CAST_AFFIX: Affix = Affix::Postfix(Precedence(60));
 
@@ -373,6 +379,7 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::Gte => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Lte => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Like => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::LikeAny => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotLike => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
@@ -409,6 +416,7 @@ impl ExprElement {
             ExprElement::IsDistinctFrom { .. } => IS_DISTINCT_FROM_AFFIX,
             ExprElement::InList { .. } => IN_LIST_AFFIX,
             ExprElement::InSubquery { .. } => IN_SUBQUERY_AFFIX,
+            ExprElement::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
             ExprElement::UnaryOp { op } => unary_affix(op),
             ExprElement::BinaryOp { op } => binary_affix(op),
             ExprElement::JsonOp { .. } => JSON_OP_AFFIX,
@@ -457,6 +465,7 @@ impl Expr {
             Expr::IsDistinctFrom { .. } => Affix::Nilfix,
             Expr::InList { .. } => IN_LIST_AFFIX,
             Expr::InSubquery { .. } => IN_SUBQUERY_AFFIX,
+            Expr::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
             Expr::UnaryOp { op, .. } => unary_affix(op),
             Expr::BinaryOp { op, .. } => binary_affix(op),
             Expr::JsonOp { .. } => JSON_OP_AFFIX,
@@ -836,6 +845,12 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 subquery,
                 not,
             },
+            ExprElement::LikeSubquery { subquery, modifier } => Expr::LikeSubquery {
+                span: transform_span(elem.span.tokens),
+                expr: Box::new(lhs),
+                subquery,
+                modifier,
+            },
             ExprElement::Between { low, high, not } => Expr::Between {
                 span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
@@ -892,6 +907,23 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(opt_not, _, _, subquery, _)| ExprElement::InSubquery {
             subquery: Box::new(subquery),
             not: opt_not.is_some(),
+        },
+    );
+    let like_subquery = map(
+        rule! {
+            LIKE ~ ( ANY | SOME | ALL ) ~ "(" ~ #query ~ ^")"
+        },
+        |(_, m, _, subquery, _)| {
+            let modifier = match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            };
+            ExprElement::LikeSubquery {
+                modifier,
+                subquery: Box::new(subquery),
+            }
         },
     );
     let between = map(
@@ -1318,6 +1350,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 #is_null : "`... IS [NOT] NULL`"
                 | #in_list : "`[NOT] IN (<expr>, ...)`"
                 | #in_subquery : "`[NOT] IN (SELECT ...)`"
+                | #like_subquery: "`LIKE ANY | ALL | SOME (SELECT ...)`"
                 | #exists : "`[NOT] EXISTS (SELECT ...)`"
                 | #between : "`[NOT] BETWEEN ... AND ...`"
                 | #binary_op : "<operator>"
@@ -1407,6 +1440,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::And, rule! { AND }),
             value(BinaryOperator::Or, rule! { OR }),
             value(BinaryOperator::Xor, rule! { XOR }),
+            value(BinaryOperator::LikeAny, rule! { LIKE ~ ANY }),
             value(BinaryOperator::Like, rule! { LIKE }),
             value(BinaryOperator::NotLike, rule! { NOT ~ LIKE }),
             value(BinaryOperator::Regexp, rule! { REGEXP }),
