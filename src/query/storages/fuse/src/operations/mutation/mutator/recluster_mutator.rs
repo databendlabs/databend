@@ -72,6 +72,8 @@ pub struct ReclusterMutator {
     pub(crate) max_tasks: usize,
     pub(crate) cluster_key_types: Vec<DataType>,
     pub(crate) column_ids: HashSet<u32>,
+
+    average_size: usize,
 }
 
 impl ReclusterMutator {
@@ -102,6 +104,13 @@ impl ReclusterMutator {
         // NOTE: The snapshot schema does not contain the stream column.
         let column_ids = snapshot.schema.to_leaf_column_id_set();
 
+        let average_size = cmp::max(
+            snapshot
+                .summary
+                .uncompressed_byte_size
+                .div_ceil(snapshot.summary.block_count) as usize,
+            block_thresholds.max_bytes_per_block / 2,
+        );
         Ok(Self {
             ctx,
             schema,
@@ -111,6 +120,7 @@ impl ReclusterMutator {
             max_tasks,
             cluster_key_types,
             column_ids,
+            average_size,
         })
     }
 
@@ -125,6 +135,7 @@ impl ReclusterMutator {
         cluster_key_id: u32,
         max_tasks: usize,
         column_ids: HashSet<u32>,
+        average_size: usize,
     ) -> Self {
         Self {
             ctx,
@@ -135,6 +146,7 @@ impl ReclusterMutator {
             max_tasks,
             cluster_key_types,
             column_ids,
+            average_size,
         }
     }
 
@@ -196,8 +208,7 @@ impl ReclusterMutator {
             .get_recluster_block_size()?
             .min(avail_memory_usage * 30 / 100) as usize;
         // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
-        let max_blocks_num =
-            (memory_threshold / self.block_thresholds.max_bytes_per_block).max(2) * self.max_tasks;
+        let max_blocks_num = (memory_threshold / self.average_size).max(2) * self.max_tasks;
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Prepare task generation parameters
