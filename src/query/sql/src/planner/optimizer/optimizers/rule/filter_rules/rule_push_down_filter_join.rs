@@ -20,6 +20,7 @@ use crate::binder::JoinPredicate;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::operator::InferFilterOptimizer;
 use crate::optimizer::optimizers::operator::JoinProperty;
 use crate::optimizer::optimizers::rule::can_filter_null;
@@ -40,6 +41,7 @@ use crate::plans::JoinType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::VisitorMut;
 use crate::MetadataRef;
 
 pub struct RulePushDownFilterJoin {
@@ -113,15 +115,26 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
     // For example: `select * from t1, t2 where (t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)`
     // The predicate will be rewritten to `((t1.a=1 and t2.b=2) or (t1.a=2 and t2.b=1)) and (t1.a=1 or t1.a=2) and (t2.b=2 or t2.b=1)`
     // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
-    let predicates = rewrite_predicates(s_expr)?;
-
+    let mut predicates = rewrite_predicates(s_expr)?;
     let join_expr = s_expr.child(0)?;
     let mut join: Join = join_expr.plan().clone().try_into()?;
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;
     let right_prop = rel_expr.derive_relational_prop_child(1)?;
+    let mut visitor = EquivalentConstantsVisitor::default();
 
+    for predicate in predicates.iter_mut() {
+        if let JoinPredicate::Both {
+            is_equal_op: true, ..
+        } = JoinPredicate::new(predicate, &left_prop, &right_prop)
+        {
+            // skip join eq conditions
+            visitor.visit(&mut predicate.clone())?;
+        } else {
+            visitor.visit(predicate)?;
+        }
+    }
     let original_predicates_count = predicates.len();
     let mut original_predicates = vec![];
     let mut left_push_down = vec![];

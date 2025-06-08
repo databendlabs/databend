@@ -42,11 +42,11 @@ EvalScalar
     └── TableScan
         ├── table: default.system.numbers
         ├── output columns: [number (#0)]
-        ├── read rows: 1
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── push downs: [filters: [and_filters(numbers.number (#0) = 1, numbers.number (#0) + 1 = 1)], limit: NONE]
+	├── read rows: 0
+	├── read size: 0
+	├── partitions total: 0
+	├── partitions scanned: 0
+	├── push downs: [filters: [false], limit: NONE]
         └── estimated rows: 1.00
 
 query T

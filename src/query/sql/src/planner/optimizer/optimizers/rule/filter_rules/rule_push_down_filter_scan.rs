@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
@@ -144,6 +145,7 @@ impl RulePushDownFilterScan {
         let is_source_of_view = table_entries.iter().any(|t| t.is_source_of_view());
 
         let mut filtered_predicates = vec![];
+        let mut visitor = EquivalentConstantsVisitor::default();
         for predicate in predicates {
             let used_columns = predicate.used_columns();
             let mut contain_derived_column = false;
@@ -158,12 +160,13 @@ impl RulePushDownFilterScan {
                 }
             }
             if !contain_derived_column {
-                let predicate = Self::replace_predicate_column(
+                let mut predicate = Self::replace_predicate_column(
                     predicate,
                     table_entries,
                     &column_entries,
                     is_source_of_view,
                 )?;
+                visitor.visit(&mut predicate)?;
                 filtered_predicates.push(predicate);
             }
         }
