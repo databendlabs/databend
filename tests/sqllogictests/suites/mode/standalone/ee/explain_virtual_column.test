@@ -173,7 +173,7 @@ query T
 explain select v['d']::string, v['d']::int from t2;
 ----
 EvalScalar
-├── output columns: [v['d']::STRING (#7), v['d']::Int32 (#8)]
+├── output columns: [v['d'] (#7), v['d'] (#8)]
 ├── expressions: [CAST(t2.v['d'] (#6) AS String NULL), CAST(t2.v['d'] (#6) AS Int32 NULL)]
 ├── estimated rows: 1.00
 └── TableScan
