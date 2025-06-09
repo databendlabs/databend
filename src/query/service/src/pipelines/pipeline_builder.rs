@@ -54,7 +54,7 @@ pub struct PipelineBuilder {
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
-    pub(crate) is_exchange_neighbor: bool,
+    pub(crate) is_exchange_stack: Vec<bool>,
 
     pub contain_sink_processor: bool,
 }
@@ -77,8 +77,8 @@ impl PipelineBuilder {
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
-            is_exchange_neighbor: false,
             contain_sink_processor: false,
+            is_exchange_stack: vec![],
         }
     }
 
@@ -143,24 +143,19 @@ impl PipelineBuilder {
         }
     }
 
-    fn is_exchange_neighbor(&self, plan: &PhysicalPlan) -> bool {
-        let mut is_empty = true;
-        let mut all_exchange_source = true;
-        for children in plan.children() {
-            is_empty = false;
-            if !matches!(children, PhysicalPlan::ExchangeSource(_)) {
-                all_exchange_source = false;
-            }
+    pub(crate) fn is_exchange_parent(&self) -> bool {
+        if self.is_exchange_stack.len() >= 2 {
+            return self.is_exchange_stack[self.is_exchange_stack.len() - 2];
         }
 
-        !is_empty && all_exchange_source
+        false
     }
 
     #[recursive::recursive]
     pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
-        let is_exchange_neighbor = self.is_exchange_neighbor;
-        self.is_exchange_neighbor |= self.is_exchange_neighbor(plan);
+        self.is_exchange_stack
+            .push(matches!(plan, PhysicalPlan::ExchangeSink(_)));
 
         match plan {
             // ==============================
@@ -299,7 +294,8 @@ impl PipelineBuilder {
             )),
         }?;
 
-        self.is_exchange_neighbor = is_exchange_neighbor;
+        self.is_exchange_stack.pop();
+
         Ok(())
     }
 }
