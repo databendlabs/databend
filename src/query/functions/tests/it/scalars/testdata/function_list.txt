@@ -115,6 +115,50 @@ Functions overloads:
 1 add_months(Date NULL, Int64 NULL) :: Date NULL
 2 add_months(Timestamp, Int64) :: Timestamp
 3 add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 add_noise(String) :: Binary
+1 add_noise(String NULL) :: Binary NULL
+2 add_noise(UInt8) :: Binary
+3 add_noise(UInt8 NULL) :: Binary NULL
+4 add_noise(UInt16) :: Binary
+5 add_noise(UInt16 NULL) :: Binary NULL
+6 add_noise(UInt32) :: Binary
+7 add_noise(UInt32 NULL) :: Binary NULL
+8 add_noise(UInt64) :: Binary
+9 add_noise(UInt64 NULL) :: Binary NULL
+10 add_noise(Int8) :: Binary
+11 add_noise(Int8 NULL) :: Binary NULL
+12 add_noise(Int16) :: Binary
+13 add_noise(Int16 NULL) :: Binary NULL
+14 add_noise(Int32) :: Binary
+15 add_noise(Int32 NULL) :: Binary NULL
+16 add_noise(Int64) :: Binary
+17 add_noise(Int64 NULL) :: Binary NULL
+18 add_noise(Float32) :: Binary
+19 add_noise(Float32 NULL) :: Binary NULL
+20 add_noise(Float64) :: Binary
+21 add_noise(Float64 NULL) :: Binary NULL
+22 add_noise(String, UInt64) :: Binary
+23 add_noise(String NULL, UInt64 NULL) :: Binary NULL
+24 add_noise(UInt8, UInt64) :: Binary
+25 add_noise(UInt8 NULL, UInt64 NULL) :: Binary NULL
+26 add_noise(UInt16, UInt64) :: Binary
+27 add_noise(UInt16 NULL, UInt64 NULL) :: Binary NULL
+28 add_noise(UInt32, UInt64) :: Binary
+29 add_noise(UInt32 NULL, UInt64 NULL) :: Binary NULL
+30 add_noise(UInt64, UInt64) :: Binary
+31 add_noise(UInt64 NULL, UInt64 NULL) :: Binary NULL
+32 add_noise(Int8, UInt64) :: Binary
+33 add_noise(Int8 NULL, UInt64 NULL) :: Binary NULL
+34 add_noise(Int16, UInt64) :: Binary
+35 add_noise(Int16 NULL, UInt64 NULL) :: Binary NULL
+36 add_noise(Int32, UInt64) :: Binary
+37 add_noise(Int32 NULL, UInt64 NULL) :: Binary NULL
+38 add_noise(Int64, UInt64) :: Binary
+39 add_noise(Int64 NULL, UInt64 NULL) :: Binary NULL
+40 add_noise(Float32, UInt64) :: Binary
+41 add_noise(Float32 NULL, UInt64 NULL) :: Binary NULL
+42 add_noise(Float64, UInt64) :: Binary
+43 add_noise(Float64 NULL, UInt64 NULL) :: Binary NULL
 0 add_quarters(Date, Int64) :: Date
 1 add_quarters(Date NULL, Int64 NULL) :: Date NULL
 2 add_quarters(Timestamp, Int64) :: Timestamp
