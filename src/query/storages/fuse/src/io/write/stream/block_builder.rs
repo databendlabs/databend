@@ -238,9 +238,9 @@ impl StreamBlockBuilder {
     pub fn need_flush(&self) -> bool {
         let file_size = self.block_writer.compressed_size();
         self.row_count >= self.properties.block_thresholds.min_rows_per_block
-            || self.block_size >= self.properties.block_thresholds.max_bytes_per_block
+            || self.block_size >= self.properties.block_thresholds.min_bytes_per_block * 2
             || (file_size >= self.properties.block_thresholds.min_compressed_per_block
-                && self.block_size >= self.properties.block_thresholds.min_bytes_per_block / 2)
+                && self.block_size >= self.properties.block_thresholds.min_bytes_per_block)
     }
 
     pub fn write(&mut self, block: DataBlock) -> Result<()> {

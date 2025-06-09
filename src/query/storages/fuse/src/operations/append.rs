@@ -51,6 +51,9 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
+        let block_thresholds = self.get_block_thresholds();
+        build_compact_block_pipeline(pipeline, block_thresholds)?;
+
         let enable_stream_block_write =
             ctx.get_settings().get_enable_block_stream_write()? && self.storage_format_as_parquet();
         if enable_stream_block_write {
@@ -76,22 +79,13 @@ impl FuseTable {
             }
 
             pipeline.add_transform(|input, output| {
-                TransformBlockBuilder::try_create(
-                    ctx.clone(),
-                    input,
-                    output,
-                    self,
-                    properties.clone(),
-                )
+                TransformBlockBuilder::try_create(input, output, properties.clone())
             })?;
 
             pipeline.add_async_accumulating_transformer(|| {
                 TransformBlockWriter::create(ctx.clone(), MutationKind::Insert, self, false)
             });
         } else {
-            let block_thresholds = self.get_block_thresholds();
-            build_compact_block_pipeline(pipeline, block_thresholds)?;
-
             let schema = DataSchema::from(&self.schema().remove_virtual_computed_fields()).into();
             let cluster_stats_gen =
                 self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, Some(schema))?;

@@ -889,8 +889,8 @@ impl Settings {
         self.try_get_u64("hilbert_num_range_ids")
     }
 
-    pub fn get_hilbert_sample_size_per_block(&self) -> Result<u64> {
-        self.try_get_u64("hilbert_sample_size_per_block")
+    pub fn get_recluster_sample_size_per_block(&self) -> Result<u64> {
+        self.try_get_u64("recluster_sample_size_per_block")
     }
 
     pub fn get_hilbert_clustering_min_bytes(&self) -> Result<u64> {

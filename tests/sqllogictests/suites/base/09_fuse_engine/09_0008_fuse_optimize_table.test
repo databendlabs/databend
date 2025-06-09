@@ -512,10 +512,10 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 2
 query I
 select a from t9 order by a
 ----
+-5
 1
 2
 4
--5
 
 statement ok
 insert into t9 values(-3)
