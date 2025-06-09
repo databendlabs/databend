@@ -52,7 +52,7 @@ esac
 echo "#######################################################"
 echo "Running benchmark for Databend Cloud with S3 storage..."
 
-export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443?login=disable"
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443?login=disable&warehouse=default"
 
 echo "Creating warehouse..."
 echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
@@ -119,7 +119,7 @@ for query in "${BENCHMARK_DATASET}"/queries/*.sql; do
 done
 
 echo "Cleaning up..."
-export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443?login=disable"
+export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:443?login=disable&warehouse=default"
 if [[ "${BENCHMARK_DATASET}" == "load" ]]; then
     echo "Dropping database..."
     echo "DROP DATABASE IF EXISTS ${BENCHMARK_DATABASE};" | bendsql
