@@ -6001,6 +6001,13 @@ Query(
                             span: Some(
                                 19..27,
                             ),
+                            qualified: [
+                                Star(
+                                    Some(
+                                        25..26,
+                                    ),
+                                ),
+                            ],
                             window: None,
                         },
                         alias: None,

@@ -241,6 +241,7 @@ pub enum ExprElement {
     },
     /// `Count(*)` expression
     CountAll {
+        qualified: QualifiedName,
         window: Option<Window>,
     },
     /// `(foo, bar)`
@@ -569,8 +570,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 value,
             },
-            ExprElement::CountAll { window } => Expr::CountAll {
+            ExprElement::CountAll { qualified, window } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
+                qualified,
                 window,
             },
             ExprElement::Tuple { exprs } => Expr::Tuple {
@@ -1036,10 +1038,28 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-            COUNT ~ "(" ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
+            COUNT ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
         },
-        |(_, _, _, _, window)| ExprElement::CountAll {
-            window: window.map(|w| w.1),
+        |(_, _, res, star, _, window)| match res {
+            Some((fst, _, Some((snd, _)))) => ExprElement::CountAll {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Identifier(snd),
+                    Indirection::Star(Some(star.span)),
+                ],
+                window: window.map(|w| w.1),
+            },
+            Some((fst, _, None)) => ExprElement::CountAll {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Star(Some(star.span)),
+                ],
+                window: window.map(|w| w.1),
+            },
+            None => ExprElement::CountAll {
+                qualified: vec![Indirection::Star(Some(star.span))],
+                window: window.map(|w| w.1),
+            },
         },
     );
 

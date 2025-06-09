@@ -526,6 +526,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     }
                 }
                 2 => Expr::CountAll {
+                    qualified: vec![],
                     span: None,
                     window: None,
                 },
