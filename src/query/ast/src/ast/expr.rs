@@ -38,6 +38,7 @@ use super::TimeTravelPoint;
 use crate::ast::display_decimal_256;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Indirection;
 use crate::ast::Query;
@@ -715,8 +716,12 @@ impl Display for Expr {
                 Expr::Literal { value, .. } => {
                     write!(f, "{value}")?;
                 }
-                Expr::CountAll { window, .. } => {
-                    write!(f, "COUNT(*)")?;
+                Expr::CountAll {
+                    window, qualified, ..
+                } => {
+                    write!(f, "COUNT(")?;
+                    write_dot_separated_list(f, qualified)?;
+                    write!(f, ")")?;
                     if let Some(window) = window {
                         write!(f, " OVER {window}")?;
                     }

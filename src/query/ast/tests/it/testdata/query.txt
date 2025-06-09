@@ -450,7 +450,7 @@ Query {
 ---------- Input ----------
 select count(t.*) from t
 ---------- Output ---------
-SELECT COUNT(*) FROM t
+SELECT COUNT(t.*) FROM t
 ---------- AST ------------
 Query {
     span: Some(

@@ -562,6 +562,12 @@ select count(*) from t;
 100
 
 
+query I
+select count(xx.*) from t xx;
+----
+100
+
+
 # table exists
 
 statement ok
