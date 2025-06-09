@@ -47,6 +47,7 @@ use crate::FunctionDomain;
 use crate::Scalar;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>;
 
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
@@ -248,7 +249,7 @@ pub struct FunctionRegistry {
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
-
+    pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
 }
 
@@ -534,6 +535,25 @@ impl FunctionRegistry {
             .extend(additional_cast_rules);
     }
 
+    // Note that, if additional_cast_rules is not empty, the default cast rules will not be used
+    pub fn register_dynamic_cast_rules(
+        &mut self,
+        fn_name: &str,
+        rule: Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>,
+    ) {
+        self.dynamic_cast_rules
+            .entry(fn_name.to_string())
+            .or_default()
+            .push(rule);
+    }
+
+    pub fn get_dynamic_cast_rules(&self, fn_name: &str) -> DynamicCastRules {
+        self.dynamic_cast_rules
+            .get(fn_name)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     pub fn register_auto_try_cast_rules(
         &mut self,
         auto_try_cast_rules: impl IntoIterator<Item = (DataType, DataType)>,
@@ -560,6 +580,7 @@ impl FunctionRegistry {
     pub fn check_ambiguity(&self) {
         for (name, funcs) in &self.funcs {
             let auto_cast_rules = self.get_auto_cast_rules(name);
+            let dynamic_cast_rules = self.get_dynamic_cast_rules(name);
             for (former, former_id) in funcs {
                 for latter in funcs
                     .iter()
@@ -582,6 +603,7 @@ impl FunctionRegistry {
                             latter.signature.args_type.iter(),
                             former.signature.args_type.iter(),
                             auto_cast_rules,
+                            &dynamic_cast_rules,
                         ) {
                             if subst.apply(&former.signature.return_type).is_ok()
                                 && former
