@@ -22,6 +22,7 @@ use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
+use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
@@ -156,10 +157,10 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut N::ColumnBuilder,
+        mut builder: N::ColumnBuilderMut<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        N::push_item(builder, N::to_scalar_ref(&self.value));
+        builder.push_item(N::to_scalar_ref(&self.value));
         Ok(())
     }
 }
@@ -251,7 +252,7 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<T>,
+        mut builder: BuilderMut<'_, DecimalType<T>>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let v = T::from_u64_array(self.value);
@@ -309,10 +310,10 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<months_days_micros>,
+        mut builder: BuilderMut<'_, IntervalType>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        IntervalType::push_item(builder, IntervalType::to_scalar_ref(&self.value));
+        builder.push_item(IntervalType::to_scalar_ref(&self.value));
         Ok(())
     }
 }

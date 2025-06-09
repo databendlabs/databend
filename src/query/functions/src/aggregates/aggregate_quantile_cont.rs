@@ -20,7 +20,7 @@ use borsh::BorshSerialize;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -94,7 +94,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut R::ColumnBuilder,
+        mut builder: R::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value_len = self.value.len();
@@ -117,26 +117,24 @@ where
             for (frac, whole) in indices {
                 let whole = whole as usize;
                 if whole >= value_len {
-                    R::push_default(builder);
+                    builder.push_default();
                 } else {
                     let n = self.compute_result(whole, frac, value_len);
                     inner_column_builder.push(NumberScalar::Float64(n.into()));
                 }
             }
             let float64_column = inner_column_builder.build();
-            R::push_item(
-                builder,
+            builder.push_item(
                 R::try_downcast_scalar(&ScalarRef::Array(Column::Number(float64_column))).unwrap(),
-            )
+            );
         } else {
             let (frac, whole) = libm::modf((value_len - 1) as f64 * quantile_cont_data.levels[0]);
             let whole = whole as usize;
             if whole >= value_len {
-                R::push_default(builder);
+                builder.push_default();
             } else {
                 let n = self.compute_result(whole, frac, value_len);
-                R::push_item(
-                    builder,
+                builder.push_item(
                     R::try_downcast_scalar(&ScalarRef::Number(NumberScalar::Float64(n.into())))
                         .unwrap(),
                 );
@@ -217,7 +215,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut ArrayColumnBuilder<T>,
+        mut builder: ArrayColumnBuilderMut<'_, T>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value_len = self.value.len();
@@ -276,7 +274,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value_len = self.value.len();
@@ -290,10 +288,10 @@ where
         let (frac, whole) = libm::modf((value_len - 1) as f64 * quantile_cont_data.levels[0]);
         let whole = whole as usize;
         if whole >= value_len {
-            T::push_default(builder);
+            builder.push_default();
         } else {
             let n = self.compute_result(whole, frac, value_len)?;
-            T::push_item(builder, T::to_scalar_ref(&n));
+            builder.push_item(T::to_scalar_ref(&n));
         }
 
         Ok(())

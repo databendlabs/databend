@@ -42,6 +42,7 @@
 #![feature(alloc_layout_extra)]
 #![feature(debug_closure_helpers)]
 #![feature(never_type)]
+#![feature(slice_as_array)]
 
 #[allow(dead_code)]
 mod block;

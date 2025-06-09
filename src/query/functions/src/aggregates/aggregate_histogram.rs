@@ -31,7 +31,6 @@ use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::Scalar;
 use serde::Deserialize;
 use serde::Serialize;
-use string::StringColumnBuilder;
 
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -107,7 +106,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut StringColumnBuilder,
+        mut builder: BuilderMut<'_, StringType>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let histogram_data = unsafe {

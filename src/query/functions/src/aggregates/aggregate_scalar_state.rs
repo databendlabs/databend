@@ -19,6 +19,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::ColumnBuilder;
@@ -230,17 +231,11 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        let mut inner = T::downcast_builder(builder);
         if let Some(v) = &self.value {
-            if let Some(inner) = T::try_downcast_builder(builder) {
-                T::push_item(inner, T::to_scalar_ref(v));
-            } else {
-                let data_type = builder.data_type();
-                builder.push(T::upcast_scalar_with_type(v.clone(), &data_type).as_ref());
-            }
-        } else if let Some(inner) = T::try_downcast_builder(builder) {
-            T::push_default(inner);
+            inner.push_item(T::to_scalar_ref(v));
         } else {
-            builder.push_default();
+            inner.push_default();
         }
         Ok(())
     }

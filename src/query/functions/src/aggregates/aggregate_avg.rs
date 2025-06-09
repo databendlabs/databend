@@ -89,7 +89,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<F64>,
+        mut builder: BuilderMut<'_, Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value = self.value.as_() / (self.count as f64);
@@ -173,7 +173,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         // # Safety
@@ -190,7 +190,7 @@ where
             .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
         {
             Some(value) => {
-                T::push_item(builder, T::to_scalar_ref(&value));
+                builder.push_item(T::to_scalar_ref(&value));
                 Ok(())
             }
             None => Err(ErrorCode::Overflow(format!(

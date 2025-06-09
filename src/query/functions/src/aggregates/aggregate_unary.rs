@@ -19,7 +19,6 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_base::base::take_mut;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
@@ -76,7 +75,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut R::ColumnBuilder,
+        builder: R::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
 }
@@ -162,23 +161,8 @@ where
     }
 
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
-        // some `ValueType` like `NullableType` need ownership to downcast builder,
-        // so here we using an unsafe way to take the ownership of builder.
-        // See [`take_mut`] for details.
-        if let Some(builder) = R::try_downcast_builder(builder) {
-            state.merge_result(builder, self.function_data.as_deref())
-        } else {
-            take_mut(builder, |builder| {
-                let data_type = builder.data_type();
-                let mut builder = R::try_downcast_owned_builder(builder).unwrap();
-                let res = state.merge_result(&mut builder, self.function_data.as_deref());
-
-                (
-                    res,
-                    R::try_upcast_column_builder(builder, &data_type).unwrap(),
-                )
-            })
-        }
+        let builder = R::downcast_builder(builder);
+        state.merge_result(builder, self.function_data.as_deref())
     }
 }
 

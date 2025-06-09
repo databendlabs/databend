@@ -90,18 +90,18 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.frequency_map.is_empty() {
-            T::push_default(builder);
+            builder.push_default();
         } else {
             let (key, _) = self
                 .frequency_map
                 .iter()
                 .max_by_key(|&(_, value)| value)
                 .unwrap();
-            T::push_item(builder, T::to_scalar_ref(key));
+            builder.push_item(T::to_scalar_ref(key));
         }
 
         Ok(())

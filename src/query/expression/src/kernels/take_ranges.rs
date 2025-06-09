@@ -108,21 +108,16 @@ impl ValueVisitor for TakeRangeVisitor<'_> {
         column: T::Column,
         data_type: &DataType,
     ) -> Result<()> {
-        let builder = ColumnBuilder::with_capacity(data_type, T::column_len(&column));
-        let mut builder = T::try_downcast_owned_builder(builder).unwrap();
+        let mut builder = ColumnBuilder::with_capacity(data_type, T::column_len(&column));
+        let mut inner_builder = T::downcast_builder(&mut builder);
 
         for range in self.ranges {
             for index in range.start as usize..range.end as usize {
-                T::push_item(&mut builder, unsafe {
-                    T::index_column_unchecked(&column, index)
-                });
+                inner_builder.push_item(unsafe { T::index_column_unchecked(&column, index) });
             }
         }
-        self.result = Some(Value::Column(T::upcast_column_with_type(
-            T::build_column(builder),
-            data_type,
-        )));
-
+        drop(inner_builder);
+        self.result = Some(Value::Column(builder.build()));
         Ok(())
     }
 

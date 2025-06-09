@@ -2659,14 +2659,22 @@ impl ColumnBuilder {
                 Date => DateType,
                 Timestamp => TimestampType,
                 Interval => IntervalType,
+                Boolean => BooleanType,
+                Binary => BinaryType,
+                String => StringType,
+                Bitmap => BitmapType,
+                Variant => VariantType,
+                Geometry => GeometryType,
+                Geography => GeographyType,
             ],
             match self {
                 ColumnBuilder::T(b) => {
-                    Self::type_build::<T>(b, &T::data_type())
+                    T::upcast_column_with_type(T::build_column(b), &T::data_type())
                 }
                 ColumnBuilder::Null { len } => Column::Null { len },
                 ColumnBuilder::EmptyArray { len } => Column::EmptyArray { len },
                 ColumnBuilder::EmptyMap { len } => Column::EmptyMap { len },
+
                 ColumnBuilder::Number(builder) => Column::Number(builder.build()),
                 ColumnBuilder::Decimal(builder) => Column::Decimal(builder.build()),
                 ColumnBuilder::Array(builder) => Column::Array(Box::new(builder.build())),
@@ -2676,21 +2684,9 @@ impl ColumnBuilder {
                     assert!(fields.iter().map(|field| field.len()).all_equal());
                     Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
                 }
-
-                ColumnBuilder::Boolean(b) => Column::Boolean(BooleanType::build_column(b)),
-                ColumnBuilder::Binary(b) => Column::Binary(BinaryType::build_column(b)),
-                ColumnBuilder::String(b) => Column::String(StringType::build_column(b)),
-                ColumnBuilder::Bitmap(b) => Column::Bitmap(BitmapType::build_column(b)),
-                ColumnBuilder::Variant(b) => Column::Variant(VariantType::build_column(b)),
-                ColumnBuilder::Geometry(b) => Column::Geometry(GeometryType::build_column(b)),
-                ColumnBuilder::Geography(b) => Column::Geography(GeographyType::build_column(b)),
                 ColumnBuilder::Vector(b) => Column::Vector(b.build()),
             }
         }
-    }
-
-    fn type_build<T: ValueType>(builder: T::ColumnBuilder, data_type: &DataType) -> Column {
-        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 
     pub fn build_scalar(self) -> Scalar {
