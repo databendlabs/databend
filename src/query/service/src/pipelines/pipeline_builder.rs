@@ -77,7 +77,6 @@ impl PipelineBuilder {
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
-            // parent_is_exchange: false,
             contain_sink_processor: false,
             is_exchange_stack: vec![],
         }
