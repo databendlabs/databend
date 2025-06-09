@@ -210,12 +210,13 @@ impl MetaServiceImpl {
                 (endpoint, txn_reply)
             }
             Err(err) => {
+                network_metrics::incr_request_result(false);
                 error!("txn request failed: {:?}", err);
                 return Err(Status::internal(err.to_string()));
             }
         };
 
-        network_metrics::incr_request_result(txn_reply.error.is_empty());
+        network_metrics::incr_request_result(true);
 
         Ok((endpoint, txn_reply))
     }

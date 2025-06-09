@@ -18,7 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
-use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_cond_eq_seq;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -152,7 +152,7 @@ impl StageApi for StageMgr {
                 dels,
             );
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
                 return Ok(());
@@ -214,7 +214,7 @@ impl StageApi for StageMgr {
             );
 
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
                 return Ok(0);
@@ -275,7 +275,7 @@ impl StageApi for StageMgr {
                 if_then,
             );
             let tx_reply = self.kv_api.transaction(txn_req).await?;
-            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
                 return Ok(());

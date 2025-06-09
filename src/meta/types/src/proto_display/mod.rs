@@ -224,10 +224,9 @@ impl Display for TxnReply {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "TxnReply{{ success: {}, responses: {}, error: {}}}",
+            "TxnReply{{ success: {}, responses: {}}}",
             self.success,
             VecDisplay::new_at_most(&self.responses, 5),
-            self.error
         )
     }
 }

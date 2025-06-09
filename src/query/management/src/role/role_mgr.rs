@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_exception::ErrorCode;
-use databend_common_meta_api::reply::txn_reply_to_api_result;
+use databend_common_meta_api::reply::unpack_txn_reply;
 use databend_common_meta_api::txn_backoff::txn_backoff;
 use databend_common_meta_api::txn_cond_seq;
 use databend_common_meta_api::txn_op_del;
@@ -370,7 +370,7 @@ impl RoleApi for RoleMgr {
             if need_transfer {
                 let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
                 let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
-                let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+                let (succ, _) = unpack_txn_reply(tx_reply);
                 debug!(
                     succ = succ;
                     "transfer_ownership_to_admin"
@@ -434,7 +434,7 @@ impl RoleApi for RoleMgr {
             let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
-            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
                 return Ok(());
@@ -519,7 +519,7 @@ impl RoleApi for RoleMgr {
             let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
-            let (succ, _) = txn_reply_to_api_result(tx_reply)?;
+            let (succ, _) = unpack_txn_reply(tx_reply);
 
             if succ {
                 return Ok(());
