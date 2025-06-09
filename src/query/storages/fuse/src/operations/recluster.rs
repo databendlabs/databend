@@ -71,6 +71,10 @@ impl FuseTable {
             return Ok(None);
         };
 
+        if snapshot.summary.block_count == 0 {
+            return Ok(None);
+        }
+
         let mutator = Arc::new(ReclusterMutator::try_create(
             self,
             ctx.clone(),
