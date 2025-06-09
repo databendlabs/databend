@@ -39,6 +39,7 @@ use crate::ast::display_decimal_256;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
+use crate::ast::Indirection;
 use crate::ast::Query;
 use crate::ast::SetExpr;
 use crate::span::merge_span;
@@ -175,6 +176,7 @@ pub enum Expr {
     /// `COUNT(*)` expression
     CountAll {
         span: Span,
+        qualified: Vec<Indirection>,
         window: Option<Window>,
     },
     /// `(foo, bar)`

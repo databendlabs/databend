@@ -287,6 +287,13 @@ Return {
                                         span: Some(
                                             20..28,
                                         ),
+                                        qualified: [
+                                            Star(
+                                                Some(
+                                                    26..27,
+                                                ),
+                                            ),
+                                        ],
                                         window: None,
                                     },
                                     alias: None,

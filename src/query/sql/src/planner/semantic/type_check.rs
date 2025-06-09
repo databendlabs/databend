@@ -940,7 +940,7 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::CountAll { span, window } => {
+            Expr::CountAll { span, window, .. } => {
                 let (new_agg_func, data_type) =
                     self.resolve_aggregate_function(*span, "count", expr, false, vec![], &[], &[])?;
 

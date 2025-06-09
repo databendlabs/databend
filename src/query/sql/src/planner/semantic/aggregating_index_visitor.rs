@@ -323,7 +323,7 @@ impl RefreshAggregatingIndexRewriter {
                 self.has_agg_function = true;
                 name.name = format!("{}_STATE", name.name);
             }
-            Expr::CountAll { span, window } if window.is_none() => {
+            Expr::CountAll { span, window, .. } if window.is_none() => {
                 self.has_agg_function = true;
                 *expr = Expr::FunctionCall {
                     span: None,
