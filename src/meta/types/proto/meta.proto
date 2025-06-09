@@ -249,7 +249,8 @@ message TxnReply {
   repeated TxnOpResponse responses = 2;
 
   // Not used
-  string error = 3;
+  // string error = 3;
+  reserved 3;
 
   // Identifies which execution path was taken
   string execution_path = 4;
