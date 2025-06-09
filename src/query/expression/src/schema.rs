@@ -366,7 +366,7 @@ impl DataSchema {
         }
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{}\". Valid fields: {:?}",
+            "Column \"{}\" does not exist. Available columns are: {:?}",
             name, valid_fields
         )))
     }
@@ -752,7 +752,7 @@ impl TableSchema {
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name.clone()).collect();
 
         Err(ErrorCode::BadArguments(format!(
-            "Unable to get field named \"{}\". Valid fields: {:?}",
+            "Column \"{}\" does not exist. Available columns are: {:?}",
             name, valid_fields
         )))
     }

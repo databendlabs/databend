@@ -141,6 +141,34 @@ CREATE TABLE IF NOT EXISTS db2.t2(a UInt32 null) Engine = Fuse
 statement ok
 INSERT INTO db2.t2 VALUES(1)
 
+# Test cases for error messages
+
+# Create test tables
+statement ok
+CREATE TABLE error_test_table (id INT, name VARCHAR, age INT) Engine = Fuse;
+
+# Test case 1: Column count mismatch in VALUES - too few values
+statement error (?s).*Column count mismatch in INSERT: you specified 3 columns but provided 2 values.*
+INSERT INTO error_test_table (id, name, age) VALUES (1, 'John');
+
+# Test case 2: Column count mismatch in VALUES - too many values
+statement error (?s).*Column count mismatch in INSERT: you specified 2 columns but provided 3 values.*
+INSERT INTO error_test_table (id, name) VALUES (1, 'John', 25);
+
+# Test case 3: Non-existent column in INSERT
+statement error (?s).*Column "salary" does not exist.*
+INSERT INTO error_test_table (id, name, salary) VALUES (1, 'John', 50000);
+
+# Test case 4: Column count mismatch in SELECT-based INSERT
+statement ok
+CREATE TABLE source_table (id INT, name VARCHAR) Engine = Fuse;
+
+statement ok
+INSERT INTO source_table VALUES (1, 'John');
+
+statement error (?s).*Column count mismatch in INSERT: you specified 3 columns but provided 2 values.*
+INSERT INTO error_test_table SELECT * FROM source_table;
+
 statement ok
 DROP DATABASE if exists db2
 

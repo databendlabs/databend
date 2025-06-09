@@ -492,7 +492,11 @@ impl Binder {
             };
             if clause.insert_operation.values.len() != source_schema.num_fields() {
                 return Err(ErrorCode::SemanticError(
-                    "insert columns and values are not matched".to_string(),
+                    format!(
+                        "Column count mismatch in INSERT: you specified {} columns but provided {} values. Please ensure these numbers match.",
+                        source_schema.num_fields(),
+                        clause.insert_operation.values.len()
+                    ),
                 ));
             }
             for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
