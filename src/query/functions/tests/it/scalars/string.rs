@@ -427,6 +427,17 @@ fn test_concat(file: &mut impl Write) {
         "a",
         BooleanType::from_data(vec![false; 3]),
     )]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "concat_ws(NULL, a, 2)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
+
+    run_ast(file, "concat(4, a, 2)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
 }
 
 fn test_bin(file: &mut impl Write) {

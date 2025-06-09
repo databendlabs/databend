@@ -79,6 +79,9 @@ pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
     "regexp_substr",
 ];
 
+/// Functions that works with all strings, allow other types to be casted to string.
+pub const PURE_STRING_FUNC_NAMES: &[&str] = &["concat", "concat_ws"];
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
     registry.register_aliases("upper", &["ucase"]);

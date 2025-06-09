@@ -2039,16 +2039,59 @@ evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | concat_ws('', a, 2)
-  | ^^^^^^^^^^^^^^^^^^^ no function matches signature `concat_ws(String, Boolean, UInt8)`, you might need to add explicit type casts.
+ast            : concat_ws('', a, 2)
+raw expr       : concat_ws('', a::Boolean, 2)
+checked expr   : concat_ws<String, String, String>("", CAST<Boolean>(a AS String), CAST<UInt8>(2_u8 AS String))
+optimized expr : "false2"
+evaluation:
++--------+---------+-----------------------+
+|        | a       | Output                |
++--------+---------+-----------------------+
+| Type   | Boolean | String                |
+| Domain | {FALSE} | {"false2"..="false2"} |
+| Row 0  | false   | 'false2'              |
+| Row 1  | false   | 'false2'              |
+| Row 2  | false   | 'false2'              |
++--------+---------+-----------------------+
+evaluation (internal):
++--------+--------------------------------------+
+| Column | Data                                 |
++--------+--------------------------------------+
+| a      | Boolean([0b_____000])                |
+| Output | StringColumn[false2, false2, false2] |
++--------+--------------------------------------+
 
-candidate functions:
-  concat_ws(String, String, String) :: String                      : unable to unify `Boolean` with `String`
-  concat_ws(String NULL, String NULL, String NULL) :: String NULL  : unable to unify `Boolean` with `String`
 
+ast            : concat_ws(NULL, a, 2)
+raw expr       : concat_ws(NULL, a::Decimal(10, 0), 2)
+checked expr   : concat_ws<String NULL, String NULL, String NULL>(CAST<NULL>(NULL AS String NULL), CAST<Decimal(10, 0)>(a AS String NULL), CAST<UInt8>(2_u8 AS String NULL))
+optimized expr : concat_ws<String NULL, String NULL, String NULL>(NULL, CAST<Decimal(10, 0)>(a AS String NULL), "2")
+output type    : String NULL
+output domain  : {""..} ∪ {NULL}
+output         : NULL
+
+
+ast            : concat(4, a, 2)
+raw expr       : concat(4, a::Decimal(10, 0), 2)
+checked expr   : concat<String, String, String>(CAST<UInt8>(4_u8 AS String), CAST<Decimal(10, 0)>(a AS String), CAST<UInt8>(2_u8 AS String))
+optimized expr : concat<String, String, String>("4", CAST<Decimal(10, 0)>(a AS String), "2")
+evaluation:
++--------+----------------+---------+
+|        | a              | Output  |
++--------+----------------+---------+
+| Type   | Decimal(10, 0) | String  |
+| Domain | {0..=2}        | {"4"..} |
+| Row 0  | 0              | '402'   |
+| Row 1  | 1              | '412'   |
+| Row 2  | 2              | '422'   |
++--------+----------------+---------+
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Decimal128([0, 1, 2])       |
+| Output | StringColumn[402, 412, 422] |
++--------+-----------------------------+
 
 
 ast            : bin(a)
