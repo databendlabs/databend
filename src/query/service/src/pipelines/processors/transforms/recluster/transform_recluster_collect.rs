@@ -36,10 +36,10 @@ where
     T: ArgType + Send + Sync,
     T::Scalar: Ord + Send,
 {
-    pub fn new(offset: usize, sample_rate: f64, seed: u64) -> Self {
+    pub fn new(offset: usize, sample_size: usize, seed: u64) -> Self {
         Self {
             input_data: vec![],
-            sampler: RangeBoundSampler::<T>::new(offset, sample_rate, seed),
+            sampler: RangeBoundSampler::<T>::new(offset, sample_size, seed),
         }
     }
 }

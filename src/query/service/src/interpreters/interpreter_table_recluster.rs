@@ -631,7 +631,7 @@ impl ReclusterTableInterpreter {
         let database = &self.plan.database;
         let table = &self.plan.table;
         let settings = self.ctx.get_settings();
-        let sample_size = settings.get_hilbert_sample_size_per_block()?;
+        let sample_size = settings.get_recluster_sample_size_per_block()?;
 
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();

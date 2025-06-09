@@ -187,7 +187,11 @@ impl PipelineBuilder {
                         .collect();
 
                     let num_processors = self.main_pipeline.output_len();
-                    let sample_rate = 0.01;
+                    let sample_size = self
+                        .ctx
+                        .get_settings()
+                        .get_recluster_sample_size_per_block()?
+                        as usize;
                     let partitions = block_thresholds.calc_partitions_for_recluster(
                         task.total_rows,
                         task.total_bytes,
@@ -195,7 +199,7 @@ impl PipelineBuilder {
                     );
                     let state = SampleState::new(num_processors, partitions);
                     let recluster_pipeline_builder =
-                        ReclusterPipelineBuilder::create(schema, sort_descs.into(), sample_rate)
+                        ReclusterPipelineBuilder::create(schema, sort_descs.into(), sample_size)
                             .with_state(state);
                     recluster_pipeline_builder
                         .build_recluster_sample_pipeline(&mut self.main_pipeline)?;
@@ -314,7 +318,7 @@ struct ReclusterPipelineBuilder {
     schema: DataSchemaRef,
     sort_desc: Arc<[SortColumnDescription]>,
     state: Option<Arc<SampleState>>,
-    sample_rate: f64,
+    sample_size: usize,
     seed: u64,
 }
 
@@ -322,13 +326,13 @@ impl ReclusterPipelineBuilder {
     fn create(
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
-        sample_rate: f64,
+        sample_size: usize,
     ) -> Self {
         Self {
             schema,
             sort_desc,
             state: None,
-            sample_rate,
+            sample_size,
             seed: rand::random(),
         }
     }
@@ -382,7 +386,7 @@ impl ReclusterPipelineBuilder {
         })?;
         let offset = self.schema.num_fields();
         pipeline.add_accumulating_transformer(|| {
-            TransformReclusterCollect::<R::Type>::new(offset, self.sample_rate, self.seed)
+            TransformReclusterCollect::<R::Type>::new(offset, self.sample_size, self.seed)
         });
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformRangePartitionIndexer::<

@@ -206,9 +206,9 @@ impl ReclusterMutator {
             settings.get_max_memory_usage()? - GLOBAL_MEM_STAT.get_memory_usage() as u64;
         let memory_threshold = settings
             .get_recluster_block_size()?
-            .min(avail_memory_usage * 50 / 100) as usize;
+            .min(avail_memory_usage * 40 / 100) as usize;
         // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
-        let max_blocks_num = (memory_threshold / self.average_size).max(2) * self.max_tasks;
+        let mut max_blocks_per_task = (memory_threshold / self.average_size).max(2);
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Prepare task generation parameters
@@ -276,8 +276,11 @@ impl ReclusterMutator {
             }
 
             // Select blocks for reclustering based on depth threshold and max block size
-            let mut selected_idx =
-                self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
+            let mut selected_idx = self.fetch_max_depth(
+                points_map,
+                self.depth_threshold,
+                max_blocks_per_task * self.max_tasks,
+            )?;
             if selected_idx.is_empty() {
                 if level != 0 || small_blocks.len() < 2 {
                     continue;
@@ -291,13 +294,19 @@ impl ReclusterMutator {
             let mut task_compressed = 0;
             let mut task_indices = Vec::new();
             let mut selected_blocks = Vec::new();
+            if selected_idx.len() > max_blocks_per_task {
+                max_blocks_per_task = selected_idx.len().div_ceil(self.max_tasks).max(10);
+            }
             for idx in selected_idx {
                 let block = blocks[idx].clone();
                 let block_size = block.block_size as usize;
                 let row_count = block.row_count as usize;
+                let selected_len = selected_blocks.len();
 
                 // If memory threshold exceeded, generate a new task and reset accumulators
-                if task_bytes + block_size > memory_threshold && selected_blocks.len() > 1 {
+                if selected_len > max_blocks_per_task
+                    || (task_bytes + block_size > memory_threshold && selected_len > 1)
+                {
                     selected_blocks_idx.extend(std::mem::take(&mut task_indices));
 
                     tasks.push(self.generate_task(

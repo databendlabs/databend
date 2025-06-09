@@ -26,7 +26,7 @@ pub struct RangeBoundSampler<T>
 where T: ValueType
 {
     offset: usize,
-    sample_rate: f64,
+    sample_size: usize,
     rng: SmallRng,
 
     values: Vec<(u64, Vec<Scalar>)>,
@@ -36,11 +36,11 @@ where T: ValueType
 impl<T> RangeBoundSampler<T>
 where T: ValueType
 {
-    pub fn new(offset: usize, sample_rate: f64, seed: u64) -> Self {
+    pub fn new(offset: usize, sample_size: usize, seed: u64) -> Self {
         let rng = SmallRng::seed_from_u64(seed);
         Self {
             offset,
-            sample_rate,
+            sample_size,
             rng,
             values: vec![],
             _t: PhantomData,
@@ -58,15 +58,10 @@ where
         assert!(rows > 0);
         let column = data.get_by_offset(self.offset).to_column(rows);
 
-        let sample_size = std::cmp::max((self.sample_rate * rows as f64).ceil() as usize, 100);
+        let sample_size = std::cmp::min(self.sample_size, rows);
         let mut indices = (0..rows).collect::<Vec<_>>();
-
-        let sampled_indices = if rows > sample_size {
-            indices.shuffle(&mut self.rng);
-            &indices[..sample_size]
-        } else {
-            &indices
-        };
+        indices.shuffle(&mut self.rng);
+        let sampled_indices = &indices[..sample_size];
 
         let column = T::try_downcast_column(&column).unwrap();
         let sample_values = sampled_indices

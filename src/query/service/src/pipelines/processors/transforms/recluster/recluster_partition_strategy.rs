@@ -32,6 +32,10 @@ impl ReclusterPartitionStrategy {
     pub fn new(properties: Arc<StreamBlockProperties>) -> Self {
         Self { properties }
     }
+
+    fn concat_blocks(blocks: Vec<DataBlock>) -> Result<DataBlock> {
+        DataBlock::concat(&blocks)
+    }
 }
 
 impl PartitionProcessStrategy for ReclusterPartitionStrategy {
@@ -51,22 +55,44 @@ impl PartitionProcessStrategy for ReclusterPartitionStrategy {
     /// Stream write each block, and flush it conditionally based on builder status
     /// and input size estimation.
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        let mut input_sizes: usize = data_blocks.iter().map(|b| b.estimate_block_size()).sum();
-        let mut input_rows: usize = data_blocks.iter().map(|b| b.num_rows()).sum();
+        let blocks_num = data_blocks.len();
+        let mut accumulated_rows = 0;
+        let mut accumulated_bytes = 0;
+        let mut pending_blocks = Vec::with_capacity(blocks_num);
+        let mut staged_blocks = Vec::with_capacity(blocks_num);
+        let mut compacted = Vec::with_capacity(blocks_num);
+        for block in data_blocks {
+            accumulated_rows += block.num_rows();
+            accumulated_bytes += block.estimate_block_size();
+            pending_blocks.push(block);
+            if !self
+                .properties
+                .check_large_enough(accumulated_rows, accumulated_bytes)
+            {
+                continue;
+            }
+            if !staged_blocks.is_empty() {
+                compacted.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
+            }
+            std::mem::swap(&mut staged_blocks, &mut pending_blocks);
+            accumulated_rows = 0;
+            accumulated_bytes = 0;
+        }
+        staged_blocks.append(&mut pending_blocks);
+        if !staged_blocks.is_empty() {
+            compacted.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
+        }
 
         let mut result = Vec::new();
         let mut builder = StreamBlockBuilder::try_new_with_config(self.properties.clone())?;
-        for block in data_blocks {
-            input_sizes -= block.estimate_block_size();
-            input_rows -= block.num_rows();
+        for block in compacted {
             builder.write(block)?;
-            if builder.need_flush() && self.properties.check_large_enough(input_rows, input_sizes) {
+            if builder.need_flush() {
                 let serialized = builder.finish()?;
                 result.push(DataBlock::empty_with_meta(Box::new(serialized)));
                 builder = StreamBlockBuilder::try_new_with_config(self.properties.clone())?;
             }
         }
-
         if !builder.is_empty() {
             let serialized = builder.finish()?;
             result.push(DataBlock::empty_with_meta(Box::new(serialized)));
