@@ -1292,6 +1292,10 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
+        r#"'中文'::text LIKE ANY ('a', 'b')"#,
+        r#"'中文'::text LIKE ANY (SELECT 'a', 'b')"#,
+        r#"'中文'::text LIKE ALL (SELECT 'a', 'b')"#,
+        r#"'中文'::text LIKE SOME (SELECT 'a', 'b')"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
         r#"coalesce(1, 2, 3)"#,

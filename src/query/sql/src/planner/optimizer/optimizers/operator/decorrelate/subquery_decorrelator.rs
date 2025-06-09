@@ -35,7 +35,6 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
@@ -48,6 +47,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
+use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
@@ -774,15 +774,17 @@ impl SubqueryDecorrelatorOptimizer {
 
 pub fn check_child_expr_in_subquery(
     child_expr: &ScalarExpr,
-    op: &ComparisonOp,
+    op: &SubqueryComparisonOp,
 ) -> Result<(ScalarExpr, bool)> {
     match child_expr {
-        ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        ScalarExpr::BoundColumnRef(_) => {
+            Ok((child_expr.clone(), op != &SubqueryComparisonOp::Equal))
+        }
         ScalarExpr::FunctionCall(func) => {
             for arg in &func.arguments {
                 let _ = check_child_expr_in_subquery(arg, op)?;
             }
-            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
+            Ok((child_expr.clone(), op != &SubqueryComparisonOp::Equal))
         }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {
