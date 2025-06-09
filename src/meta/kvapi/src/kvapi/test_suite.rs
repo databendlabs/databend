@@ -745,7 +745,6 @@ impl kvapi::TestSuite {
                 TxnOp {
                     request: Some(txn_op::Request::Delete(TxnDeleteRequest {
                         key: txn_key1.clone(),
-                        prev_value: true,
                         match_seq: None,
                     })),
                 },

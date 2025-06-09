@@ -139,8 +139,12 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2025-04-15: since 1.2.726
 ///   👥 client: requires `1,2.677`.
 ///
-/// - 2025-05-08: since TODO: add version when merged.
+/// - 2025-05-08: since 1.2.736
 ///   🖥 server: add `WatchResponse::is_initialization`,
+///
+/// - 2025-06-09: since: TODO: add version when merged.
+///   👥 client: requires `>=1,2.677`: do not use TxnPutRequest.prev_value and TxnDeleteRequest.prev_value;
+///
 ///
 ///
 /// Server feature set:

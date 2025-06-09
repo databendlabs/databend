@@ -45,7 +45,10 @@ message TxnPutRequest {
 
   // Whether or not to return the prev value
   // Not used anymore
-  bool prev_value = 3;
+  // Since 1.2.304, 2024-01-17, the server always returns prev value,
+  // and client does not need to specify this field.
+  // bool prev_value = 3;
+  reserved 3;
 
   // Absolute expire time
   optional uint64 expire_at = 4;
@@ -68,7 +71,10 @@ message TxnDeleteRequest {
 
   // if or not return the prev value
   // Not used anymore
-  bool prev_value = 2;
+  // Since 1.2.304, 2024-01-17, the server always returns prev value,
+  // and client does not need to specify this field.
+  // bool prev_value = 2;
+  reserved 2;
 
   // Delete only if the `seq` matches the specified value.
   // Such a condition skips changed record and does not result in a transaction failure.
@@ -124,7 +130,7 @@ message TxnDeleteResponse {
 }
 
 // Delete by prefix request and response
-message TxnDeleteByPrefixRequest { string prefix = 1; }
+message TxnDeleteByPrefixRequest {string prefix = 1;}
 
 message TxnDeleteByPrefixResponse {
   string prefix = 1;

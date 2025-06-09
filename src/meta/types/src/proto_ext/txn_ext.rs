@@ -260,7 +260,6 @@ impl pb::TxnOp {
             request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
                 key: key.to_string(),
                 value,
-                prev_value: true,
                 expire_at: None,
                 ttl_ms: None,
             })),
@@ -275,7 +274,6 @@ impl pb::TxnOp {
             request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
                 key: key.to_string(),
                 value,
-                prev_value: true,
                 expire_at: None,
                 ttl_ms: ttl.map(|d| d.as_millis() as u64),
             })),
@@ -299,7 +297,6 @@ impl pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::Delete(pb::TxnDeleteRequest {
                 key: key.to_string(),
-                prev_value: true,
                 match_seq: seq,
             })),
         }
