@@ -204,6 +204,11 @@ impl StorageParams {
                 s1.external_id = s2.external_id;
                 s1.master_key = s2.master_key;
                 s1.network_config = s2.network_config;
+                s1.disable_credential_loader = s2.disable_credential_loader;
+                // Remove disable_credential_loader is role_arn has been set.
+                if !s1.role_arn.is_empty() {
+                    s1.disable_credential_loader = false;
+                }
                 Ok(Self::S3(s1))
             }
             (s1, s2) => Err(ErrorCode::StorageOther(format!(
