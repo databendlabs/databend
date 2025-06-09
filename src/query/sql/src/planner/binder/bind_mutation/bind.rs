@@ -266,11 +266,13 @@ impl Binder {
                     all_source_columns.clone(),
                     update_row_version.clone(),
                     &target_table_name,
+                    &database_name,
                 )
                 .await?,
             );
         }
 
+        let dest_entity_name = format!("{database_name}.{table_name}");
         // Bind not matched clause columns and add insert exprs
         for clause in &unmatched_clauses {
             unmatched_evaluators.push(
@@ -279,6 +281,7 @@ impl Binder {
                     clause,
                     table_schema.clone(),
                     all_source_columns.clone(),
+                    dest_entity_name.clone(),
                 )
                 .await?,
             );
@@ -358,6 +361,7 @@ impl Binder {
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
         update_row_version: Option<(FieldIndex, ScalarExpr)>,
         target_name: &str,
+        database_name: &str,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
@@ -404,7 +408,11 @@ impl Binder {
                         }
                     }
 
-                    let index = schema.index_of(&col_name)?;
+                    let (index, field) = Self::try_resolve_field_in_schema(
+                        &schema,
+                        &col_name,
+                        &format!("{database_name}.{target_name}"),
+                    )?;
 
                     if update_columns.contains_key(&index) {
                         return Err(ErrorCode::BadArguments(format!(
@@ -413,7 +421,6 @@ impl Binder {
                         )));
                     }
 
-                    let field = schema.field(index);
                     if field.computed_expr().is_some() {
                         return Err(ErrorCode::BadArguments(format!(
                             "The value specified for computed column '{}' is not allowed",
@@ -444,6 +451,7 @@ impl Binder {
         clause: &UnmatchedClause,
         table_schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
+        dest_entity_name: String,
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
@@ -486,7 +494,7 @@ impl Binder {
             let mut values = Vec::with_capacity(clause.insert_operation.values.len());
             // we need to get source schema, and use it for filling columns.
             let source_schema = if let Some(fields) = clause.insert_operation.columns.clone() {
-                self.schema_project(&table_schema, &fields)?
+                self.schema_project(&table_schema, &fields, &dest_entity_name)?
             } else {
                 table_schema.clone()
             };
