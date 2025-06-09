@@ -1812,6 +1812,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let doy = value(IntervalKind::Doy, rule! { DOY });
     let dow = value(IntervalKind::Dow, rule! { DOW });
     let isodow = value(IntervalKind::ISODow, rule! { ISODOW });
+    let isoweek = value(IntervalKind::ISOWeek, rule! { ISOWEEK });
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
     let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
@@ -1871,6 +1872,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         rule! { #literal_string_eq_ignore_case("HOUR")
             | #literal_string_eq_ignore_case("H")
             | #literal_string_eq_ignore_case("HH")
+            | #literal_string_eq_ignore_case("HH24")
             | #literal_string_eq_ignore_case("HR")
             | #literal_string_eq_ignore_case("HOURS")
             | #literal_string_eq_ignore_case("HRS")
@@ -1937,6 +1939,11 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         },
     );
 
+    let isoweek_str = value(
+        IntervalKind::ISOWeek,
+        rule! { #literal_string_eq_ignore_case("IW") },
+    );
+
     let epoch_str = value(
         IntervalKind::Epoch,
         rule! { #literal_string_eq_ignore_case("EPOCH")
@@ -1983,6 +1990,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #epoch
             | #microsecond
             | #isodow
+            | #isoweek
             | #millennium
             | #yearweek
         ),
@@ -2001,6 +2009,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #epoch_str
             | #microsecond_str
             | #isodow_str
+            | #isoweek_str
             | #yearweek_str
             | #millennium_str
         ),

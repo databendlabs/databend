@@ -763,6 +763,8 @@ pub enum TokenKind {
     IS,
     #[token("ISODOW", ignore(ascii_case))]
     ISODOW,
+    #[token("ISOWEEK", ignore(ascii_case))]
+    ISOWEEK,
     #[token("ISOYEAR", ignore(ascii_case))]
     ISOYEAR,
     #[token("JOIN", ignore(ascii_case))]

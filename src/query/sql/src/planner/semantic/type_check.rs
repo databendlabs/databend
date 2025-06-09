@@ -3194,6 +3194,10 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Millennium => {
                 self.resolve_function(span, "millennium", vec![], &[arg])
             }
+            ASTIntervalKind::ISOWeek => Err(ErrorCode::SemanticError(
+                "Not support interval type ISOWeek".to_string(),
+            )
+            .set_span(span)),
         }
     }
 
@@ -3278,6 +3282,13 @@ impl<'a> TypeChecker<'a> {
                         span: None,
                         value: Literal::UInt64(week_start as u64)
                     }],
+                )
+            }
+            ASTIntervalKind::ISOWeek => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_iso_week", vec![],
+                    &[date],
                 )
             }
             ASTIntervalKind::Day => {
