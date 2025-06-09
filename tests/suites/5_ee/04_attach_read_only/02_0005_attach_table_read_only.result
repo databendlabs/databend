@@ -32,7 +32,7 @@ expects one row, 2 columns
 delete not allowed
 Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 update not allowed
-Error: APIError: QueryFailed: [1006]Unable to get field named "a". Valid fields: ["number", "c2"]
+Error: APIError: QueryFailed: [1006]Column "a" does not exist. Available columns are: ["number", "c2"]
 truncate not allowed
 Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table column not allowed

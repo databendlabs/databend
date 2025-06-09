@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS t2(a String, b String, c String, d String, e String, 
 statement ok
 CREATE TABLE IF NOT EXISTS t3(a String, b String, c String, d String) Engine = Fuse
 
-statement error (?s)1006.* Fields in select statement is not equal with expected, select fields: 4, insert fields: 5
+statement error (?s)1006.*Column count mismatch in INSERT.*you specified 5 columns but provided 4 values.*
 INSERT INTO t1 (a,b,c,d,e) select * from t3
 
-statement error (?s)1006.* Fields in select statement is not equal with expected, select fields: 3, insert fields: 5
+statement error (?s)1006.*Column count mismatch in INSERT.*you specified 5 columns but provided 3 values.*
 INSERT INTO t1 (a,b,c,d,e) select a,b,c from t3
 
 statement ok
