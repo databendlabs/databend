@@ -187,9 +187,11 @@ impl Binder {
             files: stmt.files.clone(),
             pattern,
         };
+
+        let dest_entity_name = format!("{database_name}.{table_name}");
         let stage_schema = match &stmt.dst_columns {
-            Some(cols) => self.schema_project(&table.schema(), cols)?,
-            None => self.schema_project(&table.schema(), &[])?,
+            Some(cols) => self.schema_project(&table.schema(), cols, &dest_entity_name)?,
+            None => self.schema_project(&table.schema(), &[], &dest_entity_name)?,
         };
 
         let required_values_schema: DataSchemaRef = Arc::new(stage_schema.clone().into());

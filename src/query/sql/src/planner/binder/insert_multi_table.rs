@@ -203,7 +203,12 @@ impl Binder {
             let mut casted_schema = if target_columns.is_empty() {
                 target_table.schema()
             } else {
-                self.schema_project(&target_table.schema(), target_columns.as_ref())?
+                let dest_entity_name = format!("{database_name}.{table_name}");
+                self.schema_project(
+                    &target_table.schema(),
+                    target_columns.as_ref(),
+                    &dest_entity_name,
+                )?
             };
 
             let default_indices = source_columns
