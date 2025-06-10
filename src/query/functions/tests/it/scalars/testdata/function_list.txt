@@ -3529,6 +3529,10 @@ Functions overloads:
 0 regexp_instr FACTORY
 0 regexp_like FACTORY
 0 regexp_replace FACTORY
+0 regexp_split_to_array(String, String) :: Array(String)
+1 regexp_split_to_array(String NULL, String NULL) :: Array(String) NULL
+2 regexp_split_to_array(String, String, String) :: Array(String)
+3 regexp_split_to_array(String NULL, String NULL, String NULL) :: Array(String) NULL
 0 regexp_split_to_table FACTORY
 0 regexp_substr FACTORY
 0 repeat(String, UInt64) :: String

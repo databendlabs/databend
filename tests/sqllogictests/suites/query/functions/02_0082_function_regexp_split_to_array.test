@@ -1,0 +1,69 @@
+query ?
+SELECT regexp_split_to_array('hello world', '\\s+') AS words;
+----
+['hello','world']
+
+query ?
+SELECT regexp_split_to_array('helloTworld', 't') AS words;
+----
+['helloTworld']
+
+query ?
+SELECT regexp_split_to_array('helloTworld', 't', 'c') AS word;
+----
+['helloTworld']
+
+
+statement ok
+create or replace table t(c1 string);
+
+statement ok
+insert into t values('hello world'), ('hello world');
+
+
+query ?
+SELECT regexp_split_to_array(c1, 't', 'i') from t order by c1;
+----
+['hello world']
+['hello world']
+
+query ?
+SELECT regexp_split_to_array(c1, 't', 'c') from t order by c1;
+----
+['hello world']
+['hello world']
+
+query ?
+SELECT regexp_split_to_array(c1, '\\s+') from t order by c1;
+----
+['hello','world']
+['hello','world']
+
+
+statement ok
+drop table if exists t;
+
+query ?
+SELECT regexp_split_to_array('helloTworld', 't', 'i') AS word;
+----
+['hello','world']
+
+query ?
+select count(regexp_split_to_array(',apple,,banana,', ','));
+----
+1
+
+query ?
+SELECT count(regexp_split_to_array('the quick brown fox', '\\s*'));
+----
+1
+
+query ?
+select regexp_split_to_array(',apple,,banana,', ',');
+----
+['','apple','','banana','']
+
+query ?
+SELECT  regexp_split_to_array('the quick brown fox', '\\s*') AS foo;
+----
+['t','h','e','q','u','i','c','k','b','r','o','w','n','f','o','x']
