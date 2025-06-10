@@ -525,7 +525,7 @@ async fn test_block_pruner() -> Result<()> {
     ]);
 
     let refresh_index_plan = RefreshTableIndexPlan {
-        index_type: TableIndexType::Inverted,
+        index_type: databend_common_ast::ast::TableIndexType::Inverted,
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
