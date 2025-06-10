@@ -75,11 +75,12 @@ impl DataSummary {
         let values = &block
             .columns()
             .iter()
-            .map(|x| match x.value {
-                Value::Scalar(Scalar::Number(NumberScalar::UInt64(n))) => n,
-                _ => {
-                    unreachable!()
-                }
+            .map(|x| {
+                x.as_scalar()
+                    .and_then(|x| x.as_number())
+                    .and_then(|x| x.as_u_int64())
+                    .copied()
+                    .unwrap()
             })
             .collect::<Vec<u64>>();
         DataSummary {

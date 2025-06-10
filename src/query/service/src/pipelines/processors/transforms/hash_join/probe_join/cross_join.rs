@@ -39,9 +39,9 @@ impl HashJoinProbeState {
         let build_block = DataBlock::concat(build_blocks)?;
         if build_num_rows == 1 {
             for col in build_block.columns() {
-                let scalar = unsafe { col.value.index_unchecked(0) };
+                let scalar = unsafe { col.index_unchecked(0) };
                 probe_block.add_column(BlockEntry::new(
-                    col.data_type.clone(),
+                    col.data_type(),
                     Value::Scalar(scalar.to_owned()),
                 ));
             }
@@ -71,9 +71,9 @@ impl HashJoinProbeState {
         let mut replicated_probe_block = DataBlock::new(columns, build_num_rows);
 
         for col in probe_block.columns() {
-            let scalar = unsafe { col.value.index_unchecked(take_index) };
+            let scalar = unsafe { col.index_unchecked(take_index) };
             replicated_probe_block.add_column(BlockEntry::new(
-                col.data_type.clone(),
+                col.data_type(),
                 Value::Scalar(scalar.to_owned()),
             ));
         }

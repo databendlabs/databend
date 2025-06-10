@@ -166,7 +166,6 @@ impl SinkAnalyzeState {
             .await?;
 
         let is_full = data_block.columns()[self.output_schema.num_fields() - 1]
-            .value
             .index(0)
             .unwrap();
 
@@ -186,7 +185,7 @@ impl SinkAnalyzeState {
             let name = f.name();
             let index: u32 = name.strip_prefix("ndv_").unwrap().parse().unwrap();
 
-            let col = col.value.index(0).unwrap();
+            let col = col.index(0).unwrap();
             let col = col.as_binary().unwrap();
             let hll: MetaHLL = borsh_deserialize_from_slice(col)?;
 
@@ -211,24 +210,30 @@ impl SinkAnalyzeState {
         }
         for row in 0..data_block.num_rows() {
             let column = &data_block.columns()[1];
-            let value = column.value.index(row).clone().unwrap();
+            let value = column.index(row).clone().unwrap();
             let number = value.as_number().unwrap();
             let ndv = number.as_u_int64().unwrap();
             let upper_bound =
-                Datum::from_scalar(data_block.columns()[2].value.index(row).unwrap().to_owned())
+                Datum::from_scalar(data_block.get_by_offset(2).index(row).unwrap().to_owned())
                     .ok_or_else(|| {
                         ErrorCode::Internal("Don't support the type to generate histogram")
                     })?;
             let lower_bound =
-                Datum::from_scalar(data_block.columns()[3].value.index(row).unwrap().to_owned())
+                Datum::from_scalar(data_block.get_by_offset(3).index(row).unwrap().to_owned())
                     .ok_or_else(|| {
                         ErrorCode::Internal("Don't support the type to generate histogram")
                     })?;
-            let count_col = &data_block.columns()[4];
-            let val = count_col.value.index(row).clone().unwrap();
-            let number = val.as_number().unwrap();
-            let count = number.as_u_int64().unwrap();
-            let bucket = HistogramBucket::new(lower_bound, upper_bound, *count as f64, *ndv as f64);
+
+            let count: Option<_> = try {
+                *data_block
+                    .get_by_offset(4)
+                    .index(row)?
+                    .as_number()?
+                    .as_u_int64()?
+            };
+
+            let bucket =
+                HistogramBucket::new(lower_bound, upper_bound, count.unwrap() as f64, *ndv as f64);
             self.histograms
                 .entry(col_id)
                 .and_modify(|histogram| histogram.add_bucket(bucket.clone()))

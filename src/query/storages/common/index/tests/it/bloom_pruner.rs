@@ -583,7 +583,7 @@ fn eval_index_expr(
         .enumerate()
         .filter_map(|(i, entry)| {
             let field = bloom_columns.get(&i)?;
-            let column = entry.value.as_column().unwrap();
+            let column = entry.as_column().unwrap();
             let null_count = column
                 .as_nullable()
                 .map(|nullable| nullable.validity.null_count())

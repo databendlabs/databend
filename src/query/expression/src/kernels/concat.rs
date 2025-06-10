@@ -69,7 +69,7 @@ impl DataBlock {
         let mut concat_columns = Vec::with_capacity(num_columns);
         for i in 0..num_columns {
             concat_columns.push(BlockEntry::new(
-                blocks[0].get_by_offset(i).data_type.clone(),
+                blocks[0].data_type(i),
                 Self::concat_columns(&block_refs, i)?,
             ))
         }
@@ -82,26 +82,22 @@ impl DataBlock {
     pub fn concat_columns(blocks: &[&DataBlock], column_index: usize) -> Result<Value<AnyType>> {
         debug_assert!(blocks
             .iter()
-            .map(|block| &block.get_by_offset(column_index).data_type)
+            .map(|block| block.data_type(column_index))
             .all_equal());
 
         let entry0 = blocks[0].get_by_offset(column_index);
-        if matches!(entry0.value, Value::Scalar(_))
+        if entry0.as_scalar().is_some()
             && blocks
                 .iter()
                 .all(|b| b.get_by_offset(column_index) == entry0)
         {
-            return Ok(entry0.value.clone());
+            return Ok(entry0.value());
         }
 
         let columns_iter = blocks.iter().map(|block| {
-            let entry = &block.get_by_offset(column_index);
-            match &entry.value {
-                Value::Scalar(s) => {
-                    ColumnBuilder::repeat(&s.as_ref(), block.num_rows(), &entry.data_type).build()
-                }
-                Value::Column(c) => c.clone(),
-            }
+            block
+                .get_by_offset(column_index)
+                .to_column(block.num_rows())
         });
         Ok(Value::Column(Column::concat_columns(columns_iter)?))
     }

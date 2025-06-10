@@ -28,7 +28,6 @@ use databend_common_expression::RowConverter as CommonRowConverter;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortField;
-use databend_common_expression::Value;
 use jsonb::RawJsonb;
 
 use super::RowConverter;
@@ -80,18 +79,20 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
     fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
         let columns = columns
             .iter()
-            .map(|entry| match &entry.value {
-                Value::Scalar(s) => match s {
-                    Scalar::Variant(val) => {
-                        // convert variant value to comparable format.
-                        let raw_jsonb = RawJsonb::new(val);
-                        let buf = raw_jsonb.convert_to_comparable();
-                        let s = Scalar::Variant(buf);
-                        ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
+            .map(|entry| {
+                if let Some(s) = entry.as_scalar() {
+                    match s {
+                        Scalar::Variant(val) => {
+                            // convert variant value to comparable format.
+                            let raw_jsonb = RawJsonb::new(val);
+                            let buf = raw_jsonb.convert_to_comparable();
+                            let s = Scalar::Variant(buf);
+                            ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type()).build()
+                        }
+                        _ => entry.to_column(num_rows),
                     }
-                    _ => ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build(),
-                },
-                Value::Column(c) => {
+                } else {
+                    let c = entry.as_column().unwrap();
                     let data_type = c.data_type();
                     match data_type.remove_nullable() {
                         DataType::Variant => {

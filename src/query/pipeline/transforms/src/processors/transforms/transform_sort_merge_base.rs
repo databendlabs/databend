@@ -121,10 +121,10 @@ where
                 .convert(&order_by_cols, block.num_rows())?;
             if self.output_order_col {
                 let order_col = rows.to_column();
-                block.add_column(BlockEntry {
-                    data_type: order_col.data_type(),
-                    value: Value::Column(order_col),
-                });
+                block.add_column(BlockEntry::new(
+                    order_col.data_type(),
+                    Value::Column(order_col),
+                ));
             }
             rows
         };

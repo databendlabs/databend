@@ -97,7 +97,7 @@ impl UpdateByExprMutator {
         let mut data_block = data_block.clone();
         let (last_filter, origin_block) = if has_filter {
             let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
-            let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
+            let old_filter = filter_entry.value().try_downcast().unwrap();
             // pop filter
             data_block.pop_columns(1);
             // has pop old filter
@@ -178,10 +178,7 @@ impl UpdateByExprMutator {
             }
         }
         // add filter
-        block_entries.push(BlockEntry {
-            data_type: DataType::Boolean,
-            value: last_filter,
-        });
+        block_entries.push(BlockEntry::new(DataType::Boolean, last_filter));
 
         Ok(DataBlock::new(block_entries, data_block.num_rows()))
     }

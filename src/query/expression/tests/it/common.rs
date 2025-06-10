@@ -14,20 +14,15 @@
 
 use std::io::Write;
 
-use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockRowIndex;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 
 type MergeSlice = (usize, usize, usize);
 
 pub fn new_block(columns: &[Column]) -> DataBlock {
     let len = columns.first().map_or(1, |c| c.len());
-    let columns = columns
-        .iter()
-        .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
-        .collect();
+    let columns = columns.iter().map(|col| col.clone().into()).collect();
 
     DataBlock::new(columns, len)
 }

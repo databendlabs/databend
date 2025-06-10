@@ -71,13 +71,13 @@ impl Transform for TransformExpandGroupingSets {
                 if bits & (1 << i) == 0 {
                     // This column should be set to NULLs.
                     *entry = BlockEntry::new(
-                        entry.data_type.wrap_nullable(),
+                        entry.data_type().wrap_nullable(),
                         Value::Scalar(Scalar::Null),
                     )
                 } else {
                     *entry = BlockEntry::new(
-                        entry.data_type.wrap_nullable(),
-                        entry.value.clone().wrap_nullable(None),
+                        entry.data_type().wrap_nullable(),
+                        entry.value().wrap_nullable(None),
                     )
                 }
             }

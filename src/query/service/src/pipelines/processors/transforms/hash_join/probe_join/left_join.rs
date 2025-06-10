@@ -392,10 +392,7 @@ impl HashJoinProbeState {
                     .build_schema
                     .fields()
                     .iter()
-                    .map(|df| BlockEntry {
-                        data_type: df.data_type().clone(),
-                        value: Value::Scalar(Scalar::Null),
-                    })
+                    .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
                     .collect(),
                 unmatched_idx,
             );
@@ -456,9 +453,8 @@ impl HashJoinProbeState {
                 build_block
                     .columns()
                     .iter()
-                    .map(|c| BlockEntry {
-                        value: Value::Scalar(Scalar::Null),
-                        data_type: c.data_type.wrap_nullable(),
+                    .map(|c| {
+                        BlockEntry::new(c.data_type().wrap_nullable(), Value::Scalar(Scalar::Null))
                     })
                     .collect::<Vec<_>>()
             } else {

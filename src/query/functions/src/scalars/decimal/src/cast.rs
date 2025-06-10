@@ -29,6 +29,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -1048,63 +1049,82 @@ fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Val
     .upcast_with_type(&DataType::Number(T::data_type()))
 }
 
-pub fn strict_decimal_data_type(mut data: DataBlock) -> Result<DataBlock, String> {
+pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
     use DecimalDataType::*;
-    let mut ctx = EvalContext {
-        generics: &[],
-        num_rows: data.num_rows(),
-        func_ctx: &FunctionContext::default(),
-        validity: None,
-        errors: None,
-        suppress_error: false,
-        strict_eval: true,
-    };
-    for entry in data.columns_mut() {
-        if entry.value.is_scalar_null() {
-            continue;
-        }
-        let Some((from_type, nullable)) = DecimalDataType::from_value(&entry.value) else {
-            continue;
-        };
 
-        let size = from_type.size();
-        match (size.can_carried_by_128(), from_type.data_kind()) {
-            (true, DecimalDataKind::Decimal128) | (false, DecimalDataKind::Decimal256) => continue,
-            (true, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal256) => {
-                if nullable {
-                    let nullable_value =
-                        entry.value.try_downcast::<NullableType<AnyType>>().unwrap();
-                    let value = nullable_value.value().unwrap();
-                    let new_value =
-                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size));
-
-                    entry.value =
-                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
-                } else {
-                    entry.value =
-                        decimal_to_decimal(&entry.value, &mut ctx, from_type, Decimal128(size))
-                }
+    let num_rows = data.num_rows();
+    let entries = data
+        .take_columns()
+        .into_iter()
+        .map(|entry| {
+            let value = entry.value();
+            if value.is_scalar_null() {
+                return Ok(entry);
             }
-            (false, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128) => {
-                if nullable {
-                    let nullable_value =
-                        entry.value.try_downcast::<NullableType<AnyType>>().unwrap();
-                    let value = nullable_value.value().unwrap();
-                    let new_value =
-                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size));
+            let Some((from_type, nullable)) = DecimalDataType::from_value(&value) else {
+                return Ok(entry);
+            };
 
-                    entry.value =
-                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
-                } else {
-                    entry.value =
-                        decimal_to_decimal(&entry.value, &mut ctx, from_type, Decimal256(size))
+            let mut ctx = EvalContext {
+                generics: &[],
+                num_rows,
+                func_ctx: &FunctionContext::default(),
+                validity: None,
+                errors: None,
+                suppress_error: false,
+                strict_eval: true,
+            };
+
+            let size = from_type.size();
+            let entry = match (size.can_carried_by_128(), from_type.data_kind()) {
+                (true, DecimalDataKind::Decimal128) | (false, DecimalDataKind::Decimal256) => {
+                    return Ok(entry)
                 }
-            }
-        }
+                (true, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal256) => {
+                    if nullable {
+                        let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
+                        let value = nullable_value.value().unwrap();
+                        let new_value =
+                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size));
 
-        if let Some((_, msg)) = ctx.errors.take() {
-            return Err(msg);
-        }
-    }
-    Ok(data)
+                        BlockEntry::new(
+                            entry.data_type(),
+                            new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows))),
+                        )
+                    } else {
+                        BlockEntry::new(
+                            entry.data_type(),
+                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size)),
+                        )
+                    }
+                }
+                (false, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128) => {
+                    if nullable {
+                        let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
+                        let value = nullable_value.value().unwrap();
+                        let new_value =
+                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size));
+
+                        BlockEntry::new(
+                            entry.data_type(),
+                            new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows))),
+                        )
+                    } else {
+                        BlockEntry::new(
+                            entry.data_type(),
+                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size)),
+                        )
+                    }
+                }
+            };
+
+            if let Some((_, msg)) = ctx.errors.take() {
+                Err(msg)
+            } else {
+                Ok(entry)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(DataBlock::new(entries, num_rows))
 }

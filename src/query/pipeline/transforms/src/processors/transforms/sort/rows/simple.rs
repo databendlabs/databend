@@ -22,10 +22,8 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 
 use super::RowConverter;
 use super::Rows;
@@ -169,23 +167,20 @@ impl<T: ArgType> SimpleRowConverter<T> {
     ) -> Result<R> {
         assert!(asc == R::IS_ASC_COLUMN);
         assert!(columns.len() == 1);
-        let col = &columns[0];
-        if col.data_type != T::data_type() {
+        let entry = &columns[0];
+        if entry.data_type() != T::data_type() {
             return Err(ErrorCode::Internal(format!(
                 "Cannot convert simple column. Expect data type {:?}, found {:?}",
                 T::data_type(),
-                col.data_type
+                entry.data_type()
             )));
         }
 
-        let col = match &col.value {
-            Value::Scalar(v) => {
-                let builder = ColumnBuilder::repeat(&v.as_ref(), num_rows, &col.data_type);
-                builder.build()
-            }
-            Value::Column(c) => c.clone(),
-        };
+        if let Some(c) = entry.as_column() {
+            return R::from_column(c);
+        }
 
+        let col = entry.to_column(num_rows);
         R::from_column(&col)
     }
 }

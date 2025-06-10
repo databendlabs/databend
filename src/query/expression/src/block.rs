@@ -43,15 +43,15 @@ pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 /// DataBlock is a lightweight container for a group of columns.
 #[derive(Clone)]
 pub struct DataBlock {
-    columns: Vec<BlockEntry>,
+    entries: Vec<BlockEntry>,
     num_rows: usize,
     meta: Option<BlockMetaInfoPtr>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BlockEntry {
-    pub data_type: DataType,
-    pub value: Value<AnyType>,
+    data_type: DataType,
+    value: Value<AnyType>,
 }
 
 impl BlockEntry {
@@ -82,19 +82,55 @@ impl BlockEntry {
 
     pub fn remove_nullable(self) -> Self {
         match self.value {
-            Value::Column(Column::Nullable(col)) => {
-                Self::new(self.data_type.remove_nullable(), Value::Column(col.column))
-            }
+            Value::Column(Column::Nullable(col)) => col.column.into(),
             _ => self,
         }
     }
 
     pub fn to_column(&self, num_rows: usize) -> Column {
+        debug_assert!(self
+            .value
+            .as_column()
+            .map(|c| c.len() == num_rows)
+            .unwrap_or(true));
         self.value.convert_to_full_column(&self.data_type, num_rows)
     }
 
-    pub fn into_column(self, num_rows: usize) -> Column {
-        self.value.into_full_column(&self.data_type, num_rows)
+    pub fn data_type(&self) -> DataType {
+        match &self.value {
+            Value::Column(col) => col.data_type(),
+            _ => self.data_type.clone(),
+        }
+    }
+
+    pub fn as_column(&self) -> Option<&Column> {
+        self.value.as_column()
+    }
+
+    pub fn as_scalar(&self) -> Option<&Scalar> {
+        self.value.as_scalar()
+    }
+
+    pub fn into_column(self) -> Result<Column> {
+        match self.value {
+            Value::Column(col) => Ok(col),
+            _ => Err(ErrorCode::Internal("BlockEntry is not a column")),
+        }
+    }
+
+    pub fn value(&self) -> Value<AnyType> {
+        self.value.clone()
+    }
+
+    pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
+        self.value.index(index)
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
+        self.value.index_unchecked(index)
     }
 }
 
@@ -146,14 +182,14 @@ impl DataBlock {
 
     #[inline]
     pub fn new_with_meta(
-        columns: Vec<BlockEntry>,
+        entries: Vec<BlockEntry>,
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        Self::check_columns_valid(&columns, num_rows).unwrap();
+        Self::check_columns_valid(&entries, num_rows).unwrap();
 
         Self {
-            columns,
+            entries,
             num_rows,
             meta,
         }
@@ -178,7 +214,7 @@ impl DataBlock {
     }
 
     pub fn check_valid(&self) -> Result<()> {
-        Self::check_columns_valid(&self.columns, self.num_rows)
+        Self::check_columns_valid(&self.entries, self.num_rows)
     }
 
     #[inline]
@@ -187,11 +223,7 @@ impl DataBlock {
         let num_rows = columns[0].len();
         debug_assert!(columns.iter().all(|c| c.len() == num_rows));
 
-        let columns = columns
-            .into_iter()
-            .map(|col| BlockEntry::new(col.data_type(), Value::Column(col)))
-            .collect();
-
+        let columns = columns.into_iter().map(|col| col.into()).collect();
         DataBlock::new(columns, num_rows)
     }
 
@@ -212,8 +244,7 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 let builder = ColumnBuilder::with_capacity(f.data_type(), 0);
-                let col = builder.build();
-                BlockEntry::new(f.data_type().clone(), Value::Column(col))
+                builder.build().into()
             })
             .collect();
         DataBlock::new(columns, 0)
@@ -231,22 +262,22 @@ impl DataBlock {
 
     #[inline]
     pub fn columns(&self) -> &[BlockEntry] {
-        &self.columns
+        &self.entries
     }
 
     #[inline]
     pub fn columns_mut(&mut self) -> &mut [BlockEntry] {
-        &mut self.columns
+        &mut self.entries
     }
 
     #[inline]
     pub fn take_columns(self) -> Vec<BlockEntry> {
-        self.columns
+        self.entries
     }
 
     #[inline]
     pub fn get_by_offset(&self, offset: usize) -> &BlockEntry {
-        &self.columns[offset]
+        &self.entries[offset]
     }
 
     #[inline]
@@ -256,7 +287,7 @@ impl DataBlock {
 
     #[inline]
     pub fn num_columns(&self) -> usize {
-        self.columns.len()
+        self.entries.len()
     }
 
     #[inline]
@@ -267,12 +298,12 @@ impl DataBlock {
     // Full empty means no row, no column, no meta
     #[inline]
     pub fn is_full_empty(&self) -> bool {
-        self.is_empty() && self.meta.is_none() && self.columns.is_empty()
+        self.is_empty() && self.meta.is_none() && self.entries.is_empty()
     }
 
     #[inline]
     pub fn domains(&self) -> Vec<Domain> {
-        self.columns
+        self.entries
             .iter()
             .map(|entry| entry.value.domain(&entry.data_type))
             .collect()
@@ -281,6 +312,10 @@ impl DataBlock {
     #[inline]
     pub fn memory_size(&self) -> usize {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
+    }
+
+    pub fn data_type(&self, offset: usize) -> DataType {
+        self.entries[offset].data_type.clone()
     }
 
     pub fn consume_convert_to_full(self) -> Self {
@@ -297,22 +332,19 @@ impl DataBlock {
 
     pub fn convert_to_full(&self) -> Self {
         let columns = self
-            .columns()
+            .entries
             .iter()
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => {
                     let builder =
                         ColumnBuilder::repeat(&s.as_ref(), self.num_rows, &entry.data_type);
-                    let col = builder.build();
-                    BlockEntry::new(entry.data_type.clone(), Value::Column(col))
+                    builder.build().into()
                 }
-                Value::Column(c) => {
-                    BlockEntry::new(entry.data_type.clone(), Value::Column(c.clone()))
-                }
+                Value::Column(c) => c.clone().into(),
             })
             .collect();
         Self {
-            columns,
+            entries: columns,
             num_rows: self.num_rows,
             meta: self.meta.clone(),
         }
@@ -332,14 +364,11 @@ impl DataBlock {
                 Value::Scalar(s) => {
                     BlockEntry::new(entry.data_type.clone(), Value::Scalar(s.clone()))
                 }
-                Value::Column(c) => BlockEntry::new(
-                    entry.data_type.clone(),
-                    Value::Column(c.slice(range.clone())),
-                ),
+                Value::Column(c) => c.slice(range.clone()).into(),
             })
             .collect();
         Self {
-            columns,
+            entries: columns,
             num_rows: if range.is_empty() {
                 0
             } else {
@@ -403,28 +432,28 @@ impl DataBlock {
 
     #[inline]
     pub fn merge_block(&mut self, block: DataBlock) {
-        self.columns.reserve(block.num_columns());
-        for column in block.columns.into_iter() {
+        self.entries.reserve(block.num_columns());
+        for column in block.entries.into_iter() {
             #[cfg(debug_assertions)]
             if let Value::Column(col) = &column.value {
                 assert_eq!(self.num_rows, col.len());
                 assert_eq!(col.data_type(), column.data_type);
             }
-            self.columns.push(column);
+            self.entries.push(column);
         }
     }
 
     #[inline]
     pub fn add_column(&mut self, entry: BlockEntry) {
-        self.columns.push(entry);
+        self.entries.push(entry);
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
     }
 
     #[inline]
     pub fn pop_columns(&mut self, num: usize) {
-        debug_assert!(num <= self.columns.len());
-        self.columns.truncate(self.columns.len() - num);
+        debug_assert!(num <= self.entries.len());
+        self.entries.truncate(self.entries.len() - num);
     }
 
     /// Resort the columns according to the schema.
@@ -451,7 +480,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
-            columns,
+            entries: columns,
             num_rows: self.num_rows,
             meta: self.meta,
         })
@@ -466,7 +495,7 @@ impl DataBlock {
         }
 
         Ok(Self {
-            columns: self.columns,
+            entries: self.entries,
             num_rows: self.num_rows,
             meta,
         })
@@ -579,22 +608,22 @@ impl DataBlock {
 
     #[inline]
     pub fn project(mut self, projections: &ColumnSet) -> Self {
-        let mut columns = Vec::with_capacity(projections.len());
-        for (index, column) in self.columns.into_iter().enumerate() {
+        let mut entries = Vec::with_capacity(projections.len());
+        for (index, column) in self.entries.into_iter().enumerate() {
             if !projections.contains(&index) {
                 continue;
             }
-            columns.push(column);
+            entries.push(column);
         }
-        self.columns = columns;
+        self.entries = entries;
         self
     }
 
     #[inline]
     pub fn project_with_agg_index(self, projections: &ColumnSet, num_evals: usize) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
-        let eval_offset = self.columns.len() - num_evals;
-        for (index, column) in self.columns.into_iter().enumerate() {
+        let eval_offset = self.entries.len() - num_evals;
+        for (index, column) in self.entries.into_iter().enumerate() {
             if !projections.contains(&index) && index < eval_offset {
                 continue;
             }
@@ -605,9 +634,9 @@ impl DataBlock {
 
     #[inline]
     pub fn get_last_column(&self) -> &Column {
-        debug_assert!(!self.columns.is_empty());
-        debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
-        self.columns.last().unwrap().value.as_column().unwrap()
+        debug_assert!(!self.entries.is_empty());
+        debug_assert!(self.entries.last().unwrap().value.as_column().is_some());
+        self.entries.last().unwrap().value.as_column().unwrap()
     }
 
     pub fn infer_schema(&self) -> DataSchema {
@@ -622,10 +651,10 @@ impl DataBlock {
 
     // This is inefficient, don't use it in hot path
     pub fn value_at(&self, col: usize, row: usize) -> Option<ScalarRef<'_>> {
-        if col >= self.columns.len() {
+        if col >= self.entries.len() {
             return None;
         }
-        self.columns[col].value.index(row)
+        self.entries[col].value.index(row)
     }
 
     /// Calculates the memory size of a `DataBlock` for writing purposes.

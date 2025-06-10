@@ -172,7 +172,7 @@ impl BindContext {
             .columns()
             .iter()
             .skip(1)
-            .map(|col| unsafe { col.value.index_unchecked(0).to_owned() })
+            .map(|col| unsafe { col.index_unchecked(0).to_owned() })
             .collect();
         Ok(scalars)
     }

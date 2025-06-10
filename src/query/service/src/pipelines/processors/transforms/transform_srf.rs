@@ -145,15 +145,14 @@ impl BlockingTransform for TransformSRF {
         let mut result = DataBlock::empty();
         let mut block_is_empty = true;
         for column in input.columns() {
-            let mut builder = ColumnBuilder::with_capacity(&column.data_type, result_size);
+            let mut builder = ColumnBuilder::with_capacity(&column.data_type(), result_size);
             for (i, max_nums) in self.num_rows.iter().take(used).enumerate() {
-                let scalar_ref = unsafe { column.value.index_unchecked(i) };
+                let scalar_ref = unsafe { column.index_unchecked(i) };
                 for _ in 0..*max_nums {
                     builder.push(scalar_ref.clone());
                 }
             }
-            let block_entry =
-                BlockEntry::new(column.data_type.clone(), Value::Column(builder.build()));
+            let block_entry = BlockEntry::new(column.data_type(), Value::Column(builder.build()));
             if block_is_empty {
                 result = DataBlock::new(vec![block_entry], result_size);
                 block_is_empty = false;
@@ -399,8 +398,8 @@ impl BlockingTransform for TransformSRF {
                     let data_block = DataBlock::concat(&result_data_blocks)?;
                     debug_assert!(data_block.num_rows() == result_size);
                     let block_entry = BlockEntry::new(
-                        data_block.get_by_offset(0).data_type.clone(),
-                        data_block.get_by_offset(0).value.clone(),
+                        data_block.data_type(0),
+                        data_block.get_by_offset(0).value(),
                     );
                     if block_is_empty {
                         result = DataBlock::new(vec![block_entry], result_size);

@@ -180,7 +180,6 @@ impl<T: Number> TransformWindow<T> {
     fn column_at(&self, index: &RowPtr, column_index: usize) -> &Column {
         self.block_at(index)
             .get_by_offset(column_index)
-            .value
             .as_column()
             .unwrap()
     }
@@ -564,21 +563,24 @@ impl<T: Number> TransformWindow<T> {
                 let value = if self.frame_start == self.frame_end {
                     match &ll.default {
                         LagLeadDefault::Null => Scalar::Null,
-                        LagLeadDefault::Index(col) => {
-                            let block =
-                                &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(*col).value;
-                            value.index(self.current_row.row).unwrap().to_owned()
-                        }
+                        LagLeadDefault::Index(col) => self.blocks
+                            [self.current_row.block - self.first_block]
+                            .block
+                            .get_by_offset(*col)
+                            .index(self.current_row.row)
+                            .unwrap()
+                            .to_owned(),
                     }
                 } else {
-                    let block = &self
-                        .blocks
-                        .get(self.frame_start.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    let value = &block.get_by_offset(ll.arg).value;
-                    value.index(self.frame_start.row).unwrap().to_owned()
+                    let value: Option<_> = try {
+                        self.blocks
+                            .get(self.frame_start.block - self.first_block)?
+                            .block
+                            .get_by_offset(ll.arg)
+                            .index(self.frame_start.row)?
+                            .to_owned()
+                    };
+                    value.unwrap()
                 };
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
@@ -678,62 +680,57 @@ impl<T: Number> TransformWindow<T> {
         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
         let mut block_entry = block.get_by_offset(arg_index);
         if !ignore_null {
-            return match &block_entry.value {
-                Value::Scalar(scalar) => scalar.to_owned(),
-                Value::Column(col) => unsafe { col.index_unchecked(cur.row) }.to_owned(),
-            };
+            return unsafe { block_entry.index_unchecked(cur.row).to_owned() };
         }
 
         while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
-            match &block_entry.value {
-                Value::Scalar(scalar) => {
-                    if scalar != &Scalar::Null {
-                        return scalar.to_owned();
-                    }
-                    // If value is Scalar we can directly skip this block.
-                    if advance {
-                        cur.block += 1;
-                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                        block_entry = block.get_by_offset(arg_index);
-                    } else if cur == self.frame_start {
-                        return scalar.to_owned();
-                    } else {
-                        cur.block -= 1;
-                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                        block_entry = block.get_by_offset(arg_index);
-                    }
+            if let Some(scalar) = block_entry.as_scalar() {
+                if scalar != &Scalar::Null {
+                    return scalar.to_owned();
                 }
-                Value::Column(col) => {
-                    let value = col.index(cur.row).unwrap();
-                    if value != ScalarRef::Null {
-                        return value.to_owned();
-                    }
+                // If value is Scalar we can directly skip this block.
+                if advance {
+                    cur.block += 1;
+                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                    block_entry = block.get_by_offset(arg_index);
+                } else if cur == self.frame_start {
+                    return scalar.to_owned();
+                } else {
+                    cur.block -= 1;
+                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                    block_entry = block.get_by_offset(arg_index);
+                }
+            } else {
+                let col = block_entry.as_column().unwrap();
+                let value = col.index(cur.row).unwrap();
+                if !matches!(value, ScalarRef::Null) {
+                    return value.to_owned();
+                }
 
-                    cur = if advance {
-                        let advance_cur = self.advance_row(cur);
-                        if advance_cur.block != cur.block {
-                            if let Some(b) = self.blocks.get(advance_cur.block - self.first_block) {
-                                block_entry = b.block.get_by_offset(arg_index);
-                            } else {
-                                return Scalar::Null;
-                            }
+                cur = if advance {
+                    let advance_cur = self.advance_row(cur);
+                    if advance_cur.block != cur.block {
+                        if let Some(b) = self.blocks.get(advance_cur.block - self.first_block) {
+                            block_entry = b.block.get_by_offset(arg_index);
+                        } else {
+                            return Scalar::Null;
                         }
-                        advance_cur
-                    } else if cur == self.frame_start {
-                        return unsafe { col.index_unchecked(cur.row) }.to_owned();
-                    } else {
-                        let back_cur = self.goback_row(cur);
-                        if back_cur.block != cur.block {
-                            block_entry = self
-                                .blocks
-                                .get(back_cur.block - self.first_block)
-                                .unwrap()
-                                .block
-                                .get_by_offset(arg_index);
-                        }
-                        back_cur
-                    };
-                }
+                    }
+                    advance_cur
+                } else if cur == self.frame_start {
+                    return unsafe { col.index_unchecked(cur.row) }.to_owned();
+                } else {
+                    let back_cur = self.goback_row(cur);
+                    if back_cur.block != cur.block {
+                        block_entry = self
+                            .blocks
+                            .get(back_cur.block - self.first_block)
+                            .unwrap()
+                            .block
+                            .get_by_offset(arg_index);
+                    }
+                    back_cur
+                };
             }
         }
         Scalar::Null

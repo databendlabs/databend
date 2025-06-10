@@ -35,7 +35,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -121,12 +120,11 @@ impl StripeDecoderForCopy {
                         .split(',')
                         .map(|s| s.parse::<i32>().unwrap())
                         .collect::<Vec<i32>>();
-                    let e = block.columns()[*id].clone();
-
-                    if let Value::Column(Column::Nullable(box NullableColumn {
-                        column: Column::Array(box ref array_column),
-                        ref validity,
-                    })) = e.value
+                    let e = &block.columns()[*id];
+                    if let Some(Column::Nullable(box NullableColumn {
+                        column: Column::Array(box array_column),
+                        validity,
+                    })) = e.as_column()
                     {
                         let column = array_column.underlying_column();
                         let offsets = array_column.underlying_offsets();
@@ -151,18 +149,16 @@ impl StripeDecoderForCopy {
                             }));
 
                             let new_array_column = ArrayColumn::new(new_tuple_column, offsets);
-                            let new_value =
-                                Value::Column(Column::Nullable(Box::new(NullableColumn {
-                                    column: Column::Array(Box::new(new_array_column)),
-                                    validity: validity.clone(),
-                                })));
+                            let column = Column::Nullable(Box::new(NullableColumn {
+                                column: Column::Array(Box::new(new_array_column)),
+                                validity: validity.clone(),
+                            }));
 
-                            let column = BlockEntry::new(field.data_type().clone(), new_value);
-                            columns.push(column);
+                            columns.push(column.into());
                             continue;
                         }
                     }
-                    log::error!("expect array of tuple, got {:?} {:?}", field, e.value);
+                    log::error!("expect array of tuple, got {:?} {:?}", field, e.value());
                     unreachable!("expect value: array of tuple")
                 }
             }

@@ -367,14 +367,14 @@ fn test_if_function() -> Result<()> {
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
     let block = DataBlock::new(
         vec![
-            BlockEntry {
-                data_type: UInt8Type::data_type(),
-                value: Value::Column(UInt8Type::from_data(vec![2_u8, 1])),
-            },
-            BlockEntry {
-                data_type: Int32Type::data_type().wrap_nullable(),
-                value: Value::Scalar(Scalar::Number(NumberScalar::Int32(2400_i32))),
-            },
+            BlockEntry::new(
+                UInt8Type::data_type(),
+                Value::Column(UInt8Type::from_data(vec![2_u8, 1])),
+            ),
+            BlockEntry::new(
+                Int32Type::data_type().wrap_nullable(),
+                Value::Scalar(Scalar::Number(NumberScalar::Int32(2400_i32))),
+            ),
         ],
         2,
     );

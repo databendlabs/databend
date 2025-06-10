@@ -69,7 +69,7 @@ impl DeleteByExprMutator {
     ) -> Result<(Value<BooleanType>, Value<BooleanType>)> {
         // filter rows that's is not processed
         let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
-        let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
+        let old_filter: Value<BooleanType> = filter_entry.value().try_downcast().unwrap();
         // false means this row is not processed, so use `not` to reverse it.
         let (filter_not, _) = get_not(old_filter.clone(), &self.func_ctx, data_block.num_rows())?;
         let filter_not = filter_not.try_downcast().unwrap();

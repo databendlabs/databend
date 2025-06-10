@@ -71,7 +71,7 @@ impl AggIndexSink {
 
     fn process_block(&mut self, block: &mut DataBlock) {
         let col = block.get_by_offset(self.block_name_offset);
-        let block_name_col = col.value.try_downcast::<StringType>().unwrap();
+        let block_name_col = col.value().try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
             let location = block_name_col.index(i).unwrap().to_string();

@@ -1036,13 +1036,13 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     asc: sort_desc.0,
                     nulls_first: sort_desc.1,
                 }];
-                let columns = vec![BlockEntry{
-                    data_type: arr.data_type(),
-                    value: Value::Column(arr)
-                }];
+                let columns = vec![BlockEntry::new(
+                    arr.data_type(),
+                    Value::Column(arr)
+                )];
                 match DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None) {
                     Ok(block) => {
-                        let sorted_arr = block.columns()[0].value.clone().into_column().unwrap();
+                        let sorted_arr = block.columns()[0].value().into_column().unwrap();
                         output.push(sorted_arr);
                     }
                     Err(err) => {

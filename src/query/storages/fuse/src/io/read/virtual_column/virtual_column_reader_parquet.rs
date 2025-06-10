@@ -205,7 +205,7 @@ impl VirtualColumnReader {
                 .index_of(&virtual_column_field.source_name)
                 .unwrap();
             let source = data_block.get_by_offset(src_index);
-            let src_arg = (source.value.clone(), source.data_type.clone());
+            let src_arg = (source.value(), source.data_type());
             let path_arg = (
                 Value::Scalar(virtual_column_field.key_paths.clone()),
                 DataType::String,

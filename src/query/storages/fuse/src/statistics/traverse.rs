@@ -34,15 +34,13 @@ pub type TraverseResult =
 pub fn traverse_values_dfs(columns: &[BlockEntry], fields: &[TableField]) -> TraverseResult {
     let mut leaves = vec![];
     for (entry, field) in columns.iter().zip(fields) {
-        let data_type = &entry.data_type;
+        let data_type = &entry.data_type();
         let mut next_column_id = field.column_id;
-        match &entry.value {
-            Value::Scalar(s) => {
-                traverse_scalar_recursive(s, data_type, &mut next_column_id, &mut leaves)?;
-            }
-            Value::Column(c) => {
-                traverse_column_recursive(c, data_type, &mut next_column_id, &mut leaves)?;
-            }
+        if let Some(c) = entry.as_column() {
+            traverse_column_recursive(c, data_type, &mut next_column_id, &mut leaves)?;
+        } else {
+            let s = entry.as_scalar().unwrap();
+            traverse_scalar_recursive(s, data_type, &mut next_column_id, &mut leaves)?;
         }
     }
     Ok(leaves)

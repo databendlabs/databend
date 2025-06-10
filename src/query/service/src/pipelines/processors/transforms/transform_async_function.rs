@@ -115,10 +115,7 @@ pub async fn transform_sequence(
         let range = resp.start..resp.start + count;
         UInt64Type::from_data(range.collect::<Vec<u64>>())
     };
-    let entry = BlockEntry {
-        data_type: data_type.clone(),
-        value: Value::Column(value),
-    };
+    let entry = BlockEntry::new(data_type.clone(), Value::Column(value));
     data_block.add_column(entry);
 
     Ok(())

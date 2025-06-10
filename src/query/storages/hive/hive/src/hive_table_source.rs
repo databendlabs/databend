@@ -205,28 +205,30 @@ fn check_block_schema(schema: &DataSchema, mut block: DataBlock) -> Result<DataB
 
     for (col, field) in block.columns_mut().iter_mut().zip(schema.fields().iter()) {
         // If the actual data is nullable, the field must be nullbale.
-        if col.data_type.is_nullable_or_null() && !field.is_nullable() {
+        if col.data_type().is_nullable_or_null() && !field.is_nullable() {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "Data schema mismatched (col name: {}). Data column is nullable, but schema field is not nullable",
                 field.name()
             )));
         }
         // The inner type of the data and field should be the same.
-        let data_type = col.data_type.remove_nullable();
+        let data_type = col.data_type().remove_nullable();
         let schema_type = field.data_type().remove_nullable();
         if data_type != schema_type {
             return Err(ErrorCode::TableSchemaMismatch(format!(
                 "Data schema mismatched (col name: {}). Data column type is {:?}, but schema field type is {:?}",
                 field.name(),
-                col.data_type,
+                col.data_type(),
                 field.data_type()
             )));
         }
         // If the field is nullable but the actual data is not nullable,
         // we should wrap nullable for the data.
-        if field.is_nullable() && !col.data_type.is_nullable_or_null() {
-            col.data_type = col.data_type.wrap_nullable();
-            col.value = col.value.clone().wrap_nullable(None);
+        if field.is_nullable() && !col.data_type().is_nullable_or_null() {
+            *col = BlockEntry::new(
+                col.data_type().wrap_nullable(),
+                col.value().wrap_nullable(None),
+            );
         }
     }
 

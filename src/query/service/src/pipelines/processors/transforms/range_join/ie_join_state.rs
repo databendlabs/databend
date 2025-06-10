@@ -41,7 +41,7 @@ use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 
 pub struct IEJoinState {
-    l1_data_type: DataType,
+    _l1_data_type: DataType,
     // Sort description for L1
     pub(crate) l1_sort_descriptions: Vec<SortColumnDescription>,
     // Sort description for L2
@@ -114,7 +114,7 @@ impl IEJoinState {
         ];
 
         IEJoinState {
-            l1_data_type,
+            _l1_data_type: l1_data_type,
             l1_sort_descriptions,
             l2_sort_descriptions,
             l1_order,
@@ -129,12 +129,8 @@ impl IEJoinState {
             return false;
         }
 
-        let left_l1_column = left_block.columns()[0]
-            .value
-            .convert_to_full_column(&self.l1_data_type, left_len);
-        let right_l1_column = right_block.columns()[0]
-            .value
-            .convert_to_full_column(&self.l1_data_type, right_len);
+        let left_l1_column = left_block.get_by_offset(0).to_column(left_len);
+        let right_l1_column = right_block.get_by_offset(0).to_column(right_len);
         // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
         let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) = match self.l1_order {
             true => {
@@ -224,17 +220,9 @@ impl RangeJoinState {
         // Merge `left_sorted_blocks` to one block
         let mut merged_blocks = DataBlock::concat(&left_sorted_blocks)?;
         // extract the second column
-        let l1 = &merged_blocks.columns()[0].value.convert_to_full_column(
-            self.conditions[0]
-                .left_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type(),
-            merged_blocks.num_rows(),
-        );
-        let l1_index_column = merged_blocks.columns()[2].value.convert_to_full_column(
-            &DataType::Number(NumberDataType::UInt64),
-            merged_blocks.num_rows(),
-        );
+        let num_rows = merged_blocks.num_rows();
+        let l1 = &merged_blocks.get_by_offset(0).to_column(num_rows);
+        let l1_index_column = merged_blocks.get_by_offset(2).to_column(num_rows);
 
         let mut l2_sorted_blocks = Vec::with_capacity(left_sorted_blocks.len());
         for block in left_sorted_blocks.iter() {
@@ -244,13 +232,14 @@ impl RangeJoinState {
                 None,
             )?);
         }
+        let settings = self.ctx.get_settings();
         merged_blocks = DataBlock::concat(&sort_merge(
             ie_join_state.data_schema.clone(),
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
             l2_sorted_blocks,
-            self.ctx.get_settings().get_sort_spilling_batch_bytes()?,
-            self.ctx.get_settings().get_enable_loser_tree_merge_sort()?,
+            settings.get_sort_spilling_batch_bytes()?,
+            settings.get_enable_loser_tree_merge_sort()?,
             false,
         )?)?;
 
@@ -260,7 +249,7 @@ impl RangeJoinState {
             .columns()
             .last()
             .unwrap()
-            .value
+            .value()
             .try_downcast::<UInt64Type>()
             .unwrap();
         if let Value::Column(col) = &column {
@@ -271,7 +260,7 @@ impl RangeJoinState {
         // Initialize bit_array
         let bit_array = Bitmap::new_constant(false, p_array.len()).make_mut();
 
-        let l2 = &merged_blocks.columns()[1].value.convert_to_full_column(
+        let l2 = &merged_blocks.columns()[1].value().convert_to_full_column(
             self.conditions[0]
                 .right_expr
                 .as_expr(&BUILTIN_FUNCTIONS)

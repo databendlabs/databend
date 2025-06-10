@@ -135,11 +135,9 @@ impl TransformUdfServer {
             .iter()
             .map(|i| {
                 let arg = data_block.get_by_offset(*i).clone();
-                if contains_variant(&arg.data_type) {
-                    let new_arg = BlockEntry::new(
-                        arg.data_type.clone(),
-                        transform_variant(&arg.value, true)?,
-                    );
+                if contains_variant(&arg.data_type()) {
+                    let new_arg =
+                        BlockEntry::new(arg.data_type(), transform_variant(&arg.value(), true)?);
                     Ok(new_arg)
                 } else {
                     Ok(arg)
@@ -150,7 +148,7 @@ impl TransformUdfServer {
         let fields = block_entries
             .iter()
             .enumerate()
-            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone()))
+            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type()))
             .collect::<Vec<_>>();
         let data_schema = DataSchema::new(fields);
 
@@ -213,11 +211,8 @@ impl TransformUdfServer {
         }
 
         let col = if contains_variant(&func.data_type) {
-            let value = transform_variant(&result_block.get_by_offset(0).value, false)?;
-            BlockEntry {
-                data_type: result_fields[0].data_type().clone(),
-                value,
-            }
+            let value = transform_variant(&result_block.get_by_offset(0).value(), false)?;
+            BlockEntry::new(result_fields[0].data_type().clone(), value)
         } else {
             result_block.get_by_offset(0).clone()
         };

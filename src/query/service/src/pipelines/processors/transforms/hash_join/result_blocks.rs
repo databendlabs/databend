@@ -157,10 +157,7 @@ impl HashJoinProbeState {
                     .build_schema
                     .fields()
                     .iter()
-                    .map(|df| BlockEntry {
-                        data_type: df.data_type().clone(),
-                        value: Value::Scalar(Scalar::Null),
-                    })
+                    .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
                     .collect(),
                 input_num_rows,
             );

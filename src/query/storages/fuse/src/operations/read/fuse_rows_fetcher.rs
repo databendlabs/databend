@@ -169,10 +169,9 @@ where F: RowsFetcher + Send + Sync + 'static
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let num_rows = data.num_rows();
         let entry = &data.columns()[self.row_id_col_offset];
-        let value = entry
-            .value
-            .convert_to_full_column(&entry.data_type, num_rows);
-        let row_id_column = if matches!(entry.data_type, DataType::Number(NumberDataType::UInt64)) {
+        let value = entry.to_column(num_rows);
+        let row_id_column = if matches!(entry.data_type(), DataType::Number(NumberDataType::UInt64))
+        {
             value.into_number().unwrap().into_u_int64().unwrap()
         } else {
             // From merge into matched data, the row id column is nullable but has no null value.
@@ -284,7 +283,7 @@ where F: RowsFetcher + Send + Sync + 'static
 }
 
 fn wrap_true_validity(column: &BlockEntry, num_rows: usize) -> BlockEntry {
-    let (value, data_type) = (&column.value, &column.data_type);
+    let (value, data_type) = (&column.value(), &column.data_type());
     let col = value.convert_to_full_column(data_type, num_rows);
     if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         column.clone()

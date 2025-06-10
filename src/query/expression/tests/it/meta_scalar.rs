@@ -36,9 +36,9 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
         for entry in random_block
             .columns()
             .iter()
-            .filter(|c| !c.data_type.remove_nullable().is_binary())
+            .filter(|c| !c.data_type().remove_nullable().is_binary())
         {
-            let column = entry.value.as_column().unwrap().clone();
+            let column = entry.as_column().unwrap().clone();
 
             let legacy_column: LegacyColumn = column.clone().into();
             let convert_back_column: Column = legacy_column.into();
@@ -47,7 +47,7 @@ pub fn test_legacy_converts() -> databend_common_exception::Result<()> {
             let mut v3_scalars = vec![];
 
             for row in 0..rows {
-                let scalar = entry.value.index(row).unwrap().to_owned();
+                let scalar = entry.value().index(row).unwrap().to_owned();
                 let legacy_scalar: LegacyScalar = scalar.clone().into();
                 v3_scalars.push(legacy_scalar.clone());
 
@@ -83,13 +83,13 @@ pub fn test_simple_converts() -> databend_common_exception::Result<()> {
         for entry in random_block
             .columns()
             .iter()
-            .filter(|c| !c.data_type.remove_nullable().is_binary())
+            .filter(|c| !c.data_type().remove_nullable().is_binary())
         {
             let mut scalars = vec![];
             let mut simple_scalars = vec![];
 
             for row in 0..rows {
-                let scalar = entry.value.index(row).unwrap().to_owned();
+                let scalar = entry.value().index(row).unwrap().to_owned();
                 let simple_scalar: IndexScalar = scalar.clone().try_into().unwrap();
                 simple_scalars.push(simple_scalar.clone());
                 scalars.push(scalar.clone());

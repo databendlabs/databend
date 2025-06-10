@@ -331,11 +331,9 @@ impl TransformUdfScript {
             .iter()
             .map(|i| {
                 let arg = data_block.get_by_offset(*i).clone();
-                if contains_variant(&arg.data_type) {
-                    let new_arg = BlockEntry::new(
-                        arg.data_type.clone(),
-                        transform_variant(&arg.value, true)?,
-                    );
+                if contains_variant(&arg.data_type()) {
+                    let new_arg =
+                        BlockEntry::new(arg.data_type(), transform_variant(&arg.value(), true)?);
                     Ok(new_arg)
                 } else {
                     Ok(arg)
@@ -353,7 +351,7 @@ impl TransformUdfScript {
         let fields = block_entries
             .iter()
             .enumerate()
-            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone()))
+            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type()))
             .collect::<Vec<_>>();
         let data_schema = DataSchema::new(fields);
         let num_columns = block_entries.len();
@@ -393,25 +391,25 @@ impl TransformUdfScript {
             })?;
 
         let col = if contains_variant(&func.data_type) {
-            let value =
-                transform_variant(&result_block.get_by_offset(0).value, false).map_err(|err| {
+            let value = transform_variant(&result_block.get_by_offset(0).value(), false).map_err(
+                |err| {
                     ErrorCode::UDFDataError(format!(
                         "Failed to transform variant for function '{}': {}",
                         func.name, err
                     ))
-                })?;
-            BlockEntry {
-                data_type: func.data_type.as_ref().clone(),
-                value,
-            }
+                },
+            )?;
+            BlockEntry::new(func.data_type.as_ref().clone(), value)
         } else {
             result_block.get_by_offset(0).clone()
         };
 
-        if col.data_type != func.data_type.as_ref().clone() {
+        if col.data_type() != func.data_type.as_ref().clone() {
             return Err(ErrorCode::UDFDataError(format!(
                 "Function {:?} returned column with data type {:?} but expected {:?}",
-                func.name, col.data_type, func.data_type
+                func.name,
+                col.data_type(),
+                func.data_type
             )));
         }
         data_block.add_column(col);

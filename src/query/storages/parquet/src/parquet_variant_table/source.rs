@@ -366,8 +366,10 @@ pub fn read_small_file(
     }
     let column = builder.build();
     let num_rows = column.len();
-    let entry = BlockEntry::new(DataType::Variant, Value::Column(Column::Variant(column)));
-    Ok(DataBlock::new(vec![entry], num_rows))
+    Ok(DataBlock::new(
+        vec![Column::Variant(column).into()],
+        num_rows,
+    ))
 }
 
 fn add_internal_columns(

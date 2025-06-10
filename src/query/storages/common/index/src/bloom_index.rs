@@ -652,19 +652,16 @@ impl BloomIndexBuilder {
         let mut bloom_keys_to_remove = Vec::with_capacity(self.bloom_columns.len());
 
         for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
-            let field_type = &block.get_by_offset(index_column.index).data_type;
+            let field_type = &block.data_type(index_column.index);
             if !Xor8Filter::supported_type(field_type) {
                 bloom_keys_to_remove.push(index);
                 continue;
             }
 
-            let column = match &block.get_by_offset(index_column.index).value {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
-                    builder.build()
-                }
-                Value::Column(c) => c.clone(),
-            };
+            let column = block
+                .get_by_offset(index_column.index)
+                .value()
+                .convert_to_full_column(field_type, 1);
 
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
@@ -744,14 +741,11 @@ impl BloomIndexBuilder {
             }
         }
         for index_column in self.ngram_columns.iter_mut() {
-            let field_type = &block.get_by_offset(index_column.index).data_type;
-            let column = match &block.get_by_offset(index_column.index).value {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
-                    builder.build()
-                }
-                Value::Column(c) => c.clone(),
-            };
+            let field_type = &block.data_type(index_column.index);
+            let column = block
+                .get_by_offset(index_column.index)
+                .value()
+                .convert_to_full_column(field_type, 1);
 
             for digests in BloomIndex::calculate_ngram_nullable_column(
                 Value::Column(column),

@@ -74,34 +74,26 @@ impl DataBlock {
                     .map(|block| (block.get_by_offset(index), block.num_rows()))
                     .collect_vec();
 
-                let ty = columns[0].0.data_type.clone();
+                let ty = columns[0].0.data_type();
                 if ty.is_null() {
                     return BlockEntry::new(ty, Value::Scalar(Scalar::Null));
                 }
 
                 // if they are all same scalars
-                if matches!(columns[0].0.value, Value::Scalar(_)) {
-                    let all_same_scalar = columns.iter().map(|(entry, _)| &entry.value).all_equal();
+                if columns[0].0.as_scalar().is_some() {
+                    let all_same_scalar =
+                        columns.iter().map(|(entry, _)| entry.value()).all_equal();
                     if all_same_scalar {
                         return (*columns[0].0).clone();
                     }
                 }
 
-                let full_columns: Vec<Column> = columns
+                let full_columns: Vec<_> = columns
                     .iter()
-                    .map(|(entry, rows)| match &entry.value {
-                        Value::Scalar(s) => {
-                            let builder =
-                                ColumnBuilder::repeat(&s.as_ref(), *rows, &entry.data_type);
-                            builder.build()
-                        }
-                        Value::Column(c) => c.clone(),
-                    })
+                    .map(|(entry, rows)| entry.to_column(*rows))
                     .collect();
 
-                let column = Column::take_column_indices(&full_columns, indices, result_size);
-
-                BlockEntry::new(ty, Value::Column(column))
+                Column::take_column_indices(&full_columns, indices, result_size).into()
             })
             .collect();
 
@@ -118,13 +110,13 @@ impl DataBlock {
         let result_columns = (0..num_columns)
             .map(|index| {
                 let data_type = &build_columns_data_type[index];
-                let column = Column::take_column_vec_indices(
+                Column::take_column_vec_indices(
                     &build_columns[index],
                     data_type.clone(),
                     indices,
                     result_size,
-                );
-                BlockEntry::new(data_type.clone(), Value::Column(column))
+                )
+                .into()
             })
             .collect();
         DataBlock::new(result_columns, result_size)
@@ -144,7 +136,7 @@ impl DataBlock {
         let len = len.min(num_rows);
         let block_columns = block.columns();
         for (col_index, builder) in builders.iter_mut().enumerate() {
-            Self::push_to_builder(builder, start, len, &block_columns[col_index].value);
+            Self::push_to_builder(builder, start, len, &block_columns[col_index].value());
         }
 
         Self::build_block(builders, result_size)
@@ -170,7 +162,7 @@ impl DataBlock {
             remain -= len;
 
             for (col_index, builder) in builders.iter_mut().enumerate() {
-                Self::push_to_builder(builder, *start, len, &block_columns[col_index].value);
+                Self::push_to_builder(builder, *start, len, &block_columns[col_index].value());
             }
             if remain == 0 {
                 break;
@@ -184,14 +176,14 @@ impl DataBlock {
         block
             .columns()
             .iter()
-            .map(|col| ColumnBuilder::with_capacity(&col.data_type, num_rows))
+            .map(|col| ColumnBuilder::with_capacity(&col.data_type(), num_rows))
             .collect::<Vec<_>>()
     }
 
     fn build_block(builders: Vec<ColumnBuilder>, num_rows: usize) -> DataBlock {
         let result_columns = builders
             .into_iter()
-            .map(|b| BlockEntry::new(b.data_type(), Value::Column(b.build())))
+            .map(|b| b.build().into())
             .collect::<Vec<_>>();
         DataBlock::new(result_columns, num_rows)
     }
@@ -202,7 +194,7 @@ impl DataBlock {
         limit: Option<usize>,
     ) -> BlockEntry {
         assert!(!columns.is_empty());
-        let ty = &columns[0].data_type;
+        let ty = &columns[0].data_type();
         let num_rows = limit
             .unwrap_or(usize::MAX)
             .min(slices.iter().map(|(_, _, c)| *c).sum());
@@ -214,15 +206,13 @@ impl DataBlock {
             let len = (*len).min(remain);
             remain -= len;
 
-            Self::push_to_builder(&mut builder, *start, len, &columns[*index].value);
+            Self::push_to_builder(&mut builder, *start, len, &columns[*index].value());
             if remain == 0 {
                 break;
             }
         }
 
-        let col = builder.build();
-
-        BlockEntry::new(ty.clone(), Value::Column(col))
+        builder.build().into()
     }
 
     fn push_to_builder(

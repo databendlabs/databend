@@ -16,8 +16,7 @@ use std::ops::Not;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::DataType;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 
 pub struct MutationSplitMutator {
@@ -31,29 +30,26 @@ impl MutationSplitMutator {
 
     // (matched_block,not_matched_block)
     pub fn split_data_block(&mut self, block: &DataBlock) -> Result<(DataBlock, DataBlock)> {
-        let split_column = &block.columns()[self.split_idx as usize];
-        assert!(matches!(split_column.data_type, DataType::Nullable(_)),);
+        let split_entry = block.get_by_offset(self.split_idx as _);
+        assert!(split_entry.data_type().is_nullable());
 
         // get row_id do check duplicate and get filter
-        let filter: Bitmap = match &split_column.value {
-            databend_common_expression::Value::Scalar(scalar) => {
-                // fast judge
-                if scalar.is_null() {
-                    return Ok((DataBlock::empty(), block.clone()));
-                } else {
-                    return Ok((block.clone(), DataBlock::empty()));
-                }
+        if let Some(scalar) = split_entry.as_scalar() {
+            // fast judge
+            return if scalar.is_null() {
+                Ok((DataBlock::empty(), block.clone()))
+            } else {
+                Ok((block.clone(), DataBlock::empty()))
+            };
+        }
+
+        let filter = match split_entry.as_column().unwrap() {
+            Column::Nullable(nullable_column) => nullable_column.validity_ref().clone(),
+            _ => {
+                return Err(ErrorCode::InvalidRowIdIndex(
+                    "row id column should be a nullable column, but it's a normal column",
+                ));
             }
-            databend_common_expression::Value::Column(column) => match column {
-                databend_common_expression::Column::Nullable(nullable_column) => {
-                    nullable_column.validity.clone()
-                }
-                _ => {
-                    return Err(ErrorCode::InvalidRowIdIndex(
-                        "row id column should be a nullable column, but it's a normal column",
-                    ));
-                }
-            },
         };
         Ok((
             block.clone().filter_with_bitmap(&filter)?,

@@ -152,8 +152,7 @@ impl Table for RandomTable {
             .iter()
             .map(|f| {
                 let data_type: DataType = f.data_type().into();
-                let column = Column::random(&data_type, 1, Some(self.random_options.clone()));
-                BlockEntry::new(data_type.clone(), Value::Column(column))
+                Column::random(&data_type, 1, Some(self.random_options.clone())).into()
             })
             .collect::<Vec<_>>();
         let block = DataBlock::new(columns, 1);

@@ -140,7 +140,7 @@ impl VirtualColumnBuilder {
 
             let mut virtual_values = BTreeMap::new();
             for row in 0..sample_rows {
-                let val = unsafe { column.value.index_unchecked(row) };
+                let val = unsafe { column.index_unchecked(row) };
                 if let ScalarRef::Variant(jsonb_bytes) = val {
                     let val = from_slice(jsonb_bytes).unwrap();
                     paths.clear();
@@ -157,7 +157,7 @@ impl VirtualColumnBuilder {
                 continue;
             }
             for row in sample_rows..num_rows {
-                let val = unsafe { column.value.index_unchecked(row) };
+                let val = unsafe { column.index_unchecked(row) };
                 if let ScalarRef::Variant(jsonb_bytes) = val {
                     let val = from_slice(jsonb_bytes).unwrap();
                     paths.clear();

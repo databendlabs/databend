@@ -93,7 +93,7 @@ impl WindowPartitionTopNExchange {
         let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.to_vec(), rows);
 
         for &offset in &self.partition_indices {
-            let array = block.get_by_offset(offset).value.clone();
+            let array = block.get_by_offset(offset).value();
             sort_compare.visit_value(array).unwrap();
             sort_compare.increment_column_index();
         }
@@ -101,7 +101,7 @@ impl WindowPartitionTopNExchange {
         let partition_equality = sort_compare.equality_index().to_vec();
 
         for desc in self.sort_desc.iter().skip(self.partition_indices.len()) {
-            let array = block.get_by_offset(desc.offset).value.clone();
+            let array = block.get_by_offset(desc.offset).value();
             sort_compare.visit_value(array).unwrap();
             sort_compare.increment_column_index();
         }
@@ -121,8 +121,7 @@ impl WindowPartitionTopNExchange {
         let mut hashes = vec![0u64; rows];
         for (i, &offset) in self.partition_indices.iter().enumerate() {
             let entry = block.get_by_offset(offset);
-            group_hash_value_spread(&hash_indices, entry.value.to_owned(), i == 0, &mut hashes)
-                .unwrap();
+            group_hash_value_spread(&hash_indices, entry.value(), i == 0, &mut hashes).unwrap();
         }
 
         let mut partition_permutation = vec![Vec::new(); self.num_partitions as usize];

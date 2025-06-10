@@ -62,36 +62,27 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     let block = DataBlock::new(
         vec![
-            BlockEntry::new(
-                DataType::Number(NumberDataType::Int32),
-                Value::Column(Int32Type::from_data(vec![1, 2, 3])),
-            ),
-            BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Variant)),
-                Value::Column(VariantType::from_opt_data(vec![
-                    Some(
-                        OwnedJsonb::from_str(
-                            r#"{"a": 1, "b": {"c": "x"}, "e": [{"f": 100}, 200]}"#,
-                        )
+            (Int32Type::from_data(vec![1, 2, 3])).into(),
+            (VariantType::from_opt_data(vec![
+                Some(
+                    OwnedJsonb::from_str(r#"{"a": 1, "b": {"c": "x"}, "e": [{"f": 100}, 200]}"#)
                         .unwrap()
                         .to_vec(),
-                    ),
-                    Some(
-                        OwnedJsonb::from_str(
-                            r#"{"a": 2, "b": {"c": "y", "d": true}, "e": [{"f": 300}, 400]}"#,
-                        )
+                ),
+                Some(
+                    OwnedJsonb::from_str(
+                        r#"{"a": 2, "b": {"c": "y", "d": true}, "e": [{"f": 300}, 400]}"#,
+                    )
+                    .unwrap()
+                    .to_vec(),
+                ),
+                Some(
+                    OwnedJsonb::from_str(r#"{"a": 3, "b": {"d": false}, "e": [{"f": 500}, 600]}"#)
                         .unwrap()
                         .to_vec(),
-                    ),
-                    Some(
-                        OwnedJsonb::from_str(
-                            r#"{"a": 3, "b": {"d": false}, "e": [{"f": 500}, 600]}"#,
-                        )
-                        .unwrap()
-                        .to_vec(),
-                    ), // 'c' is missing here
-                ])),
-            ),
+                ), // 'c' is missing here
+            ]))
+            .into(),
         ],
         3,
     );

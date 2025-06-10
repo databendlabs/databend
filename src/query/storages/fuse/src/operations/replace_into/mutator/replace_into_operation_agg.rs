@@ -456,7 +456,7 @@ impl AggregationContext {
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for (field, _) in on_conflict_fields.iter().enumerate() {
             let on_conflict_field_index = field;
-            columns.push(&key_columns_data
+            let entry_value = key_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -465,8 +465,10 @@ impl AggregationContext {
                         on_conflict_field_index, segment_index, block_index
                     ))
                 })?
-                .value);
+                .value();
+            columns.push(entry_value);
         }
+        let columns: Vec<_> = columns.iter().collect();
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {

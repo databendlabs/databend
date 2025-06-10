@@ -603,7 +603,7 @@ mod tests {
             let mut target = vec![0; data.num_rows()];
             for (i, entry) in data.columns().iter().enumerate() {
                 let indices = [0, 3, 8];
-                group_hash_value_spread(&indices, entry.value.to_owned(), i == 0, &mut target)?;
+                group_hash_value_spread(&indices, entry.value(), i == 0, &mut target)?;
             }
 
             assert_eq!(

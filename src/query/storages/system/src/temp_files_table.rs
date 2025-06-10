@@ -188,18 +188,9 @@ impl TempFilesTable {
                     DataType::String,
                     Value::Scalar(Scalar::String("Spill".to_string())),
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(StringType::from_data(names)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(NumberType::from_data(file_lens)),
-                ),
-                BlockEntry::new(
-                    DataType::Timestamp.wrap_nullable(),
-                    Value::Column(TimestampType::from_opt_data(file_last_modifieds)),
-                ),
+                StringType::from_data(names).into(),
+                NumberType::from_data(file_lens).into(),
+                TimestampType::from_opt_data(file_last_modifieds).into(),
             ],
             row_number,
         )

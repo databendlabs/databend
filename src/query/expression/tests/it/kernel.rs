@@ -294,8 +294,8 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                 FilterVisitor::new(&filter).with_strategy(IterationStrategy::IndexIterator);
 
             for col in random_block.columns() {
-                f1.visit_value(col.value.clone())?;
-                f2.visit_value(col.value.clone())?;
+                f1.visit_value(col.value())?;
+                f2.visit_value(col.value())?;
 
                 let l = f1.take_result();
                 let r = f2.take_result();
@@ -325,14 +325,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         .map(|index| {
             let columns = blocks
                 .iter()
-                .map(|block| {
-                    block
-                        .get_by_offset(index)
-                        .value
-                        .clone()
-                        .into_column()
-                        .unwrap()
-                })
+                .map(|block| block.get_by_offset(index).value().into_column().unwrap())
                 .collect_vec();
             Column::take_downcast_column_vec(&columns)
         })
@@ -363,14 +356,14 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
     let columns_4 = block_4.columns();
     let columns_5 = block_5.columns();
     for idx in 0..columns_1.len() {
-        assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_2[idx].value);
-        assert_eq!(columns_1[idx].data_type, columns_3[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_3[idx].value);
-        assert_eq!(columns_1[idx].data_type, columns_4[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_4[idx].value);
-        assert_eq!(columns_1[idx].data_type, columns_5[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_5[idx].value);
+        assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_2[idx].value());
+        assert_eq!(columns_1[idx].data_type(), columns_3[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_3[idx].value());
+        assert_eq!(columns_1[idx].data_type(), columns_4[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_4[idx].value());
+        assert_eq!(columns_1[idx].data_type(), columns_5[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_5[idx].value());
     }
 
     Ok(())
@@ -449,8 +442,8 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
         let columns_1 = block_1.columns();
         let columns_2 = block_2.columns();
         for idx in 0..columns_1.len() {
-            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+            assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+            assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
 
@@ -606,8 +599,8 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
         let columns_1 = block_1.columns();
         let columns_2 = block_2.columns();
         for idx in 0..columns_1.len() {
-            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+            assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+            assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
 

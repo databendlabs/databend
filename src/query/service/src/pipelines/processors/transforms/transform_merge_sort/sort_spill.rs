@@ -615,10 +615,7 @@ impl Debug for SpillableBlock {
 }
 
 fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
-    data.get_by_offset(sort_row_offset)
-        .value
-        .as_column()
-        .unwrap()
+    data.get_by_offset(sort_row_offset).as_column().unwrap()
 }
 
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.

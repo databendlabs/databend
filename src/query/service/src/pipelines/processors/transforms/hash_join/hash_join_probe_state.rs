@@ -260,10 +260,11 @@ impl HashJoinProbeState {
         let probe_keys = (&keys_columns).into();
 
         let probe_has_null = if self.join_type() == JoinType::LeftMark {
-            match &input.get_by_offset(0).value {
-                Value::Scalar(Scalar::Null) => true,
-                Value::Column(Column::Nullable(c)) if c.validity.null_count() > 0 => true,
-                _ => false,
+            let entry = input.get_by_offset(0);
+            if let Some(Column::Nullable(c)) = entry.as_column() {
+                c.validity_ref().null_count() > 0
+            } else {
+                entry.as_scalar().unwrap().is_null()
             }
         } else {
             false

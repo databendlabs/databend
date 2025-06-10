@@ -85,7 +85,7 @@ impl BlocksEncoder {
             let num_rows = block.num_rows();
             let columns_layout = std::iter::once(self.size())
                 .chain(block.take_columns().into_iter().map(|entry| {
-                    let column = entry.value.into_full_column(&entry.data_type, num_rows);
+                    let column = entry.to_column(num_rows);
                     write_column(&column, &mut self.buf).unwrap();
                     self.size()
                 }))
@@ -118,7 +118,7 @@ fn fake_data_schema(block: &DataBlock) -> DataSchema {
         .columns()
         .iter()
         .enumerate()
-        .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type.clone()))
+        .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type()))
         .collect::<Vec<_>>();
     DataSchema::new(fields)
 }

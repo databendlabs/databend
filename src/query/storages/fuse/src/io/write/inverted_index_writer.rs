@@ -217,7 +217,7 @@ impl InvertedIndexWriter {
             for (j, (field_index, ty)) in field_indexes.iter().enumerate() {
                 let field = Field::from_field_id(j as u32);
                 let column = block.get_by_offset(*field_index);
-                match unsafe { column.value.index_unchecked(i) } {
+                match unsafe { column.index_unchecked(i) } {
                     ScalarRef::String(text) => doc.add_text(field, text),
                     ScalarRef::Variant(jsonb_val) => {
                         // only support object JSON, other JSON type will not add index.
@@ -311,7 +311,7 @@ fn block_to_inverted_index(
 ) -> Result<()> {
     let mut offsets = Vec::with_capacity(block.num_columns());
     for column in block.columns() {
-        let value: Value<BinaryType> = column.value.try_downcast().unwrap();
+        let value: Value<BinaryType> = column.value().try_downcast().unwrap();
         write_buffer.extend_from_slice(value.as_scalar().unwrap());
         let offset = write_buffer.len() as u32;
         offsets.push(offset);
