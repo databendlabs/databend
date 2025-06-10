@@ -16,9 +16,14 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
+use databend_common_meta_app::schema::TableIndexType;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::Location;
 
 #[async_trait::async_trait]
 pub trait TableIndexHandler: Sync + Send {
@@ -32,6 +37,16 @@ pub trait TableIndexHandler: Sync + Send {
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropTableIndexReq,
+    ) -> Result<()>;
+
+    async fn do_refresh_table_index(
+        &self,
+        index_ty: TableIndexType,
+        table: &FuseTable,
+        ctx: Arc<dyn TableContext>,
+        index_name: String,
+        segment_locs: Option<Vec<Location>>,
+        pipeline: &mut Pipeline,
     ) -> Result<()>;
 }
 
@@ -60,6 +75,21 @@ impl TableIndexHandlerWrapper {
         req: DropTableIndexReq,
     ) -> Result<()> {
         self.handler.do_drop_table_index(catalog, req).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_refresh_table_index(
+        &self,
+        index_ty: TableIndexType,
+        table: &FuseTable,
+        ctx: Arc<dyn TableContext>,
+        index_name: String,
+        segment_locs: Option<Vec<Location>>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        self.handler
+            .do_refresh_table_index(index_ty, table, ctx, index_name, segment_locs, pipeline)
+            .await
     }
 }
 

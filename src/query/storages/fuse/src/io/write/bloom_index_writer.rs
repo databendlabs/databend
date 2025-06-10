@@ -105,6 +105,14 @@ impl BloomIndexState {
             Ok(None)
         }
     }
+
+    pub fn data(self) -> Vec<u8> {
+        self.data
+    }
+
+    pub fn ngram_size(&self) -> Option<u64> {
+        self.ngram_size
+    }
 }
 
 pub struct BloomIndexRebuilder {

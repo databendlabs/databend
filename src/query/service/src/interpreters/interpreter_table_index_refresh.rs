@@ -14,15 +14,18 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_enterprise_table_index::get_table_index_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,8 +54,21 @@ impl Interpreter for RefreshTableIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        match self.plan.index_type {
+            ast::TableIndexType::Inverted => {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+            }
+            ast::TableIndexType::Ngram => {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::NgramIndex)?;
+            }
+            ast::TableIndexType::Vector | ast::TableIndexType::Aggregating => {
+                return Err(ErrorCode::RefreshIndexError(
+                    "Only Inverted and Ngram support Refresh",
+                ));
+            }
+        }
 
         let table = self
             .ctx
@@ -91,17 +107,38 @@ impl Interpreter for RefreshTableIndexInterpreter {
         let mut build_res = PipelineBuildResult::create();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        fuse_table
-            .do_refresh_inverted_index(
-                self.ctx.clone(),
-                index_name,
-                index_version,
-                &index.options,
-                index_schema,
-                segment_locs,
-                &mut build_res.main_pipeline,
-            )
-            .await?;
+
+        match self.plan.index_type {
+            ast::TableIndexType::Inverted => {
+                fuse_table
+                    .do_refresh_inverted_index(
+                        self.ctx.clone(),
+                        index_name,
+                        index_version,
+                        &index.options,
+                        index_schema,
+                        segment_locs,
+                        &mut build_res.main_pipeline,
+                    )
+                    .await?;
+            }
+            ast::TableIndexType::Ngram => {
+                let handler = get_table_index_handler();
+                let _ = handler
+                    .do_refresh_table_index(
+                        schema::TableIndexType::Ngram,
+                        fuse_table,
+                        self.ctx.clone(),
+                        index_name,
+                        segment_locs,
+                        &mut build_res.main_pipeline,
+                    )
+                    .await?;
+            }
+            ast::TableIndexType::Vector | ast::TableIndexType::Aggregating => {
+                unreachable!()
+            }
+        }
 
         Ok(build_res)
     }
