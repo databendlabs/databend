@@ -17,12 +17,8 @@ use databend_common_expression::type_check::convert_escape_pattern;
 #[test]
 fn test_convert_escape_pattern() {
     assert_eq!(convert_escape_pattern("%$%%", '$'), "%\\%%");
-
     assert_eq!(convert_escape_pattern("_$_%", '$'), "_\\_%");
-
     assert_eq!(convert_escape_pattern("100$%", '$'), "100\\%");
-
-    assert_eq!(convert_escape_pattern("\\\\_%", '\\'), "\\\\\\_%");
-
+    assert_eq!(convert_escape_pattern("\\\\_%", '\\'), "\\\\_%");
     assert_eq!(convert_escape_pattern("hello", '$'), "hello");
 }
