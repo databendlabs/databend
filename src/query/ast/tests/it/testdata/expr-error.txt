@@ -123,7 +123,7 @@ error:
   |
 1 | CAST(1 AS STRING) ESCAPE '$'
   | ----              ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
-  | |
+  | |                  
   | while parsing expression
 
 
@@ -135,7 +135,7 @@ error:
   |
 1 | 1 + 1 ESCAPE '$'
   | -     ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
-  | |
+  | |                  
   | while parsing expression
 
 

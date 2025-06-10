@@ -93,14 +93,14 @@ pub enum Expr {
         modifier: SubqueryModifier,
         escape: Option<String>,
     },
-    /// `<right> LIKE ANY <right> ESCAPE '<escape>'`
+    /// `<left> LIKE ANY <right> ESCAPE '<escape>'`
     LikeAnyWithEscape {
         span: Span,
         left: Box<Expr>,
         right: Box<Expr>,
         escape: String,
     },
-    /// `<right> [NOT] LIKE <right> ESCAPE '<escape>'`
+    /// `<left> [NOT] LIKE <right> ESCAPE '<escape>'`
     LikeWithEscape {
         span: Span,
         left: Box<Expr>,
