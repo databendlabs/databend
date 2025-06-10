@@ -309,9 +309,9 @@ impl NewTransformPartitionBucket {
             if self.all_inputs_init {
                 if partition_count != self.max_partition_count {
                     return Err(ErrorCode::Internal(
-                    "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
+                        "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
                     ",
-                ));
+                    ));
                 }
                 match self.buckets_blocks.entry(bucket) {
                     Entry::Vacant(v) => {
@@ -579,6 +579,7 @@ impl Processor for NewTransformPartitionBucket {
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
+    max_restore_worker: u64,
 ) -> Result<()> {
     let input_nums = pipeline.output_len();
     let transform = NewTransformPartitionBucket::create(input_nums, params.clone())?;
@@ -592,7 +593,7 @@ pub fn build_partition_bucket(
         vec![output],
     )]));
 
-    pipeline.try_resize(input_nums)?;
+    pipeline.try_resize(std::cmp::min(input_nums, max_restore_worker as usize))?;
 
     let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
     let operator = DataOperator::instance().spill_operator();
@@ -608,5 +609,8 @@ pub fn build_partition_bucket(
             params.clone(),
         )?))
     })?;
+
+    pipeline.try_resize(input_nums)?;
+
     Ok(())
 }
