@@ -67,9 +67,9 @@ impl InsertInterpreter {
         // validate schema
         if select_schema.fields().len() != output_schema.fields().len() {
             return Err(ErrorCode::BadArguments(format!(
-                "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
-                select_schema.fields().len(),
+                "Column count mismatch in INSERT: you specified {} columns but provided {} values. Please ensure these numbers match.",
                 output_schema.fields().len(),
+                select_schema.fields().len(),
             )));
         }
 

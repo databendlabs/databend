@@ -441,7 +441,7 @@ impl DataBlock {
                         .map(|f| f.name().to_string())
                         .collect();
                     ErrorCode::BadArguments(format!(
-                        "Unable to get field named \"{}\". Valid fields: {:?}",
+                        "Column \"{}\" does not exist. Available columns are: {:?}",
                         dest_field.name(),
                         valid_fields
                     ))
