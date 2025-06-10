@@ -2324,6 +2324,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
 
     // date | timestamp -> date
+    registry.register_aliases("to_monday", &["to_start_of_iso_week"]);
     rounder_functions_helper::<ToLastMonday>(registry, "to_monday");
     rounder_functions_helper::<ToLastSunday>(registry, "to_start_of_week");
     rounder_functions_helper::<ToStartOfMonth>(registry, "to_start_of_month");

@@ -292,6 +292,32 @@ select trunc('2025-02-05 00:01:00', week);
 ----
 2025-02-03
 
+
+query T
+SELECT TRUNC('2025-06-11'::Date, 'IW');
+----
+2025-06-09
+
+query T
+SELECT TRUNC('2025-06-09'::Date, 'IW');
+----
+2025-06-09
+
+query T
+SELECT TRUNC('2023-12-31'::Date, 'IW');
+----
+2023-12-25
+
+query T
+SELECT TRUNC('2024-01-01'::Date, 'IW');
+----
+2024-01-01
+
+query T
+select TRUNC('2025-06-09 10:11:12'::Datetime, 'HH24');
+----
+2025-06-09 10:00:00.000000
+
 query FF
 SELECT
     MONTHS_BETWEEN('2019-03-15'::DATE,

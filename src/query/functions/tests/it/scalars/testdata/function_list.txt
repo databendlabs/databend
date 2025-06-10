@@ -75,6 +75,7 @@ substring_utf8 -> substr
 subtract -> minus
 to_char -> to_string
 to_datetime -> to_timestamp
+to_start_of_iso_week -> to_monday
 to_text -> to_string
 to_varchar -> to_string
 trunc -> truncate
