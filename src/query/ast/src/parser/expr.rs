@@ -168,10 +168,15 @@ pub enum ExprElement {
         subquery: Box<Query>,
         not: bool,
     },
-    /// `LIKE (SELECT ...)`
+    /// `LIKE (SELECT ...) [ESCAPE '<escape>']`
     LikeSubquery {
         modifier: SubqueryModifier,
         subquery: Box<Query>,
+        escape: Option<String>,
+    },
+    /// `ESCAPE '<escape>'`
+    Escape {
+        escape: String,
     },
     /// `BETWEEN ... AND ...`
     Between {
@@ -352,6 +357,9 @@ const IS_DISTINCT_FROM_AFFIX: Affix = Affix::Infix(Precedence(BETWEEN_PREC), Ass
 const IN_LIST_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IN_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const LIKE_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const LIKE_ANY_WITH_ESCAPE_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const LIKE_WITH_ESCAPE_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const ESCAPE_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const JSON_OP_AFFIX: Affix = Affix::Infix(Precedence(40), Associativity::Left);
 const PG_CAST_AFFIX: Affix = Affix::Postfix(Precedence(60));
 
@@ -378,9 +386,9 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::Lt => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Gte => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Lte => Affix::Infix(Precedence(20), Associativity::Left),
-        BinaryOperator::Like => Affix::Infix(Precedence(20), Associativity::Left),
-        BinaryOperator::LikeAny => Affix::Infix(Precedence(20), Associativity::Left),
-        BinaryOperator::NotLike => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Like(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::LikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotLike(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
@@ -417,6 +425,7 @@ impl ExprElement {
             ExprElement::InList { .. } => IN_LIST_AFFIX,
             ExprElement::InSubquery { .. } => IN_SUBQUERY_AFFIX,
             ExprElement::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
+            ExprElement::Escape { .. } => ESCAPE_AFFIX,
             ExprElement::UnaryOp { op } => unary_affix(op),
             ExprElement::BinaryOp { op } => binary_affix(op),
             ExprElement::JsonOp { .. } => JSON_OP_AFFIX,
@@ -466,6 +475,8 @@ impl Expr {
             Expr::InList { .. } => IN_LIST_AFFIX,
             Expr::InSubquery { .. } => IN_SUBQUERY_AFFIX,
             Expr::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
+            Expr::LikeAnyWithEscape { .. } => LIKE_ANY_WITH_ESCAPE_AFFIX,
+            Expr::LikeWithEscape { .. } => LIKE_WITH_ESCAPE_AFFIX,
             Expr::UnaryOp { op, .. } => unary_affix(op),
             Expr::BinaryOp { op, .. } => binary_affix(op),
             Expr::JsonOp { .. } => JSON_OP_AFFIX,
@@ -845,11 +856,54 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 subquery,
                 not,
             },
-            ExprElement::LikeSubquery { subquery, modifier } => Expr::LikeSubquery {
+            ExprElement::LikeSubquery {
+                subquery,
+                modifier,
+                escape,
+            } => Expr::LikeSubquery {
                 span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
                 subquery,
                 modifier,
+                escape,
+            },
+            ExprElement::Escape { escape } => match lhs {
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::Like(_),
+                    left,
+                    right,
+                } => Expr::LikeWithEscape {
+                    span,
+                    left,
+                    right,
+                    is_not: false,
+                    escape,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotLike(_),
+                    left,
+                    right,
+                } => Expr::LikeWithEscape {
+                    span,
+                    left,
+                    right,
+                    is_not: true,
+                    escape,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::LikeAny(_),
+                    left,
+                    right,
+                } => Expr::LikeAnyWithEscape {
+                    span,
+                    left,
+                    right,
+                    escape,
+                },
+                _ => return Err("escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr"),
             },
             ExprElement::Between { low, high, not } => Expr::Between {
                 span: transform_span(elem.span.tokens),
@@ -911,9 +965,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
     );
     let like_subquery = map(
         rule! {
-            LIKE ~ ( ANY | SOME | ALL ) ~ "(" ~ #query ~ ^")"
+            LIKE ~ ( ANY | SOME | ALL ) ~ "(" ~ #query ~ ^")" ~ (ESCAPE ~  ^#literal_string)?
         },
-        |(_, m, _, subquery, _)| {
+        |(_, m, _, subquery, _, option_escape)| {
             let modifier = match m.kind {
                 TokenKind::ALL => SubqueryModifier::All,
                 TokenKind::ANY => SubqueryModifier::Any,
@@ -923,8 +977,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ExprElement::LikeSubquery {
                 modifier,
                 subquery: Box::new(subquery),
+                escape: option_escape.map(|(_, escape)| escape),
             }
         },
+    );
+    let escape = map(
+        rule! {
+            ESCAPE ~  ^#literal_string
+        },
+        |(_, escape)| ExprElement::Escape { escape },
     );
     let between = map(
         rule! {
@@ -1386,6 +1447,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #list_comprehensions: "[expr for x in ... [if ...]]"
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
                 | #function_call
+                | #escape: "`ESCAPE '<escape>'`"
             ),
             rule!(
                 #case : "`CASE ... END`"
@@ -1440,9 +1502,9 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::And, rule! { AND }),
             value(BinaryOperator::Or, rule! { OR }),
             value(BinaryOperator::Xor, rule! { XOR }),
-            value(BinaryOperator::LikeAny, rule! { LIKE ~ ANY }),
-            value(BinaryOperator::Like, rule! { LIKE }),
-            value(BinaryOperator::NotLike, rule! { NOT ~ LIKE }),
+            value(BinaryOperator::LikeAny(None), rule! { LIKE ~ ANY }),
+            value(BinaryOperator::Like(None), rule! { LIKE }),
+            value(BinaryOperator::NotLike(None), rule! { NOT ~ LIKE }),
             value(BinaryOperator::Regexp, rule! { REGEXP }),
             value(BinaryOperator::NotRegexp, rule! { NOT ~ REGEXP }),
             value(BinaryOperator::RLike, rule! { RLIKE }),

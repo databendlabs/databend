@@ -3948,7 +3948,9 @@ Query {
                                                         span: Some(
                                                             299..307,
                                                         ),
-                                                        op: NotLike,
+                                                        op: NotLike(
+                                                            None,
+                                                        ),
                                                         left: ColumnRef {
                                                             span: Some(
                                                                 289..298,
