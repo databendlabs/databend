@@ -118,7 +118,7 @@ error:
 ---------- Input ----------
 CAST(1 AS STRING) ESCAPE '$'
 ---------- Output ---------
-error:
+error: 
   --> SQL:1:19
   |
 1 | CAST(1 AS STRING) ESCAPE '$'
@@ -130,12 +130,12 @@ error:
 ---------- Input ----------
 1 + 1 ESCAPE '$'
 ---------- Output ---------
-error:
+error: 
   --> SQL:1:7
   |
 1 | 1 + 1 ESCAPE '$'
   | -     ^^^^^^ escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr
-  | |                  
+  | |      
   | while parsing expression
 
 
