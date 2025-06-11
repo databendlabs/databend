@@ -34,7 +34,6 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_version::DATABEND_SEMVER;
 use fastrace::func_path;
 use fastrace::prelude::*;
-use highway::HighwayHash;
 use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
@@ -56,6 +55,7 @@ use poem::Request;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
+use uuid::Uuid;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQuery;
@@ -773,8 +773,8 @@ fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
 }
 
 fn query_id_to_trace_id(query_id: &str) -> TraceId {
-    let [hash_high, hash_low] = highway::PortableHash::default().hash128(query_id.as_bytes());
-    TraceId(((hash_high as u128) << 64) + (hash_low as u128))
+    let uuid = Uuid::parse_str(query_id).unwrap_or_else(|_| Uuid::now_v7());
+    TraceId(uuid.as_u128())
 }
 
 /// The HTTP query endpoints are expected to be responses within 60 seconds.
