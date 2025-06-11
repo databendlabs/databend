@@ -975,4 +975,8 @@ impl Settings {
     pub fn get_enable_experimental_virtual_column(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
     }
+
+    pub fn get_enable_auto_materialize_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_materialize_cte")? == 1)
+    }
 }
