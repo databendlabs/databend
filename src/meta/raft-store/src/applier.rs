@@ -470,11 +470,12 @@ where SM: StateMachineApi + 'static
             put.ttl_ms.map(Interval::from_millis),
         ));
 
-        let (prev, _result) = self.upsert_kv(&upsert).await?;
+        let (prev, result) = self.upsert_kv(&upsert).await?;
 
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
             prev_value: prev.map(pb::SeqV::from),
+            current: result.map(pb::SeqV::from),
         };
 
         resp.responses.push(TxnOpResponse {

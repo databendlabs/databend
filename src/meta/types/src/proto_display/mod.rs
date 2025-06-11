@@ -270,9 +270,10 @@ impl Display for TxnPutResponse {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "Put-resp: key={}, prev_seq={:?}",
+            "Put-resp: key={}, prev_seq={}, current_seq={}",
             self.key,
-            self.prev_value.as_ref().map(|x| x.seq)
+            self.prev_value.as_ref().map(|x| x.seq).display(),
+            self.current.as_ref().map(|x| x.seq).display()
         )
     }
 }
