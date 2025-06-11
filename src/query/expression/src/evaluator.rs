@@ -1617,19 +1617,26 @@ impl<'a> Evaluator<'a> {
         let lambda_idx = args.len() - 1;
         let mut builder = ColumnBuilder::with_capacity(return_type, len.unwrap_or(1));
         for idx in 0..(len.unwrap_or(1)) {
-            let mut entries = Vec::with_capacity(args.len());
-            for i in 0..lambda_idx {
-                let scalar = unsafe { args[i].index_unchecked(idx) };
-                let entry =
-                    BlockEntry::new(data_types[i].clone(), Value::Scalar(scalar.to_owned()));
-                entries.push(entry);
-            }
+            let scalars = (0..lambda_idx)
+                .map(|i| {
+                    let scalar = unsafe { args[i].index_unchecked(idx) };
+
+                    (scalar.to_owned(), data_types[i].clone())
+                })
+                .collect::<Vec<_>>();
             let scalar = unsafe { args[lambda_idx].index_unchecked(idx) };
             match scalar {
                 ScalarRef::Array(col) => {
                     // add lambda array scalar value as a column
                     let col_len = col.len();
-                    entries.push(col.clone().into());
+                    let entries = scalars
+                        .into_iter()
+                        .map(|(scalar, data_type)| {
+                            BlockEntry::new_const_column(data_type, scalar, col_len)
+                        })
+                        .chain(Some(col.into()))
+                        .collect();
+
                     let block = DataBlock::new(entries, col_len);
 
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
@@ -1655,8 +1662,15 @@ impl<'a> Evaluator<'a> {
                         Column::Tuple(t) => (t[0].clone(), t[1].clone()),
                         _ => unreachable!(),
                     };
-                    entries.push(key_col.clone().into());
-                    entries.push(value_col.clone().into());
+
+                    let entries = scalars
+                        .into_iter()
+                        .map(|(scalar, data_type)| {
+                            BlockEntry::new_const_column(data_type, scalar, col_len)
+                        })
+                        .chain([key_col.clone().into(), value_col.clone().into()])
+                        .collect();
+
                     let block = DataBlock::new(entries, col_len);
 
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);

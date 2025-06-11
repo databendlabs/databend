@@ -65,16 +65,15 @@ impl DataBlock {
             return Ok(blocks[0].clone());
         }
 
+        let num_rows = blocks.iter().map(|c| c.num_rows()).sum();
         let num_columns = blocks[0].num_columns();
         let mut concat_columns = Vec::with_capacity(num_columns);
         for i in 0..num_columns {
-            concat_columns.push(BlockEntry::new(
-                blocks[0].data_type(i),
+            concat_columns.push(BlockEntry::from_value(
                 Self::concat_columns(&block_refs, i)?,
+                || (blocks[0].data_type(i), num_rows),
             ))
         }
-
-        let num_rows = blocks.iter().map(|c| c.num_rows()).sum();
 
         Ok(DataBlock::new(concat_columns, num_rows))
     }
