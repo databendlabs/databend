@@ -1268,9 +1268,41 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let trunc = map(
         rule! {
-            TRUNC ~ "(" ~  #subexpr(0) ~ "," ~  #interval_kind ~ ")"
+            TRUNC ~ "(" ~  (#subexpr(0) ~ "," ~  #interval_kind)? ~ (#subexpr(0) ~ ("," ~  #subexpr(0))?)? ~ ")"
         },
-        |(_, _, date, _, unit, _)| ExprElement::DateTrunc { unit, date },
+        |(s, _, opt_date, opt_numeric, _)| {
+            return match (opt_date, opt_numeric) {
+                (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
+                (None, Some((expr, opt_expr2))) => {
+                    if let Some((_, expr2)) = opt_expr2 {
+                        ExprElement::FunctionCall {
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                                args: vec![expr, expr2],
+                                ..Default::default()
+                            },
+                        }
+                    } else {
+                        ExprElement::FunctionCall {
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                                args: vec![expr],
+                                ..Default::default()
+                            },
+                        }
+                    }
+                }
+                _ => ExprElement::DateTrunc {
+                    unit: IntervalKind::UnknownIntervalKind,
+                    date: Expr::Literal {
+                        span: None,
+                        value: Literal::Null,
+                    },
+                },
+            };
+        },
     );
 
     let last_day = map(

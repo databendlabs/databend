@@ -3226,8 +3226,8 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Millennium => {
                 self.resolve_function(span, "millennium", vec![], &[arg])
             }
-            ASTIntervalKind::ISOWeek => Err(ErrorCode::SemanticError(
-                "Not support interval type ISOWeek".to_string(),
+            _ => Err(ErrorCode::SemanticError(
+                "Only support interval type [ISOYear, Year, Quarter, Month, Day, Hour, Minute, Second, Doy, Dow, Week, Epoch, MicroSecond, ISODow, YearWeek, Millennium]".to_string(),
             )
             .set_span(span)),
         }
