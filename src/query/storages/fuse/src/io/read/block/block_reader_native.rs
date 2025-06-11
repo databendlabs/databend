@@ -223,11 +223,7 @@ impl BlockReader {
         let mut entries = Vec::with_capacity(self.project_column_nodes.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
             if let Some(column) = columns.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
-                let data_type: DataType = self.projected_schema.field(index).data_type().into();
-                entries.push(BlockEntry::new(
-                    data_type.clone(),
-                    Value::Column(column.clone()),
-                ));
+                entries.push(column.clone().into());
                 match nums_rows {
                     Some(rows) => {
                         debug_assert_eq!(rows, column.len(), "Column lengths are not equal")

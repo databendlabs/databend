@@ -29,6 +29,7 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::Int16Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int8Type;
+use databend_common_expression::types::MapType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
@@ -106,30 +107,26 @@ fn test_base(file: &mut impl Write) {
     let blocks = [
         DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt8),
-                    Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
+                BlockEntry::new_const_column_arg::<UInt8Type>(1, 2),
+                BlockEntry::new_const_column_arg::<StringType>("a".to_string(), 2),
+                BlockEntry::new_const_column_arg::<MapType<UInt8Type, StringType>>(
+                    KvColumn {
+                        keys: vec![1, 2].into(),
+                        values: ["a", "b"].into_iter().map(String::from).collect(),
+                    },
+                    2,
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String("a".to_string())),
-                ),
-                BlockEntry::new(
-                    map_ty1.clone(),
-                    Value::Scalar(Scalar::Map(Column::Tuple(vec![
-                        UInt8Type::from_data(vec![1, 2]),
-                        StringType::from_data(vec!["a", "b"]),
-                    ]))),
-                ),
-                BlockEntry::new(
-                    map_ty2.clone(),
-                    Value::Scalar(Scalar::Map(Column::Tuple(vec![
-                        StringType::from_data(vec!["a", "b"]),
-                        VariantType::from_data(vec![
+                BlockEntry::new_const_column_arg::<MapType<StringType, VariantType>>(
+                    KvColumn {
+                        keys: ["a", "b"].into_iter().map(String::from).collect(),
+                        values: VariantType::from_data(vec![
                             jsonb::parse_value(r#""abc""#.as_bytes()).unwrap().to_vec(),
                             jsonb::parse_value(r#"100"#.as_bytes()).unwrap().to_vec(),
-                        ]),
-                    ]))),
+                        ])
+                        .into_variant()
+                        .unwrap(),
+                    },
+                    2,
                 ),
             ],
             2,

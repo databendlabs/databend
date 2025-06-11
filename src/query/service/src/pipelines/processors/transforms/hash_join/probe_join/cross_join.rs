@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -40,7 +38,7 @@ impl HashJoinProbeState {
         if build_num_rows == 1 {
             for col in build_block.columns() {
                 let scalar = unsafe { col.index_unchecked(0) };
-                probe_block.add_const_column(col.data_type(), scalar.to_owned());
+                probe_block.add_const_column(scalar.to_owned(), col.data_type());
             }
             return Ok(vec![probe_block]);
         }

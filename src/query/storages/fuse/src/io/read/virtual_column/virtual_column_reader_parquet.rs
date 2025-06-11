@@ -178,7 +178,7 @@ impl VirtualColumnReader {
             {
                 let orig_field = orig_schema.field_with_name(&name).unwrap();
                 let orig_type: DataType = orig_field.data_type().into();
-                let value = Value::Column(Column::from_arrow_rs(arrow_array, &orig_type)?);
+                let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
                 let entry = if orig_type != data_type {
                     let cast_func_name = format!(
@@ -188,14 +188,14 @@ impl VirtualColumnReader {
                     let (cast_value, cast_data_type) = eval_function(
                         None,
                         &cast_func_name,
-                        [(value, orig_type)],
+                        [(Value::Column(column), orig_type)],
                         &func_ctx,
                         data_block.num_rows(),
                         &BUILTIN_FUNCTIONS,
                     )?;
                     BlockEntry::new(cast_data_type, cast_value)
                 } else {
-                    BlockEntry::new(data_type, value)
+                    column.into()
                 };
                 data_block.add_entry(entry);
                 continue;

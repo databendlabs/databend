@@ -31,6 +31,7 @@ use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
@@ -232,13 +233,14 @@ impl BloomIndex {
     }
 
     pub fn serialize_to_data_block(&self) -> Result<DataBlock> {
-        let fields = self.filter_schema.fields();
-        let mut filter_columns = Vec::with_capacity(fields.len());
-        for filter in &self.filters {
-            let serialized_bytes = filter.to_bytes()?;
-            let filter_value = Value::Scalar(Scalar::Binary(serialized_bytes));
-            filter_columns.push(BlockEntry::new(DataType::Binary, filter_value));
-        }
+        let filter_columns = self
+            .filters
+            .iter()
+            .map(|filter| {
+                let bs = filter.to_bytes()?;
+                Ok(BlockEntry::new_const_column_arg::<BinaryType>(bs, 1))
+            })
+            .collect::<Result<_>>()?;
         Ok(DataBlock::new(filter_columns, 1))
     }
 

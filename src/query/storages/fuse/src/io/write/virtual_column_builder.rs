@@ -29,7 +29,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -38,7 +37,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_expression::VariantDataType;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
@@ -228,7 +226,7 @@ impl VirtualColumnBuilder {
                     _ => todo!(),
                 };
                 let virtual_table_type = infer_schema_type(&virtual_type).unwrap();
-                virtual_columns.push(BlockEntry::new(virtual_type, Value::Column(column)));
+                virtual_columns.push(column.into());
 
                 let mut key_name = String::new();
                 for path in key_paths {

@@ -269,6 +269,8 @@ impl HashJoinProbeState {
             } else {
                 entry.as_scalar().unwrap().is_null()
             }
+        } else {
+            false
         };
         input = input.project(&self.probe_projections);
 

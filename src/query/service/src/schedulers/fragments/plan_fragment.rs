@@ -23,7 +23,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 use databend_common_settings::ReplaceIntoShuffleStrategy;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
@@ -183,7 +182,7 @@ impl PlanFragment {
                     let entries = values
                         .columns
                         .iter()
-                        .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
+                        .map(|col| col.clone().into())
                         .collect::<Vec<BlockEntry>>();
                     let block = DataBlock::new(entries, values.num_rows);
                     // Scatter the block

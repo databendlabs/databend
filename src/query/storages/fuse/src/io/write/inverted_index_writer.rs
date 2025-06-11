@@ -275,11 +275,10 @@ impl InvertedIndexWriter {
 
         let inverted_index_schema = TableSchema::new(fields);
 
-        let mut index_columns = Vec::with_capacity(values.len());
-        for value in values.into_iter() {
-            let index_value = Value::Scalar(value);
-            index_columns.push(BlockEntry::new(DataType::Binary, index_value));
-        }
+        let index_columns = values
+            .into_iter()
+            .map(|v| BlockEntry::new(DataType::Binary, Value::Scalar(v)))
+            .collect();
         let inverted_index_block = DataBlock::new(index_columns, 1);
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);

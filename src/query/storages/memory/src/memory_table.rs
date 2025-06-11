@@ -35,7 +35,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -356,8 +355,8 @@ impl MemoryTableSource {
                 let col = entry.as_column().unwrap().clone();
                 let inner_columns = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
-                for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
-                    values.push(BlockEntry::new(ty.clone(), Value::Column(col.clone())));
+                for col in inner_columns.iter() {
+                    values.push(col.clone().into());
                 }
                 Self::traverse_paths(&values[..], &path[1..])
             }

@@ -30,7 +30,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -288,7 +287,6 @@ fn wrap_true_validity(column: &BlockEntry, num_rows: usize) -> BlockEntry {
     if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         column.clone()
     } else {
-        let col = NullableColumn::new_column(col, Bitmap::new_trued(num_rows));
-        BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
+        NullableColumn::new_column(col, Bitmap::new_trued(num_rows)).into()
     }
 }

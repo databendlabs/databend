@@ -114,7 +114,7 @@ impl AggIndexReader {
         // 2. Compute the output block
         // Fill dummy columns first.
         let mut output_columns = vec![
-            BlockEntry::new(DataType::Null, Value::Scalar(Scalar::Null),);
+            BlockEntry::new(DataType::Null, Value::Scalar(Scalar::Null));
             self.actual_table_field_len
         ];
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
