@@ -1461,16 +1461,14 @@ fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
                 _ => {}
             }
 
-            match &mut v.response {
-                Some(Response::Put(TxnPutResponse {
-                    current: Some(pb::SeqV { meta, .. }),
-                    ..
-                })) => {
-                    if *meta == Some(pb::KvMeta { expire_at: None }) {
-                        *meta = None;
-                    }
+            if let Some(Response::Put(TxnPutResponse {
+                current: Some(pb::SeqV { meta, .. }),
+                ..
+            })) = &mut v.response
+            {
+                if *meta == Some(pb::KvMeta { expire_at: None }) {
+                    *meta = None;
                 }
-                _ => {}
             }
 
             v
