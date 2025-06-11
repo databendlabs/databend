@@ -1186,7 +1186,8 @@ impl<'a> Evaluator<'a> {
                 Value::Column(col) => col.len(),
             });
 
-        let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
+        let entry = BlockEntry::from_value(value, || (src_type.clone(), num_rows));
+        let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;
         Ok(Some(result))
@@ -1441,7 +1442,7 @@ impl<'a> Evaluator<'a> {
                 for i in 0..lambda_idx {
                     let scalar = unsafe { args[i].index_unchecked(idx) };
                     let entry =
-                        BlockEntry::new(data_types[i].clone(), Value::Scalar(scalar.to_owned()));
+                        BlockEntry::new_const_column(data_types[i].clone(), scalar.to_owned(), 1);
                     entries.push(entry);
                 }
                 let scalar = unsafe { args[lambda_idx].index_unchecked(idx) };
