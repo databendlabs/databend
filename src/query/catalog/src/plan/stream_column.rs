@@ -193,10 +193,14 @@ impl StreamColumn {
     pub fn generate_column_values(&self, meta: &StreamColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
             StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
-            StreamColumnType::OriginBlockId => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
-                meta.build_origin_block_id(),
-            ),
+            StreamColumnType::OriginBlockId => {
+                BlockEntry::from_value(meta.build_origin_block_id(), || {
+                    (
+                        DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
+                        num_rows,
+                    )
+                })
+            }
             StreamColumnType::OriginRowNum => build_origin_block_row_num(num_rows),
         }
     }

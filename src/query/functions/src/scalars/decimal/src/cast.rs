@@ -1076,7 +1076,7 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
             };
 
             let size = from_type.size();
-            let entry = match (size.can_carried_by_128(), from_type.data_kind()) {
+            let value = match (size.can_carried_by_128(), from_type.data_kind()) {
                 (true, DecimalDataKind::Decimal128) | (false, DecimalDataKind::Decimal256) => {
                     return Ok(entry)
                 }
@@ -1087,15 +1087,9 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
                         let new_value =
                             decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size));
 
-                        BlockEntry::new(
-                            entry.data_type(),
-                            new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows))),
-                        )
+                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
                     } else {
-                        BlockEntry::new(
-                            entry.data_type(),
-                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size)),
-                        )
+                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size))
                     }
                 }
                 (false, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128) => {
@@ -1105,15 +1099,9 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
                         let new_value =
                             decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size));
 
-                        BlockEntry::new(
-                            entry.data_type(),
-                            new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows))),
-                        )
+                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
                     } else {
-                        BlockEntry::new(
-                            entry.data_type(),
-                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size)),
-                        )
+                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size))
                     }
                 }
             };
@@ -1121,7 +1109,9 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
             if let Some((_, msg)) = ctx.errors.take() {
                 Err(msg)
             } else {
-                Ok(entry)
+                Ok(BlockEntry::from_value(value, || {
+                    (entry.data_type(), num_rows)
+                }))
             }
         })
         .collect::<Result<Vec<_>, _>>()?;

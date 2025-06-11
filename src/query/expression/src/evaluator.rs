@@ -1212,7 +1212,7 @@ impl<'a> Evaluator<'a> {
             .data_block
             .columns()
             .iter()
-            .find_map(|col| col.as_column().map(|col| col.len()));
+            .find_map(|col| col.as_column().map(Column::len));
 
         // Evaluate the condition first and then partially evaluate the result branches.
         let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));

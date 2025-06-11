@@ -79,18 +79,15 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
         let columns = columns
             .iter()
             .map(|entry| match entry {
-                BlockEntry::Const(scalar, _, _) => {
-                    match scalar {
-                        Scalar::Variant(val) => {
-                            // convert variant value to comparable format.
-                            let raw_jsonb = RawJsonb::new(val);
-                            let buf = raw_jsonb.convert_to_comparable();
-                            let s = Scalar::Variant(buf);
-                            ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type()).build()
-                        }
-                        _ => entry.to_column(num_rows),
-                    }
+                BlockEntry::Const(Scalar::Variant(val), _, _) => {
+                    // convert variant value to comparable format.
+                    let raw_jsonb = RawJsonb::new(val);
+                    let buf = raw_jsonb.convert_to_comparable();
+                    let s = Scalar::Variant(buf);
+                    ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type()).build()
                 }
+                BlockEntry::Const(_, _, _) => entry.to_column(num_rows),
+
                 BlockEntry::Column(c) => {
                     let data_type = c.data_type();
                     if !data_type.remove_nullable().is_variant() {

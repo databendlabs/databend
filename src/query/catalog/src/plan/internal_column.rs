@@ -32,7 +32,6 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
-use databend_common_expression::Value;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
 use databend_common_expression::BLOCK_NAME_COLUMN_ID;
@@ -263,9 +262,10 @@ impl InternalColumn {
             }
             InternalColumnType::BaseBlockIds => {
                 assert!(meta.base_block_ids.is_some());
-                BlockEntry::new(
+                BlockEntry::new_const_column(
                     DataType::Array(Box::new(DataType::Decimal(DecimalSize::default_128()))),
-                    Value::Scalar(meta.base_block_ids.clone().unwrap()),
+                    meta.base_block_ids.clone().unwrap(),
+                    num_rows,
                 )
             }
             InternalColumnType::SearchMatched => {

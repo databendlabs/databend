@@ -16,15 +16,11 @@ use std::str::FromStr;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::VariantType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Value;
 use databend_common_expression::VariantDataType;
 use databend_common_storages_fuse::io::VirtualColumnBuilder;
 use databend_common_storages_fuse::FuseTable;
@@ -152,13 +148,8 @@ async fn test_virtual_column_builder() -> Result<()> {
 
     let block = DataBlock::new(
         vec![
-            BlockEntry::new(
-                DataType::Number(NumberDataType::Int32),
-                Value::Column(Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8])),
-            ),
-            BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Variant)),
-                Value::Column(VariantType::from_opt_data(vec![
+            Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),
+            VariantType::from_opt_data(vec![
                     Some(
                         OwnedJsonb::from_str(r#"{"id":1, "create": "3/06", "text": "a", "user": {"id": 1}}"#)
                             .unwrap()
@@ -199,8 +190,7 @@ async fn test_virtual_column_builder() -> Result<()> {
                             .unwrap()
                             .to_vec(),
                     ),
-                ])),
-            ),
+                ]).into(),
         ],
         8,
     );
@@ -257,32 +247,60 @@ async fn test_virtual_column_builder() -> Result<()> {
     .unwrap();
     assert_eq!(meta_geo_lat.data_type, VariantDataType::Float64);
 
-    let block = DataBlock::new(
-            vec![
-            BlockEntry::new(
-                DataType::Number(NumberDataType::Int32),
-                Value::Column(Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8])),
+    let entries = vec![
+        Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),
+        VariantType::from_opt_data(vec![
+            // Consistent types
+            Some(
+                OwnedJsonb::from_str(
+                    r#"{"int_col": 1, "str_col": "a", "bool_col": true, "float_col": 1.1}"#,
+                )
+                .unwrap()
+                .to_vec(),
             ),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Variant)),
-                    Value::Column(VariantType::from_opt_data(vec![
-                        // Consistent types
-                        Some(OwnedJsonb::from_str(r#"{"int_col": 1, "str_col": "a", "bool_col": true, "float_col": 1.1}"#).unwrap().to_vec()),
-                        Some(OwnedJsonb::from_str(r#"{"int_col": 2, "str_col": "b", "bool_col": false, "float_col": 2.2}"#).unwrap().to_vec()),
-                        // Mixed types -> Variant/Jsonb
-                        Some(OwnedJsonb::from_str(r#"{"mixed_col": 10}"#).unwrap().to_vec()),
-                        Some(OwnedJsonb::from_str(r#"{"mixed_col": "hello"}"#).unwrap().to_vec()),
-                        // Int/UInt coercion
-                        Some(OwnedJsonb::from_str(r#"{"num_coerce1": 5, "num_coerce2": 10000000000}"#).unwrap().to_vec()), // UInt64 > i64::MAX
-                        Some(OwnedJsonb::from_str(r#"{"num_coerce1": -5, "num_coerce2": 50}"#).unwrap().to_vec()), // Int64
-                        // All Nulls (will be discarded later, but type is inferred first if exists)
-                        Some(OwnedJsonb::from_str(r#"{"all_null_col": null}"#).unwrap().to_vec()),
-                        Some(OwnedJsonb::from_str(r#"{}"#).unwrap().to_vec()),
-                    ])),
-                ),
-            ],
-            8, // Number of rows
-        );
+            Some(
+                OwnedJsonb::from_str(
+                    r#"{"int_col": 2, "str_col": "b", "bool_col": false, "float_col": 2.2}"#,
+                )
+                .unwrap()
+                .to_vec(),
+            ),
+            // Mixed types -> Variant/Jsonb
+            Some(
+                OwnedJsonb::from_str(r#"{"mixed_col": 10}"#)
+                    .unwrap()
+                    .to_vec(),
+            ),
+            Some(
+                OwnedJsonb::from_str(r#"{"mixed_col": "hello"}"#)
+                    .unwrap()
+                    .to_vec(),
+            ),
+            // Int/UInt coercion
+            Some(
+                OwnedJsonb::from_str(r#"{"num_coerce1": 5, "num_coerce2": 10000000000}"#)
+                    .unwrap()
+                    .to_vec(),
+            ), // UInt64 > i64::MAX
+            Some(
+                OwnedJsonb::from_str(r#"{"num_coerce1": -5, "num_coerce2": 50}"#)
+                    .unwrap()
+                    .to_vec(),
+            ), // Int64
+            // All Nulls (will be discarded later, but type is inferred first if exists)
+            Some(
+                OwnedJsonb::from_str(r#"{"all_null_col": null}"#)
+                    .unwrap()
+                    .to_vec(),
+            ),
+            Some(OwnedJsonb::from_str(r#"{}"#).unwrap().to_vec()),
+        ])
+        .into(),
+    ];
+
+    let block = DataBlock::new(
+        entries, 8, // Number of rows
+    );
 
     let result = builder.add_block(&block, &write_settings, &location)?;
 

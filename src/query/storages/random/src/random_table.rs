@@ -26,12 +26,10 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::RandomOptions;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -270,12 +268,7 @@ impl SyncSource for RandomSource {
             .iter()
             .map(|f| {
                 let data_type = f.data_type().into();
-                let value = Value::Column(Column::random(
-                    &data_type,
-                    self.rows,
-                    Some(self.random_options.clone()),
-                ));
-                BlockEntry::new(data_type, value)
+                Column::random(&data_type, self.rows, Some(self.random_options.clone())).into()
             })
             .collect();
 

@@ -100,7 +100,8 @@ impl StripeDecoderForCopy {
 
     fn project(&self, block: DataBlock, projection: &[Expr]) -> Result<DataBlock> {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut columns = Vec::with_capacity(projection.len());
+        let mut entries = Vec::with_capacity(projection.len());
+        let num_rows = block.num_rows();
         for (field, expr) in self.output_schema.fields().iter().zip(projection.iter()) {
             if let Expr::ColumnRef(ColumnRef {
                 display_name, id, ..
@@ -120,11 +121,11 @@ impl StripeDecoderForCopy {
                         .split(',')
                         .map(|s| s.parse::<i32>().unwrap())
                         .collect::<Vec<i32>>();
-                    let e = &block.columns()[*id];
+                    let entry = block.get_by_offset(*id);
                     if let Some(Column::Nullable(box NullableColumn {
                         column: Column::Array(box array_column),
                         validity,
-                    })) = e.as_column()
+                    })) = entry.as_column()
                     {
                         let column = array_column.underlying_column();
                         let offsets = array_column.underlying_offsets();
@@ -154,19 +155,20 @@ impl StripeDecoderForCopy {
                                 validity: validity.clone(),
                             }));
 
-                            columns.push(column.into());
+                            entries.push(column.into());
                             continue;
                         }
                     }
-                    log::error!("expect array of tuple, got {:?} {:?}", field, e.value());
+                    log::error!("expect array of tuple, got {:?} {:?}", field, entry.value());
                     unreachable!("expect value: array of tuple")
                 }
             }
-            let value = evaluator.run(expr)?;
-            let column = BlockEntry::new(field.data_type().clone(), value);
-            columns.push(column);
+            let entry = BlockEntry::from_value(evaluator.run(expr)?, || {
+                (field.data_type().clone(), num_rows)
+            });
+            entries.push(entry);
         }
-        Ok(DataBlock::new(columns, block.num_rows()))
+        Ok(DataBlock::new(entries, num_rows))
     }
 }
 

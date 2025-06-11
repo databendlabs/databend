@@ -89,6 +89,17 @@ impl BlockEntry {
         Self::new(T::data_type(), value.upcast())
     }
 
+    pub fn from_value<F>(value: Value<AnyType>, on_scalar: F) -> Self
+    where F: FnOnce() -> (DataType, usize) {
+        match value {
+            Value::Column(c) => c.into(),
+            Value::Scalar(s) => {
+                let (data_type, num_rows) = on_scalar();
+                BlockEntry::new_const_column(data_type, s, num_rows)
+            }
+        }
+    }
+
     pub fn remove_nullable(self) -> Self {
         match self {
             BlockEntry::Column(Column::Nullable(col)) => col.column().clone().into(),
@@ -175,6 +186,17 @@ impl From<Column> for BlockEntry {
     }
 }
 
+impl TryFrom<Value<AnyType>> for BlockEntry {
+    type Error = Scalar;
+
+    fn try_from(value: Value<AnyType>) -> std::result::Result<Self, Self::Error> {
+        match value {
+            Value::Scalar(scalar) => Err(scalar),
+            Value::Column(column) => Ok(column.into()),
+        }
+    }
+}
+
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     #[allow(clippy::borrowed_box)]
@@ -211,8 +233,8 @@ impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
 
 impl DataBlock {
     #[inline]
-    pub fn new(columns: Vec<BlockEntry>, num_rows: usize) -> Self {
-        DataBlock::new_with_meta(columns, num_rows, None)
+    pub fn new(entries: Vec<BlockEntry>, num_rows: usize) -> Self {
+        DataBlock::new_with_meta(entries, num_rows, None)
     }
 
     #[inline]
@@ -371,11 +393,7 @@ impl DataBlock {
     }
 
     pub fn consume_convert_to_full(self) -> Self {
-        if self
-            .columns()
-            .iter()
-            .all(|entry| matches!(entry, BlockEntry::Column(_)))
-        {
+        if self.columns().iter().all(BlockEntry::is_column) {
             return self;
         }
 

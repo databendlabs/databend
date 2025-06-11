@@ -34,12 +34,14 @@ impl CopyProjectionEvaluator {
     }
     pub(crate) fn project(&self, block: &DataBlock, projection: &[Expr]) -> Result<DataBlock> {
         let evaluator = Evaluator::new(block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        let mut columns = Vec::with_capacity(projection.len());
+        let mut entries = Vec::with_capacity(projection.len());
+        let num_rows = block.num_rows();
         for (field, expr) in self.schema.fields().iter().zip(projection.iter()) {
-            let value = evaluator.run(expr)?;
-            let column = BlockEntry::new(field.data_type().clone(), value);
-            columns.push(column);
+            let entry = BlockEntry::from_value(evaluator.run(expr)?, || {
+                (field.data_type().clone(), num_rows)
+            });
+            entries.push(entry);
         }
-        Ok(DataBlock::new(columns, block.num_rows()))
+        Ok(DataBlock::new(entries, num_rows))
     }
 }
