@@ -705,19 +705,18 @@ impl SubqueryDecorrelatorOptimizer {
                     &subquery.data_type,
                 );
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
-                let op = *subquery.compare_op.as_ref().unwrap();
+                let op = subquery.compare_op.as_ref().unwrap().clone();
                 let (right_condition, is_non_equi_condition) =
                     check_child_expr_in_subquery(&child_expr, &op)?;
                 let (left_conditions, right_conditions, non_equi_conditions) =
                     if !is_non_equi_condition {
                         (vec![left_condition], vec![right_condition], vec![])
                     } else {
-                        let other_condition = ScalarExpr::FunctionCall(FunctionCall {
-                            span: subquery.span,
-                            func_name: op.to_func_name().to_string(),
-                            params: vec![],
-                            arguments: vec![right_condition, left_condition],
-                        });
+                        let other_condition = ScalarExpr::FunctionCall(op.to_func_call(
+                            subquery.span,
+                            right_condition,
+                            left_condition,
+                        ));
                         (vec![], vec![], vec![other_condition])
                     };
                 // Add a marker column to save comparison result.

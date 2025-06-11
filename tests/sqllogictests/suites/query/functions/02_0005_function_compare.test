@@ -122,6 +122,46 @@ select '\%' not like '\%'
 1
 
 query B
+select '100%' like '100!%' escape '!'
+----
+1
+
+query B
+select '100_' like '100!_' escape '!'
+----
+1
+
+query B
+select 'hello_world' like 'hello!_world' escape '!'
+----
+1
+
+query B
+select '50% off' like '50!% off' escape '!'
+----
+1
+
+query B
+select '' like '' escape '!'
+----
+1
+
+query B
+select NULL like 'abc' escape '!'
+----
+NULL
+
+query B
+select 'abc' like NULL escape '!'
+----
+NULL
+
+query B
+select 'a%b_c\d' like 'a!%b!_c!\\d' escape '!'
+----
+1
+
+query B
 select ('PROMO' || number::string) a, a like 'PROMO%',
 	a < 'PROMO1', a > 'PROMO1',
 	a <= 'PROMO1' , a >= 'PROMO1',

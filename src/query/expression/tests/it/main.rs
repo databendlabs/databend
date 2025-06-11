@@ -41,6 +41,8 @@ mod serde;
 mod sort;
 mod types;
 
+mod like_pattern_escape;
+
 fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
     let types = get_all_test_data_types();
     let mut columns = Vec::with_capacity(types.len());
