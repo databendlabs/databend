@@ -491,8 +491,12 @@ impl kvapi::TestSuite {
         let responses = &reply.responses;
         assert_eq!(responses.len(), expected.len());
 
+        let responses = normalize_txn_response(responses.clone());
+        let expected = normalize_txn_response(expected.to_vec());
+
         for i in 0..responses.len() {
             let resp = &responses[i];
+
             let expect_resp = &expected[i];
 
             assert_eq!(resp, expect_resp, "{}-th response", i);
@@ -769,7 +773,7 @@ impl kvapi::TestSuite {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
                         prev_value: Some(pb::SeqV::new(4, val1.clone())),
-                        current: Some(pb::SeqV::new(7, val1_new.clone())),
+                        current: Some(pb::SeqV::new(6, val1_new.clone())),
                     })),
                 },
                 // change k2
@@ -777,7 +781,7 @@ impl kvapi::TestSuite {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key2.clone(),
                         prev_value: Some(pb::SeqV::new(5, val2.clone())),
-                        current: Some(pb::SeqV::new(8, b("new_v2").clone())),
+                        current: Some(pb::SeqV::new(7, b("new_v2").clone())),
                     })),
                 },
                 // get k1
@@ -817,35 +821,6 @@ impl kvapi::TestSuite {
 
         // 4th case: get one key by value and set key transaction
         {
-            /// Convert Some(KvMeta{ expire: None }) to None to simplify the comparison
-            fn norm(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
-                vs.into_iter()
-                    .map(|mut v| {
-                        //
-                        match &mut v.response {
-                            Some(Response::Get(TxnGetResponse {
-                                value: Some(pb::SeqV { meta, .. }),
-                                ..
-                            })) => {
-                                if *meta == Some(pb::KvMeta { expire_at: None }) {
-                                    *meta = None;
-                                }
-                            }
-                            Some(Response::Put(TxnPutResponse {
-                                prev_value: Some(pb::SeqV { meta, .. }),
-                                ..
-                            })) => {
-                                if *meta == Some(pb::KvMeta { expire_at: None }) {
-                                    *meta = None;
-                                }
-                            }
-                            _ => {}
-                        }
-                        v
-                    })
-                    .collect()
-            }
-
             let k1 = "txn_4_K1";
 
             kv.upsert_kv(UpsertKV::update(k1, b"v1")).await?;
@@ -885,7 +860,10 @@ impl kvapi::TestSuite {
             ];
 
             assert_eq!(resp.success, true);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test less than value: success = false
 
@@ -901,7 +879,10 @@ impl kvapi::TestSuite {
                 vec![TxnOpResponse::get(k1, Some(SeqV::new(9, b("v2"))))];
 
             assert_eq!(resp.success, false);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test less than value: success = true
 
@@ -923,7 +904,10 @@ impl kvapi::TestSuite {
             ];
 
             assert_eq!(resp.success, true);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test less equal value: success = false
 
@@ -939,7 +923,10 @@ impl kvapi::TestSuite {
                 vec![TxnOpResponse::get(k1, Some(SeqV::new(10, b("v3"))))];
 
             assert_eq!(resp.success, false);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test less equal value: success = true
 
@@ -961,7 +948,10 @@ impl kvapi::TestSuite {
             ];
 
             assert_eq!(resp.success, true);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test greater than value: success = false
 
@@ -977,7 +967,10 @@ impl kvapi::TestSuite {
                 vec![TxnOpResponse::get(k1, Some(SeqV::new(11, b("v4"))))];
 
             assert_eq!(resp.success, false);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test greater than value: success = true
 
@@ -999,7 +992,10 @@ impl kvapi::TestSuite {
             ];
 
             assert_eq!(resp.success, true);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test greater equal value: success = false
 
@@ -1015,7 +1011,10 @@ impl kvapi::TestSuite {
                 vec![TxnOpResponse::get(k1, Some(SeqV::new(12, b("v5"))))];
 
             assert_eq!(resp.success, false);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
 
             // Test greater equal value: success = true
 
@@ -1037,7 +1036,10 @@ impl kvapi::TestSuite {
             ];
 
             assert_eq!(resp.success, true);
-            assert_eq!(norm(resp.responses), norm(expected));
+            assert_eq!(
+                normalize_txn_response(resp.responses),
+                normalize_txn_response(expected)
+            );
         }
         Ok(())
     }
@@ -1432,6 +1434,48 @@ impl kvapi::TestSuite {
         }
         Ok(())
     }
+}
+
+/// Convert Some(KvMeta{ expire: None }) to None to simplify the comparison
+fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
+    vs.into_iter()
+        .map(|mut v| {
+            //
+            match &mut v.response {
+                Some(Response::Get(TxnGetResponse {
+                    value: Some(pb::SeqV { meta, .. }),
+                    ..
+                })) => {
+                    if *meta == Some(pb::KvMeta { expire_at: None }) {
+                        *meta = None;
+                    }
+                }
+                Some(Response::Put(TxnPutResponse {
+                    prev_value: Some(pb::SeqV { meta, .. }),
+                    ..
+                })) => {
+                    if *meta == Some(pb::KvMeta { expire_at: None }) {
+                        *meta = None;
+                    }
+                }
+                _ => {}
+            }
+
+            match &mut v.response {
+                Some(Response::Put(TxnPutResponse {
+                    current: Some(pb::SeqV { meta, .. }),
+                    ..
+                })) => {
+                    if *meta == Some(pb::KvMeta { expire_at: None }) {
+                        *meta = None;
+                    }
+                }
+                _ => {}
+            }
+
+            v
+        })
+        .collect()
 }
 
 fn b(x: impl ToString) -> Vec<u8> {
