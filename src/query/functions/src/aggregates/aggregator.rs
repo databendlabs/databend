@@ -42,6 +42,7 @@ use super::AggregateIfCombinator;
 use crate::aggregates::aggregate_array_agg_function_desc;
 use crate::aggregates::aggregate_array_moving_avg_function_desc;
 use crate::aggregates::aggregate_array_moving_sum_function_desc;
+use crate::aggregates::aggregate_boolean::aggregate_boolean_function_desc;
 use crate::aggregates::aggregate_histogram_function_desc;
 use crate::aggregates::aggregate_json_array_agg_function_desc;
 use crate::aggregates::aggregate_json_object_agg_function_desc;
@@ -75,6 +76,10 @@ impl Aggregators {
         factory.register("any", aggregate_any_function_desc());
         factory.register("arg_min", aggregate_arg_min_function_desc());
         factory.register("arg_max", aggregate_arg_max_function_desc());
+
+        // booleans
+        factory.register("bool_and", aggregate_boolean_function_desc::<true>());
+        factory.register("bool_or", aggregate_boolean_function_desc::<false>());
 
         factory.register_multi_names(
             &["covar_samp", "var_samp", "variance_samp"],
