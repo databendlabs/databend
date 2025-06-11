@@ -75,6 +75,12 @@ select to_interval('12 month') = to_interval('1 year');
 1
 
 onlyif http
+query TT
+select to_month(to_interval('12 month')), to_month(to_interval('1 year'));
+----
+0 0
+
+onlyif http
 query T
 select to_interval('1 hours') = to_interval('3600 seconds') as eq, to_interval('2 hours') > to_interval('3600 seconds');
 ----
@@ -199,3 +205,91 @@ query TT
 select '1 days'::INTERVAL::String, '11 days'::INTERVAL::String;
 ----
 1 day 11 days
+
+statement ok
+set timezone='America/New_York';
+
+query T
+WITH sample_dates(name, birth_date) AS (
+VALUES
+('Alice', '1990-05-15'::DATE),
+('Alice', '1990-04-15'::DATE),
+('Alice', '1990-06-15'::DATE),
+('Bob', '1985-11-30'::DATE),
+('Charlie', '1995-07-22'::DATE)
+)
+SELECT
+name,
+birth_date,
+birth_date::timestamp as birth_date_ts,
+age('2025-06-12'::date, birth_date),
+EXTRACT(YEAR FROM age('2025-06-12'::date, birth_date)) AS years,
+EXTRACT(MONTH FROM age('2025-06-12'::date, birth_date)) AS months,
+EXTRACT(DAY FROM age('2025-06-12'::date, birth_date)) AS days
+FROM sample_dates order by name, birth_date;
+----
+Alice 1990-04-15 1990-04-15 00:00:00.000000 35 years 1 month 27 days 35 1 27
+Alice 1990-05-15 1990-05-15 00:00:00.000000 35 years 28 days 35 0 28
+Alice 1990-06-15 1990-06-15 00:00:00.000000 34 years 11 months 27 days 34 11 27
+Bob 1985-11-30 1985-11-30 00:00:00.000000 39 years 6 months 12 days 39 6 12
+Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 21
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+WITH sample_dates(name, birth_date) AS (
+VALUES
+('Alice', '1990-05-15'::DATE),
+('Alice', '1990-04-15'::DATE),
+('Alice', '1990-06-15'::DATE),
+('Bob', '1985-11-30'::DATE),
+('Charlie', '1995-07-22'::DATE)
+)
+SELECT
+name,
+birth_date,
+birth_date::timestamp as birth_date_ts,
+age('2025-06-12'::date, birth_date),
+EXTRACT(YEAR FROM age('2025-06-12'::date, birth_date)) AS years,
+EXTRACT(MONTH FROM age('2025-06-12'::date, birth_date)) AS months,
+EXTRACT(DAY FROM age('2025-06-12'::date, birth_date)) AS days
+FROM sample_dates order by name, birth_date;
+----
+Alice 1990-04-15 1990-04-15 00:00:00.000000 35 years 1 month 27 days 35 1 27
+Alice 1990-05-15 1990-05-15 00:00:00.000000 35 years 28 days 35 0 28
+Alice 1990-06-15 1990-06-15 00:00:00.000000 34 years 11 months 27 days 34 11 27
+Bob 1985-11-30 1985-11-30 00:00:00.000000 39 years 6 months 12 days 39 6 12
+Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 21
+
+
+statement ok
+set timezone='UTC';
+
+query T
+WITH sample_dates(name, birth_date) AS (
+VALUES
+('Alice', '1990-05-15'::DATE),
+('Alice', '1990-04-15'::DATE),
+('Alice', '1990-06-15'::DATE),
+('Bob', '1985-11-30'::DATE),
+('Charlie', '1995-07-22'::DATE)
+)
+SELECT
+name,
+birth_date,
+birth_date::timestamp as birth_date_ts,
+age('2025-06-12'::date, birth_date),
+EXTRACT(YEAR FROM age('2025-06-12'::date, birth_date)) AS years,
+EXTRACT(MONTH FROM age('2025-06-12'::date, birth_date)) AS months,
+EXTRACT(DAY FROM age('2025-06-12'::date, birth_date)) AS days
+FROM sample_dates order by name, birth_date;
+----
+Alice 1990-04-15 1990-04-15 00:00:00.000000 35 years 1 month 27 days 35 1 27
+Alice 1990-05-15 1990-05-15 00:00:00.000000 35 years 28 days 35 0 28
+Alice 1990-06-15 1990-06-15 00:00:00.000000 34 years 11 months 27 days 34 11 27
+Bob 1985-11-30 1985-11-30 00:00:00.000000 39 years 6 months 12 days  39 6 12
+Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 21
+
+statement ok
+unset timezone;

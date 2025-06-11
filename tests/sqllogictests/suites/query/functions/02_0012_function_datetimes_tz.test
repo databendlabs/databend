@@ -575,25 +575,26 @@ statement ok
 set timezone='Asia/Shanghai';
 
 query T
-select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(50000));
 ----
-2000
+50000
 
 statement ok
 SET timezone ='America/Toronto';
 
+##check to '2106-11-23'::date
 query T
-select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(50000));
 ----
-2000
+50000
 
 statement ok
 set timezone = 'UTC';
 
 query T
-select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(50000));
 ----
-2000
+50000
 
 statement ok
 set timezone='Europe/London';
