@@ -192,6 +192,7 @@ impl PipelineBuilder {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
         let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
+        let max_restore_worker = self.settings.get_max_aggregate_restore_worker()?;
 
         let mut is_cluster_aggregate = false;
         if matches!(aggregate.input.as_ref(), PhysicalPlan::ExchangeSource(_)) {
@@ -228,7 +229,7 @@ impl PipelineBuilder {
         }
         self.build_pipeline(&aggregate.input)?;
         self.exchange_injector = old_inject;
-        build_partition_bucket(&mut self.main_pipeline, params.clone())
+        build_partition_bucket(&mut self.main_pipeline, params.clone(), max_restore_worker)
     }
 
     fn build_aggregator_params(

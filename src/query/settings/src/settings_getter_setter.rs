@@ -979,4 +979,8 @@ impl Settings {
     pub fn get_enable_experimental_virtual_column(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
     }
+
+    pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
+        self.try_get_u64("max_aggregate_restore_worker")
+    }
 }
