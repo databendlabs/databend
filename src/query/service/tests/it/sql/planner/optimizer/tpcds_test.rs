@@ -37,6 +37,7 @@ use databend_common_sql::FormatOptions;
 use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_storage::Datum;
+use databend_common_storages_fuse::TableContext;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use goldenfile::Mint;
@@ -343,6 +344,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
     // Create a test fixture with a query context
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_enable_auto_materialize_cte(0)?;
 
     // Setup tables needed for TPC-DS queries
     setup_tpcds_tables(&ctx).await?;
