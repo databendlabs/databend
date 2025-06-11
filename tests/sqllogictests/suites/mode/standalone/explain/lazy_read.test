@@ -1,4 +1,7 @@
 statement ok
+set enable_auto_materialize_cte = 0;
+
+statement ok
 drop table if exists t_lazy
 
 statement ok
