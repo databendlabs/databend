@@ -743,7 +743,7 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum SubqueryComparisonOp {
     Equal,
     NotEqual,
@@ -756,11 +756,11 @@ pub enum SubqueryComparisonOp {
     // Less or equal "<="
     LTE,
     // Like operator for pattern matching
-    Like,
+    Like(Option<String>),
 }
 
 impl SubqueryComparisonOp {
-    pub fn to_func_name(&self) -> &'static str {
+    fn to_func_name(&self) -> &'static str {
         match &self {
             SubqueryComparisonOp::Equal => "eq",
             SubqueryComparisonOp::NotEqual => "noteq",
@@ -768,7 +768,31 @@ impl SubqueryComparisonOp {
             SubqueryComparisonOp::LT => "lt",
             SubqueryComparisonOp::GTE => "gte",
             SubqueryComparisonOp::LTE => "lte",
-            SubqueryComparisonOp::Like => "like",
+            SubqueryComparisonOp::Like(_) => "like",
+        }
+    }
+
+    pub fn to_func_call(&self, span: Span, left: ScalarExpr, right: ScalarExpr) -> FunctionCall {
+        if let SubqueryComparisonOp::Like(escape) = self {
+            let mut arguments = vec![left, right];
+            if let Some(escape) = escape {
+                arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
+                    span,
+                    value: Scalar::String(escape.clone()),
+                }))
+            }
+            return FunctionCall {
+                span,
+                func_name: "like".to_string(),
+                params: vec![],
+                arguments,
+            };
+        }
+        FunctionCall {
+            span,
+            func_name: self.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![left, right],
         }
     }
 }
@@ -784,7 +808,7 @@ impl<'a> TryFrom<&'a BinaryOperator> for SubqueryComparisonOp {
             BinaryOperator::Lte => Ok(Self::LTE),
             BinaryOperator::Eq => Ok(Self::Equal),
             BinaryOperator::NotEq => Ok(Self::NotEqual),
-            BinaryOperator::Like => Ok(Self::Like),
+            BinaryOperator::Like(escape) => Ok(Self::Like(escape.clone())),
             _ => Err(ErrorCode::SemanticError(format!(
                 "Unsupported subquery comparison operator {op}"
             ))),

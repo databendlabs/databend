@@ -46,7 +46,13 @@ jobs:
 
   build:
     needs: info
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
+    runs-on:
+      - self-hosted
+      - "${{ matrix.runner }}"
+      - Linux
+      - 8c32g
+      - aws
+      - spot
     strategy:
       matrix:
         include:
@@ -72,7 +78,13 @@ jobs:
   docker:
     needs: [info, build]
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, 2c8g, aws]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - aws
+      - spot
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:

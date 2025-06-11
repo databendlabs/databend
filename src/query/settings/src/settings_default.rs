@@ -1319,6 +1319,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("max_aggregate_restore_worker", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(16),
+                    desc: "Sets the maximum number of worker to aggregate restore.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
+                }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental virtual column",

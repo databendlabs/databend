@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_expression::generate_like_pattern;
+use databend_common_expression::type_check;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::AccessType;
@@ -855,11 +856,20 @@ fn register_like(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(
         "like",
         |_, _, _| FunctionDomain::Full,
-        variant_vectorize_like_jsonb(),
+        |arg1, arg2, ctx| {
+            variant_vectorize_like_jsonb()(arg1, arg2, Value::Scalar("".to_string()), ctx)
+        },
+    );
+    registry.register_passthrough_nullable_3_arg::<VariantType, StringType, StringType, BooleanType, _, _>(
+        "like",
+        |_, _, _, _| FunctionDomain::Full,
+       |arg1, arg2, arg3, ctx| {
+           variant_vectorize_like_jsonb()(arg1, arg2, arg3, ctx)
+       },
     );
 
     registry.register_function_factory("like_any", FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
-        if args_type.len() != 2 {
+        if args_type.len() < 2 || args_type.len() > 3 {
             return None;
         }
         let is_nullable = args_type[0].is_nullable();
@@ -867,17 +877,25 @@ fn register_like(registry: &mut FunctionRegistry) {
         if !arg_type.is_string() && !arg_type.is_variant() {
             return None;
         }
-        let DataType::Tuple(patterns_ty) = &args_type[1] else {
-            return None;
+        let mut new_args_type =  match &args_type[1] {
+            DataType::Tuple(patterns_ty) => {
+                if patterns_ty.iter().any(|ty| !ty.is_string() && !ty.is_variant()) {
+                    return None;
+                }
+                vec![arg_type, DataType::Tuple(vec![DataType::String; patterns_ty.len()])]
+            }
+            DataType::String =>
+                vec![arg_type, DataType::String],
+            _ => return None,
         };
-        if patterns_ty.iter().any(|ty| !ty.is_string() && !ty.is_variant()) {
-            return None;
+        if args_type.len() > 2 {
+            new_args_type.push(DataType::String);
         }
 
         let function = Function {
             signature: FunctionSignature {
                 name: "like_any".to_string(),
-                args_type: vec![arg_type, DataType::Tuple(vec![DataType::String; patterns_ty.len()])],
+                args_type: new_args_type,
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {
@@ -887,18 +905,23 @@ fn register_like(registry: &mut FunctionRegistry) {
                     let input_all_scalars = arg.as_scalar().is_some();
                     let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
 
-                    let Some(Scalar::Tuple(patterns)) = &args[1].as_scalar() else {
-                        ctx.set_error(1, "The second parameter of `like_any` must be of Tuple type");
-                        return Value::Scalar(Scalar::Boolean(Default::default()));
+                    let patterns = match args[1].as_scalar() {
+                        Some(Scalar::Tuple(patterns)) => patterns.clone(),
+                        Some(Scalar::String(pattern)) => vec![Scalar::String(pattern.clone())],
+                        _ => {
+                            ctx.set_error(1, "The second parameter of `like_any` must be of Tuple or String type");
+                            return Value::Scalar(Scalar::Boolean(Default::default()));
+                        }
                     };
+                    let escape: Value<StringType> = args.get(2).cloned().and_then(|value| value.try_downcast()).unwrap_or(Value::Scalar("".to_string()));
 
                     let result = if let Some(value) = arg.try_downcast::<StringType>() {
                         let like = vectorize_like(|str, pattern_type| pattern_type.compare(str));
-                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), ctx))
+                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
                             .collect::<Vec<_>>()
                     } else if let Some(value) = arg.try_downcast::<VariantType>() {
                         let like = variant_vectorize_like_jsonb();
-                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), ctx))
+                        patterns.iter().map(|pattern| like(value.clone(), Value::<StringType>::Scalar(pattern.as_string().unwrap().clone()), escape.clone(), ctx))
                             .collect::<Vec<_>>()
                     } else {
                         ctx.set_error(1, "The first parameter of 'like_any' can only be of type String or Variant");
@@ -908,8 +931,8 @@ fn register_like(registry: &mut FunctionRegistry) {
                     let mut builder = BooleanType::create_builder(process_rows, ctx.generics);
 
                     let patterns_len = patterns.len();
-                    for like_result in result {
-                        builder.push((0..patterns_len).any(|i| like_result.index(i).unwrap()));
+                    for row in 0..process_rows {
+                        builder.push((0..patterns_len).any(|i| result[i].index(row).unwrap()));
                     }
                     if input_all_scalars {
                         Value::<BooleanType>::Scalar(BooleanType::build_scalar(builder))
@@ -931,34 +954,46 @@ fn register_like(registry: &mut FunctionRegistry) {
         "like",
         |_, lhs, rhs| {
             if rhs.max.as_ref() == Some(&rhs.min) {
-                let pattern_type = generate_like_pattern(rhs.min.as_bytes(), 1);
-
-                if matches!(pattern_type, LikePattern::OrdinalStr(_)) {
-                    return lhs.domain_eq(rhs);
-                }
-
-                if matches!(pattern_type, LikePattern::EndOfPercent(_)) {
-                    let mut pat_str = rhs.min.clone();
-                    // remove the last char '%'
-                    pat_str.pop();
-                    let pat_len = pat_str.chars().count();
-                    let other = StringDomain {
-                        min: pat_str.clone(),
-                        max: Some(pat_str),
-                    };
-                    let lhs = StringDomain {
-                        min: lhs.min.chars().take(pat_len).collect(),
-                        max: lhs
-                            .max
-                            .as_ref()
-                            .map(|max| max.chars().take(pat_len).collect()),
-                    };
-                    return lhs.domain_eq(&other);
+                if let Some(value) = calc_like_domain(lhs, rhs.min.to_string()) {
+                    return value;
                 }
             }
             FunctionDomain::Full
         },
-        vectorize_like(|str, pattern_type| pattern_type.compare(str)),
+        |arg1, arg2, ctx| {
+            vectorize_like(|str, pattern_type| pattern_type.compare(str))(
+                arg1,
+                arg2,
+                Value::Scalar("".to_string()),
+                ctx,
+            )
+        },
+    );
+
+    registry.register_passthrough_nullable_3_arg::<StringType, StringType, StringType, BooleanType, _, _>(
+        "like",
+        |_, lhs, rhs, escape| {
+            if rhs.max.as_ref() == Some(&rhs.min) && escape.max.as_ref() == Some(&escape.min) {
+                let pattern = escape
+                    .min
+                    .chars()
+                    .next()
+                    .map(|escape| type_check::convert_escape_pattern(&rhs.min, escape))
+                    .unwrap_or(rhs.min.to_string());
+                if let Some(value) = calc_like_domain(lhs, pattern) {
+                    return value;
+                }
+            }
+            FunctionDomain::Full
+        },
+        |arg1, arg2, arg3, ctx| {
+            vectorize_like(|str, pattern_type| pattern_type.compare(str))(
+                arg1,
+                arg2,
+                arg3,
+                ctx,
+            )
+        },
     );
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
@@ -1002,9 +1037,45 @@ fn register_like(registry: &mut FunctionRegistry) {
     );
 }
 
-fn variant_vectorize_like_jsonb(
-) -> impl Fn(Value<VariantType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy + Sized
-{
+fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomain<BooleanType>> {
+    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+
+    if matches!(pattern_type, LikePattern::OrdinalStr(_)) {
+        return Some(lhs.domain_eq(&StringDomain {
+            min: pattern.clone(),
+            max: Some(pattern),
+        }));
+    }
+
+    if matches!(pattern_type, LikePattern::EndOfPercent(_)) {
+        let mut pat_str = pattern;
+        // remove the last char '%'
+        pat_str.pop();
+        let pat_len = pat_str.chars().count();
+        let other = StringDomain {
+            min: pat_str.clone(),
+            max: Some(pat_str),
+        };
+        let lhs = StringDomain {
+            min: lhs.min.chars().take(pat_len).collect(),
+            max: lhs
+                .max
+                .as_ref()
+                .map(|max| max.chars().take(pat_len).collect()),
+        };
+        return Some(lhs.domain_eq(&other));
+    }
+    None
+}
+
+fn variant_vectorize_like_jsonb() -> impl Fn(
+    Value<VariantType>,
+    Value<StringType>,
+    Value<StringType>,
+    &mut EvalContext,
+) -> Value<BooleanType>
+       + Copy
+       + Sized {
     variant_vectorize_like(|val, pattern_type| match pattern_type {
         LikePattern::OrdinalStr(_)
         | LikePattern::StartOfPercent(_)
@@ -1035,88 +1106,128 @@ fn variant_vectorize_like_jsonb(
 
 fn vectorize_like(
     func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
-) -> impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
-    move |arg1, arg2, _ctx| match (arg1, arg2) {
-        (Value::Scalar(arg1), Value::Scalar(arg2)) => {
-            let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
-            Value::Scalar(func(arg1.as_bytes(), &pattern_type))
-        }
-        (Value::Column(arg1), Value::Scalar(arg2)) => {
-            let arg1_iter = StringType::iter_column(&arg1);
-            let mut builder = MutableBitmap::with_capacity(arg1.len());
-            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.total_bytes_len());
-            if let LikePattern::SurroundByPercent(searcher) = pattern_type {
-                for arg1 in arg1_iter {
-                    builder.push(searcher.search(arg1.as_bytes()).is_some());
+) -> impl Fn(
+    Value<StringType>,
+    Value<StringType>,
+    Value<StringType>,
+    &mut EvalContext,
+) -> Value<BooleanType>
+       + Copy {
+    move |arg1, arg2, arg3, _ctx| {
+        let Value::Scalar(escape) = arg3 else {
+            unreachable!()
+        };
+        match (arg1, arg2) {
+            (Value::Scalar(arg1), Value::Scalar(arg2)) => {
+                let pattern = convert_escape_pattern(&escape, arg2);
+                let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                Value::Scalar(func(arg1.as_bytes(), &pattern_type))
+            }
+            (Value::Column(arg1), Value::Scalar(arg2)) => {
+                let arg1_iter = StringType::iter_column(&arg1);
+                let mut builder = MutableBitmap::with_capacity(arg1.len());
+                let pattern = convert_escape_pattern(&escape, arg2);
+                let pattern_type =
+                    generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                if let LikePattern::SurroundByPercent(searcher) = pattern_type {
+                    for arg1 in arg1_iter {
+                        builder.push(searcher.search(arg1.as_bytes()).is_some());
+                    }
+                } else {
+                    for arg1 in arg1_iter {
+                        builder.push(func(arg1.as_bytes(), &pattern_type));
+                    }
                 }
-            } else {
-                for arg1 in arg1_iter {
+
+                Value::Column(builder.into())
+            }
+            (Value::Scalar(arg1), Value::Column(arg2)) => {
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for arg2 in arg2_iter {
+                    let pattern = convert_escape_pattern(&escape, arg2.to_string());
+                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
                     builder.push(func(arg1.as_bytes(), &pattern_type));
                 }
+                Value::Column(builder.into())
             }
-
-            Value::Column(builder.into())
-        }
-        (Value::Scalar(arg1), Value::Column(arg2)) => {
-            let arg2_iter = StringType::iter_column(&arg2);
-            let mut builder = MutableBitmap::with_capacity(arg2.len());
-            for arg2 in arg2_iter {
-                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
-                builder.push(func(arg1.as_bytes(), &pattern_type));
+            (Value::Column(arg1), Value::Column(arg2)) => {
+                let arg1_iter = StringType::iter_column(&arg1);
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                    let pattern = convert_escape_pattern(&escape, arg2.to_string());
+                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    builder.push(func(arg1.as_bytes(), &pattern_type));
+                }
+                Value::Column(builder.into())
             }
-            Value::Column(builder.into())
-        }
-        (Value::Column(arg1), Value::Column(arg2)) => {
-            let arg1_iter = StringType::iter_column(&arg1);
-            let arg2_iter = StringType::iter_column(&arg2);
-            let mut builder = MutableBitmap::with_capacity(arg2.len());
-            for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
-                builder.push(func(arg1.as_bytes(), &pattern_type));
-            }
-            Value::Column(builder.into())
         }
     }
 }
 
 fn variant_vectorize_like(
     func: impl Fn(&[u8], &LikePattern) -> bool + Copy,
-) -> impl Fn(Value<VariantType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType> + Copy {
-    move |arg1, arg2, _ctx| match (arg1, arg2) {
-        (Value::Scalar(arg1), Value::Scalar(arg2)) => {
-            let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
-            Value::Scalar(func(&arg1, &pattern_type))
-        }
-        (Value::Column(arg1), Value::Scalar(arg2)) => {
-            let arg1_iter = VariantType::iter_column(&arg1);
+) -> impl Fn(
+    Value<VariantType>,
+    Value<StringType>,
+    Value<StringType>,
+    &mut EvalContext,
+) -> Value<BooleanType>
+       + Copy {
+    move |arg1, arg2, arg3, _ctx| {
+        let Value::Scalar(escape) = arg3 else {
+            unreachable!()
+        };
+        match (arg1, arg2) {
+            (Value::Scalar(arg1), Value::Scalar(arg2)) => {
+                let pattern = convert_escape_pattern(&escape, arg2);
+                let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                Value::Scalar(func(&arg1, &pattern_type))
+            }
+            (Value::Column(arg1), Value::Scalar(arg2)) => {
+                let arg1_iter = VariantType::iter_column(&arg1);
 
-            let pattern_type = generate_like_pattern(arg2.as_bytes(), arg1.total_bytes_len());
-            let mut builder = MutableBitmap::with_capacity(arg1.len());
-            for arg1 in arg1_iter {
-                builder.push(func(arg1, &pattern_type));
+                let pattern = convert_escape_pattern(&escape, arg2);
+                let pattern_type =
+                    generate_like_pattern(pattern.as_bytes(), arg1.total_bytes_len());
+                let mut builder = MutableBitmap::with_capacity(arg1.len());
+                for arg1 in arg1_iter {
+                    builder.push(func(arg1, &pattern_type));
+                }
+                Value::Column(builder.into())
             }
-            Value::Column(builder.into())
-        }
-        (Value::Scalar(arg1), Value::Column(arg2)) => {
-            let arg2_iter = StringType::iter_column(&arg2);
-            let mut builder = MutableBitmap::with_capacity(arg2.len());
-            for arg2 in arg2_iter {
-                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
-                builder.push(func(&arg1, &pattern_type));
+            (Value::Scalar(arg1), Value::Column(arg2)) => {
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for arg2 in arg2_iter {
+                    let pattern = convert_escape_pattern(&escape, arg2.to_string());
+                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    builder.push(func(&arg1, &pattern_type));
+                }
+                Value::Column(builder.into())
             }
-            Value::Column(builder.into())
-        }
-        (Value::Column(arg1), Value::Column(arg2)) => {
-            let arg1_iter = VariantType::iter_column(&arg1);
-            let arg2_iter = StringType::iter_column(&arg2);
-            let mut builder = MutableBitmap::with_capacity(arg2.len());
-            for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
-                let pattern_type = generate_like_pattern(arg2.as_bytes(), 1);
-                builder.push(func(arg1, &pattern_type));
+            (Value::Column(arg1), Value::Column(arg2)) => {
+                let arg1_iter = VariantType::iter_column(&arg1);
+                let arg2_iter = StringType::iter_column(&arg2);
+                let mut builder = MutableBitmap::with_capacity(arg2.len());
+                for (arg1, arg2) in arg1_iter.zip(arg2_iter) {
+                    let pattern = convert_escape_pattern(&escape, arg2.to_string());
+                    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
+                    builder.push(func(arg1, &pattern_type));
+                }
+                Value::Column(builder.into())
             }
-            Value::Column(builder.into())
         }
     }
+}
+
+fn convert_escape_pattern(escape: &str, arg2: String) -> String {
+    escape
+        .chars()
+        .next()
+        .map(|escape| type_check::convert_escape_pattern(&arg2, escape))
+        .unwrap_or(arg2)
 }
 
 fn vectorize_regexp(

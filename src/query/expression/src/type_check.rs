@@ -896,3 +896,23 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
         }
     }
 }
+
+pub fn convert_escape_pattern(pattern: &str, escape_char: char) -> String {
+    let mut result = String::with_capacity(pattern.len());
+    let mut chars = pattern.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == escape_char {
+            if let Some(next_char) = chars.next() {
+                result.push('\\');
+                result.push(next_char);
+            } else {
+                result.push(escape_char);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}

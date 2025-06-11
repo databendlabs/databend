@@ -197,7 +197,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             left,
             right,
         } => match op {
-            BinaryOperator::NotLike => {
+            BinaryOperator::NotLike(_) => {
                 unimplemented!("please use `not (a like b)` instead")
             }
             BinaryOperator::NotRLike | BinaryOperator::NotRegexp => {

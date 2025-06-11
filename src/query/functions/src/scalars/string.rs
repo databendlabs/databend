@@ -33,6 +33,8 @@ use databend_common_expression::FunctionRegistry;
 use databend_functions_scalar_decimal::register_decimal_to_uuid;
 use stringslice::StringSlice;
 
+use crate::srfs;
+
 pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
     "upper",
     "lower",
@@ -844,6 +846,36 @@ pub fn register(registry: &mut FunctionRegistry) {
                         for v in s.split(sep) {
                             output.builder.put_and_commit(v);
                         }
+                    }
+                    output.commit_row();
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
+            "regexp_split_to_array",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
+                |s, sep, output, ctx| {
+                    let res = srfs::string::regexp_split_to_vec(s, sep, None, ctx);
+                    for v in res {
+                        output.builder.put_and_commit(v);
+                    }
+                    output.commit_row();
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_3_arg::<StringType, StringType, StringType, ArrayType<StringType>, _, _>(
+            "regexp_split_to_array",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, StringType, ArrayType<StringType>>(
+                |s, sep, flag, output, ctx| {
+                    let res = srfs::string::regexp_split_to_vec(s, sep, Some(flag), ctx);
+                    for v in res {
+                        output.builder.put_and_commit(v);
                     }
                     output.commit_row();
                 },

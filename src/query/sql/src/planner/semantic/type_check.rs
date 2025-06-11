@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,6 +67,7 @@ use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
@@ -521,25 +523,7 @@ impl<'a> TypeChecker<'a> {
                 left,
                 right,
                 ..
-            } => {
-                if let Expr::Subquery {
-                    subquery,
-                    modifier: Some(subquery_modifier),
-                    ..
-                } = &**right
-                {
-                    self.resolve_scalar_subquery(
-                        subquery,
-                        left,
-                        span,
-                        &right.span(),
-                        subquery_modifier,
-                        op,
-                    )?
-                } else {
-                    self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())?
-                }
-            }
+            } => self.resolve_binary_op_or_subquery(span, op, left, right)?,
 
             Expr::JsonOp {
                 span,
@@ -993,19 +977,49 @@ impl<'a> TypeChecker<'a> {
                     Some(SubqueryComparisonOp::Equal),
                 )?
             }
+
             Expr::LikeSubquery {
                 subquery,
                 expr,
                 span,
                 modifier,
+                escape,
             } => self.resolve_scalar_subquery(
                 subquery,
                 expr,
                 span,
                 span,
                 modifier,
-                &BinaryOperator::Like,
+                &BinaryOperator::Like(escape.clone()),
             )?,
+
+            Expr::LikeAnyWithEscape {
+                span,
+                left,
+                right,
+                escape,
+            } => self.resolve_binary_op_or_subquery(
+                span,
+                &BinaryOperator::LikeAny(Some(escape.clone())),
+                left,
+                right,
+            )?,
+
+            Expr::LikeWithEscape {
+                span,
+                left,
+                right,
+                is_not,
+                escape,
+            } => {
+                let like_op = if *is_not {
+                    BinaryOperator::NotLike(Some(escape.clone()))
+                } else {
+                    BinaryOperator::Like(Some(escape.clone()))
+                };
+
+                self.resolve_binary_op_or_subquery(span, &like_op, left, right)?
+            }
 
             expr @ Expr::MapAccess { span, .. } => {
                 let mut expr = expr;
@@ -1170,6 +1184,25 @@ impl<'a> TypeChecker<'a> {
             }
         };
         Ok(Box::new((scalar, data_type)))
+    }
+
+    fn resolve_binary_op_or_subquery(
+        &mut self,
+        span: &Span,
+        op: &BinaryOperator,
+        left: &Expr,
+        right: &Expr,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Expr::Subquery {
+            subquery,
+            modifier: Some(subquery_modifier),
+            ..
+        } = right
+        {
+            self.resolve_scalar_subquery(subquery, left, span, &right.span(), subquery_modifier, op)
+        } else {
+            self.resolve_binary_op(*span, op, left, right)
+        }
     }
 
     fn resolve_scalar_subquery(
@@ -3077,9 +3110,9 @@ impl<'a> TypeChecker<'a> {
         right: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match op {
-            BinaryOperator::NotLike | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
+            BinaryOperator::NotLike(_) | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
                 let positive_op = match op {
-                    BinaryOperator::NotLike => BinaryOperator::Like,
+                    BinaryOperator::NotLike(escape) => BinaryOperator::Like(escape.clone()),
                     BinaryOperator::NotRegexp => BinaryOperator::Regexp,
                     BinaryOperator::NotRLike => BinaryOperator::RLike,
                     _ => unreachable!(),
@@ -3104,17 +3137,19 @@ impl<'a> TypeChecker<'a> {
                     vec![left, right],
                 )
             }
-            BinaryOperator::Like => {
+            BinaryOperator::Like(escape) => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
                 if let Expr::Literal {
                     value: Literal::String(str),
                     ..
                 } = right
                 {
-                    return self.resolve_like(op, span, left, right, str);
+                    return self.resolve_like(op, span, left, right, str, escape);
                 }
-                let name = op.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[left, right])
+                self.resolve_like_escape(op, span, left, right, escape)
+            }
+            BinaryOperator::LikeAny(escape) => {
+                self.resolve_like_escape(op, span, left, right, escape)
             }
             BinaryOperator::Eq | BinaryOperator::NotEq => {
                 let name = op.to_func_name();
@@ -3226,8 +3261,8 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Millennium => {
                 self.resolve_function(span, "millennium", vec![], &[arg])
             }
-            ASTIntervalKind::ISOWeek => Err(ErrorCode::SemanticError(
-                "Not support interval type ISOWeek".to_string(),
+            _ => Err(ErrorCode::SemanticError(
+                "Only support interval type [ISOYear, Year, Quarter, Month, Day, Hour, Minute, Second, Doy, Dow, Week, Epoch, MicroSecond, ISODow, YearWeek, Millennium]".to_string(),
             )
             .set_span(span)),
         }
@@ -4354,13 +4389,22 @@ impl<'a> TypeChecker<'a> {
         left: &Expr,
         right: &Expr,
         like_str: &str,
+        escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if check_const(like_str) {
+        let new_like_str = if let Some(escape) = escape {
+            Cow::Owned(convert_escape_pattern(
+                like_str,
+                escape.chars().next().unwrap(),
+            ))
+        } else {
+            Cow::Borrowed(like_str)
+        };
+        if check_const(&new_like_str) {
             // Convert to equal comparison
             self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
-        } else if check_prefix(like_str) {
+        } else if check_prefix(&new_like_str) {
             // Convert to `a >= like_str and a < like_str + 1`
-            let mut char_vec: Vec<char> = like_str[0..like_str.len() - 1].chars().collect();
+            let mut char_vec: Vec<char> = new_like_str[0..new_like_str.len() - 1].chars().collect();
             let len = char_vec.len();
             let ascii_val = *char_vec.last().unwrap() as u8 + 1;
             char_vec[len - 1] = ascii_val as char;
@@ -4368,7 +4412,7 @@ impl<'a> TypeChecker<'a> {
             let (new_left, _) =
                 *self.resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
                     span: None,
-                    value: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                    value: Literal::String(new_like_str[..new_like_str.len() - 1].to_owned()),
                 })?;
             let (new_right, _) =
                 *self.resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
@@ -4377,9 +4421,28 @@ impl<'a> TypeChecker<'a> {
                 })?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
         } else {
-            let name = op.to_func_name();
-            self.resolve_function(span, name.as_str(), vec![], &[left, right])
+            self.resolve_like_escape(op, span, left, right, escape)
         }
+    }
+
+    fn resolve_like_escape(
+        &mut self,
+        op: &BinaryOperator,
+        span: Span,
+        left: &Expr,
+        right: &Expr,
+        escape: &Option<String>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let name = op.to_func_name();
+        let escape_expr = escape.as_ref().map(|escape| Expr::Literal {
+            span,
+            value: Literal::String(escape.clone()),
+        });
+        let mut arguments = vec![left, right];
+        if let Some(expr) = &escape_expr {
+            arguments.push(expr)
+        }
+        self.resolve_function(span, name.as_str(), vec![], &arguments)
     }
 
     fn resolve_udf(

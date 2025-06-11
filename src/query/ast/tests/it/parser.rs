@@ -1268,6 +1268,8 @@ fn test_expr() {
         r#"datepart(year, d)"#,
         r#"date_trunc(week, to_timestamp(1630812366))"#,
         r#"trunc(to_timestamp(1630812366), week)"#,
+        r#"trunc(1630812366, 999)"#,
+        r#"trunc(1630812366.23)"#,
         r#"trunc(to_timestamp(1630812366), 'y')"#,
         r#"trunc(to_timestamp(1630812366), 'mm')"#,
         r#"trunc(to_timestamp(1630812366), 'Q')"#,
@@ -1283,6 +1285,8 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"a like '%1$%1%' escape '$'"#,
+        r#"a not like '%1$%1%' escape '$'"#,
         r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
@@ -1294,9 +1298,11 @@ fn test_expr() {
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
         r#"'中文'::text LIKE ANY ('a', 'b')"#,
+        r#"'中文'::text LIKE ANY ('a', 'b') ESCAPE '$'"#,
         r#"'中文'::text LIKE ANY (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE ALL (SELECT 'a', 'b')"#,
         r#"'中文'::text LIKE SOME (SELECT 'a', 'b')"#,
+        r#"'中文'::text LIKE ANY (SELECT 'a', 'b') ESCAPE '$'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
         r#"coalesce(1, 2, 3)"#,
@@ -1355,6 +1361,8 @@ fn test_expr_error() {
             AND col1 NOT BETWEEN col2 AND
             AND 1 + col3 DIV sum(col4)
         "#,
+        r#"CAST(1 AS STRING) ESCAPE '$'"#,
+        r#"1 + 1 ESCAPE '$'"#,
     ];
 
     for case in cases {

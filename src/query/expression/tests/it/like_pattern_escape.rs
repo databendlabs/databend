@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod array;
-pub(crate) mod string;
-mod variant;
+use databend_common_expression::type_check::convert_escape_pattern;
 
-use databend_common_expression::FunctionRegistry;
-pub use string::regexp_split_to_vec;
-
-pub fn register(registry: &mut FunctionRegistry) {
-    array::register(registry);
-    variant::register(registry);
-    string::register(registry);
+#[test]
+fn test_convert_escape_pattern() {
+    assert_eq!(convert_escape_pattern("%$%%", '$'), "%\\%%");
+    assert_eq!(convert_escape_pattern("_$_%", '$'), "_\\_%");
+    assert_eq!(convert_escape_pattern("100$%", '$'), "100\\%");
+    assert_eq!(convert_escape_pattern("\\\\_%", '\\'), "\\\\_%");
+    assert_eq!(convert_escape_pattern("hello", '$'), "hello");
 }

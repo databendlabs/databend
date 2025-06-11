@@ -121,7 +121,7 @@ impl Binder {
                                 catalog_name.clone(),
                                 database_name.clone(),
                                 table_name.clone(),
-                                Arc::new(schema.clone().into()),
+                                schema.clone(),
                                 &values_str,
                                 CopyIntoTableMode::Replace,
                             )

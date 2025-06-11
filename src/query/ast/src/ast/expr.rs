@@ -87,12 +87,28 @@ pub enum Expr {
         subquery: Box<Query>,
         not: bool,
     },
-    /// `LIKE (SELECT ...)`
+    /// `LIKE (SELECT ...) [ESCAPE '<escape>']`
     LikeSubquery {
         span: Span,
         expr: Box<Expr>,
         subquery: Box<Query>,
         modifier: SubqueryModifier,
+        escape: Option<String>,
+    },
+    /// `<left> LIKE ANY <right> ESCAPE '<escape>'`
+    LikeAnyWithEscape {
+        span: Span,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        escape: String,
+    },
+    /// `<left> [NOT] LIKE <right> ESCAPE '<escape>'`
+    LikeWithEscape {
+        span: Span,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        is_not: bool,
+        escape: String,
     },
     /// `BETWEEN ... AND ...`
     Between {
@@ -295,6 +311,8 @@ impl Expr {
             | Expr::InList { span, .. }
             | Expr::InSubquery { span, .. }
             | Expr::LikeSubquery { span, .. }
+            | Expr::LikeAnyWithEscape { span, .. }
+            | Expr::LikeWithEscape { span, .. }
             | Expr::Between { span, .. }
             | Expr::BinaryOp { span, .. }
             | Expr::JsonOp { span, .. }
@@ -369,6 +387,12 @@ impl Expr {
                 merge_span(low.whole_span(), high.whole_span()),
             ),
             Expr::BinaryOp {
+                span, left, right, ..
+            }
+            | Expr::LikeWithEscape {
+                span, left, right, ..
+            }
+            | Expr::LikeAnyWithEscape {
                 span, left, right, ..
             } => merge_span(merge_span(*span, left.whole_span()), right.whole_span()),
             Expr::JsonOp {
@@ -612,10 +636,36 @@ impl Display for Expr {
                     expr,
                     subquery,
                     modifier,
+                    escape,
                     ..
                 } => {
                     write_expr(expr, Some(affix), true, f)?;
                     write!(f, " LIKE {modifier} ({subquery})")?;
+                    if let Some(escape) = escape {
+                        write!(f, " ESCAPE '{escape}'")?;
+                    }
+                }
+                Expr::LikeAnyWithEscape {
+                    left,
+                    right,
+                    escape,
+                    ..
+                } => {
+                    write_expr(left, Some(affix), true, f)?;
+                    write!(f, " LIKE ANY {right} ESCAPE '{escape}'")?;
+                }
+                Expr::LikeWithEscape {
+                    left,
+                    right,
+                    is_not,
+                    escape,
+                    ..
+                } => {
+                    write_expr(left, Some(affix), true, f)?;
+                    if *is_not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " LIKE {right} ESCAPE '{escape}'")?;
                 }
                 Expr::Between {
                     expr,
@@ -903,6 +953,7 @@ pub enum IntervalKind {
     ISODow,
     YearWeek,
     Millennium,
+    UnknownIntervalKind,
 }
 
 impl Display for IntervalKind {
@@ -925,6 +976,7 @@ impl Display for IntervalKind {
             IntervalKind::ISOWeek => "ISOWEEK",
             IntervalKind::Epoch => "EPOCH",
             IntervalKind::MicroSecond => "MICROSECOND",
+            IntervalKind::UnknownIntervalKind => "UNKNOWNINTERVALKIND",
         })
     }
 }
@@ -1478,9 +1530,9 @@ pub enum BinaryOperator {
     And,
     Or,
     Xor,
-    Like,
-    LikeAny,
-    NotLike,
+    Like(Option<String>),
+    NotLike(Option<String>),
+    LikeAny(Option<String>),
     Regexp,
     RLike,
     NotRegexp,
@@ -1520,7 +1572,8 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
             BinaryOperator::L2Distance => "l2_distance".to_string(),
-            BinaryOperator::LikeAny => "like_any".to_string(),
+            BinaryOperator::LikeAny(_) => "like_any".to_string(),
+            BinaryOperator::Like(_) => "like".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -1586,13 +1639,13 @@ impl Display for BinaryOperator {
             BinaryOperator::Xor => {
                 write!(f, "XOR")
             }
-            BinaryOperator::Like => {
+            BinaryOperator::Like(_) => {
                 write!(f, "LIKE")
             }
-            BinaryOperator::LikeAny => {
+            BinaryOperator::LikeAny(_) => {
                 write!(f, "LIKE ANY")
             }
-            BinaryOperator::NotLike => {
+            BinaryOperator::NotLike(_) => {
                 write!(f, "NOT LIKE")
             }
             BinaryOperator::Regexp => {
@@ -2084,7 +2137,9 @@ impl ExprReplacer {
             Expr::UnaryOp { expr, .. } => {
                 self.replace_expr(expr);
             }
-            Expr::BinaryOp { left, right, .. } => {
+            Expr::BinaryOp { left, right, .. }
+            | Expr::LikeWithEscape { left, right, .. }
+            | Expr::LikeAnyWithEscape { left, right, .. } => {
                 self.replace_expr(left);
                 self.replace_expr(right);
             }

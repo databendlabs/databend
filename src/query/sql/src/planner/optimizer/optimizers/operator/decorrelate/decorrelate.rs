@@ -395,15 +395,14 @@ impl SubqueryDecorrelatorOptimizer {
                     .build(),
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
-                let op = *subquery.compare_op.as_ref().unwrap();
+                let op = subquery.compare_op.as_ref().unwrap().clone();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
                 // Because it's not null-safe.
-                let non_equi_conditions = vec![ScalarExpr::FunctionCall(FunctionCall {
-                    span: subquery.span,
-                    func_name: op.to_func_name().to_string(),
-                    params: vec![],
-                    arguments: vec![child_expr, right_condition],
-                })];
+                let non_equi_conditions = vec![ScalarExpr::FunctionCall(op.to_func_call(
+                    subquery.span,
+                    child_expr,
+                    right_condition,
+                ))];
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -596,16 +595,13 @@ impl SubqueryDecorrelatorOptimizer {
                 };
                 let scalar_data_type = eval.items[0].scalar.data_type()?.wrap_nullable();
                 let scalar = ScalarExpr::TypedConstantExpr(const_scalar, scalar_data_type);
-                match (&subquery.child_expr, subquery.compare_op) {
+                match (&subquery.child_expr, subquery.compare_op.clone()) {
                     (Some(child_expr), Some(compare_op)) => {
-                        let func_name = compare_op.to_func_name().to_string();
-                        let func = ScalarExpr::FunctionCall(FunctionCall {
-                            span: subquery.span,
-                            func_name,
-                            params: vec![],
-                            arguments: vec![*child_expr.clone(), scalar],
-                        });
-                        return Ok(Some(func));
+                        return Ok(Some(ScalarExpr::FunctionCall(compare_op.to_func_call(
+                            subquery.span,
+                            *child_expr.clone(),
+                            scalar,
+                        ))));
                     }
                     (None, None) => match subquery.typ {
                         SubqueryType::Scalar => {
@@ -673,7 +669,7 @@ impl SubqueryDecorrelatorOptimizer {
                     || project_set.srfs[0].index != srf_column_index
                     || !matches!(
                         subquery.compare_op,
-                        Some(SubqueryComparisonOp::Equal) | Some(SubqueryComparisonOp::Like)
+                        Some(SubqueryComparisonOp::Equal) | Some(SubqueryComparisonOp::Like(_))
                     )
                     || subquery.typ != SubqueryType::Any
                 {

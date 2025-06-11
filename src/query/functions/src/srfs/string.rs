@@ -66,7 +66,7 @@ fn is_string_like(dt: &DataType) -> bool {
     matches!(dt, DataType::String | DataType::Nullable(box DataType::String))
 }
 
-pub fn regexp_split_to_table(
+pub fn regexp_split_to_vec(
     text: &str,
     mut pattern: &str,
     flags_str: Option<&str>,
@@ -228,7 +228,7 @@ fn build_regexp_split_to_table(
                                         ScalarRef::String(flag),
                                     ) => {
                                         let res =
-                                            regexp_split_to_table(text, pattern, Some(flag), ctx);
+                                            regexp_split_to_vec(text, pattern, Some(flag), ctx);
                                         process_regexp_split_output(res, row, max_nums_per_row)
                                     }
                                     _ => unreachable!(),
@@ -254,7 +254,7 @@ fn build_regexp_split_to_table(
                         .map(
                             |row| match (arg.index(row).unwrap(), delimiter.index(row).unwrap()) {
                                 (ScalarRef::String(text), ScalarRef::String(pattern)) => {
-                                    let res = regexp_split_to_table(text, pattern, None, ctx);
+                                    let res = regexp_split_to_vec(text, pattern, None, ctx);
                                     process_regexp_split_output(res, row, max_nums_per_row)
                                 }
                                 _ => unreachable!(),
