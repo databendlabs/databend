@@ -144,8 +144,12 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2025-05-08: since 1.2.736
 ///   🖥 server: add `WatchResponse::is_initialization`,
 ///
-/// - 2025-06-09: since TODO: update when merged
+/// - 2025-06-09: since 1.2.755
 ///   🖥 server: remove `TxnReply::error`
+///
+/// - 2025-06-11: since TODO: update when merge
+///   🖥 server: add `TxnPutResponse::current`
+///
 ///
 /// Server feature set:
 /// ```yaml

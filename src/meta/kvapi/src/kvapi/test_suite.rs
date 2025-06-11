@@ -521,6 +521,7 @@ impl kvapi::TestSuite {
             response: Some(txn_op_response::Response::Put(TxnPutResponse {
                 key: txn_key.clone(),
                 prev_value: None,
+                current: Some(pb::SeqV::new(1, b"new_v1".to_vec())),
             })),
         }];
 
@@ -659,6 +660,7 @@ impl kvapi::TestSuite {
                 response: Some(txn_op_response::Response::Put(TxnPutResponse {
                     key: txn_key.clone(),
                     prev_value: Some(pb::SeqV::from(SeqV::new(1, val1.clone()))),
+                    current: Some(pb::SeqV::new(2, b("new_v1"))),
                 })),
             }];
 
@@ -766,14 +768,16 @@ impl kvapi::TestSuite {
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key1.clone(),
-                        prev_value: Some(pb::SeqV::from(SeqV::new(4, val1.clone()))),
+                        prev_value: Some(pb::SeqV::new(4, val1.clone())),
+                        current: Some(pb::SeqV::new(7, val1_new.clone())),
                     })),
                 },
                 // change k2
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Put(TxnPutResponse {
                         key: txn_key2.clone(),
-                        prev_value: Some(pb::SeqV::from(SeqV::new(5, val2.clone()))),
+                        prev_value: Some(pb::SeqV::new(5, val2.clone())),
+                        current: Some(pb::SeqV::new(8, b("new_v2").clone())),
                     })),
                 },
                 // get k1
@@ -872,7 +876,11 @@ impl kvapi::TestSuite {
             let resp = kv.transaction(txn).await?;
 
             let expected: Vec<TxnOpResponse> = vec![
-                TxnOpResponse::put(k1, Some(pb::SeqV::new(8, b("v1")))),
+                TxnOpResponse::put(
+                    k1,
+                    Some(pb::SeqV::new(8, b("v1"))),
+                    Some(pb::SeqV::new(9, b("v2"))),
+                ),
                 TxnOpResponse::get(k1, Some(SeqV::new(9, b("v2")))),
             ];
 
@@ -906,7 +914,11 @@ impl kvapi::TestSuite {
             let resp = kv.transaction(txn).await?;
 
             let expected: Vec<TxnOpResponse> = vec![
-                TxnOpResponse::put(k1, Some(pb::SeqV::new(9, b("v2")))),
+                TxnOpResponse::put(
+                    k1,
+                    Some(pb::SeqV::new(9, b("v2"))),
+                    Some(pb::SeqV::new(10, b("v3"))),
+                ),
                 TxnOpResponse::get(k1, Some(SeqV::new(10, b("v3")))),
             ];
 
@@ -940,7 +952,11 @@ impl kvapi::TestSuite {
             let resp = kv.transaction(txn).await?;
 
             let expected: Vec<TxnOpResponse> = vec![
-                TxnOpResponse::put(k1, Some(pb::SeqV::new(10, b("v3")))),
+                TxnOpResponse::put(
+                    k1,
+                    Some(pb::SeqV::new(10, b("v3"))),
+                    Some(pb::SeqV::new(11, b("v4"))),
+                ),
                 TxnOpResponse::get(k1, Some(SeqV::new(11, b("v4")))),
             ];
 
@@ -974,7 +990,11 @@ impl kvapi::TestSuite {
             let resp = kv.transaction(txn).await?;
 
             let expected: Vec<TxnOpResponse> = vec![
-                TxnOpResponse::put(k1, Some(pb::SeqV::new(11, b("v4")))),
+                TxnOpResponse::put(
+                    k1,
+                    Some(pb::SeqV::new(11, b("v4"))),
+                    Some(pb::SeqV::new(12, b("v5"))),
+                ),
                 TxnOpResponse::get(k1, Some(SeqV::new(12, b("v5")))),
             ];
 
@@ -1008,7 +1028,11 @@ impl kvapi::TestSuite {
             let resp = kv.transaction(txn).await?;
 
             let expected: Vec<TxnOpResponse> = vec![
-                TxnOpResponse::put(k1, Some(pb::SeqV::new(12, b("v5")))),
+                TxnOpResponse::put(
+                    k1,
+                    Some(pb::SeqV::new(12, b("v5"))),
+                    Some(pb::SeqV::new(13, b("v6"))),
+                ),
                 TxnOpResponse::get(k1, Some(SeqV::new(13, b("v6")))),
             ];
 
