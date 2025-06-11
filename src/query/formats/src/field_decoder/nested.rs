@@ -32,9 +32,11 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::ColumnBuilder;
@@ -141,6 +143,7 @@ impl NestedValues {
             ColumnBuilder::Variant(c) => self.read_variant(c, reader),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader),
             ColumnBuilder::Geography(c) => self.read_geography(c, reader),
+            ColumnBuilder::Vector(c) => self.read_vector(c, reader),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -435,6 +438,33 @@ impl NestedValues {
             self.read_field(field, reader)?;
         }
         reader.must_ignore_byte(b')')?;
+        Ok(())
+    }
+
+    pub(crate) fn read_vector<R: AsRef<[u8]>>(
+        &self,
+        column: &mut VectorColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'[')?;
+        let dimension = column.dimension();
+        let mut values = Vec::with_capacity(dimension);
+        for _ in 0..dimension {
+            let _ = reader.ignore_white_spaces_or_comments();
+            reader.must_ignore_byte(b',')?;
+            let _ = reader.ignore_white_spaces_or_comments();
+            let res: Result<f32> = reader.read_float_text();
+            match res {
+                Ok(v) => {
+                    values.push(v.into());
+                }
+                Err(err) => {
+                    return Err(err);
+                }
+            }
+        }
+        reader.must_ignore_byte(b']')?;
+        column.push(&VectorScalarRef::Float32(&values));
         Ok(())
     }
 }

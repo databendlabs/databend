@@ -89,7 +89,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<F64>,
+        mut builder: BuilderMut<'_, Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value = self.value.as_() / (self.count as f64);
@@ -141,12 +141,13 @@ where
     fn add_internal(&mut self, count: u64, value: T::ScalarRef<'_>) -> Result<()> {
         self.count += count;
         self.value += T::to_owned_scalar(value);
-        if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
+        if OVERFLOW && (self.value > T::Scalar::DECIMAL_MAX || self.value < T::Scalar::DECIMAL_MIN)
+        {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 self.value,
-                T::Scalar::MIN,
-                T::Scalar::MAX,
+                T::Scalar::DECIMAL_MIN,
+                T::Scalar::DECIMAL_MAX,
             )));
         }
         Ok(())
@@ -172,7 +173,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         // # Safety
@@ -185,17 +186,17 @@ where
         };
         match self
             .value
-            .checked_mul(T::Scalar::e(decimal_avg_data.scale_add as u32))
+            .checked_mul(T::Scalar::e(decimal_avg_data.scale_add))
             .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
         {
             Some(value) => {
-                T::push_item(builder, T::to_scalar_ref(&value));
+                builder.push_item(T::to_scalar_ref(&value));
                 Ok(())
             }
             None => Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {} mul {}",
                 self.value,
-                T::Scalar::e(decimal_avg_data.scale_add as u32)
+                T::Scalar::e(decimal_avg_data.scale_add)
             ))),
         }
     }
@@ -225,17 +226,14 @@ pub fn try_create_aggregate_avg_function(
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let p = MAX_DECIMAL128_PRECISION;
-            let decimal_size = DecimalSize {
-                precision: p,
-                scale: s.scale.max(4),
-            };
+        DataType::Decimal(s) if s.can_carried_by_128() => {
+            let decimal_size =
+                DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale().max(4));
 
             // DecimalWidth<int64_t> = 18
-            let overflow = s.precision > 18;
-            let scale_add = decimal_size.scale - s.scale;
-            let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            let overflow = s.precision() > 18;
+            let scale_add = decimal_size.scale() - s.scale();
+            let return_type = DataType::Decimal(decimal_size);
 
             if overflow {
                 let func = AggregateUnaryFunction::<
@@ -259,16 +257,13 @@ pub fn try_create_aggregate_avg_function(
                 Ok(Arc::new(func))
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let p = MAX_DECIMAL256_PRECISION;
-            let decimal_size = DecimalSize {
-                precision: p,
-                scale: s.scale.max(4),
-            };
+        DataType::Decimal(s) => {
+            let decimal_size =
+                DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale().max(4));
 
-            let overflow = s.precision > 18;
-            let scale_add = decimal_size.scale - s.scale;
-            let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
+            let overflow = s.precision() > 18;
+            let scale_add = decimal_size.scale() - s.scale();
+            let return_type = DataType::Decimal(decimal_size);
 
             if overflow {
                 let func = AggregateUnaryFunction::<

@@ -29,8 +29,10 @@ use crate::types::i256;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::vector::VectorColumnBuilder;
 use crate::types::AccessType;
 use crate::types::AnyType;
+use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -41,8 +43,11 @@ use crate::types::MapType;
 use crate::types::NumberType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
+use crate::types::VectorColumn;
+use crate::types::VectorDataType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
+use crate::with_vector_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -124,6 +129,7 @@ impl Column {
             Some(col) => col,
         };
         let capacity = columns_iter_clone.fold(first_column.len(), |acc, x| acc + x.len());
+        let data_type = first_column.data_type();
         let column = match first_column {
             Column::Null { .. } => Column::Null { len: capacity },
             Column::EmptyArray { .. } => Column::EmptyArray { len: capacity },
@@ -178,7 +184,7 @@ impl Column {
                 offsets.push(0);
                 let builder = ColumnBuilder::with_capacity(&col.values().data_type(), capacity);
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns)
+                Self::concat_value_types::<ArrayType<AnyType>>(builder, columns, &data_type)
             }
             Column::Map(col) => {
                 let mut offsets = Vec::with_capacity(capacity + 1);
@@ -195,7 +201,7 @@ impl Column {
                     values: val_builder,
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
+                Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns, &data_type)
             }
             Column::Nullable(_) => {
                 let column: Vec<Column> = columns
@@ -222,6 +228,24 @@ impl Column {
                     .collect::<Result<_>>()?;
                 Column::Tuple(fields)
             }
+            Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorColumn::NUM_TYPE((_, dimension)) => {
+                    let vector_ty = VectorDataType::NUM_TYPE(dimension as u64);
+                    let mut builder = VectorColumnBuilder::with_capacity(&vector_ty, capacity);
+                    for column in columns {
+                        let vector_column = column.as_vector().unwrap();
+                        if vector_column.dimension() as usize != dimension {
+                            return Err(ErrorCode::Internal(format!(
+                                "Can't concat vector columns with different dimensions, {} and {}",
+                                dimension,
+                                vector_column.dimension()
+                            )));
+                        }
+                        builder.append_column(&vector_column);
+                    }
+                    Column::Vector(builder.build())
+                }
+            }),
             Column::Variant(_)
             | Column::Geometry(_)
             | Column::Geography(_)
@@ -269,11 +293,12 @@ impl Column {
     fn concat_value_types<T: ValueType>(
         mut builder: T::ColumnBuilder,
         columns: impl Iterator<Item = Column>,
+        data_type: &DataType,
     ) -> Column {
         let columns = columns.map(|c| T::try_downcast_column(&c).unwrap());
         for col in columns {
             T::append_column(&mut builder, &col);
         }
-        T::upcast_column(T::build_column(builder))
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 }

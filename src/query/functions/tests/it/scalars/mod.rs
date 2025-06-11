@@ -18,12 +18,15 @@ use std::io::Write;
 use comfy_table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Domain;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
@@ -59,12 +62,60 @@ mod vector;
 
 pub use databend_common_functions::test_utils as parser;
 
+#[derive(Clone)]
+pub struct TestContext<'a> {
+    pub columns: &'a [(&'a str, Column)],
+    pub input_domains: Option<&'a [(&'a str, Domain)]>,
+    pub func_ctx: FunctionContext,
+    pub strict_eval: bool,
+}
+
+impl Default for TestContext<'_> {
+    fn default() -> Self {
+        Self {
+            columns: &[],
+            input_domains: None,
+            func_ctx: FunctionContext::default(),
+            strict_eval: true,
+        }
+    }
+}
+
+impl<'a> TestContext<'a> {
+    pub fn input_domains(&mut self) -> HashMap<usize, Domain> {
+        self.columns
+            .iter()
+            .map(|(name, col)| {
+                self.input_domains
+                    .and_then(|domains| {
+                        domains
+                            .iter()
+                            .find(|(n, _)| n == name)
+                            .map(|(_, domain)| domain.clone())
+                    })
+                    .unwrap_or_else(|| col.domain())
+            })
+            .enumerate()
+            .collect()
+    }
+}
+
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
+    run_ast_with_context(file, text, TestContext {
+        columns,
+        func_ctx: FunctionContext::default(),
+        input_domains: None,
+        strict_eval: true,
+    })
+}
+
+pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ctx: TestContext) {
     let text = text.as_ref();
+
     let result: Result<_> = try {
         let raw_expr = parser::parse_raw_expr(
             text,
-            &columns
+            &ctx.columns
                 .iter()
                 .map(|(name, c)| (*name, c.data_type()))
                 .collect::<Vec<_>>(),
@@ -73,39 +124,42 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
         let expr = type_check::rewrite_function_to_cast(expr);
 
-        let input_domains = columns
-            .iter()
-            .map(|(_, col)| col.domain())
-            .enumerate()
-            .collect::<HashMap<_, _>>();
+        let input_domains = ctx.input_domains();
 
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
             &expr,
             &input_domains,
-            &FunctionContext::default(),
+            &ctx.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
 
         let remote_expr = optimized_expr.as_remote_expr();
         let optimized_expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
 
-        let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
+        let num_rows = ctx.columns.iter().map(|col| col.1.len()).max().unwrap_or(1);
         let block = DataBlock::new(
-            columns
+            ctx.columns
                 .iter()
                 .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
                 .collect::<Vec<_>>(),
             num_rows,
         );
 
-        columns.iter().for_each(|(_, col)| {
-            test_arrow_conversion(col);
+        ctx.columns.iter().for_each(|(_, col)| {
+            test_arrow_conversion(col, false);
         });
 
-        let func_ctx = FunctionContext::default();
-        let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
-        let result = evaluator.run(&expr);
-        let optimized_result = evaluator.run(&optimized_expr);
+        let evaluator = Evaluator::new(&block, &ctx.func_ctx, &BUILTIN_FUNCTIONS);
+        let result = if ctx.strict_eval {
+            evaluator.run(&expr)
+        } else {
+            evaluator.run_fast(&expr)
+        };
+        let optimized_result = if ctx.strict_eval {
+            evaluator.run(&optimized_expr)
+        } else {
+            evaluator.run_fast(&expr)
+        };
         match &result {
             Ok(result) => assert!(
                 result.semantically_eq(&optimized_result.clone().unwrap()),
@@ -143,6 +197,9 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
             if optimized_expr != expr {
                 writeln!(file, "optimized expr : {optimized_expr}").unwrap();
             }
+            if ctx.func_ctx != FunctionContext::default() {
+                writeln!(file, "func ctx       : (modified)").unwrap();
+            }
 
             match result {
                 Value::Scalar(output_scalar) => {
@@ -151,7 +208,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
                     writeln!(file, "output         : {}", output_scalar.as_ref()).unwrap();
                 }
                 Value::Column(output_col) => {
-                    test_arrow_conversion(&output_col);
+                    test_arrow_conversion(&output_col, ctx.strict_eval);
 
                     // Only display the used input columns
                     let used_columns = raw_expr
@@ -167,7 +224,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
                         .collect::<Vec<_>>();
                     let columns = used_columns
                         .into_iter()
-                        .map(|i| columns[i].clone())
+                        .map(|i| ctx.columns[i].clone())
                         .collect::<Vec<_>>();
 
                     let mut table = Table::new();
@@ -222,10 +279,27 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
     }
 }
 
-fn test_arrow_conversion(col: &Column) {
+fn test_arrow_conversion(col: &Column, strict: bool) {
+    let data_type = col.data_type();
+    let col = if !strict {
+        match col {
+            Column::Decimal(decimal) => Column::Decimal(decimal.clone().strict_decimal_data_type()),
+            col @ Column::Nullable(nullable) => match &nullable.column {
+                Column::Decimal(decimal) => Column::Nullable(Box::new(NullableColumn {
+                    column: Column::Decimal(decimal.clone().strict_decimal_data_type()),
+                    validity: nullable.validity.clone(),
+                })),
+                _ => col.clone(),
+            },
+            col => col.clone(),
+        }
+    } else {
+        col.clone()
+    };
+
     let arrow_col = col.clone().into_arrow_rs();
-    let new_col = Column::from_arrow_rs(arrow_col, &col.data_type()).unwrap();
-    assert_eq!(col, &new_col, "arrow conversion went wrong");
+    let new_col = Column::from_arrow_rs(arrow_col, &data_type).unwrap();
+    assert_eq!(col, new_col, "arrow conversion went wrong");
 }
 
 #[test]
@@ -259,9 +333,15 @@ fn list_all_builtin_functions() {
         .factories
         .iter()
         .flat_map(|(name, funcs)| {
-            funcs
-                .iter()
-                .map(|(_, id)| ((name.clone(), *id), format!("{} FACTORY", name.clone())))
+            funcs.iter().map(move |(factor, id)| {
+                let display = match factor {
+                    FunctionFactory::Closure(_) => format!("{name} FACTORY"),
+                    FunctionFactory::Helper(helper) => {
+                        format!("{name} {helper:?}")
+                    }
+                };
+                ((name.clone(), *id), display)
+            })
         })
         .collect_into(&mut funcs);
     funcs.sort_by_key(|(key, _)| key.clone());

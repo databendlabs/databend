@@ -157,8 +157,8 @@ impl Binder {
             ));
         }
 
-        match (op, all) {
-            (SetOperator::Intersect, false) => {
+        match op {
+            SetOperator::Intersect if !all => {
                 // Transfer Intersect to Semi join
                 self.bind_intersect(
                     left.span(),
@@ -169,7 +169,7 @@ impl Binder {
                     right_expr,
                 )
             }
-            (SetOperator::Except, false) => {
+            SetOperator::Except if !all => {
                 // Transfer Except to Anti join
                 self.bind_except(
                     left.span(),
@@ -180,24 +180,15 @@ impl Binder {
                     right_expr,
                 )
             }
-            (SetOperator::Union, true) => self.bind_union(
+            SetOperator::Union => self.bind_union(
                 left.span(),
                 right.span(),
-                left_bind_context,
-                right_bind_context,
+                Some(bind_context),
+                &left_bind_context,
+                &right_bind_context,
                 left_expr,
                 right_expr,
-                false,
-                cte_name,
-            ),
-            (SetOperator::Union, false) => self.bind_union(
-                left.span(),
-                right.span(),
-                left_bind_context,
-                right_bind_context,
-                left_expr,
-                right_expr,
-                true,
+                !all,
                 cte_name,
             ),
             _ => Err(ErrorCode::Unimplemented(
@@ -211,8 +202,9 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_context: BindContext,
-        right_context: BindContext,
+        parent_context: Option<&BindContext>,
+        left_context: &BindContext,
+        right_context: &BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         distinct: bool,
@@ -258,8 +250,9 @@ impl Binder {
         let (mut new_bind_context, left_outputs, right_outputs) = self.coercion_union_type(
             left_span,
             right_span,
+            parent_context,
             left_context,
-            right_context.clone(),
+            right_context,
             coercion_types,
         )?;
 
@@ -358,14 +351,6 @@ impl Binder {
         right_expr: SExpr,
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
-        let columns = left_context.all_column_bindings().to_vec();
-        let left_expr = self.bind_distinct(
-            left_span,
-            &mut left_context,
-            &columns,
-            &mut HashMap::new(),
-            left_expr,
-        )?;
         let mut left_conditions = Vec::with_capacity(left_context.columns.len());
         let mut right_conditions = Vec::with_capacity(right_context.columns.len());
         assert_eq!(left_context.columns.len(), right_context.columns.len());
@@ -407,6 +392,16 @@ impl Binder {
         left_context
             .cte_context
             .set_cte_context(right_context.cte_context);
+
+        // then apply distinct
+        let columns = left_context.all_column_bindings().to_vec();
+        let s_expr = self.bind_distinct(
+            left_span,
+            &mut left_context,
+            &columns,
+            &mut HashMap::new(),
+            s_expr,
+        )?;
         Ok((s_expr, left_context))
     }
 
@@ -416,8 +411,9 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_bind_context: BindContext,
-        right_bind_context: BindContext,
+        parent_context: Option<&BindContext>,
+        left_bind_context: &BindContext,
+        right_bind_context: &BindContext,
         coercion_types: Vec<DataType>,
     ) -> Result<(
         BindContext,
@@ -426,11 +422,11 @@ impl Binder {
     )> {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
-        let mut new_bind_context = BindContext::new();
+        let mut new_bind_context = BindContext::with_opt_parent(parent_context)?;
 
         new_bind_context
             .cte_context
-            .set_cte_context(right_bind_context.cte_context);
+            .set_cte_context(right_bind_context.cte_context.clone());
 
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
@@ -512,7 +508,7 @@ impl Binder {
             || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
-            || !bind_context.srf_info.srfs.is_empty()
+            || bind_context.has_srf_recursive()
         {
             return Ok(());
         }
@@ -579,7 +575,6 @@ impl Binder {
         }
 
         let cols = metadata.columns();
-
         let virtual_cols = cols
             .iter()
             .filter(|col| matches!(col, ColumnEntry::VirtualColumn(_)))

@@ -168,6 +168,16 @@ pub enum ExprElement {
         subquery: Box<Query>,
         not: bool,
     },
+    /// `LIKE (SELECT ...) [ESCAPE '<escape>']`
+    LikeSubquery {
+        modifier: SubqueryModifier,
+        subquery: Box<Query>,
+        escape: Option<String>,
+    },
+    /// `ESCAPE '<escape>'`
+    Escape {
+        escape: String,
+    },
     /// `BETWEEN ... AND ...`
     Between {
         low: Box<Expr>,
@@ -236,6 +246,7 @@ pub enum ExprElement {
     },
     /// `Count(*)` expression
     CountAll {
+        qualified: QualifiedName,
         window: Option<Window>,
     },
     /// `(foo, bar)`
@@ -346,6 +357,10 @@ const BETWEEN_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IS_DISTINCT_FROM_AFFIX: Affix = Affix::Infix(Precedence(BETWEEN_PREC), Associativity::Left);
 const IN_LIST_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const IN_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const LIKE_SUBQUERY_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const LIKE_ANY_WITH_ESCAPE_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const LIKE_WITH_ESCAPE_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
+const ESCAPE_AFFIX: Affix = Affix::Postfix(Precedence(BETWEEN_PREC));
 const JSON_OP_AFFIX: Affix = Affix::Infix(Precedence(40), Associativity::Left);
 const PG_CAST_AFFIX: Affix = Affix::Postfix(Precedence(60));
 
@@ -372,8 +387,9 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::Lt => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Gte => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Lte => Affix::Infix(Precedence(20), Associativity::Left),
-        BinaryOperator::Like => Affix::Infix(Precedence(20), Associativity::Left),
-        BinaryOperator::NotLike => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::Like(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::LikeAny(_) => Affix::Infix(Precedence(20), Associativity::Left),
+        BinaryOperator::NotLike(_) => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::Regexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::NotRegexp => Affix::Infix(Precedence(20), Associativity::Left),
         BinaryOperator::RLike => Affix::Infix(Precedence(20), Associativity::Left),
@@ -409,6 +425,8 @@ impl ExprElement {
             ExprElement::IsDistinctFrom { .. } => IS_DISTINCT_FROM_AFFIX,
             ExprElement::InList { .. } => IN_LIST_AFFIX,
             ExprElement::InSubquery { .. } => IN_SUBQUERY_AFFIX,
+            ExprElement::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
+            ExprElement::Escape { .. } => ESCAPE_AFFIX,
             ExprElement::UnaryOp { op } => unary_affix(op),
             ExprElement::BinaryOp { op } => binary_affix(op),
             ExprElement::JsonOp { .. } => JSON_OP_AFFIX,
@@ -457,6 +475,9 @@ impl Expr {
             Expr::IsDistinctFrom { .. } => Affix::Nilfix,
             Expr::InList { .. } => IN_LIST_AFFIX,
             Expr::InSubquery { .. } => IN_SUBQUERY_AFFIX,
+            Expr::LikeSubquery { .. } => LIKE_SUBQUERY_AFFIX,
+            Expr::LikeAnyWithEscape { .. } => LIKE_ANY_WITH_ESCAPE_AFFIX,
+            Expr::LikeWithEscape { .. } => LIKE_WITH_ESCAPE_AFFIX,
             Expr::UnaryOp { op, .. } => unary_affix(op),
             Expr::BinaryOp { op, .. } => binary_affix(op),
             Expr::JsonOp { .. } => JSON_OP_AFFIX,
@@ -560,8 +581,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 value,
             },
-            ExprElement::CountAll { window } => Expr::CountAll {
+            ExprElement::CountAll { qualified, window } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
+                qualified,
                 window,
             },
             ExprElement::Tuple { exprs } => Expr::Tuple {
@@ -836,6 +858,55 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 subquery,
                 not,
             },
+            ExprElement::LikeSubquery {
+                subquery,
+                modifier,
+                escape,
+            } => Expr::LikeSubquery {
+                span: transform_span(elem.span.tokens),
+                expr: Box::new(lhs),
+                subquery,
+                modifier,
+                escape,
+            },
+            ExprElement::Escape { escape } => match lhs {
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::Like(_),
+                    left,
+                    right,
+                } => Expr::LikeWithEscape {
+                    span,
+                    left,
+                    right,
+                    is_not: false,
+                    escape,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::NotLike(_),
+                    left,
+                    right,
+                } => Expr::LikeWithEscape {
+                    span,
+                    left,
+                    right,
+                    is_not: true,
+                    escape,
+                },
+                Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::LikeAny(_),
+                    left,
+                    right,
+                } => Expr::LikeAnyWithEscape {
+                    span,
+                    left,
+                    right,
+                    escape,
+                },
+                _ => return Err("escape clause must be after LIKE/NOT LIKE/LIKE ANY binary expr"),
+            },
             ExprElement::Between { low, high, not } => Expr::Between {
                 span: transform_span(elem.span.tokens),
                 expr: Box::new(lhs),
@@ -893,6 +964,30 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             subquery: Box::new(subquery),
             not: opt_not.is_some(),
         },
+    );
+    let like_subquery = map(
+        rule! {
+            LIKE ~ ( ANY | SOME | ALL ) ~ "(" ~ #query ~ ^")" ~ (ESCAPE ~  ^#literal_string)?
+        },
+        |(_, m, _, subquery, _, option_escape)| {
+            let modifier = match m.kind {
+                TokenKind::ALL => SubqueryModifier::All,
+                TokenKind::ANY => SubqueryModifier::Any,
+                TokenKind::SOME => SubqueryModifier::Some,
+                _ => unreachable!(),
+            };
+            ExprElement::LikeSubquery {
+                modifier,
+                subquery: Box::new(subquery),
+                escape: option_escape.map(|(_, escape)| escape),
+            }
+        },
+    );
+    let escape = map(
+        rule! {
+            ESCAPE ~  ^#literal_string
+        },
+        |(_, escape)| ExprElement::Escape { escape },
     );
     let between = map(
         rule! {
@@ -1004,10 +1099,28 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
 
     let count_all_with_window = map(
         rule! {
-            COUNT ~ "(" ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
+            COUNT ~ "(" ~  ( #ident ~ "." ~ ( #ident ~ "." )? )? ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
         },
-        |(_, _, _, _, window)| ExprElement::CountAll {
-            window: window.map(|w| w.1),
+        |(_, _, res, star, _, window)| match res {
+            Some((fst, _, Some((snd, _)))) => ExprElement::CountAll {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Identifier(snd),
+                    Indirection::Star(Some(star.span)),
+                ],
+                window: window.map(|w| w.1),
+            },
+            Some((fst, _, None)) => ExprElement::CountAll {
+                qualified: vec![
+                    Indirection::Identifier(fst),
+                    Indirection::Star(Some(star.span)),
+                ],
+                window: window.map(|w| w.1),
+            },
+            None => ExprElement::CountAll {
+                qualified: vec![Indirection::Star(Some(star.span))],
+                window: window.map(|w| w.1),
+            },
         },
     );
 
@@ -1214,11 +1327,59 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
 
+    let trunc = map(
+        rule! {
+            TRUNC ~ "(" ~  (#subexpr(0) ~ "," ~  #interval_kind)? ~ (#subexpr(0) ~ ("," ~  #subexpr(0))?)? ~ ")"
+        },
+        |(s, _, opt_date, opt_numeric, _)| {
+            return match (opt_date, opt_numeric) {
+                (Some((date, _, unit)), None) => ExprElement::DateTrunc { unit, date },
+                (None, Some((expr, opt_expr2))) => {
+                    if let Some((_, expr2)) = opt_expr2 {
+                        ExprElement::FunctionCall {
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                                args: vec![expr, expr2],
+                                ..Default::default()
+                            },
+                        }
+                    } else {
+                        ExprElement::FunctionCall {
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier::from_name(Some(s.span), "TRUNCATE"),
+                                args: vec![expr],
+                                ..Default::default()
+                            },
+                        }
+                    }
+                }
+                _ => ExprElement::DateTrunc {
+                    unit: IntervalKind::UnknownIntervalKind,
+                    date: Expr::Literal {
+                        span: None,
+                        value: Literal::Null,
+                    },
+                },
+            };
+        },
+    );
+
     let last_day = map(
         rule! {
-            LAST_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+            LAST_DAY ~ "(" ~ #subexpr(0) ~ ("," ~ #interval_kind)? ~ ")"
         },
-        |(_, _, date, _, unit, _)| ExprElement::LastDay { unit, date },
+        |(_, _, date, opt_unit, _)| {
+            if let Some((_, unit)) = opt_unit {
+                ExprElement::LastDay { unit, date }
+            } else {
+                ExprElement::LastDay {
+                    unit: IntervalKind::Month,
+                    date,
+                }
+            }
+        },
     );
 
     let previous_day = map(
@@ -1302,6 +1463,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 #is_null : "`... IS [NOT] NULL`"
                 | #in_list : "`[NOT] IN (<expr>, ...)`"
                 | #in_subquery : "`[NOT] IN (SELECT ...)`"
+                | #like_subquery: "`LIKE ANY | ALL | SOME (SELECT ...)`"
                 | #exists : "`[NOT] EXISTS (SELECT ...)`"
                 | #between : "`[NOT] BETWEEN ... AND ...`"
                 | #binary_op : "<operator>"
@@ -1317,7 +1479,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
                 | #date_between : "`DATE_BETWEEN((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW), ..., ...,)`"
-                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
+                | #trunc : "`TRUNC(..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK))`"
                 | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
                 | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
                 | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
@@ -1336,6 +1499,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #list_comprehensions: "[expr for x in ... [if ...]]"
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
                 | #function_call
+                | #escape: "`ESCAPE '<escape>'`"
             ),
             rule!(
                 #case : "`CASE ... END`"
@@ -1390,8 +1554,9 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::And, rule! { AND }),
             value(BinaryOperator::Or, rule! { OR }),
             value(BinaryOperator::Xor, rule! { XOR }),
-            value(BinaryOperator::Like, rule! { LIKE }),
-            value(BinaryOperator::NotLike, rule! { NOT ~ LIKE }),
+            value(BinaryOperator::LikeAny(None), rule! { LIKE ~ ANY }),
+            value(BinaryOperator::Like(None), rule! { LIKE }),
+            value(BinaryOperator::NotLike(None), rule! { NOT ~ LIKE }),
             value(BinaryOperator::Regexp, rule! { REGEXP }),
             value(BinaryOperator::NotRegexp, rule! { NOT ~ REGEXP }),
             value(BinaryOperator::RLike, rule! { RLIKE }),
@@ -1609,19 +1774,22 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { (FLOAT64 | DOUBLE)  ~ PRECISION? },
     );
     let ty_decimal = map_res(
-        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ ( "," ~ ^#literal_u64 )? ~ ")" },
-        |(_, _, precision, opt_scale, _)| {
+        rule! { DECIMAL ~ ( "(" ~ #literal_u64 ~ ( "," ~ ^#literal_u64 )? ~ ")" )? },
+        |(_, opt_precision)| {
+            let (precision, scale) = match opt_precision {
+                Some((_, precision, scale, _)) => {
+                    (precision, scale.map(|(_, scale)| scale).unwrap_or(0))
+                }
+                None => (18, 3),
+            };
+
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
                     .map_err(|_| nom::Err::Failure(ErrorKind::Other("precision is too large")))?,
-                scale: if let Some((_, scale)) = opt_scale {
-                    scale
-                        .try_into()
-                        .map_err(|_| nom::Err::Failure(ErrorKind::Other("scale is too large")))?
-                } else {
-                    0
-                },
+                scale: scale
+                    .try_into()
+                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("scale is too large")))?,
             })
         },
     );
@@ -1675,7 +1843,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     );
     let ty_binary = value(
         TypeName::Binary,
-        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB| BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        rule! { ( BINARY | VARBINARY | LONGBLOB | MEDIUMBLOB |  TINYBLOB | BLOB ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_string = value(
         TypeName::String,
@@ -1684,6 +1852,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
     let ty_geometry = value(TypeName::Geometry, rule! { GEOMETRY });
     let ty_geography = value(TypeName::Geography, rule! { GEOGRAPHY });
+    let ty_vector = map(
+        rule! { VECTOR ~ ^"(" ~ ^#literal_u64 ~ ^")" },
+        |(_, _, dimension, _)| TypeName::Vector(dimension),
+    );
     map_res(
         alt((
             rule! {
@@ -1717,6 +1889,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_geometry
             | #ty_geography
             | #ty_nullable
+            | #ty_vector
             ) ~ #nullable? : "type name" },
         )),
         |(ty, opt_nullable)| match opt_nullable {
@@ -1787,6 +1960,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let doy = value(IntervalKind::Doy, rule! { DOY });
     let dow = value(IntervalKind::Dow, rule! { DOW });
     let isodow = value(IntervalKind::ISODow, rule! { ISODOW });
+    let isoweek = value(IntervalKind::ISOWeek, rule! { ISOWEEK });
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
     let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
@@ -1795,68 +1969,159 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
 
     let iso_year_str = value(
         IntervalKind::ISOYear,
-        rule! { #literal_string_eq_ignore_case("ISOYEAR")  },
+        rule! { #literal_string_eq_ignore_case("ISOYEAR") },
     );
+
     let year_str = value(
         IntervalKind::Year,
-        rule! { #literal_string_eq_ignore_case("YEAR")  },
+        rule! { #literal_string_eq_ignore_case("YEAR")
+            | #literal_string_eq_ignore_case("Y")
+            | #literal_string_eq_ignore_case("YY")
+            | #literal_string_eq_ignore_case("YYY")
+            | #literal_string_eq_ignore_case("YYYY")
+            | #literal_string_eq_ignore_case("YR")
+            | #literal_string_eq_ignore_case("YEARS")
+            | #literal_string_eq_ignore_case("YRS")
+        },
     );
+
     let quarter_str = value(
         IntervalKind::Quarter,
-        rule! { #literal_string_eq_ignore_case("QUARTER") },
+        rule! { #literal_string_eq_ignore_case("QUARTER")
+            | #literal_string_eq_ignore_case("Q")
+            | #literal_string_eq_ignore_case("QTR")
+            | #literal_string_eq_ignore_case("QTRS")
+            | #literal_string_eq_ignore_case("QUARTERS")
+        },
     );
+
     let month_str = value(
         IntervalKind::Month,
-        rule! { #literal_string_eq_ignore_case("MONTH")  },
+        rule! { #literal_string_eq_ignore_case("MONTH")
+            | #literal_string_eq_ignore_case("MM")
+            | #literal_string_eq_ignore_case("MON")
+            | #literal_string_eq_ignore_case("MONS")
+            | #literal_string_eq_ignore_case("MONTHS")
+        },
     );
+
     let day_str = value(
         IntervalKind::Day,
-        rule! { #literal_string_eq_ignore_case("DAY")  },
+        rule! { #literal_string_eq_ignore_case("DAY")
+            | #literal_string_eq_ignore_case("D")
+            | #literal_string_eq_ignore_case("DD")
+            | #literal_string_eq_ignore_case("DAYS")
+            | #literal_string_eq_ignore_case("DAYOFMONTH")
+        },
     );
+
     let hour_str = value(
         IntervalKind::Hour,
-        rule! { #literal_string_eq_ignore_case("HOUR")  },
+        rule! { #literal_string_eq_ignore_case("HOUR")
+            | #literal_string_eq_ignore_case("H")
+            | #literal_string_eq_ignore_case("HH")
+            | #literal_string_eq_ignore_case("HH24")
+            | #literal_string_eq_ignore_case("HR")
+            | #literal_string_eq_ignore_case("HOURS")
+            | #literal_string_eq_ignore_case("HRS")
+        },
     );
+
     let minute_str = value(
         IntervalKind::Minute,
-        rule! { #literal_string_eq_ignore_case("MINUTE")  },
+        rule! { #literal_string_eq_ignore_case("MINUTE")
+            | #literal_string_eq_ignore_case("M")
+            | #literal_string_eq_ignore_case("MI")
+            | #literal_string_eq_ignore_case("MIN")
+            | #literal_string_eq_ignore_case("MINUTES")
+            | #literal_string_eq_ignore_case("MINS")
+        },
     );
+
     let second_str = value(
         IntervalKind::Second,
-        rule! { #literal_string_eq_ignore_case("SECOND")  },
+        rule! { #literal_string_eq_ignore_case("SECOND")
+            | #literal_string_eq_ignore_case("S")
+            | #literal_string_eq_ignore_case("SEC")
+            | #literal_string_eq_ignore_case("SECONDS")
+            | #literal_string_eq_ignore_case("SECS")
+        },
     );
+
     let doy_str = value(
         IntervalKind::Doy,
-        rule! { #literal_string_eq_ignore_case("DOY") | #literal_string_eq_ignore_case("DAYOFYEAR")  },
+        rule! { #literal_string_eq_ignore_case("DOY")
+            | #literal_string_eq_ignore_case("DAYOFYEAR")
+            | #literal_string_eq_ignore_case("YEARDAY")
+            | #literal_string_eq_ignore_case("DY")
+        },
     );
+
     let dow_str = value(
         IntervalKind::Dow,
-        rule! { (#literal_string_eq_ignore_case("DOW") | #literal_string_eq_ignore_case("WEEKDAY") | #literal_string_eq_ignore_case("DAYOFWEEK") )  },
+        rule! { (#literal_string_eq_ignore_case("DOW")
+            | #literal_string_eq_ignore_case("WEEKDAY")
+            | #literal_string_eq_ignore_case("DW")
+            | #literal_string_eq_ignore_case("DAYOFWEEK"))
+        },
     );
+
     let isodow_str = value(
         IntervalKind::ISODow,
-        rule! { #literal_string_eq_ignore_case("ISODOW")  },
+        rule! { #literal_string_eq_ignore_case("ISODOW")
+            | #literal_string_eq_ignore_case("DAYOFWEEK_ISO")
+            | #literal_string_eq_ignore_case("DAYOFWEEKISO")
+            | #literal_string_eq_ignore_case("WEEKDAY_ISO")
+            | #literal_string_eq_ignore_case("DOW_ISO")
+            | #literal_string_eq_ignore_case("DW_ISO")
+        },
     );
+
     let week_str = value(
         IntervalKind::Week,
-        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))  },
+        rule! { (#literal_string_eq_ignore_case("WEEK") | #literal_string_eq_ignore_case("WEEKS") | #literal_string_eq_ignore_case("W"))
+            | #literal_string_eq_ignore_case("WK")
+            | #literal_string_eq_ignore_case("WEEKOFYEAR")
+            | #literal_string_eq_ignore_case("WOY")
+            | #literal_string_eq_ignore_case("WY")
+        },
     );
+
+    let isoweek_str = value(
+        IntervalKind::ISOWeek,
+        rule! { #literal_string_eq_ignore_case("IW") },
+    );
+
     let epoch_str = value(
         IntervalKind::Epoch,
-        rule! { #literal_string_eq_ignore_case("EPOCH")  },
+        rule! { #literal_string_eq_ignore_case("EPOCH")
+            | #literal_string_eq_ignore_case("EPOCH_SECOND")
+            | #literal_string_eq_ignore_case("EPOCH")
+            | #literal_string_eq_ignore_case("EPOCH_SECONDS")
+        },
     );
+
     let microsecond_str = value(
         IntervalKind::MicroSecond,
-        rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+        rule! { #literal_string_eq_ignore_case("MICROSECOND")
+            | #literal_string_eq_ignore_case("MICROSECONDS")
+            | #literal_string_eq_ignore_case("US")
+            | #literal_string_eq_ignore_case("USEC")
+        },
     );
+
     let yearweek_str = value(
         IntervalKind::YearWeek,
-        rule! { #literal_string_eq_ignore_case("YEARWEEK")  },
+        rule! { #literal_string_eq_ignore_case("YEARWEEK")
+            | #literal_string_eq_ignore_case("YEAROFWEEK")
+        },
     );
+
     let millennium_str = value(
         IntervalKind::Millennium,
-        rule! { #literal_string_eq_ignore_case("MILLENNIUM")  },
+        rule! { #literal_string_eq_ignore_case("MILLENNIUM") },
     );
+
     alt((
         rule!(
             #year
@@ -1873,6 +2138,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #epoch
             | #microsecond
             | #isodow
+            | #isoweek
             | #millennium
             | #yearweek
         ),
@@ -1891,6 +2157,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #epoch_str
             | #microsecond_str
             | #isodow_str
+            | #isoweek_str
             | #yearweek_str
             | #millennium_str
         ),

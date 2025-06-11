@@ -38,7 +38,9 @@ use super::TimeTravelPoint;
 use crate::ast::display_decimal_256;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
+use crate::ast::Indirection;
 use crate::ast::Query;
 use crate::ast::SetExpr;
 use crate::span::merge_span;
@@ -84,6 +86,29 @@ pub enum Expr {
         expr: Box<Expr>,
         subquery: Box<Query>,
         not: bool,
+    },
+    /// `LIKE (SELECT ...) [ESCAPE '<escape>']`
+    LikeSubquery {
+        span: Span,
+        expr: Box<Expr>,
+        subquery: Box<Query>,
+        modifier: SubqueryModifier,
+        escape: Option<String>,
+    },
+    /// `<left> LIKE ANY <right> ESCAPE '<escape>'`
+    LikeAnyWithEscape {
+        span: Span,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        escape: String,
+    },
+    /// `<left> [NOT] LIKE <right> ESCAPE '<escape>'`
+    LikeWithEscape {
+        span: Span,
+        left: Box<Expr>,
+        right: Box<Expr>,
+        is_not: bool,
+        escape: String,
     },
     /// `BETWEEN ... AND ...`
     Between {
@@ -168,6 +193,7 @@ pub enum Expr {
     /// `COUNT(*)` expression
     CountAll {
         span: Span,
+        qualified: Vec<Indirection>,
         window: Option<Window>,
     },
     /// `(foo, bar)`
@@ -284,6 +310,9 @@ impl Expr {
             | Expr::IsDistinctFrom { span, .. }
             | Expr::InList { span, .. }
             | Expr::InSubquery { span, .. }
+            | Expr::LikeSubquery { span, .. }
+            | Expr::LikeAnyWithEscape { span, .. }
+            | Expr::LikeWithEscape { span, .. }
             | Expr::Between { span, .. }
             | Expr::BinaryOp { span, .. }
             | Expr::JsonOp { span, .. }
@@ -340,6 +369,12 @@ impl Expr {
                 expr,
                 subquery,
                 ..
+            }
+            | Expr::LikeSubquery {
+                span,
+                expr,
+                subquery,
+                ..
             } => merge_span(merge_span(*span, expr.whole_span()), subquery.span),
             Expr::Between {
                 span,
@@ -352,6 +387,12 @@ impl Expr {
                 merge_span(low.whole_span(), high.whole_span()),
             ),
             Expr::BinaryOp {
+                span, left, right, ..
+            }
+            | Expr::LikeWithEscape {
+                span, left, right, ..
+            }
+            | Expr::LikeAnyWithEscape {
                 span, left, right, ..
             } => merge_span(merge_span(*span, left.whole_span()), right.whole_span()),
             Expr::JsonOp {
@@ -591,6 +632,41 @@ impl Display for Expr {
                     }
                     write!(f, " IN({subquery})")?;
                 }
+                Expr::LikeSubquery {
+                    expr,
+                    subquery,
+                    modifier,
+                    escape,
+                    ..
+                } => {
+                    write_expr(expr, Some(affix), true, f)?;
+                    write!(f, " LIKE {modifier} ({subquery})")?;
+                    if let Some(escape) = escape {
+                        write!(f, " ESCAPE '{escape}'")?;
+                    }
+                }
+                Expr::LikeAnyWithEscape {
+                    left,
+                    right,
+                    escape,
+                    ..
+                } => {
+                    write_expr(left, Some(affix), true, f)?;
+                    write!(f, " LIKE ANY {right} ESCAPE '{escape}'")?;
+                }
+                Expr::LikeWithEscape {
+                    left,
+                    right,
+                    is_not,
+                    escape,
+                    ..
+                } => {
+                    write_expr(left, Some(affix), true, f)?;
+                    if *is_not {
+                        write!(f, " NOT")?;
+                    }
+                    write!(f, " LIKE {right} ESCAPE '{escape}'")?;
+                }
                 Expr::Between {
                     expr,
                     low,
@@ -690,8 +766,12 @@ impl Display for Expr {
                 Expr::Literal { value, .. } => {
                     write!(f, "{value}")?;
                 }
-                Expr::CountAll { window, .. } => {
-                    write!(f, "COUNT(*)")?;
+                Expr::CountAll {
+                    window, qualified, ..
+                } => {
+                    write!(f, "COUNT(")?;
+                    write_dot_separated_list(f, qualified)?;
+                    write!(f, ")")?;
                     if let Some(window) = window {
                         write!(f, " OVER {window}")?;
                     }
@@ -866,12 +946,14 @@ pub enum IntervalKind {
     Second,
     Doy,
     Week,
+    ISOWeek,
     Dow,
     Epoch,
     MicroSecond,
     ISODow,
     YearWeek,
     Millennium,
+    UnknownIntervalKind,
 }
 
 impl Display for IntervalKind {
@@ -891,8 +973,10 @@ impl Display for IntervalKind {
             IntervalKind::YearWeek => "YEARWEEK",
             IntervalKind::Millennium => "MILLENNIUM",
             IntervalKind::Week => "WEEK",
+            IntervalKind::ISOWeek => "ISOWEEK",
             IntervalKind::Epoch => "EPOCH",
             IntervalKind::MicroSecond => "MICROSECOND",
+            IntervalKind::UnknownIntervalKind => "UNKNOWNINTERVALKIND",
         })
     }
 }
@@ -998,6 +1082,20 @@ pub struct FunctionCall {
     pub lambda: Option<Lambda>,
 }
 
+impl Default for FunctionCall {
+    fn default() -> Self {
+        Self {
+            distinct: false,
+            name: Identifier::from_name(None, ""),
+            args: vec![],
+            params: vec![],
+            order_by: vec![],
+            window: None,
+            lambda: None,
+        }
+    }
+}
+
 impl Display for FunctionCall {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let FunctionCall {
@@ -1090,6 +1188,7 @@ pub enum TypeName {
     Geometry,
     Geography,
     Interval,
+    Vector(u64),
     Nullable(Box<TypeName>),
     NotNull(Box<TypeName>),
 }
@@ -1220,6 +1319,9 @@ impl Display for TypeName {
             }
             TypeName::Interval => {
                 write!(f, "INTERVAL")?;
+            }
+            TypeName::Vector(dimension) => {
+                write!(f, "VECTOR({dimension})")?;
             }
         }
         Ok(())
@@ -1428,8 +1530,9 @@ pub enum BinaryOperator {
     And,
     Or,
     Xor,
-    Like,
-    NotLike,
+    Like(Option<String>),
+    NotLike(Option<String>),
+    LikeAny(Option<String>),
     Regexp,
     RLike,
     NotRegexp,
@@ -1469,6 +1572,8 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
             BinaryOperator::L2Distance => "l2_distance".to_string(),
+            BinaryOperator::LikeAny(_) => "like_any".to_string(),
+            BinaryOperator::Like(_) => "like".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -1534,10 +1639,13 @@ impl Display for BinaryOperator {
             BinaryOperator::Xor => {
                 write!(f, "XOR")
             }
-            BinaryOperator::Like => {
+            BinaryOperator::Like(_) => {
                 write!(f, "LIKE")
             }
-            BinaryOperator::NotLike => {
+            BinaryOperator::LikeAny(_) => {
+                write!(f, "LIKE ANY")
+            }
+            BinaryOperator::NotLike(_) => {
                 write!(f, "NOT LIKE")
             }
             BinaryOperator::Regexp => {
@@ -2015,7 +2123,7 @@ impl ExprReplacer {
                     self.replace_expr(expr);
                 }
             }
-            Expr::InSubquery { expr, subquery, .. } => {
+            Expr::InSubquery { expr, subquery, .. } | Expr::LikeSubquery { expr, subquery, .. } => {
                 self.replace_expr(expr);
                 self.replace_query(subquery);
             }
@@ -2029,7 +2137,9 @@ impl ExprReplacer {
             Expr::UnaryOp { expr, .. } => {
                 self.replace_expr(expr);
             }
-            Expr::BinaryOp { left, right, .. } => {
+            Expr::BinaryOp { left, right, .. }
+            | Expr::LikeWithEscape { left, right, .. }
+            | Expr::LikeAnyWithEscape { left, right, .. } => {
                 self.replace_expr(left);
                 self.replace_expr(right);
             }

@@ -53,8 +53,6 @@ use serde_json::Map;
 use crate::Config;
 use crate::GlobalLogger;
 
-pub const PERSISTENT_LOG_SCHEMA_VERSION: usize = 1;
-
 /// An appender that sends log records to persistent storage
 #[derive(Debug)]
 pub struct RemoteLog {
@@ -110,8 +108,8 @@ impl RemoteLog {
         cfg: &Config,
     ) -> Result<(RemoteLog, Box<RemoteLogGuard>)> {
         // all interval in RemoteLog is microseconds
-        let interval = Duration::from_secs(cfg.persistentlog.interval as u64).as_micros();
-        let stage_name = cfg.persistentlog.stage_name.clone();
+        let interval = Duration::from_secs(cfg.history.interval as u64).as_micros();
+        let stage_name = cfg.history.stage_name.clone();
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
         let rt = Runtime::with_worker_threads(2, Some("remote-log-writer".to_string()))?;
         let (tx, rx) = bounded(1);
@@ -180,9 +178,8 @@ impl RemoteLog {
         op.as_ref()?;
 
         let path = format!(
-            "stage/internal/{}_v{}/{}.parquet",
+            "stage/internal/{}/{}.parquet",
             stage_name,
-            PERSISTENT_LOG_SCHEMA_VERSION,
             uuid::Uuid::new_v4()
         );
 
@@ -220,7 +217,7 @@ impl RemoteLog {
         let fields = serde_json::to_string(&fields).unwrap_or_default();
 
         let log_level = record.level().to_string();
-        let timestamp = chrono::Local::now().timestamp_micros();
+        let timestamp = chrono::Utc::now().timestamp_micros();
 
         let path = format!(
             "{}: {}:{}",
@@ -269,7 +266,7 @@ impl LogBuffer {
     pub fn new(sender: Sender<LogMessage>, interval: u64) -> Self {
         Self {
             queue: ConcurrentQueue::unbounded(),
-            last_collect: AtomicU64::new(chrono::Local::now().timestamp_micros() as u64),
+            last_collect: AtomicU64::new(chrono::Utc::now().timestamp_micros() as u64),
             sender,
             interval,
         }
@@ -280,12 +277,12 @@ impl LogBuffer {
         self.queue.push(log_element)?;
         if self.queue.len() >= Self::MAX_BUFFER_SIZE {
             self.last_collect.store(
-                chrono::Local::now().timestamp_micros() as u64,
+                chrono::Utc::now().timestamp_micros() as u64,
                 Ordering::SeqCst,
             );
             self.collect()?;
         }
-        let now = chrono::Local::now().timestamp_micros() as u64;
+        let now = chrono::Utc::now().timestamp_micros() as u64;
         let mut current_last_collect = 0;
         loop {
             match self.last_collect.compare_exchange_weak(

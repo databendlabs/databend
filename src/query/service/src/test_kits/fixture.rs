@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
@@ -79,7 +80,6 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
 use crate::storages::Table;
@@ -355,8 +355,7 @@ impl TestFixture {
             field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
-            inverted_indexes: None,
-            ngram_indexes: None,
+            table_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -383,8 +382,7 @@ impl TestFixture {
             field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: None,
-            inverted_indexes: None,
-            ngram_indexes: None,
+            table_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,
@@ -423,8 +421,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
-            inverted_indexes: None,
-            ngram_indexes: None,
+            table_indexes: None,
             attached_columns: None,
             table_partition: None,
         }
@@ -462,8 +459,7 @@ impl TestFixture {
             table_partition: None,
             as_select: None,
             cluster_key: None,
-            inverted_indexes: None,
-            ngram_indexes: None,
+            table_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
         }
@@ -509,8 +505,7 @@ impl TestFixture {
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
-            inverted_indexes: None,
-            ngram_indexes: None,
+            table_indexes: None,
             attached_columns: None,
             table_properties: Default::default(),
             table_partition: None,

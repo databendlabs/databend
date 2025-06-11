@@ -15,13 +15,13 @@
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
+use super::SelectionBuffers;
 use crate::types::string::StringColumn;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::with_mapped_cmp_method;
 use crate::LikePattern;
 use crate::SelectOp;
-use crate::SelectStrategy;
 use crate::Selector;
 use crate::Value;
 
@@ -30,284 +30,171 @@ mod select_column_scalar;
 mod select_scalar;
 
 impl Selector<'_> {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values_cmp<T: AccessType>(
+    pub(super) fn select_type_values_cmp<T: AccessType>(
         &self,
         op: &SelectOp,
         left: Value<AnyType>,
         right: Value<AnyType>,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
+        self.select_type_values_cmp_lr::<T, T>(op, left, right, validity, buffers, has_false)
+    }
+
+    pub(super) fn select_type_values_cmp_lr<L, R>(
+        &self,
+        op: &SelectOp,
+        left: Value<AnyType>,
+        right: Value<AnyType>,
+        validity: Option<Bitmap>,
+        buffers: SelectionBuffers,
+        has_false: bool,
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: for<'a> AccessType<ScalarRef<'a> = L::ScalarRef<'a>>,
+    {
         with_mapped_cmp_method!(|OP| match op {
-            SelectOp::OP => self.select_type_values::<T, _>(
-                T::OP,
+            SelectOp::OP => self.select_type_values::<L, R, _>(
+                L::OP,
                 left,
                 right,
                 validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                buffers,
+                has_false,
             ),
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_type_values<
-        T: AccessType,
-        C: Fn(T::ScalarRef<'_>, T::ScalarRef<'_>) -> bool,
-    >(
+    fn select_type_values<L, R, C>(
         &self,
         cmp: C,
         left: Value<AnyType>,
         right: Value<AnyType>,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        let has_false = false_selection.1;
+        buffers: SelectionBuffers,
+        has_false: bool,
+    ) -> Result<usize>
+    where
+        L: AccessType,
+        R: for<'a> AccessType<ScalarRef<'a> = L::ScalarRef<'a>>,
+        C: Fn(L::ScalarRef<'_>, L::ScalarRef<'_>) -> bool,
+    {
         match (left, right) {
-            (Value::Scalar(left), Value::Scalar(right)) => self.select_scalars::<T, C>(
-                cmp,
-                left,
-                right,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            ),
+            (Value::Scalar(left), Value::Scalar(right)) => {
+                let left = left.as_ref();
+                let left = L::try_downcast_scalar(&left).unwrap();
+                let right = right.as_ref();
+                let right = R::try_downcast_scalar(&right).unwrap();
+
+                let result = cmp(left, right);
+                let count = self.select_boolean_scalar_adapt(result, buffers, has_false);
+                Ok(count)
+            }
             (Value::Column(left), Value::Column(right)) => {
-                let left = T::try_downcast_column(&left).unwrap();
-                let right = T::try_downcast_column(&right).unwrap();
+                let left = L::try_downcast_column(&left).unwrap();
+                let right = R::try_downcast_column(&right).unwrap();
 
                 if has_false {
-                    self.select_columns::<T, C, true>(
-                        cmp,
-                        left,
-                        right,
-                        validity,
-                        true_selection,
-                        false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
+                    self.select_columns::<true, L, R, _>(cmp, left, right, validity, buffers)
+                } else {
+                    self.select_columns::<false, L, R, _>(cmp, left, right, validity, buffers)
+                }
+            }
+            (Value::Column(column), Value::Scalar(scalar)) => {
+                let column = L::try_downcast_column(&column).unwrap();
+                let scalar = scalar.as_ref();
+                let scalar = R::try_downcast_scalar(&scalar).unwrap();
+
+                if has_false {
+                    self.select_column_scalar::<true, L, R, _>(
+                        cmp, column, scalar, validity, buffers,
                     )
                 } else {
-                    self.select_columns::<T, C, false>(
-                        cmp,
-                        left,
-                        right,
-                        validity,
-                        true_selection,
-                        false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
+                    self.select_column_scalar::<false, L, R, _>(
+                        cmp, column, scalar, validity, buffers,
                     )
                 }
             }
-            (Value::Column(column), Value::Scalar(scalar))
-            | (Value::Scalar(scalar), Value::Column(column)) => {
-                let column = T::try_downcast_column(&column).unwrap();
+            (Value::Scalar(scalar), Value::Column(column)) => {
+                let column = R::try_downcast_column(&column).unwrap();
                 let scalar = scalar.as_ref();
-                let scalar = T::try_downcast_scalar(&scalar).unwrap();
+                let scalar = L::try_downcast_scalar(&scalar).unwrap();
 
                 if has_false {
-                    self.select_column_scalar::<T, C, true>(
-                        cmp,
-                        column,
-                        scalar,
-                        validity,
-                        true_selection,
-                        false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
+                    self.select_column_scalar::<true, R, L, _>(
+                        cmp, column, scalar, validity, buffers,
                     )
                 } else {
-                    self.select_column_scalar::<T, C, false>(
-                        cmp,
-                        column,
-                        scalar,
-                        validity,
-                        true_selection,
-                        false_selection.0,
-                        mutable_true_idx,
-                        mutable_false_idx,
-                        select_strategy,
-                        count,
+                    self.select_column_scalar::<false, R, L, _>(
+                        cmp, column, scalar, validity, buffers,
                     )
                 }
             }
         }
     }
 
-    pub(crate) fn select_boolean_scalar_adapt(
+    pub(super) fn select_boolean_scalar_adapt(
         &self,
         scalar: bool,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> usize {
-        let has_false = false_selection.1;
         if has_false {
-            self.select_boolean_scalar::<true>(
-                scalar,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
+            self.select_boolean_scalar::<true>(scalar, buffers)
         } else {
-            self.select_boolean_scalar::<false>(
-                scalar,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
+            self.select_boolean_scalar::<false>(scalar, buffers)
         }
     }
 
-    pub(crate) fn select_boolean_column_adapt(
+    pub(super) fn select_boolean_column_adapt(
         &self,
         column: Bitmap,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> usize {
-        let has_false = false_selection.1;
         if has_false {
-            self.select_boolean_column::<true>(
-                column,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
+            self.select_boolean_column::<true>(column, buffers)
         } else {
-            self.select_boolean_column::<false>(
-                column,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
+            self.select_boolean_column::<false>(column, buffers)
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_like_adapt(
+    pub(super) fn select_like(
         &self,
         column: StringColumn,
         like_pattern: &LikePattern,
         not: bool,
         validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
-        let has_false = false_selection.1;
-        match has_false {
-            true => self.select_like_not::<true>(
+        match (has_false, not) {
+            (true, true) => self.select_column_like::<true, true>(
                 column,
                 like_pattern,
-                not,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                validity.clone(),
+                buffers,
             ),
-            false => self.select_like_not::<false>(
+            (true, false) => self.select_column_like::<true, false>(
                 column,
                 like_pattern,
-                not,
-                validity,
-                true_selection,
-                false_selection.0,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                validity.clone(),
+                buffers,
             ),
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn select_like_not<const FALSE: bool>(
-        &self,
-        column: StringColumn,
-        like_pattern: &LikePattern,
-        not: bool,
-        validity: Option<Bitmap>,
-        true_selection: &mut [u32],
-        false_selection: &mut [u32],
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
-    ) -> Result<usize> {
-        if not {
-            self.select_column_like::<FALSE, true>(
+            (false, true) => self.select_column_like::<false, true>(
                 column,
                 like_pattern,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
-        } else {
-            self.select_column_like::<FALSE, false>(
+                validity.clone(),
+                buffers,
+            ),
+            (false, false) => self.select_column_like::<false, false>(
                 column,
                 like_pattern,
-                validity,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
-            )
+                validity.clone(),
+                buffers,
+            ),
         }
     }
 }

@@ -327,7 +327,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 23, "{:?}", result);
+    assert_eq!(result.schema.len(), 26, "{:?}", result);
 
     // get state
     let uri = result.stats_uri.unwrap();
@@ -366,7 +366,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"wrong page number 2"}}"#
+        r#"{"error":{"code":404,"message":"[HTTP-QUERY] [HTTP-QUERY] Invalid page number: requested 2, current page is 1"}}"#
     );
 
     // final
@@ -526,7 +526,7 @@ async fn test_active_sessions() -> Result<()> {
         .map(|(_status, resp)| (resp.error.map(|e| e.message).unwrap_or_default()))
         .collect::<Vec<_>>();
     results.sort();
-    let msg = "Current active sessions (2) has exceeded the max_active_sessions limit (2)";
+    let msg = "[HTTP-QUERY] Failed to upgrade session: Current active sessions (2) has exceeded the max_active_sessions limit (2)";
     let expect = vec!["", "", msg];
     assert_eq!(results, expect);
     Ok(())
@@ -630,7 +630,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":404,"message":"wrong page number 6"}}"#
+        r#"{"error":{"code":404,"message":"[HTTP-QUERY] [HTTP-QUERY] Invalid page number: requested 6, current page is 1"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
@@ -1759,7 +1759,7 @@ async fn test_txn_error() -> Result<()> {
         assert_eq!(reply.last().1.error.unwrap().code, 4004u16);
         assert_eq!(
             &reply.last().1.error.unwrap().message,
-            "transaction is active but missing server_info"
+            "[HTTP-QUERY] Transaction is active but missing server_info"
         );
     }
 
@@ -1819,7 +1819,7 @@ async fn test_txn_timeout() -> Result<()> {
     assert_eq!(
         reply.last().1.error.unwrap().message,
         format!(
-            "transaction timeout: last_query_id {} not found",
+            "[HTTP-QUERY] Transaction timeout: last_query_id {} not found on this server",
             last_query_id
         )
     );

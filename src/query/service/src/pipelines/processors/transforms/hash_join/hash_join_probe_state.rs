@@ -514,7 +514,7 @@ impl HashJoinProbeState {
                 None
             };
             let build_block = if build_state.generation_state.is_build_projected {
-                let mut unmatched_build_block = self.hash_join_state.row_space.gather(
+                let mut unmatched_build_block = self.hash_join_state.gather(
                     &build_indexes[0..build_indexes_occupied],
                     &generation_state.build_columns,
                     &generation_state.build_columns_data_type,
@@ -602,7 +602,7 @@ impl HashJoinProbeState {
                 ));
             }
 
-            result_blocks.push(self.hash_join_state.row_space.gather(
+            result_blocks.push(self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
@@ -663,7 +663,7 @@ impl HashJoinProbeState {
                 ));
             }
 
-            result_blocks.push(self.hash_join_state.row_space.gather(
+            result_blocks.push(self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
@@ -750,7 +750,7 @@ impl HashJoinProbeState {
             let boolean_column = Column::Boolean(boolean_bit_map.into());
             let marker_column = NullableColumn::new_column(boolean_column, validity.into());
             let marker_block = DataBlock::new_from_columns(vec![marker_column]);
-            let build_block = self.hash_join_state.row_space.gather(
+            let build_block = self.hash_join_state.gather(
                 &build_indexes[0..build_indexes_idx],
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,

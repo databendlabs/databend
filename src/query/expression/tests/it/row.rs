@@ -67,23 +67,17 @@ fn test_fixed_width() {
 
     let rows = converter.convert_columns(&cols, cols[0].len());
 
-    unsafe {
-        assert!(rows.index_unchecked(3) < rows.index_unchecked(6));
-        assert!(rows.index_unchecked(0) < rows.index_unchecked(1));
-        assert!(rows.index_unchecked(3) < rows.index_unchecked(0));
-        assert!(rows.index_unchecked(4) < rows.index_unchecked(1));
-        assert!(rows.index_unchecked(5) < rows.index_unchecked(4));
-    }
+    assert!(rows.index(3).unwrap() < rows.index(6).unwrap());
+    assert!(rows.index(0).unwrap() < rows.index(1).unwrap());
+    assert!(rows.index(3).unwrap() < rows.index(0).unwrap());
+    assert!(rows.index(4).unwrap() < rows.index(1).unwrap());
+    assert!(rows.index(5).unwrap() < rows.index(4).unwrap());
 }
 
 #[test]
 fn test_decimal128() {
     let converter = RowConverter::new(vec![SortField::new(
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 38,
-            scale: 7,
-        }))
-        .wrap_nullable(),
+        DataType::Decimal(DecimalSize::new_unchecked(38, 7)).wrap_nullable(),
     )])
     .unwrap();
 
@@ -96,56 +90,91 @@ fn test_decimal128() {
             Some(5456_i128),
             Some(i128::MAX),
         ],
-        DecimalSize {
-            precision: 38,
-            scale: 7,
-        },
+        Some(DecimalSize::new_unchecked(38, 7)),
     );
 
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() - 1 {
-            assert!(rows.index_unchecked(i) < rows.index_unchecked(i + 1));
-        }
+    for i in 0..rows.len() - 1 {
+        assert!(rows.index(i).unwrap() < rows.index(i + 1).unwrap());
     }
 }
 
 #[test]
 fn test_decimal256() {
     let converter = RowConverter::new(vec![SortField::new(
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-            precision: 76,
-            scale: 7,
-        }))
-        .wrap_nullable(),
+        DataType::Decimal(DecimalSize::new_unchecked(76, 7)).wrap_nullable(),
     )])
     .unwrap();
 
     let col = Decimal256Type::from_opt_data_with_size(
         vec![
             None,
-            Some(i256::MIN),
+            Some(i256::DECIMAL_MIN),
             Some(i256::from_words(-1, 0)),
             Some(i256::from_words(-1, i128::MAX)),
             Some(i256::from_words(0, i128::MAX)),
             Some(i256::from_words(46_i128, 0)),
             Some(i256::from_words(46_i128, 5)),
-            Some(i256::MAX),
+            Some(i256::DECIMAL_MAX),
         ],
-        DecimalSize {
-            precision: 76,
-            scale: 7,
-        },
+        Some(DecimalSize::new_unchecked(76, 7)),
     );
 
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() - 1 {
-            assert!(rows.index_unchecked(i) < rows.index_unchecked(i + 1));
+    for i in 0..rows.len() - 1 {
+        assert!(rows.index(i).unwrap() < rows.index(i + 1).unwrap());
+    }
+}
+
+#[test]
+fn test_decimal_view() {
+    fn run(size: DecimalSize, col: Column) {
+        let converter = RowConverter::new(vec![SortField::new(DataType::Decimal(size))]).unwrap();
+        let num_rows = col.len();
+        let rows = converter.convert_columns(&[col], num_rows);
+        for i in 0..num_rows - 1 {
+            assert!(rows.index(i).unwrap() <= rows.index(i + 1).unwrap());
+        }
+    }
+
+    {
+        let data = vec![-100i64, 50i64, 100i64, 200i64, 300i64];
+
+        for p in [15, 20, 40] {
+            let size = DecimalSize::new_unchecked(p, 2);
+            let col = Decimal64Type::from_data_with_size(&data, Some(size));
+            run(size, col);
+        }
+    }
+
+    {
+        let data = vec![-1000i128, 500i128, 1500i128, 2000i128, 3000i128];
+
+        for p in [15, 20, 40] {
+            let size = DecimalSize::new_unchecked(p, 3);
+            let col = Decimal128Type::from_data_with_size(&data, Some(size));
+
+            run(size, col);
+        }
+    }
+
+    {
+        let data = vec![
+            i256::from(-5000),
+            i256::from(10000),
+            i256::from(15000),
+            i256::from(20000),
+        ];
+
+        for p in [15, 20, 40] {
+            let size = DecimalSize::new_unchecked(p, 4);
+            let col = Decimal256Type::from_data_with_size(&data, Some(size));
+
+            run(size, col);
         }
     }
 }
@@ -160,11 +189,9 @@ fn test_bool() {
 
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
-    unsafe {
-        assert!(rows.index_unchecked(2) > rows.index_unchecked(1));
-        assert!(rows.index_unchecked(2) > rows.index_unchecked(0));
-        assert!(rows.index_unchecked(1) > rows.index_unchecked(0));
-    }
+    assert!(rows.index(2).unwrap() > rows.index(1).unwrap());
+    assert!(rows.index(2).unwrap() > rows.index(0).unwrap());
+    assert!(rows.index(1).unwrap() > rows.index(0).unwrap());
 
     let converter = RowConverter::new(vec![SortField::new_with_options(
         DataType::Boolean.wrap_nullable(),
@@ -175,11 +202,9 @@ fn test_bool() {
 
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        assert!(rows.index_unchecked(2) < rows.index_unchecked(1));
-        assert!(rows.index_unchecked(2) < rows.index_unchecked(0));
-        assert!(rows.index_unchecked(1) < rows.index_unchecked(0));
-    }
+    assert!(rows.index(2).unwrap() < rows.index(1).unwrap());
+    assert!(rows.index(2).unwrap() < rows.index(0).unwrap());
+    assert!(rows.index(1).unwrap() < rows.index(0).unwrap());
 }
 
 #[test]
@@ -207,12 +232,10 @@ fn test_binary() {
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        assert!(rows.index_unchecked(1) < rows.index_unchecked(0));
-        assert!(rows.index_unchecked(2) < rows.index_unchecked(4));
-        assert!(rows.index_unchecked(3) < rows.index_unchecked(0));
-        assert!(rows.index_unchecked(3) < rows.index_unchecked(1));
-    }
+    assert!(rows.index(1).unwrap() < rows.index(0).unwrap());
+    assert!(rows.index(2).unwrap() < rows.index(4).unwrap());
+    assert!(rows.index(3).unwrap() < rows.index(0).unwrap());
+    assert!(rows.index(3).unwrap() < rows.index(1).unwrap());
 
     const BLOCK_SIZE: usize = 32;
 
@@ -235,18 +258,16 @@ fn test_binary() {
         RowConverter::new(vec![SortField::new(DataType::Binary.wrap_nullable())]).unwrap();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() {
-            for j in i + 1..rows.len() {
-                assert!(
-                    rows.index_unchecked(i) < rows.index_unchecked(j),
-                    "{} < {} - {:?} < {:?}",
-                    i,
-                    j,
-                    rows.index_unchecked(i),
-                    rows.index_unchecked(j)
-                );
-            }
+    for i in 0..rows.len() {
+        for j in i + 1..rows.len() {
+            assert!(
+                rows.index(i).unwrap() < rows.index(j).unwrap(),
+                "{} < {} - {:?} < {:?}",
+                i,
+                j,
+                rows.index(i).unwrap(),
+                rows.index(j).unwrap()
+            );
         }
     }
 
@@ -258,18 +279,16 @@ fn test_binary() {
     .unwrap();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() {
-            for j in i + 1..rows.len() {
-                assert!(
-                    rows.index_unchecked(i) > rows.index_unchecked(j),
-                    "{} > {} - {:?} > {:?}",
-                    i,
-                    j,
-                    rows.index_unchecked(i),
-                    rows.index_unchecked(j)
-                );
-            }
+    for i in 0..rows.len() {
+        for j in i + 1..rows.len() {
+            assert!(
+                rows.index(i).unwrap() > rows.index(j).unwrap(),
+                "{} > {} - {:?} > {:?}",
+                i,
+                j,
+                rows.index(i).unwrap(),
+                rows.index(j).unwrap()
+            );
         }
     }
 }
@@ -284,12 +303,10 @@ fn test_string() {
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        assert!(rows.index_unchecked(1) < rows.index_unchecked(0));
-        assert!(rows.index_unchecked(2) < rows.index_unchecked(4));
-        assert!(rows.index_unchecked(3) < rows.index_unchecked(0));
-        assert!(rows.index_unchecked(3) < rows.index_unchecked(1));
-    }
+    assert!(rows.index(1).unwrap() < rows.index(0).unwrap());
+    assert!(rows.index(2).unwrap() < rows.index(4).unwrap());
+    assert!(rows.index(3).unwrap() < rows.index(0).unwrap());
+    assert!(rows.index(3).unwrap() < rows.index(1).unwrap());
 
     const BLOCK_SIZE: usize = 32;
 
@@ -309,18 +326,16 @@ fn test_string() {
         RowConverter::new(vec![SortField::new(DataType::String.wrap_nullable())]).unwrap();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() {
-            for j in i + 1..rows.len() {
-                assert!(
-                    rows.index_unchecked(i) < rows.index_unchecked(j),
-                    "{} < {} - {:?} < {:?}",
-                    i,
-                    j,
-                    rows.index_unchecked(i),
-                    rows.index_unchecked(j)
-                );
-            }
+    for i in 0..rows.len() {
+        for j in i + 1..rows.len() {
+            assert!(
+                rows.index(i).unwrap() < rows.index(j).unwrap(),
+                "{} < {} - {:?} < {:?}",
+                i,
+                j,
+                rows.index(i).unwrap(),
+                rows.index(j).unwrap()
+            );
         }
     }
 
@@ -332,18 +347,16 @@ fn test_string() {
     .unwrap();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() {
-            for j in i + 1..rows.len() {
-                assert!(
-                    rows.index_unchecked(i) > rows.index_unchecked(j),
-                    "{} > {} - {:?} > {:?}",
-                    i,
-                    j,
-                    rows.index_unchecked(i),
-                    rows.index_unchecked(j)
-                );
-            }
+    for i in 0..rows.len() {
+        for j in i + 1..rows.len() {
+            assert!(
+                rows.index(i).unwrap() > rows.index(j).unwrap(),
+                "{} > {} - {:?} > {:?}",
+                i,
+                j,
+                rows.index(i).unwrap(),
+                rows.index(j).unwrap()
+            );
         }
     }
 }
@@ -390,18 +403,16 @@ fn test_variant() {
     let num_rows = col.len();
     let rows = converter.convert_columns(&[col.clone()], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() {
-            for j in i + 1..rows.len() {
-                assert!(
-                    rows.index_unchecked(i) < rows.index_unchecked(j),
-                    "{} < {} - {:?} < {:?}",
-                    i,
-                    j,
-                    rows.index_unchecked(i),
-                    rows.index_unchecked(j)
-                );
-            }
+    for i in 0..rows.len() {
+        for j in i + 1..rows.len() {
+            assert!(
+                rows.index(i).unwrap() < rows.index(j).unwrap(),
+                "{} < {} - {:?} < {:?}",
+                i,
+                j,
+                rows.index(i).unwrap(),
+                rows.index(j).unwrap()
+            );
         }
     }
 
@@ -413,18 +424,16 @@ fn test_variant() {
     .unwrap();
     let rows = converter.convert_columns(&[col], num_rows);
 
-    unsafe {
-        for i in 0..rows.len() {
-            for j in i + 1..rows.len() {
-                assert!(
-                    rows.index_unchecked(i) > rows.index_unchecked(j),
-                    "{} > {} - {:?} > {:?}",
-                    i,
-                    j,
-                    rows.index_unchecked(i),
-                    rows.index_unchecked(j)
-                );
-            }
+    for i in 0..rows.len() {
+        for j in i + 1..rows.len() {
+            assert!(
+                rows.index(i).unwrap() > rows.index(j).unwrap(),
+                "{} > {} - {:?} > {:?}",
+                i,
+                j,
+                rows.index(i).unwrap(),
+                rows.index(j).unwrap()
+            );
         }
     }
 }
@@ -475,13 +484,11 @@ fn generate_column(len: usize) -> Column {
 }
 
 fn print_row(cols: &[Column], row: usize) -> String {
-    unsafe {
-        let t: Vec<_> = cols
-            .iter()
-            .map(|x| format!("{:?}", x.index_unchecked(row)))
-            .collect();
-        t.join(",")
-    }
+    let t: Vec<_> = cols
+        .iter()
+        .map(|x| format!("{:?}", x.index(row).unwrap()))
+        .collect();
+    t.join(",")
 }
 
 fn print_options(cols: &[(bool, bool)]) -> String {
@@ -546,24 +553,22 @@ fn fuzz_test() {
         let converter = RowConverter::new(fields).unwrap();
         let rows = converter.convert_columns(&columns, num_rows);
 
-        unsafe {
-            for i in 0..num_rows {
-                for j in 0..num_rows {
-                    let row_i = rows.index_unchecked(i);
-                    let row_j = rows.index_unchecked(j);
-                    let row_cmp = row_i.cmp(row_j);
-                    let lex_cmp = comparator.compare(i, j);
-                    assert_eq!(
-                        row_cmp,
-                        lex_cmp,
-                        "\ndata: ({:?} vs {:?})\nrow format: ({:?} vs {:?})\noptions: {:?}",
-                        print_row(&columns, i),
-                        print_row(&columns, j),
-                        row_i,
-                        row_j,
-                        print_options(&options)
-                    );
-                }
+        for i in 0..num_rows {
+            for j in 0..num_rows {
+                let row_i = rows.index(i).unwrap();
+                let row_j = rows.index(j).unwrap();
+                let row_cmp = row_i.cmp(row_j);
+                let lex_cmp = comparator.compare(i, j);
+                assert_eq!(
+                    row_cmp,
+                    lex_cmp,
+                    "\ndata: ({:?} vs {:?})\nrow format: ({:?} vs {:?})\noptions: {:?}",
+                    print_row(&columns, i),
+                    print_row(&columns, j),
+                    row_i,
+                    row_j,
+                    print_options(&options)
+                );
             }
         }
     }

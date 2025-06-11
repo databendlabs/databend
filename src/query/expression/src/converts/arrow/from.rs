@@ -35,6 +35,7 @@ use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
+use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::types::AnyType;
 use crate::types::ArrayColumn;
@@ -46,6 +47,8 @@ use crate::types::GeographyColumn;
 use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
+use crate::types::VectorColumn;
+use crate::types::VectorDataType;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
@@ -79,6 +82,27 @@ impl TryFrom<&Field> for TableField {
             ARROW_EXT_TYPE_GEOMETRY => TableDataType::Geometry,
             ARROW_EXT_TYPE_GEOGRAPHY => TableDataType::Geography,
             ARROW_EXT_TYPE_INTERVAL => TableDataType::Interval,
+            ARROW_EXT_TYPE_VECTOR => match arrow_f.data_type() {
+                ArrowDataType::FixedSizeList(field, dimension) => {
+                    let vector_ty = match field.data_type() {
+                        ArrowDataType::Int8 => VectorDataType::Int8(*dimension as u64),
+                        ArrowDataType::Float32 => VectorDataType::Float32(*dimension as u64),
+                        _ => {
+                            return Err(ErrorCode::Internal(format!(
+                                "Unsupported FixedSizeList Arrow type: {:?}",
+                                field.data_type()
+                            )));
+                        }
+                    };
+                    TableDataType::Vector(vector_ty)
+                }
+                arrow_type => {
+                    return Err(ErrorCode::Internal(format!(
+                        "Unsupported Arrow type: {:?}",
+                        arrow_type
+                    )));
+                }
+            },
             _ => match arrow_f.data_type() {
                 ArrowDataType::Null => TableDataType::Null,
                 ArrowDataType::Boolean => TableDataType::Boolean,
@@ -99,17 +123,17 @@ impl TryFrom<&Field> for TableField {
                 ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
                     TableDataType::String
                 }
-                ArrowDataType::Decimal128(precision, scale) => {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                        precision: *precision,
-                        scale: *scale as u8,
-                    }))
+                ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
+                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
+                        *precision,
+                        *scale as _,
+                    )?))
                 }
-                ArrowDataType::Decimal256(precision, scale) => {
-                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                        precision: *precision,
-                        scale: *scale as u8,
-                    }))
+                ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
+                    TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(
+                        *precision,
+                        *scale as _,
+                    )?))
                 }
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
                 ArrowDataType::Date32 => TableDataType::Date,
@@ -268,7 +292,8 @@ impl Column {
             DataType::Boolean => Column::Boolean(Bitmap::from_array_data(array.to_data())),
             DataType::String => Column::String(try_to_string_column(array)?),
             DataType::Decimal(_) => {
-                Column::Decimal(DecimalColumn::try_from_arrow_data(array.to_data())?)
+                let col = DecimalColumn::try_from_arrow_data(array.to_data())?;
+                Column::Decimal(col.strict_decimal_data_type())
             }
             DataType::Timestamp => {
                 let array = arrow_cast::cast(
@@ -360,6 +385,43 @@ impl Column {
             DataType::Variant => Column::Variant(try_to_binary_column(array)?),
             DataType::Geometry => Column::Geometry(try_to_binary_column(array)?),
             DataType::Geography => Column::Geography(GeographyColumn(try_to_binary_column(array)?)),
+            DataType::Vector(ty) => {
+                let (num_ty, inner_ty, dimension) = match ty {
+                    VectorDataType::Int8(dimension) => {
+                        (NumberDataType::Int8, ArrowDataType::Int8, *dimension as i32)
+                    }
+                    VectorDataType::Float32(dimension) => (
+                        NumberDataType::Float32,
+                        ArrowDataType::Float32,
+                        *dimension as i32,
+                    ),
+                };
+                let inner_field = Arc::new(Field::new_list_field(inner_ty, false));
+                let list_type = ArrowDataType::FixedSizeList(inner_field, dimension);
+                let array = arrow_cast::cast(array.as_ref(), &list_type)?;
+
+                let array = array
+                    .as_any()
+                    .downcast_ref::<arrow_array::FixedSizeListArray>()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Cannot downcast to FixedSizeListArray from array: {:?}",
+                            array
+                        ))
+                    })?;
+                let col = Column::from_arrow_rs(array.values().clone(), &DataType::Number(num_ty))?;
+                let num_values = col.as_number().unwrap();
+                match ty {
+                    VectorDataType::Int8(dimension) => {
+                        let values = num_values.as_int8().unwrap();
+                        Column::Vector(VectorColumn::Int8((values.clone(), *dimension as usize)))
+                    }
+                    VectorDataType::Float32(dimension) => {
+                        let values = num_values.as_float32().unwrap();
+                        Column::Vector(VectorColumn::Float32((values.clone(), *dimension as usize)))
+                    }
+                }
+            }
             DataType::Generic(_) => unreachable!("Generic type is not supported"),
         };
 

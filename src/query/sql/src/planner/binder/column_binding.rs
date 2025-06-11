@@ -39,6 +39,8 @@ pub struct ColumnBinding {
     // Opitonal virtual expr, used by virtual computed column and variant virtual column,
     // `virtual_expr` will be parsed and bind to a `ScalarExpr`.
     pub virtual_expr: Option<String>,
+    // A flag indicates the column binding from srf or not
+    pub is_srf: bool,
 }
 
 const DUMMY_INDEX: usize = usize::MAX;
@@ -77,6 +79,7 @@ impl ColumnBinding {
             data_type,
             visibility: Visibility::Visible,
             virtual_expr: None,
+            is_srf: false,
         }
     }
 
@@ -110,6 +113,7 @@ pub struct ColumnBindingBuilder {
     pub visibility: Visibility,
 
     pub virtual_expr: Option<String>,
+    pub is_srf: bool,
 }
 
 impl ColumnBindingBuilder {
@@ -129,6 +133,7 @@ impl ColumnBindingBuilder {
             data_type,
             visibility,
             virtual_expr: None,
+            is_srf: false,
         }
     }
 
@@ -157,6 +162,11 @@ impl ColumnBindingBuilder {
         self
     }
 
+    pub fn is_srf(mut self, is_srf: bool) -> ColumnBindingBuilder {
+        self.is_srf = is_srf;
+        self
+    }
+
     pub fn build(self) -> ColumnBinding {
         ColumnBinding {
             database_name: self.database_name,
@@ -168,6 +178,7 @@ impl ColumnBindingBuilder {
             data_type: self.data_type,
             visibility: self.visibility,
             virtual_expr: self.virtual_expr,
+            is_srf: self.is_srf,
         }
     }
 }

@@ -160,16 +160,14 @@ fn resolve_range_condition(
             let arg1_data_type = arg1.data_type()?;
             let arg2_data_type = arg2.data_type()?;
             if arg1_data_type.ne(&arg2_data_type) {
-                let common_type = common_super_type(
-                    arg1_data_type.clone(),
-                    arg2_data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
-                    ))
-                })?;
+                let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules(&func.func_name);
+                let common_type =
+                    common_super_type(arg1_data_type.clone(), arg2_data_type.clone(), cast_rules)
+                        .ok_or_else(|| {
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
+                        ))
+                    })?;
                 arg1 = wrap_cast(&arg1, &common_type);
                 arg2 = wrap_cast(&arg2, &common_type);
             };

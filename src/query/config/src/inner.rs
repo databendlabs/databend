@@ -438,7 +438,13 @@ impl MetaConfig {
     }
 
     pub fn to_meta_grpc_client_conf(&self) -> RpcClientConf {
+        let embedded_dir = if self.embedded_dir.is_empty() {
+            None
+        } else {
+            Some(self.embedded_dir.to_string())
+        };
         RpcClientConf {
+            embedded_dir,
             endpoints: self.endpoints.clone(),
             username: self.username.clone(),
             password: self.password.clone(),

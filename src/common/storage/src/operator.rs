@@ -36,6 +36,7 @@ use databend_common_meta_app::storage::StorageHttpConfig;
 use databend_common_meta_app::storage::StorageHuggingfaceConfig;
 use databend_common_meta_app::storage::StorageIpfsConfig;
 use databend_common_meta_app::storage::StorageMokaConfig;
+use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
@@ -56,6 +57,7 @@ use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
 
+use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
@@ -67,24 +69,44 @@ static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, S
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
     let op = match &cfg {
-        StorageParams::Azblob(cfg) => build_operator(init_azblob_operator(cfg)?)?,
-        StorageParams::Fs(cfg) => build_operator(init_fs_operator(cfg)?)?,
-        StorageParams::Gcs(cfg) => build_operator(init_gcs_operator(cfg)?)?,
+        StorageParams::Azblob(cfg) => {
+            build_operator(init_azblob_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::Fs(cfg) => build_operator(init_fs_operator(cfg)?, None)?,
+        StorageParams::Gcs(cfg) => {
+            build_operator(init_gcs_operator(cfg)?, cfg.network_config.as_ref())?
+        }
         #[cfg(feature = "storage-hdfs")]
-        StorageParams::Hdfs(cfg) => build_operator(init_hdfs_operator(cfg)?)?,
+        StorageParams::Hdfs(cfg) => {
+            build_operator(init_hdfs_operator(cfg)?, cfg.network_config.as_ref())?
+        }
         StorageParams::Http(cfg) => {
             let (builder, layer) = init_http_operator(cfg)?;
-            build_operator(builder)?.layer(layer)
+            build_operator(builder, cfg.network_config.as_ref())?.layer(layer)
         }
-        StorageParams::Ipfs(cfg) => build_operator(init_ipfs_operator(cfg)?)?,
-        StorageParams::Memory => build_operator(init_memory_operator()?)?,
-        StorageParams::Moka(cfg) => build_operator(init_moka_operator(cfg)?)?,
-        StorageParams::Obs(cfg) => build_operator(init_obs_operator(cfg)?)?,
-        StorageParams::S3(cfg) => build_operator(init_s3_operator(cfg)?)?,
-        StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
-        StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
-        StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
-        StorageParams::Huggingface(cfg) => build_operator(init_huggingface_operator(cfg)?)?,
+        StorageParams::Ipfs(cfg) => {
+            build_operator(init_ipfs_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::Memory => build_operator(init_memory_operator()?, None)?,
+        StorageParams::Moka(cfg) => build_operator(init_moka_operator(cfg)?, None)?,
+        StorageParams::Obs(cfg) => {
+            build_operator(init_obs_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::S3(cfg) => {
+            build_operator(init_s3_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::Oss(cfg) => {
+            build_operator(init_oss_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::Webhdfs(cfg) => {
+            build_operator(init_webhdfs_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::Cos(cfg) => {
+            build_operator(init_cos_operator(cfg)?, cfg.network_config.as_ref())?
+        }
+        StorageParams::Huggingface(cfg) => {
+            build_operator(init_huggingface_operator(cfg)?, cfg.network_config.as_ref())?
+        }
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -114,19 +136,37 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 /// ```
 ///
 /// Please balance the performance and compile time.
-pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
+pub fn build_operator<B: Builder>(
+    builder: B,
+    cfg: Option<&StorageNetworkParams>,
+) -> Result<Operator> {
     let ob = Operator::new(builder)?
         // Timeout layer is required to be the first layer so that internal
         // futures can be cancelled safely when the timeout is reached.
         .layer({
-            let retry_timeout = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT")
-                .ok()
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(10);
-            let retry_io_timeout = env::var("_DATABEND_INTERNAL_RETRY_IO_TIMEOUT")
-                .ok()
-                .and_then(|v| v.parse::<u64>().ok())
-                .unwrap_or(60);
+            let mut retry_timeout = match &cfg {
+                None => 10,
+                Some(v) if v.retry_timeout == 0 => 10,
+                Some(v) => v.retry_timeout,
+            };
+
+            let mut retry_io_timeout = match &cfg {
+                None => 60,
+                Some(v) if v.retry_io_timeout == 0 => 60,
+                Some(v) => v.retry_io_timeout,
+            };
+
+            if let Ok(v) = env::var("_DATABEND_INTERNAL_RETRY_TIMEOUT") {
+                if let Ok(v) = v.parse::<u64>() {
+                    retry_timeout = v;
+                }
+            }
+
+            if let Ok(v) = env::var("_DATABEND_INTERNAL_RETRY_IO_TIMEOUT") {
+                if let Ok(v) = v.parse::<u64>() {
+                    retry_io_timeout = v;
+                }
+            }
 
             let mut timeout_layer = TimeoutLayer::new();
 
@@ -152,7 +192,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .finish();
 
     // Make sure the http client has been updated.
-    ob.update_http_client(|_| HttpClient::with(StorageHttpClient::default()));
+    ob.update_http_client(|_| HttpClient::with(get_http_client(cfg)));
 
     let mut op = ob
         // Add retry
@@ -170,13 +210,67 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add PrometheusClientLayer
         .layer(METRICS_LAYER.clone());
 
+    let mut max_concurrent_request = cfg.as_ref().map(|x| x.max_concurrent_io_requests);
+
     if let Ok(permits) = env::var("_DATABEND_INTERNAL_MAX_CONCURRENT_IO_REQUEST") {
         if let Ok(permits) = permits.parse::<usize>() {
+            max_concurrent_request = Some(permits);
+        }
+    }
+
+    if let Some(permits) = max_concurrent_request {
+        if permits != 0 {
             op = op.layer(ConcurrentLimitLayer::new(permits));
         }
     }
 
     Ok(op)
+}
+
+fn get_http_client(cfg: Option<&StorageNetworkParams>) -> StorageHttpClient {
+    let mut pool_max_idle_per_host = usize::MAX;
+
+    if let Some(cfg) = cfg {
+        if cfg.pool_max_idle_per_host != 0 {
+            pool_max_idle_per_host = cfg.pool_max_idle_per_host;
+        }
+    }
+
+    if let Ok(v) = env::var("_DATABEND_INTERNAL_POOL_MAX_IDLE_PER_HOST") {
+        if let Ok(v) = v.parse::<usize>() {
+            pool_max_idle_per_host = v;
+        }
+    }
+
+    // Connect timeout default to 30s.
+    let mut connect_timeout = 30;
+    if let Some(cfg) = cfg {
+        if cfg.connect_timeout != 0 {
+            connect_timeout = cfg.connect_timeout;
+        }
+    }
+
+    if let Ok(v) = env::var("_DATABEND_INTERNAL_CONNECT_TIMEOUT") {
+        if let Ok(v) = v.parse::<u64>() {
+            connect_timeout = v;
+        }
+    }
+
+    let mut keepalive = 0;
+
+    if let Some(cfg) = cfg {
+        if cfg.tcp_keepalive != 0 {
+            keepalive = cfg.tcp_keepalive;
+        }
+    }
+
+    if let Ok(v) = env::var("_DATABEND_INTERNAL_TCP_KEEPALIVE") {
+        if let Ok(v) = v.parse::<u64>() {
+            keepalive = v;
+        }
+    }
+
+    get_storage_http_client(pool_max_idle_per_host, connect_timeout, keepalive)
 }
 
 /// init_azblob_operator will init an opendal azblob operator.
@@ -521,7 +615,7 @@ pub async fn check_operator(
 
     GlobalIORuntime::instance()
         .spawn(async move {
-            let res = op.stat("/").await;
+            let res = op.stat("databend_storage_checker").await;
             match res {
                 Ok(_) => Ok(()),
                 Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
@@ -532,7 +626,7 @@ pub async fn check_operator(
         .expect("join must succeed")
         .map_err(|cause| {
             ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: config: {:?}, cause: {cause}",
+                "current configured storage is not valid: config: {:?}, cause: {cause}",
                 params
             ))
         })

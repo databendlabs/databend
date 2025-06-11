@@ -30,15 +30,15 @@ pub trait ValueVisitor: Sized {
     fn visit_scalar(&mut self, _scalar: Scalar) -> Result<Self::U, Self::Error>;
 
     fn visit_null(&mut self, len: usize) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<NullType>(len)
+        self.visit_typed_column::<NullType>(len, &DataType::Null)
     }
 
     fn visit_empty_array(&mut self, len: usize) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<EmptyArrayType>(len)
+        self.visit_typed_column::<EmptyArrayType>(len, &DataType::EmptyArray)
     }
 
     fn visit_empty_map(&mut self, len: usize) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<EmptyMapType>(len)
+        self.visit_typed_column::<EmptyMapType>(len, &DataType::EmptyMap)
     }
 
     fn visit_any_number(&mut self, column: NumberColumn) -> Result<Self::U, Self::Error> {
@@ -51,7 +51,7 @@ pub trait ValueVisitor: Sized {
         &mut self,
         column: <NumberType<T> as AccessType>::Column,
     ) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<NumberType<T>>(column)
+        self.visit_typed_column::<NumberType<T>>(column, &DataType::Number(T::data_type()))
     }
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<Self::U, Self::Error> {
@@ -63,76 +63,86 @@ pub trait ValueVisitor: Sized {
     fn visit_decimal<T: Decimal>(
         &mut self,
         column: Buffer<T>,
-        _size: DecimalSize,
+        size: DecimalSize,
     ) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<DecimalType<T>>(column)
+        self.visit_typed_column::<DecimalType<T>>(column, &DataType::Decimal(size))
     }
 
     fn visit_boolean(&mut self, bitmap: Bitmap) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<BooleanType>(bitmap)
+        self.visit_typed_column::<BooleanType>(bitmap, &DataType::Boolean)
     }
 
     fn visit_binary(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<BinaryType>(column)
+        self.visit_typed_column::<BinaryType>(column, &DataType::Binary)
     }
 
     fn visit_string(&mut self, column: StringColumn) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<StringType>(column)
+        self.visit_typed_column::<StringType>(column, &DataType::String)
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<TimestampType>(buffer)
+        self.visit_typed_column::<TimestampType>(buffer, &DataType::Timestamp)
     }
 
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<DateType>(buffer)
+        self.visit_typed_column::<DateType>(buffer, &DataType::Date)
     }
 
     fn visit_interval(
         &mut self,
         buffer: Buffer<months_days_micros>,
     ) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<IntervalType>(buffer)
+        self.visit_typed_column::<IntervalType>(buffer, &DataType::Interval)
     }
 
     fn visit_array(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<AnyType>(Column::Array(column))
+        let data_type = Box::new(column.values().data_type());
+        self.visit_typed_column::<AnyType>(Column::Array(column), &DataType::Array(data_type))
     }
 
     fn visit_map(&mut self, column: Box<ArrayColumn<AnyType>>) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<AnyType>(Column::Map(column))
+        let data_type = Box::new(column.values().data_type());
+        self.visit_typed_column::<AnyType>(Column::Map(column), &DataType::Map(data_type))
     }
 
     fn visit_tuple(&mut self, columns: Vec<Column>) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<AnyType>(Column::Tuple(columns))
+        let data_types = columns.iter().map(|c| c.data_type()).collect();
+        self.visit_typed_column::<AnyType>(Column::Tuple(columns), &DataType::Tuple(data_types))
     }
 
     fn visit_bitmap(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<BitmapType>(column)
+        self.visit_typed_column::<BitmapType>(column, &DataType::Bitmap)
     }
 
     fn visit_nullable(
         &mut self,
         column: Box<NullableColumn<AnyType>>,
     ) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<AnyType>(Column::Nullable(column))
+        let data_type = column.column.data_type().wrap_nullable();
+        self.visit_typed_column::<AnyType>(Column::Nullable(column), &data_type)
     }
 
     fn visit_variant(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<VariantType>(column)
+        self.visit_typed_column::<VariantType>(column, &DataType::Variant)
     }
 
     fn visit_geometry(&mut self, column: BinaryColumn) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<GeometryType>(column)
+        self.visit_typed_column::<GeometryType>(column, &DataType::Geometry)
     }
 
     fn visit_geography(&mut self, column: GeographyColumn) -> Result<Self::U, Self::Error> {
-        self.visit_typed_column::<GeographyType>(column)
+        self.visit_typed_column::<GeographyType>(column, &DataType::Geography)
+    }
+
+    fn visit_vector(&mut self, column: VectorColumn) -> Result<Self::U, Self::Error> {
+        let data_type = DataType::Vector(column.data_type());
+        self.visit_typed_column::<VectorType>(column, &data_type)
     }
 
     fn visit_typed_column<T: ValueType>(
         &mut self,
-        column: <T as AccessType>::Column,
+        column: T::Column,
+        data_type: &DataType,
     ) -> Result<Self::U, Self::Error>;
 
     fn visit_value(&mut self, value: Value<AnyType>) -> Result<Self::U, Self::Error> {
@@ -170,12 +180,14 @@ pub trait ValueVisitor: Sized {
             Column::Variant(column) => visitor.visit_variant(column),
             Column::Geometry(column) => visitor.visit_geometry(column),
             Column::Geography(column) => visitor.visit_geography(column),
+            Column::Vector(column) => visitor.visit_vector(column),
         }
     }
 
     fn visit_simple_type<T: SimpleType>(
         &mut self,
         _: Buffer<T::Scalar>,
+        _: &DataType,
     ) -> Result<Self::U, Self::Error> {
         unimplemented!()
     }

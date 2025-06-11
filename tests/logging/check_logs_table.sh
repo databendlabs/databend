@@ -31,13 +31,13 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 sleep 13
 
 # Test 1
-check_query_log "1" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE target = 'databend::log::profile' and" "1"
+check_query_log "1" "$query_id" "SELECT count(*) FROM system_history.log_history WHERE target = 'databend::log::profile' and" "1"
 
 # Test 2
-check_query_log "2" "$query_id" "SELECT count(*) FROM persistent_system.query_profile WHERE" "1"
+check_query_log "2" "$query_id" "SELECT count(*) FROM system_history.profile_history WHERE" "1"
 
 # Test 3
-check_query_log "3" "$query_id" "SELECT count(*) FROM persistent_system.query_log WHERE target = 'databend::log::query' and" "2"
+check_query_log "3" "$query_id" "SELECT count(*) FROM system_history.log_history WHERE target = 'databend::log::query' and" "2"
 
 # Test 4
-check_query_log "4" "$query_id" "SELECT count(*) FROM persistent_system.query_details WHERE" "2"
+check_query_log "4" "$query_id" "SELECT count(*) FROM system_history.query_history WHERE" "1"

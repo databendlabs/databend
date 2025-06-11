@@ -126,6 +126,7 @@ impl Table for ResultScan {
             compressed_size: self.file_size,
             estimated_uncompressed_size: self.file_size,
             dedup_key: format!("{}_{}", self.location, self.file_size),
+            bucket_option: None,
         });
 
         let part_info: Box<dyn PartInfo> = Box::new(part);
@@ -158,10 +159,8 @@ impl Table for ResultScan {
             self.schema.clone(),
         )?
         .with_options(read_options);
-        let projection =
-            PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
-        let output_schema = Arc::new(projection.project_schema(&table_schema));
-        let row_group_reader = Arc::new(builder.build_row_group_reader(false)?);
+        let row_group_reader =
+            Arc::new(builder.build_row_group_reader(ParquetSourceType::ResultCache, false)?);
         pipeline.add_source(
             |output| {
                 ParquetSource::create(
@@ -174,7 +173,6 @@ impl Table for ResultScan {
                     vec![],
                     plan.push_downs.clone(),
                     table_schema.clone(),
-                    output_schema.clone(),
                     op.clone(),
                 )
             },

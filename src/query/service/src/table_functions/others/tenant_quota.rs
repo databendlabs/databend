@@ -25,8 +25,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::BlockEntry;
@@ -36,7 +34,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_meta_app::principal::UserOptionFlag;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -186,22 +183,10 @@ impl TenantQuotaSource {
     fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt32),
-                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
-                ),
+                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_databases),
+                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_tables_per_database),
+                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_stages),
+                BlockEntry::from_arg_scalar::<UInt32Type>(quota.max_files_per_stage),
             ],
             1,
         ))

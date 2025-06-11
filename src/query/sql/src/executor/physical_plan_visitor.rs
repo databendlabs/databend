@@ -289,9 +289,9 @@ pub trait PhysicalPlanReplacer {
             need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
             runtime_filter: plan.runtime_filter.clone(),
-            broadcast: plan.broadcast,
             single_to_inner: plan.single_to_inner.clone(),
             build_side_cache_info: plan.build_side_cache_info.clone(),
+            broadcast_id: plan.broadcast_id,
         }))
     }
 
@@ -425,8 +425,9 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             project_columns: plan.project_columns.clone(),
-            input_schema: plan.input_schema.clone(),
-            to_stage_info: plan.to_stage_info.clone(),
+            input_data_schema: plan.input_data_schema.clone(),
+            input_table_schema: plan.input_table_schema.clone(),
+            info: plan.info.clone(),
         })))
     }
 

@@ -119,10 +119,15 @@ impl PageManager {
             Ok(self
                 .last_page
                 .as_ref()
-                .ok_or_else(|| ErrorCode::Internal("last_page is None"))?
+                .ok_or_else(|| {
+                    ErrorCode::Internal("[HTTP-QUERY] Failed to retrieve last page: page is None")
+                })?
                 .clone())
         } else {
-            let message = format!("wrong page number {}", page_no,);
+            let message = format!(
+                "[HTTP-QUERY] Invalid page number: requested {}, current page is {}",
+                page_no, next_no
+            );
             Err(ErrorCode::HttpNotFound(message))
         }
     }
@@ -222,7 +227,10 @@ impl PageManager {
                     }
                     match tokio::time::timeout(d, self.block_receiver.recv()).await {
                         Ok(Some(block)) => {
-                            debug!("http query got new block with {} rows", block.num_rows());
+                            debug!(
+                                "[HTTP-QUERY] Received new data block with {} rows",
+                                block.num_rows()
+                            );
                             self.append_block(
                                 serializer,
                                 block,
@@ -231,11 +239,11 @@ impl PageManager {
                             )?
                         }
                         Ok(None) => {
-                            info!("http query reach end of blocks");
+                            info!("[HTTP-QUERY] Reached end of data blocks");
                             break;
                         }
                         Err(_) => {
-                            debug!("http query long pulling timeout");
+                            debug!("[HTTP-QUERY] Long polling timeout reached");
                             break;
                         }
                     }

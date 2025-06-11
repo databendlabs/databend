@@ -35,7 +35,7 @@ use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::i256;
 use crate::types::AnyType;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
 use crate::types::NumberScalar;
 use crate::BlockEntry;
@@ -168,7 +168,7 @@ fn shrink_i64(num: i64) -> Scalar {
 }
 
 fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
-    if size.scale == 0 {
+    if size.scale() == 0 {
         if decimal.is_positive() && decimal <= i256::from(u64::MAX) {
             return shrink_u64(decimal.as_u64());
         } else if decimal <= i256::from(i64::MAX) && decimal >= i256::from(i64::MIN) {
@@ -185,20 +185,16 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
     }
 
     // adjust precision to the maximum scale of the decimal type
-    if precision < size.scale {
-        precision = size.scale;
+    if precision < size.scale() {
+        precision = size.scale();
     }
     precision = precision.clamp(1, MAX_DECIMAL256_PRECISION);
 
-    let size = DecimalSize { precision, ..size };
-    let decimal_ty = DecimalDataType::from_size(size).unwrap();
-
-    match decimal_ty {
-        DecimalDataType::Decimal128(size) => {
+    let size = DecimalSize::new(precision, size.scale()).unwrap();
+    match size.data_kind() {
+        DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
             Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
         }
-        DecimalDataType::Decimal256(size) => {
-            Scalar::Decimal(DecimalScalar::Decimal256(decimal, size))
-        }
+        DecimalDataKind::Decimal256 => Scalar::Decimal(DecimalScalar::Decimal256(decimal, size)),
     }
 }

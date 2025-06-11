@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,12 +67,13 @@ use databend_common_expression::infer_schema_type;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_number;
-use databend_common_expression::types::decimal::DecimalDataType;
+use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::i256;
+use databend_common_expression::types::vector::VectorDataType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -109,7 +111,9 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
@@ -140,7 +144,6 @@ use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::DictionarySource;
@@ -153,6 +156,7 @@ use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SqlSource;
+use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
@@ -519,42 +523,7 @@ impl<'a> TypeChecker<'a> {
                 left,
                 right,
                 ..
-            } => {
-                if let Expr::Subquery {
-                    subquery,
-                    modifier: Some(subquery_modifier),
-                    ..
-                } = &**right
-                {
-                    match subquery_modifier {
-                        SubqueryModifier::Any | SubqueryModifier::Some => {
-                            let comparison_op = ComparisonOp::try_from(op)?;
-                            self.resolve_subquery(
-                                SubqueryType::Any,
-                                subquery,
-                                Some(*left.clone()),
-                                Some(comparison_op),
-                            )?
-                        }
-                        SubqueryModifier::All => {
-                            let contrary_op = op.to_contrary()?;
-                            let rewritten_subquery = Expr::Subquery {
-                                span: right.span(),
-                                modifier: Some(SubqueryModifier::Any),
-                                subquery: (*subquery).clone(),
-                            };
-                            self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
-                                span: *span,
-                                op: contrary_op,
-                                left: (*left).clone(),
-                                right: Box::new(rewritten_subquery),
-                            })?
-                        }
-                    }
-                } else {
-                    self.resolve_binary_op(*span, op, left.as_ref(), right.as_ref())?
-                }
-            }
+            } => self.resolve_binary_op_or_subquery(span, op, left, right)?,
 
             Expr::JsonOp {
                 span,
@@ -955,7 +924,7 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::CountAll { span, window } => {
+            Expr::CountAll { span, window, .. } => {
                 let (new_agg_func, data_type) =
                     self.resolve_aggregate_function(*span, "count", expr, false, vec![], &[], &[])?;
 
@@ -1005,8 +974,51 @@ impl<'a> TypeChecker<'a> {
                     SubqueryType::Any,
                     subquery,
                     Some(*expr.clone()),
-                    Some(ComparisonOp::Equal),
+                    Some(SubqueryComparisonOp::Equal),
                 )?
+            }
+
+            Expr::LikeSubquery {
+                subquery,
+                expr,
+                span,
+                modifier,
+                escape,
+            } => self.resolve_scalar_subquery(
+                subquery,
+                expr,
+                span,
+                span,
+                modifier,
+                &BinaryOperator::Like(escape.clone()),
+            )?,
+
+            Expr::LikeAnyWithEscape {
+                span,
+                left,
+                right,
+                escape,
+            } => self.resolve_binary_op_or_subquery(
+                span,
+                &BinaryOperator::LikeAny(Some(escape.clone())),
+                left,
+                right,
+            )?,
+
+            Expr::LikeWithEscape {
+                span,
+                left,
+                right,
+                is_not,
+                escape,
+            } => {
+                let like_op = if *is_not {
+                    BinaryOperator::NotLike(Some(escape.clone()))
+                } else {
+                    BinaryOperator::Like(Some(escape.clone()))
+                };
+
+                self.resolve_binary_op_or_subquery(span, &like_op, left, right)?
             }
 
             expr @ Expr::MapAccess { span, .. } => {
@@ -1172,6 +1184,61 @@ impl<'a> TypeChecker<'a> {
             }
         };
         Ok(Box::new((scalar, data_type)))
+    }
+
+    fn resolve_binary_op_or_subquery(
+        &mut self,
+        span: &Span,
+        op: &BinaryOperator,
+        left: &Expr,
+        right: &Expr,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if let Expr::Subquery {
+            subquery,
+            modifier: Some(subquery_modifier),
+            ..
+        } = right
+        {
+            self.resolve_scalar_subquery(subquery, left, span, &right.span(), subquery_modifier, op)
+        } else {
+            self.resolve_binary_op(*span, op, left, right)
+        }
+    }
+
+    fn resolve_scalar_subquery(
+        &mut self,
+        subquery: &Query,
+        expr: &Expr,
+        span: &Span,
+        right_span: &Span,
+        modifier: &SubqueryModifier,
+        op: &BinaryOperator,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        Ok(match modifier {
+            SubqueryModifier::Any | SubqueryModifier::Some => {
+                let comparison_op = SubqueryComparisonOp::try_from(op)?;
+                self.resolve_subquery(
+                    SubqueryType::Any,
+                    subquery,
+                    Some(expr.clone()),
+                    Some(comparison_op),
+                )?
+            }
+            SubqueryModifier::All => {
+                let contrary_op = op.to_contrary()?;
+                let rewritten_subquery = Expr::Subquery {
+                    span: *right_span,
+                    modifier: Some(SubqueryModifier::Any),
+                    subquery: Box::new(subquery.clone()),
+                };
+                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
+                    span: *span,
+                    op: contrary_op,
+                    left: Box::new(expr.clone()),
+                    right: Box::new(rewritten_subquery),
+                })?
+            }
+        })
     }
 
     // TODO: remove this function
@@ -1888,21 +1955,13 @@ impl<'a> TypeChecker<'a> {
                     DataType::Number(NumberDataType::Int64)
                 }
             }
-            DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-                let p = MAX_DECIMAL128_PRECISION;
-                let decimal_size = DecimalSize {
-                    precision: p,
-                    scale: s.scale,
-                };
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+            DataType::Decimal(s) if s.can_carried_by_128() => {
+                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
+                DataType::Decimal(decimal_size)
             }
-            DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-                let p = MAX_DECIMAL256_PRECISION;
-                let decimal_size = DecimalSize {
-                    precision: p,
-                    scale: s.scale,
-                };
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?)
+            DataType::Decimal(s) => {
+                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
+                DataType::Decimal(decimal_size)
             }
             DataType::Null => DataType::Null,
             DataType::Binary => DataType::Binary,
@@ -2875,7 +2934,7 @@ impl<'a> TypeChecker<'a> {
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
-        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
+        let mut arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
 
         // inject the params
         if ["round", "truncate"].contains(&func_name)
@@ -2898,6 +2957,61 @@ impl<'a> TypeChecker<'a> {
                 0
             };
             params.push(Scalar::Number(NumberScalar::Int64(scale)));
+        } else if func_name.eq_ignore_ascii_case("as_decimal") {
+            // Convert the precision and scale argument of `as_decimal` to params
+            if !params.is_empty() {
+                if params.len() > 2 || arguments.len() != 1 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid arguments for `{func_name}`, get {} params and {} arguments",
+                        params.len(),
+                        arguments.len()
+                    )));
+                }
+            } else {
+                if arguments.is_empty() || arguments.len() > 3 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid arguments for `{func_name}` require 1, 2 or 3 arguments, but got {} arguments",
+                        arguments.len()
+                    )));
+                }
+                let param_args = arguments.split_off(1);
+                for arg in param_args.into_iter() {
+                    let expr = type_check::check(&arg, &BUILTIN_FUNCTIONS)?;
+                    let param: u8 = check_number(
+                        expr.span(),
+                        &FunctionContext::default(),
+                        &expr,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    params.push(Scalar::Number(NumberScalar::UInt8(param)));
+                }
+            }
+            if !params.is_empty() {
+                let Some(precision) = params[0].get_i64() else {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid value `{}` for `{func_name}` precision parameter",
+                        params[0]
+                    )));
+                };
+                if precision < 0 || precision > MAX_DECIMAL256_PRECISION as i64 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Invalid value `{precision}` for `{func_name}` precision parameter"
+                    )));
+                }
+                if params.len() == 2 {
+                    let Some(scale) = params[1].get_i64() else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Invalid value `{}` for `{func_name}` scale parameter",
+                            params[1]
+                        )));
+                    };
+                    if scale < 0 || scale > precision {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Invalid value `{scale}` for `{func_name}` scale parameter"
+                        )));
+                    }
+                }
+            }
         }
 
         let raw_expr = RawExpr::FunctionCall {
@@ -2996,9 +3110,9 @@ impl<'a> TypeChecker<'a> {
         right: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match op {
-            BinaryOperator::NotLike | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
+            BinaryOperator::NotLike(_) | BinaryOperator::NotRegexp | BinaryOperator::NotRLike => {
                 let positive_op = match op {
-                    BinaryOperator::NotLike => BinaryOperator::Like,
+                    BinaryOperator::NotLike(escape) => BinaryOperator::Like(escape.clone()),
                     BinaryOperator::NotRegexp => BinaryOperator::Regexp,
                     BinaryOperator::NotRLike => BinaryOperator::RLike,
                     _ => unreachable!(),
@@ -3023,17 +3137,19 @@ impl<'a> TypeChecker<'a> {
                     vec![left, right],
                 )
             }
-            BinaryOperator::Like => {
+            BinaryOperator::Like(escape) => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
                 if let Expr::Literal {
                     value: Literal::String(str),
                     ..
                 } = right
                 {
-                    return self.resolve_like(op, span, left, right, str);
+                    return self.resolve_like(op, span, left, right, str, escape);
                 }
-                let name = op.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[left, right])
+                self.resolve_like_escape(op, span, left, right, escape)
+            }
+            BinaryOperator::LikeAny(escape) => {
+                self.resolve_like_escape(op, span, left, right, escape)
             }
             BinaryOperator::Eq | BinaryOperator::NotEq => {
                 let name = op.to_func_name();
@@ -3145,6 +3261,10 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Millennium => {
                 self.resolve_function(span, "millennium", vec![], &[arg])
             }
+            _ => Err(ErrorCode::SemanticError(
+                "Only support interval type [ISOYear, Year, Quarter, Month, Day, Hour, Minute, Second, Doy, Dow, Week, Epoch, MicroSecond, ISODow, YearWeek, Millennium]".to_string(),
+            )
+            .set_span(span)),
         }
     }
 
@@ -3221,13 +3341,21 @@ impl<'a> TypeChecker<'a> {
                 )
             }
             ASTIntervalKind::Week => {
+                let week_start = self.func_ctx.week_start;
                 self.resolve_function(
                     span,
                     "to_start_of_week", vec![],
                     &[date, &Expr::Literal {
                         span: None,
-                        value: Literal::UInt64(1)
+                        value: Literal::UInt64(week_start as u64)
                     }],
+                )
+            }
+            ASTIntervalKind::ISOWeek => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_iso_week", vec![],
+                    &[date],
                 )
             }
             ASTIntervalKind::Day => {
@@ -3258,7 +3386,7 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                 )
             }
-            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second]".to_string()).set_span(span)),
+            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
         }
     }
 
@@ -3320,7 +3448,7 @@ impl<'a> TypeChecker<'a> {
         typ: SubqueryType,
         subquery: &Query,
         child_expr: Option<Expr>,
-        compare_op: Option<ComparisonOp>,
+        compare_op: Option<SubqueryComparisonOp>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut binder = Binder::new(
             self.ctx.clone(),
@@ -3431,6 +3559,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("is_error"),
             Ascii::new("error_or"),
             Ascii::new("coalesce"),
+            Ascii::new("decode"),
             Ascii::new("last_query_id"),
             Ascii::new("array_sort"),
             Ascii::new("array_aggregate"),
@@ -3661,6 +3790,79 @@ impl<'a> TypeChecker<'a> {
                         span,
                         value: Literal::Null,
                     });
+                    new_args.push(Expr::Literal {
+                        span,
+                        value: Literal::Null,
+                    });
+                }
+
+                let args_ref: Vec<&Expr> = new_args.iter().collect();
+                Some(self.resolve_function(span, "if", vec![], &args_ref))
+            }
+            ("decode", args) => {
+                // DECODE( <expr> , <search1> , <result1> [ , <search2> , <result2> ... ] [ , <default> ] )
+                // Note that, contrary to CASE, a NULL value in the select expression matches a NULL value in the search expressions.
+                if args.len() < 3 {
+                    return Some(Err(ErrorCode::BadArguments(
+                        "DECODE requires at least 3 arguments",
+                    )
+                    .set_span(span)));
+                }
+
+                let mut new_args = Vec::with_capacity(args.len() * 2 + 1);
+                let search_expr = args[0].clone();
+                let mut i = 1;
+
+                while i < args.len() {
+                    let search = args[i].clone();
+                    let result = if i + 1 < args.len() {
+                        args[i + 1].clone()
+                    } else {
+                        // If we're at the last argument and it's odd, it's the default value
+                        break;
+                    };
+
+                    // (a = b) or (a is null and b is null)
+                    let is_null_a = Expr::IsNull {
+                        span,
+                        expr: Box::new(search_expr.clone()),
+                        not: false,
+                    };
+                    let is_null_b = Expr::IsNull {
+                        span,
+                        expr: Box::new(search.clone()),
+                        not: false,
+                    };
+                    let and_expr = Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::And,
+                        left: Box::new(is_null_a),
+                        right: Box::new(is_null_b),
+                    };
+
+                    let eq_expr = Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::Eq,
+                        left: Box::new(search_expr.clone()),
+                        right: Box::new(search),
+                    };
+
+                    let or_expr = Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::Or,
+                        left: Box::new(eq_expr),
+                        right: Box::new(and_expr),
+                    };
+
+                    new_args.push(or_expr);
+                    new_args.push(result);
+                    i += 2;
+                }
+
+                // Add default value if it exists
+                if i + 1 == args.len() {
+                    new_args.push(args[i].clone());
+                } else {
                     new_args.push(Expr::Literal {
                         span,
                         value: Literal::Null,
@@ -4122,10 +4324,10 @@ impl<'a> TypeChecker<'a> {
                 value,
                 precision,
                 scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(i256(*value), DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })),
+            } => Scalar::Decimal(DecimalScalar::Decimal256(
+                i256(*value),
+                DecimalSize::new_unchecked(*precision, *scale),
+            )),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
             Literal::String(string) => Scalar::String(string.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
@@ -4187,13 +4389,22 @@ impl<'a> TypeChecker<'a> {
         left: &Expr,
         right: &Expr,
         like_str: &str,
+        escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if check_const(like_str) {
+        let new_like_str = if let Some(escape) = escape {
+            Cow::Owned(convert_escape_pattern(
+                like_str,
+                escape.chars().next().unwrap(),
+            ))
+        } else {
+            Cow::Borrowed(like_str)
+        };
+        if check_const(&new_like_str) {
             // Convert to equal comparison
             self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
-        } else if check_prefix(like_str) {
+        } else if check_prefix(&new_like_str) {
             // Convert to `a >= like_str and a < like_str + 1`
-            let mut char_vec: Vec<char> = like_str[0..like_str.len() - 1].chars().collect();
+            let mut char_vec: Vec<char> = new_like_str[0..new_like_str.len() - 1].chars().collect();
             let len = char_vec.len();
             let ascii_val = *char_vec.last().unwrap() as u8 + 1;
             char_vec[len - 1] = ascii_val as char;
@@ -4201,7 +4412,7 @@ impl<'a> TypeChecker<'a> {
             let (new_left, _) =
                 *self.resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
                     span: None,
-                    value: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                    value: Literal::String(new_like_str[..new_like_str.len() - 1].to_owned()),
                 })?;
             let (new_right, _) =
                 *self.resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
@@ -4210,9 +4421,28 @@ impl<'a> TypeChecker<'a> {
                 })?;
             self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
         } else {
-            let name = op.to_func_name();
-            self.resolve_function(span, name.as_str(), vec![], &[left, right])
+            self.resolve_like_escape(op, span, left, right, escape)
         }
+    }
+
+    fn resolve_like_escape(
+        &mut self,
+        op: &BinaryOperator,
+        span: Span,
+        left: &Expr,
+        right: &Expr,
+        escape: &Option<String>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let name = op.to_func_name();
+        let escape_expr = escape.as_ref().map(|escape| Expr::Literal {
+            span,
+            value: Literal::String(escape.clone()),
+        });
+        let mut arguments = vec![left, right];
+        if let Some(expr) = &escape_expr {
+            arguments.push(expr)
+        }
+        self.resolve_function(span, name.as_str(), vec![], &arguments)
     }
 
     fn resolve_udf(
@@ -4510,16 +4740,16 @@ impl<'a> TypeChecker<'a> {
                 args_map.insert(parameter.as_str(), (*argument).clone());
             }
         });
-        let udf_expr = self
-            .clone_expr_with_replacement(&expr, &|nest_expr| {
-                if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(column.column.name()) {
-                        return Ok(Some(arg.clone()));
-                    }
+
+        let udf_expr = Self::clone_expr_with_replacement(&expr, |nest_expr| {
+            if let Expr::ColumnRef { column, .. } = nest_expr {
+                if let Some(arg) = args_map.get(column.column.name()) {
+                    return Ok(Some(arg.clone()));
                 }
-                Ok(None)
-            })
-            .map_err(|e| e.set_span(span))?;
+            }
+            Ok(None)
+        })
+        .map_err(|e| e.set_span(span))?;
         let scalar = self.resolve(&udf_expr)?;
         Ok(Box::new((
             UDFLambdaCall {
@@ -5139,7 +5369,7 @@ impl<'a> TypeChecker<'a> {
             span: None,
             subquery: Box::new(distinct_const_scan),
             child_expr: child_scalar,
-            compare_op: Some(ComparisonOp::Equal),
+            compare_op: Some(SubqueryComparisonOp::Equal),
             output_column: ctx.columns[0].clone(),
             projection_index: None,
             data_type: Box::new(data_type),
@@ -5264,295 +5494,24 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn clone_expr_with_replacement<F>(
-        &self,
-        original_expr: &Expr,
-        replacement_fn: &F,
-    ) -> Result<Expr>
-    where
-        F: Fn(&Expr) -> Result<Option<Expr>>,
-    {
-        let replacement_opt = replacement_fn(original_expr)?;
-        match replacement_opt {
-            Some(replacement) => Ok(replacement),
-            None => match original_expr {
-                Expr::IsNull { span, expr, not } => Ok(Expr::IsNull {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    not: *not,
-                }),
-                Expr::InList {
-                    span,
-                    expr,
-                    list,
-                    not,
-                } => Ok(Expr::InList {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    list: list
-                        .iter()
-                        .map(|item| self.clone_expr_with_replacement(item, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    not: *not,
-                }),
-                Expr::Between {
-                    span,
-                    expr,
-                    low,
-                    high,
-                    not,
-                } => Ok(Expr::Between {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    low: Box::new(self.clone_expr_with_replacement(low.as_ref(), replacement_fn)?),
-                    high: Box::new(
-                        self.clone_expr_with_replacement(high.as_ref(), replacement_fn)?,
-                    ),
-                    not: *not,
-                }),
-                Expr::BinaryOp {
-                    span,
-                    op,
-                    left,
-                    right,
-                } => Ok(Expr::BinaryOp {
-                    span: *span,
-                    op: op.clone(),
-                    left: Box::new(
-                        self.clone_expr_with_replacement(left.as_ref(), replacement_fn)?,
-                    ),
-                    right: Box::new(
-                        self.clone_expr_with_replacement(right.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::UnaryOp { span, op, expr } => Ok(Expr::UnaryOp {
-                    span: *span,
-                    op: op.clone(),
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::Cast {
-                    span,
-                    expr,
-                    target_type,
-                    pg_style,
-                } => Ok(Expr::Cast {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    target_type: target_type.clone(),
-                    pg_style: *pg_style,
-                }),
-                Expr::TryCast {
-                    span,
-                    expr,
-                    target_type,
-                } => Ok(Expr::TryCast {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    target_type: target_type.clone(),
-                }),
-                Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
-                    span: *span,
-                    kind: *kind,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::DatePart { span, kind, expr } => Ok(Expr::DatePart {
-                    span: *span,
-                    kind: *kind,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::Position {
-                    span,
-                    substr_expr,
-                    str_expr,
-                } => Ok(Expr::Position {
-                    span: *span,
-                    substr_expr: Box::new(
-                        self.clone_expr_with_replacement(substr_expr.as_ref(), replacement_fn)?,
-                    ),
-                    str_expr: Box::new(
-                        self.clone_expr_with_replacement(str_expr.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                Expr::Substring {
-                    span,
-                    expr,
-                    substring_from,
-                    substring_for,
-                } => Ok(Expr::Substring {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    substring_from: Box::new(
-                        self.clone_expr_with_replacement(substring_from.as_ref(), replacement_fn)?,
-                    ),
-                    substring_for: if let Some(substring_for_expr) = substring_for {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            substring_for_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
-                }),
-                Expr::Trim {
-                    span,
-                    expr,
-                    trim_where,
-                } => {
-                    Ok(Expr::Trim {
-                        span: *span,
-                        expr: Box::new(
-                            self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                        ),
-                        trim_where: if let Some((trim, trim_expr)) = trim_where {
-                            Some((
-                                trim.clone(),
-                                Box::new(self.clone_expr_with_replacement(
-                                    trim_expr.as_ref(),
-                                    replacement_fn,
-                                )?),
-                            ))
-                        } else {
-                            None
-                        },
-                    })
+    fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
+    where F: Fn(&Expr) -> Result<Option<Expr>> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter))]
+        struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
+
+        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                let replacement_opt = (self.0)(expr);
+                if let Ok(Some(replacement)) = replacement_opt {
+                    *expr = replacement;
                 }
-                Expr::Tuple { span, exprs } => Ok(Expr::Tuple {
-                    span: *span,
-                    exprs: exprs
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                }),
-                Expr::FunctionCall {
-                    span,
-                    func:
-                        ASTFunctionCall {
-                            distinct,
-                            name,
-                            args,
-                            params,
-                            order_by,
-                            window,
-                            lambda,
-                        },
-                } => Ok(Expr::FunctionCall {
-                    span: *span,
-                    func: ASTFunctionCall {
-                        distinct: *distinct,
-                        name: name.clone(),
-                        args: args
-                            .iter()
-                            .map(|arg| self.clone_expr_with_replacement(arg, replacement_fn))
-                            .collect::<Result<Vec<Expr>>>()?,
-                        params: params.clone(),
-                        order_by: order_by.clone(),
-                        window: window.clone(),
-                        lambda: if let Some(lambda) = lambda {
-                            Some(Lambda {
-                                params: lambda.params.clone(),
-                                expr: Box::new(
-                                    self.clone_expr_with_replacement(&lambda.expr, replacement_fn)?,
-                                ),
-                            })
-                        } else {
-                            None
-                        },
-                    },
-                }),
-                Expr::Case {
-                    span,
-                    operand,
-                    conditions,
-                    results,
-                    else_result,
-                } => Ok(Expr::Case {
-                    span: *span,
-                    operand: if let Some(operand_expr) = operand {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            operand_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
-                    conditions: conditions
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    results: results
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                    else_result: if let Some(else_result_expr) = else_result {
-                        Some(Box::new(self.clone_expr_with_replacement(
-                            else_result_expr.as_ref(),
-                            replacement_fn,
-                        )?))
-                    } else {
-                        None
-                    },
-                }),
-                Expr::MapAccess {
-                    span,
-                    expr,
-                    accessor,
-                } => Ok(Expr::MapAccess {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    accessor: accessor.clone(),
-                }),
-                Expr::Array { span, exprs } => Ok(Expr::Array {
-                    span: *span,
-                    exprs: exprs
-                        .iter()
-                        .map(|expr| self.clone_expr_with_replacement(expr, replacement_fn))
-                        .collect::<Result<Vec<Expr>>>()?,
-                }),
-                Expr::Interval { span, expr, unit } => Ok(Expr::Interval {
-                    span: *span,
-                    expr: Box::new(
-                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
-                    ),
-                    unit: *unit,
-                }),
-                Expr::DateAdd {
-                    span,
-                    unit,
-                    interval,
-                    date,
-                } => Ok(Expr::DateAdd {
-                    span: *span,
-                    unit: *unit,
-                    interval: Box::new(
-                        self.clone_expr_with_replacement(interval.as_ref(), replacement_fn)?,
-                    ),
-                    date: Box::new(
-                        self.clone_expr_with_replacement(date.as_ref(), replacement_fn)?,
-                    ),
-                }),
-                _ => Ok(original_expr.clone()),
-            },
+            }
         }
+        let mut visitor = ReplacerVisitor(replacement_fn);
+        let mut expr = original_expr.clone();
+        expr.drive_mut(&mut visitor);
+        Ok(expr)
     }
 
     fn try_fold_constant<Index: ColumnIndex>(
@@ -5611,10 +5570,7 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         TypeName::Float32 => TableDataType::Number(NumberDataType::Float32),
         TypeName::Float64 => TableDataType::Number(NumberDataType::Float64),
         TypeName::Decimal { precision, scale } => {
-            TableDataType::Decimal(DecimalDataType::from_size(DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })?)
+            TableDataType::Decimal(DecimalSize::new(*precision, *scale)?.into())
         }
         TypeName::Binary => TableDataType::Binary,
         TypeName::String => TableDataType::String,
@@ -5680,6 +5636,16 @@ pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDa
         TypeName::Variant => TableDataType::Variant,
         TypeName::Geometry => TableDataType::Geometry,
         TypeName::Geography => TableDataType::Geography,
+        TypeName::Vector(dimension) => {
+            if *dimension == 0 || *dimension > 4096 {
+                return Err(ErrorCode::BadArguments(format!(
+                    "Invalid vector dimension '{}'",
+                    dimension
+                )));
+            }
+            // Only support float32 type currently.
+            TableDataType::Vector(VectorDataType::Float32(*dimension))
+        }
         TypeName::NotNull(inner_type) => {
             let data_type = resolve_type_name(inner_type, not_null)?;
             data_type.remove_nullable()

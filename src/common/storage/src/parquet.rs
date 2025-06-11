@@ -117,12 +117,13 @@ pub async fn read_metadata_async(
 
     let map_err =
         |e: ParquetError| ErrorCode::BadBytes(format!("Invalid Parquet File {path}: {e}",));
-    let metadata_len = ParquetMetaDataReader::decode_footer(
+    let footer_tail = ParquetMetaDataReader::decode_footer_tail(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
             .unwrap(),
     )
-    .map_err(map_err)? as u64;
+    .map_err(map_err)?;
+    let metadata_len = footer_tail.metadata_length() as u64;
     check_meta_size(file_size, metadata_len, path)?;
 
     let footer_len = FOOTER_SIZE + metadata_len;
@@ -168,12 +169,13 @@ pub fn read_metadata_sync(
         .call()?
         .to_vec();
     let buffer_len = buffer.len();
-    let metadata_len = ParquetMetaDataReader::decode_footer(
+    let footer_tail = ParquetMetaDataReader::decode_footer_tail(
         &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
             .unwrap(),
     )
-    .map_err(map_err)? as u64;
+    .map_err(map_err)?;
+    let metadata_len = footer_tail.metadata_length() as u64;
     check_meta_size(file_size, metadata_len, path)?;
 
     let footer_len = FOOTER_SIZE + metadata_len;

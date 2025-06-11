@@ -14,6 +14,8 @@
 // limitations under the License.
 
 mod read;
+mod write;
 
 pub use read::SingleFilePartition;
 pub use read::*;
+pub use write::CopyIntoLocationInfo;

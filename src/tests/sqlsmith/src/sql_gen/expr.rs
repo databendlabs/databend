@@ -27,7 +27,6 @@ use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
 use ethnum::I256;
 use rand::distributions::Alphanumeric;
@@ -344,17 +343,10 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 NumberDataType::Float32 => Literal::Float64(self.rng.gen_range(-3.4e5..=3.4e5)),
                 NumberDataType::Float64 => Literal::Float64(self.rng.gen_range(-1.7e10..=1.7e10)),
             },
-            DataType::Decimal(decimal_type) => match decimal_type {
-                DecimalDataType::Decimal128(size) => Literal::Decimal256 {
-                    value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
-                    precision: size.precision,
-                    scale: size.scale,
-                },
-                DecimalDataType::Decimal256(size) => Literal::Decimal256 {
-                    value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
-                    precision: size.precision,
-                    scale: size.scale,
-                },
+            DataType::Decimal(decimal) => Literal::Decimal256 {
+                value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
+                precision: decimal.precision(),
+                scale: decimal.scale(),
             },
             _ => Literal::Null,
         }
@@ -534,6 +526,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     }
                 }
                 2 => Expr::CountAll {
+                    qualified: vec![],
                     span: None,
                     window: None,
                 },
@@ -902,13 +895,9 @@ fn convert_to_type_name(ty: &DataType) -> TypeName {
         DataType::Number(NumberDataType::Int64) => TypeName::Int64,
         DataType::Number(NumberDataType::Float32) => TypeName::Float32,
         DataType::Number(NumberDataType::Float64) => TypeName::Float64,
-        DataType::Decimal(DecimalDataType::Decimal128(size)) => TypeName::Decimal {
-            precision: size.precision,
-            scale: size.scale,
-        },
-        DataType::Decimal(DecimalDataType::Decimal256(size)) => TypeName::Decimal {
-            precision: size.precision,
-            scale: size.scale,
+        DataType::Decimal(size) => TypeName::Decimal {
+            precision: size.precision(),
+            scale: size.scale(),
         },
         DataType::Date => TypeName::Date,
         DataType::Timestamp => TypeName::Timestamp,

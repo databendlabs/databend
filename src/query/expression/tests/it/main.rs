@@ -16,7 +16,6 @@
 #![feature(try_blocks)]
 
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Column;
@@ -41,6 +40,8 @@ mod schema;
 mod serde;
 mod sort;
 mod types;
+
+mod like_pattern_escape;
 
 fn rand_block_for_all_types(num_rows: usize) -> DataBlock {
     let types = get_all_test_data_types();
@@ -83,14 +84,8 @@ fn get_simple_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
+        DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
+        DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
     ]
@@ -118,14 +113,8 @@ fn get_all_test_data_types() -> Vec<DataType> {
         DataType::Number(NumberDataType::Int64),
         DataType::Number(NumberDataType::Float32),
         DataType::Number(NumberDataType::Float64),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 10,
-            scale: 2,
-        })),
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: 35,
-            scale: 3,
-        })),
+        DataType::Decimal(DecimalSize::new_unchecked(10, 2)),
+        DataType::Decimal(DecimalSize::new_unchecked(35, 3)),
         DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
         DataType::Nullable(Box::new(DataType::String)),
         DataType::Array(Box::new(DataType::Number(NumberDataType::UInt32))),

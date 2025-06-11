@@ -178,18 +178,12 @@ where
     fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
         match &self.data {
             Some((_, arg)) => {
-                if let Some(inner) = A::try_downcast_builder(builder) {
-                    A::push_item(inner, A::to_scalar_ref(arg));
-                } else {
-                    builder.push(A::upcast_scalar(arg.clone()).as_ref());
-                }
+                let mut inner = A::downcast_builder(builder);
+                inner.push_item(A::to_scalar_ref(arg));
             }
             None => {
-                if let Some(inner) = A::try_downcast_builder(builder) {
-                    A::push_default(inner);
-                } else {
-                    builder.push_default();
-                }
+                let mut inner = A::downcast_builder(builder);
+                inner.push_default();
             }
         }
         Ok(())

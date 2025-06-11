@@ -56,6 +56,10 @@ select count(*) = 2 from t1 WHERE a = 3
 statement error 1006
 UPDATE t1 SET a = 3, a = 4 WHERE b > '2022-12-31'
 
+# Test cases for column not exist error
+statement error (?s)1006(.*)Table "db1.t1" does not have a column with name "c_not_exist"
+UPDATE t1 SET a = 3, c_not_exist = 4 WHERE b > '2022-12-31'
+
 statement ok
 CREATE TABLE IF NOT EXISTS t2(a Int, b Date)
 

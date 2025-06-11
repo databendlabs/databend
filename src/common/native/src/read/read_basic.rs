@@ -20,6 +20,7 @@ use databend_common_expression::types::Bitmap;
 use super::NativeReadBuf;
 use crate::compression::Compression;
 use crate::error::Result;
+use crate::nested::FixedListNested;
 use crate::nested::InitNested;
 use crate::nested::ListNested;
 use crate::nested::Nested;
@@ -76,6 +77,17 @@ pub fn read_nested<R: NativeReadBuf>(
 
                     results.push(Nested::LargeList(ListNested::new(
                         values.into(),
+                        bitmap,
+                        n.is_nullable(),
+                    )))
+                }
+                InitNested::FixedList(_) => {
+                    let mut buf = vec![0u8; 4];
+                    let length = read_u32(reader, &mut buf)?;
+                    let dimension = read_u32(reader, &mut buf)?;
+                    results.push(Nested::FixedList(FixedListNested::new(
+                        dimension as usize,
+                        length as usize,
                         bitmap,
                         n.is_nullable(),
                     )))

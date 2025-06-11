@@ -13,13 +13,24 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_exception::Result;
-use databend_common_sql::execute_commit_statement;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
+use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
+use databend_common_storage::init_stage_operator;
+use databend_common_storages_fuse::commit_with_backoff;
+use databend_common_storages_fuse::TableContext;
+use databend_storages_common_io::Files;
+use databend_storages_common_session::TxnManagerRef;
+use log::error;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+
 pub struct CommitInterpreter {
     ctx: Arc<QueryContext>,
 }
@@ -48,5 +59,57 @@ impl Interpreter for CommitInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         execute_commit_statement(self.ctx.clone()).await?;
         Ok(PipelineBuildResult::create())
+    }
+}
+
+struct ClearTxnManagerGuard(TxnManagerRef);
+
+impl Drop for ClearTxnManagerGuard {
+    fn drop(&mut self) {
+        self.0.lock().clear();
+    }
+}
+
+pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> {
+    // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
+    // Use this guard to clear txn manager before return.
+    let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
+    let is_active = ctx.txn_mgr().lock().is_active();
+    if is_active {
+        ctx.txn_mgr().lock().set_auto_commit();
+        let req = ctx.txn_mgr().lock().req();
+        commit_with_backoff(ctx.clone(), req).await?;
+        let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
+        for (stage_info, files) in need_purge_files {
+            try_purge_files(ctx.clone(), &stage_info, &files).await;
+        }
+    }
+    Ok(())
+}
+
+#[async_backtrace::framed]
+async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, files: &[String]) {
+    let start = Instant::now();
+    let op = init_stage_operator(stage_info);
+
+    match op {
+        Ok(op) => {
+            let file_op = Files::create(ctx, op);
+            if let Err(e) = file_op.remove_file_in_batch(files).await {
+                error!("Failed to delete files: {:?}, error: {}", files, e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to initialize stage operator, error: {}", e);
+        }
+    }
+
+    let elapsed = start.elapsed();
+    info!("Purged {} files, operation took {:?}", files.len(), elapsed);
+
+    // Perf.
+    {
+        metrics_inc_copy_purge_files_counter(files.len() as u32);
+        metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
     }
 }

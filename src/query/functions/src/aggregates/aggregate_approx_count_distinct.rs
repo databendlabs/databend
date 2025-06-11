@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
@@ -63,7 +64,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<u64>,
+        mut builder: BuilderMut<'_, UInt64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         builder.push(self.count() as u64);

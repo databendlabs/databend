@@ -1,0 +1,11 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {"name":  "micros", "type": { "type": "long", "logicalType": "timestamp-micros" } },
+    {"name":  "micros_local", "type": { "type": "long", "logicalType": "local-timestamp-micros" } },
+    {"name":  "millis", "type": { "type": "long", "logicalType": "timestamp-millis" } },
+    {"name":  "millis_local", "type": { "type": "long", "logicalType": "local-timestamp-millis" } }
+  ]
+}

@@ -32,8 +32,8 @@ use databend_common_version::DATABEND_GIT_SEMVER;
 use databend_common_version::DATABEND_GIT_SHA;
 use databend_common_version::DATABEND_SEMVER;
 use databend_query::clusters::ClusterDiscovery;
+use databend_query::history_tables::GlobalHistoryLog;
 use databend_query::local;
-use databend_query::persistent_log::GlobalPersistentLog;
 use databend_query::servers::admin::AdminService;
 use databend_query::servers::flight::FlightService;
 use databend_query::servers::metrics::MetricService;
@@ -61,9 +61,18 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
         Some(Commands::Local {
             query,
             output_format,
-        }) => local::query_local(query, output_format)
-            .await
-            .with_context(make_error)?,
+            config,
+        }) => {
+            let mut conf = conf.clone();
+            if !config.is_empty() {
+                let c =
+                    databend_common_config::Config::load_with_config_file(config.as_str()).unwrap();
+                conf = c.try_into().unwrap();
+            }
+            local::query_local(conf, query, output_format)
+                .await
+                .with_context(make_error)?
+        }
     }
 
     Ok(true)
@@ -282,9 +291,9 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
     if conf.log.structlog.on {
         println!("    structlog: {}", conf.log.structlog);
     }
-    if conf.log.persistentlog.on {
-        GlobalPersistentLog::instance().initialized();
-        println!("    persistentlog: {}", conf.log.persistentlog);
+    if conf.log.history.on && !conf.log.history.log_only {
+        GlobalHistoryLog::instance().initialized();
+        println!("    system history tables: {}", conf.log.history);
     }
 
     println!();

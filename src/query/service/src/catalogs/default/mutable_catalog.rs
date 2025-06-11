@@ -86,6 +86,8 @@ use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListSequencesReply;
+use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -792,6 +794,12 @@ impl Catalog for MutableCatalog {
         Ok(GetSequenceReply {
             meta: seq_meta.data,
         })
+    }
+
+    async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply> {
+        let info = self.ctx.meta.list_sequences(&req.tenant).await?;
+
+        Ok(ListSequencesReply { info })
     }
 
     async fn get_sequence_next_value(

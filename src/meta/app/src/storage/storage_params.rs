@@ -58,6 +58,28 @@ impl Default for StorageParams {
 }
 
 impl StorageParams {
+    /// Get the storage type as a string.
+    pub fn storage_type(&self) -> String {
+        match self {
+            StorageParams::Azblob(_) => "azblob".to_string(),
+            StorageParams::Fs(_) => "fs".to_string(),
+            StorageParams::Ftp(_) => "ftp".to_string(),
+            StorageParams::Gcs(_) => "gcs".to_string(),
+            StorageParams::Hdfs(_) => "hdfs".to_string(),
+            StorageParams::Http(_) => "http".to_string(),
+            StorageParams::Ipfs(_) => "ipfs".to_string(),
+            StorageParams::Memory => "memory".to_string(),
+            StorageParams::Moka(_) => "moka".to_string(),
+            StorageParams::Obs(_) => "obs".to_string(),
+            StorageParams::Oss(_) => "oss".to_string(),
+            StorageParams::S3(_) => "s3".to_string(),
+            StorageParams::Webhdfs(_) => "webhdfs".to_string(),
+            StorageParams::Cos(_) => "cos".to_string(),
+            StorageParams::Huggingface(_) => "huggingface".to_string(),
+            StorageParams::None => "none".to_string(),
+        }
+    }
+
     /// Whether this storage params is secure.
     ///
     /// Query will forbid this storage config unless `allow_insecure` has been enabled.
@@ -157,6 +179,44 @@ impl StorageParams {
 
         Ok(sp)
     }
+
+    /// Apply the update from another StorageParams.
+    ///
+    /// Only specific storage params like `credential` can be updated.
+    pub fn apply_update(self, other: Self) -> Result<Self> {
+        match (self, other) {
+            (StorageParams::Azblob(mut s1), StorageParams::Azblob(s2)) => {
+                s1.account_name = s2.account_name;
+                s1.account_key = s2.account_key;
+                s1.network_config = s2.network_config;
+                Ok(Self::Azblob(s1))
+            }
+            (StorageParams::Gcs(mut s1), StorageParams::Gcs(s2)) => {
+                s1.credential = s2.credential;
+                s1.network_config = s2.network_config;
+                Ok(Self::Gcs(s1))
+            }
+            (StorageParams::S3(mut s1), StorageParams::S3(s2)) => {
+                s1.access_key_id = s2.access_key_id;
+                s1.secret_access_key = s2.secret_access_key;
+                s1.security_token = s2.security_token;
+                s1.role_arn = s2.role_arn;
+                s1.external_id = s2.external_id;
+                s1.master_key = s2.master_key;
+                s1.network_config = s2.network_config;
+                s1.disable_credential_loader = s2.disable_credential_loader;
+                // Remove disable_credential_loader is role_arn has been set.
+                if !s1.role_arn.is_empty() {
+                    s1.disable_credential_loader = false;
+                }
+                Ok(Self::S3(s1))
+            }
+            (s1, s2) => Err(ErrorCode::StorageOther(format!(
+                "Cannot apply update from {:?} to {:?}",
+                &s1, &s2
+            ))),
+        }
+    }
 }
 
 /// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`
@@ -206,8 +266,12 @@ impl Display for StorageParams {
             StorageParams::S3(v) => {
                 write!(
                     f,
-                    "s3 | bucket={},root={},endpoint={}",
-                    v.bucket, v.root, v.endpoint_url
+                    "s3 | bucket={},root={},endpoint={},ak={},iam_role={}",
+                    v.bucket,
+                    v.root,
+                    v.endpoint_url,
+                    &mask_string(&v.access_key_id, 3),
+                    v.role_arn,
                 )
             }
             StorageParams::Webhdfs(v) => {
@@ -235,6 +299,7 @@ pub struct StorageAzblobConfig {
     pub account_name: String,
     pub account_key: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageAzblobConfig {
@@ -272,6 +337,7 @@ pub struct StorageFtpConfig {
     pub root: String,
     pub username: String,
     pub password: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Default for StorageFtpConfig {
@@ -281,6 +347,7 @@ impl Default for StorageFtpConfig {
             username: "".to_string(),
             password: "".to_string(),
             root: "/".to_string(),
+            network_config: Default::default(),
         }
     }
 }
@@ -305,6 +372,7 @@ pub struct StorageGcsConfig {
     pub bucket: String,
     pub root: String,
     pub credential: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Default for StorageGcsConfig {
@@ -314,6 +382,7 @@ impl Default for StorageGcsConfig {
             bucket: String::new(),
             root: String::new(),
             credential: String::new(),
+            network_config: Default::default(),
         }
     }
 }
@@ -340,6 +409,7 @@ impl Debug for StorageGcsConfig {
 pub struct StorageHdfsConfig {
     pub name_node: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";
@@ -373,6 +443,7 @@ pub struct StorageS3Config {
     pub role_arn: String,
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Default for StorageS3Config {
@@ -390,6 +461,7 @@ impl Default for StorageS3Config {
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
+            network_config: Default::default(),
         }
     }
 }
@@ -421,6 +493,7 @@ impl Debug for StorageS3Config {
 pub struct StorageHttpConfig {
     pub endpoint_url: String,
     pub paths: Vec<String>,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
@@ -430,6 +503,7 @@ pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
 pub struct StorageIpfsConfig {
     pub endpoint_url: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 /// Config for storage backend obs.
@@ -440,6 +514,7 @@ pub struct StorageObsConfig {
     pub access_key_id: String,
     pub secret_access_key: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageObsConfig {
@@ -474,6 +549,7 @@ pub struct StorageOssConfig {
     ///
     /// Only effective when `server_side_encryption` is "KMS"
     pub server_side_encryption_key_id: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageOssConfig {
@@ -530,6 +606,7 @@ pub struct StorageWebhdfsConfig {
     pub delegation: String,
     pub disable_list_batch: bool,
     pub user_name: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageWebhdfsConfig {
@@ -554,6 +631,7 @@ pub struct StorageCosConfig {
     pub bucket: String,
     pub endpoint_url: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageCosConfig {
@@ -589,6 +667,7 @@ pub struct StorageHuggingfaceConfig {
     /// Only needed for private repo.
     pub token: String,
     pub root: String,
+    pub network_config: Option<StorageNetworkParams>,
 }
 
 impl Debug for StorageHuggingfaceConfig {
@@ -617,4 +696,14 @@ pub fn mask_string(s: &str, unmask_len: usize) -> String {
         ret.push_str(&s[(s.len() - unmask_len)..]);
         ret
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageNetworkParams {
+    pub retry_timeout: u64,
+    pub retry_io_timeout: u64,
+    pub tcp_keepalive: u64,
+    pub connect_timeout: u64,
+    pub pool_max_idle_per_host: usize,
+    pub max_concurrent_io_requests: usize,
 }

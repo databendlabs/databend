@@ -18,12 +18,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
 
+use super::SelectionBuffers;
 use crate::expr::*;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectExpr;
 use crate::filter::SelectOp;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::Column;
 use crate::EvalContext;
 use crate::EvaluateOptions;
 use crate::Evaluator;
@@ -135,32 +137,41 @@ impl<'a> Selector<'a> {
             )?,
             SelectExpr::Others(expr) => self.process_others(
                 expr,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                SelectionBuffers {
+                    true_selection,
+                    false_selection: false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    select_strategy,
+                    count,
+                },
+                false_selection.1,
             )?,
             SelectExpr::BooleanColumn((id, data_type)) => self.process_boolean_column(
                 *id,
                 data_type,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                SelectionBuffers {
+                    true_selection,
+                    false_selection: false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    select_strategy,
+                    count,
+                },
+                false_selection.1,
             )?,
             SelectExpr::BooleanScalar((constant, data_type)) => self.process_boolean_constant(
                 constant.clone(),
                 data_type,
-                true_selection,
-                false_selection,
-                mutable_true_idx,
-                mutable_false_idx,
-                select_strategy,
-                count,
+                SelectionBuffers {
+                    true_selection,
+                    false_selection: false_selection.0,
+                    mutable_true_idx,
+                    mutable_false_idx,
+                    select_strategy,
+                    count,
+                },
+                false_selection.1,
             )?,
         };
 
@@ -295,7 +306,7 @@ impl<'a> Selector<'a> {
             *mutable_false_idx + count,
             &select_strategy,
         );
-        let mut eval_options = EvaluateOptions::new(selection);
+        let mut eval_options = EvaluateOptions::new_for_select(selection);
         let children = self.evaluator.get_children(exprs, &mut eval_options)?;
         let (left_value, left_data_type) = children[0].clone();
         let (right_value, right_data_type) = children[1].clone();
@@ -311,12 +322,15 @@ impl<'a> Selector<'a> {
             right_value,
             left_data_type,
             right_data_type,
-            true_selection,
-            false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
+            SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            },
+            false_selection.1,
         )
     }
 
@@ -341,34 +355,46 @@ impl<'a> Selector<'a> {
             *mutable_false_idx + count,
             &select_strategy,
         );
-        let mut eval_options = EvaluateOptions::new(selection);
+        let mut eval_options = EvaluateOptions::new_for_select(selection);
         let (value, data_type) = self
             .evaluator
             .get_select_child(column_ref, &mut eval_options)?;
         debug_assert!(
             matches!(data_type, DataType::String | DataType::Nullable(box DataType::String))
         );
-        match value {
-            Value::Scalar(Scalar::Null) => Ok(0),
-            _ => match value.into_column() {
-                Ok(column) => self.select_like(
-                    column,
-                    &data_type,
-                    like_pattern,
-                    not,
-                    true_selection,
-                    false_selection,
-                    mutable_true_idx,
-                    mutable_false_idx,
-                    select_strategy,
-                    count,
-                ),
-                Err(e) => Err(ErrorCode::Internal(format!(
-                    "Can not convert to column with error: {}",
-                    e
-                ))),
-            },
+
+        if value.is_scalar_null() {
+            return Ok(0);
         }
+        let column = value
+            .into_column()
+            .map_err(|v| ErrorCode::Internal(format!("Can not convert to column: {v}")))?;
+
+        // Extract StringColumn and validity from Column
+        let (column, validity) = match column.into_nullable() {
+            Ok(nullable) => (
+                nullable.column.into_string().unwrap(),
+                Some(nullable.validity),
+            ),
+            Err(Column::String(column)) => (column, None),
+            _ => unreachable!(),
+        };
+
+        self.select_like(
+            column,
+            like_pattern,
+            not,
+            validity,
+            SelectionBuffers {
+                true_selection,
+                false_selection: false_selection.0,
+                mutable_true_idx,
+                mutable_false_idx,
+                select_strategy,
+                count,
+            },
+            false_selection.1,
+        )
     }
 
     // Process SelectExpr::Others.
@@ -376,99 +402,61 @@ impl<'a> Selector<'a> {
     fn process_others(
         &self,
         expr: &Expr,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
-        let (result, data_type) = self.process_expr(
-            expr,
-            true_selection,
-            &false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
-        )?;
-        self.select_value(
-            result,
-            &data_type,
-            true_selection,
-            false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
-        )
+        let (result, data_type) = self.process_expr(expr, SelectionBuffers {
+            true_selection: buffers.true_selection,
+            false_selection: buffers.false_selection,
+            mutable_true_idx: buffers.mutable_true_idx,
+            mutable_false_idx: buffers.mutable_false_idx,
+            select_strategy: buffers.select_strategy,
+            count: buffers.count,
+        })?;
+        self.select_value(result, &data_type, buffers, has_false)
     }
 
     // Process SelectExpr::BooleanColumn.
-    #[allow(clippy::too_many_arguments)]
     fn process_boolean_column(
         &self,
         id: usize,
         data_type: &DataType,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
         let column = self.evaluator.data_block().get_by_offset(id).value.clone();
-        self.select_value(
-            column,
-            data_type,
-            true_selection,
-            false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
-        )
+        self.select_value(column, data_type, buffers, has_false)
     }
 
     // Process SelectExpr::BooleanScalar.
-    #[allow(clippy::too_many_arguments)]
     fn process_boolean_constant(
         &self,
         constant: Scalar,
         data_type: &DataType,
-        true_selection: &mut [u32],
-        false_selection: (&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
+        has_false: bool,
     ) -> Result<usize> {
-        self.select_value(
-            Value::Scalar(constant),
-            data_type,
-            true_selection,
-            false_selection,
-            mutable_true_idx,
-            mutable_false_idx,
-            select_strategy,
-            count,
-        )
+        self.select_value(Value::Scalar(constant), data_type, buffers, has_false)
     }
 
     #[allow(clippy::too_many_arguments)]
     fn process_expr(
         &self,
         expr: &Expr,
-        true_selection: &mut [u32],
-        false_selection: &(&mut [u32], bool),
-        mutable_true_idx: &mut usize,
-        mutable_false_idx: &mut usize,
-        select_strategy: SelectStrategy,
-        count: usize,
+        buffers: SelectionBuffers,
     ) -> Result<(Value<AnyType>, DataType)> {
+        let SelectionBuffers {
+            true_selection,
+            false_selection,
+            mutable_true_idx,
+            mutable_false_idx,
+            select_strategy,
+            count,
+        } = buffers;
+
         let selection = self.selection(
             true_selection,
-            false_selection.0,
+            false_selection,
             *mutable_true_idx + count,
             *mutable_false_idx + count,
             &select_strategy,
@@ -480,7 +468,7 @@ impl<'a> Selector<'a> {
                 generics,
                 ..
             }) if function.signature.name == "if" => {
-                let mut eval_options = EvaluateOptions::new(selection);
+                let mut eval_options = EvaluateOptions::new_for_select(selection);
 
                 let result = self
                     .evaluator
@@ -505,7 +493,7 @@ impl<'a> Selector<'a> {
                     expr.sql_display(),
                     return_type
                 );
-                let mut eval_options = EvaluateOptions::new(selection)
+                let mut eval_options = EvaluateOptions::new_for_select(selection)
                     .with_suppress_error(function.signature.name == "is_not_error");
 
                 let args = args
@@ -526,6 +514,7 @@ impl<'a> Selector<'a> {
                     errors: None,
                     func_ctx: self.evaluator.func_ctx(),
                     suppress_error: eval_options.suppress_error,
+                    strict_eval: eval_options.strict_eval,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(&args, &mut ctx);
@@ -553,12 +542,12 @@ impl<'a> Selector<'a> {
             }) => {
                 let selection = self.selection(
                     true_selection,
-                    false_selection.0,
+                    false_selection,
                     *mutable_true_idx + count,
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
-                let mut eval_options = EvaluateOptions::new(selection);
+                let mut eval_options = EvaluateOptions::new_for_select(selection);
                 let value = self.evaluator.get_select_child(expr, &mut eval_options)?.0;
                 let src_type = expr.data_type();
                 let result = if *is_try {
@@ -586,12 +575,12 @@ impl<'a> Selector<'a> {
             }) => {
                 let selection = self.selection(
                     true_selection,
-                    false_selection.0,
+                    false_selection,
                     *mutable_true_idx + count,
                     *mutable_false_idx + count,
                     &select_strategy,
                 );
-                let mut eval_options = EvaluateOptions::new(selection);
+                let mut eval_options = EvaluateOptions::new_for_select(selection);
 
                 let data_types = args.iter().map(|arg| arg.data_type().clone()).collect();
                 let args = args

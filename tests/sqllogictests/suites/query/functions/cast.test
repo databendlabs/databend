@@ -113,6 +113,6 @@ select CAST(10249.5500000000000000 * POW(10, 2) AS UNSIGNED), '29.55'::Int, '29.
 1024955 30 29
 
 query T
-select to_uint64(1024954.98046875::double) a, a::numeric, a::real
+select to_uint64(1024954.98046875::double) a, a::numeric as a_numeric, a::real as a_real
 ----
 1024955 1024955.000 1024955.0

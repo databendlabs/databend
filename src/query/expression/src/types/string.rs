@@ -24,14 +24,14 @@ use super::AccessType;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::ArgType;
+use crate::types::BuilderMut;
+use crate::types::ColumnBuilder;
 use crate::types::DataType;
-use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ReturnType;
 use crate::types::ValueType;
 use crate::values::Column;
 use crate::values::Scalar;
-use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,18 +62,6 @@ impl AccessType for StringType {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         domain.as_string().cloned()
-    }
-
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::String(scalar)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::String(col)
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::String(domain)
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -143,25 +131,32 @@ impl AccessType for StringType {
 
 impl ValueType for StringType {
     type ColumnBuilder = StringColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::String(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_string());
+        Scalar::String(scalar)
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::String(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_string());
+        Domain::String(domain)
+    }
+
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_string());
+        Column::String(col)
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_string_mut().unwrap().into()
     }
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_string());
         Some(ColumnBuilder::String(builder))
     }
 
@@ -173,20 +168,28 @@ impl ValueType for StringType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.put_and_commit(item);
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         builder.push_repeat(item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.put_and_commit("");
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

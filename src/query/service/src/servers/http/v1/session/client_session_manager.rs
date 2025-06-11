@@ -18,7 +18,8 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::Thread;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
@@ -30,6 +31,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_session::drop_all_temp_tables;
 use databend_storages_common_session::TempTblMgrRef;
+use log::error;
+use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use sha2::Digest;
@@ -121,7 +124,8 @@ impl ClientSessionManager {
             session_state: Default::default(),
         });
         GlobalInstance::set(mgr.clone());
-        Thread::spawn(move || Self::check_timeout(mgr));
+
+        GlobalIORuntime::instance().spawn(async move { Self::check_timeout(mgr).await });
         Ok(())
     }
 
@@ -143,7 +147,7 @@ impl ClientSessionManager {
                 }
             }
             for (id, mgr) in expired {
-                drop_all_temp_tables(&id, mgr).await.ok();
+                drop_all_temp_tables_with_logging(&id, mgr).await;
             }
             tokio::time::sleep(SESSION_TOKEN_TTL / 4).await;
         }
@@ -264,8 +268,12 @@ impl ClientSessionManager {
         let (claim, token_type) = SessionClaim::decode(token)?;
         if SystemTime::now() > claim.expire_at() + TTL_GRACE_PERIOD_QUERY {
             return match token_type {
-                TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired("refresh token expired")),
-                TokenType::Session => Err(ErrorCode::SessionTokenExpired("session token expired")),
+                TokenType::Refresh => Err(ErrorCode::RefreshTokenExpired(
+                    "[HTTP-SESSION] Authentication failed: refresh token has expired",
+                )),
+                TokenType::Session => Err(ErrorCode::SessionTokenExpired(
+                    "[HTTP-SESSION] Authentication failed: session token has expired",
+                )),
             };
         }
 
@@ -288,10 +296,10 @@ impl ClientSessionManager {
                 _ => {
                     return match token_type {
                         TokenType::Refresh => {
-                            Err(ErrorCode::RefreshTokenNotFound("refresh token not found"))
+                            Err(ErrorCode::RefreshTokenNotFound("[HTTP-SESSION] Authentication failed: refresh token not found in database"))
                         }
                         TokenType::Session => {
-                            Err(ErrorCode::SessionTokenNotFound("session token not found"))
+                            Err(ErrorCode::SessionTokenNotFound("[HTTP-SESSION] Authentication failed: session token not found in database"))
                         }
                     };
                 }
@@ -314,7 +322,7 @@ impl ClientSessionManager {
         let state_key = Self::state_key(session_id, user_name);
         let state = self.session_state.lock().remove(&state_key);
         if let Some(state) = state {
-            drop_all_temp_tables(session_id, state.temp_tbl_mgr).await?;
+            drop_all_temp_tables_with_logging(session_id, state.temp_tbl_mgr).await;
         }
         Ok(())
     }
@@ -384,6 +392,7 @@ impl ClientSessionManager {
                             query_state: QueryState::Idle(Instant::now()),
                             temp_tbl_mgr,
                         });
+                        info!("[TEMP-TABLE] session={client_session_id} added to ClientSessionManager");
                     }
                 }
                 Entry::Occupied(mut e) => {
@@ -391,6 +400,8 @@ impl ClientSessionManager {
                         e.get_mut().query_state = QueryState::Idle(Instant::now())
                     } else {
                         e.remove();
+                        // all temp table dropped by user, data should have been removed when executing drop.
+                        info!("[TEMP-TABLE] session={client_session_id} removed from ClientSessionManager");
                     }
                 }
             }
@@ -415,5 +426,27 @@ impl ClientSessionManager {
                 .await?
         }
         Ok(())
+    }
+}
+
+pub async fn drop_all_temp_tables_with_logging(id: &str, mgr: TempTblMgrRef) {
+    let start = std::time::Instant::now();
+    info!("[TEMP-TABLE] Starting cleanup for session={}", id);
+
+    match drop_all_temp_tables(id, mgr).await {
+        Ok(_) => {
+            let duration = start.elapsed().as_millis();
+            info!(
+                "[TEMP-TABLE] Clean up completed for session={} in {}ms",
+                id, duration
+            );
+        }
+        Err(e) => {
+            let duration = start.elapsed().as_millis();
+            error!(
+                "[TEMP-TABLE] Clean up failed for session={} after {}ms: error={:?}",
+                id, duration, e
+            );
+        }
     }
 }

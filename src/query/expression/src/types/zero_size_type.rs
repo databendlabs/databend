@@ -18,9 +18,12 @@ use std::marker::PhantomData;
 use std::ops::Range;
 
 use super::AccessType;
-use super::DecimalSize;
+use super::GenericMap;
+use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
+use crate::types::BuilderMut;
+use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -57,22 +60,13 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         T::downcast_scalar(scalar)
     }
-    fn upcast_scalar(_: ()) -> Scalar {
-        T::upcast_scalar()
-    }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
         T::downcast_column(col)
     }
-    fn upcast_column(col: Self::Column) -> Column {
-        T::upcast_column(col)
-    }
 
     fn try_downcast_domain(domain: &Domain) -> Option<()> {
         T::downcast_domain(domain)
-    }
-    fn upcast_domain(_: ()) -> Domain {
-        T::upcast_domain()
     }
 
     fn column_len(len: &usize) -> usize {
@@ -139,16 +133,25 @@ impl<T: ZeroSizeType> AccessType for ZeroSizeValueType<T> {
 
 impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
     type ColumnBuilder = usize;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut usize> {
-        T::downcast_builder(builder)
+    fn upcast_scalar_with_type(_: (), _: &DataType) -> Scalar {
+        T::upcast_scalar()
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<usize> {
-        T::downcast_owned_builder(builder)
+    fn upcast_domain_with_type(_domain: Self::Domain, _: &DataType) -> Domain {
+        T::upcast_domain()
     }
 
-    fn try_upcast_column_builder(builder: usize, _: Option<DecimalSize>) -> Option<ColumnBuilder> {
+    fn upcast_column_with_type(col: Self::Column, _: &DataType) -> Column {
+        T::upcast_column(col)
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        T::downcast_builder(builder).unwrap().into()
+    }
+
+    fn try_upcast_column_builder(builder: usize, _: &DataType) -> Option<ColumnBuilder> {
         T::upcast_column_builder(builder)
     }
 
@@ -160,20 +163,24 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
         *builder
     }
 
-    fn push_item(builder: &mut usize, _: ()) {
-        *builder += 1
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        **builder
     }
 
-    fn push_item_repeat(builder: &mut usize, _: (), n: usize) {
-        *builder += n
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, _: ()) {
+        **builder += 1
     }
 
-    fn push_default(builder: &mut usize) {
-        *builder += 1
+    fn push_item_repeat_mut(builder: &mut Self::ColumnBuilderMut<'_>, _: (), n: usize) {
+        **builder += n
     }
 
-    fn append_column(builder: &mut usize, other: &usize) {
-        *builder += *other
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        **builder += 1
+    }
+
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        **builder += *other
     }
 
     fn build_column(builder: usize) -> usize {
@@ -182,5 +189,22 @@ impl<T: ZeroSizeType> ValueType for ZeroSizeValueType<T> {
 
     fn build_scalar(builder: usize) {
         assert_eq!(builder, 1);
+    }
+}
+
+impl<T: ZeroSizeType> ReturnType for ZeroSizeValueType<T> {
+    fn create_builder(_capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
+        0
+    }
+
+    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
+        iter.count()
+    }
+
+    fn column_from_ref_iter<'a>(
+        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
+        _: &GenericMap,
+    ) -> Self::Column {
+        iter.count()
     }
 }

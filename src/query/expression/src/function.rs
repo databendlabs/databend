@@ -14,6 +14,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::ops::BitAnd;
 use std::ops::BitOr;
 use std::ops::Not;
@@ -46,12 +47,73 @@ use crate::FunctionDomain;
 use crate::Scalar;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
+pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>;
 
 /// A function to build function depending on the const parameters and the type of arguments (before coercion).
 ///
 /// The first argument is the const parameters and the second argument is the types of arguments.
-pub trait FunctionFactory =
+pub trait FunctionFactoryClosure =
     Fn(&[Scalar], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
+
+pub struct FunctionFactoryHelper {
+    fixed_arg_count: Option<usize>,
+    passthrough_nullable: bool,
+    create: Box<dyn FunctionFactoryClosure>,
+}
+
+impl Debug for FunctionFactoryHelper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FunctionFactoryHelper")
+            .field("fixed_arg_count", &self.fixed_arg_count)
+            .field("passthrough_nullable", &self.passthrough_nullable)
+            .finish()
+    }
+}
+
+impl FunctionFactoryHelper {
+    pub fn create_1_arg_core(
+        create: fn(&[Scalar], &DataType) -> Option<Function>,
+    ) -> FunctionFactory {
+        FunctionFactory::Helper(Self {
+            fixed_arg_count: Some(1),
+            passthrough_nullable: false,
+            create: Box::new(move |params, args: &[DataType]| match args {
+                [arg0] => create(params, arg0).map(Arc::new),
+                _ => None,
+            }),
+        })
+    }
+
+    pub fn create_1_arg_passthrough_nullable(
+        create: fn(&[Scalar], &DataType) -> Option<Function>,
+    ) -> FunctionFactory {
+        FunctionFactory::Helper(Self {
+            fixed_arg_count: Some(1),
+            passthrough_nullable: true,
+            create: Box::new(move |params, args: &[DataType]| match args {
+                [DataType::Nullable(box arg0)] => {
+                    create(params, arg0).map(|func| Arc::new(func.passthrough_nullable()))
+                }
+                [arg0] => create(params, arg0).map(Arc::new),
+                _ => None,
+            }),
+        })
+    }
+}
+
+pub enum FunctionFactory {
+    Closure(Box<dyn FunctionFactoryClosure>),
+    Helper(FunctionFactoryHelper),
+}
+
+impl FunctionFactory {
+    fn create(&self, params: &[Scalar], args: &[DataType]) -> Option<Arc<Function>> {
+        match self {
+            FunctionFactory::Closure(closure) => closure(params, args),
+            FunctionFactory::Helper(factory) => (factory.create)(params, args),
+        }
+    }
+}
 
 pub struct Function {
     pub signature: FunctionSignature,
@@ -93,7 +155,7 @@ pub enum FunctionEval {
     },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FunctionContext {
     pub tz: TimeZone,
     pub now: Zoned,
@@ -111,6 +173,8 @@ pub struct FunctionContext {
     pub parse_datetime_ignore_remainder: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
+    pub week_start: u8,
+    pub date_format_style: String,
 }
 
 impl Default for FunctionContext {
@@ -131,11 +195,13 @@ impl Default for FunctionContext {
             parse_datetime_ignore_remainder: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,
+            week_start: 0,
+            date_format_style: "oracle".to_string(),
         }
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct EvalContext<'a> {
     pub generics: &'a GenericMap,
     pub num_rows: usize,
@@ -147,6 +213,9 @@ pub struct EvalContext<'a> {
     pub validity: Option<Bitmap>,
     pub errors: Option<(MutableBitmap, String)>,
     pub suppress_error: bool,
+    /// At the top level expressions require eval to have stricter behavior
+    /// to ensure that some internal complexity is not leaking out
+    pub strict_eval: bool,
 }
 
 /// `FunctionID` is a unique identifier for a function in the registry. It's used to
@@ -169,7 +238,7 @@ pub enum FunctionID {
 pub struct FunctionRegistry {
     pub funcs: HashMap<String, Vec<(Arc<Function>, usize)>>,
     #[allow(clippy::type_complexity)]
-    pub factories: HashMap<String, Vec<(Box<dyn FunctionFactory>, usize)>>,
+    pub factories: HashMap<String, Vec<(FunctionFactory, usize)>>,
 
     /// Aliases map from alias function name to original function name.
     pub aliases: HashMap<String, String>,
@@ -180,17 +249,17 @@ pub struct FunctionRegistry {
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
-
+    pub dynamic_cast_rules: HashMap<String, DynamicCastRules>,
     pub properties: HashMap<String, FunctionProperty>,
 }
 
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
-        debug_assert!(!self
+        debug_assert!(self
             .signature
             .args_type
             .iter()
-            .any(|ty| ty.is_nullable_or_null()));
+            .all(|ty| !ty.is_nullable_or_null()));
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -252,7 +321,8 @@ impl Function {
         debug_assert!(!self.signature.return_type.is_nullable_or_null());
 
         let mut signature = self.signature;
-        signature.return_type = signature.return_type.wrap_nullable();
+        let return_type = signature.return_type;
+        signature.return_type = return_type.wrap_nullable();
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -264,7 +334,10 @@ impl Function {
                         has_null: false,
                         value: Some(Box::new(domain)),
                     };
-                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(new_domain))
+                    FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain_with_type(
+                        new_domain,
+                        &return_type,
+                    ))
                 }
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
             }
@@ -341,7 +414,7 @@ impl FunctionRegistry {
                     .iter()
                     .find(|(_, func_id)| func_id == id)
                     .map(|(func, _)| func)?;
-                factory(params, args_type)
+                factory.create(params, args_type)
             }
         }
     }
@@ -379,7 +452,7 @@ impl FunctionRegistry {
                 .cloned()
                 .collect::<Vec<_>>();
             candidates.extend(factories.iter().filter_map(|(factory, id)| {
-                factory(params, &args_type).map(|func| {
+                factory.create(params, &args_type).map(|func| {
                     (
                         FunctionID::Factory {
                             name: name.to_string(),
@@ -429,12 +502,12 @@ impl FunctionRegistry {
             .push((Arc::new(func), id));
     }
 
-    pub fn register_function_factory(&mut self, name: &str, factory: impl FunctionFactory) {
+    pub fn register_function_factory(&mut self, name: &str, factory: FunctionFactory) {
         let id = self.next_function_id(name);
         self.factories
             .entry(name.to_string())
             .or_default()
-            .push((Box::new(factory), id));
+            .push((factory, id));
     }
 
     pub fn register_aliases(&mut self, fn_name: &str, aliases: &[&str]) {
@@ -460,6 +533,25 @@ impl FunctionRegistry {
             .entry(fn_name.to_string())
             .or_default()
             .extend(additional_cast_rules);
+    }
+
+    // Note that, if additional_cast_rules is not empty, the default cast rules will not be used
+    pub fn register_dynamic_cast_rules(
+        &mut self,
+        fn_name: &str,
+        rule: Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>,
+    ) {
+        self.dynamic_cast_rules
+            .entry(fn_name.to_string())
+            .or_default()
+            .push(rule);
+    }
+
+    pub fn get_dynamic_cast_rules(&self, fn_name: &str) -> DynamicCastRules {
+        self.dynamic_cast_rules
+            .get(fn_name)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn register_auto_try_cast_rules(
@@ -488,6 +580,7 @@ impl FunctionRegistry {
     pub fn check_ambiguity(&self) {
         for (name, funcs) in &self.funcs {
             let auto_cast_rules = self.get_auto_cast_rules(name);
+            let dynamic_cast_rules = self.get_dynamic_cast_rules(name);
             for (former, former_id) in funcs {
                 for latter in funcs
                     .iter()
@@ -500,7 +593,9 @@ impl FunctionRegistry {
                             .unwrap_or(&[])
                             .iter()
                             .filter(|(_, id)| id > former_id)
-                            .filter_map(|(factory, _)| factory(&[], &former.signature.args_type)),
+                            .filter_map(|(factory, _)| {
+                                factory.create(&[], &former.signature.args_type)
+                            }),
                     )
                 {
                     if former.signature.args_type.len() == latter.signature.args_type.len() {
@@ -508,6 +603,7 @@ impl FunctionRegistry {
                             latter.signature.args_type.iter(),
                             former.signature.args_type.iter(),
                             auto_cast_rules,
+                            &dynamic_cast_rules,
                         ) {
                             if subst.apply(&former.signature.return_type).is_ok()
                                 && former
@@ -717,13 +813,13 @@ pub fn error_to_null<I1: AccessType, O: ArgType>(
             match output {
                 Value::Scalar(_) => Value::Scalar(None),
                 Value::Column(column) => {
-                    Value::Column(NullableColumn::new(column, validity.into()))
+                    Value::Column(NullableColumn::new_unchecked(column, validity.into()))
                 }
             }
         } else {
             match output {
                 Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
-                Value::Column(column) => Value::Column(NullableColumn::new(
+                Value::Column(column) => Value::Column(NullableColumn::new_unchecked(
                     column,
                     Bitmap::new_constant(true, ctx.num_rows),
                 )),

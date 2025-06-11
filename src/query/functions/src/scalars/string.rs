@@ -15,8 +15,6 @@
 use std::cmp::Ordering;
 use std::io::Write;
 
-use databend_common_base::base::uuid::Uuid;
-use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
@@ -32,7 +30,10 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_functions_scalar_decimal::register_decimal_to_uuid;
 use stringslice::StringSlice;
+
+use crate::srfs;
 
 pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
     "upper",
@@ -79,6 +80,9 @@ pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
     "regexp_replace",
     "regexp_substr",
 ];
+
+/// Functions that works with all strings, allow other types to be casted to string.
+pub const PURE_STRING_FUNC_NAMES: &[&str] = &["concat", "concat_ws"];
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
@@ -281,16 +285,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }),
     );
 
-    registry.register_passthrough_nullable_1_arg::<Decimal128Type, StringType, _, _>(
-        "to_uuid",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<Decimal128Type, StringType>(|arg, output, _| {
-            let uuid = Uuid::from_u128(arg as u128);
-            let str = uuid.as_simple().to_string();
-            output.put_str(str.as_str());
-            output.commit_row();
-        }),
-    );
+    register_decimal_to_uuid(registry);
 
     registry.register_2_arg::<StringType, StringType, NumberType<i8>, _, _>(
         "strcmp",
@@ -334,10 +329,103 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
     };
 
+    fn instr(s: &str, sub: &str, position: i64, occurrence: u64) -> u64 {
+        if occurrence == 0 {
+            return 0;
+        }
+
+        let s_len_chars = s.chars().count();
+        let sub_len_chars = sub.chars().count();
+        if sub_len_chars > s_len_chars {
+            return 0;
+        }
+
+        if sub.is_empty() {
+            return if position > 0 {
+                // For forward search, the empty string matches at the position
+                // such as: INSTR (' ABC ', ', 1) - > 1, INSTR (' ABC ', ' ', 4) - > 4
+                // The effective range is from 1 to s_len_chars + 1
+                if (position as usize) <= s_len_chars + 1 {
+                    position as u64
+                } else {
+                    0
+                }
+            } else {
+                // For reverse search, empty strings match positions after the end of the string
+                // such as: INSTR('abc', '', -1) -> 4 (s_len_chars + 1)
+                (s_len_chars + 1) as u64
+            };
+        }
+
+        let mut char_to_byte_map = Vec::with_capacity(s_len_chars + 1);
+        for (byte_idx, _) in s.char_indices() {
+            char_to_byte_map.push(byte_idx);
+        }
+        char_to_byte_map.push(s.len());
+
+        let get_slice_by_char_idx = |start_char_idx: usize, num_chars: usize| -> Option<&str> {
+            if start_char_idx + num_chars > s_len_chars {
+                return None;
+            }
+            let byte_start = char_to_byte_map[start_char_idx];
+            let byte_end = char_to_byte_map[start_char_idx + num_chars];
+            s.get(byte_start..byte_end)
+        };
+
+        let mut found_count = 0;
+
+        if position > 0 {
+            let start_char_idx_0_indexed = (position - 1) as usize;
+            for current_char_idx in
+                start_char_idx_0_indexed..=s_len_chars.saturating_sub(sub_len_chars)
+            {
+                if let Some(slice) = get_slice_by_char_idx(current_char_idx, sub_len_chars) {
+                    if slice == sub {
+                        found_count += 1;
+                        if found_count == occurrence {
+                            return (current_char_idx + 1) as u64;
+                        }
+                    }
+                }
+            }
+        } else {
+            let search_start_char_0_indexed =
+                s_len_chars.saturating_sub(position.unsigned_abs() as usize);
+
+            let max_possible_match_start_idx =
+                search_start_char_0_indexed.min(s_len_chars.saturating_sub(sub_len_chars));
+
+            for current_char_idx in (0..=max_possible_match_start_idx).rev() {
+                if let Some(slice) = get_slice_by_char_idx(current_char_idx, sub_len_chars) {
+                    if slice == sub {
+                        found_count += 1;
+                        if found_count == occurrence {
+                            return (current_char_idx + 1) as u64;
+                        }
+                    }
+                }
+            }
+        }
+
+        0
+    }
+
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
         "instr",
         |_, _, _| FunctionDomain::Full,
         move |s: &str, substr: &str, _| find_at(s, substr, 1),
+    );
+
+    registry.register_3_arg::<StringType, StringType, NumberType<i64>, NumberType<u64>, _, _>(
+        "instr",
+        |_, _, _, _| FunctionDomain::Full,
+        move |s: &str, substr: &str, pos, _| instr(s, substr, pos, 1),
+    );
+
+    registry.register_4_arg::<StringType, StringType, NumberType<i64>, NumberType<u64>, NumberType<u64>, _, _>(
+        "instr",
+        |_, _,_, _, _| FunctionDomain::Full,
+        move |s: &str, substr: &str, pos, occurrence, _| instr(s, substr, pos, occurrence),
     );
 
     registry.register_2_arg::<StringType, StringType, NumberType<u64>, _, _>(
@@ -403,6 +491,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             })
         },
         |val, _| val.as_bytes().first().map_or(0, |v| *v),
+    );
+
+    registry.register_1_arg::<StringType, NumberType<u32>, _, _>(
+        "unicode",
+        |_, _| FunctionDomain::Full,
+        |val, _| val.chars().next().map_or(0, |c| c as u32),
     );
 
     // Trim functions
@@ -752,6 +846,36 @@ pub fn register(registry: &mut FunctionRegistry) {
                         for v in s.split(sep) {
                             output.builder.put_and_commit(v);
                         }
+                    }
+                    output.commit_row();
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
+            "regexp_split_to_array",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
+                |s, sep, output, ctx| {
+                    let res = srfs::string::regexp_split_to_vec(s, sep, None, ctx);
+                    for v in res {
+                        output.builder.put_and_commit(v);
+                    }
+                    output.commit_row();
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_3_arg::<StringType, StringType, StringType, ArrayType<StringType>, _, _>(
+            "regexp_split_to_array",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, StringType, ArrayType<StringType>>(
+                |s, sep, flag, output, ctx| {
+                    let res = srfs::string::regexp_split_to_vec(s, sep, Some(flag), ctx);
+                    for v in res {
+                        output.builder.put_and_commit(v);
                     }
                     output.commit_row();
                 },

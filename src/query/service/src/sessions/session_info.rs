@@ -16,13 +16,13 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::session_type::SessionType;
 pub use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_storage::StorageMetrics;
 
 use crate::sessions::Session;
 use crate::sessions::SessionContext;
-use crate::sessions::SessionType;
 
 impl Session {
     pub fn process_info(self: &Arc<Self>) -> ProcessInfo {

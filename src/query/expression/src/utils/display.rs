@@ -60,16 +60,20 @@ use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
+use crate::types::vector::VectorDataType;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::types::DecimalSize;
 use crate::types::NumberClass;
 use crate::types::ValueType;
+use crate::types::VectorScalarRef;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
 use crate::visit_expr;
 use crate::with_integer_mapped_type;
+use crate::with_vector_number_type;
 use crate::Column;
 use crate::ColumnIndex;
 use crate::ExprVisitor;
@@ -190,6 +194,11 @@ impl Debug for ScalarRef<'_> {
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{geog:?}")
             }
+            ScalarRef::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorScalarRef::NUM_TYPE(vals) => {
+                    write!(f, "[{}]", vals.iter().join(", "))
+                }
+            }),
         }
     }
 }
@@ -227,6 +236,7 @@ impl Debug for Column {
             Column::Variant(col) => fmt_binary(f, "Variant", col),
             Column::Geometry(col) => fmt_binary(f, "Geometry", col),
             Column::Geography(col) => write!(f, "{col:?}"),
+            Column::Vector(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -298,6 +308,11 @@ impl Display for ScalarRef<'_> {
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{}", QuotedString(geog, '\''))
             }
+            ScalarRef::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorScalarRef::NUM_TYPE(vals) => {
+                    write!(f, "[{}]", vals.iter().join(", "))
+                }
+            }),
         }
     }
 }
@@ -345,22 +360,31 @@ impl Display for NumberScalar {
 impl Debug for DecimalScalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalScalar::Decimal64(val, size) => {
+                write!(
+                    f,
+                    "{}_d64({},{})",
+                    display_decimal_128(*val as i128, size.scale()),
+                    size.precision(),
+                    size.scale()
+                )
+            }
             DecimalScalar::Decimal128(val, size) => {
                 write!(
                     f,
                     "{}_d128({},{})",
-                    display_decimal_128(*val, size.scale),
-                    size.precision,
-                    size.scale
+                    display_decimal_128(*val, size.scale()),
+                    size.precision(),
+                    size.scale()
                 )
             }
             DecimalScalar::Decimal256(val, size) => {
                 write!(
                     f,
                     "{}_d256({},{})",
-                    display_decimal_256(val.0, size.scale),
-                    size.precision,
-                    size.scale
+                    display_decimal_256(val.0, size.scale()),
+                    size.precision(),
+                    size.scale()
                 )
             }
         }
@@ -370,11 +394,14 @@ impl Debug for DecimalScalar {
 impl Display for DecimalScalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalScalar::Decimal64(val, size) => {
+                write!(f, "{}", display_decimal_128(*val as i128, size.scale()))
+            }
             DecimalScalar::Decimal128(val, size) => {
-                write!(f, "{}", display_decimal_128(*val, size.scale))
+                write!(f, "{}", display_decimal_128(*val, size.scale()))
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}", display_decimal_256(val.0, size.scale))
+                write!(f, "{}", display_decimal_256(val.0, size.scale()))
             }
         }
     }
@@ -412,23 +439,32 @@ impl Debug for NumberColumn {
 impl Debug for DecimalColumn {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalColumn::Decimal64(val, size) => f
+                .debug_tuple("Decimal64")
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries(
+                            val.iter()
+                                .map(|x| display_decimal_128(*x as i128, size.scale())),
+                        )
+                        .finish()
+                })
+                .finish(),
             DecimalColumn::Decimal128(val, size) => f
                 .debug_tuple("Decimal128")
-                .field(&format_args!(
-                    "[{}]",
-                    &val.iter()
-                        .map(|x| display_decimal_128(*x, size.scale))
-                        .join(", ")
-                ))
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries(val.iter().map(|x| display_decimal_128(*x, size.scale())))
+                        .finish()
+                })
                 .finish(),
             DecimalColumn::Decimal256(val, size) => f
                 .debug_tuple("Decimal256")
-                .field(&format_args!(
-                    "[{}]",
-                    &val.iter()
-                        .map(|x| display_decimal_256(x.0, size.scale))
-                        .join(", ")
-                ))
+                .field_with(|f| {
+                    f.debug_list()
+                        .entries(val.iter().map(|x| display_decimal_256(x.0, size.scale())))
+                        .finish()
+                })
                 .finish(),
         }
     }
@@ -541,6 +577,7 @@ impl Display for DataType {
             DataType::Variant => write!(f, "Variant"),
             DataType::Geometry => write!(f, "Geometry"),
             DataType::Geography => write!(f, "Geography"),
+            DataType::Vector(vector) => write!(f, "{vector}"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -591,6 +628,7 @@ impl Display for TableDataType {
             TableDataType::Interval => write!(f, "Interval"),
             TableDataType::Geometry => write!(f, "Geometry"),
             TableDataType::Geography => write!(f, "Geography"),
+            TableDataType::Vector(vector) => write!(f, "{vector}"),
         }
     }
 }
@@ -614,14 +652,13 @@ impl Display for NumberDataType {
 
 impl Display for DecimalDataType {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match &self {
-            DecimalDataType::Decimal128(size) => {
-                write!(f, "Decimal({}, {})", size.precision, size.scale)
-            }
-            DecimalDataType::Decimal256(size) => {
-                write!(f, "Decimal({}, {})", size.precision, size.scale)
-            }
-        }
+        write!(f, "Decimal({}, {})", self.precision(), self.scale())
+    }
+}
+
+impl Display for DecimalSize {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "Decimal({}, {})", self.precision(), self.scale())
     }
 }
 
@@ -635,6 +672,15 @@ impl Display for VariantDataType {
             VariantDataType::Float64 => write!(f, "Float64"),
             VariantDataType::String => write!(f, "String"),
             VariantDataType::Array(inner) => write!(f, "Array({inner})"),
+        }
+    }
+}
+
+impl Display for VectorDataType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match &self {
+            VectorDataType::Int8(dim) => write!(f, "Vector({dim})"),
+            VectorDataType::Float32(dim) => write!(f, "Vector({dim})"),
         }
     }
 }
@@ -1110,16 +1156,22 @@ impl Display for NumberDomain {
 impl Display for DecimalDomain {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            DecimalDomain::Decimal64(SimpleDomain { min, max }, size) => {
+                write!(f, "{}", SimpleDomain {
+                    min: display_decimal_128(*min as i128, size.scale()),
+                    max: display_decimal_128(*max as i128, size.scale()),
+                })
+            }
             DecimalDomain::Decimal128(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_128(*min, size.scale),
-                    max: display_decimal_128(*max, size.scale),
+                    min: display_decimal_128(*min, size.scale()),
+                    max: display_decimal_128(*max, size.scale()),
                 })
             }
             DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_256(min.0, size.scale),
-                    max: display_decimal_256(max.0, size.scale),
+                    min: display_decimal_256(min.0, size.scale()),
+                    max: display_decimal_256(max.0, size.scale()),
                 })
             }
         }

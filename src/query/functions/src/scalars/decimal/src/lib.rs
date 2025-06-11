@@ -23,18 +23,19 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
+#![feature(likely_unlikely)]
 
 mod arithmetic;
 mod cast;
+mod cast_from_jsonb;
 mod comparison;
+mod hash;
 mod math;
+mod uuid;
 
-pub use arithmetic::register_decimal_arithmetic;
-pub use cast::convert_to_decimal;
-pub use cast::convert_to_decimal_domain;
-pub use cast::register_decimal_to_float;
-pub use cast::register_decimal_to_int;
-pub use cast::register_decimal_to_string;
-pub use cast::register_to_decimal;
-pub use comparison::register_decimal_compare_op;
+pub use arithmetic::*;
+pub use cast::*;
+pub use comparison::register_decimal_compare;
+pub use hash::*;
 pub use math::register_decimal_math;
+pub use uuid::register_decimal_to_uuid;

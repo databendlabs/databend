@@ -56,6 +56,7 @@ use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
 use super::InterpreterQueryLog;
+use crate::interpreters::interpreter_txn_commit::execute_commit_statement;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -100,12 +101,29 @@ pub trait Interpreter: Sync + Send {
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         let make_error = || "failed to execute interpreter";
 
-        ctx.set_status_info("building pipeline");
+        ctx.set_status_info("[INTERPRETER] Building execution pipeline");
         ctx.check_aborting().with_context(make_error)?;
 
-        CacheManager::instance().set_allows_disk_cache(
-            LicenseManagerSwitch::instance().is_license_valid(ctx.get_license_key()),
-        );
+        let mut allow_disk_cache = false;
+        {
+            let license_key = ctx.get_license_key();
+            if !license_key.is_empty() {
+                let validate_result = LicenseManagerSwitch::instance().check_license(license_key);
+                allow_disk_cache = validate_result.is_ok();
+                if let Err(e) = validate_result {
+                    let msg =
+                            format!("[INTERPRETER] CRITICAL ALERT: License validation FAILED - enterprise features DISABLED, System may operate in DEGRADED MODE with LIMITED CAPABILITIES and REDUCED PERFORMANCE. Please contact us at https://www.databend.com/contact-us/ or email hi@databend.com to restore full functionality: {}",
+                                    e);
+                    log::error!("{}", msg);
+
+                    // Also log at warning level to ensure the message could be propagated to client applications
+                    // (e.g., BendSQL and MySQL interactive sessions)
+                    log::warn!("{}", msg);
+                };
+            }
+        }
+
+        CacheManager::instance().set_allows_disk_cache(allow_disk_cache);
 
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
@@ -126,7 +144,7 @@ pub trait Interpreter: Sync + Send {
                 on_execution_finished(info, query_ctx)
             }));
 
-        ctx.set_status_info("executing pipeline");
+        ctx.set_status_info("[INTERPRETER] Executing pipeline");
 
         let settings = ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
@@ -179,7 +197,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        error!("interpreter.start.error: {:?}", error)
+        error!("[INTERPRETER] Failed to log query start: {:?}", error)
     }
 }
 
@@ -206,7 +224,7 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
-        error!("interpreter.finish.error: {:?}", error)
+        error!("[INTERPRETER] Failed to log query finish: {:?}", error)
     }
 }
 
@@ -240,6 +258,23 @@ pub async fn interpreter_plan_sql(
     result
 }
 
+pub async fn auto_commit_if_not_allowed_in_transaction(
+    ctx: Arc<QueryContext>,
+    stmt: &Statement,
+) -> Result<()> {
+    if !stmt.allowed_in_multi_statement() {
+        execute_commit_statement(ctx.clone()).await?;
+    }
+    if !stmt.is_transaction_command() && ctx.txn_mgr().lock().is_fail() {
+        let err = ErrorCode::CurrentTransactionIsAborted(
+            "[INTERPRETER] Current transaction is aborted, commands ignored until end of transaction block",
+        );
+        return Err(err);
+    }
+    Ok(())
+}
+
+// Note: Please synchronize the changes made in the plan_sql function to src/query/service/src/interpreters/interpreter_report_issue.rs
 async fn plan_sql(
     ctx: Arc<QueryContext>,
     sql: &str,
@@ -254,10 +289,11 @@ async fn plan_sql(
 
     // Parse the SQL query, get extract additional information.
     let extras = planner.parse_sql(sql)?;
+    auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
         let plan = planner.plan_stmt(&extras.statement).await?;
-        return Ok((plan, extras, AcquireQueueGuard::create_global(None)));
+        return Ok((plan, extras, AcquireQueueGuard::create(vec![])));
     }
 
     let need_acquire_lock = need_acquire_lock(ctx.clone(), &extras.statement);

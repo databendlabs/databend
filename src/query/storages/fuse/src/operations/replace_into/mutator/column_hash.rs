@@ -18,7 +18,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::AnyType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
@@ -73,16 +72,19 @@ pub fn row_hash_of_columns(
             ScalarRef::String(v) => sip.write(v.as_bytes()),
             ScalarRef::Bitmap(v) => sip.write(v),
             ScalarRef::Decimal(v) => match v {
-                DecimalScalar::Decimal128(i, DecimalSize { precision, scale }) => {
-                    sip.write_i128(i);
-                    sip.write_u8(precision);
-                    sip.write_u8(scale)
+                DecimalScalar::Decimal64(_, _) => {
+                    unreachable!()
                 }
-                DecimalScalar::Decimal256(i, DecimalSize { precision, scale }) => {
+                DecimalScalar::Decimal128(i, size) => {
+                    sip.write_i128(i);
+                    sip.write_u8(size.precision());
+                    sip.write_u8(size.scale())
+                }
+                DecimalScalar::Decimal256(i, size) => {
                     let le_bytes = i.to_le_bytes();
                     sip.write(&le_bytes);
-                    sip.write_u8(precision);
-                    sip.write_u8(scale)
+                    sip.write_u8(size.precision());
+                    sip.write_u8(size.scale())
                 }
             },
             ScalarRef::Boolean(v) => sip.write_u8(v as u8),

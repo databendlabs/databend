@@ -30,6 +30,10 @@ use std::time::SystemTime;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -101,11 +105,17 @@ impl<Data: QueueData> QueueManager<Data> {
             let provider = Arc::new(MetaStoreProvider::new(conf.meta.to_meta_grpc_client_conf()));
 
             provider.create_meta_store().await.map_err(|e| {
-                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+                ErrorCode::MetaServiceError(format!(
+                    "[QUERY-QUEUE] Failed to create meta store: {}",
+                    e
+                ))
             })?
         };
 
-        info!("queue manager permits: {:?}", permits);
+        info!(
+            "[QUERY-QUEUE] Queue manager initialized with permits: {:?}",
+            permits
+        );
         GlobalInstance::set(Self::create(
             permits,
             metastore,
@@ -166,67 +176,151 @@ impl<Data: QueueData> QueueManager<Data> {
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
         if data.need_acquire_to_queue() {
             info!(
-                "preparing to acquire from query queue, length: {}",
+                "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
                 self.length()
             );
 
-            let timeout = data.timeout();
-
             let start_time = SystemTime::now();
-            let acquire_res = match self.global_statement_queue {
-                true => {
-                    let semaphore_acquire = self.meta_store.new_acquired_by_time(
-                        data.get_lock_key(),
-                        self.permits as u64,
-                        data.get_key(), // ID of this acquirer
-                        data.lock_ttl(),
-                    );
+            let instant = Instant::now();
+            let mut timeout = data.timeout();
+            let mut guards = vec![];
 
-                    AcquireQueueFuture::create(
-                        Arc::new(data),
-                        tokio::time::timeout(timeout, semaphore_acquire),
-                        self.clone(),
-                    )
-                    .await
-                }
-                false => {
-                    AcquireQueueFuture::create(
-                        Arc::new(data),
-                        tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
-                        self.clone(),
-                    )
-                    .await
-                }
-            };
+            let data = Arc::new(data);
+            if let Some(workload_group) = ThreadTracker::workload_group() {
+                if let Some(QuotaValue::Number(permits)) =
+                    workload_group.meta.get_quota(MAX_CONCURRENCY_QUOTA_KEY)
+                {
+                    let mut workload_group_timeout = timeout;
 
-            return match acquire_res {
-                Ok(v) => {
-                    info!("finished acquiring from queue, length: {}", self.length());
-
-                    inc_session_running_acquired_queries();
-                    record_session_queue_acquire_duration_ms(
-                        start_time.elapsed().unwrap_or_default(),
-                    );
-                    Ok(v)
-                }
-                Err(e) => {
-                    match e.code() {
-                        ErrorCode::ABORTED_QUERY => {
-                            incr_session_queue_abort_count();
-                        }
-                        ErrorCode::TIMEOUT => {
-                            incr_session_queue_acquire_timeout_count();
-                        }
-                        _ => {
-                            incr_session_queue_acquire_error_count();
-                        }
+                    if let Some(QuotaValue::Duration(queue_timeout)) = workload_group
+                        .meta
+                        .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
+                    {
+                        workload_group_timeout =
+                            std::cmp::min(queue_timeout, workload_group_timeout);
                     }
-                    Err(e)
+
+                    let workload_queue_guard = self
+                        .acquire_workload_queue(
+                            data.clone(),
+                            workload_group.queue_key.clone(),
+                            permits as u64,
+                            workload_group_timeout,
+                        )
+                        .await?;
+
+                    info!("[QUERY-QUEUE] Successfully acquired from workload group queue. elapsed: {:?}", instant.elapsed());
+                    timeout -= instant.elapsed();
+                    guards.push(workload_queue_guard);
                 }
-            };
+            }
+
+            guards.push(self.acquire_warehouse_queue(data, timeout).await?);
+
+            inc_session_running_acquired_queries();
+            record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
+
+            return Ok(AcquireQueueGuard::create(guards));
         }
 
-        Ok(AcquireQueueGuard::create_global(None))
+        Ok(AcquireQueueGuard::create(vec![]))
+    }
+
+    async fn acquire_workload_queue(
+        self: &Arc<Self>,
+        data: Arc<Data>,
+        key: String,
+        permits: u64,
+        timeout: Duration,
+    ) -> Result<AcquireQueueGuardInner> {
+        let semaphore_acquire = self.meta_store.new_acquired_by_time(
+            key,
+            permits,
+            data.get_key(), // ID of this acquirer
+            data.lock_ttl(),
+        );
+
+        let acquire_res = AcquireQueueFuture::create(
+            data,
+            tokio::time::timeout(timeout, semaphore_acquire),
+            self.clone(),
+        )
+        .await;
+
+        match acquire_res {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                match e.code() {
+                    ErrorCode::ABORTED_QUERY => {
+                        incr_session_queue_abort_count();
+                    }
+                    ErrorCode::TIMEOUT => {
+                        incr_session_queue_acquire_timeout_count();
+                    }
+                    _ => {
+                        incr_session_queue_acquire_error_count();
+                    }
+                }
+                Err(e)
+            }
+        }
+    }
+
+    async fn acquire_warehouse_queue(
+        self: &Arc<Self>,
+        data: Arc<Data>,
+        timeout: Duration,
+    ) -> Result<AcquireQueueGuardInner> {
+        let acquire_res = match self.global_statement_queue {
+            true => {
+                let semaphore_acquire = self.meta_store.new_acquired_by_time(
+                    data.get_lock_key(),
+                    self.permits as u64,
+                    data.get_key(), // ID of this acquirer
+                    data.lock_ttl(),
+                );
+
+                AcquireQueueFuture::create(
+                    data,
+                    tokio::time::timeout(timeout, semaphore_acquire),
+                    self.clone(),
+                )
+                .await
+            }
+            false => {
+                AcquireQueueFuture::create(
+                    data,
+                    tokio::time::timeout(timeout, self.semaphore.clone().acquire_owned()),
+                    self.clone(),
+                )
+                .await
+            }
+        };
+
+        match acquire_res {
+            Ok(v) => {
+                info!(
+                    "[QUERY-QUEUE] Successfully acquired from queue, current length: {}",
+                    self.length()
+                );
+
+                Ok(v)
+            }
+            Err(e) => {
+                match e.code() {
+                    ErrorCode::ABORTED_QUERY => {
+                        incr_session_queue_abort_count();
+                    }
+                    ErrorCode::TIMEOUT => {
+                        incr_session_queue_acquire_timeout_count();
+                    }
+                    _ => {
+                        incr_session_queue_acquire_error_count();
+                    }
+                }
+                Err(e)
+            }
+        }
     }
 
     pub(crate) fn add_entity(&self, inner: Inner<Data>) -> Data::Key {
@@ -261,29 +355,37 @@ impl<Data: QueueData> QueueManager<Data> {
 }
 
 #[derive(Debug)]
-pub enum AcquireQueueGuard {
+pub struct AcquireQueueGuard {
+    inner: Vec<AcquireQueueGuardInner>,
+}
+
+impl AcquireQueueGuard {
+    pub fn create(inner: Vec<AcquireQueueGuardInner>) -> AcquireQueueGuard {
+        AcquireQueueGuard { inner }
+    }
+}
+
+#[derive(Debug)]
+pub enum AcquireQueueGuardInner {
     Global(Option<Permit>),
     Local(Option<OwnedSemaphorePermit>),
 }
 
 impl Drop for AcquireQueueGuard {
     fn drop(&mut self) {
-        match self {
-            AcquireQueueGuard::Local(Some(_)) | AcquireQueueGuard::Global(Some(_)) => {
-                dec_session_running_acquired_queries();
-            }
-            _ => {}
+        if !self.inner.is_empty() {
+            dec_session_running_acquired_queries();
         }
     }
 }
 
-impl AcquireQueueGuard {
+impl AcquireQueueGuardInner {
     pub fn create_global(permit: Option<Permit>) -> Self {
-        AcquireQueueGuard::Global(permit)
+        AcquireQueueGuardInner::Global(permit)
     }
 
     pub fn create_local(permit: Option<OwnedSemaphorePermit>) -> Self {
-        AcquireQueueGuard::Local(permit)
+        AcquireQueueGuardInner::Local(permit)
     }
 }
 
@@ -323,7 +425,7 @@ macro_rules! impl_acquire_queue_future {
         impl<Data: QueueData, T> Future for AcquireQueueFuture<Data, T, $Permit, $Error>
         where T: Future<Output = std::result::Result<std::result::Result<$Permit, $Error>, Elapsed>>
         {
-            type Output = Result<AcquireQueueGuard>;
+            type Output = Result<AcquireQueueGuardInner>;
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
                 let this = self.project();
@@ -341,9 +443,13 @@ macro_rules! impl_acquire_queue_future {
                         }
 
                         Poll::Ready(match res {
-                            Ok(Ok(v)) => Ok(AcquireQueueGuard::$fn_name(Some(v))),
-                            Ok(Err(_)) => Err(ErrorCode::TokioError("acquire queue failure.")),
-                            Err(_elapsed) => Err(ErrorCode::Timeout("query queuing timeout")),
+                            Ok(Ok(v)) => Ok(AcquireQueueGuardInner::$fn_name(Some(v))),
+                            Ok(Err(_)) => Err(ErrorCode::TokioError(
+                                "[QUERY-QUEUE] Queue acquisition failed",
+                            )),
+                            Err(_elapsed) => Err(ErrorCode::Timeout(
+                                "[QUERY-QUEUE] Query queuing timeout exceeded",
+                            )),
                         })
                     }
                     Poll::Pending => {
@@ -521,9 +627,9 @@ impl QueueData for QueryEntry {
 
     fn remove_error_message(key: Option<Self::Key>) -> ErrorCode {
         match key {
-            None => ErrorCode::AbortedQuery("The query has be kill while in queries queue"),
+            None => ErrorCode::AbortedQuery("[QUERY-QUEUE] Query was killed while in queue"),
             Some(key) => ErrorCode::AbortedQuery(format!(
-                "The query {} has be kill while in queries queue",
+                "[QUERY-QUEUE] Query {} was killed while in queue",
                 key
             )),
         }
@@ -542,12 +648,18 @@ impl QueueData for QueryEntry {
     }
 
     fn enter_wait_pending(&self) {
-        self.ctx.set_status_info("resources scheduling");
+        self.ctx
+            .set_status_info("[QUERY-QUEUE] Waiting for resource scheduling");
     }
 
     fn exit_wait_pending(&self, wait_time: Duration) {
-        self.ctx
-            .set_status_info(format!("resource scheduled(elapsed: {:?})", wait_time).as_str());
+        self.ctx.set_status_info(
+            format!(
+                "[QUERY-QUEUE] Resource scheduling completed, elapsed: {:?}",
+                wait_time
+            )
+            .as_str(),
+        );
         self.ctx.set_query_queued_duration(wait_time)
     }
 }

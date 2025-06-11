@@ -153,6 +153,7 @@ use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndex;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -1021,12 +1022,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                             IndexColumnIdNotFound::new(*column_id, &index.name),
                         )));
                     }
-                    if index_column_ids.contains(column_id) {
+                    if index_column_ids.contains(&(*column_id, index.index_type.clone())) {
                         return Err(KVAppError::AppError(AppError::DuplicatedIndexColumnId(
                             DuplicatedIndexColumnId::new(*column_id, &index.name),
                         )));
                     }
-                    index_column_ids.insert(column_id);
+                    index_column_ids.insert((*column_id, index.index_type.clone()));
                 }
             }
         }
@@ -2450,7 +2451,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             // column_id can not be duplicated
             for (name, index) in indexes.iter() {
-                if *name == req.name {
+                if *name == req.name || index.index_type != req.index_type {
                     continue;
                 }
                 for column_id in &req.column_ids {
@@ -2474,6 +2475,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                         &req.tenant,
                         req.table_id,
                         &req.name,
+                        &req.index_type,
                         &old_index.version,
                     )?;
                     mark_delete_op = Some(TxnOp::put(m_key, m_value));
@@ -2545,15 +2547,34 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let indexes = &mut table_meta.indexes;
             if !indexes.contains_key(&req.name) && !req.if_exists {
                 return Err(KVAppError::AppError(AppError::UnknownIndex(
-                    UnknownError::<IndexName>::new(req.name.clone(), "drop table index"),
+                    UnknownError::<IndexName>::new(
+                        req.name.clone(),
+                        format!("drop {} index", req.index_type),
+                    ),
                 )));
             }
             let Some(index) = indexes.remove(&req.name) else {
                 return Ok(());
             };
+            if index.index_type != req.index_type {
+                return Err(KVAppError::AppError(AppError::UnknownIndex(
+                    UnknownError::<IndexName>::new(
+                        req.name.clone(),
+                        format!(
+                            "drop {} index, but the index is {}",
+                            req.index_type, index.index_type
+                        ),
+                    ),
+                )));
+            }
 
-            let (m_key, m_value) =
-                mark_table_index_as_deleted(&req.tenant, req.table_id, &req.name, &index.version)?;
+            let (m_key, m_value) = mark_table_index_as_deleted(
+                &req.tenant,
+                req.table_id,
+                &req.name,
+                &req.index_type,
+                &index.version,
+            )?;
 
             let txn_req = TxnRequest::new(
                 vec![
@@ -4248,15 +4269,21 @@ pub fn mark_table_index_as_deleted(
     tenant: &Tenant,
     table_id: u64,
     index_name: &str,
+    index_type: &TableIndexType,
     index_version: &str,
 ) -> Result<(String, Vec<u8>), MetaError> {
     let marked_deleted_table_index_id_ident = MarkedDeletedTableIndexIdIdent::new_generic(
         tenant,
         MarkedDeletedTableIndexId::new(table_id, index_name.to_owned(), index_version.to_owned()),
     );
+    let deleted_index_type = match index_type {
+        TableIndexType::Inverted => MarkedDeletedIndexType::INVERTED,
+        TableIndexType::Ngram => MarkedDeletedIndexType::NGRAM,
+        TableIndexType::Vector => MarkedDeletedIndexType::VECTOR,
+    };
     let marked_deleted_table_index_meta = MarkedDeletedIndexMeta {
         dropped_on: Utc::now(),
-        index_type: MarkedDeletedIndexType::INVERTED,
+        index_type: deleted_index_type,
     };
 
     Ok((

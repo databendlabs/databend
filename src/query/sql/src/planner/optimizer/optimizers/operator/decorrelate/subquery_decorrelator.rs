@@ -35,7 +35,6 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
@@ -48,6 +47,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
+use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
@@ -705,19 +705,18 @@ impl SubqueryDecorrelatorOptimizer {
                     &subquery.data_type,
                 );
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
-                let op = *subquery.compare_op.as_ref().unwrap();
+                let op = subquery.compare_op.as_ref().unwrap().clone();
                 let (right_condition, is_non_equi_condition) =
                     check_child_expr_in_subquery(&child_expr, &op)?;
                 let (left_conditions, right_conditions, non_equi_conditions) =
                     if !is_non_equi_condition {
                         (vec![left_condition], vec![right_condition], vec![])
                     } else {
-                        let other_condition = ScalarExpr::FunctionCall(FunctionCall {
-                            span: subquery.span,
-                            func_name: op.to_func_name().to_string(),
-                            params: vec![],
-                            arguments: vec![right_condition, left_condition],
-                        });
+                        let other_condition = ScalarExpr::FunctionCall(op.to_func_call(
+                            subquery.span,
+                            right_condition,
+                            left_condition,
+                        ));
                         (vec![], vec![], vec![other_condition])
                     };
                 // Add a marker column to save comparison result.
@@ -774,15 +773,17 @@ impl SubqueryDecorrelatorOptimizer {
 
 pub fn check_child_expr_in_subquery(
     child_expr: &ScalarExpr,
-    op: &ComparisonOp,
+    op: &SubqueryComparisonOp,
 ) -> Result<(ScalarExpr, bool)> {
     match child_expr {
-        ScalarExpr::BoundColumnRef(_) => Ok((child_expr.clone(), op != &ComparisonOp::Equal)),
+        ScalarExpr::BoundColumnRef(_) => {
+            Ok((child_expr.clone(), op != &SubqueryComparisonOp::Equal))
+        }
         ScalarExpr::FunctionCall(func) => {
             for arg in &func.arguments {
                 let _ = check_child_expr_in_subquery(arg, op)?;
             }
-            Ok((child_expr.clone(), op != &ComparisonOp::Equal))
+            Ok((child_expr.clone(), op != &SubqueryComparisonOp::Equal))
         }
         ScalarExpr::ConstantExpr(_) => Ok((child_expr.clone(), true)),
         ScalarExpr::CastExpr(cast) => {

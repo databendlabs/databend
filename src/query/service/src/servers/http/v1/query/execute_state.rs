@@ -158,10 +158,23 @@ pub struct ExecutorSessionState {
     pub txn_manager: TxnManagerRef,
     pub temp_tbl_mgr: TempTblMgrRef,
     pub variables: HashMap<String, Scalar>,
+    pub last_query_ids: Vec<String>,
+    pub last_query_result_cache_key: String,
 }
 
 impl ExecutorSessionState {
     pub fn new(session: Arc<Session>) -> Self {
+        let mut last_query_ids = Vec::with_capacity(64);
+        let mut last_query_result_cache_key = String::new();
+
+        let last_query_id = session.get_last_query_id(-1);
+        if !last_query_id.is_empty() {
+            if let Some(meta_key) = session.get_query_result_cache_key(&last_query_id) {
+                last_query_ids.push(last_query_id);
+                last_query_result_cache_key = meta_key;
+            }
+        }
+
         Self {
             current_catalog: session.get_current_catalog(),
             current_database: session.get_current_database(),
@@ -171,6 +184,8 @@ impl ExecutorSessionState {
             txn_manager: session.txn_mgr(),
             temp_tbl_mgr: session.temp_tbl_mgr(),
             variables: session.get_all_variables(),
+            last_query_ids,
+            last_query_result_cache_key,
         }
     }
 }
@@ -267,7 +282,7 @@ impl Executor {
         let state = match &guard.state {
             Starting(s) => {
                 info!(
-                    "{}: http query begin changing state from Starting to Stopped, reason {:?}",
+                    "[HTTP-QUERY] Query {} state transitioning from Starting to Stopped, reason: {:?}",
                     &guard.query_id, reason
                 );
                 if let Err(e) = &reason {
@@ -277,7 +292,7 @@ impl Executor {
                         Some(e.clone()),
                         false,
                     )
-                    .unwrap_or_else(|e| error!("fail to write query_log {:?}", e));
+                    .unwrap_or_else(|e| error!("[HTTP-QUERY] Failed to write query_log: {:?}", e));
                 }
                 if let Err(e) = &reason {
                     if e.code() != ErrorCode::CLOSED_QUERY {
@@ -297,7 +312,7 @@ impl Executor {
             }
             Running(r) => {
                 info!(
-                    "{}: http query changing state from Running to Stopped, reason {:?}",
+                    "[HTTP-QUERY] Query {} state transitioning from Running to Stopped, reason: {:?}",
                     &guard.query_id, reason,
                 );
                 if let Err(e) = &reason {
@@ -319,14 +334,14 @@ impl Executor {
             }
             Stopped(s) => {
                 debug!(
-                    "{}: http query already stopped, reason {:?}, new reason {:?}",
+                    "[HTTP-QUERY] Query {} already in Stopped state, original reason: {:?}, new reason: {:?}",
                     &guard.query_id, s.reason, reason
                 );
                 return;
             }
         };
         info!(
-            "{}: http query has change state to Stopped, reason {:?}",
+            "[HTTP-QUERY] Query {} state changed to Stopped, reason: {:?}",
             &guard.query_id, reason
         );
         guard.state = Stopped(Box::new(state));
@@ -345,7 +360,7 @@ impl ExecuteState {
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
 
-        info!("http query prepare to plan sql");
+        info!("[HTTP-QUERY] Preparing to plan SQL query");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
         let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true)
@@ -375,7 +390,7 @@ impl ExecuteState {
             schema,
             has_result_set,
         };
-        info!("http query change state to Running");
+        info!("[HTTP-QUERY] Query state changed to Running");
         Executor::start_to_running(&executor, Running(running_state));
 
         let executor_clone = executor.clone();

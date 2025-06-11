@@ -23,6 +23,7 @@ pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryDecorrelatorOptimizer;
 pub use decorrelate::UnnestResult;
 pub use filter::DeduplicateJoinConditionOptimizer;
+pub use filter::EquivalentConstantsVisitor;
 pub use filter::InferFilterOptimizer;
 pub use filter::JoinProperty;
 pub use filter::NormalizeDisjunctiveFilterOptimizer;

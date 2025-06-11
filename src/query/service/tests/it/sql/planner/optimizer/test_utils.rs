@@ -22,8 +22,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_sql::optimizer::ir::SExpr;
-use databend_common_sql::optimizer::OptimizerContext;
-use databend_common_sql::planner::optimize;
 use databend_common_sql::planner::plans::Filter;
 use databend_common_sql::planner::Binder;
 use databend_common_sql::planner::Metadata;
@@ -87,22 +85,6 @@ pub async fn raw_plan(ctx: &Arc<QueryContext>, sql: &str) -> Result<Plan> {
     binder.bind(&extras.statement).await
 }
 
-/// Optimize a plan
-pub async fn optimize_plan(ctx: &Arc<QueryContext>, plan: Plan) -> Result<Plan> {
-    // Extract the metadata from the plan if it's a Query variant
-    let metadata = match &plan {
-        Plan::Query { metadata, .. } => metadata.clone(),
-        _ => {
-            // If it's not a Query, we still need to provide a metadata, but log a warning
-            eprintln!("Warning: Plan is not a Query variant, creating new metadata");
-            Arc::new(parking_lot::RwLock::new(Metadata::default()))
-        }
-    };
-
-    let opt_ctx = OptimizerContext::new(ctx.clone(), metadata);
-    optimize(opt_ctx, plan).await
-}
-
 // ===== Helper Functions =====
 
 /// Creates a column reference with the given index, name, data type, table name and table index
@@ -123,6 +105,7 @@ pub fn create_table_bound_column_ref(
         table_index,
         visibility: Visibility::Visible,
         virtual_expr: None,
+        is_srf: false,
     };
     ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
 }

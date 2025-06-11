@@ -58,7 +58,7 @@ async fn test_always_call_on_finished() -> Result<()> {
                 assert_eq!(error.code(), 1001);
                 assert_eq!(
                     error.message().as_str(),
-                    "Pipeline max threads cannot equals zero."
+                    "[PIPELINE-EXECUTOR] Pipeline max threads cannot be zero"
                 );
                 assert!(called_finished.load(Ordering::SeqCst));
             }

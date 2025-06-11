@@ -2974,23 +2974,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | f32 > '1'
-  |     ^ no function matches signature `gt(Float32, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Float32` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Float32` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float32` with `String`
-... and 33 more
-
-
-
-ast            : f32 = '1'
-raw expr       : eq(f32::Float32, '1')
-checked expr   : eq<Float32, Float32>(f32, CAST<String>("1" AS Float32))
+ast            : f32 > '1'
+raw expr       : gt(f32::Float32, '1')
+checked expr   : gt<Float32, String>(f32, "1")
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -3009,23 +2995,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > f32
-  |     ^ no function matches signature `gt(String, Float32)`, you might need to add explicit type casts.
+ast            : f32 = '1'
+raw expr       : eq(f32::Float32, '1')
+checked expr   : eq<Float32, String>(f32, "1")
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | f32     | Output  |
++--------+---------+---------+
+| Type   | Float32 | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| f32    | Float32([0])          |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float32` with `String`
-... and 33 more
 
+ast            : '1' > f32
+raw expr       : gt('1', f32::Float32)
+checked expr   : gt<String, Float32>("1", f32)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | f32     | Output  |
++--------+---------+---------+
+| Type   | Float32 | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| f32    | Float32([0])          |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = f32
 raw expr       : eq('1', f32::Float32)
-checked expr   : eq<Float32, Float32>(CAST<String>("1" AS Float32), f32)
+checked expr   : eq<String, Float32>("1", f32)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -3110,6 +3124,27 @@ evaluation (internal):
 ast            : 1::uint64 = f32
 raw expr       : eq(CAST(1 AS UInt64), f32::Float32)
 checked expr   : eq<Float64, Float64>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Float64), CAST<Float32>(f32 AS Float64))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | f32     | Output  |
++--------+---------+---------+
+| Type   | Float32 | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| f32    | Float32([0])          |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : f32 = true
+raw expr       : eq(f32::Float32, true)
+checked expr   : eq<Boolean, Boolean>(CAST<Float32>(f32 AS Boolean), true)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -3296,23 +3331,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:7
-  |
-1 | n_f32 > '1'
-  |       ^ no function matches signature `gt(Float32 NULL, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Float32 NULL` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Float32` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float32 NULL` with `String`
-... and 33 more
-
-
-
-ast            : n_f32 = '1'
-raw expr       : eq(n_f32::Float32 NULL, '1')
-checked expr   : eq<Float32 NULL, Float32 NULL>(n_f32, CAST<String>("1" AS Float32 NULL))
+ast            : n_f32 > '1'
+raw expr       : gt(n_f32::Float32 NULL, '1')
+checked expr   : gt<Float32 NULL, String NULL>(n_f32, CAST<String>("1" AS String NULL))
 optimized expr : false
 evaluation:
 +--------+--------------+--------------+
@@ -3331,23 +3352,51 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > n_f32
-  |     ^ no function matches signature `gt(String, Float32 NULL)`, you might need to add explicit type casts.
+ast            : n_f32 = '1'
+raw expr       : eq(n_f32::Float32 NULL, '1')
+checked expr   : eq<Float32 NULL, String NULL>(n_f32, CAST<String>("1" AS String NULL))
+optimized expr : false
+evaluation:
++--------+--------------+--------------+
+|        | n_f32        | Output       |
++--------+--------------+--------------+
+| Type   | Float32 NULL | Boolean NULL |
+| Domain | {0..=0}      | {FALSE}      |
+| Row 0  | 0            | false        |
++--------+--------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float32 NULL` with `String`
-... and 33 more
 
+ast            : '1' > n_f32
+raw expr       : gt('1', n_f32::Float32 NULL)
+checked expr   : gt<String NULL, Float32 NULL>(CAST<String>("1" AS String NULL), n_f32)
+optimized expr : true
+evaluation:
++--------+--------------+--------------+
+|        | n_f32        | Output       |
++--------+--------------+--------------+
+| Type   | Float32 NULL | Boolean NULL |
+| Domain | {0..=0}      | {TRUE}       |
+| Row 0  | 0            | true         |
++--------+--------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : '1' = n_f32
 raw expr       : eq('1', n_f32::Float32 NULL)
-checked expr   : eq<Float32 NULL, Float32 NULL>(CAST<String>("1" AS Float32 NULL), n_f32)
+checked expr   : eq<String NULL, Float32 NULL>(CAST<String>("1" AS String NULL), n_f32)
 optimized expr : false
 evaluation:
 +--------+--------------+--------------+
@@ -3432,6 +3481,27 @@ evaluation (internal):
 ast            : 1::uint64 = n_f32
 raw expr       : eq(CAST(1 AS UInt64), n_f32::Float32 NULL)
 checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Float64 NULL), CAST<Float32 NULL>(n_f32 AS Float64 NULL))
+optimized expr : false
+evaluation:
++--------+--------------+--------------+
+|        | n_f32        | Output       |
++--------+--------------+--------------+
+| Type   | Float32 NULL | Boolean NULL |
+| Domain | {0..=0}      | {FALSE}      |
+| Row 0  | 0            | false        |
++--------+--------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_f32  | NullableColumn { column: Float32([0]), validity: [0b_______1] }          |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_f32 = true
+raw expr       : eq(n_f32::Float32 NULL, true)
+checked expr   : eq<Boolean NULL, Boolean NULL>(CAST<Float32 NULL>(n_f32 AS Boolean NULL), CAST<Boolean>(true AS Boolean NULL))
 optimized expr : false
 evaluation:
 +--------+--------------+--------------+
@@ -3618,23 +3688,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | f64 > '1'
-  |     ^ no function matches signature `gt(Float64, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Float64` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Float64` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float64` with `String`
-... and 33 more
-
-
-
-ast            : f64 = '1'
-raw expr       : eq(f64::Float64, '1')
-checked expr   : eq<Float64, Float64>(f64, CAST<String>("1" AS Float64))
+ast            : f64 > '1'
+raw expr       : gt(f64::Float64, '1')
+checked expr   : gt<Float64, String>(f64, "1")
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -3653,23 +3709,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > f64
-  |     ^ no function matches signature `gt(String, Float64)`, you might need to add explicit type casts.
+ast            : f64 = '1'
+raw expr       : eq(f64::Float64, '1')
+checked expr   : eq<Float64, String>(f64, "1")
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | f64     | Output  |
++--------+---------+---------+
+| Type   | Float64 | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| f64    | Float64([0])          |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float64` with `String`
-... and 33 more
 
+ast            : '1' > f64
+raw expr       : gt('1', f64::Float64)
+checked expr   : gt<String, Float64>("1", f64)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | f64     | Output  |
++--------+---------+---------+
+| Type   | Float64 | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| f64    | Float64([0])          |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = f64
 raw expr       : eq('1', f64::Float64)
-checked expr   : eq<Float64, Float64>(CAST<String>("1" AS Float64), f64)
+checked expr   : eq<String, Float64>("1", f64)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -3754,6 +3838,27 @@ evaluation (internal):
 ast            : 1::uint64 = f64
 raw expr       : eq(CAST(1 AS UInt64), f64::Float64)
 checked expr   : eq<Float64, Float64>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Float64), f64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | f64     | Output  |
++--------+---------+---------+
+| Type   | Float64 | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| f64    | Float64([0])          |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : f64 = true
+raw expr       : eq(f64::Float64, true)
+checked expr   : eq<Boolean, Boolean>(CAST<Float64>(f64 AS Boolean), true)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -3940,23 +4045,9 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:7
-  |
-1 | n_f64 > '1'
-  |       ^ no function matches signature `gt(Float64 NULL, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Float64 NULL` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Float64` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float64 NULL` with `String`
-... and 33 more
-
-
-
-ast            : n_f64 = '1'
-raw expr       : eq(n_f64::Float64 NULL, '1')
-checked expr   : eq<Float64 NULL, Float64 NULL>(n_f64, CAST<String>("1" AS Float64 NULL))
+ast            : n_f64 > '1'
+raw expr       : gt(n_f64::Float64 NULL, '1')
+checked expr   : gt<Float64 NULL, String NULL>(n_f64, CAST<String>("1" AS String NULL))
 optimized expr : false
 evaluation:
 +--------+--------------+--------------+
@@ -3975,23 +4066,51 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > n_f64
-  |     ^ no function matches signature `gt(String, Float64 NULL)`, you might need to add explicit type casts.
+ast            : n_f64 = '1'
+raw expr       : eq(n_f64::Float64 NULL, '1')
+checked expr   : eq<Float64 NULL, String NULL>(n_f64, CAST<String>("1" AS String NULL))
+optimized expr : false
+evaluation:
++--------+--------------+--------------+
+|        | n_f64        | Output       |
++--------+--------------+--------------+
+| Type   | Float64 NULL | Boolean NULL |
+| Domain | {0..=0}      | {FALSE}      |
+| Row 0  | 0            | false        |
++--------+--------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Float64 NULL` with `String`
-... and 33 more
 
+ast            : '1' > n_f64
+raw expr       : gt('1', n_f64::Float64 NULL)
+checked expr   : gt<String NULL, Float64 NULL>(CAST<String>("1" AS String NULL), n_f64)
+optimized expr : true
+evaluation:
++--------+--------------+--------------+
+|        | n_f64        | Output       |
++--------+--------------+--------------+
+| Type   | Float64 NULL | Boolean NULL |
+| Domain | {0..=0}      | {TRUE}       |
+| Row 0  | 0            | true         |
++--------+--------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| Output | NullableColumn { column: Boolean([0b_______1]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : '1' = n_f64
 raw expr       : eq('1', n_f64::Float64 NULL)
-checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<String>("1" AS Float64 NULL), n_f64)
+checked expr   : eq<String NULL, Float64 NULL>(CAST<String>("1" AS String NULL), n_f64)
 optimized expr : false
 evaluation:
 +--------+--------------+--------------+
@@ -4076,6 +4195,27 @@ evaluation (internal):
 ast            : 1::uint64 = n_f64
 raw expr       : eq(CAST(1 AS UInt64), n_f64::Float64 NULL)
 checked expr   : eq<Float64 NULL, Float64 NULL>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Float64 NULL), n_f64)
+optimized expr : false
+evaluation:
++--------+--------------+--------------+
+|        | n_f64        | Output       |
++--------+--------------+--------------+
+| Type   | Float64 NULL | Boolean NULL |
+| Domain | {0..=0}      | {FALSE}      |
+| Row 0  | 0            | false        |
++--------+--------------+--------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| n_f64  | NullableColumn { column: Float64([0]), validity: [0b_______1] }          |
+| Output | NullableColumn { column: Boolean([0b_______0]), validity: [0b_______1] } |
++--------+--------------------------------------------------------------------------+
+
+
+ast            : n_f64 = true
+raw expr       : eq(n_f64::Float64 NULL, true)
+checked expr   : eq<Boolean NULL, Boolean NULL>(CAST<Float64 NULL>(n_f64 AS Boolean NULL), CAST<Boolean>(true AS Boolean NULL))
 optimized expr : false
 evaluation:
 +--------+--------------+--------------+

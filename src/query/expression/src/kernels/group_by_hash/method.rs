@@ -24,11 +24,6 @@ use either::Either;
 use ethnum::u256;
 
 use crate::types::binary::BinaryColumn;
-use crate::types::decimal::Decimal;
-use crate::types::i256;
-use crate::types::DataType;
-use crate::types::DecimalDataType;
-use crate::types::NumberDataType;
 use crate::types::StringColumn;
 use crate::Column;
 use crate::HashMethodKeysU128;
@@ -126,22 +121,5 @@ impl HashMethodKind {
         with_hash_method!(|T| match self {
             HashMethodKind::T(v) => v.name(),
         })
-    }
-
-    pub fn data_type(&self) -> DataType {
-        match self {
-            HashMethodKind::Serializer(_) => DataType::Binary,
-            HashMethodKind::SingleBinary(_) => DataType::Binary,
-            HashMethodKind::KeysU8(_) => DataType::Number(NumberDataType::UInt8),
-            HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
-            HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
-            HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
-            HashMethodKind::KeysU128(_) => {
-                DataType::Decimal(DecimalDataType::Decimal128(i128::default_decimal_size()))
-            }
-            HashMethodKind::KeysU256(_) => {
-                DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
-            }
-        }
     }
 }

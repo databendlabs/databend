@@ -57,8 +57,7 @@ pub struct CreateTablePlan {
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
-    pub inverted_indexes: Option<BTreeMap<String, TableIndex>>,
-    pub ngram_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub table_indexes: Option<BTreeMap<String, TableIndex>>,
 
     pub attached_columns: Option<Vec<Identifier>>,
 }
@@ -242,6 +241,21 @@ pub struct ModifyTableCommentPlan {
 }
 
 impl ModifyTableCommentPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+/// Modify table connection.
+#[derive(Clone, Debug)]
+pub struct ModifyTableConnectionPlan {
+    pub new_connection: BTreeMap<String, String>,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl ModifyTableConnectionPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

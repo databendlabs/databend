@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::*;
+use ethnum::u256;
 
 use crate::common::new_block;
 
@@ -56,5 +58,64 @@ fn test_group_by_hash() -> Result<()> {
     assert_eq!(keys, vec![
         0x10101, 0x10101, 0x20202, 0x10101, 0x20202, 0x30303
     ]);
+    Ok(())
+}
+
+#[test]
+fn test_group_by_hash_decimal() -> Result<()> {
+    let size_128 = DecimalSize::new_unchecked(10, 2);
+    let size_256 = DecimalSize::new_unchecked(40, 2);
+
+    let decimal_128_values = [123456789_i128, 987654_i128, 123456789_i128];
+    let decimal_256_values = [
+        i256::from(123456789),
+        i256::from(987654),
+        i256::from(123456789),
+    ];
+
+    let block = new_block(&vec![
+        Decimal128Type::from_data_with_size(decimal_128_values, Some(size_128)),
+        Decimal256Type::from_data_with_size(decimal_256_values, Some(size_128)),
+        Decimal128Type::from_data_with_size(decimal_128_values, Some(size_256)),
+        Decimal256Type::from_data_with_size(decimal_256_values, Some(size_256)),
+    ]);
+
+    let method = DataBlock::choose_hash_method(&block, &[0])?;
+    assert_eq!(method.name(), HashMethodKeysU128::default().name());
+    let method = DataBlock::choose_hash_method(&block, &[1])?;
+    assert_eq!(method.name(), HashMethodKeysU128::default().name());
+    let method = DataBlock::choose_hash_method(&block, &[2])?;
+    assert_eq!(method.name(), HashMethodKeysU256::default().name());
+    let method = DataBlock::choose_hash_method(&block, &[3])?;
+    assert_eq!(method.name(), HashMethodKeysU256::default().name());
+
+    for i in [0, 1] {
+        let args = &[i];
+        let group_columns = InputColumns::new_block_proxy(args, &block);
+        let hash = HashMethodKeysU128::default();
+        let state = hash.build_keys_state(group_columns, block.num_rows())?;
+        let keys_iter = hash.build_keys_iter(&state)?;
+        let keys = keys_iter.copied().collect::<Vec<_>>();
+
+        assert_eq!(keys.len(), 3);
+        assert_eq!(&keys, &[123456789_u128, 987654_u128, 123456789_u128]);
+    }
+
+    for i in [2, 3] {
+        let args = &[i];
+        let group_columns = InputColumns::new_block_proxy(args, &block);
+        let hash = HashMethodKeysU256::default();
+        let state = hash.build_keys_state(group_columns, block.num_rows())?;
+        let keys_iter = hash.build_keys_iter(&state)?;
+        let keys = keys_iter.copied().collect::<Vec<_>>();
+
+        assert_eq!(keys.len(), 3);
+        assert_eq!(&keys, &[
+            u256::from(123456789_u128),
+            u256::from(987654_u128),
+            u256::from(123456789_u128)
+        ]);
+    }
+
     Ok(())
 }

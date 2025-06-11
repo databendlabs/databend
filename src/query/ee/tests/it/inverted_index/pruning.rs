@@ -42,8 +42,8 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::pruning::FusePruner;
 use databend_common_storages_fuse::FuseTable;
-use databend_enterprise_inverted_index::get_inverted_index_handler;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_enterprise_table_index::get_table_index_handler;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::RefreshTableIndexInterpreter;
@@ -113,8 +113,7 @@ async fn test_block_pruner() -> Result<()> {
         field_comments: vec![],
         as_select: None,
         cluster_key: None,
-        inverted_indexes: None,
-        ngram_indexes: None,
+        table_indexes: None,
         attached_columns: None,
         table_partition: None,
         table_properties: None,
@@ -492,7 +491,7 @@ async fn test_block_pruner() -> Result<()> {
         .await?;
 
     // create inverted index on table
-    let handler = get_inverted_index_handler();
+    let handler = get_table_index_handler();
 
     let catalog = ctx.get_catalog(&fixture.default_catalog_name()).await?;
     let table_id = table.get_id();

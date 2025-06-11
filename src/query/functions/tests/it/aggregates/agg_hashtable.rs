@@ -36,9 +36,7 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
-use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::Float32Type;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int16Type;
@@ -185,16 +183,13 @@ fn test_agg_hashtable() {
 #[test]
 fn test_layout() {
     let factory = AggregateFunctionFactory::instance();
-    let decimal_type = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-        precision: 18,
-        scale: 2,
-    }));
+    let decimal_type = DataType::Decimal(DecimalSize::new_unchecked(18, 2));
 
     let aggrs = factory
         .get("sum", vec![], vec![decimal_type], vec![])
         .unwrap();
-    type S = DecimalSumState<false, DecimalType<i128>>;
-    type M = DecimalSumState<false, DecimalType<i256>>;
+    type S = DecimalSumState<false, i128>;
+    type M = DecimalSumState<false, i256>;
 
     let states_layout = get_states_layout(&[aggrs.clone()]).unwrap();
 

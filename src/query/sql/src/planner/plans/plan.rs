@@ -27,6 +27,7 @@ use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
+use super::ModifyTableConnectionPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
@@ -76,6 +77,7 @@ use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
 use crate::plans::DescProcedurePlan;
+use crate::plans::DescSequencePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -203,6 +205,7 @@ pub enum Plan {
         graphical: bool,
         plan: Box<Plan>,
     },
+    ReportIssue(String),
 
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
@@ -271,6 +274,7 @@ pub enum Plan {
     SetOptions(Box<SetOptionsPlan>),
     UnsetOptions(Box<UnsetOptionsPlan>),
     RefreshTableCache(Box<RefreshTableCachePlan>),
+    ModifyTableConnection(Box<ModifyTableConnectionPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),
@@ -412,6 +416,7 @@ pub enum Plan {
     // sequence
     CreateSequence(Box<CreateSequencePlan>),
     DropSequence(Box<DropSequencePlan>),
+    DescSequence(Box<DescSequencePlan>),
 
     // Dictionary
     CreateDictionary(Box<CreateDictionaryPlan>),
@@ -456,6 +461,7 @@ pub enum RewriteKind {
 
     Call,
     ShowProcedures,
+    ShowSequences,
 }
 
 impl Plan {
@@ -559,6 +565,10 @@ impl Plan {
                 DataField::new("max_concurrency", DataType::String),
                 DataField::new("query_queued_timeout", DataType::String),
             ]),
+            Plan::DescSequence(plan) => plan.schema(),
+            Plan::ReportIssue { .. } => {
+                DataSchemaRefExt::create(vec![DataField::new("summary", DataType::String)])
+            }
             _ => Arc::new(DataSchema::empty()),
         }
     }

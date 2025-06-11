@@ -33,6 +33,7 @@ fn test_comparison() {
     test_gte(file);
     test_like(file);
     test_regexp(file);
+    test_decimal(file);
 }
 
 fn test_eq(file: &mut impl Write) {
@@ -40,11 +41,14 @@ fn test_eq(file: &mut impl Write) {
     run_ast(file, "null=null", &[]);
     run_ast(file, "1=2", &[]);
     run_ast(file, "1.0=1", &[]);
-    run_ast(file, "2.222>2.11", &[]);
+    run_ast(file, "2.222=2.11", &[]);
     run_ast(file, "true=null", &[]);
     run_ast(file, "true=false", &[]);
     run_ast(file, "false=false", &[]);
     run_ast(file, "true=true", &[]);
+    run_ast(file, "10='10'", &[]);
+    run_ast(file, "'3.1'=3", &[]);
+    run_ast(file, "'3.a'=5", &[]);
     run_ast(file, "[]=[]", &[]);
     run_ast(file, "[1, 2]=[1, 2]", &[]);
     run_ast(file, "[true]=[]", &[]);
@@ -116,6 +120,9 @@ fn test_noteq(file: &mut impl Write) {
     run_ast(file, "true != true", &[]);
     run_ast(file, "true != null", &[]);
     run_ast(file, "true != false", &[]);
+    run_ast(file, "10 != '10'", &[]);
+    run_ast(file, "'3.1' != 3", &[]);
+    run_ast(file, "'3.a' != 5", &[]);
     run_ast(file, "[] != []", &[]);
     run_ast(file, "['a'] != ['a']", &[]);
     run_ast(file, "['a'] != ['b']", &[]);
@@ -168,6 +175,9 @@ fn test_lt(file: &mut impl Write) {
     run_ast(file, "true < true", &[]);
     run_ast(file, "true < null", &[]);
     run_ast(file, "true < false", &[]);
+    run_ast(file, "10 < '10'", &[]);
+    run_ast(file, "'3.1' < 3", &[]);
+    run_ast(file, "'3.a' < 5", &[]);
     run_ast(file, "[] < []", &[]);
     run_ast(file, "[1, 2] < [2, 3]", &[]);
     run_ast(file, "(1, 'b') < (1, 'a')", &[]);
@@ -217,6 +227,9 @@ fn test_lte(file: &mut impl Write) {
     run_ast(file, "true <= true", &[]);
     run_ast(file, "true <= null", &[]);
     run_ast(file, "true <= false", &[]);
+    run_ast(file, "10 <= '10'", &[]);
+    run_ast(file, "'3.1' <= 3", &[]);
+    run_ast(file, "'3.a' <= 5", &[]);
     run_ast(file, "[] <= []", &[]);
     run_ast(file, "[1, 2] <= [2, 3]", &[]);
     run_ast(file, "(1, 'b') <= (1, 'a')", &[]);
@@ -260,9 +273,13 @@ fn test_gt(file: &mut impl Write) {
     run_ast(file, "'3'>'2'", &[]);
     run_ast(file, "1>2", &[]);
     run_ast(file, "1.2>1.1", &[]);
+    run_ast(file, "2.222>2.11", &[]);
     run_ast(file, "true > true", &[]);
     run_ast(file, "true > null", &[]);
     run_ast(file, "true > false", &[]);
+    run_ast(file, "10 > '10'", &[]);
+    run_ast(file, "'3.1' > 3", &[]);
+    run_ast(file, "'3.a' > 5", &[]);
     run_ast(file, "[] > []", &[]);
     run_ast(file, "[1, 2] > [2, 3]", &[]);
     run_ast(file, "(1, 'b') > (1, 'a')", &[]);
@@ -319,6 +336,9 @@ fn test_gte(file: &mut impl Write) {
     run_ast(file, "true >= true", &[]);
     run_ast(file, "true >= null", &[]);
     run_ast(file, "true >= false", &[]);
+    run_ast(file, "10 >= '10'", &[]);
+    run_ast(file, "'3.1' >= 3", &[]);
+    run_ast(file, "'3.a' >= 5", &[]);
     run_ast(file, "[] >= []", &[]);
     run_ast(file, "[1, 2] >= [2, 3]", &[]);
     run_ast(file, "(1, 'b') >= (1, 'a')", &[]);
@@ -421,4 +441,78 @@ fn test_regexp(file: &mut impl Write) {
 
     run_ast(file, "lhs regexp rhs", &columns);
     run_ast(file, "lhs rlike rhs", &columns);
+}
+
+fn test_decimal(file: &mut impl Write) {
+    run_ast(file, "92233720368547758000000 > 5::decimal(38,37)", &[]);
+    run_ast(file, "92233720368547758000000 < 5::decimal(38,37)", &[]);
+    run_ast(file, "92233720368547758000000 >= 5::decimal(38,37)", &[]);
+    run_ast(file, "92233720368547758000000 <= 5::decimal(38,37)", &[]);
+    run_ast(file, "92233720368547758000000 = 5::decimal(38,37)", &[]);
+    run_ast(file, "92233720368547758000000 != 5::decimal(38,37)", &[]);
+
+    run_ast(file, "5000::decimal(4,0) > 5::decimal(38,37)", &[]);
+    run_ast(file, "5000::decimal(4,0) < 5::decimal(38,37)", &[]);
+    run_ast(file, "5000::decimal(4,0) >= 5::decimal(38,37)", &[]);
+    run_ast(file, "5000::decimal(4,0) <= 5::decimal(38,37)", &[]);
+    run_ast(file, "5000::decimal(4,0) = 5::decimal(38,37)", &[]);
+    run_ast(file, "5000::decimal(4,0) != 5::decimal(38,37)", &[]);
+
+    run_ast(file, "-5000::decimal(4,0) > -5::decimal(38,37)", &[]);
+    run_ast(file, "-5000::decimal(4,0) < -5::decimal(38,37)", &[]);
+    run_ast(file, "-5000::decimal(4,0) >= -5::decimal(38,37)", &[]);
+    run_ast(file, "-5000::decimal(4,0) <= -5::decimal(38,37)", &[]);
+    run_ast(file, "-5000::decimal(4,0) = -5::decimal(38,37)", &[]);
+    run_ast(file, "-5000::decimal(4,0) != -5::decimal(38,37)", &[]);
+
+    run_ast(file, "5000::decimal(4,0) > 5000::decimal(38,34)", &[]);
+    run_ast(file, "5000::decimal(4,0) < 5000::decimal(38,34)", &[]);
+    run_ast(file, "5000::decimal(4,0) >= 5000::decimal(38,34)", &[]);
+    run_ast(file, "5000::decimal(4,0) <= 5000::decimal(38,34)", &[]);
+    run_ast(file, "5000::decimal(4,0) = 5000::decimal(38,34)", &[]);
+    run_ast(file, "5000::decimal(4,0) != 5000::decimal(38,34)", &[]);
+
+    let data_a = vec![0i128, 1, -1, 123456789, -987654321, 1];
+    let data_b = vec![
+        i256::zero(),
+        2.into(),
+        (-2).into(),
+        123456780.into(),
+        (-987654320).into(),
+        10.into(),
+    ];
+    let decimals = &[
+        (
+            "a",
+            Decimal128Type::from_data_with_size(&data_a, Some(DecimalSize::new_unchecked(10, 2))),
+        ),
+        (
+            "b",
+            Decimal256Type::from_data_with_size(&data_b, Some(DecimalSize::new_unchecked(10, 2))),
+        ),
+        (
+            "c",
+            Decimal256Type::from_data_with_size(&data_b, Some(DecimalSize::new_unchecked(10, 3))),
+        ),
+    ];
+    run_ast(file, "a > b", decimals);
+    run_ast(file, "a < b", decimals);
+    run_ast(file, "a >= b", decimals);
+    run_ast(file, "a <= b", decimals);
+    run_ast(file, "a = b", decimals);
+    run_ast(file, "a != b", decimals);
+
+    run_ast(file, "b > a", decimals);
+    run_ast(file, "b < a", decimals);
+    run_ast(file, "b >= a", decimals);
+    run_ast(file, "b <= a", decimals);
+    run_ast(file, "b = a", decimals);
+    run_ast(file, "b != a", decimals);
+
+    run_ast(file, "a > c", decimals);
+    run_ast(file, "a < c", decimals);
+    run_ast(file, "a >= c", decimals);
+    run_ast(file, "a <= c", decimals);
+    run_ast(file, "a = c", decimals);
+    run_ast(file, "a != c", decimals);
 }

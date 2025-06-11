@@ -14,7 +14,7 @@ stmt "drop table if exists t1 all"
 stmt "CREATE TABLE t1 ( c0 string );"
 
 curl -sS \
--H "sql:insert /*+ set_var(input_read_buffer_size=100)  */into t1 file_format = (type = CSV)" \
+-H "sql:insert /*+ set_var(input_read_buffer_size=100)  */into t1 values file_format = (type = CSV)" \
 -H "X-databend-query-id: test" \
 -F "upload=@${DATA}" \
 -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"

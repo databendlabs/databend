@@ -111,7 +111,7 @@ impl PipelineBuilder {
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
-            self.is_exchange_neighbor,
+            self.is_exchange_parent(),
             max_block_size as usize,
             max_spill_io_requests as usize,
         )?;
@@ -125,7 +125,7 @@ impl PipelineBuilder {
         let schema_before_group_by = params.input_schema.clone();
 
         // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if !self.is_exchange_neighbor {
+        let partial_agg_config = if !self.is_exchange_parent() {
             HashTableConfig::default().with_partial(true, max_threads as usize)
         } else {
             HashTableConfig::default()
@@ -164,7 +164,7 @@ impl PipelineBuilder {
         })?;
 
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !self.is_exchange_neighbor {
+        if !self.is_exchange_parent() {
             let operator = DataOperator::instance().spill_operator();
             let location_prefix = self.ctx.query_id_spill_prefix();
 
@@ -192,13 +192,19 @@ impl PipelineBuilder {
             .settings
             .get_enable_experimental_aggregate_hashtable()?;
         let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
+        let max_restore_worker = self.settings.get_max_aggregate_restore_worker()?;
+
+        let mut is_cluster_aggregate = false;
+        if matches!(aggregate.input.as_ref(), PhysicalPlan::ExchangeSource(_)) {
+            is_cluster_aggregate = true;
+        }
 
         let params = Self::build_aggregator_params(
             aggregate.before_group_by_schema.clone(),
             &aggregate.group_by,
             &aggregate.agg_funcs,
             enable_experimental_aggregate_hashtable,
-            self.is_exchange_neighbor,
+            is_cluster_aggregate,
             max_block_size as usize,
             max_spill_io_requests as usize,
         )?;
@@ -223,7 +229,7 @@ impl PipelineBuilder {
         }
         self.build_pipeline(&aggregate.input)?;
         self.exchange_injector = old_inject;
-        build_partition_bucket(&mut self.main_pipeline, params.clone())
+        build_partition_bucket(&mut self.main_pipeline, params.clone(), max_restore_worker)
     }
 
     fn build_aggregator_params(

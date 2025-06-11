@@ -1570,23 +1570,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | i32 > '1'
-  |     ^ no function matches signature `gt(Int32, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Int32` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Int32` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Int32` with `String`
-... and 33 more
-
-
-
-ast            : i32 = '1'
-raw expr       : eq(i32::Int32, '1')
-checked expr   : eq<Int64, Int64>(CAST<Int32>(i32 AS Int64), CAST<String>("1" AS Int64))
+ast            : i32 > '1'
+raw expr       : gt(i32::Int32, '1')
+checked expr   : gt<Int32, String>(i32, "1")
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1605,23 +1591,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > i32
-  |     ^ no function matches signature `gt(String, Int32)`, you might need to add explicit type casts.
+ast            : i32 = '1'
+raw expr       : eq(i32::Int32, '1')
+checked expr   : eq<Int32, String>(i32, "1")
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | i32     | Output  |
++--------+---------+---------+
+| Type   | Int32   | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| i32    | Int32([0])            |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Int32` with `String`
-... and 33 more
 
+ast            : '1' > i32
+raw expr       : gt('1', i32::Int32)
+checked expr   : gt<String, Int32>("1", i32)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | i32     | Output  |
++--------+---------+---------+
+| Type   | Int32   | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| i32    | Int32([0])            |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = i32
 raw expr       : eq('1', i32::Int32)
-checked expr   : eq<Int64, Int64>(CAST<String>("1" AS Int64), CAST<Int32>(i32 AS Int64))
+checked expr   : eq<String, Int32>("1", i32)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1706,6 +1720,27 @@ evaluation (internal):
 ast            : 1::uint64 = i32
 raw expr       : eq(CAST(1 AS UInt64), i32::Int32)
 checked expr   : eq<Int64, Int64>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64), CAST<Int32>(i32 AS Int64))
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | i32     | Output  |
++--------+---------+---------+
+| Type   | Int32   | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| i32    | Int32([0])            |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : i32 = true
+raw expr       : eq(i32::Int32, true)
+checked expr   : eq<Boolean, Boolean>(CAST<Int32>(i32 AS Boolean), true)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1892,23 +1927,9 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | i64 > '1'
-  |     ^ no function matches signature `gt(Int64, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `Int64` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Int64` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Int64` with `String`
-... and 33 more
-
-
-
-ast            : i64 = '1'
-raw expr       : eq(i64::Int64, '1')
-checked expr   : eq<Int64, Int64>(i64, CAST<String>("1" AS Int64))
+ast            : i64 > '1'
+raw expr       : gt(i64::Int64, '1')
+checked expr   : gt<Int64, String>(i64, "1")
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -1927,23 +1948,51 @@ evaluation (internal):
 +--------+-----------------------+
 
 
-error: 
-  --> SQL:1:5
-  |
-1 | '1' > i64
-  |     ^ no function matches signature `gt(String, Int64)`, you might need to add explicit type casts.
+ast            : i64 = '1'
+raw expr       : eq(i64::Int64, '1')
+checked expr   : eq<Int64, String>(i64, "1")
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | i64     | Output  |
++--------+---------+---------+
+| Type   | Int64   | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| i64    | Int64([0])            |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
 
-candidate functions:
-  gt(Variant, Variant) :: Boolean                               : unable to unify `String` with `Variant`
-  gt(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `String` with `Variant`
-  gt(String, String) :: Boolean                                 : unable to unify `Int64` with `String`
-... and 33 more
 
+ast            : '1' > i64
+raw expr       : gt('1', i64::Int64)
+checked expr   : gt<String, Int64>("1", i64)
+optimized expr : true
+evaluation:
++--------+---------+---------+
+|        | i64     | Output  |
++--------+---------+---------+
+| Type   | Int64   | Boolean |
+| Domain | {0..=0} | {TRUE}  |
+| Row 0  | 0       | true    |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| i64    | Int64([0])            |
+| Output | Boolean([0b_______1]) |
++--------+-----------------------+
 
 
 ast            : '1' = i64
 raw expr       : eq('1', i64::Int64)
-checked expr   : eq<Int64, Int64>(CAST<String>("1" AS Int64), i64)
+checked expr   : eq<String, Int64>("1", i64)
 optimized expr : false
 evaluation:
 +--------+---------+---------+
@@ -2028,6 +2077,27 @@ evaluation (internal):
 ast            : 1::uint64 = i64
 raw expr       : eq(CAST(1 AS UInt64), i64::Int64)
 checked expr   : eq<Int64, Int64>(CAST<UInt64>(CAST<UInt8>(1_u8 AS UInt64) AS Int64), i64)
+optimized expr : false
+evaluation:
++--------+---------+---------+
+|        | i64     | Output  |
++--------+---------+---------+
+| Type   | Int64   | Boolean |
+| Domain | {0..=0} | {FALSE} |
+| Row 0  | 0       | false   |
++--------+---------+---------+
+evaluation (internal):
++--------+-----------------------+
+| Column | Data                  |
++--------+-----------------------+
+| i64    | Int64([0])            |
+| Output | Boolean([0b_______0]) |
++--------+-----------------------+
+
+
+ast            : i64 = true
+raw expr       : eq(i64::Int64, true)
+checked expr   : eq<Boolean, Boolean>(CAST<Int64>(i64 AS Boolean), true)
 optimized expr : false
 evaluation:
 +--------+---------+---------+

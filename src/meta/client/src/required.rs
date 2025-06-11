@@ -34,6 +34,8 @@ pub mod features {
     pub const EXPORT_V1:           FeatureSpec = ("export_v1",           (1, 2, 315));
     pub const WATCH:               FeatureSpec = ("watch",               (1, 2, 259));
     pub const WATCH_INITIAL_FLUSH: FeatureSpec = ("watch/initial_flush", (1, 2, 677));
+    /// WatchResponse contains a flag to indicate whether the event is initialization event or change event.
+    pub const WATCH_INIT_FLAG:     FeatureSpec = ("watch/init_flag",     (1, 2, 736));
     pub const MEMBER_LIST:         FeatureSpec = ("member_list",         (1, 2, 259));
     pub const GET_CLUSTER_STATUS:  FeatureSpec = ("get_cluster_status",  (1, 2, 259));
     pub const GET_CLIENT_INFO:     FeatureSpec = ("get_client_info",     (1, 2, 259));
@@ -50,6 +52,7 @@ pub fn all() -> &'static [FeatureSpec] {
         features::EXPORT_V1,
         features::WATCH,
         features::WATCH_INITIAL_FLUSH,
+        features::WATCH_INIT_FLAG,
         features::MEMBER_LIST,
         features::GET_CLUSTER_STATUS,
         features::GET_CLIENT_INFO,
@@ -81,6 +84,8 @@ pub fn std() -> &'static [FeatureSpec] {
         // features::EXPORT_V1,
         features::WATCH,
         features::WATCH_INITIAL_FLUSH,
+        // MIN_METASRV_VER does not include this feature, thus it is optional
+        // features::WATCH_INIT_FLAG,
         features::MEMBER_LIST,
         features::GET_CLUSTER_STATUS,
         features::GET_CLIENT_INFO,
@@ -110,6 +115,7 @@ pub fn read_write_watch() -> &'static [FeatureSpec] {
         features::TRANSACTION,
         features::WATCH,
         features::WATCH_INITIAL_FLUSH,
+        features::WATCH_INIT_FLAG,
     ];
 
     REQUIRES

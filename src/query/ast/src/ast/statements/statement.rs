@@ -61,6 +61,7 @@ pub enum Statement {
         graphical: bool,
         query: Box<Statement>,
     },
+    ReportIssue(String),
 
     CopyIntoTable(CopyIntoTableStmt),
     CopyIntoLocation(CopyIntoLocationStmt),
@@ -218,11 +219,9 @@ pub enum Statement {
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
     RefreshIndex(RefreshIndexStmt),
-    CreateInvertedIndex(CreateInvertedIndexStmt),
-    DropInvertedIndex(DropInvertedIndexStmt),
-    RefreshInvertedIndex(RefreshInvertedIndexStmt),
-    CreateNgramIndex(CreateNgramIndexStmt),
-    DropNgramIndex(DropNgramIndexStmt),
+    CreateTableIndex(CreateTableIndexStmt),
+    DropTableIndex(DropTableIndexStmt),
+    RefreshTableIndex(RefreshTableIndexStmt),
 
     // VirtualColumns
     RefreshVirtualColumn(RefreshVirtualColumnStmt),
@@ -258,6 +257,7 @@ pub enum Statement {
         show_options: Option<ShowOptions>,
     },
     ShowObjectPrivileges(ShowObjectPrivilegesStmt),
+    ShowGrantsOfRole(ShowGranteesOfRoleStmt),
     Revoke(RevokeStmt),
 
     // UDF
@@ -368,6 +368,12 @@ pub enum Statement {
     // Sequence
     CreateSequence(CreateSequenceStmt),
     DropSequence(DropSequenceStmt),
+    ShowSequences {
+        show_options: Option<ShowOptions>,
+    },
+    DescSequence {
+        name: Identifier,
+    },
 
     // Set priority for query
     SetPriority {
@@ -420,6 +426,7 @@ impl Statement {
         match self {
             Statement::Query(..)
             | Statement::Explain { .. }
+            | Statement::ReportIssue { .. }
             | Statement::ExplainAnalyze { .. }
             | Statement::CopyIntoTable(..)
             | Statement::CopyIntoLocation(..)
@@ -473,7 +480,7 @@ impl Statement {
             | Statement::ShowStreams(..)
             | Statement::DescribeStream(..)
             | Statement::RefreshIndex(..)
-            | Statement::RefreshInvertedIndex(..)
+            | Statement::RefreshTableIndex(..)
             | Statement::RefreshVirtualColumn(..)
             | Statement::ShowVirtualColumns(..)
             | Statement::ShowUsers { .. }
@@ -481,6 +488,7 @@ impl Statement {
             | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
+            | Statement::ShowGrantsOfRole(..)
             | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
@@ -504,6 +512,8 @@ impl Statement {
             | Statement::DescribeNotification(..)
             | Statement::ExecuteImmediate(..)
             | Statement::ShowProcedures { .. }
+            | Statement::ShowSequences { .. }
+            | Statement::DescSequence { .. }
             | Statement::DescProcedure(..)
             | Statement::CallProcedure(..)
             | Statement::ShowWarehouses(..)
@@ -539,10 +549,8 @@ impl Statement {
             | Statement::RenameDictionary(..)
             | Statement::CreateStream(..)
             | Statement::DropStream(..)
-            | Statement::CreateInvertedIndex(..)
-            | Statement::DropInvertedIndex(..)
-            | Statement::CreateNgramIndex(..)
-            | Statement::DropNgramIndex(..)
+            | Statement::CreateTableIndex(..)
+            | Statement::DropTableIndex(..)
             | Statement::CreateUser(..)
             | Statement::DropUser { .. }
             | Statement::CreateRole { .. }
@@ -648,6 +656,9 @@ impl Display for Statement {
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
+            }
+            Statement::ReportIssue(sql) => {
+                write!(f, "REPORT ISSUE {}", sql)?;
             }
             Statement::StatementWithSettings { settings, stmt } => {
                 if let Some(setting) = settings {
@@ -822,11 +833,9 @@ impl Display for Statement {
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::DropInvertedIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateNgramIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::DropNgramIndex(stmt) => write!(f, "{stmt}")?,
-            Statement::RefreshInvertedIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateTableIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropTableIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshTableIndex(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers { show_options } => {
@@ -886,6 +895,7 @@ impl Display for Statement {
                 }
             }
             Statement::ShowObjectPrivileges(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowGrantsOfRole(stmt) => write!(f, "{stmt}")?,
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
             Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {
@@ -1006,6 +1016,15 @@ impl Display for Statement {
             }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowSequences { show_options } => {
+                write!(f, "SHOW SEQUENCES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::DescSequence { name } => {
+                write!(f, "DESC SEQUENCE {name}")?;
+            }
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
             Statement::SetPriority {
                 priority,

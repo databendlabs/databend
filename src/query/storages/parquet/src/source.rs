@@ -51,13 +51,13 @@ use parquet::arrow::parquet_to_arrow_schema;
 
 use crate::meta::check_parquet_schema;
 use crate::meta::read_metadata_async_cached;
+use crate::parquet_part::DeleteTask;
 use crate::parquet_reader::cached_range_full_read;
 use crate::parquet_reader::policy::ReadPolicyImpl;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::RowGroupReader;
 use crate::partition::ParquetRowGroupPart;
 use crate::read_settings::ReadSettings;
-use crate::transformer::RecordBatchTransformer;
 use crate::ParquetFilePart;
 use crate::ParquetPart;
 use crate::ParquetReaderBuilder;
@@ -65,7 +65,10 @@ use crate::ParquetReaderBuilder;
 enum State {
     Init,
     // Reader, start row, location
-    ReadRowGroup(VecDeque<(ReadPolicyImpl, u64)>, String),
+    ReadRowGroup {
+        readers: VecDeque<(ReadPolicyImpl, u64)>,
+        location: String,
+    },
     ReadFiles(Vec<(Bytes, String)>),
 }
 
@@ -74,7 +77,18 @@ pub enum ParquetSourceType {
     StageTable,
     ResultCache,
     Iceberg,
-    // DeltaLake,
+    DeltaLake,
+    Hive,
+    StreamingLoad,
+}
+
+impl ParquetSourceType {
+    pub fn need_transformer(&self) -> bool {
+        !matches!(
+            self,
+            ParquetSourceType::StageTable | ParquetSourceType::StreamingLoad
+        )
+    }
 }
 
 pub struct ParquetSource {
@@ -107,7 +121,6 @@ pub struct ParquetSource {
     push_downs: Option<PushDownInfo>,
     topk: Arc<Option<TopK>>,
     op_registry: Arc<dyn OperatorRegistry>,
-    transformer: RecordBatchTransformer,
 }
 
 impl ParquetSource {
@@ -122,7 +135,6 @@ impl ParquetSource {
         internal_columns: Vec<InternalColumnType>,
         push_downs: Option<PushDownInfo>,
         table_schema: TableSchemaRef,
-        output_schema: TableSchemaRef,
         op_registry: Arc<dyn OperatorRegistry>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -133,7 +145,6 @@ impl ParquetSource {
             .as_ref()
             .as_ref()
             .map(|t| TopKSorter::new(t.limit, t.asc));
-        let transformer = RecordBatchTransformer::build(output_schema);
 
         Ok(ProcessorPtr::create(Box::new(Self {
             source_type,
@@ -153,7 +164,6 @@ impl ParquetSource {
             push_downs,
             topk,
             op_registry,
-            transformer,
         })))
     }
 }
@@ -185,7 +195,7 @@ impl Processor for ParquetSource {
         match self.generated_data.take() {
             None => match &self.state {
                 State::Init => Ok(Event::Async),
-                State::ReadRowGroup(_, _) => Ok(Event::Sync),
+                State::ReadRowGroup { .. } => Ok(Event::Sync),
                 State::ReadFiles(_) => Ok(Event::Sync),
             },
             Some(data_block) => {
@@ -206,18 +216,21 @@ impl Processor for ParquetSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Init) {
-            State::ReadRowGroup(mut vs, path) => {
+            State::ReadRowGroup {
+                readers: mut vs,
+                location,
+            } => {
                 if let Some((reader, mut start_row)) = vs.front_mut() {
                     if let Some(mut block) = reader.as_mut().read_block()? {
                         add_internal_columns(
                             &self.internal_columns,
-                            path.clone(),
+                            location.clone(),
                             &mut block,
                             &mut start_row,
                         );
 
                         if self.is_copy {
-                            self.copy_status.add_chunk(path.as_str(), FileStatus {
+                            self.copy_status.add_chunk(location.as_str(), FileStatus {
                                 num_rows_loaded: block.num_rows(),
                                 error: None,
                             });
@@ -226,18 +239,23 @@ impl Processor for ParquetSource {
                     } else {
                         vs.pop_front();
                     }
-                    self.state = State::ReadRowGroup(vs, path);
+                    self.state = State::ReadRowGroup {
+                        readers: vs,
+                        location,
+                    };
                 }
                 // Else: The reader is finished. We should try to build another reader.
             }
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
                 for (buffer, path) in buffers {
-                    let mut bs = self
+                    let bs: Result<Vec<DataBlock>> = self
                         .whole_file_reader
                         .as_ref()
                         .unwrap()
-                        .read_blocks_from_binary(buffer, &path)?;
+                        .read_blocks_from_binary(buffer, &path)?
+                        .collect();
+                    let mut bs = bs?;
 
                     if self.is_copy {
                         let num_rows = bs.iter().map(|b| b.num_rows()).sum();
@@ -274,21 +292,25 @@ impl Processor for ParquetSource {
             State::Init => {
                 if let Some(part) = self.ctx.get_partition() {
                     match ParquetPart::from_part(&part)? {
+                        // From Copy Table from Stage, we don't enable cache
                         ParquetPart::RowGroup(part) => {
                             if let Some(reader) = self
                                 .row_group_reader
                                 .create_read_policy(
-                                    &ReadSettings::from_ctx(&self.ctx)?,
+                                    &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(
+                                        !matches!(self.source_type, ParquetSourceType::StageTable),
+                                    ),
                                     part,
                                     &mut self.topk_sorter,
-                                    self.transformer.clone(),
+                                    None,
+                                    &mut None,
                                 )
                                 .await?
                             {
-                                self.state = State::ReadRowGroup(
-                                    vec![(reader, part.start_row)].into(),
-                                    part.location.clone(),
-                                );
+                                self.state = State::ReadRowGroup {
+                                    readers: vec![(reader, part.start_row)].into(),
+                                    location: part.location.clone(),
+                                };
                             }
                             // Else: keep in init state.
                         }
@@ -314,9 +336,21 @@ impl Processor for ParquetSource {
                             self.state = State::ReadFiles(results);
                         }
                         ParquetPart::File(part) => {
-                            let readers = self.get_rows_readers(part).await?;
+                            let readers = self.get_rows_readers(part, None).await?;
                             if !readers.is_empty() {
-                                self.state = State::ReadRowGroup(readers, part.file.clone());
+                                self.state = State::ReadRowGroup {
+                                    readers,
+                                    location: part.file.clone(),
+                                };
+                            }
+                        }
+                        ParquetPart::FileWithDeletes { inner, deletes } => {
+                            let readers = self.get_rows_readers(inner, Some(deletes)).await?;
+                            if !readers.is_empty() {
+                                self.state = State::ReadRowGroup {
+                                    readers,
+                                    location: inner.file.clone(),
+                                };
                             }
                         }
                     }
@@ -335,6 +369,7 @@ impl ParquetSource {
     async fn get_rows_readers(
         &mut self,
         part: &ParquetFilePart,
+        delete_files: Option<&[DeleteTask]>,
     ) -> Result<VecDeque<(ReadPolicyImpl, u64)>> {
         // Let's read the small file directly
         let (op, path) = self.row_group_reader.operator(part.file.as_str())?;
@@ -343,7 +378,8 @@ impl ParquetSource {
             read_metadata_async_cached(path, &op, Some(part.compressed_size), &part.dedup_key)
                 .await?;
 
-        if matches!(self.source_type, ParquetSourceType::StageTable) {
+        let from_stage_table = matches!(self.source_type, ParquetSourceType::StageTable);
+        if from_stage_table {
             check_parquet_schema(
                 self.row_group_reader.schema_desc(),
                 meta.file_metadata().schema_descr(),
@@ -351,8 +387,6 @@ impl ParquetSource {
                 part.file.as_str(),
             )?;
         }
-        self.transformer
-            .match_by_field_name(matches!(self.source_type, ParquetSourceType::StageTable));
         // The schema of the table in iceberg may be inconsistent with the schema in parquet
         let reader = if self.row_group_reader.schema_desc().root_schema()
             != meta.file_metadata().schema_descr().root_schema()
@@ -378,14 +412,33 @@ impl ParquetSource {
                 builder = builder.with_topk(self.topk.as_ref().as_ref());
             }
 
-            Cow::Owned(Arc::new(builder.build_row_group_reader(need_row_number)?))
+            Cow::Owned(Arc::new(
+                builder.build_row_group_reader(self.source_type, need_row_number)?,
+            ))
         } else {
             Cow::Borrowed(&self.row_group_reader)
         };
 
+        let should_read = |rowgroup_idx: usize, bucket_option: Option<(usize, usize)>| -> bool {
+            if let Some((bucket, bucket_num)) = bucket_option {
+                return rowgroup_idx % bucket_num == bucket;
+            }
+            true
+        };
+
         let mut start_row = 0;
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
-        for rg in meta.row_groups() {
+        // Deleted files only belong to the same Parquet, so they only need to be loaded once
+        let mut buf_delete_selection = None;
+        let delete_info = delete_files.as_ref().map(|tasks| (meta.as_ref(), *tasks));
+
+        for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
+            start_row += rg.num_rows() as u64;
+            // filter by bucket option
+            if !should_read(rowgroup_idx, part.bucket_option) {
+                continue;
+            }
+
             let part = ParquetRowGroupPart {
                 location: part.file.clone(),
                 start_row,
@@ -398,14 +451,14 @@ impl ParquetSource {
                 page_locations: None,
                 selectors: None,
             };
-            start_row += rg.num_rows() as u64;
 
             let reader = reader
                 .create_read_policy(
-                    &ReadSettings::from_ctx(&self.ctx)?,
+                    &ReadSettings::from_ctx(&self.ctx)?.with_enable_cache(!from_stage_table),
                     &part,
                     &mut self.topk_sorter,
-                    self.transformer.clone(),
+                    delete_info,
+                    &mut buf_delete_selection,
                 )
                 .await?;
 

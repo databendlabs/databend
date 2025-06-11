@@ -18,6 +18,7 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_column::types::i256;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalColumn;
 use databend_common_expression::types::GeographyColumn;
 use databend_common_expression::types::NullableColumn;
@@ -36,7 +37,9 @@ use crate::nested::Nested;
 use crate::util::encode_bool;
 use crate::write::binary::write_binary;
 use crate::write::primitive::write_primitive;
+use crate::write::serialize::Nested::LargeList;
 use crate::write::view::write_view;
+
 /// Writes an [`Array`] to the file
 pub fn write<W: Write>(
     w: &mut W,
@@ -76,7 +79,7 @@ impl<'a, W: Write> ValueVisitor for WriteVisitor<'a, W> {
         unreachable!()
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, _column: T::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(&mut self, _: T::Column, _: &DataType) -> Result<()> {
         unreachable!()
     }
 
@@ -181,7 +184,7 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
         let nest = nesteds.last().unwrap();
 
         if nest.is_nullable() {
-            let (_, validity) = nest.inner();
+            let validity = nest.validity();
             if let Some(bitmap) = validity {
                 w.write_all(&(bitmap.len() as u32).to_le_bytes())?;
                 let (s, offset, _) = bitmap.as_slice();
@@ -196,7 +199,7 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
         }
     } else {
         for nested in nesteds {
-            let (values, validity) = nested.inner();
+            let validity = nested.validity();
 
             if nested.is_nullable() {
                 if let Some(bitmap) = validity {
@@ -212,10 +215,18 @@ fn write_nest_info<W: Write>(w: &mut W, nesteds: &[Nested]) -> Result<()> {
                 }
             }
 
-            if nested.is_list() {
-                w.write_all(&(values.len() as u32).to_le_bytes())?;
-                let input_buf: &[u8] = bytemuck::cast_slice(&values);
-                w.write_all(input_buf)?;
+            match nested {
+                LargeList(_) => {
+                    let offsets = nested.offsets().unwrap();
+                    w.write_all(&(offsets.len() as u32).to_le_bytes())?;
+                    let input_buf: &[u8] = bytemuck::cast_slice(&offsets);
+                    w.write_all(input_buf)?;
+                }
+                Nested::FixedList(fixed_list) => {
+                    w.write_all(&(fixed_list.length as u32).to_le_bytes())?;
+                    w.write_all(&(fixed_list.dimension as u32).to_le_bytes())?;
+                }
+                _ => {}
             }
         }
     }

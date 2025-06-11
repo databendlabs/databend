@@ -28,6 +28,7 @@ use crate::display::display_tuple_field_name;
 use crate::types::decimal::DecimalDataType;
 use crate::types::DataType;
 use crate::types::NumberDataType;
+use crate::types::VectorDataType;
 use crate::BlockMetaInfo;
 use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
@@ -294,6 +295,7 @@ pub enum TableDataType {
     Geometry,
     Geography,
     Interval,
+    Vector(VectorDataType),
 }
 
 impl DataSchema {
@@ -1267,7 +1269,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::String => DataType::String,
             TableDataType::Interval => DataType::Interval,
             TableDataType::Number(ty) => DataType::Number(*ty),
-            TableDataType::Decimal(ty) => DataType::Decimal(*ty),
+            TableDataType::Decimal(ty) => DataType::Decimal(ty.size()),
             TableDataType::Timestamp => DataType::Timestamp,
             TableDataType::Date => DataType::Date,
             TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
@@ -1280,6 +1282,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Variant => DataType::Variant,
             TableDataType::Geometry => DataType::Geometry,
             TableDataType::Geography => DataType::Geography,
+            TableDataType::Vector(ty) => DataType::Vector(*ty),
         }
     }
 }
@@ -1384,6 +1387,7 @@ impl TableDataType {
             }
             .to_string(),
             TableDataType::String => "VARCHAR".to_string(),
+            TableDataType::Vector(ty) => format!("VECTOR({})", ty.dimension()),
             TableDataType::Nullable(inner_ty) => format!("{} NULL", inner_ty.sql_name()),
             _ => self.to_string().to_uppercase(),
         }
@@ -1433,7 +1437,8 @@ impl TableDataType {
                 | TableDataType::Variant
                 | TableDataType::Geometry
                 | TableDataType::Geography
-                | TableDataType::Interval => ty.sql_name(),
+                | TableDataType::Interval
+                | TableDataType::Vector(_) => ty.sql_name(),
             };
             if is_null {
                 format!("{} NULL", s)
@@ -1572,7 +1577,13 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
-        DataType::Decimal(x) => Ok(TableDataType::Decimal(*x)),
+        DataType::Decimal(size) => {
+            if size.can_carried_by_128() {
+                Ok(TableDataType::Decimal(DecimalDataType::Decimal128(*size)))
+            } else {
+                Ok(TableDataType::Decimal(DecimalDataType::Decimal256(*size)))
+            }
+        }
         DataType::Date => Ok(TableDataType::Date),
         DataType::Interval => Ok(TableDataType::Interval),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
@@ -1603,6 +1614,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
                 fields_type,
             })
         }
+        DataType::Vector(ty) => Ok(TableDataType::Vector(*ty)),
         DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {}",
             data_type

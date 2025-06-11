@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
@@ -22,18 +23,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::AnyType;
-use super::DecimalSize;
 use super::ReturnType;
 use crate::property::Domain;
 use crate::types::AccessType;
 use crate::types::ArgType;
+use crate::types::BuilderExt;
 use crate::types::DataType;
 use crate::types::GenericMap;
+use crate::types::Scalar;
+use crate::types::ScalarRef;
 use crate::types::ValueType;
 use crate::values::Column;
-use crate::values::Scalar;
 use crate::ColumnBuilder;
-use crate::ScalarRef;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArrayType<T>(PhantomData<T>);
@@ -55,7 +56,7 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 
     fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
         match scalar {
-            ScalarRef::Array(array) => <T as AccessType>::try_downcast_column(array),
+            ScalarRef::Array(array) => T::try_downcast_column(array),
             _ => None,
         }
     }
@@ -66,24 +67,10 @@ impl<T: AccessType> AccessType for ArrayType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         match domain {
-            Domain::Array(Some(domain)) => {
-                Some(Some(<T as AccessType>::try_downcast_domain(domain)?))
-            }
+            Domain::Array(Some(domain)) => Some(Some(T::try_downcast_domain(domain)?)),
             Domain::Array(None) => Some(None),
             _ => None,
         }
-    }
-
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Array(<T as AccessType>::upcast_column(scalar))
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Array(Box::new(col.upcast()))
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Array(domain.map(|domain| Box::new(<T as AccessType>::upcast_domain(domain))))
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -114,48 +101,57 @@ impl<T: AccessType> AccessType for ArrayType<T> {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(a: T::Column, b: T::Column) -> Ordering {
+        let ord = T::column_len(&a).cmp(&T::column_len(&b));
+        if ord != Ordering::Equal {
+            return ord;
+        }
+
+        for (l, r) in T::iter_column(&a).zip(T::iter_column(&b)) {
+            let ord = T::compare(l, r);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        Ordering::Equal
+    }
 }
 
 impl<T: ValueType> ValueType for ArrayType<T> {
     type ColumnBuilder = ArrayColumnBuilder<T>;
+    type ColumnBuilderMut<'a> = ArrayColumnBuilderMut<'a, T>;
 
-    fn try_downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        None
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let values_type = data_type.as_array().unwrap();
+        Scalar::Array(T::upcast_column_with_type(scalar, values_type))
     }
 
-    #[allow(clippy::manual_map)]
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Array(inner) => {
-                let builder = T::try_downcast_owned_builder(inner.builder);
-                // ```
-                // builder.map(|builder| ArrayColumnBuilder {
-                //     builder,
-                //     offsets: inner.offsets,
-                // })
-                // ```
-                // If we using the clippy recommend way like above, the compiler will complain:
-                // use of partially moved value: `inner`.
-                // That's rust borrow checker error, if we using the new borrow checker named polonius,
-                // everything goes fine, but polonius is very slow, so we allow manual map here.
-                if let Some(builder) = builder {
-                    Some(ArrayColumnBuilder {
-                        builder,
-                        offsets: inner.offsets,
-                    })
-                } else {
-                    None
-                }
-            }
-            _ => None,
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        Domain::Array(domain.map(|domain| {
+            let values_type = data_type.as_array().unwrap();
+            Box::new(T::upcast_domain_with_type(domain, values_type))
+        }))
+    }
+
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        Column::Array(Box::new(col.upcast(data_type)))
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        let any_array = builder.as_array_mut().unwrap();
+        ArrayColumnBuilderMut {
+            builder: T::downcast_builder(&mut any_array.builder),
+            offsets: &mut any_array.offsets,
         }
     }
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        Some(ColumnBuilder::Array(Box::new(builder.upcast(decimal_size))))
+        let values_type = data_type.as_array()?;
+        Some(ColumnBuilder::Array(Box::new(builder.upcast(values_type))))
     }
 
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder {
@@ -166,20 +162,29 @@ impl<T: ValueType> ValueType for ArrayType<T> {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.offsets.len() - 1
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.push(item);
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         builder.push_repeat(&item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.push_default();
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        let len = T::builder_len_mut(&builder.builder);
+        builder.offsets.push(len as u64);
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder);
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -201,7 +206,7 @@ impl<T: ArgType> ArgType for ArrayType<T> {
     }
 }
 
-impl<T: ArgType> ReturnType for ArrayType<T> {
+impl<T: ReturnType> ReturnType for ArrayType<T> {
     fn create_builder(capacity: usize, generics: &GenericMap) -> Self::ColumnBuilder {
         ArrayColumnBuilder::with_capacity(capacity, 0, generics)
     }
@@ -255,13 +260,6 @@ impl<T: AccessType> ArrayColumn<T> {
         ArrayIterator {
             values: &self.values,
             offsets: self.offsets.windows(2),
-        }
-    }
-
-    pub fn upcast(self) -> ArrayColumn<AnyType> {
-        ArrayColumn {
-            values: T::upcast_column(self.values),
-            offsets: self.offsets,
         }
     }
 
@@ -324,6 +322,16 @@ impl<T: AccessType> ArrayColumn<T> {
     }
 }
 
+impl<T: ValueType> ArrayColumn<T> {
+    pub fn upcast(self, data_type: &DataType) -> ArrayColumn<AnyType> {
+        let values_type = data_type.as_array().unwrap();
+        ArrayColumn {
+            values: T::upcast_column_with_type(self.values, values_type),
+            offsets: self.offsets,
+        }
+    }
+}
+
 impl ArrayColumn<AnyType> {
     pub fn try_downcast<T: AccessType>(&self) -> Option<ArrayColumn<T>> {
         Some(ArrayColumn {
@@ -360,7 +368,48 @@ pub struct ArrayColumnBuilder<T: ValueType> {
     pub offsets: Vec<u64>,
 }
 
+#[derive(Debug)]
+pub struct ArrayColumnBuilderMut<'a, T: ValueType> {
+    pub(super) builder: T::ColumnBuilderMut<'a>,
+    pub(super) offsets: &'a mut Vec<u64>,
+}
+
+impl<'a, T: ValueType> From<&'a mut ArrayColumnBuilder<T>> for ArrayColumnBuilderMut<'a, T> {
+    fn from(builder: &'a mut ArrayColumnBuilder<T>) -> Self {
+        ArrayColumnBuilderMut {
+            builder: (&mut builder.builder).into(),
+            offsets: &mut builder.offsets,
+        }
+    }
+}
+
+impl<T: ValueType> BuilderExt<ArrayType<T>> for ArrayColumnBuilderMut<'_, T> {
+    fn len(&self) -> usize {
+        ArrayType::<T>::builder_len_mut(self)
+    }
+
+    fn push_item(&mut self, item: <ArrayType<T> as AccessType>::ScalarRef<'_>) {
+        ArrayType::<T>::push_item_mut(self, item)
+    }
+
+    fn push_repeat(&mut self, item: <ArrayType<T> as AccessType>::ScalarRef<'_>, n: usize) {
+        ArrayType::<T>::push_item_repeat_mut(self, item, n);
+    }
+
+    fn push_default(&mut self) {
+        ArrayType::<T>::push_default_mut(self);
+    }
+
+    fn append_column(&mut self, other: &<ArrayType<T> as AccessType>::Column) {
+        ArrayType::<T>::append_column_mut(self, other);
+    }
+}
+
 impl<T: ValueType> ArrayColumnBuilder<T> {
+    pub fn as_mut(&mut self) -> ArrayColumnBuilderMut<'_, T> {
+        self.into()
+    }
+
     pub fn from_column(col: ArrayColumn<T>) -> Self {
         ArrayColumnBuilder {
             builder: T::column_to_builder(col.values),
@@ -384,10 +433,6 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         self.offsets.len() - 1
     }
 
-    pub fn reserve(&mut self, additional: usize) {
-        self.offsets.reserve(additional);
-    }
-
     pub fn put_item(&mut self, item: T::ScalarRef<'_>) {
         T::push_item(&mut self.builder, item);
     }
@@ -397,45 +442,19 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
     }
 
     pub fn push(&mut self, item: T::Column) {
-        T::append_column(&mut self.builder, &item);
-        let len = T::builder_len(&self.builder);
-        self.offsets.push(len as u64);
+        self.as_mut().push(item);
     }
 
     pub fn push_repeat(&mut self, item: &T::Column, n: usize) {
-        if n == 0 {
-            return;
-        }
-        let before = T::builder_len(&self.builder);
-        T::append_column(&mut self.builder, item);
-        let len = T::builder_len(&self.builder) - before;
-        for _ in 1..n {
-            T::append_column(&mut self.builder, item);
-        }
-        self.offsets
-            .extend((1..=n).map(|i| (before + len * i) as u64));
+        self.as_mut().push_repeat(item, n);
     }
 
     pub fn push_default(&mut self) {
-        let len = T::builder_len(&self.builder);
-        self.offsets.push(len as u64);
+        self.as_mut().push_default();
     }
 
     pub fn append_column(&mut self, other: &ArrayColumn<T>) {
-        // the first offset of other column may not be zero
-        let other_start = *other.offsets.first().unwrap() as usize;
-        let other_end = *other.offsets.last().unwrap() as usize;
-        let other_values = T::slice_column(&other.values, other_start..other_end);
-        T::append_column(&mut self.builder, &other_values);
-
-        let end = self.offsets.last().cloned().unwrap();
-        self.offsets.extend(
-            other
-                .offsets
-                .iter()
-                .skip(1)
-                .map(|offset| offset + end - (other_start as u64)),
-        );
+        self.as_mut().append_column(other);
     }
 
     pub fn build(self) -> ArrayColumn<T> {
@@ -453,15 +472,71 @@ impl<T: ValueType> ArrayColumnBuilder<T> {
         )
     }
 
-    pub fn upcast(self, decimal_size: Option<DecimalSize>) -> ArrayColumnBuilder<AnyType> {
+    pub fn upcast(self, data_type: &DataType) -> ArrayColumnBuilder<AnyType> {
         ArrayColumnBuilder {
-            builder: T::try_upcast_column_builder(self.builder, decimal_size).unwrap(),
+            builder: T::try_upcast_column_builder(self.builder, data_type).unwrap(),
             offsets: self.offsets,
         }
     }
 }
 
-impl<T: ArgType> ArrayColumnBuilder<T> {
+impl<T: ValueType> ArrayColumnBuilderMut<'_, T> {
+    pub fn len(&self) -> usize {
+        self.offsets.len() - 1
+    }
+
+    pub fn push(&mut self, item: T::Column) {
+        T::append_column_mut(&mut self.builder, &item);
+        let len = T::builder_len_mut(&self.builder);
+        self.offsets.push(len as u64);
+    }
+
+    pub fn push_repeat(&mut self, item: &T::Column, n: usize) {
+        if n == 0 {
+            return;
+        }
+        let before = T::builder_len_mut(&self.builder);
+        T::append_column_mut(&mut self.builder, item);
+        let len = T::builder_len_mut(&self.builder) - before;
+        for _ in 1..n {
+            T::append_column_mut(&mut self.builder, item);
+        }
+        self.offsets
+            .extend((1..=n).map(|i| (before + len * i) as u64));
+    }
+
+    pub fn put_item(&mut self, item: T::ScalarRef<'_>) {
+        T::push_item_mut(&mut self.builder, item);
+    }
+
+    pub fn commit_row(&mut self) {
+        self.offsets.push(T::builder_len_mut(&self.builder) as u64);
+    }
+
+    pub fn push_default(&mut self) {
+        let len = T::builder_len_mut(&self.builder);
+        self.offsets.push(len as u64);
+    }
+
+    pub fn append_column(&mut self, other: &ArrayColumn<T>) {
+        // the first offset of other column may not be zero
+        let other_start = *other.offsets.first().unwrap() as usize;
+        let other_end = *other.offsets.last().unwrap() as usize;
+        let other_values = T::slice_column(&other.values, other_start..other_end);
+        T::append_column_mut(&mut self.builder, &other_values);
+
+        let end = self.offsets.last().cloned().unwrap();
+        self.offsets.extend(
+            other
+                .offsets
+                .iter()
+                .skip(1)
+                .map(|offset| offset + end - (other_start as u64)),
+        );
+    }
+}
+
+impl<T: ReturnType> ArrayColumnBuilder<T> {
     pub fn with_capacity(len: usize, values_capacity: usize, generics: &GenericMap) -> Self {
         let mut offsets = Vec::with_capacity(len + 1);
         offsets.push(0);

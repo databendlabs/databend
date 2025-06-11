@@ -83,7 +83,6 @@ impl pb::TxnReply {
         Self {
             success: execution_path != "else",
             responses: vec![],
-            error: "".to_string(),
             execution_path,
         }
     }

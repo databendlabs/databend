@@ -845,7 +845,7 @@ impl FunctionRegistry {
 fn erase_calc_domain_generic_0_arg<O: ArgType>(
     func: impl Fn(&FunctionContext) -> FunctionDomain<O>,
 ) -> impl Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> {
-    move |ctx, args| func(ctx).map(O::upcast_domain)
+    move |ctx, args| func(ctx).map(|d| O::upcast_domain_with_type(d, &O::data_type()))
 }
 
 fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
@@ -853,7 +853,7 @@ fn erase_calc_domain_generic_1_arg<I1: ArgType, O: ArgType>(
 ) -> impl Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> {
     move |ctx, args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
-        func(ctx, &arg1).map(O::upcast_domain)
+        func(ctx, &arg1).map(|d| O::upcast_domain_with_type(d, &O::data_type()))
     }
 }
 
@@ -863,7 +863,7 @@ fn erase_calc_domain_generic_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
     move |ctx, args| {
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
-        func(ctx, &arg1, &arg2).map(O::upcast_domain)
+        func(ctx, &arg1, &arg2).map(|d| O::upcast_domain_with_type(d, &O::data_type()))
     }
 }
 
@@ -874,7 +874,7 @@ fn erase_calc_domain_generic_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: Arg
         let arg1 = I1::try_downcast_domain(&args[0]).unwrap();
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
         let arg3 = I3::try_downcast_domain(&args[2]).unwrap();
-        func(ctx, &arg1, &arg2, &arg3).map(O::upcast_domain)
+        func(ctx, &arg1, &arg2, &arg3).map(|d| O::upcast_domain_with_type(d, &O::data_type()))
     }
 }
 
@@ -898,7 +898,8 @@ fn erase_calc_domain_generic_4_arg<
         let arg2 = I2::try_downcast_domain(&args[1]).unwrap();
         let arg3 = I3::try_downcast_domain(&args[2]).unwrap();
         let arg4 = I4::try_downcast_domain(&args[3]).unwrap();
-        func(ctx, &arg1, &arg2, &arg3, &arg4).map(O::upcast_domain)
+        func(ctx, &arg1, &arg2, &arg3, &arg4)
+            .map(|d| O::upcast_domain_with_type(d, &O::data_type()))
     }
 }
 

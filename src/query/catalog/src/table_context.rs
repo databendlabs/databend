@@ -76,6 +76,7 @@ use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
 use crate::runtime_filter_info::RuntimeFilterReady;
+use crate::session_type::SessionType;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
@@ -324,7 +325,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
-    fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+    fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
+        unimplemented!()
+    }
 
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
 
@@ -412,10 +415,11 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
 
-    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         unimplemented!()
     }
-    fn set_pruned_partitions_stats(&self, _partitions: PartStatistics) {
+
+    fn set_pruned_partitions_stats(&self, _plan_id: u32, _stats: PartStatistics) {
         unimplemented!()
     }
 
@@ -425,6 +429,9 @@ pub trait TableContext: Send + Sync {
     fn get_next_broadcast_id(&self) -> u32;
 
     fn reset_broadcast_id(&self) {
+        unimplemented!()
+    }
+    fn get_session_type(&self) -> SessionType {
         unimplemented!()
     }
 }

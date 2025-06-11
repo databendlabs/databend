@@ -351,11 +351,16 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, ctx| {
+            |date_string, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
+                    let format = if ctx.func_ctx.date_format_style == *"oracle" {
+                        pg_format_to_strftime(format)
+                    } else {
+                        format.to_string()
+                    };
+                    match NaiveDate::parse_from_str(date_string, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
@@ -372,11 +377,16 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, _| {
+            |date, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
+                    let format = if ctx.func_ctx.date_format_style == *"oracle" {
+                        pg_format_to_strftime(format)
+                    } else {
+                        format.to_string()
+                    };
+                    match NaiveDate::parse_from_str(date, &format) {
                         Ok(res) => {
                             output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
                         }
@@ -400,7 +410,13 @@ fn string_to_format_datetime(
         return Ok((0, true));
     }
 
-    let (mut tm, offset) = BrokenDownTime::parse_prefix(format, timestamp)
+    let format = if ctx.func_ctx.date_format_style == *"oracle" {
+        pg_format_to_strftime(format)
+    } else {
+        format.to_string()
+    };
+
+    let (mut tm, offset) = BrokenDownTime::parse_prefix(&format, timestamp)
         .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))?;
 
     if !ctx.func_ctx.parse_datetime_ignore_remainder && offset != timestamp.len() {
@@ -698,14 +714,19 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn register_to_string(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_string", &["date_format", "strftime"]);
+    registry.register_aliases("to_string", &["date_format", "strftime", "to_char"]);
     registry.register_combine_nullable_2_arg::<TimestampType, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                let format = replace_time_format(format);
+                let format = if ctx.func_ctx.date_format_style == *"oracle" {
+                    pg_format_to_strftime(format)
+                } else {
+                    format.to_string()
+                };
+                let format = replace_time_format(&format);
                 let mut buf = String::new();
                 let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
                 if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {
@@ -835,7 +856,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         },
         |val, _| match val {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            Value::Column(col) => Value::Column(NullableColumn::new(
+            Value::Column(col) => Value::Column(NullableColumn::new_unchecked(
                 col.iter().map(|val| *val as i64).collect(),
                 Bitmap::new_constant(true, col.len()),
             )),
@@ -854,7 +875,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col, validity))
+                Value::Column(NullableColumn::new_unchecked(col, validity))
             }
         },
     );
@@ -2303,6 +2324,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
 
     // date | timestamp -> date
+    registry.register_aliases("to_monday", &["to_start_of_iso_week"]);
     rounder_functions_helper::<ToLastMonday>(registry, "to_monday");
     rounder_functions_helper::<ToLastSunday>(registry, "to_start_of_week");
     rounder_functions_helper::<ToStartOfMonth>(registry, "to_start_of_month");

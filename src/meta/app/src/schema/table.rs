@@ -290,11 +290,19 @@ pub struct TableMeta {
 }
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
+    Hash,
 )]
 pub enum TableIndexType {
     Inverted = 0,
     Ngram = 1,
+    Vector = 2,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -510,6 +518,9 @@ impl Display for TableIndexType {
             }
             TableIndexType::Ngram => {
                 write!(f, "NGRAM")
+            }
+            TableIndexType::Vector => {
+                write!(f, "VECTOR")
             }
         }
     }
@@ -807,6 +818,7 @@ pub struct UpdateTableMetaReq {
     pub table_id: u64,
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
+    pub base_snapshot_location: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

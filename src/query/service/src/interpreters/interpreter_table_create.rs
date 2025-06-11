@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -28,6 +27,7 @@ use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
 use databend_common_license::license::Feature::NgramIndex;
+use databend_common_license::license::Feature::VectorIndex;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -122,13 +123,28 @@ impl Interpreter for CreateTableInterpreter {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
-        if self.plan.inverted_indexes.is_some() {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
-        }
-        if self.plan.ngram_indexes.is_some() {
-            LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), NgramIndex)?;
+        if let Some(table_indexes) = &self.plan.table_indexes {
+            let has_inverted_index = table_indexes
+                .iter()
+                .any(|(_, i)| matches!(i.index_type, TableIndexType::Inverted));
+            let has_ngram_index = table_indexes
+                .iter()
+                .any(|(_, i)| matches!(i.index_type, TableIndexType::Ngram));
+            let has_vector_index = table_indexes
+                .iter()
+                .any(|(_, i)| matches!(i.index_type, TableIndexType::Vector));
+            if has_inverted_index {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
+            }
+            if has_ngram_index {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), NgramIndex)?;
+            }
+            if has_vector_index {
+                LicenseManagerSwitch::instance()
+                    .check_enterprise_enabled(self.ctx.get_license_key(), VectorIndex)?;
+            }
         }
 
         let quota_api = UserApiProvider::instance().tenant_quota_api(tenant);
@@ -424,16 +440,7 @@ impl CreateTableInterpreter {
             FuseSegmentFormat::from_str(segment_format)?;
         }
         let comment = options.remove(OPT_KEY_COMMENT);
-        let indexes = match (&self.plan.inverted_indexes, &self.plan.ngram_indexes) {
-            (Some(inverted_indexes), Some(ngram_indexes)) => {
-                let mut table_indexes = inverted_indexes.clone();
-                table_indexes.extend(ngram_indexes.clone());
-                table_indexes
-            }
-            (Some(inverted_indexes), None) => inverted_indexes.clone(),
-            (None, Some(ngram_indexes)) => ngram_indexes.clone(),
-            (None, None) => BTreeMap::default(),
-        };
+        let indexes = self.plan.table_indexes.clone().unwrap_or_default();
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),

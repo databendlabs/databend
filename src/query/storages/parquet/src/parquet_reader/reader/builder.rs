@@ -44,7 +44,9 @@ use crate::parquet_reader::NoPretchPolicyBuilder;
 use crate::parquet_reader::ParquetWholeFileReader;
 use crate::parquet_reader::PredicateAndTopkPolicyBuilder;
 use crate::parquet_reader::TopkOnlyPolicyBuilder;
+use crate::transformer::RecordBatchTransformer;
 use crate::ParquetPruner;
+use crate::ParquetSourceType;
 
 pub struct ParquetReaderBuilder<'a> {
     ctx: Arc<dyn TableContext>,
@@ -55,6 +57,7 @@ pub struct ParquetReaderBuilder<'a> {
     arrow_schema: Option<arrow_schema::Schema>,
 
     push_downs: Option<&'a PushDownInfo>,
+    delete_files: Option<Vec<String>>,
     options: ParquetReadOptions,
     // only for full file reader
     pruner: Option<ParquetPruner>,
@@ -109,6 +112,7 @@ impl<'a> ParquetReaderBuilder<'a> {
             arrow_schema,
             schema_desc_from,
             push_downs: None,
+            delete_files: None,
             options: Default::default(),
             pruner: None,
             topk: None,
@@ -121,6 +125,11 @@ impl<'a> ParquetReaderBuilder<'a> {
 
     pub fn with_push_downs(mut self, push_downs: Option<&'a PushDownInfo>) -> Self {
         self.push_downs = push_downs;
+        self
+    }
+
+    pub fn with_delete_files(mut self, delete_files: Option<Vec<String>>) -> Self {
+        self.delete_files = delete_files;
         self
     }
 
@@ -214,6 +223,7 @@ impl<'a> ParquetReaderBuilder<'a> {
 
     pub fn build_full_reader(
         &mut self,
+        source_type: ParquetSourceType,
         need_file_row_number: bool,
     ) -> Result<ParquetWholeFileReader> {
         let batch_size = self.ctx.get_settings().get_parquet_max_block_size()? as usize;
@@ -231,6 +241,9 @@ impl<'a> ParquetReaderBuilder<'a> {
             .unwrap();
 
         let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
+        let transformer = source_type
+            .need_transformer()
+            .then(|| RecordBatchTransformer::build(output_schema.clone()));
         Ok(ParquetWholeFileReader {
             op_registry: self.op_registry.clone(),
             expect_file_schema: self
@@ -242,12 +255,17 @@ impl<'a> ParquetReaderBuilder<'a> {
             projection,
             field_paths,
             pruner: self.pruner.clone(),
+            transformer,
             need_page_index: self.options.prune_pages(),
             batch_size,
         })
     }
 
-    pub fn build_row_group_reader(&mut self, need_file_row_number: bool) -> Result<RowGroupReader> {
+    pub fn build_row_group_reader(
+        &mut self,
+        source_type: ParquetSourceType,
+        need_file_row_number: bool,
+    ) -> Result<RowGroupReader> {
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         if !need_file_row_number {
@@ -255,6 +273,15 @@ impl<'a> ParquetReaderBuilder<'a> {
             self.build_topk()?;
         }
         self.build_output()?;
+
+        let transformer = source_type
+            .need_transformer()
+            .then(|| {
+                self.built_output.as_ref().map(|(_, _, output_schema, _)| {
+                    RecordBatchTransformer::build(output_schema.clone())
+                })
+            })
+            .flatten();
 
         let mut policy_builders = default_policy_builders();
         let default_policy = match (self.built_predicate.as_ref(), self.built_topk.as_ref()) {
@@ -287,11 +314,16 @@ impl<'a> ParquetReaderBuilder<'a> {
         };
 
         Ok(RowGroupReader {
+            ctx: self.ctx.clone(),
             op_registry: self.op_registry.clone(),
             batch_size,
             schema_desc: self.schema_desc.clone(),
+            arrow_schema: self.arrow_schema.clone(),
             policy_builders,
             default_policy,
+            transformer,
+            table_schema: self.table_schema.clone(),
+            partition_columns: self.partition_columns.clone(),
         })
     }
 

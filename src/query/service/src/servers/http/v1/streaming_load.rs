@@ -21,6 +21,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -52,7 +53,6 @@ use crate::servers::http::middleware::sanitize_request_headers;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -114,14 +114,14 @@ pub async fn streaming_load_handler(
 }
 
 #[async_backtrace::framed]
-pub async fn streaming_load_handler_inner(
+async fn streaming_load_handler_inner(
     http_context: &HttpQueryContext,
     req: &Request,
     multipart: Multipart,
     mem_stat: Arc<MemStat>,
 ) -> PoemResult<Json<LoadResponse>> {
     info!(
-        "new streaming load request, headers={:?}",
+        "[HTTP-STREAMING-LOAD] New streaming load request, headers={:?}",
         sanitize_request_headers(req.headers()),
     );
 
@@ -132,12 +132,12 @@ pub async fn streaming_load_handler_inner(
         .map_err(InternalServerError)?;
 
     let sql = req.headers().get("sql").ok_or(poem::Error::from_string(
-        "require HEADER `sql`",
+        "[HTTP-STREAMING-LOAD] Missing required 'sql' header in request",
         StatusCode::BAD_REQUEST,
     ))?;
     let sql = sql.to_str().map_err(|e| {
         poem::Error::from_string(
-            format!("value of HEADER `sql` not a valid UTF8 string: {}", e),
+            format!("[HTTP-STREAMING-LOAD] Invalid UTF-8 in 'sql' header: {}", e),
             StatusCode::BAD_REQUEST,
         )
     })?;
@@ -165,18 +165,15 @@ pub async fn streaming_load_handler_inner(
     match &mut plan {
         Plan::Insert(insert) => {
             match &mut insert.source {
-                InsertInputSource::StreamingLoad {
-                    file_format: format,
-                    receiver,
-                    ..
-                } => {
-                    if !matches!(&**format, FileFormatParams::Csv(_) | FileFormatParams::Tsv(_) | FileFormatParams::NdJson(_))  {
-                        return Err(poem::Error::from_string( format!( "file format {} not supported yet", format.get_type() ), StatusCode::BAD_REQUEST));
+                InsertInputSource::StreamingLoad(streaming_load)
+                 => {
+                    if !streaming_load.file_format.support_streaming_load() {
+                        return Err(poem::Error::from_string( format!( "[HTTP-STREAMING-LOAD] Unsupported file format: {}", streaming_load.file_format.get_type() ), StatusCode::BAD_REQUEST));
                     }
                     let (tx, rx) = tokio::sync::mpsc::channel(1);
-                    *receiver.lock() = Some(rx);
+                    *streaming_load.receiver.lock() = Some(rx);
 
-                    let format = format.clone();
+                    let format = streaming_load.file_format.clone();
                     let handler = query_context.spawn(execute_query(http_context.clone(), query_context.clone(), plan, mem_stat));
                     read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
 
@@ -185,22 +182,27 @@ pub async fn streaming_load_handler_inner(
                             id: http_context.query_id.clone(),
                             stats: query_context.get_write_progress().get_values(),
                         })),
-                        Ok(Err(cause)) => Err(poem::Error::from_string(
+                        Ok(Err(cause)) => {
+                            info!("[HTTP-STREAMING-LOAD] Query execution failed: {:?}", cause);
+                            Err(poem::Error::from_string(
                             format!(
-                                "execute fail: {}",
+                                "[HTTP-STREAMING-LOAD] Query execution failed: {}",
                                 cause.display_with_sql(sql).message()
                             ),
                             StatusCode::BAD_REQUEST,
-                        )),
-                        Err(_) => Err(poem::Error::from_string(
-                            "Maybe panic.",
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                        )),
+                        ))},
+                        Err(err) => {
+                            info!("[HTTP-STREAMING-LOAD] Internal server error: {:?}", err);
+                            Err(poem::Error::from_string(
+                                "[HTTP-STREAMING-LOAD] Internal server error: execution thread panicked",
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                            ))
+                        },
                     }
                 }
                 _non_supported_source => Err(poem::Error::from_string(
                     format!(
-                        "streaming upload only support 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)' got {}.",
+                        "[HTTP-STREAMING-LOAD] Unsupported INSERT source. Streaming upload only supports 'INSERT INTO $table FILE_FORMAT = (type = <type> ...)'. Got: {}",
                         plan
                     ),
                     StatusCode::BAD_REQUEST,
@@ -209,7 +211,7 @@ pub async fn streaming_load_handler_inner(
         }
         non_insert_plan => Err(poem::Error::from_string(
             format!(
-                "Only supports INSERT statement in streaming load, but got {}",
+                "[HTTP-STREAMING-LOAD] Only INSERT statements are supported in streaming load. Got: {}",
                 non_insert_plan
             ),
             StatusCode::BAD_REQUEST,
@@ -228,12 +230,15 @@ async fn read_multi_part(
             Err(cause) => {
                 if let Err(cause) = tx
                     .send(Err(ErrorCode::BadBytes(format!(
-                        "Parse multipart error, cause {:?}",
+                        "[HTTP-STREAMING-LOAD] Failed to parse multipart data: {:?}",
                         cause
                     ))))
                     .await
                 {
-                    warn!("Multipart channel disconnect. {}", cause);
+                    warn!(
+                        "[HTTP-STREAMING-LOAD] Multipart channel disconnected: {}",
+                        cause
+                    );
                 }
                 return Err(cause.into());
             }
@@ -245,12 +250,12 @@ async fn read_multi_part(
                 // resolve the ability to utilize name
                 if name != Some("upload") {
                     return Err(poem::Error::from_string(
-                        "the name of field in form-data must `upload`",
+                        "[HTTP-STREAMING-LOAD] Invalid field name in form-data: must be 'upload'",
                         StatusCode::BAD_REQUEST,
                     ));
                 }
                 let filename = field.file_name().unwrap_or("file_with_no_name").to_string();
-                debug!("Streaming load start read {}", &filename);
+                debug!("[HTTP-STREAMING-LOAD] Started reading file: {}", &filename);
                 let mut reader = field.into_async_read();
                 match file_format {
                     FileFormatParams::Parquet(_)
@@ -267,7 +272,7 @@ async fn read_multi_part(
                             }
                         }
                         debug!(
-                            "streaming load read file {} of {} bytes",
+                            "[HTTP-STREAMING-LOAD] Read file {} with {} bytes",
                             filename,
                             data.len()
                         );
@@ -279,7 +284,10 @@ async fn read_multi_part(
                         };
                         let block = DataBlock::empty_with_meta(Box::new(batch));
                         if let Err(e) = tx.send(Ok(block)).await {
-                            warn!("Streaming load fail to send data to pipeline: {}", e);
+                            warn!(
+                                "[HTTP-STREAMING-LOAD] Failed to send data to pipeline: {}",
+                                e
+                            );
                             break;
                         }
                     }
@@ -302,12 +310,15 @@ async fn read_multi_part(
                             };
                             let block = DataBlock::empty_with_meta(Box::new(batch));
                             if let Err(e) = tx.send(Ok(block)).await {
-                                warn!("Streaming load fail to send data to pipeline: {}", e);
+                                warn!(
+                                    "[HTTP-STREAMING-LOAD] Failed to send data to pipeline: {}",
+                                    e
+                                );
                                 // the caller get the actual error from interpreter
                                 return Ok(());
                             }
                             if n == 0 {
-                                debug!("Streaming load end read {}, size = {}", &filename, offset);
+                                debug!("[HTTP-STREAMING-LOAD] Finished reading file: {}, total size: {} bytes", &filename, offset);
                                 break;
                             }
                             offset += n;
@@ -315,7 +326,7 @@ async fn read_multi_part(
                     }
                     _ => {
                         return Err(poem::Error::from_string(
-                            format!("streaming load not support format {}", file_format),
+                            format!("[HTTP-STREAMING-LOAD] Unsupported file format for streaming load: {}", file_format),
                             StatusCode::BAD_REQUEST,
                         ));
                     }

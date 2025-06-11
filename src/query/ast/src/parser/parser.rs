@@ -81,13 +81,17 @@ pub fn parse_values(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
     run_parser(tokens, dialect, ParseMode::Default, false, values)
 }
 
-pub fn parse_raw_insert_stmt(tokens: &[Token], dialect: Dialect) -> Result<Statement> {
+pub fn parse_raw_insert_stmt(
+    tokens: &[Token],
+    dialect: Dialect,
+    in_streaming_load: bool,
+) -> Result<Statement> {
     run_parser(
         tokens,
         dialect,
         ParseMode::Default,
         false,
-        insert_stmt(true),
+        insert_stmt(true, in_streaming_load),
     )
 }
 

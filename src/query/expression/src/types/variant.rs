@@ -35,16 +35,19 @@ use crate::property::Domain;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
+use crate::types::BuilderMut;
 use crate::types::DataType;
 use crate::types::DecimalScalar;
-use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ReturnType;
 use crate::types::ValueType;
+use crate::types::VectorScalarRef;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
+use crate::with_vector_number_type;
 use crate::ColumnBuilder;
+use crate::TableDataType;
 
 /// JSONB bytes representation of `null`.
 pub const JSONB_NULL: &[u8] = &[0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -81,18 +84,6 @@ impl AccessType for VariantType {
         } else {
             None
         }
-    }
-
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Variant(scalar)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Variant(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -134,25 +125,32 @@ impl AccessType for VariantType {
 
 impl ValueType for VariantType {
     type ColumnBuilder = BinaryColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Variant(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_variant());
+        Scalar::Variant(scalar)
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Variant(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_domain_with_type(_domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_variant());
+        Domain::Undefined
+    }
+
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_variant());
+        Column::Variant(col)
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_variant_mut().unwrap().into()
     }
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_variant());
         Some(ColumnBuilder::Variant(builder))
     }
 
@@ -164,21 +162,29 @@ impl ValueType for VariantType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.put_slice(item);
         builder.commit_row();
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         builder.push_repeat(item, n);
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.commit_row();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {
@@ -215,7 +221,12 @@ impl VariantType {
     }
 }
 
-pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8>) {
+pub fn cast_scalar_to_variant(
+    scalar: ScalarRef,
+    tz: &TimeZone,
+    buf: &mut Vec<u8>,
+    table_data_type: Option<&TableDataType>,
+) {
     let value = match scalar {
         ScalarRef::Null => jsonb::Value::Null,
         ScalarRef::EmptyArray => jsonb::Value::Array(vec![]),
@@ -233,18 +244,26 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             NumberScalar::Float64(n) => n.0.into(),
         },
         ScalarRef::Decimal(x) => match x {
+            DecimalScalar::Decimal64(value, size) => {
+                let dec = jsonb::Decimal128 {
+                    precision: size.precision(),
+                    scale: size.scale(),
+                    value: value as i128,
+                };
+                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+            }
             DecimalScalar::Decimal128(value, size) => {
                 let dec = jsonb::Decimal128 {
-                    precision: size.precision,
-                    scale: size.scale,
+                    precision: size.precision(),
+                    scale: size.scale(),
                     value,
                 };
                 jsonb::Value::Number(jsonb::Number::Decimal128(dec))
             }
             DecimalScalar::Decimal256(value, size) => {
                 let dec = jsonb::Decimal256 {
-                    precision: size.precision,
-                    scale: size.scale,
+                    precision: size.precision(),
+                    scale: size.scale(),
                     value: value.0,
                 };
                 jsonb::Value::Number(jsonb::Number::Decimal256(dec))
@@ -264,13 +283,24 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             jsonb::Value::Interval(interval)
         }
         ScalarRef::Array(col) => {
-            let items = cast_scalars_to_variants(col.iter(), tz);
+            let typ = if let Some(TableDataType::Array(typ)) = table_data_type {
+                Some(typ.remove_nullable())
+            } else {
+                None
+            };
+            let items = cast_scalars_to_variants(col.iter(), tz, typ.as_ref());
             let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
                 .expect("failed to build jsonb array");
             buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Map(col) => {
+            let typ = if let Some(TableDataType::Map(typ)) = table_data_type {
+                Some(typ.remove_nullable())
+            } else {
+                None
+            };
+
             let kv_col = KvPair::<AnyType, AnyType>::try_downcast_column(&col).unwrap();
             let mut kvs = BTreeMap::new();
             for (k, v) in kv_col.iter() {
@@ -284,7 +314,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
                     _ => unreachable!(),
                 };
                 let mut val = vec![];
-                cast_scalar_to_variant(v, tz, &mut val);
+                cast_scalar_to_variant(v, tz, &mut val, typ.as_ref());
                 kvs.insert(key, val);
             }
             let owned_jsonb =
@@ -305,14 +335,43 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
             return;
         }
         ScalarRef::Tuple(fields) => {
-            let values = cast_scalars_to_variants(fields, tz);
-            let owned_jsonb = OwnedJsonb::build_object(
-                values
-                    .iter()
-                    .enumerate()
-                    .map(|(i, bytes)| (format!("{}", i + 1), RawJsonb::new(bytes))),
-            )
-            .expect("failed to build jsonb object from tuple");
+            let owned_jsonb = match table_data_type {
+                Some(TableDataType::Tuple {
+                    fields_name,
+                    fields_type,
+                }) => {
+                    assert_eq!(fields.len(), fields_type.len());
+                    let iter = fields.into_iter();
+                    let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
+                    for (scalar, typ) in iter.zip(fields_type) {
+                        cast_scalar_to_variant(
+                            scalar,
+                            tz,
+                            &mut builder.data,
+                            Some(&typ.remove_nullable()),
+                        );
+                        builder.commit_row();
+                    }
+                    let values = builder.build();
+                    OwnedJsonb::build_object(
+                        values
+                            .iter()
+                            .enumerate()
+                            .map(|(i, bytes)| (fields_name[i].clone(), RawJsonb::new(bytes))),
+                    )
+                    .expect("failed to build jsonb object from tuple")
+                }
+                _ => {
+                    let values = cast_scalars_to_variants(fields, tz, None);
+                    OwnedJsonb::build_object(
+                        values
+                            .iter()
+                            .enumerate()
+                            .map(|(i, bytes)| (format!("{}", i + 1), RawJsonb::new(bytes))),
+                    )
+                    .expect("failed to build jsonb object from tuple")
+                }
+            };
             buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
@@ -335,6 +394,20 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
                 .write_to_vec(buf);
             return;
         }
+        ScalarRef::Vector(scalar) => with_vector_number_type!(|NUM_TYPE| match scalar {
+            VectorScalarRef::NUM_TYPE(vals) => {
+                let items = cast_scalars_to_variants(
+                    vals.iter()
+                        .map(|n| ScalarRef::Number(NumberScalar::NUM_TYPE(*n))),
+                    tz,
+                    None,
+                );
+                let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
+                    .expect("failed to build jsonb array");
+                buf.extend_from_slice(owned_jsonb.as_ref());
+                return;
+            }
+        }),
     };
     value.write_to_vec(buf);
 }
@@ -342,11 +415,12 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
     tz: &TimeZone,
+    table_data_type: Option<&TableDataType>,
 ) -> BinaryColumn {
     let iter = scalars.into_iter();
     let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
-        cast_scalar_to_variant(scalar, tz, &mut builder.data);
+        cast_scalar_to_variant(scalar, tz, &mut builder.data, table_data_type);
         builder.commit_row();
     }
     builder.build()

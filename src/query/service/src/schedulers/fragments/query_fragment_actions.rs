@@ -179,17 +179,19 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_query_env(&self) -> Result<QueryEnv> {
+        let workload_group = self.ctx.get_current_session().get_current_workload_group();
         let mut builder = DataflowDiagramBuilder::create(self.ctx.get_cluster().nodes.clone());
 
         self.fragments_connections(&mut builder)?;
         self.statistics_connections(&mut builder)?;
 
         Ok(QueryEnv {
+            workload_group,
             query_id: self.ctx.get_id(),
             cluster: self.ctx.get_cluster(),
             settings: self.ctx.get_settings(),
-            query_kind: self.ctx.get_query_kind(),
 
+            query_kind: self.ctx.get_query_kind(),
             dataflow_diagram: Arc::new(builder.build()),
             request_server_id: GlobalConfig::instance().query.node_id.clone(),
             create_rpc_clint_with_current_rt: self

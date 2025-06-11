@@ -27,13 +27,13 @@ use databend_common_ast::parser::Dialect;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check;
-use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::VectorDataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
@@ -197,7 +197,7 @@ fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             left,
             right,
         } => match op {
-            BinaryOperator::NotLike => {
+            BinaryOperator::NotLike(_) => {
                 unimplemented!("please use `not (a like b)` instead")
             }
             BinaryOperator::NotRLike | BinaryOperator::NotRegexp => {
@@ -627,7 +627,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Float32 => DataType::Number(NumberDataType::Float32),
         databend_common_ast::ast::TypeName::Float64 => DataType::Number(NumberDataType::Float64),
         databend_common_ast::ast::TypeName::Decimal { precision, scale } => {
-            DataType::Decimal(DecimalDataType::from_size(DecimalSize { precision, scale }).unwrap())
+            DataType::Decimal(DecimalSize::new_unchecked(precision, scale))
         }
         databend_common_ast::ast::TypeName::Binary => DataType::Binary,
         databend_common_ast::ast::TypeName::String => DataType::String,
@@ -652,6 +652,9 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
         databend_common_ast::ast::TypeName::Variant => DataType::Variant,
         databend_common_ast::ast::TypeName::Geometry => DataType::Geometry,
         databend_common_ast::ast::TypeName::Geography => DataType::Geography,
+        databend_common_ast::ast::TypeName::Vector(d) => {
+            DataType::Vector(VectorDataType::Float32(d))
+        }
         databend_common_ast::ast::TypeName::NotNull(inner_type) => transform_data_type(*inner_type),
     }
 }
@@ -663,10 +666,10 @@ fn transform_literal(lit: ASTLiteral) -> Scalar {
             value,
             precision,
             scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal256(i256(value), DecimalSize {
-            precision,
-            scale,
-        })),
+        } => Scalar::Decimal(DecimalScalar::Decimal256(
+            i256(value),
+            DecimalSize::new_unchecked(precision, scale),
+        )),
         ASTLiteral::String(s) => Scalar::String(s),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,

@@ -100,7 +100,7 @@ struct BitmapRawResult;
 
 impl BitmapAggResult for BitmapCountResult {
     fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = UInt64Type::try_downcast_builder(builder).unwrap();
+        let mut builder = UInt64Type::downcast_builder(builder);
         let state = place.get::<BitmapAggState>();
         builder.push(state.rb.as_ref().map(|rb| rb.len()).unwrap_or(0));
         Ok(())
@@ -113,7 +113,7 @@ impl BitmapAggResult for BitmapCountResult {
 
 impl BitmapAggResult for BitmapRawResult {
     fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = BitmapType::try_downcast_builder(builder).unwrap();
+        let mut builder = BitmapType::downcast_builder(builder);
         let state = place.get::<BitmapAggState>();
         if let Some(rb) = state.rb.as_ref() {
             rb.serialize_into(&mut builder.data)?;
@@ -585,13 +585,13 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(decimal) if decimal.can_carried_by_128() => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
             )
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
                 display_name,
                 extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
@@ -606,7 +606,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
     })
 }
 
-fn extract_params<T: ValueType>(
+fn extract_params<T: AccessType>(
     display_name: &str,
     val_type: DataType,
     params: Vec<Scalar>,

@@ -620,12 +620,11 @@ impl PrivilegeAccess {
             let current_user = self.ctx.get_current_user()?;
             session
                 .validate_privilege(&GrantObject::Global, privilege, true)
-                .await.map_err(|err | {
-
+                .await.map_err(|err| {
                 if err.code() != ErrorCode::PERMISSION_DENIED {
                     err
                 } else {
-                    let role_name = session.get_current_role().map(|r|r.name).unwrap_or_default();
+                    let role_name = session.get_current_role().map(|r| r.name).unwrap_or_default();
                     ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required to invoke table function [{}] for user {} with roles [{}]",
                         privilege,
@@ -759,7 +758,7 @@ impl AccessChecker for PrivilegeAccess {
                         };
 
                         if has_priv(&tenant, database, None, show_db_id, table_id, grant_set, false).await? {
-                            return Ok(())
+                            return Ok(());
                         }
 
                         let user_api = UserApiProvider::instance();
@@ -790,12 +789,12 @@ impl AccessChecker for PrivilegeAccess {
                         check_db_tb_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
-                        if self.ctx.is_temp_table(catalog_name,database,table){
+                        if self.ctx.is_temp_table(catalog_name, database, table) {
                             return Ok(());
                         }
                         let session = self.ctx.get_current_session();
                         if self.has_ownership(&session, &GrantObject::Table(catalog_name.clone(), database.clone(), table.clone()), false, false).await? ||
-                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false, false).await?   {
+                            self.has_ownership(&session, &GrantObject::Database(catalog_name.clone(), database.clone()), false, false).await? {
                             return Ok(());
                         }
                         let catalog = self.ctx.get_catalog(catalog_name).await?;
@@ -812,6 +811,10 @@ impl AccessChecker for PrivilegeAccess {
                                 identity, database, table
                             )))
                         };
+                    }
+                    Some(RewriteKind::ShowSequences) => {
+                        self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                            .await?;
                     }
                     _ => {}
                 };
@@ -845,7 +848,7 @@ impl AccessChecker for PrivilegeAccess {
                             DataSourceInfo::TableSource(_) | DataSourceInfo::ResultScanSource(_) => {}
                         }
                     }
-                    if table.is_source_of_view()||table.table().is_temp() {
+                    if table.is_source_of_view() || table.table().is_temp() {
                         continue;
                     }
 
@@ -860,6 +863,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
             }
+
+            Plan::ReportIssue(_) => {}
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
@@ -897,7 +902,7 @@ impl AccessChecker for PrivilegeAccess {
                     self.validate_udf_access(udf).await?;
                 } else {
                     self.validate_access(&GrantObject::Global, UserPrivilegeType::Drop, false, false)
-                                        .await?;
+                        .await?;
                 }
             }
             Plan::DropStage(plan) => {
@@ -958,7 +963,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Select, false, false).await?
             }
             Plan::CreateTable(plan) => {
-                if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX){
+                if !plan.options.contains_key(OPT_KEY_TEMP_PREFIX) {
                     self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Create, false).await?;
                 }
                 if let Some(query) = &plan.as_select {
@@ -972,10 +977,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::UndropTable(plan) => {
                 // undroptable/db need convert name to id. But because of drop, can not find the id. Upgrade Object to Database.
                 self.validate_db_access(&plan.catalog, &plan.database, UserPrivilegeType::Drop, false).await?;
-
             }
             Plan::RenameTable(plan) => {
-                if  self.ctx.is_temp_table(&plan.catalog,&plan.database, &plan.table) {
+                if self.ctx.is_temp_table(&plan.catalog, &plan.database, &plan.table) {
                     return Ok(());
                 }
                 // You must have ALTER and DROP privileges for the original table,
@@ -1004,6 +1008,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ModifyTableComment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
+            Plan::ModifyTableConnection(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
             Plan::DropTableColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
@@ -1025,14 +1032,14 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::OptimizePurge(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
-            },
+            }
             Plan::OptimizeCompactSegment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
-            },
+            }
             Plan::OptimizeCompactBlock { s_expr, .. } => {
                 let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
-            },
+            }
             Plan::VacuumTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
@@ -1071,9 +1078,9 @@ impl AccessChecker for PrivilegeAccess {
                 } else {
                     vec![UserPrivilegeType::Insert]
                 };
-                for target in plan.whens.iter().flat_map(|when|when.intos.iter()).chain(plan.opt_else.as_ref().into_iter().flat_map(|e|e.intos.iter())){
+                for target in plan.whens.iter().flat_map(|when| when.intos.iter()).chain(plan.opt_else.as_ref().into_iter().flat_map(|e| e.intos.iter())) {
                     for privilege in target_table_privileges.clone() {
-                    self.validate_table_access(&target.catalog, &target.database, &target.table, privilege, false, false).await?;
+                        self.validate_table_access(&target.catalog, &target.database, &target.table, privilege, false, false).await?;
                     }
                 }
                 self.check(ctx, &plan.input_source).await?;
@@ -1173,7 +1180,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::DropUser,
-                    false,false
+                    false, false,
                 )
                     .await?;
             }
@@ -1190,7 +1197,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::DropRole,
-                    false, false
+                    false, false,
                 )
                     .await?;
             }
@@ -1198,7 +1205,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
             | Plan::RevokeRole(_) => {
-                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false, false)
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant, false, false)
                     .await?;
             }
             Plan::Set(plan) => {
@@ -1237,7 +1244,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::CopyIntoLocation(plan) => {
-                self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
+                self.validate_stage_access(&plan.info.stage, UserPrivilegeType::Write).await?;
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }
@@ -1278,6 +1285,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
             | Plan::AlterTask(_)
             | Plan::CreateSequence(_)
+            | Plan::DescSequence(_)
             | Plan::DropSequence(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
@@ -1286,7 +1294,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(
                     &GrantObject::Global,
                     UserPrivilegeType::CreateDataMask,
-                    false,false
+                    false, false,
                 )
                     .await?;
             }

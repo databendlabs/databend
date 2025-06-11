@@ -1,0 +1,60 @@
+name: "Q01"
+description: "TPC-DS Query 1 optimizer test"
+
+sql: |
+  WITH customer_total_return
+     AS (SELECT sr_customer_sk     AS ctr_customer_sk,
+                sr_store_sk        AS ctr_store_sk,
+                Sum(sr_return_amt) AS ctr_total_return
+         FROM   store_returns,
+                date_dim
+         WHERE  sr_returned_date_sk = d_date_sk
+                AND d_year = 2001
+         GROUP  BY sr_customer_sk,
+                   sr_store_sk)
+  SELECT c_customer_id
+  FROM   customer_total_return ctr1,
+       store,
+       customer
+  WHERE  ctr1.ctr_total_return > (SELECT Avg(ctr_total_return) * 1.2
+                                FROM   customer_total_return ctr2
+                                WHERE  ctr1.ctr_store_sk = ctr2.ctr_store_sk)
+       AND s_store_sk = ctr1.ctr_store_sk
+       AND s_state = 'TN'
+       AND ctr1.ctr_customer_sk = c_customer_sk
+  ORDER  BY c_customer_id
+  LIMIT 100
+
+# Reference to external statistics file
+statistics_file: tpcds/tpcds_100g.yaml
+
+# Converted from tabular format to tree format based on parent-child relationships
+good_plan: |
+  Result
+  └── SortWithLimit [sortKey: (CUSTOMER.C_CUSTOMER_ID ASC NULLS LAST), rowCount: 100]
+      └── InnerJoin [joinKey: (CTR1.CTR_CUSTOMER_SK = CUSTOMER.C_CUSTOMER_SK)]
+          ├── InnerJoin [joinKey: (STORE.S_STORE_SK = CTR1.CTR_STORE_SK)]
+          │   ├── Filter [STORE.S_STATE = 'TN']
+          │   │   └── TableScan [SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.STORE] [S_STORE_SK, S_STATE] [partitions: 1/1, bytes: 135,680]
+          │   └── InnerJoin [joinKey: (CTR2.CTR_STORE_SK = CTR1.CTR_STORE_SK), joinFilter: (CTR1.CTR_TOTAL_RETURN) > (((SUM(CTR2.CTR_TOTAL_RETURN)) / (NVL(COUNT(CTR2.CTR_TOTAL_RETURN), 0))) * 1.2)]
+          │       ├── Filter [(SUM(CTR2.CTR_TOTAL_RETURN) IS NOT NULL) AND (COUNT(CTR2.CTR_TOTAL_RETURN) IS NOT NULL)]
+          │       │   └── Aggregate [aggExprs: [SUM(CTR2.CTR_TOTAL_RETURN), COUNT(CTR2.CTR_TOTAL_RETURN)], groupKeys: [CTR2.CTR_STORE_SK]]
+          │       │       └── JoinFilter [joinKey: (STORE.S_STORE_SK = CTR1.CTR_STORE_SK)]
+          │       │           └── WithReference [CTR2]
+          │       │               └── Filter [STORE_RETURNS.SR_STORE_SK IS NOT NULL]
+          │       │                   └── WithClause [CUSTOMER_TOTAL_RETURN]
+          │       │                       └── Aggregate [aggExprs: [SUM(SUM(SUM(STORE_RETURNS.SR_RETURN_AMT)))], groupKeys: [STORE_RETURNS.SR_CUSTOMER_SK, STORE_RETURNS.SR_STORE_SK]]
+          │       │                           └── Aggregate [aggExprs: [SUM(SUM(STORE_RETURNS.SR_RETURN_AMT))], groupKeys: [STORE_RETURNS.SR_CUSTOMER_SK, STORE_RETURNS.SR_STORE_SK]]
+          │       │                               └── InnerJoin [joinKey: (DATE_DIM.D_DATE_SK = STORE_RETURNS.SR_RETURNED_DATE_SK)]
+          │       │                                   ├── Filter [DATE_DIM.D_YEAR = 2001]
+          │       │                                   │   └── TableScan [SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM] [D_DATE_SK, D_YEAR] [partitions: 1/1, bytes: 2,138,624]
+          │       │                                   └── Aggregate [aggExprs: [SUM(STORE_RETURNS.SR_RETURN_AMT)], groupKeys: [STORE_RETURNS.SR_CUSTOMER_SK, STORE_RETURNS.SR_STORE_SK, STORE_RETURNS.SR_RETURNED_DATE_SK]]
+          │       │                                       └── Filter [STORE_RETURNS.SR_RETURNED_DATE_SK IS NOT NULL]
+          │       │                                           └── JoinFilter [joinKey: (DATE_DIM.D_DATE_SK = STORE_RETURNS.SR_RETURNED_DATE_SK)]
+          │       │                                               └── TableScan [SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.STORE_RETURNS] [SR_RETURNED_DATE_SK, SR_CUSTOMER_SK, SR_STORE_SK, SR_RETURN_AMT] [partitions: 7070/7070, bytes: 124,763,446,272]
+          │       └── JoinFilter [joinKey: (STORE.S_STORE_SK = CTR1.CTR_STORE_SK)]
+          │           └── WithReference [CTR1]
+          │               └── Filter [(STORE_RETURNS.SR_STORE_SK IS NOT NULL) AND (STORE_RETURNS.SR_CUSTOMER_SK IS NOT NULL)]
+          │                   └── WithClause [CUSTOMER_TOTAL_RETURN] (reference to earlier WITH clause)
+          └── JoinFilter [joinKey: (CTR1.CTR_CUSTOMER_SK = CUSTOMER.C_CUSTOMER_SK)]
+              └── TableScan [SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.CUSTOMER] [C_CUSTOMER_SK, C_CUSTOMER_ID] [partitions: 261/261, bytes: 2,328,538,624]

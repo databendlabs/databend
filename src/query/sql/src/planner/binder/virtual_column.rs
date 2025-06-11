@@ -46,7 +46,6 @@ impl Binder {
                 catalog,
                 database,
                 table,
-                segment_locs: None,
             },
         )))
     }

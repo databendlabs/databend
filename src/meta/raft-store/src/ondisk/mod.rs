@@ -121,7 +121,7 @@ impl OnDisk {
         Ok(OnDisk::new(header, config))
     }
 
-    fn new(header: Header, config: &RaftConfig) -> Self {
+    pub fn new(header: Header, config: &RaftConfig) -> Self {
         let min_compatible = DATA_VERSION.min_compatible_data_version();
 
         if header.version < min_compatible {
@@ -358,7 +358,7 @@ impl OnDisk {
         Ok(())
     }
 
-    fn write_header(&self, header: &Header) -> Result<(), MetaStorageError> {
+    pub fn write_header(&self, header: &Header) -> Result<(), MetaStorageError> {
         Self::write_header_to_fs(&self.config, header)?;
         Ok(())
     }

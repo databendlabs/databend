@@ -20,8 +20,10 @@ use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Decimal;
 use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
@@ -222,7 +224,7 @@ pub fn parse_datum(data: &Datum) -> Option<Scalar> {
     match data.literal() {
         PrimitiveLiteral::Boolean(v) => Some(Scalar::Boolean(*v)),
         PrimitiveLiteral::Int(v) => Some(Scalar::Number(i32::upcast_scalar(*v))),
-        PrimitiveLiteral::Long(v) => Some(Scalar::Number(i64::upcast_scalar(*v))),
+        PrimitiveLiteral::Long(v) => Some(Int64Type::upcast_scalar(*v)),
         PrimitiveLiteral::Float(v) => {
             Some(Scalar::Number(F32::upcast_scalar(OrderedFloat::from(v.0))))
         }
@@ -234,10 +236,10 @@ pub fn parse_datum(data: &Datum) -> Option<Scalar> {
         // Iceberg use i128 to represent decimal
         PrimitiveLiteral::Int128(v) => {
             if let PrimitiveType::Decimal { precision, scale } = data.data_type() {
-                Some(Scalar::Decimal(v.to_scalar(DecimalSize {
-                    precision: *precision as u8,
-                    scale: *scale as u8,
-                })))
+                Some(Scalar::Decimal(v.to_scalar(DecimalSize::new_unchecked(
+                    *precision as u8,
+                    *scale as u8,
+                ))))
             } else {
                 None
             }

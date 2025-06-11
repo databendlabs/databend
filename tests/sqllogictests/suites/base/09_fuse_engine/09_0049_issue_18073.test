@@ -1,0 +1,27 @@
+statement ok
+CREATE OR REPLACE TABLE students (
+    code VARCHAR, 
+    score INT 
+);
+
+statement ok
+CREATE OR REPLACE TABLE pairs (
+    student1 VARCHAR,  
+    student2 VARCHAR,  
+    score1 INT,        
+    score2 INT         
+);
+
+statement ok
+UPDATE pairs AS p 
+SET p.score1 = data.s1, p.score2 = data.s2 
+FROM (
+    SELECT 
+        split_part(a.code, '_', 2) AS c1, a.score AS s1,
+        split_part(b.code, '_', 2) AS c2, b.score AS s2
+    FROM pairs AS p 
+    JOIN students AS a, students AS b 
+    WHERE split_part(a.code, '_', 2) = p.student1 
+        AND split_part(b.code, '_', 2) = p.student2
+) data  
+WHERE p.student1 = data.c1 AND p.student2 = data.c2;

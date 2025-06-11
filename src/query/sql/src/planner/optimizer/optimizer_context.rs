@@ -148,4 +148,28 @@ impl OptimizerContext {
     pub fn get_enable_trace(self: &Arc<Self>) -> bool {
         *self.enable_trace.read()
     }
+
+    /// Check if an optimizer or rule is disabled based on optimizer_skip_list setting
+    pub fn is_optimizer_disabled(self: &Arc<Self>, name: &str) -> bool {
+        let settings = self.get_table_ctx().get_settings();
+        match settings.get_optimizer_skip_list() {
+            Ok(skip_list) if !skip_list.is_empty() => {
+                let name_lower = name.to_lowercase();
+                let is_disabled = skip_list
+                    .split(',')
+                    .map(str::trim)
+                    .any(|item| item.to_lowercase() == name_lower);
+
+                if is_disabled {
+                    log::warn!(
+                        "Skipping optimizer component: {} (found in optimizer_skip_list: {})",
+                        name,
+                        skip_list
+                    );
+                }
+                is_disabled
+            }
+            _ => false,
+        }
+    }
 }

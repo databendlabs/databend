@@ -17,9 +17,12 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::workload_group::QuotaValue;
+use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::cluster_info::Cluster;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,7 +51,6 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
-use crate::sessions::SessionType;
 
 pub struct Session {
     pub(in crate::sessions) id: String,
@@ -152,19 +154,17 @@ impl Session {
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        let mem_stat = ThreadTracker::mem_stat().cloned();
-        self.create_query_context_with_cluster(cluster, mem_stat)
+        self.create_query_context_with_cluster(cluster)
     }
 
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
-        mem_stat: Option<Arc<MemStat>>,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
         let shared = QueryContextShared::try_create(session, cluster)?;
 
-        if let Some(mem_stat) = mem_stat {
+        if let Some(mem_stat) = ThreadTracker::mem_stat() {
             let settings = self.get_settings();
             let query_max_memory_usage = settings.get_max_query_memory_usage()?;
             let allow_query_exceeded_limit = settings.get_allow_query_exceeded_limit()?;
@@ -176,7 +176,31 @@ impl Session {
                 mem_stat.set_limit(query_max_memory_usage as i64, allow_query_exceeded_limit);
             }
 
-            shared.set_query_memory_tracking(Some(mem_stat));
+            shared.set_query_memory_tracking(Some(mem_stat.clone()));
+        }
+
+        if let Some(workload_group) = ThreadTracker::workload_group() {
+            let settings = shared.get_settings();
+            let workload_meta = &workload_group.meta;
+
+            if let Some(QuotaValue::Percentage(v)) = workload_meta.get_quota(CPU_QUOTA_KEY) {
+                if let Ok(max_threads) = settings.get_max_threads() {
+                    let new_max_threads = max_threads * v as u64 / 100;
+                    settings.set_max_threads(std::cmp::max(2, new_max_threads))?;
+                }
+            }
+
+            if let Some(QuotaValue::Duration(v)) = workload_meta.get_quota(QUERY_TIMEOUT_QUOTA_KEY)
+            {
+                if let Ok(max_execute_time) = settings.get_max_execute_time_in_seconds() {
+                    let new_max_execute_time = match max_execute_time {
+                        0 => v.as_secs(),
+                        old_value => std::cmp::min(old_value, v.as_secs()),
+                    };
+
+                    settings.set_max_execute_time_in_seconds(new_max_execute_time)?;
+                }
+            }
         }
 
         self.session_ctx
@@ -375,6 +399,10 @@ impl Session {
             .update_query_ids_results(query_id, Some(result_cache_key))
     }
 
+    pub fn get_last_query_id(&self, index: i32) -> String {
+        self.session_ctx.get_last_query_id(index)
+    }
+
     pub fn txn_mgr(&self) -> TxnManagerRef {
         self.session_ctx.txn_mgr()
     }
@@ -441,6 +469,14 @@ impl Session {
             }
         };
         Ok(format!("{}/{session_id}", self.get_current_user()?.name))
+    }
+
+    pub fn get_current_workload_group(&self) -> Option<String> {
+        self.session_ctx.get_current_workload_group()
+    }
+
+    pub fn set_current_workload_group(&self, workload_group: String) {
+        self.session_ctx.set_current_workload_group(workload_group)
     }
 }
 

@@ -136,6 +136,23 @@ impl Display for RevokeStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowGranteesOfRoleStmt {
+    pub name: String,
+    pub show_option: Option<ShowOptions>,
+}
+
+impl Display for ShowGranteesOfRoleStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW GRANTS OF ROLE {}", self.name)?;
+
+        if let Some(show_option) = &self.show_option {
+            write!(f, " {show_option}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct ShowObjectPrivilegesStmt {
     pub object: GrantObjectName,
     pub show_option: Option<ShowOptions>,
@@ -266,6 +283,8 @@ pub enum UserOptionItem {
     SetPasswordPolicy(String),
     UnsetPasswordPolicy,
     MustChangePassword(bool),
+    SetWorkloadGroup(String),
+    UnsetWorkloadGroup,
 }
 
 impl Display for UserOptionItem {
@@ -277,6 +296,8 @@ impl Display for UserOptionItem {
             UserOptionItem::SetNetworkPolicy(v) => write!(f, "SET NETWORK POLICY = '{}'", v),
             UserOptionItem::UnsetNetworkPolicy => write!(f, "UNSET NETWORK POLICY"),
             UserOptionItem::SetPasswordPolicy(v) => write!(f, "SET PASSWORD POLICY = '{}'", v),
+            UserOptionItem::SetWorkloadGroup(v) => write!(f, "SET WORKLOAD GROUP = '{}'", v),
+            UserOptionItem::UnsetWorkloadGroup => write!(f, "UNSET WORKLOAD GROUP"),
             UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
             UserOptionItem::Disabled(v) => write!(f, "DISABLED = {}", v),
             UserOptionItem::MustChangePassword(v) => write!(f, "MUST_CHANGE_PASSWORD = {}", v),

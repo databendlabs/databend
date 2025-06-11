@@ -150,6 +150,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("week_start", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Specifies the first day of the week.(Used by week-related date functions)",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
@@ -323,6 +330,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
+                }),
+                ("date_format_style", DefaultSettingValue {
+                    value: UserSettingValue::String("Oracle".to_owned()),
+                    desc: "Sets the date format style(Used by datetime functions). Available values include \"MySQL\",  \"Oracle\".",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec!["Oracle".into(), "MySQL".into()])),
                 }),
                 ("query_tag", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
@@ -661,7 +675,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-
+                ("parquet_rowgroup_hint_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(128 * 1024 * 1024),
+                    desc: "Parquet file is very large, we will divide it into multiple rowgroups to read, the config is the hint bytes of each rowgroup, Default value: 128MB",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
+                }),
                 // enterprise license related settings
                 ("enterprise_license", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
@@ -1110,7 +1130,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("format_null_as_str", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -1270,13 +1290,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("use_vacuum2_to_purge_transient_table_data", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Experimental flag which indicates if use vacuum2 to purge transient table data",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("enable_optimizer_trace", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables optimizer trace.",
@@ -1305,6 +1318,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("max_aggregate_restore_worker", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(16),
+                    desc: "Sets the maximum number of worker to aggregate restore.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("enable_experimental_virtual_column", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

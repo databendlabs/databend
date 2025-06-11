@@ -117,6 +117,42 @@ evaluation (internal):
 +--------+------------------------------------------------+
 
 
+ast            : to_jsonb_binary(parse_json('{"k1":"val","k2":100}'))
+raw expr       : to_jsonb_binary(parse_json('{"k1":"val","k2":100}'))
+checked expr   : to_jsonb_binary<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant))
+optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
+output type    : Binary
+output domain  : Undefined
+output         : 40000002100000021000000210000003200000026B316B3276616C5064
+
+
+ast            : to_jsonb_binary(parse_json('10'))
+raw expr       : to_jsonb_binary(parse_json('10'))
+checked expr   : to_jsonb_binary<Variant>(CAST<String>("10" AS Variant))
+optimized expr : 2000000020000002500A
+output type    : Binary
+output domain  : Undefined
+output         : 2000000020000002500A
+
+
+ast            : to_jsonb_binary(parse_json('123456'))
+raw expr       : to_jsonb_binary(parse_json('123456'))
+checked expr   : to_jsonb_binary<Variant>(CAST<String>("123456" AS Variant))
+optimized expr : 2000000020000005500001E240
+output type    : Binary
+output domain  : Undefined
+output         : 2000000020000005500001E240
+
+
+ast            : to_jsonb_binary(parse_json('"abcd"'))
+raw expr       : to_jsonb_binary(parse_json('"abcd"'))
+checked expr   : to_jsonb_binary<Variant>(CAST<String>("\"abcd\"" AS Variant))
+optimized expr : 200000001000000461626364
+output type    : Binary
+output domain  : Undefined
+output         : 200000001000000461626364
+
+
 ast            : from_base64('QWJj')::String
 raw expr       : CAST(from_base64('QWJj') AS String)
 checked expr   : CAST<Binary>(from_base64<String>("QWJj") AS String)
@@ -201,42 +237,6 @@ evaluation (internal):
 | s      | StringColumn[616263, 646566, 6461746162656e64] |
 | Output | StringColumn[abc, def, databend]               |
 +--------+------------------------------------------------+
-
-
-ast            : to_binary(parse_json('{"k1":"val","k2":100}'))
-raw expr       : to_binary(parse_json('{"k1":"val","k2":100}'))
-checked expr   : CAST<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant) AS Binary)
-optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
-output type    : Binary
-output domain  : Undefined
-output         : 40000002100000021000000210000003200000026B316B3276616C5064
-
-
-ast            : to_binary(parse_json('10'))
-raw expr       : to_binary(parse_json('10'))
-checked expr   : CAST<Variant>(CAST<String>("10" AS Variant) AS Binary)
-optimized expr : 2000000020000002500A
-output type    : Binary
-output domain  : Undefined
-output         : 2000000020000002500A
-
-
-ast            : to_binary(parse_json('123456'))
-raw expr       : to_binary(parse_json('123456'))
-checked expr   : CAST<Variant>(CAST<String>("123456" AS Variant) AS Binary)
-optimized expr : 2000000020000005500001E240
-output type    : Binary
-output domain  : Undefined
-output         : 2000000020000005500001E240
-
-
-ast            : to_binary(parse_json('"abcd"'))
-raw expr       : to_binary(parse_json('"abcd"'))
-checked expr   : CAST<Variant>(CAST<String>("\"abcd\"" AS Variant) AS Binary)
-optimized expr : 200000001000000461626364
-output type    : Binary
-output domain  : Undefined
-output         : 200000001000000461626364
 
 
 ast            : to_binary(to_bitmap('1,2,3'))
@@ -370,42 +370,6 @@ evaluation (internal):
 | s      | StringColumn[616263, 646566, 6461746162656e64] |
 | Output | StringColumn[abc, def, databend]               |
 +--------+------------------------------------------------+
-
-
-ast            : TRY_to_binary(parse_json('{"k1":"val","k2":100}'))
-raw expr       : TRY_to_binary(parse_json('{"k1":"val","k2":100}'))
-checked expr   : TRY_CAST<Variant>(CAST<String>("{\"k1\":\"val\",\"k2\":100}" AS Variant) AS Binary NULL)
-optimized expr : 40000002100000021000000210000003200000026B316B3276616C5064
-output type    : Binary NULL
-output domain  : Undefined
-output         : 40000002100000021000000210000003200000026B316B3276616C5064
-
-
-ast            : TRY_to_binary(parse_json('10'))
-raw expr       : TRY_to_binary(parse_json('10'))
-checked expr   : TRY_CAST<Variant>(CAST<String>("10" AS Variant) AS Binary NULL)
-optimized expr : 2000000020000002500A
-output type    : Binary NULL
-output domain  : Undefined
-output         : 2000000020000002500A
-
-
-ast            : TRY_to_binary(parse_json('123456'))
-raw expr       : TRY_to_binary(parse_json('123456'))
-checked expr   : TRY_CAST<Variant>(CAST<String>("123456" AS Variant) AS Binary NULL)
-optimized expr : 2000000020000005500001E240
-output type    : Binary NULL
-output domain  : Undefined
-output         : 2000000020000005500001E240
-
-
-ast            : TRY_to_binary(parse_json('"abcd"'))
-raw expr       : TRY_to_binary(parse_json('"abcd"'))
-checked expr   : TRY_CAST<Variant>(CAST<String>("\"abcd\"" AS Variant) AS Binary NULL)
-optimized expr : 200000001000000461626364
-output type    : Binary NULL
-output domain  : Undefined
-output         : 200000001000000461626364
 
 
 ast            : TRY_to_binary(to_bitmap('1,2,3'))

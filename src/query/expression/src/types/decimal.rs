@@ -24,6 +24,7 @@ use std::ops::Mul;
 use std::ops::MulAssign;
 use std::ops::Neg;
 use std::ops::Range;
+use std::ops::Rem;
 use std::ops::Sub;
 use std::ops::SubAssign;
 
@@ -48,23 +49,29 @@ use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::ArgType;
-use super::DataType;
-use super::GenericMap;
-use super::ReturnType;
+use super::compute_view::Compute;
+use super::compute_view::ComputeView;
+use super::AccessType;
+use super::AnyType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
+use super::ValueType;
+use crate::types::DataType;
 use crate::utils::arrow::buffer_into_mut;
+use crate::with_decimal_mapped_type;
+use crate::with_decimal_type;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
 use crate::Scalar;
 use crate::ScalarRef;
+use crate::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
 
+pub type Decimal64Type = DecimalType<i64>;
 pub type Decimal128Type = DecimalType<i128>;
 pub type Decimal256Type = DecimalType<i256>;
 
@@ -94,26 +101,26 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
         Num::try_downcast_owned_builder(builder)
     }
 
-    fn upcast_column_builder(
-        builder: Vec<Num>,
-        decimal_size: Option<DecimalSize>,
-    ) -> Option<ColumnBuilder> {
+    fn upcast_column_builder(builder: Vec<Num>, data_type: &DataType) -> Option<ColumnBuilder> {
         Some(ColumnBuilder::Decimal(Num::upcast_builder(
             builder,
-            decimal_size.unwrap(),
+            *data_type.as_decimal().unwrap(),
         )))
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Num::upcast_scalar(scalar, Num::default_decimal_size())
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_scalar(scalar, size)
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        Num::upcast_column(col, Num::default_decimal_size())
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_column(col, size)
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Num::upcast_domain(domain, Num::default_decimal_size())
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_domain(domain, size)
     }
 
     #[inline(always)]
@@ -142,56 +149,13 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 }
 
-impl<Num: Decimal> ArgType for DecimalType<Num> {
-    fn data_type() -> DataType {
-        Num::data_type()
-    }
-
-    fn full_domain() -> Self::Domain {
+impl<Num: Decimal> DecimalType<Num> {
+    pub fn full_domain(size: &DecimalSize) -> SimpleDomain<Num> {
         SimpleDomain {
-            min: Num::MIN,
-            max: Num::MAX,
+            min: Num::min_for_precision(size.precision),
+            max: Num::max_for_precision(size.precision),
         }
     }
-}
-
-impl<Num: Decimal> ReturnType for DecimalType<Num> {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
-    }
-}
-
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    EnumAsInner,
-)]
-pub enum DecimalDataType {
-    Decimal128(DecimalSize),
-    Decimal256(DecimalSize),
 }
 
 #[derive(
@@ -206,55 +170,70 @@ pub enum DecimalDataType {
     BorshDeserialize,
 )]
 pub enum DecimalScalar {
+    Decimal64(i64, DecimalSize),
     Decimal128(i128, DecimalSize),
     Decimal256(i256, DecimalSize),
 }
 
 impl DecimalScalar {
     pub fn to_float64(&self) -> f64 {
-        match self {
-            DecimalScalar::Decimal128(v, size) => i128::to_float64(*v, size.scale),
-            DecimalScalar::Decimal256(v, size) => i256::to_float64(*v, size.scale),
-        }
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(v, size) => v.to_float64(size.scale),
+        })
     }
+
     pub fn is_positive(&self) -> bool {
-        match self {
-            DecimalScalar::Decimal128(v, _) => i128::is_positive(*v),
-            DecimalScalar::Decimal256(v, _) => i256::is_positive(*v),
-        }
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(v, _) => v.is_positive(),
+        })
+    }
+
+    pub fn size(&self) -> DecimalSize {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(_, size) => *size,
+        })
+    }
+
+    pub fn as_decimal<D: Decimal>(&self) -> D {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(value, _) => value.as_decimal(),
+        })
     }
 }
 
 #[derive(Clone, PartialEq, EnumAsInner)]
 pub enum DecimalColumn {
+    Decimal64(Buffer<i64>, DecimalSize),
     Decimal128(Buffer<i128>, DecimalSize),
     Decimal256(Buffer<i256>, DecimalSize),
 }
 
 #[derive(Clone, PartialEq, EnumAsInner, Debug)]
 pub enum DecimalColumnVec {
+    Decimal64(Vec<Buffer<i64>>, DecimalSize),
     Decimal128(Vec<Buffer<i128>>, DecimalSize),
     Decimal256(Vec<Buffer<i256>>, DecimalSize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum DecimalColumnBuilder {
+    Decimal64(Vec<i64>, DecimalSize),
     Decimal128(Vec<i128>, DecimalSize),
     Decimal256(Vec<i256>, DecimalSize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumAsInner)]
 pub enum DecimalDomain {
+    Decimal64(SimpleDomain<i64>, DecimalSize),
     Decimal128(SimpleDomain<i128>, DecimalSize),
     Decimal256(SimpleDomain<i256>, DecimalSize),
 }
 
 impl DecimalDomain {
     pub fn decimal_size(&self) -> DecimalSize {
-        match self {
-            DecimalDomain::Decimal128(_, size) => *size,
-            DecimalDomain::Decimal256(_, size) => *size,
-        }
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalDomain::DECIMAL(_, size) => *size,
+        })
     }
 }
 
@@ -271,8 +250,84 @@ impl DecimalDomain {
     BorshDeserialize,
 )]
 pub struct DecimalSize {
-    pub precision: u8,
-    pub scale: u8,
+    precision: u8,
+    scale: u8,
+}
+
+impl DecimalSize {
+    pub fn new_unchecked(precision: u8, scale: u8) -> DecimalSize {
+        DecimalSize { precision, scale }
+    }
+
+    pub fn new(precision: u8, scale: u8) -> Result<DecimalSize> {
+        let size = DecimalSize { precision, scale };
+        size.validate()?;
+
+        Ok(size)
+    }
+
+    pub fn validate(&self) -> Result<()> {
+        if self.precision < 1 || self.precision > MAX_DECIMAL256_PRECISION {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal precision must be between 1 and {MAX_DECIMAL256_PRECISION}",
+            )));
+        }
+
+        if self.scale > self.precision {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal scale must be between 0 and precision {}",
+                self.precision
+            )));
+        }
+
+        Ok(())
+    }
+
+    pub fn default_128() -> DecimalSize {
+        i128::default_decimal_size()
+    }
+
+    pub fn precision(&self) -> u8 {
+        self.precision
+    }
+
+    pub fn scale(&self) -> u8 {
+        self.scale
+    }
+
+    pub fn leading_digits(&self) -> u8 {
+        self.precision - self.scale
+    }
+
+    pub fn can_carried_by_64(&self) -> bool {
+        self.precision <= MAX_DECIMAL64_PRECISION
+    }
+
+    pub fn can_carried_by_128(&self) -> bool {
+        self.precision <= MAX_DECIMAL128_PRECISION
+    }
+
+    pub fn data_kind(&self) -> DecimalDataKind {
+        (*self).into()
+    }
+
+    pub fn best_type(&self) -> DecimalDataType {
+        if self.can_carried_by_64() {
+            DecimalDataType::Decimal64(*self)
+        } else if self.can_carried_by_128() {
+            DecimalDataType::Decimal128(*self)
+        } else {
+            DecimalDataType::Decimal256(*self)
+        }
+    }
+}
+
+impl From<DecimalSize> for DecimalDataType {
+    fn from(size: DecimalSize) -> Self {
+        with_decimal_type!(|DECIMAL| match DecimalDataKind::from(size) {
+            DecimalDataKind::DECIMAL => DecimalDataType::DECIMAL(size),
+        })
+    }
 }
 
 pub trait Decimal:
@@ -300,11 +355,13 @@ pub trait Decimal:
     fn minus_one() -> Self;
 
     // 10**scale
-    fn e(n: u32) -> Self;
+    fn e(n: u8) -> Self;
     fn mem_size() -> usize;
 
     fn to_u64_array(self) -> Self::U64Array;
     fn from_u64_array(v: Self::U64Array) -> Self;
+
+    fn signum(self) -> Self;
 
     fn checked_add(self, rhs: Self) -> Option<Self>;
     fn checked_sub(self, rhs: Self) -> Option<Self>;
@@ -320,15 +377,25 @@ pub trait Decimal:
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
 
+    fn int_part_is_zero(self, scale: u8) -> bool {
+        if self >= Self::zero() {
+            self <= Self::max_for_precision(scale)
+        } else {
+            self >= Self::min_for_precision(scale)
+        }
+    }
+
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
+
+    fn from_i64(value: i64) -> Self;
     fn from_i128<U: Into<i128>>(value: U) -> Self;
     fn from_i256(value: i256) -> Self;
     fn from_bigint(value: BigInt) -> Option<Self>;
 
     fn de_binary(bytes: &mut &[u8]) -> Self;
-    fn display(self, scale: u8) -> String;
+    fn to_decimal_string(self, scale: u8) -> String;
 
     fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
@@ -347,9 +414,8 @@ pub trait Decimal:
     fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column;
     fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain;
     fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder;
-    fn data_type() -> DataType;
-    const MIN: Self;
-    const MAX: Self;
+    const DECIMAL_MIN: Self;
+    const DECIMAL_MAX: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -359,10 +425,12 @@ pub trait Decimal:
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar;
 
+    fn as_decimal<D: Decimal>(self) -> D;
+
     fn with_size(&self, size: DecimalSize) -> Option<Self> {
-        let multiplier = Self::e(size.scale as u32);
-        let min_for_precision = Self::min_for_precision(size.precision);
-        let max_for_precision = Self::max_for_precision(size.precision);
+        let multiplier = Self::e(size.scale());
+        let min_for_precision = Self::min_for_precision(size.precision());
+        let max_for_precision = Self::max_for_precision(size.precision());
         self.checked_mul(multiplier).and_then(|v| {
             if v > max_for_precision || v < min_for_precision {
                 None
@@ -373,8 +441,8 @@ pub trait Decimal:
     }
 }
 
-impl Decimal for i128 {
-    type U64Array = [u64; 2];
+impl Decimal for i64 {
+    type U64Array = [u64; 1];
 
     fn to_u64_array(self) -> Self::U64Array {
         unsafe { std::mem::transmute(self) }
@@ -385,23 +453,45 @@ impl Decimal for i128 {
     }
 
     fn zero() -> Self {
-        0_i128
+        0
     }
 
     fn one() -> Self {
-        1_i128
+        1
     }
 
     fn minus_one() -> Self {
-        -1_i128
+        -1
     }
 
-    fn e(n: u32) -> Self {
-        10_i128.pow(n)
+    fn e(n: u8) -> Self {
+        const L: usize = MAX_DECIMAL64_PRECISION as usize + 1;
+        const TAB: [i64; L] = {
+            const fn gen() -> [i64; L] {
+                let mut arr = [0; L];
+                let mut i = 0;
+                loop {
+                    if i == L {
+                        break;
+                    }
+                    arr[i] = 10_i64.pow(i as u32);
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
+        TAB.get(n as usize)
+            .copied()
+            .unwrap_or_else(|| 10_i64.pow(n as u32))
     }
 
     fn mem_size() -> usize {
-        16
+        std::mem::size_of::<Self>()
+    }
+
+    fn signum(self) -> Self {
+        self.signum()
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -430,7 +520,266 @@ impl Decimal for i128 {
         }
 
         if !overflow {
-            let div = i128::e(shift_scale);
+            let div = i64::e(shift_scale as u8);
+            let res = if self.is_negative() == rhs.is_negative() {
+                (self * rhs + div / 2) / div
+            } else {
+                (self * rhs - div / 2) / div
+            };
+            return Some(res);
+        }
+
+        let div = i128::e(shift_scale as u8);
+        let res = if self.is_negative() == rhs.is_negative() {
+            (self as i128 * rhs as i128 + div / 2) / div
+        } else {
+            (self as i128 * rhs as i128 - div / 2) / div
+        };
+
+        if !(i64::DECIMAL_MIN as i128..=i64::DECIMAL_MAX as i128).contains(&res) {
+            None
+        } else {
+            Some(res as i64)
+        }
+    }
+
+    fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
+        let mul = i128::e(mul_scale as u8);
+        let rhs = rhs as i128;
+        let res = if self.is_negative() == rhs.is_negative() {
+            ((self as i128) * mul + rhs / 2) / rhs
+        } else {
+            ((self as i128) * mul - rhs / 2) / rhs
+        };
+        Some(res as i64)
+    }
+
+    fn min_for_precision(precision: u8) -> Self {
+        -(Self::e(precision) - 1)
+    }
+
+    fn max_for_precision(precision: u8) -> Self {
+        Self::e(precision) - 1
+    }
+
+    fn default_decimal_size() -> DecimalSize {
+        DecimalSize {
+            precision: 18,
+            scale: 0,
+        }
+    }
+
+    fn from_float(value: f64) -> Self {
+        value as i64
+    }
+
+    #[inline]
+    fn from_i64(value: i64) -> Self {
+        value
+    }
+
+    #[inline]
+    fn from_i128<U: Into<i128>>(value: U) -> Self {
+        value.into() as i64
+    }
+
+    #[inline]
+    fn from_i256(value: i256) -> Self {
+        value.as_i64()
+    }
+
+    fn from_bigint(value: BigInt) -> Option<Self> {
+        value.to_i64()
+    }
+
+    fn de_binary(bytes: &mut &[u8]) -> Self {
+        let bs: [u8; std::mem::size_of::<Self>()] =
+            bytes[0..std::mem::size_of::<Self>()].try_into().unwrap();
+        *bytes = &bytes[std::mem::size_of::<Self>()..];
+
+        i64::from_le_bytes(bs)
+    }
+
+    fn to_decimal_string(self, scale: u8) -> String {
+        display_decimal_128(self as i128, scale).to_string()
+    }
+
+    fn to_float32(self, scale: u8) -> f32 {
+        let div = 10_f32.powi(scale as i32);
+        self as f32 / div
+    }
+
+    fn to_float64(self, scale: u8) -> f64 {
+        let div = 10_f64.powi(scale as i32);
+        self as f64 / div
+    }
+
+    fn to_int<U: NumCast>(self, scale: u8, rounding_mode: bool) -> Option<U> {
+        let div = 10i64.checked_pow(scale as u32)?;
+        let mut val = self / div;
+        if rounding_mode && scale > 0 {
+            if let Some(r) = self.checked_rem(div) {
+                if let Some(m) = r.checked_div(i64::e((scale as u32 - 1) as u8)) {
+                    if m >= 5i64 {
+                        val = val.checked_add(1i64)?;
+                    } else if m <= -5i64 {
+                        val = val.checked_sub(1i64)?;
+                    }
+                }
+            }
+        }
+        num_traits::cast(val)
+    }
+
+    fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
+        DecimalScalar::Decimal64(self, size)
+    }
+
+    fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)> {
+        let column = column.as_decimal()?;
+        match column {
+            DecimalColumn::Decimal64(c, size) => Some((c.clone(), *size)),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal64(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self>> {
+        match builder {
+            ColumnBuilder::Decimal(DecimalColumnBuilder::Decimal64(s, _)) => Some(s),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_scalar(scalar: &DecimalScalar) -> Option<Self> {
+        match scalar {
+            DecimalScalar::Decimal64(val, _) => Some(*val),
+            _ => None,
+        }
+    }
+
+    fn try_downcast_domain(domain: &DecimalDomain) -> Option<SimpleDomain<Self>> {
+        match domain {
+            DecimalDomain::Decimal64(val, _) => Some(*val),
+            _ => None,
+        }
+    }
+
+    fn upcast_scalar(scalar: Self, size: DecimalSize) -> Scalar {
+        Scalar::Decimal(DecimalScalar::Decimal64(scalar, size))
+    }
+
+    fn upcast_column(col: Buffer<Self>, size: DecimalSize) -> Column {
+        Column::Decimal(DecimalColumn::Decimal64(col, size))
+    }
+
+    fn upcast_domain(domain: SimpleDomain<Self>, size: DecimalSize) -> Domain {
+        Domain::Decimal(DecimalDomain::Decimal64(domain, size))
+    }
+
+    fn upcast_builder(builder: Vec<Self>, size: DecimalSize) -> DecimalColumnBuilder {
+        DecimalColumnBuilder::Decimal64(builder, size)
+    }
+
+    const DECIMAL_MIN: i64 = -999999999999999999;
+    const DECIMAL_MAX: i64 = 999999999999999999;
+
+    fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
+        DecimalColumn::Decimal64(value, size)
+    }
+
+    #[inline]
+    fn as_decimal<D: Decimal>(self) -> D {
+        D::from_i64(self)
+    }
+}
+
+impl Decimal for i128 {
+    type U64Array = [u64; 2];
+
+    fn to_u64_array(self) -> Self::U64Array {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn from_u64_array(v: Self::U64Array) -> Self {
+        unsafe { std::mem::transmute(v) }
+    }
+
+    fn zero() -> Self {
+        0_i128
+    }
+
+    fn one() -> Self {
+        1_i128
+    }
+
+    fn minus_one() -> Self {
+        -1_i128
+    }
+
+    fn e(n: u8) -> Self {
+        const L: usize = MAX_DECIMAL128_PRECISION as usize + 1;
+        const TAB: [i128; L] = {
+            const fn gen() -> [i128; L] {
+                let mut arr = [0; L];
+                let mut i = 0;
+                loop {
+                    if i == L {
+                        break;
+                    }
+                    arr[i] = 10_i128.pow(i as u32);
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
+        TAB.get(n as usize)
+            .copied()
+            .unwrap_or_else(|| 10_i128.pow(n as u32))
+    }
+
+    fn mem_size() -> usize {
+        16
+    }
+
+    fn signum(self) -> Self {
+        self.signum()
+    }
+
+    fn checked_add(self, rhs: Self) -> Option<Self> {
+        self.checked_add(rhs)
+    }
+
+    fn checked_sub(self, rhs: Self) -> Option<Self> {
+        self.checked_sub(rhs)
+    }
+
+    fn checked_div(self, rhs: Self) -> Option<Self> {
+        self.checked_div(rhs)
+    }
+
+    fn checked_mul(self, rhs: Self) -> Option<Self> {
+        self.checked_mul(rhs)
+    }
+
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
+    }
+
+    fn do_round_mul(self, rhs: Self, shift_scale: u32, overflow: bool) -> Option<Self> {
+        if shift_scale == 0 {
+            return Some(self);
+        }
+
+        if !overflow {
+            let div = i128::e(shift_scale as u8);
             let res = if self.is_negative() == rhs.is_negative() {
                 (self * rhs + div / 2) / div
             } else {
@@ -440,7 +789,7 @@ impl Decimal for i128 {
             return Some(res);
         }
 
-        let div = i256::e(shift_scale);
+        let div = i256::e(shift_scale as u8);
         let res = if self.is_negative() == rhs.is_negative() {
             (i256::from(self) * i256::from(rhs) + div / i256::from(2)) / div
         } else {
@@ -455,21 +804,56 @@ impl Decimal for i128 {
     }
 
     fn do_round_div(self, rhs: Self, mul_scale: u32) -> Option<Self> {
-        let mul = i256::e(mul_scale);
-        if self.is_negative() == rhs.is_negative() {
-            let res = (i256::from(self) * mul + i256::from(rhs) / i256::from(2)) / i256::from(rhs);
-            Some(*res.low())
+        let mul = i256::e(mul_scale as u8);
+        let rhs = i256::from(rhs);
+        let res = if self.is_negative() == rhs.is_negative() {
+            (i256::from(self) * mul + rhs / i256::from(2)) / rhs
         } else {
-            let res = (i256::from(self) * mul - i256::from(rhs) / i256::from(2)) / i256::from(rhs);
-            Some(*res.low())
-        }
+            (i256::from(self) * mul - rhs / i256::from(2)) / rhs
+        };
+        Some(*res.low())
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
+        /// `MIN_DECIMAL_FOR_EACH_PRECISION[p]` holds the minimum `i128` value that can
+        /// be stored in a [arrow_schema::DataType::Decimal128] value of precision `p`
+        const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
+            const fn gen() -> [i128; 38] {
+                let mut arr = [0; 38];
+                let mut i = 0;
+                loop {
+                    if i == 38 {
+                        break;
+                    }
+                    arr[i] = -(10_i128.pow(1 + i as u32) - 1);
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
+
         MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
     fn max_for_precision(to_precision: u8) -> Self {
+        /// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
+        /// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
+        const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = {
+            const fn gen() -> [i128; 38] {
+                let mut arr = [0; 38];
+                let mut i = 0;
+                loop {
+                    if i == 38 {
+                        break;
+                    }
+                    arr[i] = 10_i128.pow(1 + i as u32) - 1;
+                    i += 1;
+                }
+                arr
+            }
+            gen()
+        };
         MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
@@ -482,6 +866,11 @@ impl Decimal for i128 {
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal128(value, size)
+    }
+
+    #[inline]
+    fn as_decimal<D: Decimal>(self) -> D {
+        D::from_i128(self)
     }
 
     fn from_float(value: f64) -> Self {
@@ -515,10 +904,17 @@ impl Decimal for i128 {
         }
     }
 
+    #[inline]
+    fn from_i64(value: i64) -> Self {
+        value as _
+    }
+
+    #[inline]
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         value.into()
     }
 
+    #[inline]
     fn from_i256(value: i256) -> Self {
         value.as_i128()
     }
@@ -535,8 +931,8 @@ impl Decimal for i128 {
         i128::from_le_bytes(bs)
     }
 
-    fn display(self, scale: u8) -> String {
-        display_decimal_128(self, scale)
+    fn to_decimal_string(self, scale: u8) -> String {
+        display_decimal_128(self, scale).to_string()
     }
 
     fn to_float32(self, scale: u8) -> f32 {
@@ -555,7 +951,7 @@ impl Decimal for i128 {
         if rounding_mode && scale > 0 {
             // Checking whether numbers need to be added or subtracted to calculate rounding
             if let Some(r) = self.checked_rem(div) {
-                if let Some(m) = r.checked_div(i128::e(scale as u32 - 1)) {
+                if let Some(m) = r.checked_div(i128::e(scale - 1)) {
                     if m >= 5i128 {
                         val = val.checked_add(1i128)?;
                     } else if m <= -5i128 {
@@ -624,16 +1020,9 @@ impl Decimal for i128 {
         DecimalColumnBuilder::Decimal128(builder, size)
     }
 
-    fn data_type() -> DataType {
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision: MAX_DECIMAL128_PRECISION,
-            scale: 0,
-        }))
-    }
+    const DECIMAL_MIN: i128 = -99999999999999999999999999999999999999i128;
 
-    const MIN: i128 = -99999999999999999999999999999999999999i128;
-
-    const MAX: i128 = 99999999999999999999999999999999999999i128;
+    const DECIMAL_MAX: i128 = 99999999999999999999999999999999999999i128;
 }
 
 impl Decimal for i256 {
@@ -659,12 +1048,22 @@ impl Decimal for i256 {
         i256::MINUS_ONE
     }
 
-    fn e(n: u32) -> Self {
-        (i256::ONE * i256::from(10)).pow(n)
+    fn e(n: u8) -> Self {
+        match n {
+            0 => i256::ONE,
+            1..=MAX_DECIMAL256_PRECISION => {
+                MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[n as usize - 1] + i256::ONE
+            }
+            _ => i256::from(10).pow(n as u32),
+        }
     }
 
     fn mem_size() -> usize {
         32
+    }
+
+    fn signum(self) -> Self {
+        Self(self.0.signum())
     }
 
     fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -692,7 +1091,7 @@ impl Decimal for i256 {
             return Some(self);
         }
 
-        let div = i256::e(shift_scale);
+        let div = i256::e(shift_scale as u8);
         if !overflow {
             let ret = if self.is_negative() == rhs.is_negative() {
                 (self * rhs + div / i256::from(2)) / div
@@ -738,7 +1137,7 @@ impl Decimal for i256 {
             return fallback();
         }
 
-        let mul = i256::e(mul_scale);
+        let mul = i256::e(mul_scale as u8);
         let ret: Option<i256> = if self.is_negative() == rhs.is_negative() {
             self.checked_mul(mul)
                 .map(|x| (x + rhs / i256::from(2)) / rhs)
@@ -769,10 +1168,17 @@ impl Decimal for i256 {
         i256(value.as_i256())
     }
 
+    #[inline]
+    fn from_i64(value: i64) -> Self {
+        i256::from(value)
+    }
+
+    #[inline]
     fn from_i128<U: Into<i128>>(value: U) -> Self {
         i256::from(value.into())
     }
 
+    #[inline]
     fn from_i256(value: i256) -> Self {
         value
     }
@@ -796,7 +1202,7 @@ impl Decimal for i256 {
                 let m: u256 = u256::ONE << 255;
                 match ret.cmp(&m) {
                     Ordering::Less => Some(-i256::try_from(ret).unwrap()),
-                    Ordering::Equal => Some(i256::MIN),
+                    Ordering::Equal => Some(i256::DECIMAL_MIN),
                     Ordering::Greater => None,
                 }
             }
@@ -811,8 +1217,8 @@ impl Decimal for i256 {
         i256::from_le_bytes(bs)
     }
 
-    fn display(self, scale: u8) -> String {
-        display_decimal_256(self.0, scale)
+    fn to_decimal_string(self, scale: u8) -> String {
+        display_decimal_256(self.0, scale).to_string()
     }
 
     fn to_float32(self, scale: u8) -> f32 {
@@ -890,204 +1296,173 @@ impl Decimal for i256 {
         DecimalColumnBuilder::Decimal256(builder, size)
     }
 
-    fn data_type() -> DataType {
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-            precision: MAX_DECIMAL256_PRECISION,
-            scale: 0,
-        }))
-    }
-
-    const MIN: i256 = i256(ethnum::int!(
+    const DECIMAL_MIN: i256 = i256(ethnum::int!(
         "-9999999999999999999999999999999999999999999999999999999999999999999999999999"
     ));
-    const MAX: i256 = i256(ethnum::int!(
+    const DECIMAL_MAX: i256 = i256(ethnum::int!(
         "9999999999999999999999999999999999999999999999999999999999999999999999999999"
     ));
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn {
         DecimalColumn::Decimal256(value, size)
     }
+
+    #[inline]
+    fn as_decimal<D: Decimal>(self) -> D {
+        D::from_i256(self)
+    }
 }
 
-pub static MAX_DECIMAL128_PRECISION: u8 = 38;
-pub static MAX_DECIMAL256_PRECISION: u8 = 76;
+pub const MAX_DECIMAL64_PRECISION: u8 = 18;
+pub const MAX_DECIMAL128_PRECISION: u8 = 38;
+pub const MAX_DECIMAL256_PRECISION: u8 = 76;
+
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    EnumAsInner,
+)]
+pub enum DecimalDataType {
+    Decimal64(DecimalSize),
+    Decimal128(DecimalSize),
+    Decimal256(DecimalSize),
+}
 
 impl DecimalDataType {
-    pub fn from_size(size: DecimalSize) -> Result<DecimalDataType> {
-        if size.precision < 1 || size.precision > MAX_DECIMAL256_PRECISION {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal precision must be between 1 and {}",
-                MAX_DECIMAL256_PRECISION
-            )));
-        }
-
-        if size.scale > size.precision {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal scale must be between 0 and precision {}",
-                size.precision
-            )));
-        }
-        if size.precision <= MAX_DECIMAL128_PRECISION {
-            Ok(DecimalDataType::Decimal128(size))
-        } else {
-            Ok(DecimalDataType::Decimal256(size))
+    pub fn from_value(value: &Value<AnyType>) -> Option<(DecimalDataType, bool)> {
+        match value {
+            Value::Scalar(Scalar::Decimal(scalar)) => with_decimal_type!(|T| match scalar {
+                DecimalScalar::T(_, size) => Some((DecimalDataType::T(*size), false)),
+            }),
+            Value::Column(Column::Decimal(column)) => with_decimal_type!(|T| match column {
+                DecimalColumn::T(_, size) => Some((DecimalDataType::T(*size), false)),
+            }),
+            Value::Column(Column::Nullable(box column)) => {
+                with_decimal_type!(|T| match &column.column {
+                    Column::Decimal(DecimalColumn::T(_, size)) =>
+                        Some((DecimalDataType::T(*size), true)),
+                    _ => None,
+                })
+            }
+            _ => None,
         }
     }
 
+    pub fn data_kind(&self) -> DecimalDataKind {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalDataType::DECIMAL(_) => DecimalDataKind::DECIMAL,
+        })
+    }
+
     pub fn default_scalar(&self) -> DecimalScalar {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => DecimalScalar::DECIMAL_TYPE(0.into(), *size),
         })
     }
 
     pub fn size(&self) -> DecimalSize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalDataType::DECIMAL_TYPE(size) => *size,
         })
     }
 
     pub fn scale(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.scale,
+        with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => size.scale(),
         })
     }
 
     pub fn precision(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.precision,
+        with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => size.precision(),
         })
     }
 
     pub fn leading_digits(&self) -> u8 {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalDataType::DECIMAL_TYPE(size) => size.precision - size.scale,
+        with_decimal_type!(|DECIMAL_TYPE| match self {
+            DecimalDataType::DECIMAL_TYPE(size) => size.precision() - size.scale(),
         })
     }
 
     pub fn max_precision(&self) -> u8 {
         match self {
+            DecimalDataType::Decimal64(_) => MAX_DECIMAL64_PRECISION,
             DecimalDataType::Decimal128(_) => MAX_DECIMAL128_PRECISION,
             DecimalDataType::Decimal256(_) => MAX_DECIMAL256_PRECISION,
         }
     }
 
     pub fn max_result_precision(&self, other: &Self) -> u8 {
-        if matches!(other, DecimalDataType::Decimal128(_)) {
-            return self.max_precision();
-        }
-        other.max_precision()
-    }
-
-    pub fn belong_diff_precision(precision_a: u8, precision_b: u8) -> bool {
-        (precision_a > MAX_DECIMAL128_PRECISION && precision_b <= MAX_DECIMAL128_PRECISION)
-            || (precision_a <= MAX_DECIMAL128_PRECISION && precision_b > MAX_DECIMAL128_PRECISION)
+        self.max_precision().max(other.max_precision())
     }
 
     // For div ops, a,b and return must belong to same width types
     pub fn div_common_type(a: &Self, b: &Self, return_size: DecimalSize) -> Result<(Self, Self)> {
-        let precision_a = if Self::belong_diff_precision(a.precision(), return_size.precision) {
-            return_size.precision
+        let return_kind = DecimalDataKind::from(return_size);
+
+        let a = if a.data_kind() == return_kind {
+            *a
         } else {
-            a.precision()
+            DecimalSize::new(return_size.precision, a.scale())?.into()
         };
 
-        let precision_b = if Self::belong_diff_precision(b.precision(), return_size.precision) {
-            return_size.precision
+        let b = if b.data_kind() == return_kind {
+            *b
         } else {
-            b.precision()
+            DecimalSize::new(return_size.precision, b.scale())?.into()
         };
 
-        let a_type = Self::from_size(DecimalSize {
-            precision: precision_a,
-            scale: a.scale(),
-        })?;
-        let b_type = Self::from_size(DecimalSize {
-            precision: precision_b,
-            scale: b.scale(),
-        })?;
-
-        Ok((a_type, b_type))
+        Ok((a, b))
     }
 
-    // Returns binded types and result type
-    pub fn binary_result_type(
-        a: &Self,
-        b: &Self,
-        is_multiply: bool,
-        is_divide: bool,
-        is_plus_minus: bool,
-    ) -> Result<(Self, Self, Self)> {
-        let mut scale = a.scale().max(b.scale());
-        let mut precision = a.max_result_precision(b);
+    pub fn is_strict(&self) -> bool {
+        DecimalDataKind::from(self.size()) == self.data_kind()
+    }
+}
 
-        // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
-        if is_multiply {
-            scale = (a.scale() + b.scale()).min(a.scale().max(b.scale()).max(12));
-            let l = a.leading_digits() + b.leading_digits();
-            precision = l + scale;
-        } else if is_divide {
-            scale = a.scale().max((a.scale() + 6).min(12)); // scale must be >= a.sale()
-            let l = a.leading_digits() + b.scale(); // l must be >= a.leading_digits()
-            precision = l + scale; // so precision must be >= a.precision()
-        } else if is_plus_minus {
-            scale = std::cmp::max(a.scale(), b.scale());
-            // for addition/subtraction, we add 1 to the width to ensure we don't overflow
-            let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
-            precision = precision.min(plus_min_precision);
-        }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DecimalDataKind {
+    Decimal64,
+    Decimal128,
+    Decimal256,
+}
 
-        // if the args both are Decimal128, we need to clamp the precision to 38
-        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
-            precision = precision.min(MAX_DECIMAL128_PRECISION);
-        } else if precision <= MAX_DECIMAL128_PRECISION
-            && Self::belong_diff_precision(a.precision(), b.precision())
-        {
-            // lift up to decimal256
-            precision = MAX_DECIMAL128_PRECISION + 1;
-        }
-        precision = precision.min(MAX_DECIMAL256_PRECISION);
-
-        let result_type = Self::from_size(DecimalSize { precision, scale })?;
-
-        if is_multiply {
-            Ok((
-                Self::from_size(DecimalSize {
-                    precision,
-                    scale: a.scale(),
-                })?,
-                Self::from_size(DecimalSize {
-                    precision,
-                    scale: b.scale(),
-                })?,
-                result_type,
-            ))
-        } else if is_divide {
-            let p = precision.max(a.precision()).max(b.precision());
-            Ok((
-                Self::from_size(DecimalSize {
-                    precision: p,
-                    scale: a.scale(),
-                })?,
-                Self::from_size(DecimalSize {
-                    precision: p,
-                    scale: b.scale(),
-                })?,
-                result_type,
-            ))
+impl From<DecimalSize> for DecimalDataKind {
+    fn from(size: DecimalSize) -> Self {
+        if size.can_carried_by_128() {
+            DecimalDataKind::Decimal128
         } else {
-            Ok((result_type, result_type, result_type))
+            DecimalDataKind::Decimal256
+        }
+    }
+}
+
+impl DecimalDataKind {
+    pub fn with_size(&self, size: DecimalSize) -> DecimalDataType {
+        match self {
+            DecimalDataKind::Decimal64 => DecimalDataType::Decimal64(size),
+            DecimalDataKind::Decimal128 => DecimalDataType::Decimal128(size),
+            DecimalDataKind::Decimal256 => DecimalDataType::Decimal256(size),
         }
     }
 }
 
 impl DecimalScalar {
     pub fn domain(&self) -> DecimalDomain {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalScalar::DECIMAL_TYPE(num, size) => DecimalDomain::DECIMAL_TYPE(
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(num, size) => DecimalDomain::DECIMAL(
                 SimpleDomain {
                     min: *num,
                     max: *num,
                 },
-                *size
+                *size,
             ),
         })
     }
@@ -1095,13 +1470,13 @@ impl DecimalScalar {
 
 impl DecimalColumn {
     pub fn len(&self) -> usize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, _) => col.len(),
         })
     }
 
     pub fn index(&self, index: usize) -> Option<DecimalScalar> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 Some(DecimalScalar::DECIMAL_TYPE(col.get(index).cloned()?, *size)),
         })
@@ -1112,7 +1487,7 @@ impl DecimalColumn {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> DecimalScalar {
         debug_assert!(index < self.len());
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 DecimalScalar::DECIMAL_TYPE(*col.get_unchecked(index), *size),
         })
@@ -1126,7 +1501,7 @@ impl DecimalColumn {
             self.len()
         );
 
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) => {
                 DecimalColumn::DECIMAL_TYPE(
                     col.clone().sliced(range.start, range.end - range.start),
@@ -1138,7 +1513,7 @@ impl DecimalColumn {
 
     pub fn domain(&self) -> DecimalDomain {
         assert!(self.len() > 0);
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumn::DECIMAL_TYPE(col, size) => {
                 let (min, max) = col.iter().minmax().into_option().unwrap();
                 DecimalDomain::DECIMAL_TYPE(
@@ -1152,8 +1527,25 @@ impl DecimalColumn {
         })
     }
 
-    pub fn arrow_buffer(&self) -> arrow_buffer::Buffer {
-        match self {
+    pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
+        #[cfg(debug_assertions)]
+        {
+            match (&arrow_type, self) {
+                (arrow_schema::DataType::Decimal128(p, s), DecimalColumn::Decimal64(_, size))
+                | (arrow_schema::DataType::Decimal128(p, s), DecimalColumn::Decimal128(_, size))
+                | (arrow_schema::DataType::Decimal256(p, s), DecimalColumn::Decimal256(_, size)) => {
+                    assert_eq!(size.precision, *p);
+                    assert_eq!(size.scale as i16, *s as i16);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let buffer = match self {
+            DecimalColumn::Decimal64(col, _) => {
+                let builder = Decimal64As128Type::iter_column(col).collect::<Vec<_>>();
+                Decimal128Type::build_column(builder).into()
+            }
             DecimalColumn::Decimal128(col, _) => col.clone().into(),
             DecimalColumn::Decimal256(col, _) => {
                 let col = unsafe {
@@ -1163,11 +1555,8 @@ impl DecimalColumn {
                 };
                 col.into()
             }
-        }
-    }
+        };
 
-    pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
-        let buffer = self.arrow_buffer();
         let builder = ArrayDataBuilder::new(arrow_type)
             .len(self.len())
             .buffers(vec![buffer]);
@@ -1185,13 +1574,13 @@ impl DecimalColumn {
                 Ok(Self::Decimal128(buffer.into(), decimal_size))
             }
             arrow_schema::DataType::Decimal256(p, s) => {
-                let buffer: Buffer<databend_common_column::types::i256> = buffer.into();
-                let buffer = unsafe { std::mem::transmute::<_, Buffer<i256>>(buffer) };
-
                 let decimal_size = DecimalSize {
                     precision: *p,
                     scale: *s as u8,
                 };
+
+                let buffer: Buffer<databend_common_column::types::i256> = buffer.into();
+                let buffer = unsafe { std::mem::transmute::<_, Buffer<i256>>(buffer) };
                 Ok(Self::Decimal256(buffer, decimal_size))
             }
             data_type => Err(ErrorCode::Unimplemented(format!(
@@ -1200,38 +1589,83 @@ impl DecimalColumn {
             ))),
         }
     }
+
+    pub fn size(&self) -> DecimalSize {
+        match self {
+            DecimalColumn::Decimal64(_, size)
+            | DecimalColumn::Decimal128(_, size)
+            | DecimalColumn::Decimal256(_, size) => *size,
+        }
+    }
+
+    pub fn strict_decimal_data_type(self) -> Self {
+        match &self {
+            DecimalColumn::Decimal64(buffer, size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+                    let builder = Decimal64As128Type::iter_column(buffer).collect::<Vec<_>>();
+                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
+                }
+                DecimalDataKind::Decimal256 => {
+                    let builder = Decimal64As256Type::iter_column(buffer).collect::<Vec<_>>();
+                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
+                }
+            },
+            DecimalColumn::Decimal128(buffer, size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => self,
+                DecimalDataKind::Decimal256 => {
+                    let builder = Decimal128As256Type::iter_column(buffer).collect::<Vec<_>>();
+                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
+                }
+            },
+            DecimalColumn::Decimal256(buffer, size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+                    let builder = Decimal256As128Type::iter_column(buffer).collect::<Vec<_>>();
+                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
+                }
+                DecimalDataKind::Decimal256 => self,
+            },
+        }
+    }
+
+    pub fn is_strict_decimal_data_type(&self) -> bool {
+        match self {
+            DecimalColumn::Decimal128(_, size) if size.can_carried_by_128() => true,
+            DecimalColumn::Decimal256(_, size) if !size.can_carried_by_128() => true,
+            _ => false,
+        }
+    }
 }
 
 impl DecimalColumnBuilder {
     pub fn from_column(col: DecimalColumn) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match col {
+        with_decimal_type!(|DECIMAL_TYPE| match col {
             DecimalColumn::DECIMAL_TYPE(col, size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(buffer_into_mut(col), size),
         })
     }
 
     pub fn repeat(scalar: DecimalScalar, n: usize) -> DecimalColumnBuilder {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match scalar {
+        with_decimal_type!(|DECIMAL_TYPE| match scalar {
             DecimalScalar::DECIMAL_TYPE(num, size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(vec![num; n], size),
         })
     }
 
     pub fn repeat_default(ty: &DecimalDataType, n: usize) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
+        with_decimal_type!(|DECIMAL_TYPE| match ty {
             DecimalDataType::DECIMAL_TYPE(size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(vec![0.into(); n], *size),
         })
     }
 
     pub fn len(&self) -> usize {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(col, _) => col.len(),
         })
     }
 
     pub fn with_capacity(ty: &DecimalDataType, capacity: usize) -> Self {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match ty {
+        with_decimal_type!(|DECIMAL_TYPE| match ty {
             DecimalDataType::DECIMAL_TYPE(size) =>
                 DecimalColumnBuilder::DECIMAL_TYPE(Vec::with_capacity(capacity), *size),
         })
@@ -1242,50 +1676,42 @@ impl DecimalColumnBuilder {
     }
 
     pub fn push_repeat(&mut self, item: DecimalScalar, n: usize) {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, item) {
-            (
-                DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
-                DecimalScalar::DECIMAL_TYPE(value, value_size),
-            ) => {
-                debug_assert_eq!(*builder_size, value_size);
+        with_decimal_mapped_type!(|DECIMAL| match self {
+            DecimalColumnBuilder::DECIMAL(builder, builder_size) => {
+                let value = item.as_decimal::<DECIMAL>();
+                debug_assert_eq!(*builder_size, item.size());
                 if n == 1 {
                     builder.push(value)
                 } else {
                     builder.resize(builder.len() + n, value)
                 }
             }
-            (builder, scalar) => unreachable!("unable to push {scalar:?} to {builder:?}"),
         })
     }
 
     pub fn push_default(&mut self) {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
-            DecimalColumnBuilder::DECIMAL_TYPE(builder, _) => builder.push(0.into()),
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalColumnBuilder::DECIMAL(builder, _) => builder.push(0.into()),
         })
     }
 
-    pub fn append_column(&mut self, other: &DecimalColumn) {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+    pub fn append_column(&mut self, column: &DecimalColumn) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, column) {
             (
                 DecimalColumnBuilder::DECIMAL_TYPE(builder, builder_size),
-                DecimalColumn::DECIMAL_TYPE(other, other_size),
+                DecimalColumn::DECIMAL_TYPE(column, column_size),
             ) => {
-                debug_assert_eq!(builder_size, other_size);
-                builder.extend_from_slice(other);
+                debug_assert_eq!(builder_size, column_size);
+                builder.extend_from_slice(column);
             }
-            (DecimalColumnBuilder::Decimal128(_, _), DecimalColumn::Decimal256(_, _)) =>
-                unreachable!(
-                "unable append column(data type: Decimal256) into builder(data type: Decimal128)"
-            ),
-            (DecimalColumnBuilder::Decimal256(_, _), DecimalColumn::Decimal128(_, _)) =>
-                unreachable!(
-                "unable append column(data type: Decimal128) into builder(data type: Decimal256)"
+            (_b, _c) => unreachable!(
+                // "unable append column(data type: Decimal256) into builder(data type: Decimal128)"
             ),
         })
     }
 
     pub fn build(self) -> DecimalColumn {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, size) =>
                 DecimalColumn::DECIMAL_TYPE(builder.into(), size),
         })
@@ -1294,14 +1720,14 @@ impl DecimalColumnBuilder {
     pub fn build_scalar(self) -> DecimalScalar {
         assert_eq!(self.len(), 1);
 
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, size) =>
                 DecimalScalar::DECIMAL_TYPE(builder[0], size),
         })
     }
 
     pub fn pop(&mut self) -> Option<DecimalScalar> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match self {
+        with_decimal_type!(|DECIMAL_TYPE| match self {
             DecimalColumnBuilder::DECIMAL_TYPE(builder, size) => {
                 builder
                     .pop()
@@ -1311,16 +1737,15 @@ impl DecimalColumnBuilder {
     }
 
     pub fn decimal_size(&self) -> DecimalSize {
-        match self {
-            DecimalColumnBuilder::Decimal128(_, size)
-            | DecimalColumnBuilder::Decimal256(_, size) => *size,
-        }
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalColumnBuilder::DECIMAL(_, size) => *size,
+        })
     }
 }
 
 impl PartialOrd for DecimalScalar {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
             (
                 DecimalScalar::DECIMAL_TYPE(lhs, lhs_size),
                 DecimalScalar::DECIMAL_TYPE(rhs, rhs_size),
@@ -1338,7 +1763,7 @@ impl PartialOrd for DecimalScalar {
 
 impl PartialOrd for DecimalColumn {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        crate::with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
+        with_decimal_type!(|DECIMAL_TYPE| match (self, other) {
             (
                 DecimalColumn::DECIMAL_TYPE(lhs, lhs_size),
                 DecimalColumn::DECIMAL_TYPE(rhs, rhs_size),
@@ -1358,7 +1783,7 @@ impl PartialOrd for DecimalColumn {
 macro_rules! with_decimal_type {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
-            $t = [Decimal128, Decimal256],
+            $t = [Decimal64, Decimal128, Decimal256],
             $($tail)*
         }
     }
@@ -1369,7 +1794,7 @@ macro_rules! with_decimal_mapped_type {
     (| $t:tt | $($tail:tt)*) => {
         match_template::match_template! {
             $t = [
-                Decimal128 => i128, Decimal256 => i256
+                Decimal64 => i64, Decimal128 => i128, Decimal256 => i256
             ],
             $($tail)*
         }
@@ -1378,7 +1803,7 @@ macro_rules! with_decimal_mapped_type {
 // MAX decimal256 value of little-endian format for each precision.
 // Each element is the max value of signed 256-bit integer for the specified precision which
 // is encoded to the 32-byte width format of little-endian.
-pub(crate) const MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
+const MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
     i256::from_le_bytes([
         9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0,
@@ -1688,7 +2113,7 @@ pub(crate) const MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
 // MIN decimal256 value of little-endian format for each precision.
 // Each element is the min value of signed 256-bit integer for the specified precision which
 // is encoded to the 76-byte width format of little-endian.
-pub(crate) const MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
+const MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
     i256::from_le_bytes([
         247, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
         255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -1995,93 +2420,6 @@ pub(crate) const MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION: [i256; 76] = [
     ]),
 ];
 
-/// Codes from arrow-rs: https://github.com/apache/arrow-rs/blob/9728c676b50b19c06643a23daba4aa4a1dc48055/arrow-data/src/decimal.rs
-/// `MAX_DECIMAL_FOR_EACH_PRECISION[p]` holds the maximum `i128` value that can
-/// be stored in [arrow_schema::DataType::Decimal128] value of precision `p`
-pub const MAX_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = [
-    9,
-    99,
-    999,
-    9999,
-    99999,
-    999999,
-    9999999,
-    99999999,
-    999999999,
-    9999999999,
-    99999999999,
-    999999999999,
-    9999999999999,
-    99999999999999,
-    999999999999999,
-    9999999999999999,
-    99999999999999999,
-    999999999999999999,
-    9999999999999999999,
-    99999999999999999999,
-    999999999999999999999,
-    9999999999999999999999,
-    99999999999999999999999,
-    999999999999999999999999,
-    9999999999999999999999999,
-    99999999999999999999999999,
-    999999999999999999999999999,
-    9999999999999999999999999999,
-    99999999999999999999999999999,
-    999999999999999999999999999999,
-    9999999999999999999999999999999,
-    99999999999999999999999999999999,
-    999999999999999999999999999999999,
-    9999999999999999999999999999999999,
-    99999999999999999999999999999999999,
-    999999999999999999999999999999999999,
-    9999999999999999999999999999999999999,
-    99999999999999999999999999999999999999,
-];
-
-/// `MIN_DECIMAL_FOR_EACH_PRECISION[p]` holds the minimum `i128` value that can
-/// be stored in a [arrow_schema::DataType::Decimal128] value of precision `p`
-pub const MIN_DECIMAL_FOR_EACH_PRECISION: [i128; 38] = [
-    -9,
-    -99,
-    -999,
-    -9999,
-    -99999,
-    -999999,
-    -9999999,
-    -99999999,
-    -999999999,
-    -9999999999,
-    -99999999999,
-    -999999999999,
-    -9999999999999,
-    -99999999999999,
-    -999999999999999,
-    -9999999999999999,
-    -99999999999999999,
-    -999999999999999999,
-    -9999999999999999999,
-    -99999999999999999999,
-    -999999999999999999999,
-    -9999999999999999999999,
-    -99999999999999999999999,
-    -999999999999999999999999,
-    -9999999999999999999999999,
-    -99999999999999999999999999,
-    -999999999999999999999999999,
-    -9999999999999999999999999999,
-    -99999999999999999999999999999,
-    -999999999999999999999999999999,
-    -9999999999999999999999999999999,
-    -99999999999999999999999999999999,
-    -999999999999999999999999999999999,
-    -9999999999999999999999999999999999,
-    -99999999999999999999999999999999999,
-    -999999999999999999999999999999999999,
-    -9999999999999999999999999999999999999,
-    -99999999999999999999999999999999999999,
-];
-
 /// The wrapper of `ethnum::I256`, used to implement the `BorshSerialize` and `BorshDeserialize` traits.
 #[derive(Clone, Copy, Default, Eq, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
@@ -2352,6 +2690,14 @@ impl Div for i256 {
     }
 }
 
+impl Rem for i256 {
+    type Output = Self;
+
+    fn rem(self, rhs: Self) -> Self::Output {
+        Self(self.0 % rhs.0)
+    }
+}
+
 macro_rules! impl_from {
     ($($t:ty),* $(,)?) => {$(
         impl From<$t> for i256 {
@@ -2466,5 +2812,96 @@ impl Ord for i256 {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         self.0.cmp(&other.0)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DecimalConvert<F, T>(std::marker::PhantomData<(F, T)>);
+
+impl<F, T> Compute<CoreDecimal<F>, CoreDecimal<T>> for DecimalConvert<F, T>
+where
+    F: Decimal,
+    T: Decimal,
+{
+    #[inline]
+    fn compute(value: &F) -> T {
+        value.as_decimal::<T>()
+    }
+
+    fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
+        SimpleDomain {
+            min: domain.min.as_decimal::<T>(),
+            max: domain.max.as_decimal::<T>(),
+        }
+    }
+}
+
+macro_rules! decimal_convert_type {
+    ($from:ty, $to:ty, $alias:ident, $compat:ident) => {
+        pub type $alias =
+            ComputeView<DecimalConvert<$from, $to>, CoreDecimal<$from>, CoreDecimal<$to>>;
+        pub type $compat = DecimalConvert<$from, $to>;
+    };
+}
+
+decimal_convert_type!(i64, i128, Decimal64As128Type, I64ToI128);
+decimal_convert_type!(i128, i64, Decimal128As64Type, I128ToI64);
+decimal_convert_type!(i64, i256, Decimal64As256Type, I64ToI256);
+decimal_convert_type!(i128, i256, Decimal128As256Type, I128ToI256);
+decimal_convert_type!(i256, i128, Decimal256As128Type, I256ToI128);
+decimal_convert_type!(i256, i64, Decimal256As64Type, I256ToI64);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::ValueType;
+
+    #[test]
+    fn test_decimal_cast() {
+        let test_values = vec![
+            0i128,
+            1i128,
+            -1i128,
+            i128::MAX,
+            i128::MIN,
+            123456789i128,
+            -987654321i128,
+        ];
+
+        let size = DecimalSize::new_unchecked(38, 10);
+        let col_128 = Decimal128Type::from_data_with_size(test_values.clone(), Some(size));
+
+        let downcast_col = Decimal128As256Type::try_downcast_column(&col_128).unwrap();
+        let builder: Vec<i256> = Decimal128As256Type::iter_column(&downcast_col).collect();
+
+        let col_256 = i256::upcast_column(Decimal256Type::build_column(builder), size);
+
+        let buffer = Decimal256Type::try_downcast_column(&col_256).unwrap();
+
+        for (got, want) in buffer.iter().zip(&test_values) {
+            assert_eq!(*got, i256::from(*want));
+        }
+
+        let downcast_col = Decimal256As128Type::try_downcast_column(&col_256).unwrap();
+        let builder: Vec<i128> = Decimal256As128Type::iter_column(&downcast_col).collect();
+
+        let col_128 = i128::upcast_column(Decimal128Type::build_column(builder), size);
+
+        let buffer = Decimal128Type::try_downcast_column(&col_128).unwrap();
+
+        for (got, want) in buffer.iter().zip(&test_values) {
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
+    fn test_min_max_for_precision() {
+        assert_eq!(i128::max_for_precision(1), 9);
+        assert_eq!(i128::max_for_precision(2), 99);
+        assert_eq!(i128::max_for_precision(38), i128::DECIMAL_MAX);
+
+        assert_eq!(i128::min_for_precision(1), -9);
+        assert_eq!(i128::min_for_precision(2), -99);
+        assert_eq!(i128::min_for_precision(38), i128::DECIMAL_MIN);
     }
 }

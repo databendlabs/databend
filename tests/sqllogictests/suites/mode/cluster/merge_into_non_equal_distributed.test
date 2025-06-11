@@ -246,15 +246,15 @@ CommitSink
             └── HashJoin
                 ├── output columns: [t1.a (#1), t1._row_id (#2), stage._$1 (#0)]
                 ├── join type: RIGHT OUTER
-                ├── build keys: [CAST(t2.a (#0) AS Int64 NULL)]
-                ├── probe keys: [CAST(t1.a (#1) AS Int64 NULL)]
+                ├── build keys: [CAST(t2.a (#0) AS Decimal(38, 5) NULL)]
+                ├── probe keys: [CAST(t1.a (#1) AS Decimal(38, 5) NULL)]
                 ├── keys is null equal: [false]
                 ├── filters: []
                 ├── build join filters:
                 ├── estimated rows: 0.00
                 ├── Exchange(Build)
                 │   ├── output columns: [stage._$1 (#0)]
-                │   ├── exchange type: Hash(CAST(t2.a (#0) AS Int64 NULL))
+                │   ├── exchange type: Hash(CAST(t2.a (#0) AS Decimal(38, 5) NULL))
                 │   └── TableScan
                 │       ├── table: default.system.stage
                 │       ├── output columns: [_$1 (#0)]
@@ -266,7 +266,7 @@ CommitSink
                 │       └── estimated rows: 0.00
                 └── Exchange(Probe)
                     ├── output columns: [t1.a (#1), t1._row_id (#2)]
-                    ├── exchange type: Hash(CAST(t1.a (#1) AS Int64 NULL))
+                    ├── exchange type: Hash(CAST(t1.a (#1) AS Decimal(38, 5) NULL))
                     └── TableScan
                         ├── table: default.default.t1
                         ├── output columns: [a (#1), _row_id (#2)]

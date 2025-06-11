@@ -27,6 +27,7 @@ mod grpc_metrics;
 mod kv_api_impl;
 mod message;
 pub mod required;
+pub(crate) mod rpc_handler;
 
 use std::sync::LazyLock;
 
@@ -39,6 +40,7 @@ pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
+pub use message::InitFlag;
 pub use message::Streamed;
 pub use required::FeatureSpec;
 pub use required::VersionTuple;
@@ -125,6 +127,8 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-12-20: since 1.2.676
 ///   🖥 server: add `TxnRequest::operations`,
 ///   to specify a complex bool expression and corresponding operations
+///   🖥 server: no longer use `TxnReply::error`
+///   👥 client: no longer use `TxnReply::error`
 ///
 /// - 2024-12-26: since 1.2.677
 ///   🖥 server: add `WatchRequest::initial_flush`,
@@ -137,9 +141,11 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2025-04-15: since 1.2.726
 ///   👥 client: requires `1,2.677`.
 ///
-/// - 2025-05-08: since TODO: add version when merged.
+/// - 2025-05-08: since 1.2.736
 ///   🖥 server: add `WatchResponse::is_initialization`,
 ///
+/// - 2025-06-09: since TODO: update when merged
+///   🖥 server: remove `TxnReply::error`
 ///
 /// Server feature set:
 /// ```yaml

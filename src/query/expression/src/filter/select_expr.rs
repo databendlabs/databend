@@ -21,6 +21,7 @@ use crate::expr::*;
 use crate::filter::select_expr_permutation::FilterPermutation;
 use crate::filter::SelectOp;
 use crate::generate_like_pattern;
+use crate::type_check::convert_escape_pattern;
 use crate::types::DataType;
 use crate::Expr;
 use crate::Function;
@@ -167,11 +168,26 @@ impl SelectExprBuilder {
                                     .can_push_down_not(false);
                                 }
                             };
+                            let option_escape = args.get(2).and_then(|expr| match expr {
+                                Expr::Constant(Constant {
+                                    scalar: Scalar::String(escape),
+                                    ..
+                                }) => Some(escape),
+                                _ => None,
+                            });
                             let can_reorder = Self::can_reorder(column);
                             if matches!(column_data_type, DataType::String | DataType::Nullable(box DataType::String))
                                 && let Scalar::String(like_str) = scalar
                             {
-                                let pattern = like_str.clone().into();
+                                let pattern = option_escape
+                                    .and_then(|escape| {
+                                        escape
+                                            .chars()
+                                            .next()
+                                            .map(|escape| convert_escape_pattern(like_str, escape))
+                                    })
+                                    .unwrap_or(like_str.to_string())
+                                    .into();
                                 let like_pattern: LikePattern<'static> =
                                     generate_like_pattern(Cow::Owned(pattern), 0);
 

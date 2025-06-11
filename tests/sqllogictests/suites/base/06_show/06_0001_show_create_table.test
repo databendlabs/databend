@@ -4,7 +4,7 @@ CREATE OR REPLACE database test
 # most show create table tests are migrated into 02_0001_show_create_table.sh
 # logictests are not suitable to test outputs with newline
 
-statement error 4000
+statement error 3901
 CREATE TABLE should_fail (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement ok

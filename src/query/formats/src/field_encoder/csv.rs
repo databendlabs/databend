@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::ValueType;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
@@ -159,7 +159,7 @@ impl FieldEncoderCSV {
                 self.string_formatter.write_string(wkt.as_bytes(), out_buf);
             }
 
-            Column::Array(..) | Column::Map(..) | Column::Tuple(..) => {
+            Column::Array(..) | Column::Map(..) | Column::Tuple(..) | Column::Vector(..) => {
                 let mut buf = Vec::new();
                 self.nested.write_field(column, row_index, &mut buf, false);
                 self.string_formatter.write_string(&buf, out_buf);
@@ -174,16 +174,16 @@ impl FieldEncoderCSV {
         }
     }
 
-    fn write_nullable<T: ValueType>(
+    fn write_nullable(
         &self,
-        column: &NullableColumn<T>,
+        column: &NullableColumn<AnyType>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
         if !column.validity.get_bit(row_index) {
             self.simple.write_null(out_buf)
         } else {
-            self.write_field(&T::upcast_column(column.column.clone()), row_index, out_buf)
+            self.write_field(&column.column, row_index, out_buf)
         }
     }
 }

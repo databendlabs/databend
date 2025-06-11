@@ -47,13 +47,16 @@ mod vector;
 
 pub use comparison::ALL_COMP_FUNC_NAMES;
 use databend_functions_scalar_arithmetic::arithmetic;
+pub use databend_functions_scalar_decimal::strict_decimal_data_type;
 use databend_functions_scalar_numeric_basic_arithmetic::register_numeric_basic_arithmetic;
 pub use hash::CityHasher64;
 pub use hash::DFHash;
 pub use string::ALL_STRING_FUNC_NAMES;
+pub use string::PURE_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
+    databend_functions_scalar_decimal::register_decimal_minus(registry);
     arithmetic::register(registry);
     // register basic arithmetic operation (+ - * / %)
     databend_functions_scalar_decimal::register_decimal_arithmetic(registry);

@@ -14,8 +14,12 @@
 
 use std::io::Write;
 
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::Decimal256Type;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::StringType;
 use databend_common_expression::FromData;
 use goldenfile::Mint;
@@ -59,7 +63,8 @@ fn test_string() {
     test_left(file);
     test_right(file);
     test_substr(file);
-    test_split(file)
+    test_split(file);
+    test_to_uuid(file);
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -422,6 +427,17 @@ fn test_concat(file: &mut impl Write) {
         "a",
         BooleanType::from_data(vec![false; 3]),
     )]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "concat_ws(NULL, a, 2)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
+
+    run_ast(file, "concat(4, a, 2)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
 }
 
 fn test_bin(file: &mut impl Write) {
@@ -761,4 +777,34 @@ fn test_split(file: &mut impl Write) {
             ]),
         ),
     ]);
+}
+
+fn test_to_uuid(file: &mut impl Write) {
+    run_ast(file, "to_uuid(5::decimal(1,0))", &[]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "to_uuid(a)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
+    run_ast(file, "to_uuid(a)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)).wrap_nullable(None),
+    )]);
+    run_ast(file, "to_uuid(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size)),
+    )]);
+    run_ast(file, "to_uuid(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size))
+            .wrap_nullable(None),
+    )]);
+    run_ast(file, "to_uuid(a)", &[(
+        "a",
+        Decimal256Type::from_data_with_size(
+            [i256::from(0), i256::from(20)],
+            Some(DecimalSize::new(40, 0).unwrap()),
+        ),
+    )]);
 }

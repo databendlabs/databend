@@ -13,6 +13,11 @@ on:
         type: string
         required: true
         default: "aws"
+      runner_capacity:
+        description: "Self-hosted runner capacity, spot or on-demand"
+        type: string
+        required: true
+        default: "spot"
       license_type:
         description: "License type, enterprise or trial"
         type: string
@@ -25,7 +30,13 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, 8c32g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 8c32g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,6 +54,7 @@ jobs:
       - Linux
       - 16c64g
       - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +90,7 @@ jobs:
   #     - Linux
   #     - 8c32g
   #     - "${{ inputs.runner_provider }}"
+  #     - "${{ inputs.runner_capacity }}"
   #   strategy:
   #     fail-fast: false
   #     matrix:
@@ -95,7 +108,13 @@ jobs:
   #         artifacts: query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 16c64g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 16c64g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -105,7 +124,13 @@ jobs:
         timeout-minutes: 60
 
   test_metactl:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -113,7 +138,13 @@ jobs:
         timeout-minutes: 10
 
   test_compat_meta_query:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +152,13 @@ jobs:
         timeout-minutes: 10
 
   test_compat_fuse:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -129,7 +166,13 @@ jobs:
         timeout-minutes: 20
 
   test_compat_meta_meta:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -137,15 +180,31 @@ jobs:
         timeout-minutes: 20
 
   test_logs:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
   test_meta_cluster:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -153,7 +212,13 @@ jobs:
         timeout-minutes: 10
 
   test_stateless_standalone:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -161,7 +226,13 @@ jobs:
         timeout-minutes: 18
 
   test_stateless_cluster:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +244,12 @@ jobs:
         timeout-minutes: 18
 
   test_stateful_standalone:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -186,7 +262,13 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_cluster:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -204,7 +286,13 @@ jobs:
 
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -212,7 +300,13 @@ jobs:
         timeout-minutes: 60
 
   test_stateful_iceberg_catalogs:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     needs: [build, check]
     steps:
       - uses: actions/checkout@v4
@@ -226,7 +320,13 @@ jobs:
 
   test_stateful_hive_standalone:
     needs: [build, check]
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_hive_standalone
@@ -238,8 +338,14 @@ jobs:
           name: test_stateful_hive_standalone
 
   # test_fuzz_standalone:
-  #   runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
   #   needs: [build, check]
+  #   runs-on:
+  #     - self-hosted
+  #     - X64
+  #     - Linux
+  #     - 2c8g
+  #     - "${{ inputs.runner_provider }}"
+  #     - "${{ inputs.runner_capacity }}"
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/test_fuzz_standalone_linux
@@ -248,7 +354,13 @@ jobs:
 
   test_ee_standalone:
     needs: [build, check]
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -270,7 +382,13 @@ jobs:
   #
   #  test_ee_standalone_fake_time:
   #    needs: [build, check]
-  #    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+  #    runs-on:
+  #      - self-hosted
+  #      - X64
+  #      - Linux
+  #      - 2c8g
+  #      - "${{ inputs.runner_provider }}"
+  #      - "${{ inputs.runner_capacity }}"
   #    steps:
   #      - uses: actions/checkout@v4
   #      - uses: ./.github/actions/setup_license
@@ -287,7 +405,13 @@ jobs:
 
   test_ee_management_mode:
     needs: [build, check]
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
@@ -310,4 +434,5 @@ jobs:
     with:
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
+      runner_capacity: ${{ inputs.runner_capacity }}
       license_type: ${{ inputs.license_type }}

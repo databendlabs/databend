@@ -344,7 +344,7 @@ impl BlockingTransform for TransformSRF {
                         result.add_column(block_entry);
                     }
                 }
-                "unnest" => {
+                "unnest" | "regexp_split_to_table" => {
                     let mut result_data_blocks = Vec::with_capacity(used);
                     for (i, (mut row_result, repeat_times)) in
                         srf_results.drain(0..used).enumerate()

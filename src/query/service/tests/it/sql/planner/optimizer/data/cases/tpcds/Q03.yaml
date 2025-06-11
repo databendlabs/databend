@@ -1,0 +1,39 @@
+name: "Q03"
+description: "TPC-DS Query 3 optimizer test"
+
+sql: |
+  SELECT dt.d_year, item.i_brand_id brand_id, item.i_brand brand,
+         SUM(ss_ext_sales_price) AS sum_agg
+  FROM date_dim dt, store_sales, item
+  WHERE dt.d_date_sk = store_sales.ss_sold_date_sk
+    AND store_sales.ss_item_sk = item.i_item_sk
+    AND item.i_manufact_id = 128
+    AND dt.d_moy = 11
+  GROUP BY dt.d_year, item.i_brand, item.i_brand_id
+  ORDER BY dt.d_year, sum_agg DESC, brand_id
+  LIMIT 100
+
+# Reference to external statistics file
+statistics_file: tpcds/tpcds_100g.yaml
+
+good_plan: |
+  Result [output: DT.D_YEAR, ITEM.I_BRAND_ID, ITEM.I_BRAND, SUM(...)]
+  └── SortWithLimit [limit: 100]
+      ├── sort keys: [DT.D_YEAR ASC NULLS LAST, SUM(SS_EXT_SALES_PRICE) DESC NULLS FIRST, ITEM.I_BRAND_ID ASC NULLS LAST]
+      └── Aggregate [group by: DT.D_YEAR, ITEM.I_BRAND, ITEM.I_BRAND_ID]
+          └── Aggregate [group by: DT.D_YEAR, ITEM.I_BRAND, ITEM.I_BRAND_ID]
+              └── InnerJoin [join key: (DT.D_DATE_SK = STORE_SALES.SS_SOLD_DATE_SK)]
+                  ├── Filter [condition: DT.D_MOY = 11]
+                  │   └── TableScan (DATE_DIM as DT) [partitions: 1/1, bytes: 2,138,624]
+                  │       └── columns: [D_DATE_SK, D_YEAR, D_MOY]
+                  └── Aggregate [group by: ITEM.I_BRAND_ID, ITEM.I_BRAND, STORE_SALES.SS_SOLD_DATE_SK]
+                      └── InnerJoin [join key: (ITEM.I_ITEM_SK = STORE_SALES.SS_ITEM_SK)]
+                          ├── Aggregate [group by: ITEM.I_ITEM_SK, ITEM.I_BRAND_ID, ITEM.I_BRAND]
+                          │   └── Filter [condition: ITEM.I_MANUFACT_ID = 128]
+                          │       └── TableScan (ITEM) [partitions: 2/2, bytes: 23,811,584]
+                          │           └── columns: [I_ITEM_SK, I_BRAND_ID, I_BRAND, I_MANUFACT_ID]
+                          └── Aggregate [group by: STORE_SALES.SS_SOLD_DATE_SK, STORE_SALES.SS_ITEM_SK]
+                              └── Filter [condition: STORE_SALES.SS_SOLD_DATE_SK IS NOT NULL]
+                                  └── JoinFilter [join key: (DT.D_DATE_SK = STORE_SALES.SS_SOLD_DATE_SK)]
+                                      └── TableScan (STORE_SALES) [partitions: 70,412/72,718, bytes: 1,212,628,258,304]
+                                          └── columns: [SS_SOLD_DATE_SK, SS_ITEM_SK, SS_EXT_SALES_PRICE]

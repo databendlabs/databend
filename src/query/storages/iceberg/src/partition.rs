@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use databend_common_catalog::plan::PartInfo;
+use databend_common_storages_parquet::DeleteTask;
+use databend_common_storages_parquet::DeleteType;
 use databend_common_storages_parquet::ParquetFilePart;
 use databend_common_storages_parquet::ParquetPart;
 use databend_storages_common_stage::SingleFilePartition;
+use iceberg::spec::DataContentType;
 use iceberg::spec::DataFileFormat;
 
 pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> Box<dyn PartInfo> {
@@ -28,13 +31,37 @@ pub(crate) fn convert_file_scan_task(task: iceberg::scan::FileScanTask) -> Box<d
             Box::new(part)
         }
         DataFileFormat::Parquet => {
-            let file = ParquetFilePart {
+            let fn_part = || ParquetFilePart {
                 file: task.data_file_path.clone(),
                 compressed_size: task.length,
                 estimated_uncompressed_size: task.length * 5,
                 dedup_key: format!("{}_{}", task.data_file_path, task.length),
+                bucket_option: None,
             };
-            Box::new(ParquetPart::File(file))
+
+            if !task.deletes.is_empty() {
+                Box::new(ParquetPart::FileWithDeletes {
+                    inner: fn_part(),
+                    deletes: task
+                        .deletes
+                        .iter()
+                        .filter_map(|file| {
+                            let ty = match file.file_type {
+                                DataContentType::Data => return None,
+                                DataContentType::PositionDeletes => DeleteType::Position,
+                                DataContentType::EqualityDeletes => DeleteType::Equality,
+                            };
+                            Some(DeleteTask {
+                                path: file.file_path.clone(),
+                                ty,
+                                equality_ids: file.equality_ids.clone(),
+                            })
+                        })
+                        .collect(),
+                })
+            } else {
+                Box::new(ParquetPart::File(fn_part()))
+            }
         }
         _ => unimplemented!(),
     }

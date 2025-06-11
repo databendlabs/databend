@@ -40,6 +40,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -56,6 +57,7 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -73,6 +75,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::FormatSettings;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -146,7 +150,6 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
@@ -179,7 +182,7 @@ impl QueryContext {
     }
 
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
-        debug!("Create QueryContext");
+        debug!("[QUERY-CTX] Creating new QueryContext instance");
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let query_settings = Settings::create(tenant);
@@ -220,7 +223,7 @@ impl QueryContext {
                 Ok(table_function.as_table())
             }
             (Some(_), false) => Err(ErrorCode::InvalidArgument(
-                "request table args inside non-default catalog is invalid",
+                "[QUERY-CTX] Table args not supported in non-default catalog",
             )),
             // Load table first, if not found, try to load table function.
             (None, true) => {
@@ -277,7 +280,7 @@ impl QueryContext {
             }
             Err(_) => {
                 return Err(ErrorCode::UnknownDatabase(format!(
-                    "Cannot use database '{}': It does not exist.",
+                    "[QUERY-CTX] Cannot use database '{}': database does not exist",
                     new_database_name
                 )));
             }
@@ -565,7 +568,7 @@ impl QueryContext {
             let _ = op.write(&meta_path, joined_contents).await?;
             Ok(())
         }) {
-            log::error!("create spill meta file error: {}", e);
+            log::error!("[QUERY-CTX] Failed to create spill meta file: {}", e);
         }
     }
 
@@ -684,7 +687,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        info!("{}", info);
+        info!("[QUERY-CTX] Status update: {}", info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -795,7 +798,7 @@ impl TableContext for QueryContext {
             .lock()
             .insert(table_name.to_string(), hint);
         info!(
-            "set_compaction_num_block_hint: table_name {} old hint {:?}, new hint {}",
+            "[QUERY-CTX] Set compaction hint for table '{}': old={:?}, new={}",
             table_name, old, hint
         );
     }
@@ -919,10 +922,14 @@ impl TableContext for QueryContext {
     fn get_format_settings(&self) -> Result<FormatSettings> {
         let tz = self.get_settings().get_timezone()?;
         let timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            ErrorCode::InvalidTimezone(
+                "[QUERY-CTX] Invalid timezone format - timezone validation failed",
+            )
         })?;
         let jiff_timezone = TimeZone::get(&tz).map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+            ErrorCode::InvalidTimezone(
+                "[QUERY-CTX] Invalid timezone format - jiff timezone parsing failed",
+            )
         })?;
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
@@ -950,10 +957,7 @@ impl TableContext for QueryContext {
 
         let tz_string = settings.get_timezone()?;
         let tz = TimeZone::get(&tz_string).map_err(|e| {
-            ErrorCode::InvalidTimezone(format!(
-                "Timezone has been checked and should be valid but got error: {}",
-                e
-            ))
+            ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
         })?;
         let now = Zoned::now().with_time_zone(TimeZone::UTC);
         let numeric_cast_option = settings.get_numeric_cast_option()?;
@@ -962,6 +966,8 @@ impl TableContext for QueryContext {
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
+        let week_start = settings.get_week_start()? as u8;
+        let date_format_style = settings.get_date_format_style()?;
         let query_config = &GlobalConfig::instance().query;
         let random_function_seed = settings.get_random_function_seed()?;
 
@@ -982,6 +988,8 @@ impl TableContext for QueryContext {
             parse_datetime_ignore_remainder,
             enable_strict_datetime_parser,
             random_function_seed,
+            week_start,
+            date_format_style,
         })
     }
 
@@ -1160,6 +1168,20 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
+        // Queries to non-internal system_history databases require license checks to be enabled.
+        if database.eq_ignore_ascii_case("system_history")
+            && ThreadTracker::capture_log_settings().is_none()
+        {
+            LicenseManagerSwitch::instance().check_enterprise_enabled(
+                unsafe {
+                    self.get_settings()
+                        .get_enterprise_license()
+                        .unwrap_or_default()
+                },
+                Feature::SystemHistory,
+            )?;
+        }
+
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
         self.get_table_from_shared(catalog, database, table, batch_size)
             .await
@@ -1185,7 +1207,10 @@ impl TableContext for QueryContext {
                 }
                 None => {
                     if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
-                        info!("overriding max_batch_size of stream consumption using value specified in setting: {}", v);
+                        info!(
+                            "[QUERY-CTX] Overriding stream max_batch_size with setting value: {}",
+                            v
+                        );
                         Some(v)
                     } else {
                         None
@@ -1203,14 +1228,14 @@ impl TableContext for QueryContext {
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
                     format!(
-                        "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        "[QUERY-CTX] Stream batch size must be consistent within transaction: actual={:?}, requested={:?}",
                         actual_batch_limit, max_batch_size
                     )
                 ));
             }
         } else if max_batch_size.is_some() {
             return Err(ErrorCode::StorageUnsupported(
-                "MAX_BATCH_SIZE only support in STREAM",
+                "[QUERY-CTX] MAX_BATCH_SIZE parameter only supported for STREAM tables",
             ));
         }
         Ok(table)
@@ -1227,7 +1252,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         if files.is_empty() {
-            info!("no files to filter");
+            info!("[QUERY-CTX] No files to filter for copy operation");
             return Ok(FilteredCopyFiles::default());
         }
 
@@ -1285,7 +1310,10 @@ impl TableContext for QueryContext {
                         });
                     }
                     if result_size > COPY_MAX_FILES_PER_COMMIT {
-                        return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
+                        return Err(ErrorCode::Internal(format!(
+                            "[QUERY-CTX] {}",
+                            COPY_MAX_FILES_COMMIT_MSG
+                        )));
                     }
                 } else if collect_duplicated_files && duplicated_files.len() < max_files {
                     duplicated_files.push(file.path.clone());
@@ -1407,23 +1435,13 @@ impl TableContext for QueryContext {
         runtime_filters.clear();
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
+    fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
         let mut runtime_filters = self.shared.runtime_filters.write();
-        match runtime_filters.entry(filters.0) {
-            Entry::Vacant(v) => {
-                v.insert(filters.1);
-            }
-            Entry::Occupied(mut v) => {
-                for filter in filters.1.get_inlist() {
-                    v.get_mut().add_inlist(filter.clone());
-                }
-                for filter in filters.1.get_min_max() {
-                    v.get_mut().add_min_max(filter.clone());
-                }
-                for filter in filters.1.blooms() {
-                    v.get_mut().add_bloom(filter);
-                }
-            }
+        for (scan_id, filter) in filters {
+            let entry = runtime_filters.entry(scan_id).or_default();
+            entry.inlist.extend(filter.inlist);
+            entry.min_max.extend(filter.min_max);
+            entry.bloom.extend(filter.bloom);
         }
     }
 
@@ -1472,7 +1490,7 @@ impl TableContext for QueryContext {
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_bloom()).clone(),
+            Some(v) => v.bloom.clone(),
             None => vec![],
         }
     }
@@ -1480,7 +1498,7 @@ impl TableContext for QueryContext {
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_inlist()).clone(),
+            Some(v) => v.inlist.clone(),
             None => vec![],
         }
     }
@@ -1488,14 +1506,14 @@ impl TableContext for QueryContext {
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_min_max()).clone(),
+            Some(v) => v.min_max.clone(),
             None => vec![],
         }
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return !runtime_filter.get_bloom().is_empty();
+            return !runtime_filter.bloom.is_empty();
         }
         false
     }
@@ -1525,7 +1543,7 @@ impl TableContext for QueryContext {
                     let duration = if fuse_table.is_transient() {
                         Duration::from_secs(0)
                     } else {
-                        let settings = &self.query_settings;
+                        let settings = self.get_settings();
                         let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
                         if max_exec_time_secs != 0 {
                             Duration::from_secs(max_exec_time_secs)
@@ -1543,7 +1561,7 @@ impl TableContext for QueryContext {
 
                     chrono::Duration::from_std(duration).map_err(|e| {
                         ErrorCode::Internal(format!(
-                            "Unable to construct delta duration of table meta timestamp, {e}",
+                            "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
                         ))
                     })?
                 };
@@ -1607,7 +1625,9 @@ impl TableContext for QueryContext {
                 DeltaTable::get_meta(&table).await
             }
             // TODO: iceberg doesn't support load from storage directly.
-            _ => Err(ErrorCode::Internal("unsupported datalake type {}")),
+            _ => Err(ErrorCode::Internal(
+                "[QUERY-CTX] Unsupported datalake type for schema loading",
+            )),
         }
     }
 
@@ -1629,30 +1649,54 @@ impl TableContext for QueryContext {
         };
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
-                let mut read_options = ParquetReadOptions::default();
+                if max_column_position > 1 {
+                    Err(ErrorCode::SemanticError(
+                        "[QUERY-CTX] Query from parquet file only support $1 as column position",
+                    ))
+                } else if max_column_position == 0 {
+                    let settings = self.get_settings();
+                    let mut read_options = ParquetReadOptions::default();
 
-                if !self.get_settings().get_enable_parquet_page_index()? {
-                    read_options = read_options.with_prune_pages(false);
+                    if !settings.get_enable_parquet_page_index()? {
+                        read_options = read_options.with_prune_pages(false);
+                    }
+
+                    if !settings.get_enable_parquet_rowgroup_pruning()? {
+                        read_options = read_options.with_prune_row_groups(false);
+                    }
+
+                    if !settings.get_enable_parquet_prewhere()? {
+                        read_options = read_options.with_do_prewhere(false);
+                    }
+                    ParquetTable::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                        self.get_settings(),
+                        self.get_query_kind(),
+                        case_sensitive,
+                    )
+                    .await
+                } else {
+                    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                        "_$1",
+                        TableDataType::Variant,
+                    )]));
+                    let info = StageTableInfo {
+                        schema,
+                        stage_info,
+                        files_info,
+                        files_to_copy,
+                        duplicated_files_detected: vec![],
+                        is_select: true,
+                        default_exprs: None,
+                        copy_into_table_options: Default::default(),
+                        stage_root,
+                        is_variant: true,
+                    };
+                    StageTable::try_create(info)
                 }
-
-                if !self.get_settings().get_enable_parquet_rowgroup_pruning()? {
-                    read_options = read_options.with_prune_row_groups(false);
-                }
-
-                if !self.get_settings().get_enable_parquet_prewhere()? {
-                    read_options = read_options.with_do_prewhere(false);
-                }
-
-                ParquetTable::create(
-                    stage_info.clone(),
-                    files_info,
-                    read_options,
-                    files_to_copy,
-                    self.get_settings(),
-                    self.get_query_kind(),
-                    case_sensitive,
-                )
-                .await
             }
             FileFormatParams::Orc(..) => {
                 let schema = Arc::new(TableSchema::empty());
@@ -1664,14 +1708,13 @@ impl TableContext for QueryContext {
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_exprs: None,
-                    copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    copy_into_location_ordered: false,
+                    is_variant: false,
                 };
                 OrcTable::try_create(info).await
             }
-            FileFormatParams::NdJson(..) => {
+            FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
                     "_$1", // TODO: this name should be in visible
                     TableDataType::Variant,
@@ -1684,10 +1727,9 @@ impl TableContext for QueryContext {
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_exprs: None,
-                    copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    copy_into_location_ordered: false,
+                    is_variant: true,
                 };
                 StageTable::try_create(info)
             }
@@ -1700,7 +1742,7 @@ impl TableContext for QueryContext {
                     };
 
                     return Err(ErrorCode::SemanticError(format!(
-                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        "[QUERY-CTX] Query from {} file lacks column positions. Specify as $1, $2, etc.",
                         file_type
                     )));
                 }
@@ -1722,16 +1764,15 @@ impl TableContext for QueryContext {
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_exprs: None,
-                    copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    copy_into_location_ordered: false,
+                    is_variant: false,
                 };
                 StageTable::try_create(info)
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(format!(
-                    "The file format in the query stage is not supported. Currently supported formats are: Parquet, NDJson, CSV, and TSV. Provided format: '{}'.",
+                    "[QUERY-CTX] Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TSV. Provided: '{}'",
                     stage_info.file_format_params
                 )));
             }
@@ -1849,9 +1890,9 @@ impl TableContext for QueryContext {
             if query && !consume {
                 continue;
             }
-            let stream = tables
-                .get(stream_key)
-                .ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+            let stream = tables.get(stream_key).ok_or_else(|| {
+                ErrorCode::Internal("[QUERY-CTX] Stream reference not found in tables cache")
+            })?;
             streams_meta.push(stream.clone());
         }
         Ok(streams_meta)
@@ -1861,12 +1902,12 @@ impl TableContext for QueryContext {
         self.shared.get_warehouse_clusters().await
     }
 
-    fn get_pruned_partitions_stats(&self) -> Option<PartStatistics> {
+    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         self.shared.get_pruned_partitions_stats()
     }
 
-    fn set_pruned_partitions_stats(&self, partitions: PartStatistics) {
-        self.shared.set_pruned_partitions_stats(partitions);
+    fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(plan_id, stats);
     }
 
     fn get_next_broadcast_id(&self) -> u32 {
@@ -1877,6 +1918,10 @@ impl TableContext for QueryContext {
 
     fn reset_broadcast_id(&self) {
         self.shared.next_broadcast_id.store(0, Ordering::Release);
+    }
+
+    fn get_session_type(&self) -> SessionType {
+        self.shared.session.get_type()
     }
 }
 

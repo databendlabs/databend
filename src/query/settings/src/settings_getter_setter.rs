@@ -265,6 +265,10 @@ impl Settings {
         self.try_get_u64("max_execute_time_in_seconds")
     }
 
+    pub fn set_max_execute_time_in_seconds(&self, v: u64) -> Result<()> {
+        self.try_set_u64("max_execute_time_in_seconds", v)
+    }
+
     // Get flight client timeout.
     pub fn get_flight_client_timeout(&self) -> Result<u64> {
         self.try_get_u64("flight_client_timeout")
@@ -399,6 +403,10 @@ impl Settings {
         }
     }
 
+    pub fn get_date_format_style(&self) -> Result<String> {
+        Ok(self.try_get_string("date_format_style")?.to_lowercase())
+    }
+
     pub fn get_collation(&self) -> Result<&str> {
         match self.try_get_string("collation")?.to_lowercase().as_str() {
             "utf8" => Ok("utf8"),
@@ -516,6 +524,10 @@ impl Settings {
 
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
+    }
+
+    pub fn get_parquet_rowgroup_hint_bytes(&self) -> Result<u64> {
+        self.try_get_u64("parquet_rowgroup_hint_bytes")
     }
 
     pub fn get_enable_table_lock(&self) -> Result<bool> {
@@ -754,6 +766,10 @@ impl Settings {
         self.try_get_u64("cost_factor_aggregate_per_row")
     }
 
+    pub fn get_week_start(&self) -> Result<u64> {
+        self.try_get_u64("week_start")
+    }
+
     pub fn get_cost_factor_network_per_row(&self) -> Result<u64> {
         self.try_get_u64("cost_factor_network_per_row")
     }
@@ -932,17 +948,16 @@ impl Settings {
     pub fn get_enable_auto_vacuum(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_vacuum")? == 1)
     }
-
-    pub fn get_enable_use_vacuum2_to_purge_transient_table_data(&self) -> Result<bool> {
-        Ok(self.try_get_u64("use_vacuum2_to_purge_transient_table_data")? == 1)
-    }
-
     pub fn get_enable_optimizer_trace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_optimizer_trace")? == 1)
     }
 
     pub fn get_optimizer_skip_list(&self) -> Result<String> {
         self.try_get_string("optimizer_skip_list")
+    }
+
+    pub fn set_optimizer_skip_list(&self, v: String) -> Result<()> {
+        self.set_setting("optimizer_skip_list".to_string(), v)
     }
 
     pub fn get_enable_block_stream_write(&self) -> Result<bool> {
@@ -963,5 +978,9 @@ impl Settings {
 
     pub fn get_enable_experimental_virtual_column(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
+    }
+
+    pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
+        self.try_get_u64("max_aggregate_restore_worker")
     }
 }

@@ -33,9 +33,7 @@ use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
-use databend_common_ast::ast::NgramIndexDefinition;
 use databend_common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Query;
@@ -46,6 +44,8 @@ use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTablesStatusStmt;
 use databend_common_ast::ast::ShowTablesStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::ast::TableIndexDefinition;
+use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TruncateTableStmt;
@@ -124,6 +124,7 @@ use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
+use crate::plans::ModifyTableConnectionPlan;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
@@ -153,8 +154,7 @@ use crate::SelectBuilder;
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
     pub(in crate::planner::binder) field_comments: Vec<String>,
-    pub(in crate::planner::binder) inverted_indexes: Option<BTreeMap<String, TableIndex>>,
-    pub(in crate::planner::binder) ngram_indexes: Option<BTreeMap<String, TableIndex>>,
+    pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
 }
 
 impl Binder {
@@ -172,13 +172,22 @@ impl Binder {
             with_history,
         } = stmt;
 
-        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let catalog_name = match catalog {
+            None => self.ctx.get_current_catalog(),
+            Some(ident) => {
+                // check in check_database_exist
+                normalize_identifier(ident, &self.name_resolution_ctx).name
+            }
+        };
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog))
+            SelectBuilder::from(&format!(
+                "{}.system.tables_with_history",
+                catalog_name.to_lowercase()
+            ))
         } else {
-            SelectBuilder::from(&format!("{}.system.tables", default_catalog))
+            SelectBuilder::from(&format!("{}.system.tables", catalog_name.to_lowercase()))
         };
 
         if *full {
@@ -214,15 +223,6 @@ impl Binder {
 
         select_builder.with_filter(format!("database = '{database}'"));
         select_builder.with_filter("table_type = 'BASE TABLE'".to_string());
-
-        let catalog_name = match catalog {
-            None => self.ctx.get_current_catalog(),
-            Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog).await?;
-                catalog
-            }
-        };
 
         select_builder.with_filter(format!("catalog = '{catalog_name}'"));
         let query = match limit {
@@ -310,7 +310,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
-        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let default_catalog = self.ctx.get_current_catalog();
         let database = self.check_database_exist(&None, database).await?;
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
@@ -557,7 +557,7 @@ impl Binder {
         };
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols, _, _)) = &source {
+        if let Some(CreateTableSource::Columns(cols, _)) = &source {
             if cols
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry | TypeName::Geography))
@@ -576,8 +576,7 @@ impl Binder {
             AnalyzeCreateTableResult {
                 schema,
                 field_comments,
-                inverted_indexes,
-                ngram_indexes,
+                table_indexes,
             },
             as_query_plan,
         ) = match (&source, &as_query) {
@@ -609,8 +608,7 @@ impl Binder {
                     AnalyzeCreateTableResult {
                         schema,
                         field_comments: vec![],
-                        inverted_indexes: None,
-                        ngram_indexes: None,
+                        table_indexes: None,
                     },
                     Some(Box::new(as_query_plan)),
                 )
@@ -656,8 +654,7 @@ impl Binder {
                         (AnalyzeCreateTableResult {
                             schema: Arc::new(table_schema),
                             field_comments: vec![],
-                            inverted_indexes: None,
-                            ngram_indexes: None,
+                            table_indexes: None,
                         }, as_query_plan)
                     }
                     Engine::Delta => {
@@ -673,8 +670,7 @@ impl Binder {
                         (AnalyzeCreateTableResult {
                             schema: Arc::new(table_schema),
                             field_comments: vec![],
-                            inverted_indexes: None,
-                            ngram_indexes: None,
+                            table_indexes: None,
                         }, as_query_plan)
                     }
                     _ => Err(ErrorCode::BadArguments(
@@ -747,9 +743,9 @@ impl Binder {
                     default_compression.to_owned(),
                 );
             }
-        } else if inverted_indexes.is_some() {
+        } else if table_indexes.is_some() {
             return Err(ErrorCode::UnsupportedIndex(format!(
-                "Table engine {} does not support create inverted index",
+                "Table engine {} does not support create index",
                 engine
             )));
         }
@@ -784,8 +780,7 @@ impl Binder {
             field_comments,
             cluster_key,
             as_select: as_query_plan,
-            inverted_indexes,
-            ngram_indexes,
+            table_indexes,
             attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
@@ -853,8 +848,7 @@ impl Binder {
             field_comments: vec![],
             cluster_key: None,
             as_select: None,
-            inverted_indexes: None,
-            ngram_indexes: None,
+            table_indexes: None,
             attached_columns: stmt.columns_opt.clone(),
         })))
     }
@@ -957,6 +951,14 @@ impl Binder {
                     table,
                 })))
             }
+            AlterTableAction::ModifyConnection { new_connection } => Ok(
+                Plan::ModifyTableConnection(Box::new(ModifyTableConnectionPlan {
+                    new_connection: new_connection.clone(),
+                    catalog,
+                    database,
+                    table,
+                })),
+            ),
             AlterTableAction::RenameColumn {
                 old_column,
                 new_column,
@@ -1559,73 +1561,62 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn analyze_inverted_indexes(
+    async fn analyze_table_indexes(
         &self,
         table_schema: TableSchemaRef,
-        inverted_index_defs: &[InvertedIndexDefinition],
+        table_index_defs: &[TableIndexDefinition],
     ) -> Result<BTreeMap<String, TableIndex>> {
-        let mut inverted_indexes = BTreeMap::new();
-        for inverted_index_def in inverted_index_defs {
-            let name = self.normalize_object_identifier(&inverted_index_def.index_name);
-            if inverted_indexes.contains_key(&name) {
+        let mut table_indexes = BTreeMap::new();
+        for table_index_def in table_index_defs {
+            let name = self.normalize_object_identifier(&table_index_def.index_name);
+            if table_indexes.contains_key(&name) {
                 return Err(ErrorCode::BadArguments(format!(
-                    "Duplicated inverted index name: {}",
+                    "Duplicated index name: {}",
                     name
                 )));
             }
-            let column_ids = self
-                .validate_inverted_index_columns(table_schema.clone(), &inverted_index_def.columns)
-                .await?;
-            let options = self
-                .validate_inverted_index_options(&inverted_index_def.index_options)
-                .await?;
+            let (index_type, column_ids, options) = match table_index_def.index_type {
+                AstTableIndexType::Inverted => {
+                    let column_ids = self.validate_inverted_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_inverted_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Inverted, column_ids, options)
+                }
+                AstTableIndexType::Ngram => {
+                    let column_ids = self.validate_ngram_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_ngram_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Ngram, column_ids, options)
+                }
+                AstTableIndexType::Vector => {
+                    let column_ids = self.validate_vector_index_columns(
+                        table_schema.clone(),
+                        &table_index_def.columns,
+                    )?;
+                    let options =
+                        self.validate_vector_index_options(&table_index_def.index_options)?;
+                    (TableIndexType::Vector, column_ids, options)
+                }
+                AstTableIndexType::Aggregating => unreachable!(),
+            };
 
-            let inverted_index = TableIndex {
-                index_type: TableIndexType::Inverted,
+            let table_index = TableIndex {
+                index_type,
                 name: name.clone(),
                 column_ids,
-                sync_creation: inverted_index_def.sync_creation,
+                sync_creation: table_index_def.sync_creation,
                 version: Uuid::new_v4().simple().to_string(),
                 options,
             };
-            inverted_indexes.insert(name, inverted_index);
+            table_indexes.insert(name, table_index);
         }
-        Ok(inverted_indexes)
-    }
-
-    #[async_backtrace::framed]
-    async fn analyze_ngram_indexes(
-        &self,
-        table_schema: TableSchemaRef,
-        ngram_index_defs: &[NgramIndexDefinition],
-    ) -> Result<BTreeMap<String, TableIndex>> {
-        let mut ngram_indexes = BTreeMap::new();
-        for ngram_index_def in ngram_index_defs {
-            let name = self.normalize_object_identifier(&ngram_index_def.index_name);
-            if ngram_indexes.contains_key(&name) {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Duplicated ngram index name: {}",
-                    name
-                )));
-            }
-            let column_ids = self
-                .validate_ngram_index_columns(table_schema.clone(), &ngram_index_def.columns)
-                .await?;
-            let options = self
-                .validate_ngram_index_options(&ngram_index_def.index_options)
-                .await?;
-
-            let ngram_index = TableIndex {
-                index_type: TableIndexType::Ngram,
-                name: name.clone(),
-                column_ids,
-                sync_creation: ngram_index_def.sync_creation,
-                version: Uuid::new_v4().simple().to_string(),
-                options,
-            };
-            ngram_indexes.insert(name, ngram_index);
-        }
-        Ok(ngram_indexes)
+        Ok(table_indexes)
     }
 
     #[async_backtrace::framed]
@@ -1634,42 +1625,21 @@ impl Binder {
         source: &CreateTableSource,
     ) -> Result<AnalyzeCreateTableResult> {
         match source {
-            CreateTableSource::Columns(columns, inverted_index_defs, ngram_index_defs) => {
+            CreateTableSource::Columns(columns, table_index_defs) => {
                 let (schema, comments) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
-                let inverted_indexes = if let Some(inverted_index_defs) = inverted_index_defs {
-                    let inverted_indexes = self
-                        .analyze_inverted_indexes(schema.clone(), inverted_index_defs)
+                let table_indexes = if let Some(table_index_defs) = table_index_defs {
+                    let table_indexes = self
+                        .analyze_table_indexes(schema.clone(), table_index_defs)
                         .await?;
-                    Some(inverted_indexes)
+                    Some(table_indexes)
                 } else {
                     None
                 };
-                let ngram_indexes = if let Some(ngram_index_defs) = ngram_index_defs {
-                    let ngram_indexes = self
-                        .analyze_ngram_indexes(schema.clone(), ngram_index_defs)
-                        .await?;
-                    Some(ngram_indexes)
-                } else {
-                    None
-                };
-                if let (Some(inverted_indexes), Some(ngram_indexes)) =
-                    (&inverted_indexes, &ngram_indexes)
-                {
-                    for key in inverted_indexes.keys() {
-                        if ngram_indexes.contains_key(key) {
-                            return Err(ErrorCode::BadArguments(format!(
-                                "The index: {} exists between both inverted index and ngram index",
-                                key
-                            )));
-                        }
-                    }
-                }
                 Ok(AnalyzeCreateTableResult {
                     schema,
                     field_comments: comments,
-                    inverted_indexes,
-                    ngram_indexes,
+                    table_indexes,
                 })
             }
             CreateTableSource::Like {
@@ -1688,8 +1658,7 @@ impl Binder {
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,
                             field_comments: vec![],
-                            inverted_indexes: None,
-                            ngram_indexes: None,
+                            table_indexes: None,
                         })
                     } else {
                         Err(ErrorCode::Internal(
@@ -1700,8 +1669,7 @@ impl Binder {
                     Ok(AnalyzeCreateTableResult {
                         schema: table.schema(),
                         field_comments: table.field_comments().clone(),
-                        inverted_indexes: None,
-                        ngram_indexes: None,
+                        table_indexes: None,
                     })
                 }
             }
@@ -1882,7 +1850,10 @@ async fn verify_external_location_privileges(dal: Operator) -> Result<()> {
         }
 
         // verify privilege to list
-        if let Err(e) = dal.list(VERIFICATION_KEY).await {
+        // Append "/" to the verification key to ensure we are listing the contents of the directory/prefix
+        // rather than attempting to list a single object.
+        // Like aws s3 express one, the list requires a end delimiter.
+        if let Err(e) = dal.list(&format!("{}{}", VERIFICATION_KEY, "/")).await {
             errors.push(format!("Permission check for [List] failed: {}", e));
         }
 

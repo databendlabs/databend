@@ -27,7 +27,7 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -133,19 +133,20 @@ impl ShowCreateTableInterpreter {
             VIEW_ENGINE => Self::show_create_view_query(table, database),
             _ => match table.options().get(OPT_KEY_STORAGE_PREFIX) {
                 Some(_) => Ok(Self::show_attach_table_query(table, database)),
-                None => Self::show_create_table_query(table, settings),
+                None => Self::show_create_table_query(table.get_table_info(), settings),
             },
         }
     }
 
-    fn show_create_table_query(
-        table: &dyn Table,
+    pub fn show_create_table_query(
+        table_info: &TableInfo,
         settings: &ShowCreateQuerySettings,
     ) -> Result<String> {
-        let name = table.name();
-        let engine = table.engine();
-        let schema = table.schema();
-        let field_comments = table.field_comments();
+        let name = &table_info.name;
+        let engine = table_info.engine();
+        let schema = table_info.schema();
+        let field_comments = table_info.field_comments();
+        let options = table_info.options();
         let sql_dialect = settings.sql_dialect;
         let force_quoted_ident = settings.force_quoted_ident;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
@@ -160,7 +161,8 @@ impl ShowCreateTableInterpreter {
                 sql_dialect
             )
         );
-        if table.options().contains_key("TRANSIENT") {
+
+        if options.contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
                 display_ident(
@@ -172,7 +174,7 @@ impl ShowCreateTableInterpreter {
             )
         }
 
-        if table.options().contains_key(OPT_KEY_TEMP_PREFIX) {
+        if options.contains_key(OPT_KEY_TEMP_PREFIX) {
             table_create_sql = format!(
                 "CREATE TEMP TABLE {} (\n",
                 display_ident(
@@ -183,8 +185,6 @@ impl ShowCreateTableInterpreter {
                 )
             )
         }
-
-        let table_info = table.get_table_info();
 
         // Append columns and indexes.
         {
@@ -243,14 +243,10 @@ impl ShowCreateTableInterpreter {
                     let option = format!("{} = '{}'", key, value);
                     options.push(option);
                 }
-                let index_type = match index_field.index_type {
-                    TableIndexType::Inverted => "INVERTED",
-                    TableIndexType::Ngram => "NGRAM",
-                };
                 let mut index_str = format!(
                     "  {} {} INDEX {} ({})",
                     sync,
-                    index_type,
+                    index_field.index_type,
                     display_ident(
                         &index_field.name,
                         force_quoted_ident,

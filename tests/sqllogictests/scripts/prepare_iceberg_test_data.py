@@ -16,6 +16,10 @@ spark = (
         "spark.jars.packages",
         "org.apache.iceberg:iceberg-aws-bundle:1.6.1,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.6.1",
     )
+    # for delete file
+    .config("spark.sql.shuffle.partitions", "1")
+    # for delete file
+    .config("spark.default.parallelism", "1")
     .getOrCreate()
 )
 
@@ -32,7 +36,9 @@ CREATE TABLE iceberg.test.t1 (
 USING iceberg;
 """)
 
-spark.sql(f"""INSERT INTO iceberg.test.t1 VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);""")
+spark.sql(
+    f"""INSERT INTO iceberg.test.t1 VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);"""
+)
 
 # ORC
 spark.sql(f"""
@@ -47,6 +53,8 @@ TBLPROPERTIES (
 );
 """)
 
-spark.sql(f"""INSERT INTO iceberg.test.t1_orc VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);""")
+spark.sql(
+    f"""INSERT INTO iceberg.test.t1_orc VALUES (0, 0, 'a'), (1, 1, 'b'), (2, 2, 'c'), (3, 3, 'd'), (4, null, null);"""
+)
 
 spark.stop()

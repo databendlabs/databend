@@ -44,6 +44,7 @@ use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
+use crate::CacheAccessor;
 use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
@@ -73,6 +74,14 @@ impl<T: Clone> CacheSlot<T> {
     fn get(&self) -> Option<T> {
         self.cache.read().clone()
     }
+}
+
+/// Specifies the level of aggression when clearing memory caches.
+pub enum CacheClearanceLevel {
+    /// Clears only basic caches that may consume significant memory
+    Basic,
+    /// Performs a more aggressive clearing, including both basic caches and extra caches
+    Deep,
 }
 
 /// Where all the caches reside
@@ -290,12 +299,11 @@ impl CacheManager {
 
             let segment_block_metas_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_SEGMENT_BLOCK_METAS,
-                config.block_meta_count as usize,
+                config.segment_block_metas_count as usize,
             );
 
             let block_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_BLOCK_META,
-                // TODO replace this config
                 config.block_meta_count as usize,
             );
 
@@ -333,6 +341,43 @@ impl CacheManager {
 
     pub fn get_table_snapshot_cache(&self) -> Option<TableSnapshotCache> {
         self.table_snapshot_cache.get()
+    }
+
+    /// Releases memory occupied by caches
+    ///
+    /// This method is used to free up memory resources by clearing various caches
+    /// in the system. The extent of cache clearing depends on the specified clearance level.
+    ///
+    /// # Parameters
+    /// * `clearance_level` - Determines how aggressively to clear caches:
+    ///   * `CacheClearanceLevel::Basic`: Clears basic caches that may consume significant memory
+    ///   * `CacheClearanceLevel::Deep`: Performs a more aggressive clearing, including both basic caches and extra caches
+    pub fn release_cache_memory(&self, clearance_level: CacheClearanceLevel) {
+        /// Clears basic caches that may consume a significant amount of memory
+        fn clear_basic_caches(me: &CacheManager) {
+            CacheManager::clear_cache(&me.in_memory_table_data_cache);
+            CacheManager::clear_cache(&me.segment_block_metas_cache);
+            // Only the in-memory part of column_data_cache will be cleared
+            CacheManager::clear_cache(&me.column_data_cache);
+            CacheManager::clear_cache(&me.block_meta_cache);
+        }
+
+        fn clear_extra_caches(me: &CacheManager) {
+            // These caches are typically not memory usage heavy, and have more significant impact
+            // for the query performance, consider clearing them when the memory pressure is
+            // high.
+            CacheManager::clear_cache(&me.compact_segment_info_cache);
+            CacheManager::clear_cache(&me.bloom_index_filter_cache);
+            CacheManager::clear_cache(&me.bloom_index_meta_cache);
+        }
+
+        match clearance_level {
+            CacheClearanceLevel::Basic => clear_basic_caches(self),
+            CacheClearanceLevel::Deep => {
+                clear_basic_caches(self);
+                clear_extra_caches(self)
+            }
+        }
     }
 
     pub fn set_cache_capacity(&self, name: &str, new_capacity: u64) -> Result<()> {
@@ -412,6 +457,18 @@ impl CacheManager {
         } else {
             let new_cache = Self::new_bytes_cache(name, new_capacity as usize);
             cache.set(new_cache)
+        }
+    }
+    fn clear_cache<C: CacheAccessor + Clone>(cache_slot: &CacheSlot<C>) {
+        if let Some(cache) = cache_slot.get() {
+            let name = cache.name();
+            info!(
+                "clearing cache {}: dropping {} items, size {}",
+                name,
+                cache.len(),
+                cache.bytes_size()
+            );
+            cache.clear();
         }
     }
 
@@ -680,11 +737,26 @@ const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
+    use arrow::array::ArrayRef;
+    use arrow::array::Int32Array;
+    use bytes::Bytes;
     use databend_common_config::CacheConfig;
     use databend_common_config::DiskCacheInnerConfig;
+    use databend_storages_common_index::filters::FilterBuilder;
+    use databend_storages_common_index::filters::FilterImpl;
+    use databend_storages_common_index::filters::Xor8Builder;
+    use databend_storages_common_index::BloomIndexMeta;
+    use databend_storages_common_table_meta::meta::BlockMeta;
+    use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+    use databend_storages_common_table_meta::meta::Compression;
+    use databend_storages_common_table_meta::meta::MetaEncoding;
+    use databend_storages_common_table_meta::meta::RawBlockMeta;
     use tempfile::TempDir;
 
     use super::*;
+    use crate::ColumnData;
     fn config_with_disk_cache_enabled(cache_path: &str) -> CacheConfig {
         CacheConfig {
             data_cache_storage: CacheStorageTypeInnerConfig::Disk,
@@ -822,6 +894,213 @@ mod tests {
         // All disk caches should be disabled, even if disk caches are toggled on
         cache_manager.set_allows_disk_cache(true);
         assert!(all_disk_cache_disabled(&cache_manager));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_release_cache_memory() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_string_lossy().clone();
+        let max_server_memory_usage = 1024 * 1024;
+
+        let mut cache_config = config_with_disk_cache_enabled(&cache_path);
+
+        // Configure cache with sufficient capacity for testing
+        cache_config.table_data_deserialized_data_bytes = 1024 * 1024;
+        cache_config.block_meta_count = 10;
+        cache_config.segment_block_metas_count = 20;
+        cache_config.data_cache_in_memory_bytes = 1024 * 1024;
+
+        let ee_mode = true;
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            ee_mode,
+        )?;
+
+        // ----- POPULATE BASIC CACHES -----
+
+        // 1. Populate in-memory table data cache
+        let in_memory_table_data_cache = cache_manager.get_table_data_array_cache().unwrap();
+        let array: ArrayRef = Arc::new(Int32Array::from(vec![1, 2, 3, 4, 5]));
+        in_memory_table_data_cache.insert("not matter".to_string(), (array, 1));
+
+        // 2. Populate segment block metas cache
+        let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache().unwrap();
+        segment_block_metas_cache.insert("not matter".to_string(), vec![]);
+
+        // 3. Populate column data cache
+        let column_data_cache = cache_manager.get_column_data_cache().unwrap();
+        column_data_cache.insert(
+            "not matter".to_string(),
+            ColumnData::from_bytes(Bytes::new()),
+        );
+
+        {
+            // Make sure at least the first key is written to disk cache
+
+            column_data_cache.insert(
+                "extra_key".to_string(),
+                ColumnData::from_bytes(Bytes::new()),
+            );
+
+            let disk_cache = column_data_cache.on_disk_cache().unwrap();
+            // Since the on-disk cache is populated asynchronously, we need to
+            // wait until the populate-queue is empty. At that time, at least
+            // the first key `test_key` should be written into the on-disk cache.
+            disk_cache.till_no_pending_items_in_queue();
+        }
+
+        // 4. Populate block meta cache
+        let block_meta_cache = cache_manager.get_block_meta_cache().unwrap();
+        block_meta_cache.insert("not matter".to_string(), BlockMeta {
+            row_count: 0,
+            block_size: 0,
+            file_size: 0,
+            col_stats: Default::default(),
+            col_metas: Default::default(),
+            cluster_stats: None,
+            location: ("".to_string(), 0),
+            bloom_filter_index_location: None,
+            bloom_filter_index_size: 0,
+            inverted_index_size: None,
+            ngram_filter_index_size: None,
+            virtual_block_meta: None,
+            compression: Compression::Lz4,
+            create_on: None,
+        });
+
+        // ----- POPULATE EXTRA CACHES -----
+
+        // 1. Populate compact segment info cache
+        let compact_segment_info_cache = cache_manager.get_table_segment_cache().unwrap();
+        compact_segment_info_cache.insert("not matter".to_string(), CompactSegmentInfo {
+            format_version: 0,
+            summary: Default::default(),
+            raw_block_metas: RawBlockMeta {
+                bytes: vec![],
+                encoding: MetaEncoding::Bincode,
+                compression: Default::default(),
+            },
+        });
+
+        // 2. Populate bloom index filter cache
+        let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache().unwrap();
+        let mut builder = Xor8Builder::create();
+        builder.add_key(&"what ever".to_string());
+        let xor8_filter = builder.build()?;
+        bloom_index_filter_cache.insert("not matter".to_string(), FilterImpl::Xor(xor8_filter));
+
+        // 3. Populate bloom index meta cache
+        let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache().unwrap();
+        bloom_index_meta_cache.insert("not matter".to_string(), BloomIndexMeta { columns: vec![] });
+
+        // ----- VERIFY INITIAL CACHE STATE -----
+        // Verify all caches are correctly populated
+        assert!(!cache_manager.get_table_data_array_cache().is_empty());
+        assert!(!cache_manager
+            .get_segment_block_metas_cache()
+            .unwrap()
+            .is_empty());
+        assert!(!cache_manager.get_column_data_cache().is_empty());
+        assert!(!cache_manager.get_block_meta_cache().is_empty());
+        assert!(!cache_manager.get_table_segment_cache().is_empty());
+        assert!(!cache_manager.get_bloom_index_filter_cache().is_empty());
+        assert!(!cache_manager.get_bloom_index_meta_cache().is_empty());
+
+        // 4.
+        // ----- TEST BASIC CLEARANCE LEVEL -----
+
+        // Clear caches with Basic clearance level
+        cache_manager.release_cache_memory(CacheClearanceLevel::Basic);
+
+        // Verify basic caches are cleared
+        assert!(in_memory_table_data_cache.is_empty());
+        assert!(cache_manager
+            .get_segment_block_metas_cache()
+            .unwrap()
+            .is_empty());
+        assert!(cache_manager.get_block_meta_cache().is_empty());
+
+        // Verify hybrid column data cache behavior:
+        // - On-disk cache of table data should remain populated
+        assert!(!cache_manager.get_column_data_cache().is_empty());
+        // - In-memory cache of table data should be cleared
+        assert!(cache_manager
+            .get_column_data_cache()
+            .unwrap()
+            .in_memory_cache()
+            .unwrap()
+            .is_empty());
+
+        // Verify extra caches remain intact after Basic clearance
+        assert!(!cache_manager.get_table_segment_cache().is_empty());
+        assert!(!cache_manager.get_bloom_index_filter_cache().is_empty());
+        assert!(!cache_manager.get_bloom_index_meta_cache().is_empty());
+
+        // 5.
+        // ----- TEST DEEP CLEARANCE LEVEL -----
+
+        // Clear caches with Deep clearance level
+        cache_manager.release_cache_memory(CacheClearanceLevel::Deep);
+
+        // Verify extra caches are now cleared
+        assert!(cache_manager.get_table_segment_cache().is_empty());
+
+        // Verify in-memory part of hybrid bloom index meta caches are cleared
+        assert!(cache_manager
+            .get_bloom_index_meta_cache()
+            .unwrap()
+            .in_memory_cache()
+            .unwrap()
+            .is_empty());
+
+        // Verify in-memory part of hybrid bloom index filter caches are cleared
+        assert!(cache_manager
+            .get_bloom_index_filter_cache()
+            .unwrap()
+            .in_memory_cache()
+            .unwrap()
+            .is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_manager_block_meta_config() -> Result<()> {
+        let max_server_memory_usage = 1024 * 1024;
+
+        let cache_config = CacheConfig {
+            enable_table_meta_cache: true,
+            segment_block_metas_count: 10,
+            block_meta_count: 20,
+            ..Default::default()
+        };
+
+        let ee_mode = false;
+        let cache_manager = CacheManager::try_new(
+            &cache_config,
+            &max_server_memory_usage,
+            "test_tenant_id",
+            ee_mode,
+        )?;
+
+        assert_eq!(
+            cache_manager
+                .get_segment_block_metas_cache()
+                .unwrap()
+                .items_capacity(),
+            10
+        );
+        assert_eq!(
+            cache_manager
+                .get_block_meta_cache()
+                .unwrap()
+                .items_capacity(),
+            20
+        );
 
         Ok(())
     }

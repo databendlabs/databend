@@ -35,6 +35,7 @@ use databend_common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use databend_common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use databend_common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
 use databend_common_meta_app::storage::StorageMokaConfig as InnerStorageMokaConfig;
+use databend_common_meta_app::storage::StorageNetworkParams;
 use databend_common_meta_app::storage::StorageObsConfig as InnerStorageObsConfig;
 use databend_common_meta_app::storage::StorageOssConfig as InnerStorageOssConfig;
 use databend_common_meta_app::storage::StorageParams;
@@ -45,10 +46,11 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig as InnerStorageConfig;
 use databend_common_tracing::Config as InnerLogConfig;
 use databend_common_tracing::FileConfig as InnerFileLogConfig;
+use databend_common_tracing::HistoryConfig as InnerHistoryConfig;
+use databend_common_tracing::HistoryTableConfig as InnerHistoryTableConfig;
 use databend_common_tracing::OTLPConfig as InnerOTLPLogConfig;
 use databend_common_tracing::OTLPEndpointConfig as InnerOTLPEndpointConfig;
 use databend_common_tracing::OTLPProtocol;
-use databend_common_tracing::PersistentLogConfig as InnerPersistentLogConfig;
 use databend_common_tracing::ProfileLogConfig as InnerProfileLogConfig;
 use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
@@ -159,6 +161,8 @@ pub enum Commands {
         query: String,
         #[clap(long, default_value_t)]
         output_format: String,
+        #[clap(long, short = 'c')]
+        config: String,
     },
 }
 
@@ -267,6 +271,51 @@ impl Config {
     }
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct StorageNetworkConfig {
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_timeout: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_io_timeout: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_pool_max_idle_per_host: usize,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_connect_timeout: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_tcp_keepalive: u64,
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_max_concurrent_io_requests: usize,
+}
+
+impl From<StorageNetworkParams> for StorageNetworkConfig {
+    fn from(value: StorageNetworkParams) -> Self {
+        StorageNetworkConfig {
+            storage_retry_timeout: value.retry_timeout,
+            storage_retry_io_timeout: value.retry_io_timeout,
+            storage_pool_max_idle_per_host: value.pool_max_idle_per_host,
+            storage_connect_timeout: value.connect_timeout,
+            storage_tcp_keepalive: value.tcp_keepalive,
+            storage_max_concurrent_io_requests: value.max_concurrent_io_requests,
+        }
+    }
+}
+
+impl TryInto<StorageNetworkParams> for StorageNetworkConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> std::result::Result<StorageNetworkParams, Self::Error> {
+        Ok(StorageNetworkParams {
+            retry_timeout: self.storage_retry_timeout,
+            retry_io_timeout: self.storage_retry_io_timeout,
+            tcp_keepalive: self.storage_tcp_keepalive,
+            connect_timeout: self.storage_connect_timeout,
+            pool_max_idle_per_host: self.storage_pool_max_idle_per_host,
+            max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
+        })
+    }
+}
+
 /// Storage config group.
 ///
 /// # TODO(xuanwo)
@@ -304,6 +353,24 @@ pub struct StorageConfig {
 
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_retry_io_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_pool_max_idle_per_host: usize,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_connect_timeout: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_tcp_keepalive: u64,
+
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub storage_max_concurrent_io_requests: usize,
 
     // Fs storage backend config.
     #[clap(flatten)]
@@ -368,6 +435,13 @@ impl From<InnerStorageConfig> for StorageConfig {
             webhdfs: Default::default(),
             cos: Default::default(),
 
+            storage_retry_timeout: 0,
+            storage_retry_io_timeout: 0,
+            storage_pool_max_idle_per_host: 0,
+            storage_connect_timeout: 0,
+            storage_tcp_keepalive: 0,
+            storage_max_concurrent_io_requests: 0,
+
             // Deprecated fields
             storage_type: None,
             deprecated_storage_num_cpus: None,
@@ -376,6 +450,11 @@ impl From<InnerStorageConfig> for StorageConfig {
         match inner.params {
             StorageParams::Azblob(v) => {
                 cfg.typ = "azblob".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.azblob = v.into();
             }
             StorageParams::Fs(v) => {
@@ -385,6 +464,11 @@ impl From<InnerStorageConfig> for StorageConfig {
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
                 cfg.typ = "hdfs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.hdfs = v.into();
             }
             StorageParams::Memory => {
@@ -392,32 +476,84 @@ impl From<InnerStorageConfig> for StorageConfig {
             }
             StorageParams::S3(v) => {
                 cfg.typ = "s3".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.s3 = v.into()
             }
             StorageParams::Gcs(v) => {
                 cfg.typ = "gcs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.gcs = v.into()
             }
             StorageParams::Obs(v) => {
                 cfg.typ = "obs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.obs = v.into()
             }
             StorageParams::Oss(v) => {
                 cfg.typ = "oss".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.oss = v.into()
             }
             StorageParams::Webhdfs(v) => {
                 cfg.typ = "webhdfs".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.webhdfs = v.into()
             }
             StorageParams::Cos(v) => {
                 cfg.typ = "cos".to_string();
+
+                if let Some(v) = v.network_config.as_ref() {
+                    cfg.update_storage_network_param(v);
+                }
+
                 cfg.cos = v.into()
             }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
         cfg
+    }
+}
+
+impl StorageConfig {
+    fn update_storage_network_param(&mut self, v: &StorageNetworkParams) {
+        self.storage_retry_timeout = v.retry_timeout;
+        self.storage_tcp_keepalive = v.tcp_keepalive;
+        self.storage_connect_timeout = v.connect_timeout;
+        self.storage_retry_io_timeout = v.retry_io_timeout;
+        self.storage_pool_max_idle_per_host = v.pool_max_idle_per_host;
+        self.storage_max_concurrent_io_requests = v.max_concurrent_io_requests;
+    }
+
+    fn create_storage_network_params(&self) -> StorageNetworkParams {
+        StorageNetworkParams {
+            retry_timeout: self.storage_retry_timeout,
+            retry_io_timeout: self.storage_retry_io_timeout,
+            tcp_keepalive: self.storage_tcp_keepalive,
+            connect_timeout: self.storage_connect_timeout,
+            pool_max_idle_per_host: self.storage_pool_max_idle_per_host,
+            max_concurrent_io_requests: self.storage_max_concurrent_io_requests,
+        }
     }
 }
 
@@ -436,22 +572,56 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
             ));
         }
 
+        let storage_network_params = self.create_storage_network_params();
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
             params: {
                 match self.typ.as_str() {
-                    "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
+                    "azblob" => {
+                        let mut azblob_config: InnerStorageAzblobConfig = self.azblob.try_into()?;
+                        azblob_config.network_config = Some(storage_network_params);
+                        StorageParams::Azblob(azblob_config)
+                    }
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
-                    "gcs" => StorageParams::Gcs(self.gcs.try_into()?),
+                    "gcs" => {
+                        let mut gcs_config: InnerStorageGcsConfig = self.gcs.try_into()?;
+                        gcs_config.network_config = Some(storage_network_params);
+                        StorageParams::Gcs(gcs_config)
+                    }
                     #[cfg(feature = "storage-hdfs")]
-                    "hdfs" => StorageParams::Hdfs(self.hdfs.try_into()?),
+                    "hdfs" => {
+                        let mut hdfs_config: InnerStorageHdfsConfig = self.hdfs.try_into()?;
+                        hdfs_config.network_config = Some(storage_network_params);
+                        StorageParams::Hdfs(hdfs_config)
+                    }
                     "memory" => StorageParams::Memory,
-                    "s3" => StorageParams::S3(self.s3.try_into()?),
-                    "obs" => StorageParams::Obs(self.obs.try_into()?),
-                    "oss" => StorageParams::Oss(self.oss.try_into()?),
-                    "webhdfs" => StorageParams::Webhdfs(self.webhdfs.try_into()?),
-                    "cos" => StorageParams::Cos(self.cos.try_into()?),
+                    "s3" => {
+                        let mut s3config: InnerStorageS3Config = self.s3.try_into()?;
+                        s3config.network_config = Some(storage_network_params);
+                        StorageParams::S3(s3config)
+                    }
+                    "obs" => {
+                        let mut obs_config: InnerStorageObsConfig = self.obs.try_into()?;
+                        obs_config.network_config = Some(storage_network_params);
+                        StorageParams::Obs(obs_config)
+                    }
+                    "oss" => {
+                        let mut oss_config: InnerStorageOssConfig = self.oss.try_into()?;
+                        oss_config.network_config = Some(storage_network_params);
+                        StorageParams::Oss(oss_config)
+                    }
+                    "webhdfs" => {
+                        let mut webhdfs_config: InnerStorageWebhdfsConfig =
+                            self.webhdfs.try_into()?;
+                        webhdfs_config.network_config = Some(storage_network_params);
+                        StorageParams::Webhdfs(webhdfs_config)
+                    }
+                    "cos" => {
+                        let mut cos_config: InnerStorageCosConfig = self.cos.try_into()?;
+                        cos_config.network_config = Some(storage_network_params);
+                        StorageParams::Cos(cos_config)
+                    }
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -687,6 +857,7 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
             bucket: self.gcs_bucket,
             root: self.gcs_root,
             credential: self.credential,
+            network_config: None,
         })
     }
 }
@@ -817,6 +988,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
+            network_config: None,
         })
     }
 }
@@ -909,6 +1081,7 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
             account_name: self.account_name,
             account_key: self.account_key,
             root: self.azblob_root,
+            network_config: None,
         })
     }
 }
@@ -948,6 +1121,7 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
         Ok(InnerStorageHdfsConfig {
             name_node: self.name_node,
             root: self.hdfs_root,
+            network_config: None,
         })
     }
 }
@@ -1042,6 +1216,7 @@ impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
             access_key_id: self.obs_access_key_id,
             secret_access_key: self.obs_secret_access_key,
             root: self.obs_root,
+            network_config: None,
         })
     }
 }
@@ -1158,6 +1333,7 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             root: self.oss_root,
             server_side_encryption: self.oss_server_side_encryption,
             server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
+            network_config: None,
         })
     }
 }
@@ -1277,6 +1453,7 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
             root: value.webhdfs_root,
             disable_list_batch: value.webhdfs_disable_list_batch,
             user_name: value.webhdfs_user_name,
+            network_config: None,
         })
     }
 }
@@ -1358,6 +1535,7 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
             bucket: value.cos_bucket,
             endpoint_url: value.cos_endpoint_url,
             root: value.cos_root,
+            network_config: None,
         })
     }
 }
@@ -2029,7 +2207,7 @@ pub struct LogConfig {
     pub tracing: TracingConfig,
 
     #[clap(flatten)]
-    pub persistentlog: PersistentLogConfig,
+    pub history: HistoryLogConfig,
 }
 
 impl Default for LogConfig {
@@ -2113,10 +2291,10 @@ impl TryInto<InnerLogConfig> for LogConfig {
 
         let tracing: InnerTracingConfig = self.tracing.try_into()?;
 
-        let mut persistentlog: InnerPersistentLogConfig = self.persistentlog.try_into()?;
+        let mut history: InnerHistoryConfig = self.history.try_into()?;
 
-        if persistentlog.on && persistentlog.level.is_empty() && file.on && !file.level.is_empty() {
-            persistentlog.level = file.level.clone();
+        if history.on && history.level.is_empty() && file.on && !file.level.is_empty() {
+            history.level = file.level.clone();
         }
 
         Ok(InnerLogConfig {
@@ -2127,7 +2305,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
             profile,
             structlog,
             tracing,
-            persistentlog,
+            history,
         })
     }
 }
@@ -2144,7 +2322,7 @@ impl From<InnerLogConfig> for LogConfig {
             profile: inner.profile.into(),
             structlog: inner.structlog.into(),
             tracing: inner.tracing.into(),
-            persistentlog: inner.persistentlog.into(),
+            history: inner.history.into(),
 
             // Deprecated fields
             log_dir: None,
@@ -2539,94 +2717,147 @@ impl From<InnerTracingConfig> for TracingConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
-pub struct PersistentLogConfig {
+pub struct HistoryLogConfig {
     #[clap(
-        long = "log-persistentlog-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+        long = "log-history-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
     )]
     #[serde(rename = "on")]
-    pub log_persistentlog_on: bool,
+    pub log_history_on: bool,
 
-    /// Specifies the interval in seconds for how often the persistent log is flushed
+    /// Enables log-only mode for the history feature.
+    ///
+    /// When set to true, this node will only record raw log data to the specified stage,
+    /// but will not perform the transform and clean process.
+    /// Please make sure that the transform and clean process is handled by other nodes
+    /// otherwise the raw log data will not be processed and cleaned up.
+    ///
+    /// Note: This is useful for nodes that should avoid the performance overhead of the
+    /// transform and clean process
     #[clap(
-        long = "log-persistentlog-interval",
+        long = "log-history-log-only", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "log_only")]
+    pub log_history_log_only: bool,
+
+    /// Specifies the interval in seconds for how often the history log is flushed
+    #[clap(
+        long = "log-history-interval",
         value_name = "VALUE",
         default_value = "2"
     )]
     #[serde(rename = "interval")]
-    pub log_persistentlog_interval: usize,
+    pub log_history_interval: usize,
 
     /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
     ///
     /// Note:
     /// The default value uses an uuid to avoid conflicts with existing stages
     #[clap(
-        long = "log-persistentlog-stage-name",
+        long = "log-history-stage-name",
         value_name = "VALUE",
         default_value = "log_1f93b76af0bd4b1d8e018667865fbc65"
     )]
     #[serde(rename = "stage_name")]
-    pub log_persistentlog_stage_name: String,
+    pub log_history_stage_name: String,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(
-        long = "log-persistentlog-level",
+        long = "log-history-level",
         value_name = "VALUE",
         default_value = "WARN"
     )]
     #[serde(rename = "level")]
-    pub log_persistentlog_level: String,
-
-    /// The retention period (in hours) for persistent logs.
-    /// Data older than this period will be deleted during retention tasks.
-    #[clap(
-        long = "log-persistentlog-retention",
-        value_name = "VALUE",
-        default_value = "72"
-    )]
-    #[serde(rename = "retention")]
-    pub log_persistentlog_retention: usize,
+    pub log_history_level: String,
 
     /// The interval (in hours) at which the retention process is triggered.
     /// Specifies how often the retention task runs to clean up old data.
     #[clap(
-        long = "log-persistentlog-retention-interval",
+        long = "log-history-retention-interval",
         value_name = "VALUE",
         default_value = "24"
     )]
     #[serde(rename = "retention_interval")]
-    pub log_persistentlog_retention_interval: usize,
+    pub log_history_retention_interval: usize,
+
+    /// Specifies which history table to enable
+    #[clap(skip)]
+    #[serde(rename = "tables")]
+    pub log_history_tables: Vec<HistoryLogTableConfig>,
 }
 
-impl Default for PersistentLogConfig {
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HistoryLogTableConfig {
+    /// Specifies the history table name
+    pub table_name: String,
+
+    /// The retention period (in hours) for history logs.
+    /// Data older than this period will be deleted during retention tasks.
+    pub retention: usize,
+}
+
+impl Default for HistoryLogConfig {
     fn default() -> Self {
-        InnerPersistentLogConfig::default().into()
+        InnerHistoryConfig::default().into()
     }
 }
 
-impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
+impl Default for HistoryLogTableConfig {
+    fn default() -> Self {
+        InnerHistoryTableConfig::default().into()
+    }
+}
+
+impl TryInto<InnerHistoryTableConfig> for HistoryLogTableConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerPersistentLogConfig> {
-        Ok(InnerPersistentLogConfig {
-            on: self.log_persistentlog_on,
-            interval: self.log_persistentlog_interval,
-            stage_name: self.log_persistentlog_stage_name,
-            level: self.log_persistentlog_level,
-            retention: self.log_persistentlog_retention,
-            retention_interval: self.log_persistentlog_retention_interval,
+    fn try_into(self) -> Result<InnerHistoryTableConfig> {
+        Ok(InnerHistoryTableConfig {
+            table_name: self.table_name,
+            retention: self.retention,
         })
     }
 }
 
-impl From<InnerPersistentLogConfig> for PersistentLogConfig {
-    fn from(inner: InnerPersistentLogConfig) -> Self {
+impl From<InnerHistoryTableConfig> for HistoryLogTableConfig {
+    fn from(inner: InnerHistoryTableConfig) -> Self {
         Self {
-            log_persistentlog_on: inner.on,
-            log_persistentlog_interval: inner.interval,
-            log_persistentlog_stage_name: inner.stage_name,
-            log_persistentlog_level: inner.level,
-            log_persistentlog_retention: inner.retention,
-            log_persistentlog_retention_interval: inner.retention_interval,
+            table_name: inner.table_name,
+            retention: inner.retention,
+        }
+    }
+}
+
+impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerHistoryConfig> {
+        Ok(InnerHistoryConfig {
+            on: self.log_history_on,
+            log_only: self.log_history_log_only,
+            interval: self.log_history_interval,
+            stage_name: self.log_history_stage_name,
+            level: self.log_history_level,
+            retention_interval: self.log_history_retention_interval,
+            tables: self
+                .log_history_tables
+                .into_iter()
+                .map(|cfg| cfg.try_into())
+                .collect::<Result<Vec<_>>>()?,
+        })
+    }
+}
+
+impl From<InnerHistoryConfig> for HistoryLogConfig {
+    fn from(inner: InnerHistoryConfig) -> Self {
+        Self {
+            log_history_on: inner.on,
+            log_history_log_only: inner.log_only,
+            log_history_interval: inner.interval,
+            log_history_stage_name: inner.stage_name,
+            log_history_level: inner.level,
+            log_history_retention_interval: inner.retention_interval,
+            log_history_tables: inner.tables.into_iter().map(Into::into).collect(),
         }
     }
 }

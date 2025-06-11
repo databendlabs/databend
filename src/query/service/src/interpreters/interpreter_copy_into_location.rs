@@ -14,17 +14,14 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::CopyIntoLocationOptions;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
-use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_storage::StageFilesInfo;
+use databend_storages_common_stage::CopyIntoLocationInfo;
 use log::debug;
 use log::info;
 
@@ -84,10 +81,8 @@ impl CopyIntoLocationInterpreter {
     #[async_backtrace::framed]
     async fn build_local_copy_into_stage_pipeline(
         &self,
-        stage: &StageInfo,
-        path: &str,
         query: &Plan,
-        options: &CopyIntoLocationOptions,
+        info: &CopyIntoLocationInfo,
     ) -> Result<(PipelineBuildResult, Vec<UpdateStreamMetaReq>)> {
         let (query_interpreter, update_stream_meta_req) = self.build_query(query).await?;
         let query_physical_plan = query_interpreter.build_physical_plan().await?;
@@ -98,24 +93,9 @@ impl CopyIntoLocationInterpreter {
             plan_id: 0,
             input: Box::new(query_physical_plan),
             project_columns: query_interpreter.get_result_columns(),
-            input_schema: query_result_schema,
-            to_stage_info: StageTableInfo {
-                schema: table_schema,
-                stage_info: stage.clone(),
-                files_info: StageFilesInfo {
-                    path: path.to_string(),
-                    files: None,
-                    pattern: None,
-                },
-                files_to_copy: None,
-                duplicated_files_detected: vec![],
-                is_select: false,
-                default_exprs: None,
-                copy_into_location_options: options.clone(),
-                copy_into_table_options: Default::default(),
-                stage_root: "".to_string(),
-                copy_into_location_ordered: self.plan.is_ordered,
-            },
+            input_data_schema: query_result_schema,
+            input_table_schema: table_schema,
+            info: info.clone(),
         }));
 
         let mut next_plan_id = 0;
@@ -147,12 +127,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         }
 
         let (mut pipeline_build_result, update_stream_reqs) = self
-            .build_local_copy_into_stage_pipeline(
-                &self.plan.stage,
-                &self.plan.path,
-                &self.plan.from,
-                &self.plan.options,
-            )
+            .build_local_copy_into_stage_pipeline(&self.plan.from, &self.plan.info)
             .await?;
 
         // We are going to consuming streams, which are all of the default catalog

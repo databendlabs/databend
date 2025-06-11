@@ -16,9 +16,15 @@ runs:
       shell: bash
       run: |
         VERSION=`echo ${{ inputs.version }} | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+'`
-        echo "building tag and version: $GIT_TAG $VERSION"
-        sed "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
+        echo "building tag and version: git tag: $GIT_TAG version: $VERSION"
+        sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
+        sed "s#version = \"0.1.0\"#version = \"$VERSION\"#g" pyproject.toml > pyproject.toml.bak
+
         mv Cargo.toml.bak Cargo.toml
+        mv pyproject.toml.bak pyproject.toml
+
+        echo "version in Cargo.toml: $(grep 'version' Cargo.toml)"
+        echo "version in pyproject.toml: $(grep 'version' pyproject.toml)"
 
     - name: Get Toolchain
       id: toolchain
@@ -45,7 +51,13 @@ runs:
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
+    - name: Setup uv
+      uses: astral-sh/setup-uv@v5
+      with:
+        enable-cache: true
+
     - name: Build wheels
+      if: inputs.tag
       uses: PyO3/maturin-action@v1
       with:
         rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
@@ -59,12 +71,5 @@ runs:
         before-script-linux: |
           unset RUSTC_WRAPPER
           ../../scripts/setup/dev_setup.sh -yb
-
-    - name: Run tests
-      working-directory: src/bendpy
-      if: endsWith(inputs.target, '-gnu')
-      shell: bash
-      run: |
-        pip install dist/*.whl
-        pip install pytest pyarrow pandas polars
-        pytest -v tests/*
+          uv venv --python=python3.12
+          uv sync --all-groups --all-extras

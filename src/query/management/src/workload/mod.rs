@@ -14,13 +14,8 @@
 
 mod workload_api;
 mod workload_mgr;
+mod workload_resource;
 
-pub use workload_api::QuotaValue;
 pub use workload_api::WorkloadApi;
-pub use workload_api::WorkloadGroup;
-pub use workload_api::CPU_QUOTA_KEY;
-pub use workload_api::MAX_CONCURRENCY_QUOTA_KEY;
-pub use workload_api::MEMORY_QUOTA_KEY;
-pub use workload_api::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
-pub use workload_api::QUERY_TIMEOUT_QUOTA_KEY;
 pub use workload_mgr::WorkloadMgr;
+pub use workload_resource::WorkloadGroupResourceManager;

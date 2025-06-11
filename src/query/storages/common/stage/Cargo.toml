@@ -7,6 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+databend-common-ast = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }

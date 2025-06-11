@@ -517,6 +517,8 @@ pub enum TokenKind {
     DATESUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
     DATE_TRUNC,
+    #[token("TRUNC", ignore(ascii_case))]
+    TRUNC,
     #[token("DATETIME", ignore(ascii_case))]
     DATETIME,
     #[token("DAY", ignore(ascii_case))]
@@ -761,6 +763,8 @@ pub enum TokenKind {
     IS,
     #[token("ISODOW", ignore(ascii_case))]
     ISODOW,
+    #[token("ISOWEEK", ignore(ascii_case))]
+    ISOWEEK,
     #[token("ISOYEAR", ignore(ascii_case))]
     ISOYEAR,
     #[token("JOIN", ignore(ascii_case))]
@@ -1130,6 +1134,8 @@ pub enum TokenKind {
     UPLOAD,
     #[token("SEQUENCE", ignore(ascii_case))]
     SEQUENCE,
+    #[token("SEQUENCES", ignore(ascii_case))]
+    SEQUENCES,
     #[token("SHARE", ignore(ascii_case))]
     SHARE,
     #[token("SHARES", ignore(ascii_case))]
@@ -1260,6 +1266,8 @@ pub enum TokenKind {
     VARIANT,
     #[token("VARIABLE", ignore(ascii_case))]
     VARIABLE,
+    #[token("VECTOR", ignore(ascii_case))]
+    VECTOR,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
     #[token("GRAPHICAL", ignore(ascii_case))]
@@ -1426,6 +1434,10 @@ pub enum TokenKind {
     WORKLOAD,
     #[token("GROUPS", ignore(ascii_case))]
     GROUPS,
+    #[token("REPORT", ignore(ascii_case))]
+    REPORT,
+    #[token("ISSUE", ignore(ascii_case))]
+    ISSUE,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1670,6 +1682,7 @@ impl TokenKind {
             | TokenKind::DATE_SUB
             | TokenKind::DATE_BETWEEN
             | TokenKind::DATE_TRUNC
+            | TokenKind::TRUNC
             | TokenKind::LAST_DAY
             | TokenKind::PREVIOUS_DAY
             | TokenKind::NEXT_DAY
@@ -1686,6 +1699,7 @@ impl TokenKind {
             | TokenKind::ANY
             | TokenKind::FUNCTION
             | TokenKind::PROCEDURE
+            | TokenKind::SEQUENCE
             | TokenKind::ASC
             | TokenKind::ANTI
             // | TokenKind::ASYMMETRIC

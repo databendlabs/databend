@@ -53,3 +53,32 @@ select c1, c3 from t1_orc;
 2 c
 3 d
 4 NULL
+
+# test_merge_on_read_deletes: DELETE FROM test_merge_on_read_deletes WHERE letter = 'k' OR number = 3 OR (number > 4 AND number < 7)
+# Tips: `2023-03-30 6 z` is new row
+query TTI rowsort
+select * from test_merge_on_read_deletes;
+----
+2023-03-01 1 a
+2023-03-02 2 b
+2023-03-04 4 d
+2023-03-07 7 g
+2023-03-08 8 h
+2023-03-09 9 i
+2023-03-10 10 j
+2023-03-12 12 l
+2023-03-30 6 z
+
+# test projection
+query T rowsort
+select dt from test_merge_on_read_deletes;
+----
+2023-03-01
+2023-03-02
+2023-03-04
+2023-03-07
+2023-03-08
+2023-03-09
+2023-03-10
+2023-03-12
+2023-03-30

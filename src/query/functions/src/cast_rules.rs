@@ -22,6 +22,7 @@ use databend_common_expression::FunctionRegistry;
 
 use crate::scalars::ALL_COMP_FUNC_NAMES;
 use crate::scalars::ALL_STRING_FUNC_NAMES;
+use crate::scalars::PURE_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(GENERAL_CAST_RULES.iter().cloned());
@@ -49,11 +50,19 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     for func_name in ALL_STRING_FUNC_NAMES {
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
-        if ["concat", "concat_ws"].contains(func_name) {
-            registry.register_additional_cast_rules(
+        if PURE_STRING_FUNC_NAMES.contains(func_name) {
+            registry.register_dynamic_cast_rules(
                 func_name,
-                get_cast_int_to_string_rules().into_iter(),
-            )
+                std::sync::Arc::new(|arg_type, result_type| {
+                    let is_nullable_or_null = arg_type.is_nullable_or_null();
+                    let result_is_nullable_or_null = result_type.is_nullable_or_null();
+
+                    (!is_nullable_or_null && matches!(result_type, DataType::String))
+                        || (is_nullable_or_null
+                            && result_is_nullable_or_null
+                            && matches!(result_type.remove_nullable(), DataType::String))
+                }),
+            );
         } else {
             registry
                 .register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
@@ -69,12 +78,12 @@ pub fn register(registry: &mut FunctionRegistry) {
     }
 
     for func_name in ALL_COMP_FUNC_NAMES {
-        // Disable auto cast from strings, e.g., `1 < '1'`.
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
         registry.register_additional_cast_rules(func_name, CAST_FROM_VARIANT_RULES());
+        registry.register_additional_cast_rules(func_name, CAST_FROM_NUMBER_RULES.iter().cloned());
     }
-    // for eq function: we allow cast from string to int or float, eg: col_int = '1'
-    registry.register_additional_cast_rules("eq", CAST_FROM_STRING_RULES.iter().cloned());
+    registry.register_additional_cast_rules("contains", GENERAL_CAST_RULES.iter().cloned());
+    registry.register_additional_cast_rules("contains", CAST_FROM_VARIANT_RULES());
 
     // Timestamp/Date --> other ints and floats
     // Now it only overload 'to_int64'
@@ -229,8 +238,7 @@ pub const GENERAL_CAST_RULES: AutoCastRules = &[
 ];
 
 /// The rules for automatic casting from string to other types. For example, they are
-/// used to allow `add_hours('2023-01-01 00:00:00', '1')`. But they should be disabled
-/// for comparison functions, because `1 < '1'` should be an error.
+/// used to allow `add_hours('2023-01-01 00:00:00', '1')`.
 pub const CAST_FROM_STRING_RULES: AutoCastRules = &[
     (DataType::String, DataType::Number(NumberDataType::Int64)),
     (DataType::String, DataType::Number(NumberDataType::UInt64)),
@@ -375,9 +383,15 @@ pub const CAST_INT_TO_UINT64: AutoCastRules = &[
     ),
 ];
 
-pub fn get_cast_int_to_string_rules() -> Vec<(DataType, DataType)> {
-    ALL_NUMERICS_TYPES
-        .iter()
-        .map(|ty| (DataType::Number(*ty), DataType::String))
-        .collect()
-}
+pub const CAST_FROM_NUMBER_RULES: AutoCastRules = &[
+    (DataType::Number(NumberDataType::UInt8), DataType::Boolean),
+    (DataType::Number(NumberDataType::UInt16), DataType::Boolean),
+    (DataType::Number(NumberDataType::UInt32), DataType::Boolean),
+    (DataType::Number(NumberDataType::UInt64), DataType::Boolean),
+    (DataType::Number(NumberDataType::Int8), DataType::Boolean),
+    (DataType::Number(NumberDataType::Int16), DataType::Boolean),
+    (DataType::Number(NumberDataType::Int32), DataType::Boolean),
+    (DataType::Number(NumberDataType::Int64), DataType::Boolean),
+    (DataType::Number(NumberDataType::Float32), DataType::Boolean),
+    (DataType::Number(NumberDataType::Float64), DataType::Boolean),
+];

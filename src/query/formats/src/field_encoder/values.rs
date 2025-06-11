@@ -23,11 +23,13 @@ use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryColumn;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::NumberColumn;
-use databend_common_expression::types::ValueType;
+use databend_common_expression::types::VectorColumn;
+use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::Column;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
@@ -165,6 +167,7 @@ impl FieldEncoderValues {
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf),
+            Column::Vector(c) => self.write_vector(c, row_index, out_buf),
         }
     }
     fn common_settings(&self) -> &OutputCommonSettings {
@@ -207,9 +210,9 @@ impl FieldEncoderValues {
         out_buf.extend_from_slice(b"{}");
     }
 
-    fn write_nullable<T: ValueType>(
+    fn write_nullable(
         &self,
-        column: &NullableColumn<T>,
+        column: &NullableColumn<AnyType>,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         in_nested: bool,
@@ -217,12 +220,7 @@ impl FieldEncoderValues {
         if !column.validity.get_bit(row_index) {
             self.write_null(out_buf)
         } else {
-            self.write_field(
-                &T::upcast_column(column.column.clone()),
-                row_index,
-                out_buf,
-                in_nested,
-            )
+            self.write_field(&column.column, row_index, out_buf, in_nested)
         }
     }
 
@@ -373,16 +371,11 @@ impl FieldEncoderValues {
         self.write_string_inner(&s, out_buf, in_nested);
     }
 
-    fn write_array<T: ValueType>(
-        &self,
-        column: &ArrayColumn<T>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-    ) {
+    fn write_array(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &T::upcast_column(column.values().clone());
+        let inner = column.values();
         for i in start..end {
             if i != start {
                 out_buf.push(b',');
@@ -392,16 +385,11 @@ impl FieldEncoderValues {
         out_buf.push(b']');
     }
 
-    fn write_map<T: ValueType>(
-        &self,
-        column: &ArrayColumn<T>,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-    ) {
+    fn write_map(&self, column: &ArrayColumn<AnyType>, row_index: usize, out_buf: &mut Vec<u8>) {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
-        let inner = &T::upcast_column(column.values().clone());
+        let inner = column.values();
         match inner {
             Column::Tuple(fields) => {
                 for i in start..end {
@@ -427,5 +415,29 @@ impl FieldEncoderValues {
             self.write_field(inner, row_index, out_buf, true);
         }
         out_buf.push(b')');
+    }
+
+    pub fn write_vector(&self, column: &VectorColumn, row_index: usize, out_buf: &mut Vec<u8>) {
+        let scalar_val = unsafe { column.index_unchecked(row_index) };
+        out_buf.push(b'[');
+        match scalar_val {
+            VectorScalarRef::Int8(values) => {
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        out_buf.push(b',');
+                    }
+                    v.write_field(out_buf, self.common_settings());
+                }
+            }
+            VectorScalarRef::Float32(values) => {
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        out_buf.push(b',');
+                    }
+                    v.0.write_field(out_buf, self.common_settings());
+                }
+            }
+        }
+        out_buf.push(b']');
     }
 }

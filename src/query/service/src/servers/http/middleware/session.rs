@@ -26,6 +26,7 @@ use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::headers::HEADER_WAREHOUSE;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -73,9 +74,11 @@ use crate::servers::http::v1::unix_ts;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
+use crate::servers::login_history::LoginEventType;
+use crate::servers::login_history::LoginHandler;
+use crate::servers::login_history::LoginHistory;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 const COOKIE_LAST_ACCESS_TIME: &str = "last_access_time";
@@ -134,7 +137,7 @@ impl EndpointKind {
                 }
             }
             EndpointKind::Login | EndpointKind::Clickhouse => Err(ErrorCode::AuthenticateFailure(
-                format!("should not use databend token for {self:?}",),
+                format!("[HTTP-SESSION] Invalid token usage: databend token cannot be used for {self:?}",),
             )),
         }
     }
@@ -198,7 +201,10 @@ fn get_credential(
     }
     let std_auth_headers: Vec<_> = req.headers().get_all(AUTHORIZATION).iter().collect();
     if std_auth_headers.len() > 1 {
-        let msg = &format!("Multiple {} headers detected", AUTHORIZATION);
+        let msg = &format!(
+            "[HTTP-SESSION] Authentication error: multiple {} headers detected",
+            AUTHORIZATION
+        );
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
     let client_ip = get_client_ip(req);
@@ -207,7 +213,7 @@ fn get_credential(
             get_clickhouse_name_password(req, client_ip)
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "No authorization header detected",
+                "[HTTP-SESSION] Authentication error: no authorization header provided",
             ))
         }
     } else {
@@ -261,7 +267,9 @@ fn get_credential_from_header(
                 };
                 Ok(c)
             }
-            None => Err(ErrorCode::AuthenticateFailure("bad Basic auth header")),
+            None => Err(ErrorCode::AuthenticateFailure(
+                "[HTTP-SESSION] Authentication error: invalid Basic auth header format",
+            )),
         }
     } else if value.as_bytes().starts_with(b"Bearer ") {
         match Bearer::decode(value) {
@@ -270,7 +278,7 @@ fn get_credential_from_header(
                 if SessionClaim::is_databend_token(&token) {
                     if let Some(t) = endpoint_kind.require_databend_token_type()? {
                         if t != SessionClaim::get_type(&token)? {
-                            return Err(ErrorCode::AuthenticateFailure("wrong data token type"));
+                            return Err(ErrorCode::AuthenticateFailure("[HTTP-SESSION] Authentication error: incorrect token type for this endpoint"));
                         }
                     }
                     Ok(Credential::DatabendToken { token })
@@ -278,10 +286,14 @@ fn get_credential_from_header(
                     Ok(Credential::Jwt { token, client_ip })
                 }
             }
-            None => Err(ErrorCode::AuthenticateFailure("bad Bearer auth header")),
+            None => Err(ErrorCode::AuthenticateFailure(
+                "[HTTP-SESSION] Authentication error: invalid Bearer auth header format",
+            )),
         }
     } else {
-        Err(ErrorCode::AuthenticateFailure("bad auth header"))
+        Err(ErrorCode::AuthenticateFailure(
+            "[HTTP-SESSION] Authentication error: unsupported authorization header format",
+        ))
     }
 }
 
@@ -300,7 +312,12 @@ fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Res
     } else {
         let query_str = req.uri().query().unwrap_or_default();
         let query_params = serde_urlencoded::from_str::<HashMap<String, String>>(query_str)
-            .map_err(|e| ErrorCode::BadArguments(format!("{}", e)))?;
+            .map_err(|e| {
+                ErrorCode::BadArguments(format!(
+                    "[HTTP-SESSION] Failed to parse query parameters: {}",
+                    e
+                ))
+            })?;
         let (user, key) = (query_params.get("user"), query_params.get("password"));
         if let (Some(name), Some(password)) = (user, key) {
             Ok(Credential::Password {
@@ -310,7 +327,7 @@ fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Res
             })
         } else {
             Err(ErrorCode::AuthenticateFailure(
-                "No header or query parameters for authorization detected",
+                "[HTTP-SESSION] Authentication error: no credentials found in headers or query parameters",
             ))
         }
     }
@@ -343,9 +360,19 @@ fn make_cookie(name: impl Into<String>, value: impl Into<String>) -> Cookie {
 
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
-    async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
-        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
+    async fn auth(
+        &self,
+        req: &Request,
+        query_id: String,
+        login_history: &mut LoginHistory,
+    ) -> Result<HttpQueryContext> {
+        let client_host = get_client_ip(req);
+        let node_id = GlobalConfig::instance().query.node_id.clone();
+        login_history.client_ip = client_host.clone().unwrap_or_default();
+        login_history.node_id = node_id.clone();
 
+        let credential = get_credential(req, self.kind, self.endpoint_kind)?;
+        login_history.auth_type = credential.type_name();
         let session_manager = SessionManager::instance();
 
         let mut session = session_manager.create_session(SessionType::Dummy).await?;
@@ -371,12 +398,21 @@ impl<E> HTTPSessionEndpoint<E> {
                 self.endpoint_kind.need_user_info(),
             )
             .await?;
+        login_history.user_name = user_name.clone();
+
+        // If cookie_session_id is set, we disable writing to login_history.
+        // The cookie_session_id is initially issued by the server to the client upon the first successful login.
+        // For all subsequent requests, the client includes this session_id with each request.
+        // This indicates the user is already logged in, so we skip recording another login event.
+        if cookie_session_id.is_some() {
+            login_history.disable_write = true;
+        }
 
         let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
             (Some(id1), Some(id2)) => {
                 if id1 != id2 {
                     return Err(ErrorCode::AuthenticateFailure(format!(
-                        "session id in token ({}) != session id in cookie({}) ",
+                        "[HTTP-SESSION] Session ID mismatch: token session ID '{}' does not match cookie session ID '{}'",
                         id1, id2
                     )));
                 }
@@ -390,7 +426,7 @@ impl<E> HTTPSessionEndpoint<E> {
             (None, None) => {
                 if cookie_enabled {
                     let id = Uuid::new_v4().to_string();
-                    info!("new session id: {}", id);
+                    info!("[HTTP-SESSION] Created new session with ID: {}", id);
                     req.cookie().add(make_cookie(COOKIE_SESSION_ID, &id));
                     Some(id)
                 } else {
@@ -398,6 +434,8 @@ impl<E> HTTPSessionEndpoint<E> {
                 }
             }
         };
+        login_history.session_id = client_session_id.clone().unwrap_or_default();
+
         if let Some(id) = &client_session_id {
             session.set_client_session_id(id.clone());
             let last_access_time = req
@@ -405,13 +443,16 @@ impl<E> HTTPSessionEndpoint<E> {
                 .get(COOKIE_LAST_ACCESS_TIME)
                 .map(|s| s.value_str().to_string());
             if let Some(ts) = &last_access_time {
-                let ts = ts
-                    .parse::<u64>()
-                    .map_err(|_| ErrorCode::BadArguments(format!("bad last_access_time {ts}")))?;
+                let ts = ts.parse::<u64>().map_err(|_| {
+                    ErrorCode::BadArguments(format!(
+                        "[HTTP-SESSION] Invalid last_access_time value: {}",
+                        ts
+                    ))
+                })?;
                 let ts = SystemTime::UNIX_EPOCH + Duration::from_secs(ts);
                 if let Err(err) = ts.elapsed() {
                     log::error!(
-                        "last_access_time is incorrect or has clock drift, difference: {:?}",
+                        "[HTTP-SESSION] Invalid last_access_time: detected clock drift or incorrect timestamp, difference: {:?}",
                         err.duration()
                     );
                 };
@@ -437,6 +478,7 @@ impl<E> HTTPSessionEndpoint<E> {
             .headers()
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
+        login_history.user_agent = user_agent.clone().unwrap_or_default();
 
         let expected_node_id = req
             .headers()
@@ -448,9 +490,6 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(TRACE_PARENT)
             .map(|id| id.to_str().unwrap().to_string());
         let opentelemetry_baggage = extract_baggage_from_headers(req.headers());
-        let client_host = get_client_ip(req);
-
-        let node_id = GlobalConfig::instance().query.node_id.clone();
 
         Ok(HttpQueryContext {
             session,
@@ -636,13 +675,22 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().replace('-', ""))
             .unwrap_or_else(|| Uuid::now_v7().simple().to_string());
 
+        let mut login_history = LoginHistory::new();
+        login_history.handler = LoginHandler::HTTP;
+        login_history.connection_uri = uri.to_string();
+
         ThreadTracker::tracking_future(async move {
-            match self.auth(&req, query_id).await {
+            match self.auth(&req, query_id, &mut login_history).await {
                 Ok(ctx) => {
+                    login_history.event_type = LoginEventType::LoginSuccess;
+                    login_history.write_to_log();
                     req.extensions_mut().insert(ctx);
                     self.ep.call(req).await.map(|v| v.into_response())
                 }
                 Err(err) => {
+                    login_history.event_type = LoginEventType::LoginFailed;
+                    login_history.error_message = err.to_string();
+                    login_history.write_to_log();
                     let err = HttpErrorCode::error_code(err);
                     if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(

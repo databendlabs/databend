@@ -19,6 +19,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::InsertStmt;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_raw_insert_stmt;
 use databend_common_ast::parser::parse_raw_replace_stmt;
@@ -29,6 +30,7 @@ use databend_common_ast::parser::token::Tokenizer;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,7 +52,6 @@ use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 
 const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
-const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
@@ -100,13 +101,13 @@ impl Planner {
                 let options = prqlc::Options::default();
                 match prqlc::compile(sql, &options) {
                     Ok(res) => {
-                        info!("Try convert prql to sql succeed, generated sql: {}", &res);
+                        info!("[SQL-PLANNER] PRQL to SQL conversion successful: {}", &res);
                         prql_converted = true;
                         res
                     }
                     Err(e) => {
                         warn!(
-                            "Try convert prql to sql failed, still use raw sql to parse. error: {e}"
+                            "[SQL-PLANNER] PRQL to SQL conversion failed, fallback to raw SQL parsing: {e}"
                         );
                         sql.to_string()
                     }
@@ -118,9 +119,6 @@ impl Planner {
         // Step 1: Tokenize the SQL.
         let mut tokenizer = Tokenizer::new(&final_sql).peekable();
 
-        // Only tokenize the beginning tokens for `INSERT INTO` statement because the rest tokens after `VALUES` is unused.
-        // Stop the tokenizer on unrecognized token because some values inputs (e.g. CSV) may not be valid for the tokenizer.
-        // See also: https://github.com/datafuselabs/databend/issues/6669
         let first_token = tokenizer
             .peek()
             .and_then(|token| Some(token.as_ref().ok()?.kind));
@@ -149,12 +147,17 @@ impl Planner {
         } else {
             (&mut tokenizer).collect::<databend_common_ast::Result<_>>()?
         };
+        let session_type = self.ctx.get_session_type();
+        let in_streaming_load = session_type == SessionType::HTTPStreamingLoad;
 
         loop {
             let res = try {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = if is_insert_stmt {
-                    (parse_raw_insert_stmt(&tokens, sql_dialect)?, None)
+                    (
+                        parse_raw_insert_stmt(&tokens, sql_dialect, in_streaming_load)?,
+                        None,
+                    )
                 } else if is_replace_stmt {
                     (parse_raw_replace_stmt(&tokens, sql_dialect)?, None)
                 } else {
@@ -164,7 +167,9 @@ impl Planner {
                     && sql_dialect == Dialect::PRQL
                     && !prql_converted
                 {
-                    return Err(ErrorCode::SyntaxException("convert prql to sql failed."));
+                    return Err(ErrorCode::SyntaxException(
+                        "[SQL-PLANNER] PRQL to SQL conversion failed",
+                    ));
                 }
 
                 self.replace_stmt(&mut stmt)?;
@@ -178,40 +183,39 @@ impl Planner {
             let mut maybe_partial_insert = false;
 
             if is_insert_or_replace_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
-                if let Ok(PlanExtras {
-                    statement:
-                        Statement::Insert(InsertStmt {
-                            source: InsertSource::Select { .. },
-                            ..
-                        }),
-                    ..
-                }) = &res
-                {
-                    maybe_partial_insert = true;
+                match res {
+                    Ok(PlanExtras {
+                        statement:
+                            Statement::Insert(InsertStmt {
+                                source: InsertSource::Select { .. },
+                                ..
+                            }),
+                        ..
+                    })
+                    | Ok(PlanExtras {
+                        statement:
+                            Statement::Replace(ReplaceStmt {
+                                source: InsertSource::Select { .. },
+                                ..
+                            }),
+                        ..
+                    }) => {
+                        maybe_partial_insert = true;
+                    }
+                    _ => {}
                 }
             }
 
             if (maybe_partial_insert || res.is_err()) && matches!(tokenizer.peek(), Some(Ok(_))) {
                 // Remove the EOI.
                 tokens.pop();
-                // Tokenize more and try again.
-                if !maybe_partial_insert && tokens.len() < PROBE_INSERT_MAX_TOKENS {
-                    let iter = (&mut tokenizer)
-                        .take(tokens.len() * 2)
-                        .take_while(|token| token.is_ok())
-                        .map(|token| token.unwrap())
-                        // Make sure the tokens stream is always ended with EOI.
-                        .chain(std::iter::once(Token::new_eoi(&final_sql)));
-                    tokens.extend(iter);
-                } else {
-                    // Take the whole tokenizer
-                    let iter = (&mut tokenizer)
-                        .take_while(|token| token.is_ok())
-                        .map(|token| token.unwrap())
-                        // Make sure the tokens stream is always ended with EOI.
-                        .chain(std::iter::once(Token::new_eoi(&final_sql)));
-                    tokens.extend(iter);
-                };
+                // Take the whole tokenizer
+                let iter = (&mut tokenizer)
+                    .take_while(|token| token.is_ok())
+                    .map(|token| token.unwrap())
+                    // Make sure the tokens stream is always ended with EOI.
+                    .chain(std::iter::once(Token::new_eoi(&final_sql)));
+                tokens.extend(iter);
             } else {
                 return res;
             }
@@ -240,7 +244,10 @@ impl Planner {
                 stmt,
             );
             if let Some(plan) = plan {
-                info!("logical plan from cache, time used: {:?}", start.elapsed());
+                info!(
+                    "[SQL-PLANNER] Logical plan retrieved from cache, elapsed: {:?}",
+                    start.elapsed()
+                );
                 // update for clickhouse handler
                 self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
                 return Ok(plan.plan);
@@ -279,7 +286,10 @@ impl Planner {
             self.set_cache(planner_cache_key.clone().unwrap(), optimized_plan.clone());
         }
 
-        info!("logical plan built, time used: {:?}", start.elapsed());
+        info!(
+            "[SQL-PLANNER] Logical plan construction completed, elapsed: {:?}",
+            start.elapsed()
+        );
         Ok(optimized_plan)
     }
 
@@ -316,7 +326,7 @@ impl Planner {
         let max_set_ops = self.ctx.get_settings().get_max_set_operator_count()?;
         if max_set_ops < set_ops_counter.count as u64 {
             return Err(ErrorCode::SyntaxException(format!(
-                "The number of set operations: {} exceeds the limit: {}",
+                "[SQL-PLANNER] Set operations count {} exceeds maximum limit {}",
                 set_ops_counter.count, max_set_ops
             )));
         }

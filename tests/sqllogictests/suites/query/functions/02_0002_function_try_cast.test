@@ -124,7 +124,7 @@ statement error
 select * from test having try_cast(try_cast(b as timestamp null) as boolean);
 
 query TTT
-select try_to_binary(parse_json('{"data":"bend","test":100}')), try_to_binary(parse_json('[1,2,3]')), try_to_binary(parse_json('100'));
+select to_jsonb_binary(parse_json('{"data":"bend","test":100}')), to_jsonb_binary(parse_json('[1,2,3]')), to_jsonb_binary(parse_json('100'));
 ----
 4000000210000004100000041000000420000002646174617465737462656E645064 80000003200000022000000220000002500150025003 20000000200000025064
 

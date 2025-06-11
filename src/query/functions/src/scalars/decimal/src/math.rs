@@ -15,8 +15,9 @@
 use std::ops::*;
 use std::sync::Arc;
 
+use databend_common_expression::types::compute_view::Compute;
+use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::with_decimal_mapped_type;
@@ -24,6 +25,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
@@ -40,7 +42,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let from_decimal_type = from_type.as_decimal().unwrap();
+        let from_size = *from_type.as_decimal().unwrap();
 
         let scale = if params.is_empty() {
             debug_assert!(matches!(round_mode, RoundMode::Ceil | RoundMode::Floor));
@@ -49,12 +51,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             params[0].get_i64()?
         };
 
-        let decimal_size = DecimalSize {
-            precision: from_decimal_type.precision(),
-            scale: scale.clamp(0, from_decimal_type.scale() as i64) as u8,
-        };
+        let return_size = DecimalSize::new(
+            from_size.precision(),
+            scale.clamp(0, from_size.scale() as _) as _,
+        )
+        .ok()?;
 
-        let dest_decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
         let name = format!("{:?}", round_mode).to_lowercase();
 
         let mut sig_args_type = args_type.to_owned();
@@ -63,17 +65,23 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             signature: FunctionSignature {
                 name,
                 args_type: sig_args_type,
-                return_type: DataType::Decimal(dest_decimal_type),
+                return_type: DataType::Decimal(return_size),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
+                    let dest_type = if !ctx.strict_eval && return_size.can_carried_by_64() {
+                        DecimalDataType::Decimal64(return_size)
+                    } else {
+                        DecimalDataType::from(return_size)
+                    };
+
                     decimal_rounds(
                         &args[0],
                         ctx,
-                        from_type.clone(),
-                        dest_decimal_type,
-                        scale,
+                        dest_type,
+                        from_size.scale() as _,
+                        scale as _,
                         round_mode,
                     )
                 }),
@@ -94,9 +102,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         RoundMode::Floor,
     ] {
         let name = format!("{:?}", m).to_lowercase();
-        registry.register_function_factory(&name, move |params, args_type| {
-            Some(Arc::new(factory_rounds(params, args_type, m)?))
-        });
+        registry.register_function_factory(
+            &name,
+            FunctionFactory::Closure(Box::new(move |params, args_type| {
+                Some(Arc::new(factory_rounds(params, args_type, m)?))
+            })),
+        );
     }
 
     let factory_abs = |_params: &[Scalar], args_type: &[DataType]| {
@@ -116,9 +127,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
-                eval: Box::new(move |args, ctx| {
-                    decimal_abs(&args[0], ctx, from_type.as_decimal().unwrap())
-                }),
+                eval: Box::new(move |args, ctx| decimal_abs(&args[0], ctx)),
             },
         };
 
@@ -129,9 +138,12 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
         }
     };
 
-    registry.register_function_factory("abs", move |params, args_type| {
-        Some(Arc::new(factory_abs(params, args_type)?))
-    });
+    registry.register_function_factory(
+        "abs",
+        FunctionFactory::Closure(Box::new(move |params, args_type| {
+            Some(Arc::new(factory_abs(params, args_type)?))
+        })),
+    );
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -142,32 +154,35 @@ enum RoundMode {
     Ceil,
 }
 
-fn decimal_round_positive<T>(
+fn decimal_round_positive<C, T, U>(
     value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
-) -> Value<DecimalType<T>>
+) -> Value<DecimalType<U>>
 where
     T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e((source_scale - target_scale) as u32);
+    let power_of_ten = T::e((source_scale - target_scale) as u8);
     let addition = power_of_ten / T::from(2);
-    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
-        if a < T::zero() {
+    vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
+        let res = if a < T::zero() {
             (a - addition) / power_of_ten
         } else {
             (a + addition) / power_of_ten
-        }
+        };
+        C::compute(&res)
     })(value, ctx)
 }
 
-fn decimal_round_negative<T>(
+fn decimal_round_negative<C, T, U>(
     value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
-) -> Value<DecimalType<T>>
+) -> Value<DecimalType<U>>
 where
     T: Decimal
         + From<i8>
@@ -176,63 +191,49 @@ where
         + Add<Output = T>
         + Sub<Output = T>
         + Mul<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
+    let divide_power_of_ten = T::e((source_scale - target_scale) as u8);
     let addition = divide_power_of_ten / T::from(2);
-    let multiply_power_of_ten = T::e((-target_scale) as u32);
+    let multiply_power_of_ten = T::e((-target_scale) as u8);
 
-    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
+    vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let a = if a < T::zero() {
             a - addition
         } else {
             a + addition
         };
-        a / divide_power_of_ten * multiply_power_of_ten
+        let res = a / divide_power_of_ten * multiply_power_of_ten;
+        C::compute(&res)
     })(value, ctx)
 }
 
 // if round mode is ceil, truncate should add one value
-fn decimal_truncate_positive<T>(
+fn decimal_truncate_positive<C, T, U>(
     value: Value<DecimalType<T>>,
     source_scale: i64,
     target_scale: i64,
     ctx: &mut EvalContext,
-) -> Value<DecimalType<T>>
+) -> Value<DecimalType<U>>
 where
     T: Decimal + From<i8> + DivAssign + Div<Output = T> + Add<Output = T> + Sub<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e((source_scale - target_scale) as u32);
-    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| a / power_of_ten)(value, ctx)
-}
-
-fn decimal_truncate_negative<T>(
-    value: Value<DecimalType<T>>,
-    source_scale: i64,
-    target_scale: i64,
-    ctx: &mut EvalContext,
-) -> Value<DecimalType<T>>
-where
-    T: Decimal
-        + From<i8>
-        + DivAssign
-        + Div<Output = T>
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Mul<Output = T>,
-{
-    let divide_power_of_ten = T::e((source_scale - target_scale) as u32);
-    let multiply_power_of_ten = T::e((-target_scale) as u32);
-
-    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
-        a / divide_power_of_ten * multiply_power_of_ten
+    let power_of_ten = T::e((source_scale - target_scale) as u8);
+    vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
+        let res = a / power_of_ten;
+        C::compute(&res)
     })(value, ctx)
 }
 
-fn decimal_floor<T>(
+fn decimal_truncate_negative<C, T, U>(
     value: Value<DecimalType<T>>,
     source_scale: i64,
+    target_scale: i64,
     ctx: &mut EvalContext,
-) -> Value<DecimalType<T>>
+) -> Value<DecimalType<U>>
 where
     T: Decimal
         + From<i8>
@@ -241,24 +242,52 @@ where
         + Add<Output = T>
         + Sub<Output = T>
         + Mul<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e(source_scale as u32);
+    let divide_power_of_ten = T::e((source_scale - target_scale) as u8);
+    let multiply_power_of_ten = T::e((-target_scale) as u8);
 
-    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
-        if a < T::zero() {
+    vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
+        let res = a / divide_power_of_ten * multiply_power_of_ten;
+        C::compute(&res)
+    })(value, ctx)
+}
+
+fn decimal_floor<C, T, U>(
+    value: Value<DecimalType<T>>,
+    source_scale: i64,
+    ctx: &mut EvalContext,
+) -> Value<DecimalType<U>>
+where
+    T: Decimal
+        + From<i8>
+        + DivAssign
+        + Div<Output = T>
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
+{
+    let power_of_ten = T::e(source_scale as u8);
+
+    vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
+        let res = if a < T::zero() {
             // below 0 we ceil the number (e.g. -10.5 -> -11)
             ((a + T::one()) / power_of_ten) - T::one()
         } else {
             a / power_of_ten
-        }
+        };
+        C::compute(&res)
     })(value, ctx)
 }
 
-fn decimal_ceil<T>(
+fn decimal_ceil<C, T, U>(
     value: Value<DecimalType<T>>,
     source_scale: i64,
     ctx: &mut EvalContext,
-) -> Value<DecimalType<T>>
+) -> Value<DecimalType<U>>
 where
     T: Decimal
         + From<i8>
@@ -267,74 +296,111 @@ where
         + Add<Output = T>
         + Sub<Output = T>
         + Mul<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
 {
-    let power_of_ten = T::e(source_scale as u32);
+    let power_of_ten = T::e(source_scale as u8);
 
-    vectorize_1_arg::<DecimalType<T>, DecimalType<T>>(|a, _| {
-        if a <= T::zero() {
+    vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
+        let res = if a <= T::zero() {
             a / power_of_ten
         } else {
             ((a - T::one()) / power_of_ten) + T::one()
-        }
+        };
+        C::compute(&res)
     })(value, ctx)
 }
 
 fn decimal_rounds(
     arg: &Value<AnyType>,
     ctx: &mut EvalContext,
-    from_type: DataType,
     dest_type: DecimalDataType,
+    source_scale: i64,
     target_scale: i64,
     mode: RoundMode,
 ) -> Value<AnyType> {
-    let from_decimal_type = from_type.as_decimal().unwrap();
-    let source_scale = from_decimal_type.scale() as i64;
+    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
 
-    if source_scale < target_scale {
-        return arg.clone().to_owned();
+    if from_type.data_kind() == dest_type.data_kind() && source_scale < target_scale {
+        return arg.to_owned();
     }
 
-    let zero_or_positive = target_scale >= 0;
-
-    with_decimal_mapped_type!(|DECIMAL_TYPE| match from_decimal_type {
-        DecimalDataType::DECIMAL_TYPE(_) => {
-            let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
-
-            let result = match (zero_or_positive, mode) {
-                (true, RoundMode::Round) => {
-                    decimal_round_positive::<_>(value, source_scale, target_scale, ctx)
-                }
-                (true, RoundMode::Truncate) => {
-                    decimal_truncate_positive::<_>(value, source_scale, target_scale, ctx)
-                }
-                (false, RoundMode::Round) => {
-                    decimal_round_negative::<_>(value, source_scale, target_scale, ctx)
-                }
-                (false, RoundMode::Truncate) => {
-                    decimal_truncate_negative::<_>(value, source_scale, target_scale, ctx)
-                }
-                (_, RoundMode::Floor) => decimal_floor::<_>(value, source_scale, ctx),
-                (_, RoundMode::Ceil) => decimal_ceil::<_>(value, source_scale, ctx),
-            };
-
-            result.upcast_decimal(dest_type.size())
+    with_decimal_mapped_type!(|IN| match from_type {
+        DecimalDataType::IN(_) => {
+            let arg = arg.try_downcast().unwrap();
+            with_decimal_mapped_type!(|OUT| match dest_type {
+                DecimalDataType::OUT(size) => decimal_rounds_type::<DecimalConvert<IN, OUT>, _, _>(
+                    arg,
+                    ctx,
+                    source_scale,
+                    target_scale,
+                    mode
+                )
+                .upcast_with_type(&DataType::Decimal(size)),
+            })
         }
     })
 }
 
-fn decimal_abs(
-    arg: &Value<AnyType>,
+fn decimal_rounds_type<C, T, U>(
+    arg: Value<DecimalType<T>>,
     ctx: &mut EvalContext,
-    data_type: &DecimalDataType,
-) -> Value<AnyType> {
-    with_decimal_mapped_type!(|DECIMAL_TYPE| match data_type {
-        DecimalDataType::DECIMAL_TYPE(_) => {
-            let value = arg.try_downcast::<DecimalType<DECIMAL_TYPE>>().unwrap();
-            let result =
-                vectorize_1_arg::<DecimalType<DECIMAL_TYPE>, DecimalType<DECIMAL_TYPE>>(|a, _| {
-                    a.abs()
-                })(value, ctx);
-            result.upcast_decimal(data_type.size())
+    source_scale: i64,
+    target_scale: i64,
+    mode: RoundMode,
+) -> Value<DecimalType<U>>
+where
+    T: Decimal
+        + From<i8>
+        + DivAssign
+        + Div<Output = T>
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Mul<Output = T>,
+    U: Decimal,
+    C: Compute<CoreDecimal<T>, CoreDecimal<U>>,
+{
+    let zero_or_positive = target_scale >= 0;
+    match (mode, zero_or_positive) {
+        (RoundMode::Round, true) => {
+            decimal_round_positive::<C, T, U>(arg, source_scale, target_scale, ctx)
+        }
+        (RoundMode::Round, false) => {
+            decimal_round_negative::<C, T, U>(arg, source_scale, target_scale, ctx)
+        }
+
+        (RoundMode::Truncate, true) => {
+            decimal_truncate_positive::<C, T, U>(arg, source_scale, target_scale, ctx)
+        }
+        (RoundMode::Truncate, false) => {
+            decimal_truncate_negative::<C, T, U>(arg, source_scale, target_scale, ctx)
+        }
+
+        (RoundMode::Floor, _) => decimal_floor::<C, T, U>(arg, source_scale, ctx),
+        (RoundMode::Ceil, _) => decimal_ceil::<C, T, U>(arg, source_scale, ctx),
+    }
+}
+
+fn decimal_abs(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
+    let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
+
+    let dest_type = if !ctx.strict_eval && from_type.size().can_carried_by_64() {
+        from_type
+    } else {
+        DecimalDataType::from(from_type.size())
+    };
+
+    with_decimal_mapped_type!(|IN| match from_type {
+        DecimalDataType::IN(size) => {
+            with_decimal_mapped_type!(|OUT| match dest_type {
+                DecimalDataType::OUT(_) => {
+                    let value = arg.try_downcast().unwrap();
+                    vectorize_1_arg::<ComputeView<DecimalConvert<IN, OUT>, _, _>, DecimalType<OUT>>(
+                        |a, _| a.abs(),
+                    )(value, ctx)
+                    .upcast_with_type(&DataType::Decimal(size))
+                }
+            })
         }
     })
 }

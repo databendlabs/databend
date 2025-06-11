@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS db2.t2(a UInt32 null) Engine = Fuse
 statement ok
 INSERT INTO db2.t2 VALUES(1)
 
+# Test cases for column not exist error
+statement error (?s)1006(.*)Table "db2.t2" does not have a column with name "c_no_exist"
+insert into db2.t2(a, c_no_exist) values(1, 2);
+
 statement ok
 DROP DATABASE if exists db2
 

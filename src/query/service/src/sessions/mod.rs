@@ -24,7 +24,6 @@ mod session_mgr_metrics;
 mod session_mgr_status;
 mod session_privilege_mgr;
 mod session_status;
-mod session_type;
 
 pub use databend_common_catalog::table_context::TableContext;
 pub use query_affect::QueryAffect;
@@ -44,4 +43,3 @@ pub use session_mgr::SessionManager;
 pub use session_mgr_status::SessionManagerStatus;
 pub use session_privilege_mgr::SessionPrivilegeManager;
 pub use session_status::SessionStatus;
-pub use session_type::SessionType;

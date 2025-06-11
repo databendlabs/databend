@@ -17,7 +17,7 @@ use std::io::Cursor;
 use std::marker::PhantomData;
 
 use databend_common_column::buffer::Buffer;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::Column;

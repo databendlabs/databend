@@ -78,6 +78,16 @@ impl FileFormatParams {
         }
     }
 
+    pub fn support_streaming_load(&self) -> bool {
+        matches!(
+            self,
+            FileFormatParams::Csv(_)
+                | FileFormatParams::Tsv(_)
+                | FileFormatParams::NdJson(_)
+                | FileFormatParams::Parquet(_)
+        )
+    }
+
     pub fn default_by_type(format_type: StageFileFormatType) -> Result<Self> {
         match format_type {
             StageFileFormatType::Parquet => {

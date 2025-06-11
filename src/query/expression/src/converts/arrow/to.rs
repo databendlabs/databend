@@ -35,12 +35,16 @@ use super::ARROW_EXT_TYPE_GEOGRAPHY;
 use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
+use super::ARROW_EXT_TYPE_VECTOR;
 use super::EXTENSION_KEY;
 use crate::infer_table_schema;
 use crate::types::DataType;
+use crate::types::DecimalColumn;
 use crate::types::DecimalDataType;
 use crate::types::GeographyColumn;
 use crate::types::NumberDataType;
+use crate::types::VectorColumn;
+use crate::types::VectorDataType;
 use crate::with_number_type;
 use crate::Column;
 use crate::DataBlock;
@@ -109,11 +113,14 @@ impl From<&TableField> for Field {
             TableDataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
+            TableDataType::Decimal(DecimalDataType::Decimal64(size)) => {
+                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
+            }
             TableDataType::Decimal(DecimalDataType::Decimal128(size)) => {
-                ArrowDataType::Decimal128(size.precision, size.scale as i8)
+                ArrowDataType::Decimal128(size.precision(), size.scale() as i8)
             }
             TableDataType::Decimal(DecimalDataType::Decimal256(size)) => {
-                ArrowDataType::Decimal256(size.precision, size.scale as i8)
+                ArrowDataType::Decimal256(size.precision(), size.scale() as i8)
             }
             TableDataType::Timestamp => ArrowDataType::Timestamp(TimeUnit::Microsecond, None),
             TableDataType::Date => ArrowDataType::Date32,
@@ -194,6 +201,17 @@ impl From<&TableField> for Field {
                     ARROW_EXT_TYPE_INTERVAL.to_string(),
                 );
                 ArrowDataType::Decimal128(38, 0)
+            }
+            TableDataType::Vector(ty) => {
+                metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_VECTOR.to_string());
+                let (inner_ty, dimension) = match ty {
+                    VectorDataType::Int8(dimension) => (ArrowDataType::Int8, *dimension as i32),
+                    VectorDataType::Float32(dimension) => {
+                        (ArrowDataType::Float32, *dimension as i32)
+                    }
+                };
+                let inner_field = Arc::new(Field::new_list_field(inner_ty, false));
+                ArrowDataType::FixedSizeList(inner_field, dimension)
             }
         };
 
@@ -297,7 +315,18 @@ impl From<&Column> for ArrayData {
             Column::EmptyMap { len } => Bitmap::new_constant(true, *len).into(),
             Column::Boolean(col) => col.into(),
             Column::Number(c) => c.arrow_data(arrow_type),
-            Column::Decimal(c) => c.arrow_data(arrow_type),
+            Column::Decimal(c) => {
+                let c = c.clone().strict_decimal_data_type();
+                let arrow_type = match c {
+                    DecimalColumn::Decimal64(_, size) | DecimalColumn::Decimal128(_, size) => {
+                        ArrowDataType::Decimal128(size.precision(), size.scale() as _)
+                    }
+                    DecimalColumn::Decimal256(_, size) => {
+                        ArrowDataType::Decimal256(size.precision(), size.scale() as _)
+                    }
+                };
+                c.arrow_data(arrow_type)
+            }
             Column::String(col) => col.clone().into(),
             Column::Timestamp(col) => buffer_to_array_data((col.clone(), arrow_type)),
             Column::Date(col) => buffer_to_array_data((col.clone(), arrow_type)),
@@ -338,7 +367,24 @@ impl From<&Column> for ArrayData {
 
                 unsafe { builder.build_unchecked() }
             }
+            Column::Vector(col) => {
+                let child_builder = match col {
+                    VectorColumn::Int8((values, _)) => ArrayData::builder(ArrowDataType::Int8)
+                        .len(values.len())
+                        .add_buffer(values.clone().into()),
+                    VectorColumn::Float32((values, _)) => {
+                        ArrayData::builder(ArrowDataType::Float32)
+                            .len(values.len())
+                            .add_buffer(values.clone().into())
+                    }
+                };
+                let child_data = unsafe { child_builder.build_unchecked() };
+                let builder = ArrayDataBuilder::new(arrow_type)
+                    .len(value.len())
+                    .child_data(vec![child_data]);
 
+                unsafe { builder.build_unchecked() }
+            }
             Column::Binary(col)
             | Column::Bitmap(col)
             | Column::Variant(col)

@@ -34,9 +34,11 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
+use crate::types::vector::VectorColumnBuilder;
 use crate::types::*;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
+use crate::with_vector_number_type;
 use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -247,6 +249,7 @@ impl Column {
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Column {
+        let data_type = columns[0].data_type();
         match &columns[0] {
             Column::Null { .. } => Column::Null { len: result_size },
             Column::EmptyArray { .. } => Column::EmptyArray { len: result_size },
@@ -254,7 +257,9 @@ impl Column {
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(_) => {
                     let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(columns, builder, indices)
+                    Self::take_block_value_types::<NumberType<NUM_TYPE>>(
+                        columns, &data_type, builder, indices,
+                    )
                 }
             }),
             Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
@@ -279,27 +284,27 @@ impl Column {
             }),
             Column::Boolean(_) => {
                 let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BooleanType>(columns, builder, indices)
+                Self::take_block_value_types::<BooleanType>(columns, &data_type, builder, indices)
             }
             Column::Binary(_) => {
                 let builder = BinaryType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BinaryType>(columns, builder, indices)
+                Self::take_block_value_types::<BinaryType>(columns, &data_type, builder, indices)
             }
             Column::String(_) => {
                 let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<StringType>(columns, builder, indices)
+                Self::take_block_value_types::<StringType>(columns, &data_type, builder, indices)
             }
             Column::Timestamp(_) => {
                 let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<TimestampType>(columns, builder, indices)
+                Self::take_block_value_types::<TimestampType>(columns, &data_type, builder, indices)
             }
             Column::Date(_) => {
                 let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<DateType>(columns, builder, indices)
+                Self::take_block_value_types::<DateType>(columns, &data_type, builder, indices)
             }
             Column::Interval(_) => {
                 let builder = IntervalType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<IntervalType>(columns, builder, indices)
+                Self::take_block_value_types::<IntervalType>(columns, &data_type, builder, indices)
             }
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -307,7 +312,9 @@ impl Column {
                 let builder =
                     ColumnBuilder::with_capacity(&column.values().data_type(), result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+                Self::take_block_value_types::<ArrayType<AnyType>>(
+                    columns, &data_type, builder, indices,
+                )
             }
             Column::Map(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
@@ -324,11 +331,13 @@ impl Column {
                     values: val_builder,
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_value_types::<MapType<AnyType, AnyType>>(columns, builder, indices)
+                Self::take_block_value_types::<MapType<AnyType, AnyType>>(
+                    columns, &data_type, builder, indices,
+                )
             }
             Column::Bitmap(_) => {
                 let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<BitmapType>(columns, builder, indices)
+                Self::take_block_value_types::<BitmapType>(columns, &data_type, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_columns = columns
@@ -368,16 +377,36 @@ impl Column {
             }
             Column::Variant(_) => {
                 let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<VariantType>(columns, builder, indices)
+                Self::take_block_value_types::<VariantType>(columns, &data_type, builder, indices)
             }
             Column::Geometry(_) => {
                 let builder = GeometryType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<GeometryType>(columns, builder, indices)
+                Self::take_block_value_types::<GeometryType>(columns, &data_type, builder, indices)
             }
             Column::Geography(_) => {
                 let builder = GeographyType::create_builder(result_size, &[]);
-                Self::take_block_value_types::<GeographyType>(columns, builder, indices)
+                Self::take_block_value_types::<GeographyType>(columns, &data_type, builder, indices)
             }
+            Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorColumn::NUM_TYPE((_, dimension)) => {
+                    let vector_ty = VectorDataType::NUM_TYPE(*dimension as u64);
+                    let mut builder = VectorColumnBuilder::with_capacity(&vector_ty, result_size);
+
+                    let columns = columns
+                        .iter()
+                        .map(|col| col.as_vector().unwrap())
+                        .collect_vec();
+
+                    for &(block_index, row, times) in indices {
+                        let val =
+                            unsafe { columns[block_index as usize].index_unchecked(row as usize) };
+                        for _ in 0..times {
+                            builder.push(&val);
+                        }
+                    }
+                    Column::Vector(builder.build())
+                }
+            }),
         }
     }
 
@@ -587,6 +616,18 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Geography(columns)
             }
+            Column::Vector(col) => with_vector_number_type!(|NUM_TYPE| match col {
+                VectorColumn::NUM_TYPE((_, dimension)) => {
+                    let columns = columns
+                        .iter()
+                        .map(|col| match col {
+                            Column::Vector(VectorColumn::NUM_TYPE((col, _))) => col.clone(),
+                            _ => unreachable!(),
+                        })
+                        .collect_vec();
+                    ColumnVec::Vector(VectorColumnVec::NUM_TYPE((columns, *dimension)))
+                }
+            }),
         }
     }
 
@@ -619,56 +660,43 @@ impl Column {
                 Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
             }
             ColumnVec::Binary(columns) => {
-                BinaryType::upcast_column(Self::take_block_vec_binary_types(columns, indices))
+                Column::Binary(Self::take_block_vec_binary_types(columns, indices))
             }
             ColumnVec::String(columns) => {
-                StringType::upcast_column(Self::take_block_vec_string_types(columns, indices))
+                Column::String(Self::take_block_vec_string_types(columns, indices))
             }
             ColumnVec::Timestamp(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let ts = NumberType::<i64>::upcast_column(NumberType::<i64>::column_from_vec(
-                    builder,
-                    &[],
-                ))
-                .into_number()
-                .unwrap()
-                .into_int64()
-                .unwrap();
+                let ts = Int64Type::column_from_vec(builder, &[]);
                 Column::Timestamp(ts)
             }
             ColumnVec::Date(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let d = NumberType::<i32>::upcast_column(NumberType::<i32>::column_from_vec(
-                    builder,
-                    &[],
-                ))
-                .into_number()
-                .unwrap()
-                .into_int32()
-                .unwrap();
+                let d = Int32Type::column_from_vec(builder, &[]);
                 Column::Date(d)
             }
             ColumnVec::Interval(columns) => {
                 let builder = Self::take_block_vec_primitive_types(columns, indices);
-                let i = IntervalType::upcast_column(IntervalType::column_from_vec(builder, &[]))
-                    .into_interval()
-                    .unwrap();
+                let i = IntervalType::column_from_vec(builder, &[]);
                 Column::Interval(i)
             }
             ColumnVec::Array(columns) => {
-                let data_type = data_type.as_array().unwrap();
+                let item_type = data_type.as_array().unwrap();
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::with_capacity(data_type, result_size);
+                let builder = ColumnBuilder::with_capacity(item_type, result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
-                Self::take_block_vec_value_types::<ArrayType<AnyType>>(columns, builder, indices)
+                Self::take_block_vec_value_types::<ArrayType<AnyType>>(
+                    columns, builder, indices, &data_type,
+                )
             }
             ColumnVec::Map(columns) => {
-                let data_type = data_type.as_map().unwrap();
+                let kv_type = data_type.as_map().unwrap();
+
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    ColumnBuilder::with_capacity(data_type, result_size).build(),
+                    ColumnBuilder::with_capacity(kv_type, result_size).build(),
                 );
                 let (key_builder, val_builder) = match builder {
                     ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
@@ -680,7 +708,7 @@ impl Column {
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_vec_value_types::<MapType<AnyType, AnyType>>(
-                    columns, builder, indices,
+                    columns, builder, indices, &data_type,
                 )
             }
             ColumnVec::Bitmap(columns) => {
@@ -736,6 +764,24 @@ impl Column {
                     &columns, indices,
                 )))
             }
+            ColumnVec::Vector(columns) => with_vector_number_type!(|NUM_TYPE| match columns {
+                VectorColumnVec::NUM_TYPE((values, dimension)) => {
+                    let vector_ty = VectorDataType::NUM_TYPE(*dimension as u64);
+                    let mut builder = VectorColumnBuilder::with_capacity(&vector_ty, indices.len());
+                    let columns = values
+                        .into_iter()
+                        .map(|vals| VectorColumn::NUM_TYPE((vals.clone(), *dimension)))
+                        .collect_vec();
+                    for row_ptr in indices {
+                        let val = unsafe {
+                            columns[row_ptr.chunk_index as usize]
+                                .index_unchecked(row_ptr.row_index as usize)
+                        };
+                        builder.push(&val);
+                    }
+                    Column::Vector(builder.build())
+                }
+            }),
         }
     }
 
@@ -830,6 +876,7 @@ impl Column {
         columns: &[T::Column],
         mut builder: T::ColumnBuilder,
         indices: &[RowPtr],
+        data_type: &DataType,
     ) -> Column {
         for row_ptr in indices {
             let val = unsafe {
@@ -840,11 +887,12 @@ impl Column {
             };
             T::push_item(&mut builder, val.clone());
         }
-        T::upcast_column(T::build_column(builder))
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 
     fn take_block_value_types<T: ValueType>(
         columns: &[Column],
+        data_type: &DataType,
         mut builder: T::ColumnBuilder,
         indices: &[BlockRowIndex],
     ) -> Column {
@@ -859,6 +907,6 @@ impl Column {
                 T::push_item(&mut builder, val.clone())
             }
         }
-        T::upcast_column(T::build_column(builder))
+        T::upcast_column_with_type(T::build_column(builder), data_type)
     }
 }

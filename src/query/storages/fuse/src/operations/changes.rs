@@ -32,7 +32,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
@@ -274,7 +273,7 @@ impl FuseTable {
                     base_block_ids.push(block_id);
                 }
                 let base_block_ids_scalar =
-                    Scalar::Array(Decimal128Type::from_data(base_block_ids));
+                    Scalar::Array(Decimal128Type::from_data_with_size(base_block_ids, None));
                 push_downs = replace_push_downs(push_downs, &base_block_ids_scalar)?;
                 (add_blocks, Some(base_block_ids_scalar))
             }

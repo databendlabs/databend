@@ -30,7 +30,6 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
@@ -95,6 +94,8 @@ use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
+use databend_common_meta_app::schema::ListSequencesReply;
+use databend_common_meta_app::schema::ListSequencesReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
@@ -126,7 +127,6 @@ use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
-use databend_common_sql::IndexType;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
@@ -288,16 +288,17 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 error_injection: self.update_meta_error.clone(),
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
-            let r = FuseTable::commit_to_meta_server(
-                ctx.as_ref(),
-                fuse_table.get_table_info(),
-                fuse_table.meta_location_generator(),
-                new_snapshot,
-                None,
-                &None,
-                fuse_table.get_operator_ref(),
-            )
-            .await;
+            let r = fuse_table
+                .commit_to_meta_server(
+                    ctx.as_ref(),
+                    fuse_table.get_table_info(),
+                    fuse_table.meta_location_generator(),
+                    new_snapshot,
+                    None,
+                    &None,
+                    fuse_table.get_operator_ref(),
+                )
+                .await;
 
             if self.update_meta_error.is_some() {
                 assert_eq!(
@@ -788,10 +789,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_runtime_filter(&self, _filters: (IndexType, RuntimeFilterInfo)) {
-        todo!()
-    }
-
     fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
         todo!()
     }
@@ -1140,7 +1137,9 @@ impl Catalog for FakedCatalog {
     async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
         unimplemented!()
     }
-
+    async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
+        unimplemented!()
+    }
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,

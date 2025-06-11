@@ -28,10 +28,10 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;
+use super::FragmentKind;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
-use crate::executor::physical_plans::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
@@ -97,8 +97,6 @@ pub struct HashJoin {
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 
-    // Under cluster, mark if the join is broadcast join.
-    pub broadcast: bool,
     // When left/right single join converted to inner join, record the original join type
     // and do some special processing during runtime.
     pub single_to_inner: Option<JoinType>,
@@ -108,6 +106,7 @@ pub struct HashJoin {
     pub build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
 
     pub runtime_filter: PhysicalRuntimeFilters,
+    pub broadcast_id: Option<u32>,
 }
 
 impl HashJoin {
@@ -219,24 +218,11 @@ impl PhysicalPlanBuilder {
     /// # Arguments
     /// * `probe_side` - The probe side physical plan
     /// * `build_side` - The build side physical plan
-    ///
-    /// # Returns
-    /// * `Result<bool>` - Whether this is a broadcast join
-    fn check_broadcast_and_unify_keys(
+    fn unify_keys(
         &self,
         probe_side: &mut Box<PhysicalPlan>,
         build_side: &mut Box<PhysicalPlan>,
-    ) -> Result<bool> {
-        // Check if join is broadcast join
-        let mut is_broadcast = false;
-        if let PhysicalPlan::Exchange(Exchange {
-            kind: FragmentKind::Expansive,
-            ..
-        }) = build_side.as_ref()
-        {
-            is_broadcast = true;
-        }
-
+    ) -> Result<()> {
         // Unify the data types of the left and right exchange keys
         if let (
             PhysicalPlan::Exchange(Exchange {
@@ -247,13 +233,14 @@ impl PhysicalPlanBuilder {
             }),
         ) = (probe_side.as_mut(), build_side.as_mut())
         {
+            let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
             for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
                 let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
                 let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
                 let common_ty = common_super_type(
                     probe_expr.data_type().clone(),
                     build_expr.data_type().clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                    cast_rules,
                 )
                 .ok_or_else(|| {
                     ErrorCode::IllegalDataType(format!(
@@ -280,7 +267,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        Ok(is_broadcast)
+        Ok(())
     }
 
     /// Prepares runtime filter expression for join conditions
@@ -406,6 +393,7 @@ impl PhysicalPlanBuilder {
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
 
+        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
         for condition in join.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -437,17 +425,13 @@ impl PhysicalPlanBuilder {
             // Unify the data types of the left and right expressions
             let left_type = left_expr.data_type();
             let right_type = right_expr.data_type();
-            let common_ty = common_super_type(
-                left_type.clone(),
-                right_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::IllegalDataType(format!(
-                    "Cannot find common type for {:?} and {:?}",
-                    left_type, right_type
-                ))
-            })?;
+            let common_ty = common_super_type(left_type.clone(), right_type.clone(), cast_rules)
+                .ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "Cannot find common type for {:?} and {:?}",
+                        left_type, right_type
+                    ))
+                })?;
 
             let left_expr = check_cast(
                 left_expr.span(),
@@ -804,7 +788,6 @@ impl PhysicalPlanBuilder {
         join: &Join,
         probe_side: Box<PhysicalPlan>,
         build_side: Box<PhysicalPlan>,
-        is_broadcast: bool,
         projections: ColumnSet,
         probe_projections: ColumnSet,
         build_projections: ColumnSet,
@@ -818,6 +801,15 @@ impl PhysicalPlanBuilder {
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let broadcast_id = if let PhysicalPlan::Exchange(Exchange {
+            kind: FragmentKind::Normal,
+            ..
+        }) = build_side.as_ref()
+        {
+            Some(self.ctx.get_next_broadcast_id())
+        } else {
+            None
+        };
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: 0,
             projections,
@@ -836,10 +828,10 @@ impl PhysicalPlanBuilder {
             output_schema,
             need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
-            broadcast: is_broadcast,
             single_to_inner: join.single_to_inner.clone(),
             build_side_cache_info,
             runtime_filter,
+            broadcast_id,
         }))
     }
 
@@ -862,8 +854,8 @@ impl PhysicalPlanBuilder {
         let (column_projections, mut pre_column_projections) =
             self.prepare_column_projections(&mut required, &mut others_required);
 
-        // Step 3: Check if broadcast join and unify exchange keys
-        let is_broadcast = self.check_broadcast_and_unify_keys(&mut probe_side, &mut build_side)?;
+        // Step 3: unify exchange keys
+        self.unify_keys(&mut probe_side, &mut build_side)?;
 
         // Step 4: Prepare schemas for both sides
         let build_schema = self.prepare_build_schema(&join.join_type, &build_side)?;
@@ -919,9 +911,9 @@ impl PhysicalPlanBuilder {
             .build_runtime_filter(
                 join,
                 s_expr,
-                is_broadcast,
                 &right_join_conditions,
                 left_join_conditions_rt,
+                &build_side,
             )
             .await?;
 
@@ -930,7 +922,6 @@ impl PhysicalPlanBuilder {
             join,
             probe_side,
             build_side,
-            is_broadcast,
             projections,
             probe_projections,
             build_projections,
@@ -950,18 +941,18 @@ impl PhysicalPlanBuilder {
         &self,
         join: &Join,
         s_expr: &SExpr,
-        is_broadcast: bool,
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
+        build_side: &PhysicalPlan,
     ) -> Result<PhysicalRuntimeFilters> {
         JoinRuntimeFilter::build_runtime_filter(
             self.ctx.clone(),
             &self.metadata,
             join,
             s_expr,
-            is_broadcast,
             build_keys,
             probe_keys,
+            build_side,
         )
         .await
     }

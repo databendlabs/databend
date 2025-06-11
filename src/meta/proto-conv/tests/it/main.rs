@@ -118,3 +118,6 @@ mod v123_parquet_format_params;
 mod v124_udf_server_headers;
 mod v125_table_index;
 mod v126_iceberg_storage_catalog_option;
+mod v127_user_option_workload_group;
+mod v128_storage_network_config;
+mod v129_vector_datatype;

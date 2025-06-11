@@ -34,7 +34,7 @@ pub struct LogoutResponse {
 pub async fn logout_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
     if let Some(id) = &ctx.client_session_id {
         info!(
-            "logout with user={}, client session id={}, credential type={:?}",
+            "[HTTP-SESSION] Logout request: user={}, client_session_id={}, credential_type={:?}",
             ctx.user_name,
             id,
             ctx.credential.type_name()

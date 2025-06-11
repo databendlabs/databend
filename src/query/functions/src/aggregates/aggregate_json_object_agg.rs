@@ -177,14 +177,15 @@ where
         let tz = TimeZone::UTC;
         let mut values = Vec::with_capacity(self.kvs.len());
         let kvs = mem::take(&mut self.kvs);
+        let data_type = builder.data_type();
         for (key, value) in kvs.into_iter() {
-            let v = V::upcast_scalar(value);
+            let v = V::upcast_scalar_with_type(value, &data_type);
             // NULL values are omitted from the output.
             if v == Scalar::Null {
                 continue;
             }
             let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
+            cast_scalar_to_variant(v.as_ref(), &tz, &mut val, None);
             values.push((key, val));
         }
         let owned_jsonb =

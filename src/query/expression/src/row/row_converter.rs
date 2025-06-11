@@ -25,11 +25,17 @@ use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
+use crate::types::AccessType;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
+use crate::types::Decimal128As256Type;
+use crate::types::Decimal128As64Type;
+use crate::types::Decimal256As128Type;
+use crate::types::Decimal256As64Type;
+use crate::types::Decimal64As128Type;
+use crate::types::Decimal64As256Type;
+use crate::types::DecimalDataKind;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
-use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
@@ -76,7 +82,7 @@ impl RowConverter {
 
     /// Convert columns into [`BinaryColumn`] represented comparable row format.
     pub fn convert_columns(&self, columns: &[Column], num_rows: usize) -> BinaryColumn {
-        debug_assert!(columns.len() == self.fields.len());
+        debug_assert_eq!(columns.len(), self.fields.len());
         debug_assert!(columns
             .iter()
             .zip(self.fields.iter())
@@ -91,7 +97,7 @@ impl RowConverter {
     }
 
     fn new_empty_rows(&self, cols: &[Column], num_rows: usize) -> BinaryColumnBuilder {
-        let mut lengths = vec![0_u64; num_rows];
+        let mut lengths = vec![0_usize; num_rows];
 
         for (field, col) in self.fields.iter().zip(cols.iter()) {
             // Both nullable and non-nullable data will be encoded with null sentinel byte.
@@ -99,33 +105,28 @@ impl RowConverter {
             let ty = field.data_type.remove_nullable();
             match ty {
                 DataType::Null => {}
-                DataType::Boolean => lengths
-                    .iter_mut()
-                    .for_each(|x| *x += bool::ENCODED_LEN as u64),
+                DataType::Boolean => lengths.iter_mut().for_each(|x| *x += bool::ENCODED_LEN),
                 DataType::Number(t) => with_number_mapped_type!(|NUM_TYPE| match t {
                     NumberDataType::NUM_TYPE => {
-                        lengths
-                            .iter_mut()
-                            .for_each(|x| *x += NUM_TYPE::ENCODED_LEN as u64)
+                        lengths.iter_mut().for_each(|x| *x += NUM_TYPE::ENCODED_LEN)
                     }
                 }),
-                DataType::Decimal(t) => match t {
-                    DecimalDataType::Decimal128(_) => lengths
-                        .iter_mut()
-                        .for_each(|x| *x += i128::ENCODED_LEN as u64),
-                    DecimalDataType::Decimal256(_) => lengths
-                        .iter_mut()
-                        .for_each(|x| *x += i256::ENCODED_LEN as u64),
+                DataType::Decimal(size) => match size.data_kind() {
+                    DecimalDataKind::Decimal64 => {
+                        lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN)
+                    }
+                    DecimalDataKind::Decimal128 => {
+                        lengths.iter_mut().for_each(|x| *x += i128::ENCODED_LEN)
+                    }
+                    DecimalDataKind::Decimal256 => {
+                        lengths.iter_mut().for_each(|x| *x += i256::ENCODED_LEN)
+                    }
                 },
-                DataType::Timestamp => lengths
-                    .iter_mut()
-                    .for_each(|x| *x += i64::ENCODED_LEN as u64),
+                DataType::Timestamp => lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN),
                 DataType::Interval => lengths
                     .iter_mut()
-                    .for_each(|x| *x += months_days_micros::ENCODED_LEN as u64),
-                DataType::Date => lengths
-                    .iter_mut()
-                    .for_each(|x| *x += i32::ENCODED_LEN as u64),
+                    .for_each(|x| *x += months_days_micros::ENCODED_LEN),
+                DataType::Date => lengths.iter_mut().for_each(|x| *x += i32::ENCODED_LEN),
                 DataType::Binary => {
                     let col = col.remove_nullable();
                     if all_null {
@@ -137,7 +138,7 @@ impl RowConverter {
                             .zip(validity.iter())
                             .zip(lengths.iter_mut())
                             .for_each(|((bytes, v), length)| {
-                                *length += variable::encoded_len(bytes, !v) as u64
+                                *length += variable::encoded_len(bytes, !v)
                             })
                     } else {
                         col.as_binary()
@@ -145,7 +146,7 @@ impl RowConverter {
                             .iter()
                             .zip(lengths.iter_mut())
                             .for_each(|(bytes, length)| {
-                                *length += variable::encoded_len(bytes, false) as u64
+                                *length += variable::encoded_len(bytes, false)
                             })
                     }
                 }
@@ -160,7 +161,7 @@ impl RowConverter {
                             .zip(validity.iter())
                             .zip(lengths.iter_mut())
                             .for_each(|((str, v), length)| {
-                                *length += variable::encoded_len(str.as_bytes(), !v) as u64
+                                *length += variable::encoded_len(str.as_bytes(), !v)
                             })
                     } else {
                         col.as_string()
@@ -168,7 +169,7 @@ impl RowConverter {
                             .iter()
                             .zip(lengths.iter_mut())
                             .for_each(|(str, length)| {
-                                *length += variable::encoded_len(str.as_bytes(), false) as u64
+                                *length += variable::encoded_len(str.as_bytes(), false)
                             })
                     }
                 }
@@ -183,7 +184,7 @@ impl RowConverter {
                             .zip(validity.iter())
                             .zip(lengths.iter_mut())
                             .for_each(|((bytes, v), length)| {
-                                *length += variable::encoded_len(bytes, !v) as u64
+                                *length += variable::encoded_len(bytes, !v)
                             })
                     } else {
                         col.as_variant()
@@ -191,7 +192,7 @@ impl RowConverter {
                             .iter()
                             .zip(lengths.iter_mut())
                             .for_each(|(bytes, length)| {
-                                *length += variable::encoded_len(bytes, false) as u64
+                                *length += variable::encoded_len(bytes, false)
                             })
                     }
                 }
@@ -221,7 +222,7 @@ impl RowConverter {
         let mut cur_offset = 0_u64;
         for l in lengths {
             offsets.push(cur_offset);
-            cur_offset = cur_offset.checked_add(l).expect("overflow");
+            cur_offset = cur_offset.checked_add(l as u64).expect("overflow");
         }
 
         let buffer = vec![0_u8; cur_offset as usize];
@@ -252,13 +253,47 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
                 }
             })
         }
-        Column::Decimal(col) => {
-            with_decimal_type!(|DECIMAL| match col {
-                DecimalColumn::DECIMAL(c, _) => {
-                    fixed::encode(out, c, validity, asc, nulls_first)
+        Column::Decimal(col) => match col {
+            DecimalColumn::Decimal64(buffer, size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 => {
+                    fixed::encode(out, buffer, validity, asc, nulls_first)
                 }
-            })
-        }
+                DecimalDataKind::Decimal128 => {
+                    let iter = Decimal64As128Type::iter_column(&buffer);
+                    fixed::encode(out, iter, validity, asc, nulls_first)
+                }
+                DecimalDataKind::Decimal256 => {
+                    let iter = Decimal64As256Type::iter_column(&buffer);
+                    fixed::encode(out, iter, validity, asc, nulls_first)
+                }
+            },
+            DecimalColumn::Decimal128(buffer, size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 => {
+                    let iter = Decimal128As64Type::iter_column(&buffer);
+                    fixed::encode(out, iter, validity, asc, nulls_first)
+                }
+                DecimalDataKind::Decimal128 => {
+                    fixed::encode(out, buffer, validity, asc, nulls_first)
+                }
+                DecimalDataKind::Decimal256 => {
+                    let iter = Decimal128As256Type::iter_column(&buffer);
+                    fixed::encode(out, iter, validity, asc, nulls_first)
+                }
+            },
+            DecimalColumn::Decimal256(buffer, size) => match size.data_kind() {
+                DecimalDataKind::Decimal64 => {
+                    let iter = Decimal256As64Type::iter_column(&buffer);
+                    fixed::encode(out, iter, validity, asc, nulls_first)
+                }
+                DecimalDataKind::Decimal128 => {
+                    let iter = Decimal256As128Type::iter_column(&buffer);
+                    fixed::encode(out, iter, validity, asc, nulls_first)
+                }
+                DecimalDataKind::Decimal256 => {
+                    fixed::encode(out, buffer, validity, asc, nulls_first)
+                }
+            },
+        },
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Interval(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),

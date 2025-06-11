@@ -33,8 +33,8 @@ use crate::pipelines::processors::ProcessorPtr;
 
 pub struct TransformCastSchema {
     func_ctx: FunctionContext,
-    insert_schema: DataSchemaRef,
-    select_schema: DataSchemaRef,
+    to_schema: DataSchemaRef,
+    from_schema: DataSchemaRef,
     exprs: Vec<Expr>,
 }
 
@@ -46,25 +46,12 @@ where Self: Transform
         insert_schema: DataSchemaRef,
         func_ctx: FunctionContext,
     ) -> Result<Self> {
-        let exprs = select_schema
-            .fields()
-            .iter()
-            .zip(insert_schema.fields().iter().enumerate())
-            .map(|(from, (index, to))| {
-                let expr = ColumnRef {
-                    span: None,
-                    id: index,
-                    data_type: from.data_type().clone(),
-                    display_name: from.name().clone(),
-                };
-                check_cast(None, false, expr.into(), to.data_type(), &BUILTIN_FUNCTIONS)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let exprs = build_cast_exprs(select_schema.clone(), insert_schema.clone())?;
 
         Ok(Self {
             func_ctx,
-            insert_schema,
-            select_schema,
+            to_schema: insert_schema,
+            from_schema: select_schema,
             exprs,
         })
     }
@@ -89,28 +76,55 @@ impl Transform for TransformCastSchema {
     const NAME: &'static str = "CastSchemaTransform";
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let mut columns = Vec::with_capacity(self.exprs.len());
-        let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for (i, (field, expr)) in self
-            .insert_schema
-            .fields()
-            .iter()
-            .zip(self.exprs.iter())
-            .enumerate()
-        {
-            let value = evaluator.run(expr).map_err(|err| {
-                let msg = format!(
-                    "fail to auto cast column {} ({}) to column {} ({})",
-                    self.select_schema.fields[i].name(),
-                    self.select_schema.fields[i].data_type(),
-                    field.name(),
-                    field.data_type(),
-                );
-                err.add_message(msg)
-            })?;
-            let column = BlockEntry::new(field.data_type().clone(), value);
-            columns.push(column);
-        }
-        Ok(DataBlock::new(columns, data_block.num_rows()))
+        cast_schema(
+            data_block,
+            self.from_schema.clone(),
+            self.to_schema.clone(),
+            &self.exprs,
+            &self.func_ctx,
+        )
     }
+}
+
+pub fn build_cast_exprs(from_schema: DataSchemaRef, to_schema: DataSchemaRef) -> Result<Vec<Expr>> {
+    from_schema
+        .fields()
+        .iter()
+        .zip(to_schema.fields().iter().enumerate())
+        .map(|(from, (index, to))| {
+            let expr = ColumnRef {
+                span: None,
+                id: index,
+                data_type: from.data_type().clone(),
+                display_name: from.name().clone(),
+            };
+            check_cast(None, false, expr.into(), to.data_type(), &BUILTIN_FUNCTIONS)
+        })
+        .collect::<Result<Vec<_>>>()
+}
+
+pub fn cast_schema(
+    data_block: DataBlock,
+    from_schema: DataSchemaRef,
+    to_schema: DataSchemaRef,
+    exprs: &[Expr],
+    func_ctx: &FunctionContext,
+) -> Result<DataBlock> {
+    let mut columns = Vec::with_capacity(exprs.len());
+    let evaluator = Evaluator::new(&data_block, func_ctx, &BUILTIN_FUNCTIONS);
+    for (i, (field, expr)) in to_schema.fields().iter().zip(exprs.iter()).enumerate() {
+        let value = evaluator.run(expr).map_err(|err| {
+            let msg = format!(
+                "fail to auto cast column {} ({}) to column {} ({})",
+                from_schema.fields[i].name(),
+                from_schema.fields[i].data_type(),
+                field.name(),
+                field.data_type(),
+            );
+            err.add_message(msg)
+        })?;
+        let column = BlockEntry::new(field.data_type().clone(), value);
+        columns.push(column);
+    }
+    Ok(DataBlock::new(columns, data_block.num_rows()))
 }

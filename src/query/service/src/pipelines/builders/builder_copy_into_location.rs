@@ -15,7 +15,7 @@
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
-use databend_common_storages_stage::StageTable;
+use databend_common_storages_stage::StageSinkTable;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -32,12 +32,12 @@ impl PipelineBuilder {
             false,
         )?;
 
-        let to_table = StageTable::try_create(copy.to_stage_info.clone())?;
+        let to_table = StageSinkTable::create(copy.info.clone(), copy.input_table_schema.clone())?;
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
             to_table,
-            copy.input_schema.clone(),
+            copy.input_data_schema.clone(),
             None,
             vec![],
             false,

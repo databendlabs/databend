@@ -19,6 +19,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
@@ -35,7 +36,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
 
-    registry.register_function_factory("unnest", |_, arg_types: &[DataType]| {
+    let unnest = FunctionFactory::Closure(Box::new(|_, arg_types: &[DataType]| {
         match arg_types {
             [ty @ (DataType::Null
             | DataType::EmptyArray
@@ -50,7 +51,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 ))
             }
         }
-    });
+    }));
+    registry.register_function_factory("unnest", unnest);
 }
 
 fn build_unnest(

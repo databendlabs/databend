@@ -281,7 +281,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             };
             column_defs.push(column_def);
         }
-        CreateTableSource::Columns(column_defs, None, None)
+        CreateTableSource::Columns(column_defs, None)
     }
 }
 
@@ -331,6 +331,10 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             value: Literal::String("".to_string()),
         },
         TypeName::Array(_) => Expr::Array {
+            span: None,
+            exprs: vec![],
+        },
+        TypeName::Vector(_) => Expr::Array {
             span: None,
             exprs: vec![],
         },

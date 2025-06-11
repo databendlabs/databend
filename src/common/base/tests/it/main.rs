@@ -24,6 +24,7 @@ mod range_merger;
 mod runtime;
 mod stoppable;
 mod string;
+mod time_series;
 
 // runtime tests depends on the memory stat collector.
 #[global_allocator]

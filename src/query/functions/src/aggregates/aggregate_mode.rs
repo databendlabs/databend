@@ -90,18 +90,18 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if self.frequency_map.is_empty() {
-            T::push_default(builder);
+            builder.push_default();
         } else {
             let (key, _) = self
                 .frequency_map
                 .iter()
                 .max_by_key(|&(_, value)| value)
                 .unwrap();
-            T::push_item(builder, T::to_scalar_ref(key));
+            builder.push_item(T::to_scalar_ref(key));
         }
 
         Ok(())
@@ -129,7 +129,7 @@ pub fn try_create_aggregate_mode_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(s) if s.can_carried_by_128() => {
             let func = AggregateUnaryFunction::<
                 ModeState<Decimal128Type>,
                 Decimal128Type,
@@ -140,7 +140,7 @@ pub fn try_create_aggregate_mode_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             let func = AggregateUnaryFunction::<
                 ModeState<Decimal256Type>,
                 Decimal256Type,

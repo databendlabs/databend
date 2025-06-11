@@ -159,7 +159,7 @@ impl TransformSerializeBlock {
             .get_enable_refresh_virtual_column_after_write()
             .unwrap_or_default()
         {
-            VirtualColumnBuilder::try_create(ctx.clone(), &table.table_info)
+            VirtualColumnBuilder::try_create(ctx.clone(), table, source_schema.clone()).ok()
         } else {
             None
         };

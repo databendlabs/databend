@@ -72,6 +72,8 @@ pub struct IndexMeta {
 pub enum MarkedDeletedIndexType {
     AGGREGATING = 1,
     INVERTED = 2,
+    NGRAM = 3,
+    VECTOR = 4,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -124,7 +124,7 @@ impl Binder {
         }
 
         // todo(geometry): remove this when geometry stable.
-        if let Some(CreateTableSource::Columns(cols, inverted_indexes, ngram_indexes)) = &source {
+        if let Some(CreateTableSource::Columns(cols, table_indexes)) = &source {
             if cols
                 .iter()
                 .any(|col| matches!(col.data_type, TypeName::Geometry))
@@ -136,14 +136,9 @@ impl Binder {
                     We do not guarantee its compatibility until we doc this feature.",
                 ));
             }
-            if inverted_indexes.is_some() {
+            if table_indexes.is_some() {
                 return Err(ErrorCode::SemanticError(
-                    "dynamic table don't support inverted indexes".to_string(),
-                ));
-            }
-            if ngram_indexes.is_some() {
-                return Err(ErrorCode::SemanticError(
-                    "dynamic table don't support ngram indexes".to_string(),
+                    "dynamic table don't support indexes".to_string(),
                 ));
             }
         }

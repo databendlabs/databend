@@ -2,28 +2,16 @@ statement ok
 use default
 
 statement ok
-DROP TABLE IF EXISTS data2013
+CREATE OR REPLACE TABLE data2013 (name String, value UInt32)
 
 statement ok
-DROP TABLE IF EXISTS data2014
+CREATE OR REPLACE TABLE data2014 (name String, value UInt32)
 
 statement ok
-DROP TABLE IF EXISTS data2015
+CREATE OR REPLACE TABLE data2015 (data_name String, data_value UInt32)
 
 statement ok
-DROP TABLE IF EXISTS data2016
-
-statement ok
-CREATE TABLE data2013 (name String, value UInt32)
-
-statement ok
-CREATE TABLE data2014 (name String, value UInt32)
-
-statement ok
-CREATE TABLE data2015 (data_name String, data_value UInt32)
-
-statement ok
-CREATE TABLE data2016 (name String, value UInt32)
+CREATE OR REPLACE TABLE data2016 (name String, value UInt32)
 
 statement ok
 INSERT INTO data2013(name,value) VALUES('Alice', 1000), ('Bob', 2000), ('Carol', 5000)
@@ -346,7 +334,19 @@ statement ok
 unset max_set_operator_count;
 
 query I
-select * from numbers(100) union all select * from numbers(100) ignore_result;
+select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0 ignore_result;
+----
+
+query I
+select t, sum(number) as number from (select sum(number) as number, number* 3 as t   from numbers(100) group by t union all select  number, number* 3 as t from numbers(1000) where number < 0) group by t ignore_result;
+----
+
+query I
+select  number::int32 from numbers(100) union all select number::int from numbers(100) where number < 0 ignore_result;
+----
+
+query I
+select number::int32 from numbers(100) union all select number::int from numbers(100) where number > 0 ignore_result;
 ----
 
 statement ok
@@ -383,6 +383,14 @@ query I
 WITH cte1 AS ( SELECT t1.test FROM t1 WHERE t1.test = 0 ) ,cte2 AS ( SELECT cte1.test FROM cte1 WHERE cte1.test = 1  UNION ALL  SELECT cte1.test FROM cte1 WHERE cte1.test = 0 ) SELECT * FROM cte2;
 ----
 0
+
+query I
+select * from (select 1 n) t2
+where exists (
+select 1 from (select * from numbers(5) union select * from numbers(5)) t where t.number = t2.n
+);
+----
+1
 
 statement ok
 drop table t1;

@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_expression::hilbert_index;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
@@ -30,6 +30,7 @@ use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
@@ -38,7 +39,7 @@ use databend_common_expression::Value;
 /// Registers Hilbert curve related functions with the function registry.
 pub fn register(registry: &mut FunctionRegistry) {
     // Register the hilbert_range_index function that calculates Hilbert indices for multi-dimensional data
-    registry.register_function_factory("hilbert_range_index", |_, args_type| {
+    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let args_num = args_type.len();
         // The function supports 2, 3, 4, or 5 dimensions (each dimension requires 2 arguments)
         if ![4, 6, 8, 10].contains(&args_num) {
@@ -118,7 +119,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         }))
-    });
+    }));
+    registry.register_function_factory("hilbert_range_index", factory);
 
     // This `range_partition_id(col, range_bounds)` function calculates the partition ID for each value
     // in the column based on the specified partition boundaries.

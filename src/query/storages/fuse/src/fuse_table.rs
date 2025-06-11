@@ -61,7 +61,9 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
@@ -236,7 +238,7 @@ impl FuseTable {
         let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
         if !table_info.meta.part_prefix.is_empty() {
             return Err(ErrorCode::StorageOther(
-                "Location_prefix no longer supported. The last version that supports it is: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
+                "[FUSE-TABLE] Location_prefix no longer supported. Last supported version: https://github.com/databendlabs/databend/releases/tag/v1.2.653-nightly",
             ));
         }
 
@@ -254,6 +256,16 @@ impl FuseTable {
             changes_desc: None,
             pruned_result_receiver: Arc::new(Mutex::new(None)),
         }))
+    }
+
+    pub fn from_table_meta(id: u64, seq: u64, table_meta: TableMeta) -> Result<Box<FuseTable>> {
+        let table_info = TableInfo {
+            ident: TableIdent { table_id: id, seq },
+            meta: table_meta,
+            ..Default::default()
+        };
+        let table = Self::do_create_table_ext(table_info, false)?;
+        Ok(table)
     }
 
     pub fn description() -> StorageDescription {
@@ -336,6 +348,17 @@ impl FuseTable {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
+    pub async fn read_table_snapshot_with_location(
+        &self,
+        loc: Option<String>,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = self.snapshot_format_version(loc.clone())?;
+        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+    }
+
+    #[fastrace::trace]
+    #[async_backtrace::framed]
     pub async fn read_table_snapshot_without_cache(&self) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
         let loc = self.snapshot_loc();
@@ -395,7 +418,7 @@ impl FuseTable {
     pub fn try_from_table(tbl: &dyn Table) -> Result<&FuseTable> {
         tbl.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
             ErrorCode::Internal(format!(
-                "expects table of engine FUSE, but got {}",
+                "[FUSE-TABLE] Expected FUSE engine table, but got {}",
                 tbl.engine()
             ))
         })
@@ -569,12 +592,16 @@ impl FuseTable {
                     let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
                     let snapshot =
                         Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
-                    info!("table snapshot refreshed, time used {:?}", begin.elapsed());
+                    info!(
+                        "[FUSE-TABLE] Table snapshot refreshed, elapsed: {:?}",
+                        begin.elapsed()
+                    );
 
                     let schema = snapshot
                         .ok_or_else(|| {
                             ErrorCode::ShareStorageError(
-                                "Failed to load snapshot of read_only attach table".to_string(),
+                                "[FUSE-TABLE] Failed to load snapshot of read-only attached table"
+                                    .to_string(),
                             )
                         })?
                         .schema
@@ -815,13 +842,15 @@ impl Table for FuseTable {
     ) -> Result<()> {
         self.do_append_data(ctx, pipeline, table_meta_timestamps)
     }
+
     fn build_prune_pipeline(
         &self,
         table_ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
+        plan_id: u32,
     ) -> Result<Option<Pipeline>> {
-        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, false)
+        self.do_build_prune_pipeline(table_ctx, plan, source_pipeline, plan_id)
     }
 
     fn commit_insertion(

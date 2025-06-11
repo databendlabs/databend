@@ -70,15 +70,21 @@ fn test_type_check() {
             "n_j",
             VariantType::from_data(vec![json.clone()]).wrap_nullable(None),
         ),
-        ("d128", Decimal128Type::from_data(vec![0_i128])),
+        (
+            "d128",
+            Decimal128Type::from_data_with_size(vec![0_i128], None),
+        ),
         (
             "n_d128",
-            Decimal128Type::from_data(vec![0_i128]).wrap_nullable(None),
+            Decimal128Type::from_opt_data_with_size(vec![Some(0_i128)], None),
         ),
-        ("d256", Decimal256Type::from_data(vec![i256::ZERO])),
+        (
+            "d256",
+            Decimal256Type::from_data_with_size(vec![i256::ZERO], None),
+        ),
         (
             "n_d256",
-            Decimal256Type::from_data(vec![i256::ZERO]).wrap_nullable(None),
+            Decimal256Type::from_opt_data_with_size(vec![Some(i256::ZERO)], None),
         ),
     ];
 
@@ -145,6 +151,7 @@ fn test_type_check() {
             run_ast(file, format!("{ty} = 1::uint64"), &columns);
             run_ast(file, format!("1::uint64 > {ty}"), &columns);
             run_ast(file, format!("1::uint64 = {ty}"), &columns);
+            run_ast(file, format!("{ty} = true"), &columns);
         }
     }
 }

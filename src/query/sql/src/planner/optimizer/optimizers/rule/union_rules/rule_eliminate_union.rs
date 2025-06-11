@@ -72,6 +72,17 @@ impl Rule for RuleEliminateUnion {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let union: UnionAll = s_expr.plan().clone().try_into()?;
+
+        // Need to check that union's output indexes are the same as left child's output indexes
+        // currently this is always !false now, so the following codes are not necessary
+        if !union
+            .left_outputs
+            .iter()
+            .all(|(idx, _)| union.output_indexes.contains(idx))
+        {
+            return Ok(());
+        }
+
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
 

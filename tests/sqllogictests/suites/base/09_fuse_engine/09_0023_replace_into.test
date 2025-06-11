@@ -514,7 +514,7 @@ select * from t order by c;
 3
 
 statement ok
-create or replace table test (c int);
+create or replace table test (c int64);
 
 statement ok
 create or replace table source (c int, v string);
@@ -535,6 +535,10 @@ select sum(c) from test;
 
 statement ok
 explain replace into test on(c) select sum(c) as c from source group by v;
+
+# partial parse insert source
+statement ok
+replace into test (c) on conflict (c) select sum(c) as c from source where c >= 0 and c >= 1 and c >= 2 and c >= 3 and c >= 4 and c >= 5 and c >= 6 and c >= 7 and c >= 8 and c >= 9 and c >= 10 and c >= 11 and c >= 12 and c >= 13 and c >= 14 and c >= 15 and c >= 16 and c >= 17 and c >= 18 and c >= 19 and c >= 20 and c >= 21 and c >=22 and c >= 23 and c >= 24 and true and true and now() >= '2025-01-01' and date(now()) < date(add_hours(now(),24));
 
 statement ok
 DROP DATABASE db_09_0023

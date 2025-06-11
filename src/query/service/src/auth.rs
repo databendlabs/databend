@@ -26,6 +26,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
 use fastrace::func_name;
+use serde::Serialize;
 
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
@@ -34,7 +35,7 @@ pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub enum CredentialType {
     DatabendToken,
     Jwt,
@@ -123,11 +124,11 @@ impl AuthMgr {
                 let jwt_auth = self
                     .jwt_auth
                     .as_ref()
-                    .ok_or_else(|| ErrorCode::AuthenticateFailure("jwt auth not configured."))?;
+                    .ok_or_else(|| ErrorCode::AuthenticateFailure("[AUTH] JWT authentication failed: JWT auth is not configured on this server"))?;
                 let jwt = jwt_auth.parse_jwt_claims(t.as_str()).await?;
                 let user_name = jwt.subject.ok_or_else(|| {
                     ErrorCode::AuthenticateFailure(
-                        "jwt auth not configured correctly, user name is missing.",
+                        "[AUTH] JWT authentication failed: subject claim (user name) is missing in the token",
                     )
                 })?;
 
@@ -147,7 +148,7 @@ impl AuthMgr {
                 {
                     Ok(user_info) => match user_info.auth_info {
                         AuthInfo::JWT => user_info,
-                        _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                        _ => return Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for JWT authentication")),
                     },
                     Err(e) => {
                         match e.code() {
@@ -155,12 +156,12 @@ impl AuthMgr {
                             ErrorCode::META_SERVICE_ERROR => {
                                 return Err(e);
                             }
-                            _ => return Err(ErrorCode::AuthenticateFailure(e.message())),
+                            _ => return Err(ErrorCode::AuthenticateFailure(format!("[AUTH] Authentication failed: {}", e.message()))),
                         }
                         let ensure_user = jwt
                             .custom
                             .ensure_user
-                            .ok_or_else(|| ErrorCode::AuthenticateFailure(e.message()))?;
+                            .ok_or_else(|| ErrorCode::AuthenticateFailure(format!("[AUTH] JWT authentication failed: ensure_user claim is missing and user does not exist: {}", e.message())))?;
                         // create a new user if not exists
                         let mut user_info = UserInfo::new(&user_name, "%", AuthInfo::JWT);
                         if let Some(ref roles) = ensure_user.roles {
@@ -226,16 +227,16 @@ impl AuthMgr {
                         hash_method: t,
                         ..
                     } => match p {
-                        None => Err(ErrorCode::AuthenticateFailure("password required")),
+                        None => Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: password is required but was not provided")),
                         Some(p) => {
                             if *h == t.hash(p) {
                                 Ok(())
                             } else {
-                                Err(ErrorCode::AuthenticateFailure("wrong password"))
+                                Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: incorrect password"))
                             }
                         }
                     },
-                    _ => Err(ErrorCode::AuthenticateFailure("wrong auth type")),
+                    _ => Err(ErrorCode::AuthenticateFailure("[AUTH] Authentication failed: user exists but is not configured for password authentication")),
                 };
                 UserApiProvider::instance()
                     .update_user_login_result(tenant, identity, authed.is_ok(), &user)

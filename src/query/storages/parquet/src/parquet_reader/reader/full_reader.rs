@@ -17,9 +17,11 @@ use std::sync::Arc;
 
 use arrow_schema::ArrowError;
 use bytes::Bytes;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -48,6 +50,8 @@ use crate::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_reader::utils::transform_record_batch;
 use crate::parquet_reader::utils::transform_record_batch_by_field_paths;
 use crate::parquet_reader::utils::FieldPaths;
+use crate::parquet_reader::DataBlockIterator;
+use crate::transformer::RecordBatchTransformer;
 use crate::ParquetPruner;
 
 /// The reader to read a whole parquet file.
@@ -70,6 +74,8 @@ pub struct ParquetWholeFileReader {
     pub(super) field_paths: Arc<Option<FieldPaths>>,
 
     pub(super) pruner: Option<ParquetPruner>,
+
+    pub(super) transformer: Option<RecordBatchTransformer>,
 
     // Options
     pub(super) need_page_index: bool,
@@ -172,7 +178,7 @@ impl ParquetWholeFileReader {
     }
 
     /// Read a [`DataBlock`] from bytes.
-    pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<Vec<DataBlock>> {
+    pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<DataBlockIterator> {
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
             ArrowReaderOptions::new(),
@@ -226,26 +232,32 @@ impl ParquetWholeFileReader {
             }
         }
         let reader = builder.build()?;
-        // Write `if` outside iteration to reduce branches.
-        if let Some(field_paths) = self.field_paths.as_ref() {
-            reader
-                .into_iter()
-                .map(|batch| {
-                    let batch = batch?;
-                    transform_record_batch_by_field_paths(&batch, field_paths)
+        let iter = reader.into_iter().map(|r| r.map_err(ErrorCode::from));
+        let output_data_schema: DataSchema = self.output_schema.as_ref().into();
+        let output_data_schema = Arc::new(output_data_schema);
+        let field_paths = self.field_paths.clone();
+        let mut transformer = self.transformer.clone();
+
+        if let Some(field_paths) = field_paths.as_ref() {
+            let field_paths = field_paths.clone();
+            let iter = iter.map(move |r| {
+                r.and_then(|mut batch| {
+                    if let Some(transformer) = &mut transformer {
+                        batch = transformer.process_record_batch(batch)?;
+                    }
+                    transform_record_batch_by_field_paths(&batch, &field_paths)
                 })
-                .collect()
+            });
+            Ok(Box::new(iter))
         } else {
-            reader
-                .into_iter()
-                .map(|batch| {
-                    let batch = batch?;
-                    Ok(
-                        DataBlock::from_record_batch(&self.output_schema.as_ref().into(), &batch)?
-                            .0,
-                    )
+            Ok(Box::new(iter.map(move |r| {
+                r.and_then(|mut batch| {
+                    if let Some(transformer) = &mut transformer {
+                        batch = transformer.process_record_batch(batch)?
+                    }
+                    DataBlock::from_record_batch(&output_data_schema, &batch).map(|t| t.0)
                 })
-                .collect()
+            })))
         }
     }
 }
@@ -272,16 +284,19 @@ impl ParquetFileReader {
 }
 
 impl AsyncFileReader for ParquetFileReader {
-    fn get_bytes(&mut self, range: Range<usize>) -> BoxFuture<'_, parquet::errors::Result<Bytes>> {
+    fn get_bytes(&mut self, range: Range<u64>) -> BoxFuture<'_, parquet::errors::Result<Bytes>> {
         Box::pin(
             self.r
-                .read(range.start as u64..range.end as u64)
+                .read(range.start..range.end)
                 .map_ok(|v| v.to_bytes())
                 .map_err(|err| parquet::errors::ParquetError::External(Box::new(err))),
         )
     }
 
-    fn get_metadata(&mut self) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
+    fn get_metadata(
+        &mut self,
+        _options: Option<&'_ ArrowReaderOptions>,
+    ) -> BoxFuture<'_, parquet::errors::Result<Arc<ParquetMetaData>>> {
         Box::pin(async move {
             let size = self.size as usize;
             #[allow(deprecated)]

@@ -16,16 +16,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::mask_connection_info;
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
+use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_version::DATABEND_SEMVER;
 use fastrace::func_path;
@@ -38,6 +42,7 @@ use log::error;
 use log::info;
 use log::warn;
 use poem::error::Error as PoemError;
+use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
 use poem::get;
 use poem::middleware::CookieJarManager;
@@ -260,7 +265,7 @@ async fn query_final_handler(
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
-            "{}: got {} request, this query is going to be finally completed.",
+            "[HTTP-QUERY] Query {} received final request at {}, completing query execution",
             query_id,
             make_final_uri(&query_id)
         );
@@ -301,7 +306,7 @@ async fn query_cancel_handler(
     let _t = SlowRequestLogTracker::new(ctx);
     async {
         info!(
-            "{}: got {} request, cancel the query",
+            "[HTTP-QUERY] Query {} received cancel request at {}, terminating execution",
             query_id,
             make_kill_uri(&query_id)
         );
@@ -374,7 +379,7 @@ async fn query_page_handler(
             if query.user_name != ctx.user_name {
                 return Err(poem::error::Error::from_string(
                     format!(
-                        "wrong user, query {} expect {}, got {}",
+                        "[HTTP-QUERY] Authentication error: query {} expected user {}, but got {}",
                         query_id, query.user_name, ctx.user_name
                     ),
                     StatusCode::UNAUTHORIZED,
@@ -387,7 +392,10 @@ async fn query_page_handler(
             } else {
                 query.update_expire_time(true).await;
                 let resp = query.get_response_page(page_no).await.map_err(|err| {
-                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                    poem::Error::from_string(
+                        format!("[HTTP-QUERY] {}", err.message()),
+                        StatusCode::NOT_FOUND,
+                    )
                 })?;
                 query.update_expire_time(false).await;
                 Ok(QueryResponse::from_internal(query_id, resp, false))
@@ -416,8 +424,10 @@ async fn query_page_handler(
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
-    Json(req): Json<HttpQueryRequest>,
+    Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
+    let session = ctx.session.clone();
+
     let query_handle = async {
         let agent_info = ctx
             .user_agent
@@ -431,7 +441,7 @@ pub(crate) async fn query_handler(
             .map(|s| format!("(client_session_id={s})"))
             .unwrap_or("".to_string());
         info!(
-            "http query new request{}{}: {}",
+            "[HTTP-QUERY] New query request{}{}: {}",
             agent_info,
             client_session_id_info,
             mask_connection_info(&format!("{:?}", req))
@@ -441,14 +451,14 @@ pub(crate) async fn query_handler(
         match HttpQuery::try_create(ctx, req.clone()).await {
             Err(err) => {
                 let err = err.display_with_sql(&sql);
-                error!("http query fail to start sql, error: {:?}", err);
+                error!("[HTTP-QUERY] Failed to start SQL query, error: {:?}", err);
                 ctx.set_fail();
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
                 if let Err(err) = query.start_query(sql.clone()).await {
                     let err = err.display_with_sql(&sql);
-                    error!("http query fail to start sql, error: {:?}", err);
+                    error!("[HTTP-QUERY] Failed to start SQL query, error: {:?}", err);
                     ctx.set_fail();
                     return Ok(req.fail_to_start_sql(err).into_response());
                 }
@@ -463,7 +473,10 @@ pub(crate) async fn query_handler(
                     .await
                     .map_err(|err| err.display_with_sql(&sql))
                     .map_err(|err| {
-                        poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                        poem::Error::from_string(
+                            format!("[HTTP-QUERY] {}", err.message()),
+                            StatusCode::NOT_FOUND,
+                        )
                     })?;
 
                 if matches!(resp.state.state, ExecuteStateKind::Failed) {
@@ -474,7 +487,7 @@ pub(crate) async fn query_handler(
                     None => (0, None),
                     Some(p) => (p.page.data.num_rows(), p.next_page_no),
                 };
-                info!( "http query initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                info!("[HTTP-QUERY] Initial response for query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
                         &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                     );
                 query.update_expire_time(false).await;
@@ -490,10 +503,29 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let query_mem_stat = MemStat::create(ctx.query_id.clone());
+        let mut tracking_workload_group = None;
+        let mut parent_mem_stat = ParentMemStat::StaticRef(&GLOBAL_MEM_STAT);
+
+        if let Some(workload_id) = session.get_current_workload_group() {
+            let mgr = GlobalInstance::get::<Arc<WorkloadGroupResourceManager>>();
+
+            let workload_group = match mgr.get_workload(&workload_id).await {
+                Ok(workload_group) => workload_group,
+                Err(error) => {
+                    return Ok(HttpErrorCode::error_code(error).as_response());
+                }
+            };
+
+            parent_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
+            tracking_workload_group = Some(workload_group);
+        }
+
+        let name = Some(ctx.query_id.clone());
+        let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
+        tracking_payload.workload_group_resource = tracking_workload_group;
         let _tracking_guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(query_handle)
     };
@@ -580,12 +612,12 @@ pub async fn heartbeat_handler(
                                     .unwrap(),
                             )
                         } else {
-                            warn!("heartbeat forward fail: {:?}", resp);
+                            warn!("[HTTP-QUERY] Heartbeat forward failed: {:?}", resp);
                             None
                         }
                     }
                     Err(e) => {
-                        warn!("heartbeat forward error: {:?}", e);
+                        warn!("[HTTP-QUERY] Heartbeat forward error: {:?}", e);
                         None
                     }
                 }
@@ -728,14 +760,14 @@ pub fn query_route() -> Route {
 
 fn query_id_removed(query_id: &str, remove_reason: RemoveReason) -> PoemError {
     PoemError::from_string(
-        format!("query id {query_id} {}", remove_reason),
+        format!("[HTTP-QUERY] Query ID {query_id} {}", remove_reason),
         StatusCode::BAD_REQUEST,
     )
 }
 
 fn query_id_not_found(query_id: &str, node_id: &str) -> PoemError {
     PoemError::from_string(
-        format!("query id {query_id} not found on {node_id}"),
+        format!("[HTTP-QUERY] Query ID {query_id} not found on node {node_id}"),
         StatusCode::NOT_FOUND,
     )
 }
@@ -770,7 +802,7 @@ impl Drop for SlowRequestLogTracker {
             let elapsed = self.started_at.elapsed();
             if elapsed.as_secs_f64() > 60.0 {
                 warn!(
-                    "slow http query request on {} {}, elapsed: {:.2}s",
+                    "[HTTP-QUERY] Slow request detected on {} {}, elapsed time: {:.2}s",
                     self.method,
                     self.uri,
                     elapsed.as_secs_f64()
@@ -795,7 +827,7 @@ pub(crate) fn get_http_tracing_span(
                     .with_properties(|| ctx.to_fastrace_properties());
             }
             None => {
-                warn!("failed to decode trace parent: {}", trace);
+                warn!("[HTTP-QUERY] Failed to decode trace parent: {}", trace);
             }
         }
     }

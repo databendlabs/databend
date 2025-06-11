@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use async_channel::Receiver;
@@ -30,6 +31,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::SourcePipeBuilder;
 use log::info;
 
+use super::parquet_data_transform_reader::ReadStats;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -165,6 +167,11 @@ pub fn build_fuse_parquet_source_pipeline(
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
 
+    let stats = Arc::new(ReadStats {
+        blocks_total: AtomicU64::new(0),
+        blocks_pruned: AtomicU64::new(0),
+    });
+
     match block_reader.support_blocking_api() {
         true => {
             let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
@@ -180,6 +187,9 @@ pub fn build_fuse_parquet_source_pipeline(
                     pipeline.add_pipe(pipe);
                 }
             }
+            let unfinished_processors_count =
+                Arc::new(AtomicU64::new(pipeline.output_len() as u64));
+
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<true>::create(
                     plan.scan_id,
@@ -190,11 +200,16 @@ pub fn build_fuse_parquet_source_pipeline(
                     virtual_reader.clone(),
                     input,
                     output,
+                    stats.clone(),
+                    unfinished_processors_count.clone(),
                 )
             })?;
         }
         false => {
-            info!("read block data adjust max io requests:{}", max_io_requests);
+            info!(
+                "[FUSE-SOURCE] Block data reader adjusted max_io_requests to {}",
+                max_io_requests
+            );
 
             let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
             let partitions = StealablePartitions::new(partitions, ctx.clone());
@@ -215,6 +230,8 @@ pub fn build_fuse_parquet_source_pipeline(
                     pipeline.add_pipe(pipe);
                 }
             }
+            let unfinished_processors_count =
+                Arc::new(AtomicU64::new(pipeline.output_len() as u64));
 
             pipeline.add_transform(|input, output| {
                 ReadParquetDataTransform::<false>::create(
@@ -226,13 +243,15 @@ pub fn build_fuse_parquet_source_pipeline(
                     virtual_reader.clone(),
                     input,
                     output,
+                    stats.clone(),
+                    unfinished_processors_count.clone(),
                 )
             })?;
 
             pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
 
             info!(
-                "read block pipeline resize from:{} to:{}",
+                "[FUSE-SOURCE] Block read pipeline resized from {} to {} threads",
                 max_io_requests,
                 pipeline.output_len()
             );

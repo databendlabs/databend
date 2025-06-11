@@ -105,13 +105,15 @@ where
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
         match inner_type.remove_nullable() {
-            DataType::Decimal(decimal_type) => {
-                let size = decimal_type.size();
+            DataType::Decimal(size) => {
                 let values = mem::take(&mut self.values);
                 for value in values.into_iter() {
-                    let val = T::upcast_scalar(value);
+                    let val = T::upcast_scalar_with_type(value, &DataType::Decimal(size));
                     let decimal_val = val.as_decimal().unwrap();
                     let new_val = match decimal_val {
+                        DecimalScalar::Decimal64(v, _) => {
+                            ScalarRef::Decimal(DecimalScalar::Decimal64(*v, size))
+                        }
                         DecimalScalar::Decimal128(v, _) => {
                             ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
                         }
@@ -125,7 +127,7 @@ where
             _ => {
                 let values = mem::take(&mut self.values);
                 for value in values.into_iter() {
-                    let val = T::upcast_scalar(value);
+                    let val = T::upcast_scalar_with_type(value, inner_type);
                     inner_builder.push(val.as_ref());
                 }
             }
@@ -209,14 +211,17 @@ where
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
         match inner_type.remove_nullable() {
-            DataType::Decimal(decimal_type) => {
-                let size = decimal_type.size();
+            DataType::Decimal(size) => {
                 for value in &self.values {
                     match value {
                         Some(value) => {
-                            let val = T::upcast_scalar(value.clone());
+                            let val =
+                                T::upcast_scalar_with_type(value.clone(), &DataType::Decimal(size));
                             let decimal_val = val.as_decimal().unwrap();
                             let new_val = match decimal_val {
+                                DecimalScalar::Decimal64(v, _) => {
+                                    ScalarRef::Decimal(DecimalScalar::Decimal64(*v, size))
+                                }
                                 DecimalScalar::Decimal128(v, _) => {
                                     ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
                                 }
@@ -236,7 +241,10 @@ where
                 for value in &self.values {
                     match value {
                         Some(value) => {
-                            let val = T::upcast_scalar(value.clone());
+                            let val = T::upcast_scalar_with_type(
+                                value.clone(),
+                                &inner_type.remove_nullable(),
+                            );
                             inner_builder.push(val.as_ref());
                         }
                         None => {
@@ -454,7 +462,7 @@ pub fn try_create_aggregate_array_agg_function(
                 }
             })
         }
-        DataType::Decimal(DecimalDataType::Decimal128(_)) => {
+        DataType::Decimal(size) if size.can_carried_by_128() => {
             if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i128>>;
                 AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
@@ -469,7 +477,7 @@ pub fn try_create_aggregate_array_agg_function(
                 )
             }
         }
-        DataType::Decimal(DecimalDataType::Decimal256(_)) => {
+        DataType::Decimal(_) => {
             if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i256>>;
                 AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(

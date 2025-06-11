@@ -743,6 +743,79 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub enum SubqueryComparisonOp {
+    Equal,
+    NotEqual,
+    // Greater ">"
+    GT,
+    // Less "<"
+    LT,
+    // Greater or equal ">="
+    GTE,
+    // Less or equal "<="
+    LTE,
+    // Like operator for pattern matching
+    Like(Option<String>),
+}
+
+impl SubqueryComparisonOp {
+    fn to_func_name(&self) -> &'static str {
+        match &self {
+            SubqueryComparisonOp::Equal => "eq",
+            SubqueryComparisonOp::NotEqual => "noteq",
+            SubqueryComparisonOp::GT => "gt",
+            SubqueryComparisonOp::LT => "lt",
+            SubqueryComparisonOp::GTE => "gte",
+            SubqueryComparisonOp::LTE => "lte",
+            SubqueryComparisonOp::Like(_) => "like",
+        }
+    }
+
+    pub fn to_func_call(&self, span: Span, left: ScalarExpr, right: ScalarExpr) -> FunctionCall {
+        if let SubqueryComparisonOp::Like(escape) = self {
+            let mut arguments = vec![left, right];
+            if let Some(escape) = escape {
+                arguments.push(ScalarExpr::ConstantExpr(ConstantExpr {
+                    span,
+                    value: Scalar::String(escape.clone()),
+                }))
+            }
+            return FunctionCall {
+                span,
+                func_name: "like".to_string(),
+                params: vec![],
+                arguments,
+            };
+        }
+        FunctionCall {
+            span,
+            func_name: self.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![left, right],
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a BinaryOperator> for SubqueryComparisonOp {
+    type Error = ErrorCode;
+
+    fn try_from(op: &'a BinaryOperator) -> Result<Self> {
+        match op {
+            BinaryOperator::Gt => Ok(Self::GT),
+            BinaryOperator::Lt => Ok(Self::LT),
+            BinaryOperator::Gte => Ok(Self::GTE),
+            BinaryOperator::Lte => Ok(Self::LTE),
+            BinaryOperator::Eq => Ok(Self::Equal),
+            BinaryOperator::NotEq => Ok(Self::NotEqual),
+            BinaryOperator::Like(escape) => Ok(Self::Like(escape.clone())),
+            _ => Err(ErrorCode::SemanticError(format!(
+                "Unsupported subquery comparison operator {op}"
+            ))),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunctionScalarSortDesc {
     pub expr: ScalarExpr,
@@ -902,7 +975,7 @@ pub struct SubqueryExpr {
     // The expr that is used to compare the result of the subquery (IN/ANY/ALL), such as `t1.a in (select t2.a from t2)`, t1.a is `child_expr`.
     pub child_expr: Option<Box<ScalarExpr>>,
     // Comparison operator for Any/All, such as t1.a = Any (...), `compare_op` is `=`.
-    pub compare_op: Option<ComparisonOp>,
+    pub compare_op: Option<SubqueryComparisonOp>,
     // Output column of Any/All and scalar subqueries.
     pub output_column: ColumnBinding,
     pub projection_index: Option<IndexType>,

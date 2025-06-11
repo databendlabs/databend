@@ -26,10 +26,8 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_meta_semaphore::errors::AcquireError;
 use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
-use futures::stream::TryStreamExt;
 pub use local::LocalMetaService;
 use log::info;
 use tokio_stream::Stream;
@@ -49,13 +47,15 @@ pub enum MetaStore {
     R(Arc<ClientHandle>),
 }
 
+/// Internally [`MetaStore`] contains a [`ClientHandle`] which is a client to either a local
+/// databend-meta service or a remote databend-meta service accessed via gRPC.
 impl Deref for MetaStore {
     type Target = Arc<ClientHandle>;
 
     fn deref(&self) -> &Self::Target {
         match self {
             MetaStore::L(l) => l.deref(),
-            MetaStore::R(r) => r,
+            MetaStore::R(grpc_client) => grpc_client,
         }
     }
 }
@@ -86,13 +86,6 @@ impl MetaStore {
     pub async fn get_local_addr(&self) -> Result<String, MetaError> {
         let client_info = self.get_client_info().await?;
         Ok(client_info.client_addr)
-    }
-
-    pub async fn watch(&self, request: WatchRequest) -> Result<WatchStream, MetaError> {
-        let client = self.deref();
-
-        let streaming = client.request(request).await?;
-        Ok(Box::pin(streaming.map_err(MetaError::from)))
     }
 
     pub async fn new_acquired(
@@ -132,9 +125,12 @@ impl MetaStoreProvider {
 
             // NOTE: This can only be used for test: data will be removed when program quit.
             Ok(MetaStore::L(Arc::new(
-                LocalMetaService::new("MetaStoreProvider-created")
-                    .await
-                    .unwrap(),
+                LocalMetaService::new_with_fixed_dir(
+                    self.rpc_conf.embedded_dir.clone(),
+                    "MetaStoreProvider-created",
+                )
+                .await
+                .unwrap(),
             )))
         } else {
             info!(conf :? =(&self.rpc_conf); "use remote meta");

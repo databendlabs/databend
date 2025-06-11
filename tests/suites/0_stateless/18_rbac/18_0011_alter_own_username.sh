@@ -20,12 +20,12 @@ echo "alter user 'testuser1' identified by '123' with disabled=true" | $TEST_USE
 
 # Note: this query in bendsql will return err, because bendsql will call auth in poll, after password modified, in next poll the auth failed, it will return err.
 # testuser1@localhost:8000/default> alter user 'testuser1' identified by '123';
-# error: APIError: RequestError: Query Page failed with status 401 Unauthorized: {"error":{"code":"401","message":"wrong password"}}
-echo "alter user 'testuser1' identified by '123'" | $TEST_USER_CONNECT 2>&1 | grep 'wrong password' | wc -l
+# error: APIError: RequestError: Query Page failed with status 401 Unauthorized: {"error":{"code":"401","message":"... incorrect password ..."}}
+echo "alter user 'testuser1' identified by '123'" | $TEST_USER_CONNECT 2>&1 | grep 'incorrect password' | wc -l
 
 export TEST_USER_MODIFY_CONNECT="bendsql --user=testuser1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-echo "select 1" | $TEST_USER_CONNECT  2>&1 | grep 'wrong password' | wc -l
+echo "select 1" | $TEST_USER_CONNECT  2>&1 | grep 'incorrect password' | wc -l
 echo "select 'testuser1 password is 123'" | $TEST_USER_MODIFY_CONNECT
 echo "select 'testuser2 password not modify'" | $TEST_USER2_CONNECT
 

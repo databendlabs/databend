@@ -52,7 +52,7 @@ statement ok
 with S as (select number from numbers(1000) where number > 100) COPY INTO @hello from (select number from numbers(1) where number not in (SELECT number FROM S)) FILE_FORMAT = (type = parquet)
 
 query I
-select sum($1) from @hello;
+select sum(number) from @hello;
 ----
 45
 

@@ -29,12 +29,13 @@ use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::Decimal128As256Type;
+use crate::types::Decimal256As128Type;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
 use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
-use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::InputColumns;
@@ -46,10 +47,13 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
         DataType::Boolean => 1,
         DataType::Number(n) => n.bit_width() as usize / 8,
-        DataType::Decimal(n) => match n {
-            crate::types::DecimalDataType::Decimal128(_) => 16,
-            crate::types::DecimalDataType::Decimal256(_) => 32,
-        },
+        DataType::Decimal(n) => {
+            if n.can_carried_by_128() {
+                16
+            } else {
+                32
+            }
+        }
         DataType::Timestamp => 8,
         DataType::Date => 4,
         DataType::Interval => 16,
@@ -61,7 +65,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
         | DataType::Geometry
         | DataType::Geography => 4 + 8, // u32 len + address
         DataType::Nullable(x) => rowformat_size(x),
-        DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) => 4 + 8,
+        DataType::Array(_) | DataType::Map(_) | DataType::Tuple(_) | DataType::Vector(_) => 4 + 8,
         DataType::Generic(_) => unreachable!(),
     }
 }
@@ -85,15 +89,33 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
         }),
-        Column::Decimal(v) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
-                DecimalColumn::DECIMAL_TYPE(buffer, _) => {
+        Column::Decimal(v) => match v {
+            DecimalColumn::Decimal64(_, _) => unimplemented!(),
+            DecimalColumn::Decimal128(buffer, size) => {
+                if size.can_carried_by_128() {
+                    for index in select_vector.iter().take(rows).copied() {
+                        store(&buffer[index], address[index].add(offset) as *mut u8);
+                    }
+                } else {
+                    for index in select_vector.iter().take(rows).copied() {
+                        let val = Decimal128As256Type::index_column_unchecked(buffer, index);
+                        store(&val, address[index].add(offset) as *mut u8);
+                    }
+                }
+            }
+            DecimalColumn::Decimal256(buffer, size) => {
+                if size.can_carried_by_128() {
+                    for index in select_vector.iter().take(rows).copied() {
+                        let val = Decimal256As128Type::index_column_unchecked(buffer, index);
+                        store(&val, address[index].add(offset) as *mut u8);
+                    }
+                } else {
                     for index in select_vector.iter().take(rows).copied() {
                         store(&buffer[index], address[index].add(offset) as *mut u8);
                     }
                 }
-            })
-        }
+            }
+        },
         Column::Boolean(v) => {
             if v.null_count() == 0 || v.null_count() == v.len() {
                 let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
@@ -243,6 +265,7 @@ pub unsafe fn row_match_column(
             }
         }),
         Column::Decimal(v) => match v {
+            DecimalColumn::Decimal64(_, _) => unreachable!(),
             DecimalColumn::Decimal128(_, _) => row_match_column_type::<DecimalType<i128>>(
                 col,
                 validity,

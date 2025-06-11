@@ -171,6 +171,12 @@ function install_openssl {
 
 	echo "==> installing openssl libs..."
 
+	install_pkg perl-core "$PACKAGE_MANAGER" || echo "perl-core skipped"
+	install_pkg perl-CPAN "$PACKAGE_MANAGER" || echo "perl-CPAN skipped"
+	install_pkg perl-devel "$PACKAGE_MANAGER" || echo "perl-devel skipped"
+
+	PERL_MM_USE_DEFAULT=1 perl -MCPAN -e 'install IPC::Cmd'
+
 	case "$PACKAGE_MANAGER" in
 	apt-get)
 		install_pkg libssl-dev "$PACKAGE_MANAGER"
@@ -650,8 +656,8 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	# Any call to cargo will make rustup install the correct toolchain
 	cargo version
-	cargo install cargo-quickinstall
-	cargo quickinstall cargo-binstall
+	## install cargo-binstall
+	curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 	cargo binstall -y sccache
 	cargo binstall -y cargo-zigbuild
 	cargo binstall -y cargo-nextest

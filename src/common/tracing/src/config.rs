@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use itertools::Itertools;
+
 // use the uncommon usage of Pascal Case level name
 // to partially avoid the feature of serfig that can not override with the default value.
 // see https://github.com/Xuanwo/serfig/issues/23 for detail.
@@ -31,7 +33,7 @@ pub struct Config {
     pub profile: ProfileLogConfig,
     pub structlog: StructLogConfig,
     pub tracing: TracingConfig,
-    pub persistentlog: PersistentLogConfig,
+    pub history: HistoryConfig,
 }
 
 impl Config {
@@ -336,42 +338,62 @@ impl Default for OTLPEndpointConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct PersistentLogConfig {
+pub struct HistoryConfig {
     pub on: bool,
+    pub log_only: bool,
     pub interval: usize,
     pub stage_name: String,
     pub level: String,
-    pub retention: usize,
     pub retention_interval: usize,
+    pub tables: Vec<HistoryTableConfig>,
 }
 
-impl Display for PersistentLogConfig {
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct HistoryTableConfig {
+    pub table_name: String,
+    pub retention: usize,
+}
+
+impl Display for HistoryConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, interval={}, stage_name={}, level={}, retention={}, retention_interval={}",
+            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}]",
             self.on,
+            self.log_only,
             self.interval,
             self.stage_name,
             self.level,
-            self.retention,
-            self.retention_interval
+            self.retention_interval,
+            self.tables
+                .iter()
+                .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
+                .join(", ")
         )
     }
 }
 
-impl Default for PersistentLogConfig {
+impl Default for HistoryConfig {
     fn default() -> Self {
         Self {
             on: false,
             interval: 2,
+            log_only: false,
             // The default value of stage name uses an uuid to avoid conflicts with existing stages
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
             level: "WARN".to_string(),
-            // Data older than 72 hours will be deleted during retention tasks
-            retention: 72,
             // Trigger the retention task every 24 hours
             retention_interval: 24,
+            tables: vec![],
+        }
+    }
+}
+
+impl Default for HistoryTableConfig {
+    fn default() -> Self {
+        Self {
+            table_name: "".to_string(),
+            retention: 168,
         }
     }
 }

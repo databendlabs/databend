@@ -12,56 +12,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use databend_common_base::base::tokio::sync::watch;
 use databend_common_base::base::tokio::sync::watch::Receiver;
 use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_expression::Expr;
 use xorf::BinaryFuse16;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub struct RuntimeFilterInfo {
-    inlist: Vec<Expr<String>>,
-    min_max: Vec<Expr<String>>,
-    bloom: Vec<(String, BinaryFuse16)>,
+    pub inlist: Vec<Expr<String>>,
+    pub min_max: Vec<Expr<String>>,
+    pub bloom: Vec<(String, BinaryFuse16)>,
+}
+
+impl Debug for RuntimeFilterInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "RuntimeFilterInfo {{ inlist: {}, min_max: {}, bloom: {:?} }}",
+            self.inlist
+                .iter()
+                .map(|e| e.sql_display())
+                .collect::<Vec<String>>()
+                .join(","),
+            self.min_max
+                .iter()
+                .map(|e| e.sql_display())
+                .collect::<Vec<String>>()
+                .join(","),
+            self.bloom
+        )
+    }
 }
 
 impl RuntimeFilterInfo {
-    pub fn add_inlist(&mut self, expr: Expr<String>) {
-        self.inlist.push(expr);
-    }
-
-    pub fn add_bloom(&mut self, bloom: (String, BinaryFuse16)) {
-        self.bloom.push(bloom);
-    }
-
-    pub fn add_min_max(&mut self, expr: Expr<String>) {
-        self.min_max.push(expr);
-    }
-
-    pub fn get_inlist(&self) -> &Vec<Expr<String>> {
-        &self.inlist
-    }
-
-    pub fn get_bloom(&self) -> &Vec<(String, BinaryFuse16)> {
-        &self.bloom
-    }
-
-    pub fn get_min_max(&self) -> &Vec<Expr<String>> {
-        &self.min_max
-    }
-
-    pub fn blooms(self) -> Vec<(String, BinaryFuse16)> {
-        self.bloom
-    }
-
-    pub fn inlists(self) -> Vec<Expr<String>> {
-        self.inlist
-    }
-
-    pub fn min_maxs(self) -> Vec<Expr<String>> {
-        self.min_max
-    }
-
     pub fn is_empty(&self) -> bool {
         self.inlist.is_empty() && self.bloom.is_empty() && self.min_max.is_empty()
     }
@@ -72,9 +59,9 @@ impl RuntimeFilterInfo {
 }
 
 pub struct RuntimeFilterReady {
-    pub runtime_filter_watcher: Sender<Option<bool>>,
+    pub runtime_filter_watcher: Sender<Option<()>>,
     /// A dummy receiver to make runtime_filter_watcher channel open.
-    pub _runtime_filter_dummy_receiver: Receiver<Option<bool>>,
+    pub _runtime_filter_dummy_receiver: Receiver<Option<()>>,
 }
 
 impl Default for RuntimeFilterReady {

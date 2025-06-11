@@ -34,13 +34,13 @@ output domain  : {TRUE}
 output         : true
 
 
-ast            : 2.222>2.11
-raw expr       : gt(2.222, 2.11)
-checked expr   : gt<Decimal(4, 3), Decimal(3, 2)>(2.222_d128(4,3), 2.11_d128(3,2))
-optimized expr : true
+ast            : 2.222=2.11
+raw expr       : eq(2.222, 2.11)
+checked expr   : eq<Decimal(4, 3), Decimal(3, 2)>(2.222_d128(4,3), 2.11_d128(3,2))
+optimized expr : false
 output type    : Boolean
-output domain  : {TRUE}
-output         : true
+output domain  : {FALSE}
+output         : false
 
 
 ast            : true=null
@@ -77,6 +77,32 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : 10='10'
+raw expr       : eq(10, '10')
+checked expr   : eq<UInt8, String>(10_u8, "10")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : '3.1'=3
+raw expr       : eq('3.1', 3)
+checked expr   : eq<String, UInt8>("3.1", 3_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+error: 
+  --> SQL:1:6
+  |
+1 | '3.a'=5
+  |      ^ Could not convert string '3.a' to number while evaluating function `eq('3.a', 5)` in expr `'3.a' = 5`
+
 
 
 ast            : []=[]
@@ -116,7 +142,7 @@ candidate functions:
   eq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   eq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 34 more
+... and 74 more
 
 
 
@@ -322,6 +348,32 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : 10 != '10'
+raw expr       : noteq(10, '10')
+checked expr   : noteq<UInt8, String>(10_u8, "10")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : '3.1' != 3
+raw expr       : noteq('3.1', 3)
+checked expr   : noteq<String, UInt8>("3.1", 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' != 5
+  |       ^^ Could not convert string '3.a' to number while evaluating function `noteq('3.a', 5)` in expr `'3.a' <> 5`
+
+
+
 ast            : [] != []
 raw expr       : noteq(array(), array())
 checked expr   : noteq<Array(Nothing), Array(Nothing)>(array<>(), array<>())
@@ -359,7 +411,7 @@ candidate functions:
   noteq(Variant, Variant) :: Boolean                               : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(Variant NULL, Variant NULL) :: Boolean NULL                : unable to unify `Tuple(UInt8, String)` with `Variant`
   noteq(String, String) :: Boolean                                 : unable to unify `Tuple(UInt8, String)` with `String`
-... and 34 more
+... and 74 more
 
 
 
@@ -508,6 +560,32 @@ optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
 output         : false
+
+
+ast            : 10 < '10'
+raw expr       : lt(10, '10')
+checked expr   : lt<UInt8, String>(10_u8, "10")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : '3.1' < 3
+raw expr       : lt('3.1', 3)
+checked expr   : lt<String, UInt8>("3.1", 3_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' < 5
+  |       ^ Could not convert string '3.a' to number while evaluating function `lt('3.a', 5)` in expr `'3.a' < 5`
+
 
 
 ast            : [] < []
@@ -690,6 +768,32 @@ output domain  : {FALSE}
 output         : false
 
 
+ast            : 10 <= '10'
+raw expr       : lte(10, '10')
+checked expr   : lte<UInt8, String>(10_u8, "10")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : '3.1' <= 3
+raw expr       : lte('3.1', 3)
+checked expr   : lte<String, UInt8>("3.1", 3_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' <= 5
+  |       ^^ Could not convert string '3.a' to number while evaluating function `lte('3.a', 5)` in expr `'3.a' <= 5`
+
+
+
 ast            : [] <= []
 raw expr       : lte(array(), array())
 checked expr   : lte<Array(Nothing), Array(Nothing)>(array<>(), array<>())
@@ -844,6 +948,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : 2.222>2.11
+raw expr       : gt(2.222, 2.11)
+checked expr   : gt<Decimal(4, 3), Decimal(3, 2)>(2.222_d128(4,3), 2.11_d128(3,2))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : true > true
 raw expr       : gt(true, true)
 checked expr   : gt<Boolean, Boolean>(true, true)
@@ -869,6 +982,32 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : 10 > '10'
+raw expr       : gt(10, '10')
+checked expr   : gt<UInt8, String>(10_u8, "10")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : '3.1' > 3
+raw expr       : gt('3.1', 3)
+checked expr   : gt<String, UInt8>("3.1", 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' > 5
+  |       ^ Could not convert string '3.a' to number while evaluating function `gt('3.a', 5)` in expr `'3.a' > 5`
+
 
 
 ast            : [] > []
@@ -1076,6 +1215,32 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : 10 >= '10'
+raw expr       : gte(10, '10')
+checked expr   : gte<UInt8, String>(10_u8, "10")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : '3.1' >= 3
+raw expr       : gte('3.1', 3)
+checked expr   : gte<String, UInt8>("3.1", 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+error: 
+  --> SQL:1:7
+  |
+1 | '3.a' >= 5
+  |       ^^ Could not convert string '3.a' to number while evaluating function `gte('3.a', 5)` in expr `'3.a' >= 5`
+
 
 
 ast            : [] >= []
@@ -1499,5 +1664,689 @@ evaluation (internal):
 | rhs    | StringColumn[^a, ^b, abe, a, , ]        |
 | Output | Boolean([0b__101101])                   |
 +--------+-----------------------------------------+
+
+
+ast            : 92233720368547758000000 > 5::decimal(38,37)
+raw expr       : gt(92233720368547758000000, CAST(5 AS Decimal(38, 37)))
+checked expr   : gt<Decimal(23, 0), Decimal(38, 37)>(92233720368547758000000_d128(23,0), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 92233720368547758000000 < 5::decimal(38,37)
+raw expr       : lt(92233720368547758000000, CAST(5 AS Decimal(38, 37)))
+checked expr   : lt<Decimal(23, 0), Decimal(38, 37)>(92233720368547758000000_d128(23,0), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 92233720368547758000000 >= 5::decimal(38,37)
+raw expr       : gte(92233720368547758000000, CAST(5 AS Decimal(38, 37)))
+checked expr   : gte<Decimal(23, 0), Decimal(38, 37)>(92233720368547758000000_d128(23,0), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 92233720368547758000000 <= 5::decimal(38,37)
+raw expr       : lte(92233720368547758000000, CAST(5 AS Decimal(38, 37)))
+checked expr   : lte<Decimal(23, 0), Decimal(38, 37)>(92233720368547758000000_d128(23,0), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 92233720368547758000000 = 5::decimal(38,37)
+raw expr       : eq(92233720368547758000000, CAST(5 AS Decimal(38, 37)))
+checked expr   : eq<Decimal(23, 0), Decimal(38, 37)>(92233720368547758000000_d128(23,0), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 92233720368547758000000 != 5::decimal(38,37)
+raw expr       : noteq(92233720368547758000000, CAST(5 AS Decimal(38, 37)))
+checked expr   : noteq<Decimal(23, 0), Decimal(38, 37)>(92233720368547758000000_d128(23,0), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) > 5::decimal(38,37)
+raw expr       : gt(CAST(5000 AS Decimal(4, 0)), CAST(5 AS Decimal(38, 37)))
+checked expr   : gt<Decimal(4, 0), Decimal(38, 37)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) < 5::decimal(38,37)
+raw expr       : lt(CAST(5000 AS Decimal(4, 0)), CAST(5 AS Decimal(38, 37)))
+checked expr   : lt<Decimal(4, 0), Decimal(38, 37)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 5000::decimal(4,0) >= 5::decimal(38,37)
+raw expr       : gte(CAST(5000 AS Decimal(4, 0)), CAST(5 AS Decimal(38, 37)))
+checked expr   : gte<Decimal(4, 0), Decimal(38, 37)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) <= 5::decimal(38,37)
+raw expr       : lte(CAST(5000 AS Decimal(4, 0)), CAST(5 AS Decimal(38, 37)))
+checked expr   : lte<Decimal(4, 0), Decimal(38, 37)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 5000::decimal(4,0) = 5::decimal(38,37)
+raw expr       : eq(CAST(5000 AS Decimal(4, 0)), CAST(5 AS Decimal(38, 37)))
+checked expr   : eq<Decimal(4, 0), Decimal(38, 37)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 5000::decimal(4,0) != 5::decimal(38,37)
+raw expr       : noteq(CAST(5000 AS Decimal(4, 0)), CAST(5 AS Decimal(38, 37)))
+checked expr   : noteq<Decimal(4, 0), Decimal(38, 37)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt8>(5_u8 AS Decimal(38, 37)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : -5000::decimal(4,0) > -5::decimal(38,37)
+raw expr       : gt(minus(CAST(5000 AS Decimal(4, 0))), minus(CAST(5 AS Decimal(38, 37))))
+checked expr   : gt<Decimal(4, 0), Decimal(38, 37)>(minus<Decimal(4, 0)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0))), minus<Decimal(38, 37)>(CAST<UInt8>(5_u8 AS Decimal(38, 37))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : -5000::decimal(4,0) < -5::decimal(38,37)
+raw expr       : lt(minus(CAST(5000 AS Decimal(4, 0))), minus(CAST(5 AS Decimal(38, 37))))
+checked expr   : lt<Decimal(4, 0), Decimal(38, 37)>(minus<Decimal(4, 0)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0))), minus<Decimal(38, 37)>(CAST<UInt8>(5_u8 AS Decimal(38, 37))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : -5000::decimal(4,0) >= -5::decimal(38,37)
+raw expr       : gte(minus(CAST(5000 AS Decimal(4, 0))), minus(CAST(5 AS Decimal(38, 37))))
+checked expr   : gte<Decimal(4, 0), Decimal(38, 37)>(minus<Decimal(4, 0)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0))), minus<Decimal(38, 37)>(CAST<UInt8>(5_u8 AS Decimal(38, 37))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : -5000::decimal(4,0) <= -5::decimal(38,37)
+raw expr       : lte(minus(CAST(5000 AS Decimal(4, 0))), minus(CAST(5 AS Decimal(38, 37))))
+checked expr   : lte<Decimal(4, 0), Decimal(38, 37)>(minus<Decimal(4, 0)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0))), minus<Decimal(38, 37)>(CAST<UInt8>(5_u8 AS Decimal(38, 37))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : -5000::decimal(4,0) = -5::decimal(38,37)
+raw expr       : eq(minus(CAST(5000 AS Decimal(4, 0))), minus(CAST(5 AS Decimal(38, 37))))
+checked expr   : eq<Decimal(4, 0), Decimal(38, 37)>(minus<Decimal(4, 0)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0))), minus<Decimal(38, 37)>(CAST<UInt8>(5_u8 AS Decimal(38, 37))))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : -5000::decimal(4,0) != -5::decimal(38,37)
+raw expr       : noteq(minus(CAST(5000 AS Decimal(4, 0))), minus(CAST(5 AS Decimal(38, 37))))
+checked expr   : noteq<Decimal(4, 0), Decimal(38, 37)>(minus<Decimal(4, 0)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0))), minus<Decimal(38, 37)>(CAST<UInt8>(5_u8 AS Decimal(38, 37))))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) > 5000::decimal(38,34)
+raw expr       : gt(CAST(5000 AS Decimal(4, 0)), CAST(5000 AS Decimal(38, 34)))
+checked expr   : gt<Decimal(4, 0), Decimal(38, 34)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt16>(5000_u16 AS Decimal(38, 34)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 5000::decimal(4,0) < 5000::decimal(38,34)
+raw expr       : lt(CAST(5000 AS Decimal(4, 0)), CAST(5000 AS Decimal(38, 34)))
+checked expr   : lt<Decimal(4, 0), Decimal(38, 34)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt16>(5000_u16 AS Decimal(38, 34)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : 5000::decimal(4,0) >= 5000::decimal(38,34)
+raw expr       : gte(CAST(5000 AS Decimal(4, 0)), CAST(5000 AS Decimal(38, 34)))
+checked expr   : gte<Decimal(4, 0), Decimal(38, 34)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt16>(5000_u16 AS Decimal(38, 34)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) <= 5000::decimal(38,34)
+raw expr       : lte(CAST(5000 AS Decimal(4, 0)), CAST(5000 AS Decimal(38, 34)))
+checked expr   : lte<Decimal(4, 0), Decimal(38, 34)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt16>(5000_u16 AS Decimal(38, 34)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) = 5000::decimal(38,34)
+raw expr       : eq(CAST(5000 AS Decimal(4, 0)), CAST(5000 AS Decimal(38, 34)))
+checked expr   : eq<Decimal(4, 0), Decimal(38, 34)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt16>(5000_u16 AS Decimal(38, 34)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : 5000::decimal(4,0) != 5000::decimal(38,34)
+raw expr       : noteq(CAST(5000 AS Decimal(4, 0)), CAST(5000 AS Decimal(38, 34)))
+checked expr   : noteq<Decimal(4, 0), Decimal(38, 34)>(CAST<UInt16>(5000_u16 AS Decimal(4, 0)), CAST<UInt16>(5000_u16 AS Decimal(38, 34)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : a > b
+raw expr       : gt(a::Decimal(10, 2), b::Decimal(10, 2))
+checked expr   : gt<Decimal(10, 2), Decimal(10, 2)>(a, b)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | false         |
+| Row 1  | 0.01                       | 0.02                       | false         |
+| Row 2  | -0.01                      | -0.02                      | true          |
+| Row 3  | 1234567.89                 | 1234567.80                 | true          |
+| Row 4  | -9876543.21                | -9876543.20                | false         |
+| Row 5  | 0.01                       | 0.10                       | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__001100])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : a < b
+raw expr       : lt(a::Decimal(10, 2), b::Decimal(10, 2))
+checked expr   : lt<Decimal(10, 2), Decimal(10, 2)>(a, b)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | false         |
+| Row 1  | 0.01                       | 0.02                       | true          |
+| Row 2  | -0.01                      | -0.02                      | false         |
+| Row 3  | 1234567.89                 | 1234567.80                 | false         |
+| Row 4  | -9876543.21                | -9876543.20                | true          |
+| Row 5  | 0.01                       | 0.10                       | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__110010])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : a >= b
+raw expr       : gte(a::Decimal(10, 2), b::Decimal(10, 2))
+checked expr   : gte<Decimal(10, 2), Decimal(10, 2)>(a, b)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | true          |
+| Row 1  | 0.01                       | 0.02                       | false         |
+| Row 2  | -0.01                      | -0.02                      | true          |
+| Row 3  | 1234567.89                 | 1234567.80                 | true          |
+| Row 4  | -9876543.21                | -9876543.20                | false         |
+| Row 5  | 0.01                       | 0.10                       | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__001101])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : a <= b
+raw expr       : lte(a::Decimal(10, 2), b::Decimal(10, 2))
+checked expr   : lte<Decimal(10, 2), Decimal(10, 2)>(a, b)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | true          |
+| Row 1  | 0.01                       | 0.02                       | true          |
+| Row 2  | -0.01                      | -0.02                      | false         |
+| Row 3  | 1234567.89                 | 1234567.80                 | false         |
+| Row 4  | -9876543.21                | -9876543.20                | true          |
+| Row 5  | 0.01                       | 0.10                       | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__110011])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : a = b
+raw expr       : eq(a::Decimal(10, 2), b::Decimal(10, 2))
+checked expr   : eq<Decimal(10, 2), Decimal(10, 2)>(a, b)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | true          |
+| Row 1  | 0.01                       | 0.02                       | false         |
+| Row 2  | -0.01                      | -0.02                      | false         |
+| Row 3  | 1234567.89                 | 1234567.80                 | false         |
+| Row 4  | -9876543.21                | -9876543.20                | false         |
+| Row 5  | 0.01                       | 0.10                       | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__000001])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : a != b
+raw expr       : noteq(a::Decimal(10, 2), b::Decimal(10, 2))
+checked expr   : noteq<Decimal(10, 2), Decimal(10, 2)>(a, b)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | false         |
+| Row 1  | 0.01                       | 0.02                       | true          |
+| Row 2  | -0.01                      | -0.02                      | true          |
+| Row 3  | 1234567.89                 | 1234567.80                 | true          |
+| Row 4  | -9876543.21                | -9876543.20                | true          |
+| Row 5  | 0.01                       | 0.10                       | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__111110])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : b > a
+raw expr       : gt(b::Decimal(10, 2), a::Decimal(10, 2))
+checked expr   : gt<Decimal(10, 2), Decimal(10, 2)>(b, a)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | false         |
+| Row 1  | 0.01                       | 0.02                       | true          |
+| Row 2  | -0.01                      | -0.02                      | false         |
+| Row 3  | 1234567.89                 | 1234567.80                 | false         |
+| Row 4  | -9876543.21                | -9876543.20                | true          |
+| Row 5  | 0.01                       | 0.10                       | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__110010])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : b < a
+raw expr       : lt(b::Decimal(10, 2), a::Decimal(10, 2))
+checked expr   : lt<Decimal(10, 2), Decimal(10, 2)>(b, a)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | false         |
+| Row 1  | 0.01                       | 0.02                       | false         |
+| Row 2  | -0.01                      | -0.02                      | true          |
+| Row 3  | 1234567.89                 | 1234567.80                 | true          |
+| Row 4  | -9876543.21                | -9876543.20                | false         |
+| Row 5  | 0.01                       | 0.10                       | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__001100])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : b >= a
+raw expr       : gte(b::Decimal(10, 2), a::Decimal(10, 2))
+checked expr   : gte<Decimal(10, 2), Decimal(10, 2)>(b, a)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | true          |
+| Row 1  | 0.01                       | 0.02                       | true          |
+| Row 2  | -0.01                      | -0.02                      | false         |
+| Row 3  | 1234567.89                 | 1234567.80                 | false         |
+| Row 4  | -9876543.21                | -9876543.20                | true          |
+| Row 5  | 0.01                       | 0.10                       | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__110011])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : b <= a
+raw expr       : lte(b::Decimal(10, 2), a::Decimal(10, 2))
+checked expr   : lte<Decimal(10, 2), Decimal(10, 2)>(b, a)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | true          |
+| Row 1  | 0.01                       | 0.02                       | false         |
+| Row 2  | -0.01                      | -0.02                      | true          |
+| Row 3  | 1234567.89                 | 1234567.80                 | true          |
+| Row 4  | -9876543.21                | -9876543.20                | false         |
+| Row 5  | 0.01                       | 0.10                       | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__001101])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : b = a
+raw expr       : eq(b::Decimal(10, 2), a::Decimal(10, 2))
+checked expr   : eq<Decimal(10, 2), Decimal(10, 2)>(b, a)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | true          |
+| Row 1  | 0.01                       | 0.02                       | false         |
+| Row 2  | -0.01                      | -0.02                      | false         |
+| Row 3  | 1234567.89                 | 1234567.80                 | false         |
+| Row 4  | -9876543.21                | -9876543.20                | false         |
+| Row 5  | 0.01                       | 0.10                       | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__000001])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : b != a
+raw expr       : noteq(b::Decimal(10, 2), a::Decimal(10, 2))
+checked expr   : noteq<Decimal(10, 2), Decimal(10, 2)>(b, a)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | b                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 2)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-9876543.20..=1234567.80} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.00                       | false         |
+| Row 1  | 0.01                       | 0.02                       | true          |
+| Row 2  | -0.01                      | -0.02                      | true          |
+| Row 3  | 1234567.89                 | 1234567.80                 | true          |
+| Row 4  | -9876543.21                | -9876543.20                | true          |
+| Row 5  | 0.01                       | 0.10                       | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+----------------------------------------------------------------+
+| Column | Data                                                           |
++--------+----------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01]) |
+| b      | Decimal256([0.00, 0.02, -0.02, 1234567.80, -9876543.20, 0.10]) |
+| Output | Boolean([0b__111110])                                          |
++--------+----------------------------------------------------------------+
+
+
+ast            : a > c
+raw expr       : gt(a::Decimal(10, 2), c::Decimal(10, 3))
+checked expr   : gt<Decimal(10, 2), Decimal(10, 3)>(a, c)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | c                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 3)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-987654.320..=123456.780} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.000                      | false         |
+| Row 1  | 0.01                       | 0.002                      | true          |
+| Row 2  | -0.01                      | -0.002                     | false         |
+| Row 3  | 1234567.89                 | 123456.780                 | true          |
+| Row 4  | -9876543.21                | -987654.320                | false         |
+| Row 5  | 0.01                       | 0.010                      | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01])     |
+| c      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 0.010]) |
+| Output | Boolean([0b__001010])                                              |
++--------+--------------------------------------------------------------------+
+
+
+ast            : a < c
+raw expr       : lt(a::Decimal(10, 2), c::Decimal(10, 3))
+checked expr   : lt<Decimal(10, 2), Decimal(10, 3)>(a, c)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | c                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 3)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-987654.320..=123456.780} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.000                      | false         |
+| Row 1  | 0.01                       | 0.002                      | false         |
+| Row 2  | -0.01                      | -0.002                     | true          |
+| Row 3  | 1234567.89                 | 123456.780                 | false         |
+| Row 4  | -9876543.21                | -987654.320                | true          |
+| Row 5  | 0.01                       | 0.010                      | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01])     |
+| c      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 0.010]) |
+| Output | Boolean([0b__010100])                                              |
++--------+--------------------------------------------------------------------+
+
+
+ast            : a >= c
+raw expr       : gte(a::Decimal(10, 2), c::Decimal(10, 3))
+checked expr   : gte<Decimal(10, 2), Decimal(10, 3)>(a, c)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | c                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 3)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-987654.320..=123456.780} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.000                      | true          |
+| Row 1  | 0.01                       | 0.002                      | true          |
+| Row 2  | -0.01                      | -0.002                     | false         |
+| Row 3  | 1234567.89                 | 123456.780                 | true          |
+| Row 4  | -9876543.21                | -987654.320                | false         |
+| Row 5  | 0.01                       | 0.010                      | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01])     |
+| c      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 0.010]) |
+| Output | Boolean([0b__101011])                                              |
++--------+--------------------------------------------------------------------+
+
+
+ast            : a <= c
+raw expr       : lte(a::Decimal(10, 2), c::Decimal(10, 3))
+checked expr   : lte<Decimal(10, 2), Decimal(10, 3)>(a, c)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | c                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 3)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-987654.320..=123456.780} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.000                      | true          |
+| Row 1  | 0.01                       | 0.002                      | false         |
+| Row 2  | -0.01                      | -0.002                     | true          |
+| Row 3  | 1234567.89                 | 123456.780                 | false         |
+| Row 4  | -9876543.21                | -987654.320                | true          |
+| Row 5  | 0.01                       | 0.010                      | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01])     |
+| c      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 0.010]) |
+| Output | Boolean([0b__110101])                                              |
++--------+--------------------------------------------------------------------+
+
+
+ast            : a = c
+raw expr       : eq(a::Decimal(10, 2), c::Decimal(10, 3))
+checked expr   : eq<Decimal(10, 2), Decimal(10, 3)>(a, c)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | c                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 3)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-987654.320..=123456.780} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.000                      | true          |
+| Row 1  | 0.01                       | 0.002                      | false         |
+| Row 2  | -0.01                      | -0.002                     | false         |
+| Row 3  | 1234567.89                 | 123456.780                 | false         |
+| Row 4  | -9876543.21                | -987654.320                | false         |
+| Row 5  | 0.01                       | 0.010                      | true          |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01])     |
+| c      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 0.010]) |
+| Output | Boolean([0b__100001])                                              |
++--------+--------------------------------------------------------------------+
+
+
+ast            : a != c
+raw expr       : noteq(a::Decimal(10, 2), c::Decimal(10, 3))
+checked expr   : noteq<Decimal(10, 2), Decimal(10, 3)>(a, c)
+evaluation:
++--------+----------------------------+----------------------------+---------------+
+|        | a                          | c                          | Output        |
++--------+----------------------------+----------------------------+---------------+
+| Type   | Decimal(10, 2)             | Decimal(10, 3)             | Boolean       |
+| Domain | {-9876543.21..=1234567.89} | {-987654.320..=123456.780} | {FALSE, TRUE} |
+| Row 0  | 0.00                       | 0.000                      | false         |
+| Row 1  | 0.01                       | 0.002                      | true          |
+| Row 2  | -0.01                      | -0.002                     | true          |
+| Row 3  | 1234567.89                 | 123456.780                 | true          |
+| Row 4  | -9876543.21                | -987654.320                | true          |
+| Row 5  | 0.01                       | 0.010                      | false         |
++--------+----------------------------+----------------------------+---------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------+
+| Column | Data                                                               |
++--------+--------------------------------------------------------------------+
+| a      | Decimal128([0.00, 0.01, -0.01, 1234567.89, -9876543.21, 0.01])     |
+| c      | Decimal256([0.000, 0.002, -0.002, 123456.780, -987654.320, 0.010]) |
+| Output | Boolean([0b__011110])                                              |
++--------+--------------------------------------------------------------------+
 
 

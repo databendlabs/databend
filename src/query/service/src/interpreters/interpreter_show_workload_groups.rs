@@ -16,6 +16,11 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::MEMORY_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
+use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -26,11 +31,6 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
-use databend_common_management::CPU_QUOTA_KEY;
-use databend_common_management::MAX_CONCURRENCY_QUOTA_KEY;
-use databend_common_management::MEMORY_QUOTA_KEY;
-use databend_common_management::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
-use databend_common_management::QUERY_TIMEOUT_QUOTA_KEY;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;

@@ -26,14 +26,19 @@ use databend_common_base::base::tokio::sync::watch::Sender;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnVec;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::HashMethodFixedKeys;
 use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
 use databend_common_hashtable::HashtableKeyable;
+use databend_common_hashtable::RowPtr;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
@@ -41,7 +46,6 @@ use parking_lot::RwLock;
 
 use super::merge_into_hash_join_optimization::MergeIntoState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
-use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::HashJoinDesc;
@@ -98,8 +102,7 @@ pub struct HashJoinState {
     /// Use the column of probe side to construct build side column.
     /// (probe index, (is probe column nullable, is build column nullable))
     pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
-    /// `RowSpace` contains all rows from build side.
-    pub(crate) row_space: RowSpace,
+    pub(crate) build_schema: DataSchemaRef,
     /// `BuildState` contains all data used in probe phase.
     pub(crate) build_state: SyncUnsafeCell<BuildState>,
 
@@ -160,6 +163,14 @@ impl HashJoinState {
         } else {
             HashMap::new()
         };
+
+        let mut projected_build_fields = vec![];
+        for (i, field) in build_schema.fields().iter().enumerate() {
+            if build_projections.contains(&i) {
+                projected_build_fields.push(field.clone());
+            }
+        }
+        let build_schema = DataSchemaRefExt::create(projected_build_fields);
         Ok(Arc::new(HashJoinState {
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             build_watcher,
@@ -168,7 +179,7 @@ impl HashJoinState {
             interrupt: AtomicBool::new(false),
             fast_return: Default::default(),
             probe_to_build: probe_to_build.to_vec(),
-            row_space: RowSpace::new(ctx, build_schema, build_projections)?,
+            build_schema,
             build_state: SyncUnsafeCell::new(BuildState::new()),
             spilled_partitions: Default::default(),
             continue_build_watcher,
@@ -251,7 +262,6 @@ impl HashJoinState {
     // Reset the state for next round run.
     // It's only called when spill is enable.
     pub(crate) fn reset(&self) {
-        self.row_space.reset();
         let build_state = unsafe { &mut *self.build_state.get() };
         build_state.generation_state.chunks.clear();
         build_state.generation_state.build_num_rows = 0;
@@ -296,5 +306,25 @@ impl HashJoinState {
 
     pub fn next_cache_block_index(&self) -> usize {
         self.next_cache_block_index.fetch_add(1, Ordering::AcqRel)
+    }
+
+    pub fn gather(
+        &self,
+        row_ptrs: &[RowPtr],
+        build_columns: &[ColumnVec],
+        build_columns_data_type: &[DataType],
+        num_rows: &usize,
+    ) -> Result<DataBlock> {
+        if *num_rows != 0 {
+            let data_block = DataBlock::take_column_vec(
+                build_columns,
+                build_columns_data_type,
+                row_ptrs,
+                row_ptrs.len(),
+            );
+            Ok(data_block)
+        } else {
+            Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
+        }
     }
 }

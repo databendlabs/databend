@@ -42,6 +42,7 @@ fn test_decode_v73_huggingface_config() -> anyhow::Result<()> {
         revision: "main".to_string(),
         token: "".to_string(),
         root: "/".to_string(),
+        network_config: None,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(

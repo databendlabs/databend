@@ -13,6 +13,7 @@ edition = { workspace = true }
 anyerror = { workspace = true }
 arrow-flight = { workspace = true }
 async-backtrace = { workspace = true }
+chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
@@ -22,6 +23,7 @@ databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 derive_more = { workspace = true }
+display-more = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }

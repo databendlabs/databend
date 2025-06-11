@@ -267,6 +267,9 @@ impl FromToProto for ex::TableDataType {
                         ex::TableDataType::Decimal(ex::types::decimal::DecimalDataType::from_pb(x)?)
                     }
                     Dt24::EmptyMapT(_) => ex::TableDataType::EmptyMap,
+                    Dt24::VectorT(v) => {
+                        ex::TableDataType::Vector(ex::types::VectorDataType::from_pb(v)?)
+                    }
                 };
                 Ok(x)
             }
@@ -330,6 +333,10 @@ impl FromToProto for ex::TableDataType {
             TableDataType::Variant => new_pb_dt24(Dt24::VariantT(pb::Empty {})),
             TableDataType::Geometry => new_pb_dt24(Dt24::GeometryT(pb::Empty {})),
             TableDataType::Geography => new_pb_dt24(Dt24::GeographyT(pb::Empty {})),
+            TableDataType::Vector(v) => {
+                let x = v.to_pb()?;
+                new_pb_dt24(Dt24::VectorT(x))
+            }
         };
         Ok(x)
     }
@@ -413,6 +420,9 @@ impl FromToProto for ex::types::DecimalDataType {
 
     fn to_pb(&self) -> Result<pb::Decimal, Incompatible> {
         let x = match self {
+            ex::types::DecimalDataType::Decimal64(x) => {
+                pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
+            }
             ex::types::DecimalDataType::Decimal128(x) => {
                 pb::decimal::Decimal::Decimal128(ex::types::decimal::DecimalSize::to_pb(x)?)
             }
@@ -439,18 +449,18 @@ impl FromToProto for ex::types::decimal::DecimalSize {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        Ok(ex::types::decimal::DecimalSize {
-            precision: p.precision as u8,
-            scale: p.scale as u8,
-        })
+        Ok(ex::types::decimal::DecimalSize::new_unchecked(
+            p.precision as _,
+            p.scale as _,
+        ))
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
         Ok(pb::DecimalSize {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            precision: self.precision as i32,
-            scale: self.scale as i32,
+            precision: self.precision() as i32,
+            scale: self.scale() as i32,
         })
     }
 }
@@ -559,6 +569,45 @@ impl FromToProto for ex::VirtualDataSchema {
             metadata: self.metadata.clone(),
             next_column_id: self.next_column_id,
             number_of_blocks: self.number_of_blocks,
+        })
+    }
+}
+
+impl FromToProto for ex::types::VectorDataType {
+    type PB = pb::Vector;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::Vector) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let num = p
+            .num
+            .ok_or_else(|| Incompatible::new("Invalid Vector: .num can not be None".to_string()))?;
+        let num = ex::types::NumberDataType::from_pb(num)?;
+        let x = match num {
+            ex::types::NumberDataType::Int8 => ex::types::VectorDataType::Int8(p.dimension),
+            ex::types::NumberDataType::Float32 => ex::types::VectorDataType::Float32(p.dimension),
+            _ => unreachable!(),
+        };
+        Ok(x)
+    }
+
+    fn to_pb(&self) -> Result<pb::Vector, Incompatible> {
+        let (number_ty, dimension) = match self {
+            ex::types::VectorDataType::Int8(d) => (ex::types::NumberDataType::Int8, *d),
+            ex::types::VectorDataType::Float32(d) => (ex::types::NumberDataType::Float32, *d),
+        };
+        let num = number_ty.to_pb()?;
+
+        Ok(pb::Vector {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+
+            num: Some(num),
+            dimension,
         })
     }
 }
