@@ -23,7 +23,10 @@ use crate::servers::flight::v1::packets::QueryEnv;
 
 pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 
-pub async fn init_query_env(env: QueryEnv) -> Result<()> {
+pub async fn init_query_env(mut env: QueryEnv) -> Result<()> {
+    // Update query id to make sure they are compatible.
+    env.query_id = env.query_id.replace('-', "");
+
     let query_mem_stat = MemStat::create(env.query_id.clone());
     let query_max_memory_usage = env.settings.get_max_query_memory_usage()?;
     let allow_query_exceeded_limit = env.settings.get_allow_query_exceeded_limit()?;
