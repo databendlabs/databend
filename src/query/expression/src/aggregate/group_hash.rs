@@ -21,12 +21,15 @@ use databend_common_exception::Result;
 
 use crate::types::i256;
 use crate::types::number::Number;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::BinaryColumn;
 use crate::types::BinaryType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
+use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::Decimal64As128Type;
 use crate::types::DecimalColumn;
 use crate::types::DecimalScalar;
 use crate::types::DecimalType;
@@ -83,8 +86,14 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
         unreachable!()
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        self.combine_group_hash_type_column::<AnyType>(&T::upcast_column(column));
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        self.combine_group_hash_type_column::<AnyType>(&T::upcast_column_with_type(
+            column, data_type,
+        ));
         Ok(())
     }
 
@@ -100,6 +109,9 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
         match column {
+            DecimalColumn::Decimal64(buffer, _) => {
+                self.combine_group_hash_type_column::<Decimal64As128Type>(&buffer);
+            }
             DecimalColumn::Decimal128(buffer, _) => {
                 self.combine_group_hash_type_column::<DecimalType<i128>>(&buffer);
             }
@@ -198,7 +210,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
 impl<const IS_FIRST: bool> HashVisitor<'_, IS_FIRST> {
     fn combine_group_hash_type_column<T>(&mut self, col: &T::Column)
     where
-        T: ValueType,
+        T: AccessType,
         for<'a> T::ScalarRef<'a>: AggHash,
     {
         if IS_FIRST {
@@ -270,6 +282,7 @@ where I: Index
                 NumberScalar::NUM_TYPE(v) => v.agg_hash(),
             }),
             Scalar::Decimal(v) => match v {
+                DecimalScalar::Decimal64(v, _) => (v as i128).agg_hash(),
                 DecimalScalar::Decimal128(v, _) => v.agg_hash(),
                 DecimalScalar::Decimal256(v, _) => v.agg_hash(),
             },
@@ -380,11 +393,16 @@ where I: Index
         }
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
         self.visit_indices(|i| {
-            let x = T::upcast_scalar(T::to_owned_scalar(
-                T::index_column(&column, i.to_usize()).unwrap(),
-            ));
+            let x = T::upcast_scalar_with_type(
+                T::to_owned_scalar(T::index_column(&column, i.to_usize()).unwrap()),
+                data_type,
+            );
             x.as_ref().agg_hash()
         })
     }
@@ -539,7 +557,6 @@ mod tests {
     use databend_common_column::bitmap::Bitmap;
 
     use super::*;
-    use crate::types::AccessType;
     use crate::types::ArgType;
     use crate::types::Int32Type;
     use crate::types::NullableColumn;
@@ -623,8 +640,11 @@ mod tests {
 
         {
             let c = Int32Type::from_data(vec![3, 1, 2]);
-            let c = NullableColumn::<AnyType>::new(c, Bitmap::from([true, true, false]));
-            let nc = NullableType::<AnyType>::upcast_column(c);
+            let c = NullableColumn::new(c, Bitmap::from([true, true, false]));
+            let nc = NullableType::<AnyType>::upcast_column_with_type(
+                c,
+                &Int32Type::data_type().wrap_nullable(),
+            );
 
             let indices = [0, 1, 2];
             let mut target = vec![0; 3];

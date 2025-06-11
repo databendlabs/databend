@@ -83,7 +83,6 @@ impl pb::TxnReply {
         Self {
             success: execution_path != "else",
             responses: vec![],
-            error: "".to_string(),
             execution_path,
         }
     }
@@ -330,11 +329,16 @@ impl pb::TxnOpResponse {
     }
 
     /// Create a new `TxnOpResponse` of a `Put` operation.
-    pub fn put(key: impl ToString, prev_value: Option<pb::SeqV>) -> Self {
+    pub fn put(
+        key: impl ToString,
+        prev_value: Option<pb::SeqV>,
+        current: Option<pb::SeqV>,
+    ) -> Self {
         pb::TxnOpResponse {
             response: Some(pb::txn_op_response::Response::Put(pb::TxnPutResponse {
                 key: key.to_string(),
                 prev_value,
+                current,
             })),
         }
     }

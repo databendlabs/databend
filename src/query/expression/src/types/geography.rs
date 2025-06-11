@@ -35,8 +35,8 @@ use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
 use crate::types::ArgType;
+use crate::types::BuilderMut;
 use crate::types::DataType;
-use crate::types::DecimalSize;
 use crate::types::GenericMap;
 use crate::types::ReturnType;
 use crate::types::ValueType;
@@ -142,18 +142,6 @@ impl AccessType for GeographyType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Geography(scalar)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Geography(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
-    }
-
     fn column_len(col: &Self::Column) -> usize {
         col.len()
     }
@@ -191,25 +179,32 @@ impl AccessType for GeographyType {
 
 impl ValueType for GeographyType {
     type ColumnBuilder = BinaryColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Geography(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_geography());
+        Scalar::Geography(scalar)
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Geography(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_domain_with_type(_domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_geography());
+        Domain::Undefined
+    }
+
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_geography());
+        Column::Geography(col)
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_geography_mut().unwrap().into()
     }
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_geography());
         Some(ColumnBuilder::Geography(builder))
     }
 
@@ -221,21 +216,32 @@ impl ValueType for GeographyType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.put_slice(item.0);
         builder.commit_row()
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.push_repeat(item.0, n)
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
+        for _ in 0..n {
+            builder.put_slice(item.0);
+            builder.commit_row();
+        }
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
-        builder.commit_row()
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
+        builder.commit_row();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other: &Self::Column) {
-        builder.append_column(&other.0)
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(&other.0);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

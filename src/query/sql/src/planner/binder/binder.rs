@@ -348,20 +348,14 @@ impl<'a> Binder {
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
-            Statement::CreateInvertedIndex(stmt) => {
-                self.bind_create_inverted_index(bind_context, stmt).await?
+            Statement::CreateTableIndex(stmt) => {
+                self.bind_create_table_index(bind_context, stmt).await?
             }
-            Statement::DropInvertedIndex(stmt) => {
-                self.bind_drop_inverted_index(bind_context, stmt).await?
+            Statement::DropTableIndex(stmt) => {
+                self.bind_drop_table_index(bind_context, stmt).await?
             }
-            Statement::RefreshInvertedIndex(stmt) => {
-                self.bind_refresh_inverted_index(bind_context, stmt).await?
-            }
-            Statement::CreateNgramIndex(stmt) => {
-                self.bind_create_ngram_index(bind_context, stmt).await?
-            }
-            Statement::DropNgramIndex(stmt) => {
-                self.bind_drop_ngram_index(bind_context, stmt).await?
+            Statement::RefreshTableIndex(stmt) => {
+                self.bind_refresh_table_index(bind_context, stmt).await?
             }
 
             // Virtual Columns

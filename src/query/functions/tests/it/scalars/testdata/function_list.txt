@@ -15,6 +15,7 @@ bitmap_cardinality -> bitmap_count
 ceiling -> ceil
 char_length -> length
 character_length -> length
+chr -> char
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
@@ -74,6 +75,7 @@ substring_utf8 -> substr
 subtract -> minus
 to_char -> to_string
 to_datetime -> to_timestamp
+to_start_of_iso_week -> to_monday
 to_text -> to_string
 to_varchar -> to_string
 trunc -> truncate
@@ -892,7 +894,6 @@ Functions overloads:
 19 ceil(Float64) :: Float64
 20 ceil(Float64 NULL) :: Float64 NULL
 0 char FACTORY
-1 char FACTORY
 0 check_json(Variant) :: String NULL
 1 check_json(Variant NULL) :: String NULL
 2 check_json(String) :: String NULL
@@ -2144,6 +2145,10 @@ Functions overloads:
 1 insert(String NULL, Int64 NULL, Int64 NULL, String NULL) :: String NULL
 0 instr(String, String) :: UInt64
 1 instr(String NULL, String NULL) :: UInt64 NULL
+2 instr(String, String, Int64) :: UInt64
+3 instr(String NULL, String NULL, Int64 NULL) :: UInt64 NULL
+4 instr(String, String, Int64, UInt64) :: UInt64
+5 instr(String NULL, String NULL, Int64 NULL, UInt64 NULL) :: UInt64 NULL
 0 is_array(Variant) :: Boolean
 1 is_array(Variant NULL) :: Boolean NULL
 0 is_binary(Variant) :: Boolean
@@ -2235,8 +2240,13 @@ Functions overloads:
 8 length(Binary NULL) :: UInt64 NULL
 0 like(Variant, String) :: Boolean
 1 like(Variant NULL, String NULL) :: Boolean NULL
-2 like(String, String) :: Boolean
-3 like(String NULL, String NULL) :: Boolean NULL
+2 like(Variant, String, String) :: Boolean
+3 like(Variant NULL, String NULL, String NULL) :: Boolean NULL
+4 like(String, String) :: Boolean
+5 like(String NULL, String NULL) :: Boolean NULL
+6 like(String, String, String) :: Boolean
+7 like(String NULL, String NULL, String NULL) :: Boolean NULL
+0 like_any FACTORY
 0 ln(UInt8) :: Float64
 1 ln(UInt8 NULL) :: Float64 NULL
 2 ln(UInt16) :: Float64
@@ -2541,23 +2551,23 @@ Functions overloads:
 1 minus(Variant NULL, Int32 NULL) :: Variant NULL
 2 minus(Variant, String) :: Variant
 3 minus(Variant NULL, String NULL) :: Variant NULL
-4 minus(UInt8) :: Int16
-5 minus(UInt8 NULL) :: Int16 NULL
-6 minus(Int8) :: Int16
-7 minus(Int8 NULL) :: Int16 NULL
-8 minus(UInt16) :: Int32
-9 minus(UInt16 NULL) :: Int32 NULL
-10 minus(Int16) :: Int32
-11 minus(Int16 NULL) :: Int32 NULL
-12 minus(UInt32) :: Int64
-13 minus(UInt32 NULL) :: Int64 NULL
-14 minus(Int32) :: Int64
-15 minus(Int32 NULL) :: Int64 NULL
-16 minus(UInt64) :: Int64
-17 minus(UInt64 NULL) :: Int64 NULL
-18 minus(Int64) :: Int64
-19 minus(Int64 NULL) :: Int64 NULL
-20 minus FACTORY
+4 minus FACTORY
+5 minus(UInt8) :: Int16
+6 minus(UInt8 NULL) :: Int16 NULL
+7 minus(Int8) :: Int16
+8 minus(Int8 NULL) :: Int16 NULL
+9 minus(UInt16) :: Int32
+10 minus(UInt16 NULL) :: Int32 NULL
+11 minus(Int16) :: Int32
+12 minus(Int16 NULL) :: Int32 NULL
+13 minus(UInt32) :: Int64
+14 minus(UInt32 NULL) :: Int64 NULL
+15 minus(Int32) :: Int64
+16 minus(Int32 NULL) :: Int64 NULL
+17 minus(UInt64) :: Int64
+18 minus(UInt64 NULL) :: Int64 NULL
+19 minus(Int64) :: Int64
+20 minus(Int64 NULL) :: Int64 NULL
 21 minus(Float32) :: Float32
 22 minus(Float32 NULL) :: Float32 NULL
 23 minus(Float64) :: Float64
@@ -3523,6 +3533,11 @@ Functions overloads:
 0 regexp_instr FACTORY
 0 regexp_like FACTORY
 0 regexp_replace FACTORY
+0 regexp_split_to_array(String, String) :: Array(String)
+1 regexp_split_to_array(String NULL, String NULL) :: Array(String) NULL
+2 regexp_split_to_array(String, String, String) :: Array(String)
+3 regexp_split_to_array(String NULL, String NULL, String NULL) :: Array(String) NULL
+0 regexp_split_to_table FACTORY
 0 regexp_substr FACTORY
 0 repeat(String, UInt64) :: String
 1 repeat(String NULL, UInt64 NULL) :: String NULL
@@ -4850,6 +4865,8 @@ Functions overloads:
 1 try_to_variant(T0 NULL) :: Variant NULL
 0 tuple FACTORY
 0 typeof(T0) :: String
+0 unicode(String) :: UInt32
+1 unicode(String NULL) :: UInt32 NULL
 0 unnest FACTORY
 0 upper(String) :: String
 1 upper(String NULL) :: String NULL

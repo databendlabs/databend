@@ -205,7 +205,7 @@ fn get_example() -> Vec<(&'static str, Column)> {
             "dec",
             Decimal128Type::from_opt_data_with_size(
                 vec![Some(110), Some(220), None, Some(330)],
-                DecimalSize::new_unchecked(15, 2),
+                Some(DecimalSize::new_unchecked(15, 2)),
             ),
         ),
     ]

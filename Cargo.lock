@@ -1351,6 +1351,7 @@ dependencies = [
  "arrow",
  "arrow-schema",
  "ctor",
+ "databend-common-catalog",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
@@ -2966,6 +2967,7 @@ dependencies = [
  "bytes",
  "clap",
  "databend-common-base",
+ "databend-common-catalog",
  "databend-common-config",
  "databend-common-license",
  "databend-common-meta-client",
@@ -3688,6 +3690,7 @@ dependencies = [
  "anyhow",
  "arrow-flight",
  "async-backtrace",
+ "chrono",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-grpc",
@@ -3698,6 +3701,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "derive_more",
+ "display-more",
  "fastrace",
  "futures",
  "itertools 0.13.0",
@@ -4143,6 +4147,7 @@ dependencies = [
  "databend-common-version",
  "databend-enterprise-data-mask-feature",
  "databend-storages-common-cache",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "databend_educe",
  "derive-visitor",
@@ -4830,32 +4835,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-enterprise-inverted-index"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-meta-app",
-]
-
-[[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
-
-[[package]]
-name = "databend-enterprise-ngram-index"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "databend-common-base",
- "databend-common-catalog",
- "databend-common-exception",
- "databend-common-meta-app",
-]
 
 [[package]]
 name = "databend-enterprise-query"
@@ -4894,12 +4875,11 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
  "databend-enterprise-hilbert-clustering",
- "databend-enterprise-inverted-index",
- "databend-enterprise-ngram-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-query",
@@ -4961,6 +4941,18 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-sql",
+]
+
+[[package]]
+name = "databend-enterprise-table-index"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-meta-app",
 ]
 
 [[package]]
@@ -5255,10 +5247,9 @@ dependencies = [
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-hilbert-clustering",
- "databend-enterprise-inverted-index",
- "databend-enterprise-ngram-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-stream-handler",
+ "databend-enterprise-table-index",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",
  "databend-storages-common-blocks",
@@ -5266,6 +5257,7 @@ dependencies = [
  "databend-storages-common-index",
  "databend-storages-common-io",
  "databend-storages-common-session",
+ "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "derive-visitor",
  "ethnum",
@@ -5523,6 +5515,7 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
+ "databend-common-ast",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",

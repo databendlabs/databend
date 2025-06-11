@@ -57,6 +57,7 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
@@ -149,7 +150,6 @@ use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
@@ -1435,23 +1435,13 @@ impl TableContext for QueryContext {
         runtime_filters.clear();
     }
 
-    fn set_runtime_filter(&self, filters: (IndexType, RuntimeFilterInfo)) {
+    fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
         let mut runtime_filters = self.shared.runtime_filters.write();
-        match runtime_filters.entry(filters.0) {
-            Entry::Vacant(v) => {
-                v.insert(filters.1);
-            }
-            Entry::Occupied(mut v) => {
-                for filter in filters.1.get_inlist() {
-                    v.get_mut().add_inlist(filter.clone());
-                }
-                for filter in filters.1.get_min_max() {
-                    v.get_mut().add_min_max(filter.clone());
-                }
-                for filter in filters.1.blooms() {
-                    v.get_mut().add_bloom(filter);
-                }
-            }
+        for (scan_id, filter) in filters {
+            let entry = runtime_filters.entry(scan_id).or_default();
+            entry.inlist.extend(filter.inlist);
+            entry.min_max.extend(filter.min_max);
+            entry.bloom.extend(filter.bloom);
         }
     }
 
@@ -1500,7 +1490,7 @@ impl TableContext for QueryContext {
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, BinaryFuse16)> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_bloom()).clone(),
+            Some(v) => v.bloom.clone(),
             None => vec![],
         }
     }
@@ -1508,7 +1498,7 @@ impl TableContext for QueryContext {
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_inlist()).clone(),
+            Some(v) => v.inlist.clone(),
             None => vec![],
         }
     }
@@ -1516,14 +1506,14 @@ impl TableContext for QueryContext {
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
         let runtime_filters = self.shared.runtime_filters.read();
         match runtime_filters.get(&id) {
-            Some(v) => (v.get_min_max()).clone(),
+            Some(v) => v.min_max.clone(),
             None => vec![],
         }
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
         if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return !runtime_filter.get_bloom().is_empty();
+            return !runtime_filter.bloom.is_empty();
         }
         false
     }
@@ -1553,7 +1543,7 @@ impl TableContext for QueryContext {
                     let duration = if fuse_table.is_transient() {
                         Duration::from_secs(0)
                     } else {
-                        let settings = &self.query_settings;
+                        let settings = self.get_settings();
                         let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
                         if max_exec_time_secs != 0 {
                             Duration::from_secs(max_exec_time_secs)
@@ -1664,8 +1654,8 @@ impl TableContext for QueryContext {
                         "[QUERY-CTX] Query from parquet file only support $1 as column position",
                     ))
                 } else if max_column_position == 0 {
+                    let settings = self.get_settings();
                     let mut read_options = ParquetReadOptions::default();
-                    let settings = self.query_settings.clone();
 
                     if !settings.get_enable_parquet_page_index()? {
                         read_options = read_options.with_prune_pages(false);
@@ -1701,10 +1691,8 @@ impl TableContext for QueryContext {
                         duplicated_files_detected: vec![],
                         is_select: true,
                         default_exprs: None,
-                        copy_into_location_options: Default::default(),
                         copy_into_table_options: Default::default(),
                         stage_root,
-                        copy_into_location_ordered: false,
                         is_variant: true,
                     };
                     StageTable::try_create(info)
@@ -1720,10 +1708,8 @@ impl TableContext for QueryContext {
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_exprs: None,
-                    copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    copy_into_location_ordered: false,
                     is_variant: false,
                 };
                 OrcTable::try_create(info).await
@@ -1741,10 +1727,8 @@ impl TableContext for QueryContext {
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_exprs: None,
-                    copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    copy_into_location_ordered: false,
                     is_variant: true,
                 };
                 StageTable::try_create(info)
@@ -1780,10 +1764,8 @@ impl TableContext for QueryContext {
                     duplicated_files_detected: vec![],
                     is_select: true,
                     default_exprs: None,
-                    copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    copy_into_location_ordered: false,
                     is_variant: false,
                 };
                 StageTable::try_create(info)
@@ -1936,6 +1918,10 @@ impl TableContext for QueryContext {
 
     fn reset_broadcast_id(&self) {
         self.shared.next_broadcast_id.store(0, Ordering::Release);
+    }
+
+    fn get_session_type(&self) -> SessionType {
+        self.shared.session.get_type()
     }
 }
 

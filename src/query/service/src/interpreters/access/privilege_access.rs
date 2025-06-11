@@ -1008,6 +1008,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ModifyTableComment(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
+            Plan::ModifyTableConnection(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
             Plan::DropTableColumn(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
@@ -1241,7 +1244,7 @@ impl AccessChecker for PrivilegeAccess {
                 }
             }
             Plan::CopyIntoLocation(plan) => {
-                self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
+                self.validate_stage_access(&plan.info.stage, UserPrivilegeType::Write).await?;
                 let from = plan.from.clone();
                 return self.check(ctx, &from).await;
             }

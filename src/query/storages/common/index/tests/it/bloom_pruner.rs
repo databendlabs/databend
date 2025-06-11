@@ -148,7 +148,10 @@ fn test_base(file: &mut impl Write) {
                     },
                     Buffer::<u64>::from(vec![0, 2, 3]),
                 )
-                .upcast(),
+                .upcast(&DataType::Array(Box::new(DataType::Tuple(vec![
+                    DataType::Number(NumberDataType::UInt8),
+                    DataType::String,
+                ])))),
             )),
             Column::Map(Box::new(
                 ArrayColumn::<KvPair<AnyType, AnyType>>::new(
@@ -162,7 +165,10 @@ fn test_base(file: &mut impl Write) {
                     },
                     Buffer::<u64>::from(vec![0, 2, 3]),
                 )
-                .upcast(),
+                .upcast(&DataType::Array(Box::new(DataType::Tuple(vec![
+                    DataType::String,
+                    DataType::Variant,
+                ])))),
             )),
         ]),
     ];

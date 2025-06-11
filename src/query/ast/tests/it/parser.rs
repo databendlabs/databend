@@ -925,6 +925,8 @@ SELECT * from s;"#,
         r#"CREATE SEQUENCE seq comment='test'"#,
         r#"DESCRIBE SEQUENCE seq"#,
         r#"SHOW SEQUENCES LIKE '%seq%'"#,
+        r#"ALTER TABLE p1 CONNECTION=(CONNECTION_NAME='test')"#,
+        r#"ALTER table t connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
     ];
 
     for case in cases {
@@ -956,7 +958,6 @@ fn test_statement_error() {
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,
-        r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"create table a (c1 decimal(38), c2 int) partition by ();"#,
@@ -1101,7 +1102,7 @@ fn test_raw_insert_stmt() {
     ];
 
     for case in cases {
-        run_parser(file, insert_stmt(true), case);
+        run_parser(file, insert_stmt(true, false), case);
     }
 }
 
@@ -1113,6 +1114,7 @@ fn test_query() {
         r#"select ?"#,
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select columns('abc'), columns(a -> length(a) = 3) from t"#,
+        r#"select count(t.*) from t"#,
         r#"select * from customer at(offset => -10 * 30)"#,
         r#"select * from customer changes(information => default) at (stream => s) order by a, b"#,
         r#"select * from customer with consume as s"#,
@@ -1266,6 +1268,11 @@ fn test_expr() {
         r#"datepart(year, d)"#,
         r#"date_trunc(week, to_timestamp(1630812366))"#,
         r#"trunc(to_timestamp(1630812366), week)"#,
+        r#"trunc(1630812366, 999)"#,
+        r#"trunc(1630812366.23)"#,
+        r#"trunc(to_timestamp(1630812366), 'y')"#,
+        r#"trunc(to_timestamp(1630812366), 'mm')"#,
+        r#"trunc(to_timestamp(1630812366), 'Q')"#,
         r#"DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))"#,
         r#"last_day(to_date('2024-10-22'), week)"#,
         r#"last_day(to_date('2024-10-22'))"#,
@@ -1278,6 +1285,8 @@ fn test_expr() {
         r#"(arr[0]:a).b"#,
         r#"arr[4]["k"]"#,
         r#"a rlike '^11'"#,
+        r#"a like '%1$%1%' escape '$'"#,
+        r#"a not like '%1$%1%' escape '$'"#,
         r#"'中文'::text not in ('a', 'b')"#,
         r#"G.E.B IS NOT NULL AND col1 not between col2 and (1 + col3) DIV sum(col4)"#,
         r#"sum(CASE WHEN n2.n_name = 'GERMANY' THEN ol_amount ELSE 0 END) / CASE WHEN sum(ol_amount) = 0 THEN 1 ELSE sum(ol_amount) END"#,
@@ -1288,6 +1297,12 @@ fn test_expr() {
             AND p_size BETWEEN CAST (1 AS smallint) AND CAST (5 AS smallint)
             AND l_shipmode IN ('AIR', 'AIR REG')
             AND l_shipinstruct = 'DELIVER IN PERSON'"#,
+        r#"'中文'::text LIKE ANY ('a', 'b')"#,
+        r#"'中文'::text LIKE ANY ('a', 'b') ESCAPE '$'"#,
+        r#"'中文'::text LIKE ANY (SELECT 'a', 'b')"#,
+        r#"'中文'::text LIKE ALL (SELECT 'a', 'b')"#,
+        r#"'中文'::text LIKE SOME (SELECT 'a', 'b')"#,
+        r#"'中文'::text LIKE ANY (SELECT 'a', 'b') ESCAPE '$'"#,
         r#"nullif(1, 1)"#,
         r#"nullif(a, b)"#,
         r#"coalesce(1, 2, 3)"#,
@@ -1346,6 +1361,8 @@ fn test_expr_error() {
             AND col1 NOT BETWEEN col2 AND
             AND 1 + col3 DIV sum(col4)
         "#,
+        r#"CAST(1 AS STRING) ESCAPE '$'"#,
+        r#"1 + 1 ESCAPE '$'"#,
     ];
 
     for case in cases {

@@ -27,6 +27,7 @@ use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
+use super::ModifyTableConnectionPlan;
 use super::RenameDictionaryPlan;
 use super::ShowCreateDictionaryPlan;
 use crate::binder::ExplainConfig;
@@ -273,6 +274,7 @@ pub enum Plan {
     SetOptions(Box<SetOptionsPlan>),
     UnsetOptions(Box<UnsetOptionsPlan>),
     RefreshTableCache(Box<RefreshTableCachePlan>),
+    ModifyTableConnection(Box<ModifyTableConnectionPlan>),
 
     // Optimize
     OptimizePurge(Box<OptimizePurgePlan>),

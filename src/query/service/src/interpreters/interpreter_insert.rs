@@ -24,6 +24,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
@@ -41,6 +42,7 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
+use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
@@ -248,24 +250,28 @@ impl Interpreter for InsertInterpreter {
 
                 return Ok(build_res);
             }
-            InsertInputSource::StreamingLoad {
-                file_format,
-                on_error_mode,
-                schema,
-                default_exprs,
-                block_thresholds,
-                receiver,
-            } => {
+            InsertInputSource::StreamingLoad(plan) => {
                 build_streaming_load_pipeline(
                     self.ctx.clone(),
                     &mut build_res.main_pipeline,
-                    file_format,
-                    receiver.clone(),
-                    schema.clone(),
-                    default_exprs.clone(),
-                    *block_thresholds,
-                    on_error_mode.clone(),
+                    &plan.file_format,
+                    plan.receiver.clone(),
+                    plan.required_source_schema.clone(),
+                    plan.default_exprs.clone(),
+                    plan.block_thresholds,
+                    plan.on_error_mode.clone(),
                 )?;
+                if !plan.values_consts.is_empty() {
+                    let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));
+                    build_res.main_pipeline.try_add_transformer(|| {
+                        TransformAddConstColumns::try_new(
+                            self.ctx.clone(),
+                            input_schema.clone(),
+                            plan.required_values_schema.clone(),
+                            plan.values_consts.clone(),
+                        )
+                    })?;
+                }
             }
         };
 

@@ -22,6 +22,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GeometryType;
@@ -77,7 +78,7 @@ where
 
 impl<T> ScalarStateFunc<T> for StCollectState<T>
 where
-    T: ValueType,
+    T: ArgType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
 {
     fn new() -> Self {

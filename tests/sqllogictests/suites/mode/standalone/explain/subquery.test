@@ -746,3 +746,125 @@ EmptyResultScan
 
 statement ok
 drop table if exists t;
+
+statement ok
+create table t (i string);
+
+statement ok
+insert into t values('database'), ('databend'), ('data%base');
+
+query T
+select * from t where i like any (select 'data%');
+----
+database
+databend
+data%base
+
+query T
+explain select * from t where i like any (select 'data%');
+----
+Filter
+├── output columns: [t.i (#0)]
+├── filters: [is_true(like(t.i (#0), 'data%'))]
+├── estimated rows: 0.60
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(like(t.i (#0), 'data%'))], limit: NONE]
+    └── estimated rows: 3.00
+
+query T
+select * from t where i like any (SELECT c1 FROM (VALUES ('data%')) words(c1));
+----
+database
+databend
+data%base
+
+query T
+explain select * from t where i like any (SELECT c1 FROM (VALUES ('data%')) words(c1));
+----
+HashJoin
+├── output columns: [t.i (#0)]
+├── join type: LEFT SEMI
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL))]
+├── build join filters:
+├── estimated rows: 3.00
+├── ConstantTableScan(Build)
+│   ├── output columns: [c1 (#1)]
+│   └── column 0: ['data%']
+└── TableScan(Probe)
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
+
+query T
+select * from t where i like any (select 'data$%%') escape '$';
+----
+data%base
+
+query T
+explain select * from t where i like any (select 'data$%%') escape '$';
+----
+Filter
+├── output columns: [t.i (#0)]
+├── filters: [is_true(like(t.i (#0), 'data$%%', '$'))]
+├── estimated rows: 0.60
+└── TableScan
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(like(t.i (#0), 'data$%%', '$'))], limit: NONE]
+    └── estimated rows: 3.00
+
+query T
+select * from t where i like any (SELECT c1 FROM (VALUES ('data$%%')) words(c1)) escape '$';
+----
+data%base
+
+query T
+explain select * from t where i like any (SELECT c1 FROM (VALUES ('data$%%')) words(c1)) escape '$';
+----
+HashJoin
+├── output columns: [t.i (#0)]
+├── join type: LEFT SEMI
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [like(t.i (#0), CAST(subquery_1 (#1) AS String NULL), '$')]
+├── build join filters:
+├── estimated rows: 3.00
+├── ConstantTableScan(Build)
+│   ├── output columns: [c1 (#1)]
+│   └── column 0: ['data$%%']
+└── TableScan(Probe)
+    ├── table: default.default.t
+    ├── output columns: [i (#0)]
+    ├── read rows: 3
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 3.00
+
+statement ok
+drop table if exists t;
+

@@ -14,7 +14,7 @@ function run() {
   echo "--$2"
   stmt "copy into @streaming_load_parquet/$1.parquet from (select $2)  single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;"
   echo ">>>> streaming load: $1.parquet $4 $5:"
-  curl -sS -H "x-databend-query-id:load-$1" -H "sql:insert into streaming_load_parquet($3) file_format = (type='parquet', missing_field_as=$4, null_if=($5))" -F "upload=@$DATA/$1.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"
+  (set -x; curl -sS -H "x-databend-query-id:load-$1" -H "sql:insert into streaming_load_parquet($3) values file_format = (type='parquet', missing_field_as=$4, null_if=($5))" -F "upload=@$DATA/$1.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load")
   echo
   echo "<<<<"
   query "select * from streaming_load_parquet;"
@@ -22,9 +22,9 @@ function run() {
 }
 
 run "q1" "'2021-01-01' as c3, '1' as c2"  "c2,c3" "error" ""
-run "q1" "'2021-01-01' as c3"  "c2,c3" "error" ""
-run "q1" "'2021-01-01' as c3"  "c2,c3" "field_default" ""
-run "q1" "'2021-01-01' as c3, 'my_null' as c1"  "c1,c3" "error" ""
-run "q1" "'2021-01-01' as c3, 'my_null' as c1"  "c1,c3" "error" "'my_null'"
+run "q2" "'2021-01-01' as c3"  "c2,c3" "error" ""
+run "q3" "'2021-01-01' as c3"  "c2,c3" "field_default" ""
+run "q4" "'2021-01-01' as c3, 'my_null' as c1"  "c1,c3" "error" ""
+run "q5" "'2021-01-01' as c3, 'my_null' as c1"  "c1,c3" "error" "'my_null'"
 
 stmt "drop table if exists streaming_load_parquet"

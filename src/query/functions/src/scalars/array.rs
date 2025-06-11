@@ -153,7 +153,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
 
                     match len {
-                        Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
+                        Some(_) => Value::Column(Column::Array(Box::new(
+                            builder
+                                .build()
+                                .upcast(&DataType::Array(Box::new(DataType::Generic(0)))),
+                        ))),
                         None => Value::Scalar(Scalar::Array(builder.build_scalar())),
                     }
                 }),

@@ -126,14 +126,14 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         if let Some(v) = self.value {
             let v = T::Scalar::from_u64_array(v);
-            T::push_item(builder, T::to_scalar_ref(&v));
+            builder.push_item(T::to_scalar_ref(&v));
         } else {
-            T::push_default(builder);
+            builder.push_default();
         }
         Ok(())
     }

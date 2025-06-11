@@ -26,6 +26,7 @@ use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::headers::HEADER_WAREHOUSE;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -78,7 +79,6 @@ use crate::servers::login_history::LoginHandler;
 use crate::servers::login_history::LoginHistory;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
 const COOKIE_LAST_ACCESS_TIME: &str = "last_access_time";
@@ -399,6 +399,14 @@ impl<E> HTTPSessionEndpoint<E> {
             )
             .await?;
         login_history.user_name = user_name.clone();
+
+        // If cookie_session_id is set, we disable writing to login_history.
+        // The cookie_session_id is initially issued by the server to the client upon the first successful login.
+        // For all subsequent requests, the client includes this session_id with each request.
+        // This indicates the user is already logged in, so we skip recording another login event.
+        if cookie_session_id.is_some() {
+            login_history.disable_write = true;
+        }
 
         let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
             (Some(id1), Some(id2)) => {

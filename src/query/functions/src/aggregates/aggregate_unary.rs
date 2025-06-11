@@ -19,11 +19,10 @@ use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_base::base::take_mut;
 use databend_common_exception::Result;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -40,7 +39,7 @@ use crate::aggregates::AggrStateLoc;
 pub trait UnaryState<T, R>:
     Send + Sync + Default + borsh::BorshSerialize + borsh::BorshDeserialize
 where
-    T: ValueType,
+    T: AccessType,
     R: ValueType,
 {
     fn add(
@@ -76,7 +75,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut R::ColumnBuilder,
+        builder: R::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
 }
@@ -88,7 +87,7 @@ pub trait FunctionData: Send + Sync {
 pub struct AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R>,
-    T: ValueType,
+    T: AccessType,
     R: ValueType,
 {
     display_name: String,
@@ -103,7 +102,7 @@ where
 impl<S, T, R> Display for AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R>,
-    T: ValueType,
+    T: AccessType,
     R: ValueType,
 {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -114,7 +113,7 @@ where
 impl<S, T, R> AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R> + 'static,
-    T: Send + Sync + ValueType,
+    T: Send + Sync + AccessType,
     R: Send + Sync + ValueType,
 {
     pub(crate) fn try_create_unary(
@@ -162,40 +161,15 @@ where
     }
 
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {
-        let decimal_size = check_decimal(builder);
-        // some `ValueType` like `NullableType` need ownership to downcast builder,
-        // so here we using an unsafe way to take the ownership of builder.
-        // See [`take_mut`] for details.
-        if let Some(builder) = R::try_downcast_builder(builder) {
-            state.merge_result(builder, self.function_data.as_deref())
-        } else {
-            take_mut(builder, |builder| {
-                let mut builder = R::try_downcast_owned_builder(builder).unwrap();
-                let res = state.merge_result(&mut builder, self.function_data.as_deref());
-
-                (
-                    res,
-                    R::try_upcast_column_builder(builder, decimal_size).unwrap(),
-                )
-            })
-        }
-    }
-}
-
-fn check_decimal(builder: &ColumnBuilder) -> Option<DecimalSize> {
-    match builder {
-        ColumnBuilder::Decimal(b) => Some(b.decimal_size()),
-        ColumnBuilder::Array(box b) => check_decimal(&b.builder),
-        ColumnBuilder::Nullable(box b) => check_decimal(&b.builder),
-        ColumnBuilder::Map(box b) => check_decimal(&b.builder),
-        _ => None,
+        let builder = R::downcast_builder(builder);
+        state.merge_result(builder, self.function_data.as_deref())
     }
 }
 
 impl<S, T, R> AggregateFunction for AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R> + 'static,
-    T: Send + Sync + ValueType,
+    T: Send + Sync + AccessType,
     R: Send + Sync + ValueType,
 {
     fn name(&self) -> &str {

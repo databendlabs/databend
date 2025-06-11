@@ -63,6 +63,7 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::VisitorMut as _;
 use crate::IndexType;
+use crate::NameResolutionContext;
 use crate::TypeChecker;
 use crate::WindowChecker;
 
@@ -271,29 +272,44 @@ impl Binder {
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr)?;
 
+                    fn get_expr_name(
+                        expr: &Expr,
+                        alias: &Option<Identifier>,
+                        name_resolution_ctx: &NameResolutionContext,
+                    ) -> String {
+                        match (expr, alias) {
+                            (
+                                Expr::ColumnRef {
+                                    column:
+                                        ColumnRef {
+                                            column: ColumnID::Name(column),
+                                            ..
+                                        },
+                                    ..
+                                },
+                                None,
+                            ) => normalize_identifier(column, name_resolution_ctx).name,
+                            (
+                                Expr::Cast {
+                                    expr: internal_expr,
+                                    ..
+                                },
+                                None,
+                            ) => get_expr_name(internal_expr.as_ref(), &None, name_resolution_ctx),
+                            (_, Some(alias)) => {
+                                normalize_identifier(alias, name_resolution_ctx).name
+                            }
+                            _ => {
+                                let mut expr = expr.clone();
+                                let mut remove_quote_visitor = RemoveIdentifierQuote;
+                                expr.drive_mut(&mut remove_quote_visitor);
+                                format!("{:#}", expr)
+                            }
+                        }
+                    }
+
                     // If alias is not specified, we will generate a name for the scalar expression.
-                    let expr_name = match (expr.as_ref(), alias) {
-                        (
-                            Expr::ColumnRef {
-                                column:
-                                    ColumnRef {
-                                        column: ColumnID::Name(column),
-                                        ..
-                                    },
-                                ..
-                            },
-                            None,
-                        ) => normalize_identifier(column, &self.name_resolution_ctx).name,
-                        (_, Some(alias)) => {
-                            normalize_identifier(alias, &self.name_resolution_ctx).name
-                        }
-                        _ => {
-                            let mut expr = expr.clone();
-                            let mut remove_quote_visitor = RemoveIdentifierQuote;
-                            expr.drive_mut(&mut remove_quote_visitor);
-                            format!("{:#}", expr)
-                        }
-                    };
+                    let expr_name = get_expr_name(expr.as_ref(), alias, &self.name_resolution_ctx);
 
                     prev_aliases.push((expr_name.clone(), bound_expr.clone()));
 

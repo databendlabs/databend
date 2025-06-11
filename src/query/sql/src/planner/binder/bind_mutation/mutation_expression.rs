@@ -198,6 +198,18 @@ impl MutationExpression {
                 let (mut s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
 
+                // Note: We intentionally get target table index before binding source table,
+                // because source table may contain tables with same name as target table,
+                // which could cause us to get wrong table index if we do it later.
+                let target_table_index = binder
+                    .metadata
+                    .read()
+                    .get_table_index(
+                        Some(target_table_identifier.database_name().as_str()),
+                        target_table_identifier.table_name().as_str(),
+                    )
+                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
+
                 let from_s_expr = if let Some(from) = from {
                     let (from_s_expr, mut from_context) =
                         binder.bind_table_reference(&mut bind_context, from)?;
@@ -215,16 +227,6 @@ impl MutationExpression {
                 } else {
                     None
                 };
-
-                // Get target table index.
-                let target_table_index = binder
-                    .metadata
-                    .read()
-                    .get_table_index(
-                        Some(target_table_identifier.database_name().as_str()),
-                        target_table_identifier.table_name().as_str(),
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
 
                 // If the filter is a simple expression, change the mutation strategy to MutationStrategy::Direct.
                 let (mut mutation_strategy, predicates) =

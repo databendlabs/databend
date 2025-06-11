@@ -278,6 +278,11 @@ select date_trunc('month', '2025-02-05 00:01:00');
 2025-02-01
 
 query T
+select trunc('2025-02-05 00:01:00', 'mm');
+----
+2025-02-01
+
+query T
 select date_trunc('week', '2025-02-05 00:01:00');
 ----
 2025-02-03
@@ -286,6 +291,32 @@ query T
 select trunc('2025-02-05 00:01:00', week);
 ----
 2025-02-03
+
+
+query T
+SELECT TRUNC('2025-06-11'::Date, 'IW');
+----
+2025-06-09
+
+query T
+SELECT TRUNC('2025-06-09'::Date, 'IW');
+----
+2025-06-09
+
+query T
+SELECT TRUNC('2023-12-31'::Date, 'IW');
+----
+2023-12-25
+
+query T
+SELECT TRUNC('2024-01-01'::Date, 'IW');
+----
+2024-01-01
+
+query T
+select TRUNC('2025-06-09 10:11:12'::Datetime, 'HH24');
+----
+2025-06-09 10:00:00.000000
 
 query FF
 SELECT
@@ -1153,6 +1184,16 @@ query T
 select date_sub(QUARTER, 1, to_date('2018-01-02'))
 ----
 2017-10-02
+
+query T
+select trunc(to_date('2022-07-07'),'Y');
+----
+2022-01-01
+
+query T
+select trunc(to_date('2022-07-07'),'Q');
+----
+2022-07-01
 
 query T
 select date_trunc(month, to_date('2022-07-07'))

@@ -530,22 +530,14 @@ impl fmt::Display for TableStatisticsContext {
 
         if !self.columns_statistics.is_empty() {
             writeln!(f, "\n#### Column Statistics")?;
-            writeln!(f, "| Column | Min | Max | Distinct Values | Null Count |")?;
-            writeln!(f, "|--------|-----|-----|-----------------|------------|")?;
+            writeln!(f, "| Column | Ndv | Nc |")?;
+            writeln!(f, "|--------|-----------------|------------|")?;
 
             for (col_name, stats) in &self.columns_statistics {
                 writeln!(
                     f,
-                    "| {} | {} | {} | {} | {} |",
+                    "| {} | {} | {} |",
                     col_name,
-                    stats
-                        .min
-                        .as_ref()
-                        .map_or("NULL".to_string(), |d| format!("{}", d)),
-                    stats
-                        .max
-                        .as_ref()
-                        .map_or("NULL".to_string(), |d| format!("{}", d)),
                     stats.ndv.map_or("NULL".to_string(), |n| n.to_string()),
                     stats.null_count
                 )?;

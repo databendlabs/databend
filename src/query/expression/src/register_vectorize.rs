@@ -293,7 +293,9 @@ pub fn passthrough_nullable_1_arg<I1: AccessType, O: ReturnType>(
                 let out = func(arg1, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
+                    Value::Column(out) => {
+                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
+                    }
                     Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
@@ -325,7 +327,9 @@ pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>
                 let out = func(arg1, arg2, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
+                    Value::Column(out) => {
+                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
+                    }
                     Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
@@ -334,7 +338,7 @@ pub fn passthrough_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>
     }
 }
 
-pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: ArgType, O: ReturnType>(
+pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O: ReturnType>(
     func: impl for<'a> Fn(Value<I1>, Value<I2>, Value<I3>, &mut EvalContext) -> Value<O>
         + Copy
         + Send
@@ -361,7 +365,9 @@ pub fn passthrough_nullable_3_arg<I1: AccessType, I2: AccessType, I3: ArgType, O
                 let out = func(arg1, arg2, arg3, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
+                    Value::Column(out) => {
+                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
+                    }
                     Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
@@ -405,7 +411,9 @@ pub fn passthrough_nullable_4_arg<
                 let out = func(arg1, arg2, arg3, arg4, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
+                    Value::Column(out) => {
+                        Value::Column(NullableColumn::new_unchecked(out, args_validity))
+                    }
                     Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
@@ -431,7 +439,7 @@ pub fn combine_nullable_1_arg<I1: AccessType, O: ReturnType>(
                 let out = func(arg1, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(
+                    Value::Column(out) => Value::Column(NullableColumn::new_unchecked(
                         out.column,
                         &args_validity & &out.validity,
                     )),
@@ -468,7 +476,7 @@ pub fn combine_nullable_2_arg<I1: AccessType, I2: AccessType, O: ReturnType>(
                 let out = func(arg1, arg2, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(
+                    Value::Column(out) => Value::Column(NullableColumn::new_unchecked(
                         out.column,
                         &args_validity & &out.validity,
                     )),
@@ -507,7 +515,7 @@ pub fn combine_nullable_3_arg<I1: AccessType, I2: AccessType, I3: AccessType, O:
                 let out = func(arg1, arg2, arg3, ctx);
 
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(
+                    Value::Column(out) => Value::Column(NullableColumn::new_unchecked(
                         out.column,
                         &args_validity & &out.validity,
                     )),
@@ -559,7 +567,7 @@ pub fn combine_nullable_4_arg<
             (Some(arg1), Some(arg2), Some(arg3), Some(arg4)) => {
                 let out = func(arg1, arg2, arg3, arg4, ctx);
                 match out {
-                    Value::Column(out) => Value::Column(NullableColumn::new(
+                    Value::Column(out) => Value::Column(NullableColumn::new_unchecked(
                         out.column,
                         &args_validity & &out.validity,
                     )),

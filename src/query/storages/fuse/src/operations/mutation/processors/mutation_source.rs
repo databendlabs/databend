@@ -249,10 +249,7 @@ impl Processor for MutationSource {
                             }
 
                             MutationAction::Update => {
-                                data_block.add_column(BlockEntry::new(
-                                    DataType::Boolean,
-                                    Value::upcast(predicates),
-                                ));
+                                data_block.add_column(BlockEntry::from_arg_value(predicates));
                                 if self.remain_reader.is_none() {
                                     self.state = State::PerformOperator(
                                         data_block,

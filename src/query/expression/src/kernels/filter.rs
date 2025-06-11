@@ -203,28 +203,30 @@ impl ValueVisitor for FilterVisitor<'_> {
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        let c = T::upcast_column(column.clone());
-        let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
-        let mut builder = T::try_downcast_owned_builder(builder).unwrap();
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        let c = T::upcast_column_with_type(column.clone(), data_type);
+        let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+        let mut inner_builder = T::downcast_builder(&mut builder);
         match self.strategy {
             IterationStrategy::IndexIterator => {
                 let iter = TrueIdxIter::new(self.original_rows, Some(self.filter));
                 iter.for_each(|index| {
-                    T::push_item(&mut builder, unsafe {
-                        T::index_column_unchecked(&column, index)
-                    })
+                    inner_builder.push_item(unsafe { T::index_column_unchecked(&column, index) });
                 });
             }
             _ => {
                 let iter = SlicesIterator::new(self.filter);
                 iter.for_each(|(start, len)| {
-                    T::append_column(&mut builder, &T::slice_column(&column, start..start + len))
+                    inner_builder.append_column(&T::slice_column(&column, start..start + len));
                 });
             }
         }
-
-        self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
+        drop(inner_builder);
+        self.result = Some(Value::Column(builder.build()));
         Ok(())
     }
 

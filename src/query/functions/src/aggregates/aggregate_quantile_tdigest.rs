@@ -125,7 +125,7 @@ impl QuantileTDigestState {
             });
             builder.commit_row();
         } else {
-            let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
+            let mut builder = NumberType::<F64>::downcast_builder(builder);
             let q = self.quantile(levels[0]);
             builder.push(q.into());
         }

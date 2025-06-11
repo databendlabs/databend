@@ -126,6 +126,7 @@ mod interpreter_table_index_drop;
 mod interpreter_table_index_refresh;
 mod interpreter_table_modify_column;
 mod interpreter_table_modify_comment;
+mod interpreter_table_modify_connection;
 mod interpreter_table_recluster;
 mod interpreter_table_rename;
 mod interpreter_table_rename_column;

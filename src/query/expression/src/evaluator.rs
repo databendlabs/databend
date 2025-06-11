@@ -82,12 +82,12 @@ impl Default for EvaluateOptions<'_> {
 }
 
 impl<'a> EvaluateOptions<'a> {
-    pub fn new(selection: Option<&'a [u32]>) -> EvaluateOptions<'a> {
+    pub fn new_for_select(selection: Option<&'a [u32]>) -> EvaluateOptions<'a> {
         Self {
             selection,
             suppress_error: false,
             errors: None,
-            strict_eval: true,
+            strict_eval: false,
         }
     }
 
@@ -149,18 +149,25 @@ impl<'a> Evaluator<'a> {
 
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None, &mut EvaluateOptions::default())
-            .map_err(|err| {
-                let expr_str = format!("`{}`", expr.sql_display());
-                if err.message().contains(expr_str.as_str()) {
-                    err
-                } else {
-                    ErrorCode::BadArguments(format!(
-                        "{}, during run expr: {expr_str}",
-                        err.message()
-                    ))
-                    .set_span(err.span())
-                }
-            })
+            .map_err(|err| Self::map_err(err, expr))
+    }
+
+    pub fn run_fast(&self, expr: &Expr) -> Result<Value<AnyType>> {
+        self.partial_run(expr, None, &mut EvaluateOptions {
+            strict_eval: false,
+            ..Default::default()
+        })
+        .map_err(|err| Self::map_err(err, expr))
+    }
+
+    fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
+        let expr_str = format!("`{}`", expr.sql_display());
+        if err.message().contains(expr_str.as_str()) {
+            err
+        } else {
+            ErrorCode::BadArguments(format!("{}, during run expr: {expr_str}", err.message()))
+                .set_span(err.span())
+        }
     }
 
     /// Run an expression partially, only the rows that are valid in the validity bitmap
@@ -259,11 +266,11 @@ impl<'a> Evaluator<'a> {
             Value::Column(col) => assert_eq!(&col.data_type(), expr.data_type()),
         }
 
-        if !expr.is_column_ref() && options.strict_eval {
+        if !expr.is_column_ref() && !expr.is_constant() && options.strict_eval {
             let mut check = CheckStrictValue;
             assert!(
                 check.visit_value(result.clone()).is_ok(),
-                "result {result:?}",
+                "strict check fail on expr: {expr}",
             )
         }
 
@@ -287,6 +294,9 @@ impl<'a> Evaluator<'a> {
         } = call;
         let child_suppress_error = function.signature.name == "is_not_error";
         let mut child_option = options.with_suppress_error(child_suppress_error);
+        if child_option.strict_eval && call.generics.is_empty() {
+            child_option.strict_eval = false;
+        }
 
         let args = args
             .iter()
@@ -2233,9 +2243,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 });
 
                 let (calc_domain, eval) = match &function.eval {
-                    FunctionEval::Scalar {
-                        calc_domain, eval, ..
-                    } => (calc_domain, eval),
+                    FunctionEval::Scalar { calc_domain, eval } => (calc_domain, eval),
                     FunctionEval::SRF { .. } => {
                         return (func_expr, None);
                     }
@@ -2638,7 +2646,11 @@ impl ValueVisitor for CheckStrictValue {
         self.visit_column(column.column)
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, _: T::Column) -> std::result::Result<(), ()> {
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        _: T::Column,
+        _: &DataType,
+    ) -> std::result::Result<(), ()> {
         Ok(())
     }
 }

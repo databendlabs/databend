@@ -113,8 +113,9 @@ where
         let tz = TimeZone::UTC;
         let mut items = Vec::with_capacity(self.values.len());
         let values = mem::take(&mut self.values);
+        let data_type = builder.data_type();
         for value in values.into_iter() {
-            let v = T::upcast_scalar(value);
+            let v = T::upcast_scalar_with_type(value, &data_type);
             // NULL values are omitted from the output.
             if v == Scalar::Null {
                 continue;

@@ -404,9 +404,14 @@ impl QueryVisitor {
                     .as_ref()
                     .map(|(trim_where, expr)| (trim_where.clone(), Box::new(self.fuzz_expr(expr)))),
             },
-            Expr::CountAll { span, window } => Expr::CountAll {
+            Expr::CountAll {
+                span,
+                window,
+                qualified,
+            } => Expr::CountAll {
                 span: *span,
                 window: window.as_ref().map(|window| self.fuzz_window(window)),
+                qualified: qualified.clone(),
             },
             Expr::Tuple { span, exprs } => Expr::Tuple {
                 span: *span,

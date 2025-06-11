@@ -18,7 +18,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
@@ -78,7 +78,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut ArrayColumnBuilder<T>,
+        mut builder: ArrayColumnBuilderMut<'_, T>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value_len = self.value.len();
@@ -111,7 +111,7 @@ where
 
 impl<T> UnaryState<T, T> for QuantileState<T>
 where
-    T: ArgType + Sync + Send,
+    T: ValueType + Sync + Send,
     T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
 {
     fn add(
@@ -134,7 +134,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut T::ColumnBuilder,
+        mut builder: T::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let value_len = self.value.len();
@@ -147,11 +147,11 @@ where
 
         let idx = ((value_len - 1) as f64 * quantile_disc_data.levels[0]).floor() as usize;
         if idx >= value_len {
-            T::push_default(builder);
+            builder.push_default();
         } else {
             self.value.as_mut_slice().select_nth_unstable(idx);
             let value = self.value.get(idx).unwrap();
-            T::push_item(builder, T::to_scalar_ref(value));
+            builder.push_item(T::to_scalar_ref(value));
         }
 
         Ok(())

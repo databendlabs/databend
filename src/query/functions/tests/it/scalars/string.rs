@@ -427,6 +427,17 @@ fn test_concat(file: &mut impl Write) {
         "a",
         BooleanType::from_data(vec![false; 3]),
     )]);
+
+    let size = DecimalSize::new(10, 0).unwrap();
+    run_ast(file, "concat_ws(NULL, a, 2)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
+
+    run_ast(file, "concat(4, a, 2)", &[(
+        "a",
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
+    )]);
 }
 
 fn test_bin(file: &mut impl Write) {
@@ -774,26 +785,26 @@ fn test_to_uuid(file: &mut impl Write) {
     let size = DecimalSize::new(10, 0).unwrap();
     run_ast(file, "to_uuid(a)", &[(
         "a",
-        Decimal128Type::from_data_with_size([0, 1, 2], size),
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)),
     )]);
     run_ast(file, "to_uuid(a)", &[(
         "a",
-        Decimal128Type::from_data_with_size([0, 1, 2], size).wrap_nullable(None),
+        Decimal128Type::from_data_with_size([0, 1, 2], Some(size)).wrap_nullable(None),
     )]);
     run_ast(file, "to_uuid(a)", &[(
         "a",
-        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size),
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size)),
     )]);
     run_ast(file, "to_uuid(a)", &[(
         "a",
-        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], size)
+        Decimal256Type::from_data_with_size([i256::from(0), i256::from(20)], Some(size))
             .wrap_nullable(None),
     )]);
     run_ast(file, "to_uuid(a)", &[(
         "a",
         Decimal256Type::from_data_with_size(
             [i256::from(0), i256::from(20)],
-            DecimalSize::new(40, 0).unwrap(),
+            Some(DecimalSize::new(40, 0).unwrap()),
         ),
     )]);
 }

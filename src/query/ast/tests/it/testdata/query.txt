@@ -448,6 +448,89 @@ Query {
 
 
 ---------- Input ----------
+select count(t.*) from t
+---------- Output ---------
+SELECT COUNT(t.*) FROM t
+---------- AST ------------
+Query {
+    span: Some(
+        0..24,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..24,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                AliasedExpr {
+                    expr: CountAll {
+                        span: Some(
+                            7..17,
+                        ),
+                        qualified: [
+                            Identifier(
+                                Identifier {
+                                    span: Some(
+                                        13..14,
+                                    ),
+                                    name: "t",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                            Star(
+                                Some(
+                                    15..16,
+                                ),
+                            ),
+                        ],
+                        window: None,
+                    },
+                    alias: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        23..24,
+                    ),
+                    catalog: None,
+                    database: None,
+                    table: Identifier {
+                        span: Some(
+                            23..24,
+                        ),
+                        name: "t",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    alias: None,
+                    temporal: None,
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * from customer at(offset => -10 * 30)
 ---------- Output ---------
 SELECT * FROM customer AT (OFFSET => - 10 * 30)
@@ -3679,6 +3762,13 @@ Query {
                         span: Some(
                             19..27,
                         ),
+                        qualified: [
+                            Star(
+                                Some(
+                                    25..26,
+                                ),
+                            ),
+                        ],
                         window: None,
                     },
                     alias: Some(
@@ -3948,7 +4038,9 @@ Query {
                                                         span: Some(
                                                             299..307,
                                                         ),
-                                                        op: NotLike,
+                                                        op: NotLike(
+                                                            None,
+                                                        ),
                                                         left: ColumnRef {
                                                             span: Some(
                                                                 289..298,

@@ -1929,6 +1929,219 @@ DateTrunc {
 
 
 ---------- Input ----------
+trunc(1630812366, 999)
+---------- Output ---------
+TRUNCATE(1630812366, 999)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..22,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..5,
+            ),
+            name: "TRUNCATE",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    6..16,
+                ),
+                value: UInt64(
+                    1630812366,
+                ),
+            },
+            Literal {
+                span: Some(
+                    18..21,
+                ),
+                value: UInt64(
+                    999,
+                ),
+            },
+        ],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+trunc(1630812366.23)
+---------- Output ---------
+TRUNCATE(1630812366.23)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..20,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..5,
+            ),
+            name: "TRUNCATE",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    6..19,
+                ),
+                value: Decimal256 {
+                    value: 163081236623,
+                    precision: 76,
+                    scale: 2,
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+trunc(to_timestamp(1630812366), 'y')
+---------- Output ---------
+DATE_TRUNC(YEAR, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..36,
+    ),
+    unit: Year,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+trunc(to_timestamp(1630812366), 'mm')
+---------- Output ---------
+DATE_TRUNC(MONTH, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..37,
+    ),
+    unit: Month,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
+trunc(to_timestamp(1630812366), 'Q')
+---------- Output ---------
+DATE_TRUNC(QUARTER, to_timestamp(1630812366))
+---------- AST ------------
+DateTrunc {
+    span: Some(
+        0..36,
+    ),
+    unit: Quarter,
+    date: FunctionCall {
+        span: Some(
+            6..30,
+        ),
+        func: FunctionCall {
+            distinct: false,
+            name: Identifier {
+                span: Some(
+                    6..18,
+                ),
+                name: "to_timestamp",
+                quote: None,
+                ident_type: None,
+            },
+            args: [
+                Literal {
+                    span: Some(
+                        19..29,
+                    ),
+                    value: UInt64(
+                        1630812366,
+                    ),
+                },
+            ],
+            params: [],
+            order_by: [],
+            window: None,
+            lambda: None,
+        },
+    },
+}
+
+
+---------- Input ----------
 DATEDIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
 ---------- Output ---------
 DATE_DIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
@@ -2602,6 +2815,88 @@ BinaryOp {
             "^11",
         ),
     },
+}
+
+
+---------- Input ----------
+a like '%1$%1%' escape '$'
+---------- Output ---------
+a LIKE '%1$%1%' ESCAPE '$'
+---------- AST ------------
+LikeWithEscape {
+    span: Some(
+        2..6,
+    ),
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            7..15,
+        ),
+        value: String(
+            "%1$%1%",
+        ),
+    },
+    is_not: false,
+    escape: "$",
+}
+
+
+---------- Input ----------
+a not like '%1$%1%' escape '$'
+---------- Output ---------
+a NOT LIKE '%1$%1%' ESCAPE '$'
+---------- AST ------------
+LikeWithEscape {
+    span: Some(
+        2..10,
+    ),
+    left: ColumnRef {
+        span: Some(
+            0..1,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        0..1,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    right: Literal {
+        span: Some(
+            11..19,
+        ),
+        value: String(
+            "%1$%1%",
+        ),
+    },
+    is_not: true,
+    escape: "$",
 }
 
 
@@ -3476,6 +3771,428 @@ BinaryOp {
             ),
         },
     },
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ANY ('a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE ANY ('a', 'b')
+---------- AST ------------
+BinaryOp {
+    span: Some(
+        15..23,
+    ),
+    op: LikeAny(
+        None,
+    ),
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            24..34,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    25..28,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    30..33,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ANY ('a', 'b') ESCAPE '$'
+---------- Output ---------
+'中文'::STRING LIKE ANY ('a', 'b') ESCAPE '$'
+---------- AST ------------
+LikeAnyWithEscape {
+    span: Some(
+        15..23,
+    ),
+    left: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    right: Tuple {
+        span: Some(
+            24..34,
+        ),
+        exprs: [
+            Literal {
+                span: Some(
+                    25..28,
+                ),
+                value: String(
+                    "a",
+                ),
+            },
+            Literal {
+                span: Some(
+                    30..33,
+                ),
+                value: String(
+                    "b",
+                ),
+            },
+        ],
+    },
+    escape: "$",
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ANY (SELECT 'a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE ANY (SELECT 'a', 'b')
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..41,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            25..40,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    25..40,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                32..35,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                37..40,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: Any,
+    escape: None,
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ALL (SELECT 'a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE ALL (SELECT 'a', 'b')
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..41,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            25..40,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    25..40,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                32..35,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                37..40,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: All,
+    escape: None,
+}
+
+
+---------- Input ----------
+'中文'::text LIKE SOME (SELECT 'a', 'b')
+---------- Output ---------
+'中文'::STRING LIKE SOME (SELECT 'a', 'b')
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..42,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            26..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    26..41,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                33..36,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                38..41,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: Some,
+    escape: None,
+}
+
+
+---------- Input ----------
+'中文'::text LIKE ANY (SELECT 'a', 'b') ESCAPE '$'
+---------- Output ---------
+'中文'::STRING LIKE ANY (SELECT 'a', 'b') ESCAPE '$'
+---------- AST ------------
+LikeSubquery {
+    span: Some(
+        15..52,
+    ),
+    expr: Cast {
+        span: Some(
+            8..14,
+        ),
+        expr: Literal {
+            span: Some(
+                0..8,
+            ),
+            value: String(
+                "中文",
+            ),
+        },
+        target_type: String,
+        pg_style: true,
+    },
+    subquery: Query {
+        span: Some(
+            25..40,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    25..40,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                32..35,
+                            ),
+                            value: String(
+                                "a",
+                            ),
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                37..40,
+                            ),
+                            value: String(
+                                "b",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+    modifier: Any,
+    escape: Some(
+        "$",
+    ),
 }
 
 

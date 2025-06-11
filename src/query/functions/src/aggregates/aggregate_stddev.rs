@@ -22,7 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::Decimal256Type;
-use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::nullable::NullableColumnBuilderMut;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Float64Type;
@@ -96,7 +96,7 @@ impl<const TYPE: u8> StddevState<TYPE> {
 
     fn state_merge_result(
         &mut self,
-        builder: &mut NullableColumnBuilder<Float64Type>,
+        mut builder: NullableColumnBuilderMut<'_, Float64Type>,
     ) -> Result<()> {
         // For single-record inputs, VAR_SAMP and STDDEV_SAMP should return NULL
         if self.count <= 1 && (TYPE == VAR_SAMP || TYPE == STD_SAMP) {
@@ -141,7 +141,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut NullableColumnBuilder<Float64Type>,
+        builder: NullableColumnBuilderMut<'_, Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         self.state.state_merge_result(builder)
@@ -190,7 +190,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut NullableColumnBuilder<Float64Type>,
+        builder: NullableColumnBuilderMut<'_, Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         self.state.state_merge_result(builder)

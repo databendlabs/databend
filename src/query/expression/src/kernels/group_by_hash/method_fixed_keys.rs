@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_hashtable::FastHash;
 use ethnum::u256;
-use ethnum::U256;
 use micromarshal::Marshal;
 
 use crate::types::boolean::BooleanType;
@@ -33,6 +32,7 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::AccessType;
+use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::Decimal128As256Type;
 use crate::types::Decimal128Type;
@@ -251,7 +251,6 @@ macro_rules! impl_hash_method_fixed_keys {
                 &self,
                 key_state: &'a KeysState,
             ) -> Result<Self::HashKeyIter<'a>> {
-                use crate::types::ArgType;
                 match key_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => Ok(col.iter()),
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
@@ -262,7 +261,6 @@ macro_rules! impl_hash_method_fixed_keys {
                 &self,
                 keys_state: KeysState,
             ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-                use crate::types::ArgType;
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
                         Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
@@ -272,7 +270,6 @@ macro_rules! impl_hash_method_fixed_keys {
             }
 
             fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
-                use crate::types::ArgType;
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
                         hashes.extend(col.iter().map(|key| key.fast_hash()));
@@ -363,7 +360,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
 }
 
 impl_hash_method_fixed_large_keys! {u128, U128}
-impl_hash_method_fixed_large_keys! {U256, U256}
+impl_hash_method_fixed_large_keys! {u256, U256}
 
 // Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.
 // If the value is null, we write 1 to the null_offset, otherwise we write 0.

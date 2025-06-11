@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,10 +22,6 @@ use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::execute_futures_in_parallel;
-use databend_common_base::runtime::workload_group::QuotaValue;
-use databend_common_base::runtime::workload_group::WorkloadGroup;
-use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
-use databend_common_base::runtime::workload_group::QUERY_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ParentMemStat;
 use databend_common_base::runtime::ThreadTracker;
@@ -34,7 +29,6 @@ use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
-use databend_common_management::WorkloadGroupResource;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_version::DATABEND_SEMVER;
@@ -99,7 +93,6 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::QueryAffect;
-use crate::sessions::Session;
 
 pub fn make_page_uri(query_id: &str, page_no: usize) -> String {
     format!("/v1/query/{}/page/{}", query_id, page_no)
@@ -427,73 +420,13 @@ async fn query_page_handler(
     query_page_handle.await
 }
 
-async fn get_workload_group(
-    session: &Session,
-) -> Result<Option<Arc<WorkloadGroupResource>>, ErrorCode> {
-    match session.get_current_workload_group() {
-        None => Ok(None),
-        Some(id) => {
-            let mgr = GlobalInstance::get::<Arc<WorkloadGroupResourceManager>>();
-            Ok(Some(mgr.get_workload(&id).await?))
-        }
-    }
-}
-
-// To ensure the priority of the workload group settings, we have moved them into the session config.
-fn workload_group_settings(
-    session: &Session,
-    workload_group: &WorkloadGroup,
-    req: &mut HttpQueryRequest,
-) {
-    let mut settings = BTreeMap::new();
-    let session_settings = session.get_settings();
-
-    if let Some(QuotaValue::Percentage(v)) = workload_group.get_quota(CPU_QUOTA_KEY) {
-        if let Ok(max_threads) = session_settings.get_max_threads() {
-            let new_max_threads = max_threads * v as u64 / 100;
-            settings.insert(
-                "max_threads".to_string(),
-                std::cmp::max(2, new_max_threads).to_string(),
-            );
-        }
-    }
-
-    if let Some(QuotaValue::Duration(v)) = workload_group.get_quota(QUERY_TIMEOUT_QUOTA_KEY) {
-        if let Ok(max_execute_time) = session_settings.get_max_execute_time_in_seconds() {
-            let new_max_execute_time = match max_execute_time {
-                0 => v.as_secs(),
-                old_value => std::cmp::min(old_value, v.as_secs()),
-            };
-
-            settings.insert(
-                "max_execute_time_in_seconds".to_string(),
-                new_max_execute_time.to_string(),
-            );
-        }
-    }
-
-    if !settings.is_empty() {
-        req.set_settings(settings);
-    }
-}
-
 #[poem::handler]
 #[async_backtrace::framed]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(mut req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let workload_group = match get_workload_group(&ctx.session).await {
-        Ok(workload_group) => workload_group,
-        Err(error) => {
-            let err = HttpErrorCode::error_code(error);
-            return Ok(err.as_response());
-        }
-    };
-
-    if let Some(workload_group) = workload_group.as_ref() {
-        workload_group_settings(&ctx.session, workload_group, &mut req);
-    }
+    let session = ctx.session.clone();
 
     let query_handle = async {
         let agent_info = ctx
@@ -570,16 +503,29 @@ pub(crate) async fn query_handler(
     };
 
     let query_handle = {
-        let workload_group_mem_stat = match workload_group {
-            None => ParentMemStat::StaticRef(&GLOBAL_MEM_STAT),
-            Some(workload_group) => ParentMemStat::Normal(workload_group.mem_stat.clone()),
-        };
+        let mut tracking_workload_group = None;
+        let mut parent_mem_stat = ParentMemStat::StaticRef(&GLOBAL_MEM_STAT);
+
+        if let Some(workload_id) = session.get_current_workload_group() {
+            let mgr = GlobalInstance::get::<Arc<WorkloadGroupResourceManager>>();
+
+            let workload_group = match mgr.get_workload(&workload_id).await {
+                Ok(workload_group) => workload_group,
+                Err(error) => {
+                    return Ok(HttpErrorCode::error_code(error).as_response());
+                }
+            };
+
+            parent_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
+            tracking_workload_group = Some(workload_group);
+        }
 
         let name = Some(ctx.query_id.clone());
-        let query_mem_stat = MemStat::create_child(name, 0, workload_group_mem_stat);
+        let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
+        tracking_payload.workload_group_resource = tracking_workload_group;
         let _tracking_guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(query_handle)
     };

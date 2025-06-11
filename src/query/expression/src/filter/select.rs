@@ -25,9 +25,15 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::Decimal128As256Type;
+use crate::types::Decimal128As64Type;
 use crate::types::Decimal128Type;
 use crate::types::Decimal256As128Type;
+use crate::types::Decimal256As64Type;
 use crate::types::Decimal256Type;
+use crate::types::Decimal64As128Type;
+use crate::types::Decimal64As256Type;
+use crate::types::Decimal64Type;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalDataType;
 use crate::types::EmptyArrayType;
 use crate::types::NullableType;
@@ -36,8 +42,6 @@ use crate::types::StringType;
 use crate::types::TimestampType;
 use crate::types::VariantType;
 use crate::with_number_mapped_type;
-use crate::Column;
-use crate::LikePattern;
 use crate::Selector;
 use crate::Value;
 
@@ -94,44 +98,7 @@ impl Selector<'_> {
             }
 
             DataType::Decimal(_) => {
-                let (left_type, _) = DecimalDataType::from_value(&left).unwrap();
-                let (right_type, _) = DecimalDataType::from_value(&right).unwrap();
-                debug_assert_eq!(left_type.size(), right_type.size());
-
-                match (left_type, right_type) {
-                    (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => {
-                        self.select_type_values_cmp::<Decimal128Type>(
-                            &op, left, right, validity, buffers, has_false,
-                        )
-                    }
-                    (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => {
-                        self.select_type_values_cmp::<Decimal256Type>(
-                            &op, left, right, validity, buffers, has_false,
-                        )
-                    }
-                    (DecimalDataType::Decimal128(size), DecimalDataType::Decimal256(_)) => {
-                        if size.can_carried_by_128() {
-                            self.select_type_values_cmp_lr::<Decimal128Type, Decimal256As128Type>(
-                                &op, left, right, validity, buffers, has_false,
-                            )
-                        } else {
-                            self.select_type_values_cmp_lr::<Decimal128As256Type, Decimal256Type>(
-                                &op, left, right, validity, buffers, has_false,
-                            )
-                        }
-                    }
-                    (DecimalDataType::Decimal256(size), DecimalDataType::Decimal128(_)) => {
-                        if size.can_carried_by_128() {
-                            self.select_type_values_cmp_lr::<Decimal256As128Type, Decimal128Type>(
-                                &op, left, right, validity, buffers, has_false,
-                            )
-                        } else {
-                            self.select_type_values_cmp_lr::<Decimal256Type, Decimal128As256Type>(
-                                &op, left, right, validity, buffers, has_false,
-                            )
-                        }
-                    }
-                }
+                self.select_values_decimal(&op, left, right, buffers, has_false, validity)
             }
             DataType::Date => self
                 .select_type_values_cmp::<DateType>(&op, left, right, validity, buffers, has_false),
@@ -152,6 +119,114 @@ impl Selector<'_> {
             ),
             _ => self
                 .select_type_values_cmp::<AnyType>(&op, left, right, validity, buffers, has_false),
+        }
+    }
+
+    fn select_values_decimal(
+        &self,
+        op: &SelectOp,
+        left: Value<AnyType>,
+        right: Value<AnyType>,
+        buffers: SelectionBuffers<'_>,
+        has_false: bool,
+        validity: Option<databend_common_column::bitmap::Bitmap>,
+    ) -> std::result::Result<usize, ErrorCode> {
+        let (left_type, _) = DecimalDataType::from_value(&left).unwrap();
+        let (right_type, _) = DecimalDataType::from_value(&right).unwrap();
+        debug_assert_eq!(left_type.size(), right_type.size());
+
+        match (left_type, right_type) {
+            (DecimalDataType::Decimal64(_), DecimalDataType::Decimal64(_)) => self
+                .select_type_values_cmp::<Decimal64Type>(
+                    op, left, right, validity, buffers, has_false,
+                ),
+            (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(_)) => self
+                .select_type_values_cmp::<Decimal128Type>(
+                    op, left, right, validity, buffers, has_false,
+                ),
+            (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(_)) => self
+                .select_type_values_cmp::<Decimal256Type>(
+                    op, left, right, validity, buffers, has_false,
+                ),
+
+            (DecimalDataType::Decimal64(size), DecimalDataType::Decimal128(_)) => {
+                match size.data_kind() {
+                    DecimalDataKind::Decimal64 => self
+                        .select_type_values_cmp_lr::<Decimal64Type, Decimal128As64Type>(
+                            op, left, right, validity, buffers, has_false,
+                        ),
+
+                    DecimalDataKind::Decimal128 | DecimalDataKind::Decimal256 => self
+                        .select_type_values_cmp_lr::<Decimal64As128Type, Decimal128Type>(
+                        op, left, right, validity, buffers, has_false,
+                    ),
+                }
+            }
+            (DecimalDataType::Decimal128(size), DecimalDataType::Decimal64(_)) => {
+                match size.data_kind() {
+                    DecimalDataKind::Decimal64 => self
+                        .select_type_values_cmp_lr::<Decimal128As64Type, Decimal64Type>(
+                            op, left, right, validity, buffers, has_false,
+                        ),
+
+                    DecimalDataKind::Decimal128 | DecimalDataKind::Decimal256 => self
+                        .select_type_values_cmp_lr::<Decimal128Type, Decimal64As128Type>(
+                        op, left, right, validity, buffers, has_false,
+                    ),
+                }
+            }
+
+            (DecimalDataType::Decimal64(size), DecimalDataType::Decimal256(_)) => {
+                match size.data_kind() {
+                    DecimalDataKind::Decimal64 => self
+                        .select_type_values_cmp_lr::<Decimal64Type, Decimal256As64Type>(
+                            op, left, right, validity, buffers, has_false,
+                        ),
+
+                    DecimalDataKind::Decimal128 | DecimalDataKind::Decimal256 => self
+                        .select_type_values_cmp_lr::<Decimal64As256Type, Decimal256Type>(
+                        op, left, right, validity, buffers, has_false,
+                    ),
+                }
+            }
+            (DecimalDataType::Decimal256(size), DecimalDataType::Decimal64(_)) => {
+                match size.data_kind() {
+                    DecimalDataKind::Decimal64 => self
+                        .select_type_values_cmp_lr::<Decimal256As64Type, Decimal64Type>(
+                            op, left, right, validity, buffers, has_false,
+                        ),
+
+                    DecimalDataKind::Decimal128 | DecimalDataKind::Decimal256 => self
+                        .select_type_values_cmp_lr::<Decimal256Type, Decimal64As256Type>(
+                        op, left, right, validity, buffers, has_false,
+                    ),
+                }
+            }
+
+            (DecimalDataType::Decimal128(size), DecimalDataType::Decimal256(_)) => {
+                match size.data_kind() {
+                    DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => self
+                        .select_type_values_cmp_lr::<Decimal128Type, Decimal256As128Type>(
+                        op, left, right, validity, buffers, has_false,
+                    ),
+                    DecimalDataKind::Decimal256 => self
+                        .select_type_values_cmp_lr::<Decimal128As256Type, Decimal256Type>(
+                            op, left, right, validity, buffers, has_false,
+                        ),
+                }
+            }
+            (DecimalDataType::Decimal256(size), DecimalDataType::Decimal128(_)) => {
+                match size.data_kind() {
+                    DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => self
+                        .select_type_values_cmp_lr::<Decimal256As128Type, Decimal128Type>(
+                        op, left, right, validity, buffers, has_false,
+                    ),
+                    DecimalDataKind::Decimal256 => self
+                        .select_type_values_cmp_lr::<Decimal256Type, Decimal128As256Type>(
+                            op, left, right, validity, buffers, has_false,
+                        ),
+                }
+            }
         }
     }
 
@@ -202,26 +277,5 @@ impl Selector<'_> {
             }
         };
         Ok(count)
-    }
-
-    pub(super) fn select_like(
-        &self,
-        mut column: Column,
-        data_type: &DataType,
-        like_pattern: &LikePattern,
-        not: bool,
-        buffers: SelectionBuffers,
-        has_false: bool,
-    ) -> Result<usize> {
-        // Remove `NullableColumn` and get the inner column and validity.
-        let mut validity = None;
-        if let DataType::Nullable(_) = data_type {
-            let nullable_column = column.clone().into_nullable().unwrap();
-            column = nullable_column.column;
-            validity = Some(nullable_column.validity);
-        }
-        // It's safe to unwrap because the column's data type is `DataType::String`.
-        let column = column.into_string().unwrap();
-        self.select_like_adapt(column, like_pattern, not, validity, buffers, has_false)
     }
 }

@@ -31,12 +31,12 @@ use crate::types::decimal::DecimalSize;
 use crate::types::decimal::MAX_DECIMAL128_PRECISION;
 use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
-use crate::types::DecimalDataType;
 use crate::types::Number;
 use crate::visit_expr;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
+use crate::DynamicCastRules;
 use crate::ExprVisitor;
 use crate::FunctionContext;
 use crate::Scalar;
@@ -296,6 +296,7 @@ pub fn check_function<Index: ColumnIndex>(
     }
 
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
+    let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
 
     let mut fail_reasons = Vec::with_capacity(candidates.len());
     let mut checked_candidates = vec![];
@@ -305,7 +306,13 @@ pub fn check_function<Index: ColumnIndex>(
         .collect::<Vec<_>>();
     let need_sort = candidates.len() > 1 && args_not_const.iter().any(|contain| !*contain);
     for (seq, (id, func)) in candidates.iter().enumerate() {
-        match try_check_function(args, &func.signature, auto_cast_rules, fn_registry) {
+        match try_check_function(
+            args,
+            &func.signature,
+            auto_cast_rules,
+            &dynamic_cast_rules,
+            fn_registry,
+        ) {
             Ok((args, return_type, generics)) => {
                 let score = if need_sort {
                     args.iter()
@@ -456,12 +463,14 @@ pub fn try_check_function<Index: ColumnIndex>(
     args: &[Expr<Index>],
     sig: &FunctionSignature,
     auto_cast_rules: AutoCastRules,
+    dynamic_cast_rules: &DynamicCastRules,
     fn_registry: &FunctionRegistry,
 ) -> Result<(Vec<Expr<Index>>, DataType, Vec<DataType>)> {
     let subst = try_unify_signature(
         args.iter().map(Expr::data_type),
         sig.args_type.iter(),
         auto_cast_rules,
+        dynamic_cast_rules,
     )?;
 
     let checked_args = args
@@ -501,6 +510,7 @@ pub fn try_unify_signature(
     src_tys: impl IntoIterator<Item = &DataType> + ExactSizeIterator,
     dest_tys: impl IntoIterator<Item = &DataType> + ExactSizeIterator,
     auto_cast_rules: AutoCastRules,
+    dynamic_cast_rules: &DynamicCastRules,
 ) -> Result<Substitution> {
     if src_tys.len() != dest_tys.len() {
         return Err(ErrorCode::from_string_no_backtrace(format!(
@@ -513,7 +523,7 @@ pub fn try_unify_signature(
     let substs = src_tys
         .into_iter()
         .zip(dest_tys)
-        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, auto_cast_rules))
+        .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules))
         .collect::<Result<Vec<_>>>()?;
 
     Ok(substs
@@ -526,27 +536,34 @@ pub fn unify(
     src_ty: &DataType,
     dest_ty: &DataType,
     auto_cast_rules: AutoCastRules,
+    dynamic_cast_rules: &DynamicCastRules,
 ) -> Result<Substitution> {
     match (src_ty, dest_ty) {
         (ty, _) if ty.has_generic() => Err(ErrorCode::from_string_no_backtrace(
             "source type {src_ty} must not contain generic type".to_string(),
         )),
         (ty, DataType::Generic(idx)) => Ok(Substitution::equation(*idx, ty.clone())),
-        (src_ty, dest_ty) if can_auto_cast_to(src_ty, dest_ty, auto_cast_rules) => {
+        (src_ty, dest_ty)
+            if can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules) =>
+        {
             Ok(Substitution::empty())
         }
         (DataType::Null, DataType::Nullable(_)) => Ok(Substitution::empty()),
         (DataType::EmptyArray, DataType::Array(_)) => Ok(Substitution::empty()),
         (DataType::EmptyMap, DataType::Map(_)) => Ok(Substitution::empty()),
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
-            unify(src_ty, dest_ty, auto_cast_rules)
+            unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
         }
-        (src_ty, DataType::Nullable(dest_ty)) => unify(src_ty, dest_ty, auto_cast_rules),
+        (src_ty, DataType::Nullable(dest_ty)) => {
+            unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+        }
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
-            unify(src_ty, dest_ty, auto_cast_rules)
+            unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
         }
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
-            (DataType::Tuple(_), DataType::Tuple(_)) => unify(src_ty, dest_ty, auto_cast_rules),
+            (DataType::Tuple(_), DataType::Tuple(_)) => {
+                unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+            }
             (_, _) => unreachable!(),
         },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys))
@@ -555,7 +572,9 @@ pub fn unify(
             let substs = src_tys
                 .iter()
                 .zip(dest_tys)
-                .map(|(src_ty, dest_ty)| unify(src_ty, dest_ty, auto_cast_rules))
+                .map(|(src_ty, dest_ty)| {
+                    unify(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+                })
                 .collect::<Result<Vec<_>>>()?;
             let subst = substs
                 .into_iter()
@@ -602,13 +621,15 @@ pub fn can_auto_cast_to(
     src_ty: &DataType,
     dest_ty: &DataType,
     auto_cast_rules: AutoCastRules,
+    dynamic_cast_rules: &DynamicCastRules,
 ) -> bool {
     match (src_ty, dest_ty) {
         (src_ty, dest_ty) if src_ty == dest_ty => true,
         (src_ty, dest_ty)
-            if auto_cast_rules
-                .iter()
-                .any(|(src, dest)| src == src_ty && dest == dest_ty) =>
+            if dynamic_cast_rules.iter().any(|r| r(src_ty, dest_ty))
+                || auto_cast_rules
+                    .iter()
+                    .any(|(src, dest)| src == src_ty && dest == dest_ty) =>
         {
             true
         }
@@ -616,24 +637,25 @@ pub fn can_auto_cast_to(
         (DataType::EmptyArray, DataType::Array(_)) => true,
         (DataType::EmptyMap, DataType::Map(_)) => true,
         (DataType::Nullable(src_ty), DataType::Nullable(dest_ty)) => {
-            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
         }
-        (src_ty, DataType::Nullable(dest_ty)) => can_auto_cast_to(src_ty, dest_ty, auto_cast_rules),
+        (src_ty, DataType::Nullable(dest_ty)) => {
+            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+        }
         (DataType::Array(src_ty), DataType::Array(dest_ty)) => {
-            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+            can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
         }
         (DataType::Map(box src_ty), DataType::Map(box dest_ty)) => match (src_ty, dest_ty) {
             (DataType::Tuple(_), DataType::Tuple(_)) => {
-                can_auto_cast_to(src_ty, dest_ty, auto_cast_rules)
+                can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
             }
             (_, _) => unreachable!(),
         },
         (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
             src_tys.len() == dest_tys.len()
-                && src_tys
-                    .iter()
-                    .zip(dest_tys)
-                    .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
+                && src_tys.iter().zip(dest_tys).all(|(src_ty, dest_ty)| {
+                    can_auto_cast_to(src_ty, dest_ty, auto_cast_rules, dynamic_cast_rules)
+                })
         }
         (DataType::String, DataType::Decimal(_)) => true,
         (DataType::Decimal(x), DataType::Decimal(y)) => {
@@ -657,9 +679,14 @@ pub fn common_super_type(
     ty2: DataType,
     auto_cast_rules: AutoCastRules,
 ) -> Option<DataType> {
+    let dynamic_cast_rules = &vec![];
     match (ty1, ty2) {
-        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
-        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
+        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules, dynamic_cast_rules) => {
+            Some(ty2)
+        }
+        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules, dynamic_cast_rules) => {
+            Some(ty1)
+        }
         (DataType::Null, ty @ DataType::Nullable(_))
         | (ty @ DataType::Nullable(_), DataType::Null) => Some(ty),
         (DataType::Null, ty) | (ty, DataType::Null) => Some(DataType::Nullable(Box::new(ty))),
@@ -715,20 +742,14 @@ pub fn common_super_type(
         | (DataType::Decimal(a), DataType::Number(num_ty))
             if !num_ty.is_float() =>
         {
-            let b = DecimalDataType::from_size(num_ty.get_decimal_properties().unwrap()).unwrap();
+            let b = num_ty.get_decimal_properties().unwrap();
 
             let scale = a.scale().max(b.scale());
-            let mut precision = a.leading_digits().max(b.leading_digits()) + scale;
+            let precision = a.leading_digits().max(b.leading_digits()) + scale;
 
-            if a.precision() <= MAX_DECIMAL128_PRECISION
-                && b.precision() <= MAX_DECIMAL128_PRECISION
-            {
-                precision = precision.min(MAX_DECIMAL128_PRECISION);
-            } else {
-                precision = precision.min(MAX_DECIMAL256_PRECISION);
-            }
-
-            Some(DataType::Decimal(DecimalSize::new(precision, scale).ok()?))
+            Some(DataType::Decimal(
+                DecimalSize::new(precision.min(MAX_DECIMAL256_PRECISION), scale).ok()?,
+            ))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
         | (DataType::Decimal(_), DataType::Number(num_ty))
@@ -874,4 +895,24 @@ impl<Index: ColumnIndex> ExprVisitor<Index> for RewriteCast {
             Cow::Owned(call) => Ok(Some(call.into())),
         }
     }
+}
+
+pub fn convert_escape_pattern(pattern: &str, escape_char: char) -> String {
+    let mut result = String::with_capacity(pattern.len());
+    let mut chars = pattern.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == escape_char {
+            if let Some(next_char) = chars.next() {
+                result.push('\\');
+                result.push(next_char);
+            } else {
+                result.push(escape_char);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
 }

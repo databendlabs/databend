@@ -14,6 +14,7 @@
 
 mod build_state;
 mod common;
+pub(crate) mod concat_buffer;
 mod desc;
 mod hash_join_build_state;
 mod hash_join_probe_state;
@@ -23,7 +24,7 @@ mod merge_into_hash_join_optimization;
 mod probe_join;
 mod probe_state;
 mod result_blocks;
-pub(crate) mod row;
+mod runtime_filter;
 mod spill_common;
 mod transform_hash_join_build;
 mod transform_hash_join_probe;

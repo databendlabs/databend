@@ -65,6 +65,9 @@ echo "delete not allowed"
 echo "DELETE from attach_read_only" | $BENDSQL_CLIENT_CONNECT
 
 echo "update not allowed"
+echo "UPDATE attach_read_only set number = 1" | $BENDSQL_CLIENT_CONNECT
+
+echo "column not exists"
 echo "UPDATE attach_read_only set a = 1" | $BENDSQL_CLIENT_CONNECT
 
 echo "truncate not allowed"

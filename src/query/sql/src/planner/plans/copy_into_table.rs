@@ -123,11 +123,13 @@ pub struct CopyIntoTablePlan {
     pub table_name: String,
     pub from_attachment: bool,
 
+    // given SQL: ... into table (c1, c2, c3, c4) values (1, ?, 'a', ?)
+    // required_values_schema = (c1, c2, c3, c4)
+    // required_source_schema = (c2, c4)
+    // values_consts = [1, 'a']
     pub required_values_schema: DataSchemaRef,
-    // ... into table(<columns>) ..  -> <columns>
     pub values_consts: Vec<Scalar>,
-    // (1, ?, 'a', ?) -> (1, 'a')
-    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
+    pub required_source_schema: DataSchemaRef,
 
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,

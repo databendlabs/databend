@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_license::license::StorageQuota;
@@ -22,7 +23,6 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_enterprise_storage_quota::StorageQuotaHandler;
 use databend_enterprise_storage_quota::StorageQuotaHandlerWrapper;
 use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
 
 pub struct RealStorageQuotaHandler {
     cfg: InnerConfig,

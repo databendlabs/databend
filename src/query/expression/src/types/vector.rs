@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
@@ -24,7 +25,8 @@ use serde::Serialize;
 
 use crate::property::Domain;
 use crate::types::AccessType;
-use crate::types::DecimalSize;
+use crate::types::BuilderMut;
+use crate::types::DataType;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
 use crate::types::ValueType;
@@ -69,18 +71,6 @@ impl AccessType for VectorType {
         }
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        Scalar::Vector(scalar)
-    }
-
-    fn upcast_column(col: Self::Column) -> Column {
-        Column::Vector(col)
-    }
-
-    fn upcast_domain(_domain: Self::Domain) -> Domain {
-        Domain::Undefined
-    }
-
     fn column_len<'a>(col: &Self::Column) -> usize {
         col.len()
     }
@@ -111,29 +101,40 @@ impl AccessType for VectorType {
     fn column_memory_size(col: &Self::Column) -> usize {
         col.memory_size()
     }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.partial_cmp(&rhs).unwrap_or(Ordering::Equal)
+    }
 }
 
 impl ValueType for VectorType {
     type ColumnBuilder = VectorColumnBuilder;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Vector(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_vector());
+        Scalar::Vector(scalar)
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        match builder {
-            ColumnBuilder::Vector(builder) => Some(builder),
-            _ => None,
-        }
+    fn upcast_column_with_type(col: Self::Column, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_vector());
+        Column::Vector(col)
+    }
+
+    fn upcast_domain_with_type(_domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_vector());
+        Domain::Undefined
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        builder.as_vector_mut().unwrap().into()
     }
 
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_vector());
         Some(ColumnBuilder::Vector(builder))
     }
 
@@ -145,20 +146,30 @@ impl ValueType for VectorType {
         builder.len()
     }
 
-    fn push_item(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.push(&item);
     }
 
-    fn push_item_repeat(builder: &mut Self::ColumnBuilder, item: Self::ScalarRef<'_>, n: usize) {
-        builder.push_repeat(&item, n);
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
+        for _ in 0..n {
+            builder.push(&item);
+        }
     }
 
-    fn push_default(builder: &mut Self::ColumnBuilder) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.push_default();
     }
 
-    fn append_column(builder: &mut Self::ColumnBuilder, other_builder: &Self::Column) {
-        builder.append_column(other_builder)
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
+        builder.append_column(other);
     }
 
     fn build_column(builder: Self::ColumnBuilder) -> Self::Column {

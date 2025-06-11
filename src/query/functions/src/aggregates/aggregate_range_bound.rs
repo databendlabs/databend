@@ -20,7 +20,7 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_columns;
-use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
@@ -44,6 +44,7 @@ use crate::with_simple_no_number_mapped_type;
 struct RangeBoundData {
     partitions: usize,
     sample_size: usize,
+    data_type: DataType,
 }
 
 impl FunctionData for RangeBoundData {
@@ -79,7 +80,7 @@ where
 
 impl<T> UnaryState<T, ArrayType<T>> for RangeBoundState<T>
 where
-    T: ArgType + Sync + Send,
+    T: ReturnType + Sync + Send,
     T::Scalar: Ord + Sync + Send + BorshSerialize + BorshDeserialize,
 {
     fn add(
@@ -178,7 +179,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut ArrayColumnBuilder<T>,
+        mut builder: ArrayColumnBuilderMut<'_, T>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         let range_bound_data = unsafe {
@@ -199,7 +200,10 @@ where
                 weights.push(weight);
             });
         }
-        let col = T::upcast_column(T::column_from_vec(data.clone(), &[]));
+        let col = T::upcast_column_with_type(
+            T::column_from_vec(data.clone(), &[]),
+            &range_bound_data.data_type,
+        );
         let indices = compare_columns(vec![col], self.total_samples)?;
 
         let mut cum_weight = 0.0;
@@ -239,7 +243,7 @@ pub fn try_create_aggregate_range_bound_function(
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
     let data_type = arguments[0].clone().remove_nullable();
-    let function_data = get_partitions(&params, display_name)?;
+    let function_data = get_partitions(&params, display_name, data_type.clone())?;
     let return_type = DataType::Array(Box::new(data_type.clone()));
 
     with_simple_no_number_mapped_type!(|T| match data_type {
@@ -327,17 +331,23 @@ pub fn aggregate_range_bound_function_desc() -> AggregateFunctionDescription {
     ))
 }
 
-fn get_partitions(params: &[Scalar], display_name: &str) -> Result<RangeBoundData> {
+fn get_partitions(
+    params: &[Scalar],
+    display_name: &str,
+    data_type: DataType,
+) -> Result<RangeBoundData> {
     match params.len() {
         0 => Ok(RangeBoundData {
             partitions: 1024,
             sample_size: 100,
+            data_type,
         }),
         1 => {
             let partitions = get_positive_integer(&params[0], display_name)?;
             Ok(RangeBoundData {
                 partitions,
                 sample_size: 100,
+                data_type,
             })
         }
         2 => {
@@ -346,6 +356,7 @@ fn get_partitions(params: &[Scalar], display_name: &str) -> Result<RangeBoundDat
             Ok(RangeBoundData {
                 partitions,
                 sample_size,
+                data_type,
             })
         }
         _ => Err(ErrorCode::BadArguments(format!(

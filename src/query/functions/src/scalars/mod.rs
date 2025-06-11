@@ -52,9 +52,11 @@ use databend_functions_scalar_numeric_basic_arithmetic::register_numeric_basic_a
 pub use hash::CityHasher64;
 pub use hash::DFHash;
 pub use string::ALL_STRING_FUNC_NAMES;
+pub use string::PURE_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
+    databend_functions_scalar_decimal::register_decimal_minus(registry);
     arithmetic::register(registry);
     // register basic arithmetic operation (+ - * / %)
     databend_functions_scalar_decimal::register_decimal_arithmetic(registry);

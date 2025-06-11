@@ -1,0 +1,92 @@
+query T
+SELECT regexp_split_to_table('hello world', '\\s+') AS words;
+----
+hello
+world
+
+query T
+SELECT regexp_split_to_table('helloTworld', 't') AS words;
+----
+helloTworld
+
+query T
+SELECT regexp_split_to_table('helloTworld', 't', 'c') AS word;
+----
+helloTworld
+
+
+statement ok
+create or replace table t(c1 string);
+
+statement ok
+insert into t values('hello world'), ('hello world');
+
+
+query T
+SELECT regexp_split_to_table(c1, 't', 'i') from t order by c1;
+----
+hello world
+hello world
+
+query T
+SELECT regexp_split_to_table(c1, 't', 'c') from t order by c1;
+----
+hello world
+hello world
+
+query T
+SELECT regexp_split_to_table(c1, '\\s+') from t order by c1;
+----
+hello
+world
+hello
+world
+
+
+statement ok
+drop table if exists t;
+
+query T
+SELECT regexp_split_to_table('helloTworld', 't', 'i') AS word;
+----
+hello
+world
+
+query T
+select count(regexp_split_to_table(',apple,,banana,', ','));
+----
+5
+
+query T
+SELECT count(regexp_split_to_table('the quick brown fox', '\\s*'));
+----
+16
+
+query T
+select regexp_split_to_table(',apple,,banana,', ',');
+----
+(empty)
+apple
+(empty)
+banana
+(empty)
+
+query T
+SELECT  regexp_split_to_table('the quick brown fox', '\\s*') AS foo;
+----
+t
+h
+e
+q
+u
+i
+c
+k
+b
+r
+o
+w
+n
+f
+o
+x

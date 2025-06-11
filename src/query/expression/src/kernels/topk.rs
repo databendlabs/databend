@@ -55,7 +55,7 @@ impl TopKSorter {
         });
     }
 
-    fn push_column_internal<T: ValueType>(&mut self, col: &Column, bitmap: &mut MutableBitmap) {
+    fn push_column_internal<T: ArgType>(&mut self, col: &Column, bitmap: &mut MutableBitmap) {
         let col = T::try_downcast_column(col).unwrap();
         for (i, value) in T::iter_column(&col).enumerate() {
             if !bitmap.get(i) {
@@ -99,7 +99,7 @@ impl TopKSorter {
         })
     }
 
-    fn push_column_with_selection_internal<T: ValueType, const SELECT_ALL: bool>(
+    fn push_column_with_selection_internal<T: ArgType, const SELECT_ALL: bool>(
         &mut self,
         col: &Column,
         selection: &mut [u32],
@@ -126,7 +126,7 @@ impl TopKSorter {
     }
 
     #[inline]
-    fn push_value<T: ValueType>(&mut self, value: T::ScalarRef<'_>) -> bool {
+    fn push_value<T: ArgType>(&mut self, value: T::ScalarRef<'_>) -> bool {
         let order = self.ordering();
         unsafe {
             assume(self.data.len() == self.limit);

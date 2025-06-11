@@ -59,7 +59,12 @@ message TxnPutRequest {
 
 message TxnPutResponse {
   string key = 1;
+
+  // The value before put
   optional SeqV prev_value = 2;
+
+  // The value after put
+  optional SeqV current = 3;
 }
 
 // Delete request and response
@@ -124,7 +129,7 @@ message TxnDeleteResponse {
 }
 
 // Delete by prefix request and response
-message TxnDeleteByPrefixRequest { string prefix = 1; }
+message TxnDeleteByPrefixRequest {string prefix = 1;}
 
 message TxnDeleteByPrefixResponse {
   string prefix = 1;

@@ -158,10 +158,23 @@ pub struct ExecutorSessionState {
     pub txn_manager: TxnManagerRef,
     pub temp_tbl_mgr: TempTblMgrRef,
     pub variables: HashMap<String, Scalar>,
+    pub last_query_ids: Vec<String>,
+    pub last_query_result_cache_key: String,
 }
 
 impl ExecutorSessionState {
     pub fn new(session: Arc<Session>) -> Self {
+        let mut last_query_ids = Vec::with_capacity(64);
+        let mut last_query_result_cache_key = String::new();
+
+        let last_query_id = session.get_last_query_id(-1);
+        if !last_query_id.is_empty() {
+            if let Some(meta_key) = session.get_query_result_cache_key(&last_query_id) {
+                last_query_ids.push(last_query_id);
+                last_query_result_cache_key = meta_key;
+            }
+        }
+
         Self {
             current_catalog: session.get_current_catalog(),
             current_database: session.get_current_database(),
@@ -171,6 +184,8 @@ impl ExecutorSessionState {
             txn_manager: session.txn_mgr(),
             temp_tbl_mgr: session.temp_tbl_mgr(),
             variables: session.get_all_variables(),
+            last_query_ids,
+            last_query_result_cache_key,
         }
     }
 }

@@ -23,6 +23,8 @@ use databend_common_ast::ast::Statement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
@@ -36,6 +38,7 @@ use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
 use crate::plans::Plan;
+use crate::plans::StreamingLoadPlan;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 
@@ -44,6 +47,7 @@ impl Binder {
         &self,
         schema: &Arc<TableSchema>,
         columns: &[Identifier],
+        entity_name: &str,
     ) -> Result<Arc<TableSchema>> {
         let fields = if columns.is_empty() {
             schema
@@ -56,9 +60,9 @@ impl Binder {
             columns
                 .iter()
                 .map(|ident| {
-                    let field = schema.field_with_name(
-                        &normalize_identifier(ident, &self.name_resolution_ctx).name,
-                    )?;
+                    let field_name = &normalize_identifier(ident, &self.name_resolution_ctx).name;
+                    let (_, field) =
+                        Self::try_resolve_field_in_schema(schema, field_name, entity_name)?;
                     if field.computed_expr().is_some() {
                         Err(ErrorCode::BadArguments(format!(
                             "The value specified for computed column '{}' is not allowed",
@@ -71,6 +75,20 @@ impl Binder {
                 .collect::<Result<Vec<_>>>()?
         };
         Ok(TableSchemaRefExt::create(fields))
+    }
+
+    pub(in crate::planner::binder) fn try_resolve_field_in_schema<'a>(
+        schema: &'a Arc<TableSchema>,
+        field_name: &str,
+        entity_name: &str,
+    ) -> Result<(FieldIndex, &'a TableField)> {
+        match schema.column_with_name(field_name) {
+            None => Err(ErrorCode::BadArguments(format!(
+                "Table \"{}\" does not have a column with name \"{}\"",
+                entity_name, field_name
+            ))),
+            Some(v) => Ok(v),
+        }
     }
 
     #[async_backtrace::framed]
@@ -105,7 +123,11 @@ impl Binder {
             .await
             .map_err(|err| table_identifier.not_found_suggest_error(err))?;
 
-        let schema = self.schema_project(&table.schema(), columns)?;
+        let schema = self.schema_project(
+            &table.schema(),
+            columns,
+            &format!("{database_name}.{table_name}"),
+        )?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Values { rows } => {
@@ -137,7 +159,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
-                                Arc::new(schema.into()),
+                                schema,
                                 &values_str,
                                 CopyIntoTableMode::Insert {
                                     overwrite: *overwrite,
@@ -157,9 +179,16 @@ impl Binder {
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
             InsertSource::StreamingLoad {
+                value,
                 format_options,
                 on_error_mode,
             } => {
+                let settings = self.ctx.get_settings();
+                let (required_source_schema, values_consts) = if let Some(value) = value {
+                    self.prepared_values(value, &schema, settings).await?
+                } else {
+                    (schema.clone(), vec![])
+                };
                 let file_format_params = FileFormatParams::try_from_reader(
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,
@@ -174,17 +203,19 @@ impl Binder {
                 } else {
                     None
                 };
-                Ok(InsertInputSource::StreamingLoad {
+                Ok(InsertInputSource::StreamingLoad(StreamingLoadPlan {
                     file_format: Box::new(file_format_params),
-                    schema: schema.clone(),
                     on_error_mode: OnErrorMode::from_str(
                         &on_error_mode.unwrap_or("abort".to_string()),
                     )?,
+                    required_values_schema,
+                    values_consts,
                     block_thresholds: table.get_block_thresholds(),
                     default_exprs,
                     // fill it in HTTP handler
                     receiver: Default::default(),
-                })
+                    required_source_schema,
+                }))
             }
         };
 

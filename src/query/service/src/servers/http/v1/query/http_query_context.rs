@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::session_type::SessionType;
 use http::StatusCode;
 use log::warn;
 use poem::FromRequest;
@@ -26,7 +27,6 @@ use crate::auth::Credential;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 #[derive(Clone)]
 pub struct HttpQueryContext {

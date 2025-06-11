@@ -28,7 +28,13 @@ permissions:
 
 jobs:
   linux:
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 4c16g, aws]
+    runs-on:
+      - self-hosted
+      - "${{ matrix.runner }}"
+      - Linux
+      - 4c16g
+      - aws
+      - spot
     strategy:
       matrix:
         include:

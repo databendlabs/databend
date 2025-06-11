@@ -22,6 +22,7 @@ use databend_common_expression::FunctionRegistry;
 
 use crate::scalars::ALL_COMP_FUNC_NAMES;
 use crate::scalars::ALL_STRING_FUNC_NAMES;
+use crate::scalars::PURE_STRING_FUNC_NAMES;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_default_cast_rules(GENERAL_CAST_RULES.iter().cloned());
@@ -49,11 +50,19 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     for func_name in ALL_STRING_FUNC_NAMES {
         registry.register_additional_cast_rules(func_name, GENERAL_CAST_RULES.iter().cloned());
-        if ["concat", "concat_ws"].contains(func_name) {
-            registry.register_additional_cast_rules(
+        if PURE_STRING_FUNC_NAMES.contains(func_name) {
+            registry.register_dynamic_cast_rules(
                 func_name,
-                get_cast_int_to_string_rules().into_iter(),
-            )
+                std::sync::Arc::new(|arg_type, result_type| {
+                    let is_nullable_or_null = arg_type.is_nullable_or_null();
+                    let result_is_nullable_or_null = result_type.is_nullable_or_null();
+
+                    (!is_nullable_or_null && matches!(result_type, DataType::String))
+                        || (is_nullable_or_null
+                            && result_is_nullable_or_null
+                            && matches!(result_type.remove_nullable(), DataType::String))
+                }),
+            );
         } else {
             registry
                 .register_additional_cast_rules(func_name, CAST_FROM_STRING_RULES.iter().cloned());
@@ -386,10 +395,3 @@ pub const CAST_FROM_NUMBER_RULES: AutoCastRules = &[
     (DataType::Number(NumberDataType::Float32), DataType::Boolean),
     (DataType::Number(NumberDataType::Float64), DataType::Boolean),
 ];
-
-pub fn get_cast_int_to_string_rules() -> Vec<(DataType, DataType)> {
-    ALL_NUMERICS_TYPES
-        .iter()
-        .map(|ty| (DataType::Number(*ty), DataType::String))
-        .collect()
-}

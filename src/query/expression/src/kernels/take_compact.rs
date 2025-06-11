@@ -100,20 +100,23 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
         Ok(())
     }
 
-    fn visit_typed_column<T: ValueType>(&mut self, column: T::Column) -> Result<()> {
-        let c = T::upcast_column(column.clone());
-        let builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
-        let mut builder = T::try_downcast_owned_builder(builder).unwrap();
+    fn visit_typed_column<T: ValueType>(
+        &mut self,
+        column: T::Column,
+        data_type: &DataType,
+    ) -> Result<()> {
+        let c = T::upcast_column_with_type(column.clone(), data_type);
+        let mut builder = ColumnBuilder::with_capacity(&c.data_type(), c.len());
+        let mut inner_builder = T::downcast_builder(&mut builder);
 
         for (index, cnt) in self.indices {
             for _ in 0..*cnt {
-                T::push_item(&mut builder, unsafe {
-                    T::index_column_unchecked(&column, *index as usize)
-                });
+                inner_builder
+                    .push_item(unsafe { T::index_column_unchecked(&column, *index as usize) });
             }
         }
-        self.result = Some(Value::Column(T::upcast_column(T::build_column(builder))));
-
+        drop(inner_builder);
+        self.result = Some(Value::Column(builder.build()));
         Ok(())
     }
 
@@ -121,22 +124,25 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
         &mut self,
         buffer: <NumberType<T> as AccessType>::Column,
     ) -> Result<()> {
-        self.result = Some(Value::Column(NumberType::<T>::upcast_column(
+        self.result = Some(Value::Column(NumberType::<T>::upcast_column_with_type(
             self.take_primitive_types(buffer),
+            &DataType::Number(T::data_type()),
         )));
         Ok(())
     }
 
     fn visit_timestamp(&mut self, buffer: Buffer<i64>) -> Result<()> {
-        self.result = Some(Value::Column(TimestampType::upcast_column(
+        self.result = Some(Value::Column(TimestampType::upcast_column_with_type(
             self.take_primitive_types(buffer),
+            &DataType::Timestamp,
         )));
         Ok(())
     }
 
     fn visit_date(&mut self, buffer: Buffer<i32>) -> Result<()> {
-        self.result = Some(Value::Column(DateType::upcast_column(
+        self.result = Some(Value::Column(DateType::upcast_column_with_type(
             self.take_primitive_types(buffer),
+            &DataType::Date,
         )));
         Ok(())
     }
@@ -154,22 +160,25 @@ impl ValueVisitor for TakeCompactVisitor<'_> {
     }
 
     fn visit_binary(&mut self, col: BinaryColumn) -> Result<()> {
-        self.result = Some(Value::Column(BinaryType::upcast_column(
+        self.result = Some(Value::Column(BinaryType::upcast_column_with_type(
             self.take_binary_types(&col),
+            &DataType::Binary,
         )));
         Ok(())
     }
 
     fn visit_string(&mut self, col: StringColumn) -> Result<()> {
-        self.result = Some(Value::Column(StringType::upcast_column(
+        self.result = Some(Value::Column(StringType::upcast_column_with_type(
             self.take_string_types(&col),
+            &DataType::String,
         )));
         Ok(())
     }
 
     fn visit_variant(&mut self, column: BinaryColumn) -> Result<()> {
-        self.result = Some(Value::Column(VariantType::upcast_column(
+        self.result = Some(Value::Column(VariantType::upcast_column_with_type(
             self.take_binary_types(&column),
+            &DataType::Variant,
         )));
         Ok(())
     }

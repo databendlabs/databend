@@ -20,10 +20,13 @@ use std::ops::Range;
 use databend_common_column::buffer::Buffer;
 
 use super::AccessType;
-use super::DecimalSize;
+use super::GenericMap;
+use super::ReturnType;
 use super::Scalar;
 use super::ValueType;
 use crate::arrow::buffer_into_mut;
+use crate::types::BuilderMut;
+use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::Domain;
@@ -34,19 +37,19 @@ pub trait SimpleType: Debug + Clone + PartialEq + Sized + 'static {
     type Domain: Debug + Clone + Copy + PartialEq;
 
     fn downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::Scalar>;
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar;
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar;
 
     fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>>;
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column;
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column;
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain>;
-    fn upcast_domain(domain: Self::Domain) -> Domain;
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain;
 
     fn downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>>;
     fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>>;
     fn upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder>;
 
     fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering;
@@ -103,18 +106,6 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         T::downcast_domain(domain)
-    }
-
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
-        T::upcast_scalar(scalar)
-    }
-
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        T::upcast_column(col)
-    }
-
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        T::upcast_domain(domain)
     }
 
     fn column_len(buffer: &Buffer<Self::Scalar>) -> usize {
@@ -187,20 +178,29 @@ impl<T: SimpleType> AccessType for SimpleValueType<T> {
 
 impl<T: SimpleType> ValueType for SimpleValueType<T> {
     type ColumnBuilder = Vec<Self::Scalar>;
+    type ColumnBuilderMut<'a> = BuilderMut<'a, Self>;
 
-    fn try_downcast_builder(builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
-        T::downcast_builder(builder)
+    fn upcast_scalar_with_type(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        T::upcast_scalar(scalar, data_type)
     }
 
-    fn try_downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
-        T::downcast_owned_builder(builder)
+    fn upcast_domain_with_type(domain: Self::Domain, data_type: &DataType) -> Domain {
+        T::upcast_domain(domain, data_type)
+    }
+
+    fn upcast_column_with_type(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        T::upcast_column(col, data_type)
+    }
+
+    fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_> {
+        T::downcast_builder(builder).unwrap().into()
     }
 
     fn try_upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
-        T::upcast_column_builder(builder, decimal_size)
+        T::upcast_column_builder(builder, data_type)
     }
 
     fn column_to_builder(buffer: Buffer<Self::Scalar>) -> Vec<Self::Scalar> {
@@ -211,23 +211,32 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
         builder.len()
     }
 
-    fn push_item(builder: &mut Vec<Self::Scalar>, item: Self::Scalar) {
+    fn builder_len_mut(builder: &Self::ColumnBuilderMut<'_>) -> usize {
+        builder.len()
+    }
+
+    fn push_item_mut(builder: &mut Self::ColumnBuilderMut<'_>, item: Self::ScalarRef<'_>) {
         builder.push(item);
     }
 
-    fn push_item_repeat(builder: &mut Vec<Self::Scalar>, item: Self::Scalar, n: usize) {
+    fn push_item_repeat_mut(
+        builder: &mut Self::ColumnBuilderMut<'_>,
+        item: Self::ScalarRef<'_>,
+        n: usize,
+    ) {
         if n == 1 {
             builder.push(item)
         } else {
-            builder.resize(builder.len() + n, item)
+            let new_len = builder.len() + n;
+            builder.resize(new_len, item)
         }
     }
 
-    fn push_default(builder: &mut Vec<Self::Scalar>) {
+    fn push_default_mut(builder: &mut Self::ColumnBuilderMut<'_>) {
         builder.push(Self::Scalar::default());
     }
 
-    fn append_column(builder: &mut Vec<Self::Scalar>, other: &Buffer<Self::Scalar>) {
+    fn append_column_mut(builder: &mut Self::ColumnBuilderMut<'_>, other: &Self::Column) {
         builder.extend_from_slice(other);
     }
 
@@ -238,5 +247,11 @@ impl<T: SimpleType> ValueType for SimpleValueType<T> {
     fn build_scalar(builder: Vec<Self::Scalar>) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder[0]
+    }
+}
+
+impl<T: SimpleType> ReturnType for SimpleValueType<T> {
+    fn create_builder(capacity: usize, _: &GenericMap) -> Self::ColumnBuilder {
+        Vec::with_capacity(capacity)
     }
 }

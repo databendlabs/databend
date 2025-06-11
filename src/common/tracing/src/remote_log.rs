@@ -217,7 +217,7 @@ impl RemoteLog {
         let fields = serde_json::to_string(&fields).unwrap_or_default();
 
         let log_level = record.level().to_string();
-        let timestamp = chrono::Local::now().timestamp_micros();
+        let timestamp = chrono::Utc::now().timestamp_micros();
 
         let path = format!(
             "{}: {}:{}",
@@ -266,7 +266,7 @@ impl LogBuffer {
     pub fn new(sender: Sender<LogMessage>, interval: u64) -> Self {
         Self {
             queue: ConcurrentQueue::unbounded(),
-            last_collect: AtomicU64::new(chrono::Local::now().timestamp_micros() as u64),
+            last_collect: AtomicU64::new(chrono::Utc::now().timestamp_micros() as u64),
             sender,
             interval,
         }
@@ -277,12 +277,12 @@ impl LogBuffer {
         self.queue.push(log_element)?;
         if self.queue.len() >= Self::MAX_BUFFER_SIZE {
             self.last_collect.store(
-                chrono::Local::now().timestamp_micros() as u64,
+                chrono::Utc::now().timestamp_micros() as u64,
                 Ordering::SeqCst,
             );
             self.collect()?;
         }
-        let now = chrono::Local::now().timestamp_micros() as u64;
+        let now = chrono::Utc::now().timestamp_micros() as u64;
         let mut current_last_collect = 0;
         loop {
             match self.last_collect.compare_exchange_weak(

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::tenant::Tenant;
@@ -26,7 +27,6 @@ use databend_query::servers::admin::v1::instance_status::instance_status_handler
 use databend_query::servers::admin::v1::instance_status::InstanceStatus;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
 use databend_query::test_kits::*;
 use http::header;
 use http::Method;

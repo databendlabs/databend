@@ -19,6 +19,7 @@ use async_stream::stream;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::tokio::task::JoinHandle;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
@@ -56,7 +57,6 @@ use crate::interpreters::InterpreterPtr;
 use crate::servers::http::middleware::sanitize_request_headers;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::sessions::QueryContext;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 // accept all clickhouse params, so they do not go to settings.

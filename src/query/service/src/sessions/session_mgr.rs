@@ -26,6 +26,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_base::runtime::LimitMemGuard;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -44,7 +45,6 @@ use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
-use crate::sessions::SessionType;
 
 pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,

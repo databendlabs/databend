@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_users::UserApiProvider;
@@ -27,7 +28,6 @@ use super::status;
 use crate::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 impl FlightSqlServiceImpl {
     pub(super) fn get_session<T>(&self, req: &Request<T>) -> Result<Arc<Session>, Status> {

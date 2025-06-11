@@ -956,6 +956,10 @@ impl Settings {
         self.try_get_string("optimizer_skip_list")
     }
 
+    pub fn set_optimizer_skip_list(&self, v: String) -> Result<()> {
+        self.set_setting("optimizer_skip_list".to_string(), v)
+    }
+
     pub fn get_enable_block_stream_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_block_stream_write")? == 1)
     }
@@ -982,5 +986,9 @@ impl Settings {
 
     pub fn set_enable_auto_materialize_cte(&self, val: u64) -> Result<()> {
         self.try_set_u64("enable_auto_materialize_cte", val)
+    }
+
+    pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
+        self.try_get_u64("max_aggregate_restore_worker")
     }
 }

@@ -53,8 +53,10 @@ use rand::random;
 use tokio::time::sleep;
 use uuid::Uuid;
 
+use crate::history_tables::alter_table::get_alter_table_sql;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::sessions::QueryContext;
 
 pub struct GlobalHistoryLog {
     meta_client: Arc<ClientHandle>,
@@ -72,6 +74,12 @@ pub struct GlobalHistoryLog {
 impl GlobalHistoryLog {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         setup_operator().await?;
+        if cfg.log.history.log_only {
+            info!(
+                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
+            );
+            return Ok(());
+        }
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let stage_name = cfg.log.history.stage_name.clone();
@@ -123,7 +131,7 @@ impl GlobalHistoryLog {
             }
         }
         self.prepare().await?;
-        info!("System history prepared successfully");
+        info!("[HISTORY-TABLES] System history prepared successfully");
         // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
         let sleep_time =
             Duration::from_millis(self.interval * 500 + random::<u64>() % (self.interval * 1000));
@@ -133,10 +141,12 @@ impl GlobalHistoryLog {
             let meta_key = format!("{}/history_log_transform", self.tenant_id).clone();
             let log = GlobalHistoryLog::instance();
             let handle = spawn(async move {
+                let mut consecutive_error = 0;
                 loop {
                     match log.transform(&table_clone, &meta_key).await {
                         Ok(acquired_lock) => {
                             if acquired_lock {
+                                consecutive_error = 0;
                                 let _ = log
                                     .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                     .await;
@@ -147,9 +157,17 @@ impl GlobalHistoryLog {
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
                             error!(
-                                "system history {} log transform exit {}",
-                                table_clone.name, e
+                                "[HISTORY-TABLES] {} log transform failed due to {}, retry {}",
+                                table_clone.name, e, consecutive_error
                             );
+                            consecutive_error += 1;
+                            if consecutive_error > 3 {
+                                error!(
+                                    "[HISTORY-TABLES] {} log transform failed too many times, exit",
+                                    table_clone.name
+                                );
+                                break;
+                            }
                         }
                     }
                     sleep(sleep_time).await;
@@ -177,7 +195,10 @@ impl GlobalHistoryLog {
                             let _ = log
                                 .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
                                 .await;
-                            error!("{} log clean exit {}", table_clone.name, e);
+                            error!(
+                                "[HISTORY-TABLES] {} log clean failed {}",
+                                table_clone.name, e
+                            );
                         }
                     }
                     sleep(sleep_time).await;
@@ -219,7 +240,7 @@ impl GlobalHistoryLog {
         {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
-                chrono::Local::now().timestamp_millis() as u64
+                chrono::Utc::now().timestamp_millis() as u64
                     - Duration::from_secs(interval).as_millis() as u64
                     > last
             }
@@ -238,9 +259,7 @@ impl GlobalHistoryLog {
             .upsert_kv(UpsertKV::new(
                 format!("{}/last_timestamp", meta_key),
                 MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(
-                    &chrono::Local::now().timestamp_millis(),
-                )?),
+                Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
                 None,
             ))
             .await?;
@@ -260,16 +279,7 @@ impl GlobalHistoryLog {
     }
 
     async fn do_execute(&self, sql: &str, query_id: String) -> Result<()> {
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-        // only need run the sql on the current node
-        let context = session.create_query_context_with_cluster(
-            Arc::new(Cluster {
-                unassign: false,
-                local_id: self.node_id.clone(),
-                nodes: vec![],
-            }),
-            ThreadTracker::mem_stat().cloned(),
-        )?;
+        let context = self.create_context().await?;
         context.update_init_query_id(query_id);
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
@@ -289,6 +299,13 @@ impl GlobalHistoryLog {
         for table in self.tables.iter() {
             let create_table = &table.create;
             self.execute_sql(create_table).await?;
+            let get_alter_sql =
+                get_alter_table_sql(self.create_context().await?, create_table, &table.name)
+                    .await?;
+            for alter_sql in get_alter_sql {
+                info!("[HISTORY-TABLES] executing alter table: {}", alter_sql);
+                self.execute_sql(&alter_sql).await?;
+            }
         }
         Ok(())
     }
@@ -354,7 +371,7 @@ impl GlobalHistoryLog {
                 let vacuum = format!("VACUUM TABLE system_history.{}", table.name);
                 self.execute_sql(&vacuum).await?;
                 info!(
-                    "Periodic VACUUM operation on history log table '{}' completed successfully.",
+                    "[HISTORY-TABLES] periodic VACUUM operation on history log table '{}' completed successfully.",
                     table.name
                 );
             }
@@ -384,6 +401,16 @@ impl GlobalHistoryLog {
             ))
             .await?;
         Ok(())
+    }
+
+    pub async fn create_context(&self) -> Result<Arc<QueryContext>> {
+        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+        // only need run the sql on the current node
+        session.create_query_context_with_cluster(Arc::new(Cluster {
+            unassign: false,
+            local_id: self.node_id.clone(),
+            nodes: vec![],
+        }))
     }
 }
 

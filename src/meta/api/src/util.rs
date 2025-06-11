@@ -44,7 +44,7 @@ use display_more::DisplaySliceExt;
 use log::debug;
 
 use crate::kv_app_error::KVAppError;
-use crate::reply::txn_reply_to_api_result;
+use crate::reply::unpack_txn_reply;
 
 pub const DEFAULT_MGET_SIZE: usize = 256;
 
@@ -247,7 +247,7 @@ pub async fn send_txn(
 ) -> Result<(bool, Vec<TxnOpResponse>), MetaError> {
     debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
-    let (succ, responses) = txn_reply_to_api_result(tx_reply)?;
+    let (succ, responses) = unpack_txn_reply(tx_reply);
     debug!("txn success: {}: {}", succ, responses.display_n::<20>());
     Ok((succ, responses))
 }

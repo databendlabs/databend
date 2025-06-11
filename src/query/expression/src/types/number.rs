@@ -33,11 +33,9 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::decimal::DecimalSize;
-use super::ReturnType;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
-use crate::types::GenericMap;
 use crate::types::SimpleType;
 use crate::types::SimpleValueType;
 use crate::utils::arrow::buffer_into_mut;
@@ -137,21 +135,25 @@ impl<Num: Number> SimpleType for CoreNumber<Num> {
 
     fn upcast_column_builder(
         builder: Vec<Self::Scalar>,
-        _decimal_size: Option<DecimalSize>,
+        data_type: &DataType,
     ) -> Option<ColumnBuilder> {
+        debug_assert!(data_type.is_number());
         Num::try_upcast_column_builder(builder)
     }
 
-    fn upcast_scalar(scalar: Self::Scalar) -> Scalar {
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        debug_assert!(data_type.is_number());
         Scalar::Number(Num::upcast_scalar(scalar))
     }
 
-    fn upcast_column(col: Buffer<Self::Scalar>) -> Column {
-        Column::Number(Num::upcast_column(col))
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        debug_assert!(data_type.is_number());
+        Domain::Number(Num::upcast_domain(domain))
     }
 
-    fn upcast_domain(domain: Self::Domain) -> Domain {
-        Domain::Number(Num::upcast_domain(domain))
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        debug_assert!(data_type.is_number());
+        Column::Number(Num::upcast_column(col))
     }
 
     fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering {
@@ -189,27 +191,6 @@ impl<Num: Number> ArgType for NumberType<Num> {
             min: Num::MIN,
             max: Num::MAX,
         }
-    }
-}
-
-impl<Num: Number> ReturnType for NumberType<Num> {
-    fn create_builder(capacity: usize, _generics: &GenericMap) -> Self::ColumnBuilder {
-        Vec::with_capacity(capacity)
-    }
-
-    fn column_from_vec(vec: Vec<Self::Scalar>, _generics: &GenericMap) -> Self::Column {
-        vec.into()
-    }
-
-    fn column_from_iter(iter: impl Iterator<Item = Self::Scalar>, _: &GenericMap) -> Self::Column {
-        iter.collect()
-    }
-
-    fn column_from_ref_iter<'a>(
-        iter: impl Iterator<Item = Self::ScalarRef<'a>>,
-        _: &GenericMap,
-    ) -> Self::Column {
-        iter.collect()
     }
 }
 

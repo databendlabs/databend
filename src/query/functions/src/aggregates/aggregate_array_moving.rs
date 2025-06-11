@@ -186,7 +186,7 @@ where
             avg_values.push(avg_val.into());
         }
 
-        let inner_col = NumberType::<F64>::upcast_column(avg_values.into());
+        let inner_col = Float64Type::upcast_column(avg_values.into());
         let array_value = ScalarRef::Array(inner_col);
         builder.push(array_value);
 
@@ -211,12 +211,12 @@ where T: Decimal
 {
     #[inline]
     pub fn check_over_flow(&self, value: T) -> Result<()> {
-        if value > T::MAX || value < T::MIN {
+        if value > T::DECIMAL_MAX || value < T::DECIMAL_MIN {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {} not in [{}, {}]",
                 value,
-                T::MIN,
-                T::MAX,
+                T::DECIMAL_MIN,
+                T::DECIMAL_MAX,
             )));
         }
         Ok(())
@@ -355,7 +355,7 @@ where T: Decimal
                 sum -= self.values[i - window_size];
             }
             let avg_val = match sum
-                .checked_mul(T::e(scale_add as u32))
+                .checked_mul(T::e(scale_add))
                 .and_then(|v| v.checked_div(T::from_i128(window_size as u64)))
             {
                 Some(value) => value,
@@ -363,7 +363,7 @@ where T: Decimal
                     return Err(ErrorCode::Overflow(format!(
                         "Decimal overflow: {} mul {}",
                         sum,
-                        T::e(scale_add as u32)
+                        T::e(scale_add)
                     )));
                 }
             };

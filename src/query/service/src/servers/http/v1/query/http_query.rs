@@ -27,6 +27,7 @@ use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -71,7 +72,6 @@ use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
-use crate::sessions::SessionType;
 use crate::sessions::TableContext;
 
 fn default_as_true() -> bool {
@@ -210,10 +210,11 @@ pub struct ServerInfo {
 pub struct HttpSessionStateInternal {
     /// value is JSON of Scalar
     variables: Vec<(String, String)>,
+    pub last_query_result_cache_key: String,
 }
 
 impl HttpSessionStateInternal {
-    fn new(variables: &HashMap<String, Scalar>) -> Self {
+    fn new(variables: &HashMap<String, Scalar>, last_query_result_cache_key: String) -> Self {
         let variables = variables
             .iter()
             .map(|(k, v)| {
@@ -223,7 +224,10 @@ impl HttpSessionStateInternal {
                 )
             })
             .collect();
-        Self { variables }
+        Self {
+            variables,
+            last_query_result_cache_key,
+        }
     }
 
     pub fn get_variables(&self) -> Result<HashMap<String, Scalar>> {
@@ -442,6 +446,7 @@ impl HttpQuery {
         // - the current database
         // - the current role
         // - the session-level settings, like max_threads, http_handler_result_timeout_secs, etc.
+        // - the session-level query cache.
         if let Some(session_conf) = &req.session {
             if let Some(catalog) = &session_conf.catalog {
                 session.set_current_catalog(catalog.clone());
@@ -477,8 +482,18 @@ impl HttpQuery {
                 if !state.variables.is_empty() {
                     session.set_all_variables(state.get_variables()?)
                 }
+                if let Some(id) = session_conf.last_query_ids.first() {
+                    if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
+                        session.update_query_ids_results(
+                            id.to_owned(),
+                            state.last_query_result_cache_key.to_owned(),
+                        );
+                    }
+                }
             }
+
             try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
+
             if session_conf.need_sticky
                 && matches!(session_conf.txn_state, None | Some(TxnState::AutoCommit))
             {
@@ -622,6 +637,7 @@ impl HttpQuery {
         // - role: updated by SET ROLE;
         // - secondary_roles: updated by SET SECONDARY ROLES ALL|NONE;
         // - settings: updated by SET XXX = YYY;
+        // - query cache: last_query_id and result_scan
 
         let (session_state, is_stopped) = {
             let executor = self.state.lock();
@@ -644,8 +660,13 @@ impl HttpQuery {
         let role = session_state.current_role.clone();
         let secondary_roles = session_state.secondary_roles.clone();
         let txn_state = session_state.txn_manager.lock().state();
-        let internal = if !session_state.variables.is_empty() {
-            Some(HttpSessionStateInternal::new(&session_state.variables))
+        let internal = if !session_state.variables.is_empty()
+            || !session_state.last_query_result_cache_key.is_empty()
+        {
+            Some(HttpSessionStateInternal::new(
+                &session_state.variables,
+                session_state.last_query_result_cache_key,
+            ))
         } else {
             None
         };
@@ -722,7 +743,11 @@ impl HttpQuery {
             need_sticky,
             need_keep_alive,
             last_server_info: Some(HttpQueryManager::instance().server_info.clone()),
-            last_query_ids: vec![self.id.clone()],
+            last_query_ids: if session_state.last_query_ids.is_empty() {
+                vec![self.id.clone()]
+            } else {
+                session_state.last_query_ids
+            },
             internal,
         })
     }

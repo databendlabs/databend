@@ -19,6 +19,8 @@ use std::sync::Mutex;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::key_spaces::SMEntry;
+use databend_common_meta_raft_store::ondisk::DataVersion;
+use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
@@ -38,6 +40,8 @@ pub async fn import_v004(
     raft_config: RaftConfig,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
+    let data_version = DataVersion::V004;
+
     OnDisk::ensure_dirs(&raft_config.raft_dir)?;
 
     let mut n = 0;
@@ -50,7 +54,7 @@ pub async fn import_v004(
         raft_log_v004::Importer::new(raft_log)
     };
 
-    let snapshot_store = SnapshotStoreV004::new(raft_config);
+    let snapshot_store = SnapshotStoreV004::new(raft_config.clone());
     let writer = snapshot_store.new_writer()?;
     let (tx, join_handle) = writer.spawn_writer_thread("import_v004");
 
@@ -104,11 +108,24 @@ pub async fn import_v004(
     let db = temp_snapshot_data.move_to_final_path(snapshot_id.to_string())?;
 
     eprintln!(
-        "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
+        "{data_version}: Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
         n,
         snapshot_id,
         db.path(),
         db.stat()
     );
+
+    let on_disk = OnDisk::new(
+        Header {
+            version: DataVersion::V004,
+            upgrading: None,
+            cleaning: false,
+        },
+        &raft_config,
+    );
+
+    on_disk.write_header(&on_disk.header)?;
+    eprintln!("{data_version}: written on-disk header: {}", on_disk.header);
+
     Ok(max_log_id)
 }

@@ -1442,12 +1442,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let create_inverted_index = map_res(
+    let create_table_index = map_res(
         rule! {
             CREATE
             ~ ( OR ~ ^REPLACE )?
             ~ ASYNC?
-            ~ INVERTED ~ INDEX
+            ~ #index_type ~ ^INDEX
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
@@ -1458,7 +1458,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             _,
             opt_or_replace,
             opt_async,
-            _,
+            index_type,
             _,
             opt_if_not_exists,
             index_name,
@@ -1471,9 +1471,10 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         )| {
             let create_option =
                 parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateInvertedIndex(CreateInvertedIndexStmt {
+            Ok(Statement::CreateTableIndex(CreateTableIndexStmt {
                 create_option,
                 index_name,
+                index_type,
                 catalog,
                 database,
                 table,
@@ -1484,15 +1485,16 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let drop_inverted_index = map(
+    let drop_table_index = map(
         rule! {
-            DROP ~ INVERTED ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
+            DROP ~ #index_type ~ ^INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
             ~ ON ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
-            Statement::DropInvertedIndex(DropInvertedIndexStmt {
+        |(_, index_type, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+            Statement::DropTableIndex(DropTableIndexStmt {
                 if_exists: opt_if_exists.is_some(),
                 index_name,
+                index_type,
                 catalog,
                 database,
                 table,
@@ -1500,76 +1502,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let drop_ngram_index = map(
+    let refresh_table_index = map(
         rule! {
-            DROP ~ NGRAM ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
-            ~ ON ~ #dot_separated_idents_1_to_3
+            REFRESH ~ #index_type ~ ^INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, _, opt_if_exists, index_name, _, (catalog, database, table))| {
-            Statement::DropNgramIndex(DropNgramIndexStmt {
-                if_exists: opt_if_exists.is_some(),
+        |(_, index_type, _, index_name, _, (catalog, database, table), opt_limit)| {
+            Statement::RefreshTableIndex(RefreshTableIndexStmt {
                 index_name,
-                catalog,
-                database,
-                table,
-            })
-        },
-    );
-
-    let refresh_inverted_index = map(
-        rule! {
-            REFRESH ~ INVERTED ~ INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
-        },
-        |(_, _, _, index_name, _, (catalog, database, table), opt_limit)| {
-            Statement::RefreshInvertedIndex(RefreshInvertedIndexStmt {
-                index_name,
+                index_type,
                 catalog,
                 database,
                 table,
                 limit: opt_limit.map(|(_, limit)| limit),
             })
-        },
-    );
-
-    let create_ngram_index = map_res(
-        rule! {
-            CREATE
-            ~ ( OR ~ ^REPLACE )?
-            ~ ASYNC?
-            ~ NGRAM ~ INDEX
-            ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ #ident
-            ~ ON ~ #dot_separated_idents_1_to_3
-            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
-            ~ ( #table_option )?
-        },
-        |(
-            _,
-            opt_or_replace,
-            opt_async,
-            _,
-            _,
-            opt_if_not_exists,
-            index_name,
-            _,
-            (catalog, database, table),
-            _,
-            columns,
-            _,
-            opt_index_options,
-        )| {
-            let create_option =
-                parse_create_option(opt_or_replace.is_some(), opt_if_not_exists.is_some())?;
-            Ok(Statement::CreateNgramIndex(CreateNgramIndexStmt {
-                create_option,
-                index_name,
-                catalog,
-                database,
-                table,
-                columns,
-                sync_creation: opt_async.is_none(),
-                index_options: opt_index_options.unwrap_or_default(),
-            }))
         },
     );
 
@@ -2605,7 +2550,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #conditional_multi_table_insert() : "`INSERT [OVERWRITE] {FIRST|ALL} { WHEN <condition> THEN intoClause [ ... ] } [ ... ] [ ELSE intoClause ] <subquery>`"
             | #unconditional_multi_table_insert() : "`INSERT [OVERWRITE] ALL intoClause [ ... ] <subquery>`"
-            | #insert_stmt(false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #insert_stmt(false, false) : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (VALUES <values> | <query>)`"
             | #replace_stmt(false) : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
             | #delete : "`DELETE FROM <table> [WHERE ...]`"
@@ -2670,11 +2615,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #create_index: "`CREATE [OR REPLACE] AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP <index_type> INDEX [IF EXISTS] <index>`"
             | #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
-            | #create_inverted_index: "`CREATE [OR REPLACE] INVERTED INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
-            | #drop_inverted_index: "`DROP INVERTED INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
-            | #refresh_inverted_index: "`REFRESH INVERTED INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
-            | #create_ngram_index: "`CREATE [OR REPLACE] NGRAM INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
-            | #drop_ngram_index: "`DROP NGRAM INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            | #create_table_index: "`CREATE [OR REPLACE] <index_type> INDEX [IF NOT EXISTS] <index> ON [<database>.]<table>(<column>, ...)`"
+            | #drop_table_index: "`DROP <index_type> INDEX [IF EXISTS] <index> ON [<database>.]<table>`"
+            | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
             | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
             | #show_virtual_columns : "`SHOW VIRTUAL COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
             | #sequence
@@ -2798,10 +2741,15 @@ pub fn parse_create_option(
     }
 }
 
-pub fn insert_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
+pub fn insert_stmt(
+    allow_raw: bool,
+    in_streaming_load: bool,
+) -> impl FnMut(Input) -> IResult<Statement> {
     move |i| {
-        let insert_source_parser = if allow_raw {
-            raw_insert_source
+        let insert_source_parser = if in_streaming_load {
+            insert_source_file
+        } else if allow_raw {
+            insert_source_fast_values
         } else {
             insert_source
         };
@@ -2935,7 +2883,7 @@ fn else_clause(i: Input) -> IResult<ElseClause> {
 pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> {
     move |i| {
         let insert_source_parser = if allow_raw {
-            raw_insert_source
+            insert_source_fast_values
         } else {
             insert_source
         };
@@ -2955,7 +2903,7 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
                 (catalog, database, table),
                 opt_columns,
                 _,
-                _,
+                opt_conflict,
                 _,
                 on_conflict_columns,
                 _,
@@ -2967,6 +2915,7 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
                     catalog,
                     database,
                     table,
+                    is_conflict: opt_conflict.is_some(),
                     on_conflict_columns,
                     columns: opt_columns
                         .map(|(_, columns, _)| columns)
@@ -3004,20 +2953,38 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
+pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
+    let value = map(
+        rule! {
+            "(" ~ #comma_separated_list1(expr) ~ ")"
+        },
+        |(_, values, _)| values,
+    );
+    map(
+        rule! {
+           VALUES ~ #value? ~ #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+        },
+        |(_, value, options, on_error_opt)| InsertSource::StreamingLoad {
+            format_options: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+            value,
+        },
+    )(i)
+    // TODO: support query later
+    // let query = map(query, |query| InsertSource::Select {
+    //     query: Box::new(query),
+    // });
+    // rule!(
+    //     #file
+    //     | #query
+    // )(i)
+}
+
 // `INSERT INTO ... VALUES` statement will
 // stop the parser immediately and return the rest tokens in `InsertSource`.
 //
 // This is a hack to parse large insert statements.
-pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
-    let streaming = map(
-        rule! {
-           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
-        },
-        |(options, on_error_opt)| InsertSource::StreamingLoad {
-            format_options: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-        },
-    );
+pub fn insert_source_fast_values(i: Input) -> IResult<InsertSource> {
     let values = map(
         rule! {
             VALUES ~ #rest_str
@@ -3036,7 +3003,6 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     rule!(
         #values
         | #query
-        | #streaming
     )(i)
 }
 
@@ -3271,38 +3237,19 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     Ok((i, def))
 }
 
-pub fn inverted_index_def(i: Input) -> IResult<InvertedIndexDefinition> {
+pub fn table_index_def(i: Input) -> IResult<TableIndexDefinition> {
     map_res(
         rule! {
             ASYNC?
-            ~ INVERTED ~ ^INDEX
+            ~ #index_type ~ ^INDEX
             ~ #ident
             ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
             ~ ( #table_option )?
         },
-        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
-            Ok(InvertedIndexDefinition {
+        |(opt_async, index_type, _, index_name, _, columns, _, opt_index_options)| {
+            Ok(TableIndexDefinition {
                 index_name,
-                columns,
-                sync_creation: opt_async.is_none(),
-                index_options: opt_index_options.unwrap_or_default(),
-            })
-        },
-    )(i)
-}
-
-pub fn ngram_index_def(i: Input) -> IResult<NgramIndexDefinition> {
-    map_res(
-        rule! {
-            ASYNC?
-            ~ NGRAM ~ ^INDEX
-            ~ #ident
-            ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
-            ~ ( #table_option )?
-        },
-        |(opt_async, _, _, index_name, _, columns, _, opt_index_options)| {
-            Ok(NgramIndexDefinition {
-                index_name,
+                index_type,
                 columns,
                 sync_creation: opt_async.is_none(),
                 index_options: opt_index_options.unwrap_or_default(),
@@ -3314,11 +3261,7 @@ pub fn ngram_index_def(i: Input) -> IResult<NgramIndexDefinition> {
 pub fn create_def(i: Input) -> IResult<CreateDefinition> {
     alt((
         map(rule! { #column_def }, CreateDefinition::Column),
-        map(
-            rule! { #inverted_index_def },
-            CreateDefinition::InvertedIndex,
-        ),
-        map(rule! { #ngram_index_def }, CreateDefinition::NgramIndex),
+        map(rule! { #table_index_def }, CreateDefinition::TableIndex),
     ))(i)
 }
 
@@ -3710,32 +3653,23 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
         },
         |(_, create_defs, _)| {
             let mut columns = Vec::with_capacity(create_defs.len());
-            let mut inverted_indexes = Vec::new();
-            let mut ngram_indexes = Vec::new();
+            let mut table_indexes = Vec::new();
             for create_def in create_defs {
                 match create_def {
                     CreateDefinition::Column(column) => {
                         columns.push(column);
                     }
-                    CreateDefinition::InvertedIndex(inverted_index) => {
-                        inverted_indexes.push(inverted_index);
-                    }
-                    CreateDefinition::NgramIndex(ngram_index) => {
-                        ngram_indexes.push(ngram_index);
+                    CreateDefinition::TableIndex(table_index) => {
+                        table_indexes.push(table_index);
                     }
                 }
             }
-            let opt_inverted_indexes = if !inverted_indexes.is_empty() {
-                Some(inverted_indexes)
+            let opt_table_indexes = if !table_indexes.is_empty() {
+                Some(table_indexes)
             } else {
                 None
             };
-            let opt_ngram_indexes = if !ngram_indexes.is_empty() {
-                Some(ngram_indexes)
-            } else {
-                None
-            };
-            CreateTableSource::Columns(columns, opt_inverted_indexes, opt_ngram_indexes)
+            CreateTableSource::Columns(columns, opt_table_indexes)
         },
     );
     let like = map(
@@ -3991,6 +3925,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _)| AlterTableAction::RefreshTableCache,
     );
 
+    let modify_table_connection = map(
+        rule! {
+            CONNECTION ~ ^"=" ~ #connection_options
+        },
+        |(_, _, connection_options)| AlterTableAction::ModifyConnection {
+            new_connection: connection_options,
+        },
+    );
+
     rule!(
         #alter_table_cluster_key
         | #drop_table_cluster_key
@@ -4005,6 +3948,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #set_table_options
         | #unset_table_options
         | #refresh_cache
+        | #modify_table_connection
     )(i)
 }
 
@@ -5248,4 +5192,12 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
         },
         |opts| opts,
     )(i)
+}
+
+fn index_type(i: Input) -> IResult<TableIndexType> {
+    alt((
+        value(TableIndexType::Inverted, rule! { INVERTED }),
+        value(TableIndexType::Ngram, rule! { NGRAM }),
+        value(TableIndexType::Vector, rule! { VECTOR }),
+    ))(i)
 }

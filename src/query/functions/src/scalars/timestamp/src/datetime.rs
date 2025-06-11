@@ -856,7 +856,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         },
         |val, _| match val {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
-            Value::Column(col) => Value::Column(NullableColumn::new(
+            Value::Column(col) => Value::Column(NullableColumn::new_unchecked(
                 col.iter().map(|val| *val as i64).collect(),
                 Bitmap::new_constant(true, col.len()),
             )),
@@ -875,7 +875,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
             Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
             Value::Column(col) => {
                 let validity = Bitmap::new_constant(true, col.len());
-                Value::Column(NullableColumn::new(col, validity))
+                Value::Column(NullableColumn::new_unchecked(col, validity))
             }
         },
     );
@@ -2324,6 +2324,7 @@ fn register_rounder_functions(registry: &mut FunctionRegistry) {
     );
 
     // date | timestamp -> date
+    registry.register_aliases("to_monday", &["to_start_of_iso_week"]);
     rounder_functions_helper::<ToLastMonday>(registry, "to_monday");
     rounder_functions_helper::<ToLastSunday>(registry, "to_start_of_week");
     rounder_functions_helper::<ToStartOfMonth>(registry, "to_start_of_month");

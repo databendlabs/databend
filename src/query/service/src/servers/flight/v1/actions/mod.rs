@@ -25,6 +25,7 @@ mod truncate_table;
 
 use std::sync::Arc;
 
+use databend_common_catalog::session_type::SessionType;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_settings::Settings;
@@ -43,7 +44,6 @@ pub use truncate_table::TRUNCATE_TABLE;
 
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
 
 pub(crate) fn create_session() -> Result<Arc<Session>> {
     let config = GlobalConfig::instance();

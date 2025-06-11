@@ -33,18 +33,8 @@ where T: DeserializeOwned {
     }
 }
 
-/// Convert txn response to `success` and a series of `TxnOpResponse`.
-pub fn txn_reply_to_api_result(
-    txn_reply: TxnReply,
-) -> Result<(bool, Vec<TxnOpResponse>), MetaAPIError> {
-    if txn_reply.error.is_empty() {
-        Ok((txn_reply.success, txn_reply.responses))
-    } else {
-        let err: MetaAPIError = serde_json::from_str(&txn_reply.error)
-            .map_err(|e| InvalidReply::new("invalid TxnReply.error", &e))?;
-
-        Err(err)
-    }
+pub fn unpack_txn_reply(txn_reply: TxnReply) -> (bool, Vec<TxnOpResponse>) {
+    (txn_reply.success, txn_reply.responses)
 }
 
 #[cfg(test)]

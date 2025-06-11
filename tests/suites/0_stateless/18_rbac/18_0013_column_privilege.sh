@@ -50,3 +50,16 @@ echo "drop database nogrant" | $BENDSQL_CLIENT_CONNECT
 echo "drop database grant_db" | $BENDSQL_CLIENT_CONNECT
 echo "drop table default.test_t" | $BENDSQL_CLIENT_CONNECT
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== FIX ISSUE 18056 ==="
+echo "create or replace database db1;" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace table db1.t(id1 int);" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace database db2;" | $BENDSQL_CLIENT_CONNECT
+echo "create or replace table db2.t(id2 int);" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by 'password';" | $BENDSQL_CLIENT_CONNECT
+echo "grant select on db1.t to a;" | $BENDSQL_CLIENT_CONNECT
+
+echo "select database, table, name from system.columns where database in ('db1', 'db2') and table='t';" | $USER_A_CONNECT
+echo "drop database if exists db1; drop database if exists db2; drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "======"
