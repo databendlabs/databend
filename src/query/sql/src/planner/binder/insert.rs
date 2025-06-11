@@ -38,6 +38,7 @@ use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::InsertValue;
 use crate::plans::Plan;
+use crate::plans::StreamingLoadPlan;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 
@@ -158,7 +159,7 @@ impl Binder {
                                 catalog_name,
                                 database_name,
                                 table_name,
-                                Arc::new(schema.into()),
+                                schema,
                                 &values_str,
                                 CopyIntoTableMode::Insert {
                                     overwrite: *overwrite,
@@ -182,11 +183,12 @@ impl Binder {
                 format_options,
                 on_error_mode,
             } => {
-                if value.is_some() {
-                    return Err(ErrorCode::BadArguments(
-                        "streaming load with values placeholder not supported yet.".to_string(),
-                    ));
-                }
+                let settings = self.ctx.get_settings();
+                let (required_source_schema, values_consts) = if let Some(value) = value {
+                    self.prepared_values(value, &schema, settings).await?
+                } else {
+                    (schema.clone(), vec![])
+                };
                 let file_format_params = FileFormatParams::try_from_reader(
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,
@@ -201,17 +203,19 @@ impl Binder {
                 } else {
                     None
                 };
-                Ok(InsertInputSource::StreamingLoad {
+                Ok(InsertInputSource::StreamingLoad(StreamingLoadPlan {
                     file_format: Box::new(file_format_params),
-                    schema: schema.clone(),
                     on_error_mode: OnErrorMode::from_str(
                         &on_error_mode.unwrap_or("abort".to_string()),
                     )?,
+                    required_values_schema,
+                    values_consts,
                     block_thresholds: table.get_block_thresholds(),
                     default_exprs,
                     // fill it in HTTP handler
                     receiver: Default::default(),
-                })
+                    required_source_schema,
+                }))
             }
         };
 

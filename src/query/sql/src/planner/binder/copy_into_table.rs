@@ -44,18 +44,21 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::infer_table_schema;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
+use databend_common_settings::Settings;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
@@ -351,14 +354,14 @@ impl Binder {
         catalog_name: String,
         database_name: String,
         table_name: String,
-        required_values_schema: DataSchemaRef,
+        required_values_schema: TableSchemaRef,
         values_str: &str,
         write_mode: CopyIntoTableMode,
     ) -> Result<Plan> {
-        let (data_schema, const_columns) = if values_str.is_empty() {
+        let (required_source_schema, const_columns) = if values_str.is_empty() {
             (required_values_schema.clone(), vec![])
         } else {
-            self.prepared_values(values_str, &required_values_schema)
+            self.prepared_values_str(values_str, &required_values_schema)
                 .await?
         };
 
@@ -379,8 +382,7 @@ impl Binder {
         let files_to_copy = list_stage_files(&stage_info, &files_info, thread_num, None).await?;
         let duplicated_files_detected = vec![];
 
-        let stage_schema = infer_table_schema(&data_schema)?;
-
+        let required_values_schema = Arc::new(DataSchema::from(required_values_schema));
         let default_values = DefaultExprBinder::try_new(self.ctx.clone())?
             .prepare_default_values(&required_values_schema)?;
 
@@ -390,13 +392,13 @@ impl Binder {
             table_name,
             no_file_to_copy: false,
             from_attachment: true,
-            required_source_schema: data_schema.clone(),
+            required_source_schema: Arc::new(DataSchema::from(&required_source_schema)),
             required_values_schema,
             dedup_full_path: false,
             path_prefix: None,
             values_consts: const_columns,
             stage_table_info: StageTableInfo {
-                schema: stage_schema,
+                schema: required_source_schema,
                 files_info,
                 stage_info,
                 files_to_copy: Some(files_to_copy),
@@ -524,17 +526,26 @@ impl Binder {
         Ok(Plan::CopyIntoTable(Box::new(plan)))
     }
 
-    #[async_backtrace::framed]
-    pub(crate) async fn prepared_values(
+    pub(crate) async fn prepared_values_str(
         &self,
         values_str: &str,
-        source_schema: &DataSchemaRef,
-    ) -> Result<(DataSchemaRef, Vec<Scalar>)> {
+        source_schema: &TableSchemaRef,
+    ) -> Result<(TableSchemaRef, Vec<Scalar>)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
         let expr_or_placeholders = parse_values(&tokens, sql_dialect)?;
+        self.prepared_values(expr_or_placeholders, source_schema, settings)
+            .await
+    }
 
+    #[async_backtrace::framed]
+    pub(crate) async fn prepared_values(
+        &self,
+        expr_or_placeholders: Vec<Expr>,
+        source_schema: &TableSchemaRef,
+        settings: Arc<Settings>,
+    ) -> Result<(TableSchemaRef, Vec<Scalar>)> {
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(
                 "need {} fields in values, got only {}",
@@ -553,7 +564,7 @@ impl Binder {
                 }
                 e => {
                     exprs.push(e);
-                    const_fields.push(source_schema.fields()[i].clone());
+                    const_fields.push(DataField::from(&source_schema.fields()[i]));
                 }
             }
         }
@@ -570,7 +581,7 @@ impl Binder {
                 metadata,
             )
             .await?;
-        Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
+        Ok((Arc::new(TableSchema::new(attachment_fields)), const_values))
     }
 }
 

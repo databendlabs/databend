@@ -49,14 +49,25 @@ pub enum InsertInputSource {
     Values(InsertValue),
     // From stage
     Stage(Box<Plan>),
-    StreamingLoad {
-        file_format: Box<FileFormatParams>,
-        on_error_mode: OnErrorMode,
-        schema: TableSchemaRef,
-        default_exprs: Option<Vec<RemoteDefaultExpr>>,
-        block_thresholds: BlockThresholds,
-        receiver: Arc<Mutex<Option<Receiver<Result<DataBlock>>>>>,
-    },
+    StreamingLoad(StreamingLoadPlan),
+}
+
+#[derive(Clone, Debug)]
+pub struct StreamingLoadPlan {
+    pub file_format: Box<FileFormatParams>,
+    pub on_error_mode: OnErrorMode,
+
+    // given SQL: ... into table (c1, c2, c3, c4) values (1, ?, 'a', ?)
+    // required_values_schema = (c1, c2, c3, c4)
+    // required_source_schema = (c2, c4)
+    // values_consts = [1, 'a']
+    pub required_values_schema: DataSchemaRef,
+    pub values_consts: Vec<Scalar>,
+    pub required_source_schema: TableSchemaRef,
+
+    pub default_exprs: Option<Vec<RemoteDefaultExpr>>,
+    pub block_thresholds: BlockThresholds,
+    pub receiver: Arc<Mutex<Option<Receiver<Result<DataBlock>>>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,14 +195,10 @@ pub(crate) fn format_insert_source(
             )
             .format_pretty()?),
         },
-        InsertInputSource::StreamingLoad {
-            file_format: format,
-            on_error_mode,
-            ..
-        } => {
+        InsertInputSource::StreamingLoad(plan) => {
             let stage_node = vec![
-                FormatTreeNode::new(format!("format: {format}")),
-                FormatTreeNode::new(format!("on_error_mode: {on_error_mode}")),
+                FormatTreeNode::new(format!("format: {}", plan.file_format)),
+                FormatTreeNode::new(format!("on_error_mode: {}", plan.on_error_mode)),
             ];
             children.extend(stage_node);
 

@@ -114,7 +114,7 @@ pub async fn streaming_load_handler(
 }
 
 #[async_backtrace::framed]
-pub async fn streaming_load_handler_inner(
+async fn streaming_load_handler_inner(
     http_context: &HttpQueryContext,
     req: &Request,
     multipart: Multipart,
@@ -165,18 +165,15 @@ pub async fn streaming_load_handler_inner(
     match &mut plan {
         Plan::Insert(insert) => {
             match &mut insert.source {
-                InsertInputSource::StreamingLoad {
-                    file_format: format,
-                    receiver,
-                    ..
-                } => {
-                    if !format.support_streaming_load() {
-                        return Err(poem::Error::from_string( format!( "[HTTP-STREAMING-LOAD] Unsupported file format: {}", format.get_type() ), StatusCode::BAD_REQUEST));
+                InsertInputSource::StreamingLoad(streaming_load)
+                 => {
+                    if !streaming_load.file_format.support_streaming_load() {
+                        return Err(poem::Error::from_string( format!( "[HTTP-STREAMING-LOAD] Unsupported file format: {}", streaming_load.file_format.get_type() ), StatusCode::BAD_REQUEST));
                     }
                     let (tx, rx) = tokio::sync::mpsc::channel(1);
-                    *receiver.lock() = Some(rx);
+                    *streaming_load.receiver.lock() = Some(rx);
 
-                    let format = format.clone();
+                    let format = streaming_load.file_format.clone();
                     let handler = query_context.spawn(execute_query(http_context.clone(), query_context.clone(), plan, mem_stat));
                     read_multi_part(multipart, &format, tx, input_read_buffer_size).await?;
 
