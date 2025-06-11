@@ -13,10 +13,11 @@
 // limitations under the License.
 
 mod array;
-mod string;
+pub(crate) mod string;
 mod variant;
 
 use databend_common_expression::FunctionRegistry;
+pub use string::regexp_split_to_vec;
 
 pub fn register(registry: &mut FunctionRegistry) {
     array::register(registry);
