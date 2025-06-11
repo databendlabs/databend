@@ -170,6 +170,7 @@ impl BloomPrunerCreator {
                     acc.push(BloomIndex::build_filter_ngram_name(
                         field.column_id(),
                         ngram_arg.gram_size(),
+                        ngram_arg.bloom_size(),
                     ));
                 }
                 Ok::<_, ErrorCode>(acc)

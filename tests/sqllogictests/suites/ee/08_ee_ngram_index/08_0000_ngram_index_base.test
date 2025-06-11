@@ -34,7 +34,7 @@ INSERT INTO t1 VALUES
 query III
 select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1')
 ----
-4 1049458 1048617
+4 1049482 1048617
 
 statement ok
 CREATE TABLE t2 (id int, content string)
@@ -87,9 +87,9 @@ INSERT INTO t1 VALUES
 (4, 'Actions speak louder than words');
 
 query II
-select block_size, ngram_index_size from fuse_block('test_gram_index', 't1');
+select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1');
 ----
-206 NULL
+206 654 NULL
 
 statement ok
 CREATE NGRAM INDEX idx1 ON t1(content) gram_size = 5 bloom_size = 1048576
@@ -98,9 +98,9 @@ statement ok
 REFRESH NGRAM INDEX idx1 ON t1
 
 query II
-select block_size, ngram_index_size from fuse_block('test_gram_index', 't1');
+select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1');
 ----
-206 1048617
+206 1049482 1048617
 
 statement ok
 use default

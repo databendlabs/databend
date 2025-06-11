@@ -106,6 +106,10 @@ impl BloomIndexState {
         }
     }
 
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
     pub fn data(self) -> Vec<u8> {
         self.data
     }

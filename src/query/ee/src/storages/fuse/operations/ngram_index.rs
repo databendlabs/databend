@@ -24,6 +24,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::FieldIndex;
+use databend_common_expression::TableField;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
@@ -138,8 +140,11 @@ pub async fn do_refresh_ngram_index(
                 else {
                     continue;
                 };
-                let ngram_index_name =
-                    BloomIndex::build_filter_ngram_name(index_column_id, ngram_arg.gram_size());
+                let ngram_index_name = BloomIndex::build_filter_ngram_name(
+                    index_column_id,
+                    ngram_arg.gram_size(),
+                    ngram_arg.bloom_size(),
+                );
                 if schema_meta
                     .columns()
                     .iter()
@@ -162,6 +167,9 @@ pub async fn do_refresh_ngram_index(
     let settings = ReadSettings::from_ctx(&ctx)?;
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
+    let bloom_columns_map = fuse_table
+        .bloom_index_cols()
+        .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
 
     pipeline.add_source(
         |output| {
@@ -184,6 +192,7 @@ pub async fn do_refresh_ngram_index(
         NgramIndexTransform::new(
             ctx.clone(),
             operator.clone(),
+            bloom_columns_map.clone(),
             ngram_args.clone(),
             block_meta_index_map.clone(),
         )
@@ -280,6 +289,7 @@ impl AsyncSource for NgramIndexSource {
 pub struct NgramIndexTransform {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
+    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
     block_meta_index_map: HashMap<Location, BlockMetaIndex>,
 }
@@ -288,12 +298,14 @@ impl NgramIndexTransform {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
+        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: Vec<NgramArgs>,
         block_meta_index_map: HashMap<Location, BlockMetaIndex>,
     ) -> Self {
         Self {
             ctx,
             operator,
+            bloom_columns_map,
             ngram_args,
             block_meta_index_map,
         }
@@ -321,9 +333,10 @@ impl AsyncTransform for NgramIndexTransform {
             self.ctx.clone(),
             &data_block,
             (index_location.clone(), BlockFilter::VERSION),
-            BTreeMap::new(),
+            self.bloom_columns_map.clone(),
             &self.ngram_args,
         )? {
+            new_block_meta.bloom_filter_index_size = state.size();
             new_block_meta.ngram_filter_index_size = state.ngram_size();
             write_data(state.data(), &self.operator, &index_location).await?;
         }
