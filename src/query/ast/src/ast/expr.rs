@@ -903,6 +903,7 @@ pub enum IntervalKind {
     ISODow,
     YearWeek,
     Millennium,
+    UnknownIntervalKind,
 }
 
 impl Display for IntervalKind {
@@ -925,6 +926,7 @@ impl Display for IntervalKind {
             IntervalKind::ISOWeek => "ISOWEEK",
             IntervalKind::Epoch => "EPOCH",
             IntervalKind::MicroSecond => "MICROSECOND",
+            IntervalKind::UnknownIntervalKind => "UNKNOWNINTERVALKIND",
         })
     }
 }

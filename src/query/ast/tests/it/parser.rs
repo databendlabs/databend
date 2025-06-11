@@ -1268,6 +1268,8 @@ fn test_expr() {
         r#"datepart(year, d)"#,
         r#"date_trunc(week, to_timestamp(1630812366))"#,
         r#"trunc(to_timestamp(1630812366), week)"#,
+        r#"trunc(1630812366, 999)"#,
+        r#"trunc(1630812366.23)"#,
         r#"trunc(to_timestamp(1630812366), 'y')"#,
         r#"trunc(to_timestamp(1630812366), 'mm')"#,
         r#"trunc(to_timestamp(1630812366), 'Q')"#,

@@ -1929,6 +1929,90 @@ DateTrunc {
 
 
 ---------- Input ----------
+trunc(1630812366, 999)
+---------- Output ---------
+TRUNCATE(1630812366, 999)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..22,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..5,
+            ),
+            name: "TRUNCATE",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    6..16,
+                ),
+                value: UInt64(
+                    1630812366,
+                ),
+            },
+            Literal {
+                span: Some(
+                    18..21,
+                ),
+                value: UInt64(
+                    999,
+                ),
+            },
+        ],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+trunc(1630812366.23)
+---------- Output ---------
+TRUNCATE(1630812366.23)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..20,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..5,
+            ),
+            name: "TRUNCATE",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    6..19,
+                ),
+                value: Decimal256 {
+                    value: 163081236623,
+                    precision: 76,
+                    scale: 2,
+                },
+            },
+        ],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
 trunc(to_timestamp(1630812366), 'y')
 ---------- Output ---------
 DATE_TRUNC(YEAR, to_timestamp(1630812366))
