@@ -600,6 +600,7 @@ jobs:
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
       runner_provider: aws
+      runner_capacity: spot
       target: all
 
   deb:

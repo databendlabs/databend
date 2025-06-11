@@ -54,6 +54,7 @@ jobs:
     with:
       build_profile: ci
       runner_provider: aws
+      runner_capacity: spot
       license_type: trial
 
   ready:
