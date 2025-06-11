@@ -33,6 +33,7 @@ use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::index::filters::BlockFilter;
+use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_index_meta;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::BloomIndexState;
@@ -128,10 +129,8 @@ pub async fn do_refresh_ngram_index(
                 .await
                 .map(|meta| meta.content_length())
             {
-                let reader: Reader = operator.reader(&index_location).await?;
-                let mut reader = ParquetFileReader::new(reader, content_length);
-                let index_meta = AsyncFileReader::get_metadata(&mut reader, None).await?;
-                let schema_meta = index_meta.file_metadata().schema_descr();
+                let bloom_index_meta =
+                    load_index_meta(operator.clone(), &index_location, content_length).await?;
                 let index_column_id = index.column_ids[0];
 
                 let Some(ngram_arg) = ngram_args
@@ -145,10 +144,10 @@ pub async fn do_refresh_ngram_index(
                     ngram_arg.gram_size(),
                     ngram_arg.bloom_size(),
                 );
-                if schema_meta
-                    .columns()
+                if bloom_index_meta
+                    .columns
                     .iter()
-                    .any(|column| column.name() == ngram_index_name)
+                    .any(|(column_name, _)| column_name == &ngram_index_name)
                 {
                     continue;
                 }

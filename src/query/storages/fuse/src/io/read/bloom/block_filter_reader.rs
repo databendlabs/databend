@@ -174,7 +174,11 @@ async fn load_column_bloom_filter<'a>(
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
 #[fastrace::trace]
-async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
+pub async fn load_index_meta(
+    dal: Operator,
+    path: &str,
+    length: u64,
+) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {
         let reader = MetaReaders::bloom_index_meta_reader(dal);
