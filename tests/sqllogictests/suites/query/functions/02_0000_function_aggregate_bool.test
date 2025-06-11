@@ -27,3 +27,9 @@ query B
 select bool_or(t) from (values (false), (false), (false)) a(t);
 ----
 0
+
+
+query B
+select bool_or(t), bool_and(t) from (values (null)) a(t);
+----
+NULL NULL
