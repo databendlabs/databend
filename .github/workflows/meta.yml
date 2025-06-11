@@ -36,7 +36,13 @@ jobs:
 
   build:
     needs: info
-    runs-on: [self-hosted, "${{ matrix.runner }}", Linux, 8c32g, aws]
+    runs-on:
+      - self-hosted
+      - "${{ matrix.runner }}"
+      - Linux
+      - 8c32g
+      - aws
+      - spot
     strategy:
       matrix:
         include:
@@ -56,7 +62,13 @@ jobs:
 
   chaos:
     needs: [info, build]
-    runs-on: [self-hosted, X64, Linux, 4c16g, aws]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 4c16g
+      - aws
+      - spot
     steps:
       - uses: actions/checkout@v4
         with:
