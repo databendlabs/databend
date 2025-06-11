@@ -117,9 +117,8 @@ impl UpdateByExprMutator {
 
             predicates = res.try_downcast().unwrap();
 
-            data_block.add_column(BlockEntry::new(
-                DataType::Boolean,
-                Value::upcast(predicates.clone()),
+            data_block.add_entry(BlockEntry::from_arg_value::<BooleanType>(
+                predicates.clone(),
             ));
             let (last_filter, _) = get_or(
                 old_filter,
@@ -131,9 +130,8 @@ impl UpdateByExprMutator {
             (last_filter, origin_block)
         } else {
             let origin_block = data_block.clone();
-            data_block.add_column(BlockEntry::new(
-                DataType::Boolean,
-                Value::upcast(predicates.clone()),
+            data_block.add_entry(BlockEntry::from_arg_value::<BooleanType>(
+                predicates.clone(),
             ));
             (Value::upcast(predicates), origin_block)
         };

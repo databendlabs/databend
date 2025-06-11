@@ -70,9 +70,9 @@ impl BlockOperator {
                     for expr in exprs {
                         let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                         let result = evaluator.run(expr)?;
-                        let col = BlockEntry::new(expr.data_type().clone(), result);
+                        let entry = BlockEntry::new(expr.data_type().clone(), result);
 
-                        input.add_column(col);
+                        input.add_entry(entry);
                     }
                     match projections {
                         Some(projections) => Ok(input.project(projections)),
@@ -82,12 +82,15 @@ impl BlockOperator {
             }
 
             BlockOperator::Project { projection } => {
-                let mut result =
-                    DataBlock::new_with_meta(vec![], input.num_rows(), input.take_meta());
-                for index in projection {
-                    result.add_column(input.get_by_offset(*index).clone());
-                }
-                Ok(result)
+                let entries = projection
+                    .iter()
+                    .map(|i| input.get_by_offset(*i).clone())
+                    .collect();
+                Ok(DataBlock::new_with_meta(
+                    entries,
+                    input.num_rows(),
+                    input.take_meta(),
+                ))
             }
         }
     }

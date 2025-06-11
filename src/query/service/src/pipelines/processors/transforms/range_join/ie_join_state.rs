@@ -22,7 +22,6 @@ use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -211,10 +210,7 @@ impl RangeJoinState {
             for idx in count..(count + block.num_rows()) {
                 column_builder.push(NumberScalar::UInt64(idx as u64));
             }
-            block.add_column(BlockEntry::new(
-                DataType::Number(NumberDataType::UInt64),
-                Value::Column(Column::Number(column_builder.build())),
-            ));
+            block.add_column(Column::Number(column_builder.build()));
             count += block.num_rows();
         }
         // Merge `left_sorted_blocks` to one block
@@ -366,9 +362,7 @@ impl RangeJoinState {
             indices.len(),
         );
         // Merge left_result_block and right_result_block
-        for col in right_result_block.columns() {
-            left_result_block.add_column(col.clone());
-        }
+        left_result_block.merge_block(right_result_block);
         for filter in self.other_conditions.iter() {
             left_result_block = filter_block(left_result_block, filter)?;
         }

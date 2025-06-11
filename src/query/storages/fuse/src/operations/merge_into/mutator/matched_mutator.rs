@@ -398,7 +398,7 @@ impl AggregationContext {
         let origin_num_rows = origin_data_block.num_rows();
         if self.stream_ctx.is_some() {
             let row_num = build_origin_block_row_num(origin_num_rows);
-            origin_data_block.add_column(row_num);
+            origin_data_block.add_entry(row_num);
         }
 
         // apply delete

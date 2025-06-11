@@ -390,7 +390,7 @@ impl TransformUdfScript {
                 ))
             })?;
 
-        let col = if contains_variant(&func.data_type) {
+        let entry = if contains_variant(&func.data_type) {
             let value = transform_variant(&result_block.get_by_offset(0).value(), false).map_err(
                 |err| {
                     ErrorCode::UDFDataError(format!(
@@ -404,15 +404,15 @@ impl TransformUdfScript {
             result_block.get_by_offset(0).clone()
         };
 
-        if col.data_type() != func.data_type.as_ref().clone() {
+        if entry.data_type() != func.data_type.as_ref().clone() {
             return Err(ErrorCode::UDFDataError(format!(
                 "Function {:?} returned column with data type {:?} but expected {:?}",
                 func.name,
-                col.data_type(),
+                entry.data_type(),
                 func.data_type
             )));
         }
-        data_block.add_column(col);
+        data_block.add_entry(entry);
         Ok(())
     }
 }

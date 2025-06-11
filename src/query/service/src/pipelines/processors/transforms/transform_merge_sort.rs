@@ -20,11 +20,9 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -161,10 +159,7 @@ where
             .row_converter
             .convert(&order_by_cols, block.num_rows())?;
         let order_col = rows.to_column();
-        block.add_column(BlockEntry::new(
-            order_col.data_type(),
-            Value::Column(order_col),
-        ));
+        block.add_column(order_col);
         Ok((rows, block))
     }
 

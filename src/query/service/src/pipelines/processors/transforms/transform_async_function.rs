@@ -18,10 +18,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
@@ -99,10 +97,10 @@ pub async fn transform_sequence(
     ctx: &Arc<QueryContext>,
     data_block: &mut DataBlock,
     sequence_name: &String,
-    data_type: &DataType,
+    _data_type: &DataType,
 ) -> Result<()> {
     let count = data_block.num_rows() as u64;
-    let value = if count == 0 {
+    let column = if count == 0 {
         UInt64Type::from_data(vec![])
     } else {
         let tenant = ctx.get_tenant();
@@ -115,8 +113,7 @@ pub async fn transform_sequence(
         let range = resp.start..resp.start + count;
         UInt64Type::from_data(range.collect::<Vec<u64>>())
     };
-    let entry = BlockEntry::new(data_type.clone(), Value::Column(value));
-    data_block.add_column(entry);
+    data_block.add_column(column);
 
     Ok(())
 }

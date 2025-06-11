@@ -605,7 +605,7 @@ impl TransformAsyncFunction {
         let entry = data_block.get_by_offset(arg_index);
         let value = op.dict_get(&entry.value(), data_type, dict_arg).await?;
         let entry = BlockEntry::new(data_type.clone(), value);
-        data_block.add_column(entry);
+        data_block.add_entry(entry);
 
         Ok(())
     }

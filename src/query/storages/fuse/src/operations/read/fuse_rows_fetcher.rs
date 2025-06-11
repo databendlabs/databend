@@ -263,11 +263,11 @@ where F: RowsFetcher + Send + Sync + 'static
         // We ensure it in transform method
         self.fetcher.clear_cache();
 
-        for col in fetched_block.columns().iter() {
+        for entry in fetched_block.take_columns() {
             if self.need_wrap_nullable {
-                data.add_column(wrap_true_validity(col, num_rows));
+                data.add_entry(wrap_true_validity(&entry, num_rows));
             } else {
-                data.add_column(col.clone());
+                data.add_entry(entry);
             }
         }
 

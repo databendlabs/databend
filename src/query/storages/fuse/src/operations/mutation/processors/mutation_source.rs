@@ -227,7 +227,7 @@ impl Processor for MutationSource {
                                 } else {
                                     if self.block_reader.update_stream_columns {
                                         let row_num = build_origin_block_row_num(rows);
-                                        data_block.add_column(row_num);
+                                        data_block.add_entry(row_num);
                                     }
 
                                     let predicate_col = predicates.into_column().unwrap();
@@ -249,7 +249,7 @@ impl Processor for MutationSource {
                             }
 
                             MutationAction::Update => {
-                                data_block.add_column(BlockEntry::from_arg_value(predicates));
+                                data_block.add_entry(BlockEntry::from_arg_value(predicates));
                                 if self.remain_reader.is_none() {
                                     self.state = State::PerformOperator(
                                         data_block,
@@ -301,9 +301,7 @@ impl Processor for MutationSource {
                         remain_block
                     };
 
-                    for col in remain_block.columns() {
-                        data_block.add_column(col.clone());
-                    }
+                    data_block.merge_block(remain_block)
                 } else {
                     return Err(ErrorCode::Internal("It's a bug. Need remain reader"));
                 };

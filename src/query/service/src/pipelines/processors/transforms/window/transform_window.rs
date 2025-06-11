@@ -25,14 +25,12 @@ use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -453,10 +451,7 @@ impl<T: Number> TransformWindow<T> {
                     ColumnBuilder::with_capacity(&data_type, 0),
                 );
                 let new_column = builder.build();
-                output.add_column(BlockEntry::new(
-                    new_column.data_type(),
-                    Value::Column(new_column),
-                ));
+                output.add_column(new_column);
                 self.outputs.push_back(output);
                 self.next_output_block += 1;
             } else {

@@ -20,7 +20,6 @@ use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumn;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
@@ -152,12 +151,12 @@ impl BlockingTransform for TransformSRF {
                     builder.push(scalar_ref.clone());
                 }
             }
-            let block_entry = BlockEntry::new(column.data_type(), Value::Column(builder.build()));
+            let column = builder.build();
             if block_is_empty {
-                result = DataBlock::new(vec![block_entry], result_size);
+                result = DataBlock::new(vec![column.into()], result_size);
                 block_is_empty = false;
             } else {
-                result.add_column(block_entry);
+                result.add_column(column);
             }
         }
 
@@ -186,16 +185,13 @@ impl BlockingTransform for TransformSRF {
                         }
                     }
 
-                    let column = builder.build().upcast();
-                    let block_entry = BlockEntry::new(
-                        DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
-                        Value::Column(Column::Tuple(vec![Column::Nullable(Box::new(column))])),
-                    );
+                    let column =
+                        Column::Tuple(vec![Column::Nullable(Box::new(builder.build().upcast()))]);
                     if block_is_empty {
-                        result = DataBlock::new(vec![block_entry], result_size);
+                        result = DataBlock::new(vec![column.into()], result_size);
                         block_is_empty = false;
                     } else {
-                        result.add_column(block_entry);
+                        result.add_column(column);
                     }
                 }
                 "json_each" => {
@@ -231,21 +227,15 @@ impl BlockingTransform for TransformSRF {
                         }
                     }
 
-                    let block_entry = BlockEntry::new(
-                        DataType::Tuple(vec![
-                            DataType::Nullable(Box::new(DataType::String)),
-                            DataType::Nullable(Box::new(DataType::Variant)),
-                        ]),
-                        Value::Column(Column::Tuple(vec![
-                            Column::Nullable(Box::new(key_builder.build().upcast())),
-                            Column::Nullable(Box::new(value_builder.build().upcast())),
-                        ])),
-                    );
+                    let column = Column::Tuple(vec![
+                        Column::Nullable(Box::new(key_builder.build().upcast())),
+                        Column::Nullable(Box::new(value_builder.build().upcast())),
+                    ]);
                     if block_is_empty {
-                        result = DataBlock::new(vec![block_entry], result_size);
+                        result = DataBlock::new(vec![column.into()], result_size);
                         block_is_empty = false;
                     } else {
-                        result.add_column(block_entry);
+                        result.add_column(column);
                     }
                 }
                 "flatten" => {
@@ -318,29 +308,19 @@ impl BlockingTransform for TransformSRF {
                         }
                     }
 
-                    let block_entry = BlockEntry::new(
-                        DataType::Tuple(vec![
-                            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                            DataType::Nullable(Box::new(DataType::String)),
-                            DataType::Nullable(Box::new(DataType::String)),
-                            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                            DataType::Nullable(Box::new(DataType::Variant)),
-                            DataType::Nullable(Box::new(DataType::Variant)),
-                        ]),
-                        Value::Column(Column::Tuple(vec![
-                            Column::Nullable(Box::new(seq_builder.build().upcast())),
-                            Column::Nullable(Box::new(key_builder.build().upcast())),
-                            Column::Nullable(Box::new(path_builder.build().upcast())),
-                            Column::Nullable(Box::new(index_builder.build().upcast())),
-                            Column::Nullable(Box::new(value_builder.build().upcast())),
-                            Column::Nullable(Box::new(this_builder.build().upcast())),
-                        ])),
-                    );
+                    let column = Column::Tuple(vec![
+                        Column::Nullable(Box::new(seq_builder.build().upcast())),
+                        Column::Nullable(Box::new(key_builder.build().upcast())),
+                        Column::Nullable(Box::new(path_builder.build().upcast())),
+                        Column::Nullable(Box::new(index_builder.build().upcast())),
+                        Column::Nullable(Box::new(value_builder.build().upcast())),
+                        Column::Nullable(Box::new(this_builder.build().upcast())),
+                    ]);
                     if block_is_empty {
-                        result = DataBlock::new(vec![block_entry], result_size);
+                        result = DataBlock::new(vec![column.into()], result_size);
                         block_is_empty = false;
                     } else {
-                        result.add_column(block_entry);
+                        result.add_column(column);
                     }
                 }
                 "unnest" | "regexp_split_to_table" => {
@@ -405,7 +385,7 @@ impl BlockingTransform for TransformSRF {
                         result = DataBlock::new(vec![block_entry], result_size);
                         block_is_empty = false;
                     } else {
-                        result.add_column(block_entry);
+                        result.add_entry(block_entry);
                     }
                 }
                 _ => todo!(

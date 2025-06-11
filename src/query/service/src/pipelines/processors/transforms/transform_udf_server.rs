@@ -210,14 +210,14 @@ impl TransformUdfServer {
             )));
         }
 
-        let col = if contains_variant(&func.data_type) {
+        let entry = if contains_variant(&func.data_type) {
             let value = transform_variant(&result_block.get_by_offset(0).value(), false)?;
             BlockEntry::new(result_fields[0].data_type().clone(), value)
         } else {
             result_block.get_by_offset(0).clone()
         };
 
-        data_block.add_column(col);
+        data_block.add_entry(entry);
         drop(permit);
         Ok(data_block)
     }

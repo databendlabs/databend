@@ -519,10 +519,18 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn add_column(&mut self, entry: BlockEntry) {
+    pub fn add_entry(&mut self, mut entry: BlockEntry) {
+        if let InnerEntry::Const(_, _, n) = &mut entry.0 {
+            *n = Some(self.num_rows)
+        }
         self.entries.push(entry);
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
+    }
+
+    #[inline]
+    pub fn add_column(&mut self, column: Column) {
+        self.add_entry(column.into());
     }
 
     #[inline]

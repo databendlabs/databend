@@ -105,9 +105,7 @@ impl RangeJoinState {
                         indices.len(),
                     );
                     // Merge left_result_block and right_result_block
-                    for col in right_result_block.columns() {
-                        left_result_block.add_column(col.clone());
-                    }
+                    left_result_block.merge_block(right_result_block);
                     for filter in self.other_conditions.iter() {
                         left_result_block = filter_block(left_result_block, filter)?;
                     }

@@ -16,11 +16,9 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 
 use super::sort::RowConverter;
 use super::sort::Rows;
@@ -121,10 +119,7 @@ where
                 .convert(&order_by_cols, block.num_rows())?;
             if self.output_order_col {
                 let order_col = rows.to_column();
-                block.add_column(BlockEntry::new(
-                    order_col.data_type(),
-                    Value::Column(order_col),
-                ));
+                block.add_column(order_col);
             }
             rows
         };

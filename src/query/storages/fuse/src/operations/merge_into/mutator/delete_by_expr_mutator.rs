@@ -153,7 +153,7 @@ impl DeleteByExprMutator {
 
                 let const_predicates = expr2prdicate(&evaluator, &const_expr)?;
 
-                res_block.add_column(BlockEntry::from_arg_value(const_predicates));
+                res_block.add_entry(BlockEntry::from_arg_value(const_predicates));
 
                 Ok((res_block, self.get_row_id_block(filtered_block)))
             }
