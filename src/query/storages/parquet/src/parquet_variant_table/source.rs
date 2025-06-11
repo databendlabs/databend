@@ -29,13 +29,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumnBuilder;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -380,10 +378,7 @@ fn add_internal_columns(
     for c in internal_columns {
         match c {
             InternalColumnType::FileName => {
-                b.add_entry(BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(path.clone())),
-                ));
+                b.add_const_column(Scalar::String(path.clone()), DataType::String);
             }
             InternalColumnType::FileRowNumber => {
                 let end_row = (*start_row) + b.num_rows() as u64;

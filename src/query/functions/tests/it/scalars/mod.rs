@@ -140,8 +140,8 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let block = DataBlock::new(
             ctx.columns
                 .iter()
-                .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
-                .collect::<Vec<_>>(),
+                .map(|(_, col)| col.clone().into())
+                .collect(),
             num_rows,
         );
 

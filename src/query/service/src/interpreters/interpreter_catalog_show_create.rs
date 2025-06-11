@@ -92,12 +92,9 @@ impl Interpreter for ShowCreateCatalogInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(name))),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(catalog_type)),
-                ),
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(option))),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(name), 1),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(catalog_type), 1),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(option), 1),
             ],
             1,
         );

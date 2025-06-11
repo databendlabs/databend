@@ -46,7 +46,6 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -1036,11 +1035,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     asc: sort_desc.0,
                     nulls_first: sort_desc.1,
                 }];
-                let columns = vec![BlockEntry::new(
-                    arr.data_type(),
-                    Value::Column(arr)
-                )];
-                match DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None) {
+                match DataBlock::sort(&DataBlock::new(vec![arr.into()], len), &sort_desc, None) {
                     Ok(block) => {
                         let sorted_arr = block.columns()[0].value().into_column().unwrap();
                         output.push(sorted_arr);

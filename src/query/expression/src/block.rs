@@ -67,6 +67,16 @@ impl Debug for BlockEntry {
 }
 
 impl BlockEntry {
+    pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
+        #[cfg(debug_assertions)]
+        check_type(&data_type, &Value::Scalar(scalar.clone()));
+        Self(InnerEntry::Const(scalar, data_type, Some(num_rows)))
+    }
+
+    pub fn new_const_column_arg<T: ArgType>(scalar: T::Scalar, num_rows: usize) -> Self {
+        Self::new_const_column(T::data_type(), T::upcast_scalar(scalar), num_rows)
+    }
+
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
@@ -88,10 +98,6 @@ impl BlockEntry {
 
     pub fn from_arg_value<T: ArgType>(value: Value<T>) -> Self {
         Self::new(T::data_type(), value.upcast())
-    }
-
-    pub fn from_arg_scalar<T: ArgType>(scalar: T::Scalar) -> Self {
-        Self::new(T::data_type(), Value::Scalar(T::upcast_scalar(scalar)))
     }
 
     pub fn remove_nullable(self) -> Self {
@@ -533,6 +539,16 @@ impl DataBlock {
         self.add_entry(column.into());
     }
 
+    pub fn add_const_column(&mut self, scalar: Scalar, data_type: DataType) {
+        self.entries.push(BlockEntry(InnerEntry::Const(
+            scalar,
+            data_type,
+            Some(self.num_rows),
+        )));
+        #[cfg(debug_assertions)]
+        self.check_valid().unwrap();
+    }
+
     #[inline]
     pub fn pop_columns(&mut self, num: usize) {
         debug_assert!(num <= self.entries.len());
@@ -641,16 +657,19 @@ impl DataBlock {
     ) -> Result<DataBlock> {
         let schema_fields = schema.fields();
 
-        let mut columns = Vec::with_capacity(default_vals.len());
+        let mut entries = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
 
-            let column = BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()));
-            columns.push(column);
+            entries.push(BlockEntry::new_const_column(
+                data_type.clone(),
+                default_val.to_owned(),
+                num_rows,
+            ));
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 
     // If block_column_ids not contain schema.field[i].column_id,

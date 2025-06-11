@@ -40,10 +40,7 @@ impl HashJoinProbeState {
         if build_num_rows == 1 {
             for col in build_block.columns() {
                 let scalar = unsafe { col.index_unchecked(0) };
-                probe_block.add_entry(BlockEntry::new(
-                    col.data_type(),
-                    Value::Scalar(scalar.to_owned()),
-                ));
+                probe_block.add_const_column(col.data_type(), scalar.to_owned());
             }
             return Ok(vec![probe_block]);
         }
@@ -72,10 +69,7 @@ impl HashJoinProbeState {
 
         for col in probe_block.columns() {
             let scalar = unsafe { col.index_unchecked(take_index) };
-            replicated_probe_block.add_entry(BlockEntry::new(
-                col.data_type(),
-                Value::Scalar(scalar.to_owned()),
-            ));
+            replicated_probe_block.add_const_column(scalar.to_owned(), col.data_type());
         }
         replicated_probe_block.merge_block(build_block.clone());
         Ok(replicated_probe_block)

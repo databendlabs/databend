@@ -17,6 +17,8 @@ use std::sync::Arc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
@@ -103,18 +105,12 @@ impl Interpreter for PresignInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(presigned_req.method().as_str().to_string())),
+                BlockEntry::new_const_column_arg::<StringType>(
+                    presigned_req.method().as_str().to_string(),
+                    1,
                 ),
-                BlockEntry::new(
-                    DataType::Variant,
-                    Value::Scalar(Scalar::Variant(header.to_vec())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(presigned_req.uri().to_string())),
-                ),
+                BlockEntry::new_const_column_arg::<VariantType>(header.to_vec(), 1),
+                BlockEntry::new_const_column_arg::<StringType>(presigned_req.uri().to_string(), 1),
             ],
             1,
         );

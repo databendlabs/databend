@@ -565,7 +565,6 @@ mod tests {
     use crate::BlockEntry;
     use crate::DataBlock;
     use crate::FromData;
-    use crate::Scalar;
     use crate::Value;
 
     fn merge_hash_slice(ls: &[u64]) -> u64 {
@@ -576,24 +575,10 @@ mod tests {
     fn test_value_spread() -> Result<()> {
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3])),
-                ),
-                BlockEntry::new(
-                    StringType::data_type(),
-                    Value::Scalar(Scalar::String("a".to_string())),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3])),
-                ),
-                BlockEntry::new(
-                    StringType::data_type(),
-                    Value::Column(StringType::from_data(vec![
-                        "a", "b", "c", "d", "e", "f", "g", "h", "i",
-                    ])),
-                ),
+                Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3]).into(),
+                BlockEntry::new_const_column_arg::<StringType>("a".to_string(), 9),
+                Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3]).into(),
+                StringType::from_data(vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"]).into(),
             ],
             9,
         );

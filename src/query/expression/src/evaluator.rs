@@ -1395,11 +1395,10 @@ impl<'a> Evaluator<'a> {
         for i in 1..column.len() {
             let arg1 = unsafe { column.index_unchecked(i).to_owned() };
             let mut entries = col_entries.clone();
-            entries.push(BlockEntry::new(
-                col_type.clone(),
-                Value::Scalar(arg0.clone()),
-            ));
-            entries.push(BlockEntry::new(col_type.clone(), Value::Scalar(arg1)));
+            entries.extend_from_slice(&[
+                BlockEntry::new_const_column(col_type.clone(), arg0.clone(), 1),
+                BlockEntry::new_const_column(col_type.clone(), arg1, 1),
+            ]);
             let block = DataBlock::new(entries, 1);
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
             let result = evaluator.run(expr)?;

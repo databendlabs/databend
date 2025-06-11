@@ -261,13 +261,14 @@ impl HashJoinProbeState {
 
         let probe_has_null = if self.join_type() == JoinType::LeftMark {
             let entry = input.get_by_offset(0);
-            if let Some(Column::Nullable(c)) = entry.as_column() {
-                c.validity_ref().null_count() > 0
+            if let Some(column) = entry.as_column() {
+                column
+                    .as_nullable()
+                    .map(|c| c.validity_ref().null_count() > 0)
+                    .unwrap_or(false)
             } else {
                 entry.as_scalar().unwrap().is_null()
             }
-        } else {
-            false
         };
         input = input.project(&self.probe_projections);
 

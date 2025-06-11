@@ -227,14 +227,17 @@ impl InternalColumn {
 
                 UInt64Type::from_data(row_ids).into()
             }
-            InternalColumnType::BlockName => {
-                BlockEntry::from_arg_scalar::<StringType>(meta.block_location.clone())
-            }
-            InternalColumnType::SegmentName => {
-                BlockEntry::from_arg_scalar::<StringType>(meta.segment_location.clone())
-            }
-            InternalColumnType::SnapshotName => BlockEntry::from_arg_scalar::<StringType>(
+            InternalColumnType::BlockName => BlockEntry::new_const_column_arg::<StringType>(
+                meta.block_location.clone(),
+                num_rows,
+            ),
+            InternalColumnType::SegmentName => BlockEntry::new_const_column_arg::<StringType>(
+                meta.segment_location.clone(),
+                num_rows,
+            ),
+            InternalColumnType::SnapshotName => BlockEntry::new_const_column_arg::<StringType>(
                 meta.snapshot_location.clone().unwrap_or_default(),
+                num_rows,
             ),
             InternalColumnType::BaseRowId => {
                 let uuid =
