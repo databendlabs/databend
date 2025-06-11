@@ -46,7 +46,7 @@ impl<const IS_AND: bool> Default for BooleanState<IS_AND> {
 pub fn boolean_batch<const IS_AND: bool>(inner: Bitmap, validity: Option<&Bitmap>) -> bool {
     match validity {
         Some(v) => {
-            let mut res = if IS_AND { true } else { false };
+            let mut res = IS_AND;
             if v.true_count() as f64 / v.len() as f64 >= SELECTIVITY_THRESHOLD {
                 inner.iter().zip(v.iter()).for_each(|(t, b)| {
                     if b {
