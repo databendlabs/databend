@@ -489,8 +489,8 @@ impl BloomIndex {
         }
     }
 
-    pub fn build_filter_ngram_name(field: &TableField, gram_size: usize) -> String {
-        format!("Ngram({})_{gram_size}", field.column_id())
+    pub fn build_filter_ngram_name(column_id: ColumnId, gram_size: usize) -> String {
+        format!("Ngram({})_{gram_size}", column_id)
     }
 
     fn find(
@@ -508,7 +508,7 @@ impl BloomIndex {
                 // The column doesn't have a Ngram Arg.
                 return Ok(FilterEvalResult::Uncertain);
             };
-            BloomIndex::build_filter_ngram_name(table_field, ngram_arg.gram_size)
+            BloomIndex::build_filter_ngram_name(table_field.column_id(), ngram_arg.gram_size)
         } else {
             BloomIndex::build_filter_bloom_name(self.version, table_field)?
         };
@@ -792,8 +792,10 @@ impl BloomIndexBuilder {
         }
         for ngram_column in self.ngram_columns.iter_mut() {
             let filter = ngram_column.builder.build()?;
-            let filter_name =
-                BloomIndex::build_filter_ngram_name(&ngram_column.field, ngram_column.gram_size);
+            let filter_name = BloomIndex::build_filter_ngram_name(
+                ngram_column.field.column_id(),
+                ngram_column.gram_size,
+            );
             filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }
