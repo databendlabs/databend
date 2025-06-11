@@ -260,14 +260,12 @@ impl HashJoinProbeState {
         let probe_keys = (&keys_columns).into();
 
         let probe_has_null = if self.join_type() == JoinType::LeftMark {
-            let entry = input.get_by_offset(0);
-            if let Some(column) = entry.as_column() {
-                column
+            match input.get_by_offset(0) {
+                BlockEntry::Const(scalar, _, _) => scalar.is_null(),
+                BlockEntry::Column(column) => column
                     .as_nullable()
-                    .map(|c| c.validity_ref().null_count() > 0)
-                    .unwrap_or(false)
-            } else {
-                entry.as_scalar().unwrap().is_null()
+                    .map(|c| c.validity().null_count() > 0)
+                    .unwrap_or(false),
             }
         } else {
             false

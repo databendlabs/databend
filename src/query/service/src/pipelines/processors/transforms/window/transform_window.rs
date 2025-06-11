@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -679,53 +680,55 @@ impl<T: Number> TransformWindow<T> {
         }
 
         while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
-            if let Some(scalar) = block_entry.as_scalar() {
-                if scalar != &Scalar::Null {
-                    return scalar.to_owned();
+            match block_entry {
+                BlockEntry::Const(scalar, _, _) => {
+                    if scalar != &Scalar::Null {
+                        return scalar.to_owned();
+                    }
+                    // If value is Scalar we can directly skip this block.
+                    if advance {
+                        cur.block += 1;
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        block_entry = block.get_by_offset(arg_index);
+                    } else if cur == self.frame_start {
+                        return scalar.to_owned();
+                    } else {
+                        cur.block -= 1;
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        block_entry = block.get_by_offset(arg_index);
+                    }
                 }
-                // If value is Scalar we can directly skip this block.
-                if advance {
-                    cur.block += 1;
-                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                    block_entry = block.get_by_offset(arg_index);
-                } else if cur == self.frame_start {
-                    return scalar.to_owned();
-                } else {
-                    cur.block -= 1;
-                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
-                    block_entry = block.get_by_offset(arg_index);
-                }
-            } else {
-                let col = block_entry.as_column().unwrap();
-                let value = col.index(cur.row).unwrap();
-                if !matches!(value, ScalarRef::Null) {
-                    return value.to_owned();
-                }
+                BlockEntry::Column(col) => {
+                    let value = col.index(cur.row).unwrap();
+                    if !matches!(value, ScalarRef::Null) {
+                        return value.to_owned();
+                    }
 
-                cur = if advance {
-                    let advance_cur = self.advance_row(cur);
-                    if advance_cur.block != cur.block {
-                        if let Some(b) = self.blocks.get(advance_cur.block - self.first_block) {
-                            block_entry = b.block.get_by_offset(arg_index);
-                        } else {
-                            return Scalar::Null;
+                    cur = if advance {
+                        let advance_cur = self.advance_row(cur);
+                        if advance_cur.block != cur.block {
+                            if let Some(b) = self.blocks.get(advance_cur.block - self.first_block) {
+                                block_entry = b.block.get_by_offset(arg_index);
+                            } else {
+                                return Scalar::Null;
+                            }
                         }
-                    }
-                    advance_cur
-                } else if cur == self.frame_start {
-                    return unsafe { col.index_unchecked(cur.row) }.to_owned();
-                } else {
-                    let back_cur = self.goback_row(cur);
-                    if back_cur.block != cur.block {
-                        block_entry = self
-                            .blocks
-                            .get(back_cur.block - self.first_block)
-                            .unwrap()
-                            .block
-                            .get_by_offset(arg_index);
-                    }
-                    back_cur
-                };
+                        advance_cur
+                    } else if cur == self.frame_start {
+                        return unsafe { col.index_unchecked(cur.row) }.to_owned();
+                    } else {
+                        let back_cur = self.goback_row(cur);
+                        if back_cur.block != cur.block {
+                            block_entry = self
+                                .blocks
+                                .get(back_cur.block - self.first_block)
+                                .unwrap()
+                                .block
+                                .get_by_offset(arg_index);
+                        }
+                        back_cur
+                    };
+                }
             }
         }
         Scalar::Null

@@ -20,6 +20,7 @@ use std::ops::Range;
 use arrow_array::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use enum_as_inner::EnumAsInner;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
@@ -48,29 +49,17 @@ pub struct DataBlock {
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone, PartialEq)]
-pub struct BlockEntry(InnerEntry);
-
-#[derive(Clone, PartialEq)]
-enum InnerEntry {
-    Const(Scalar, DataType, Option<usize>),
+#[derive(Clone, Debug, PartialEq, EnumAsInner)]
+pub enum BlockEntry {
+    Const(Scalar, DataType, Option<usize>), // todo: replace Option<usize> with usize
     Column(Column),
-}
-
-impl Debug for BlockEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BlockEntry")
-            .field("data_type", &self.data_type())
-            .field("value", &self.value())
-            .finish()
-    }
 }
 
 impl BlockEntry {
     pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
         #[cfg(debug_assertions)]
         check_type(&data_type, &Value::Scalar(scalar.clone()));
-        Self(InnerEntry::Const(scalar, data_type, Some(num_rows)))
+        BlockEntry::Const(scalar, data_type, Some(num_rows))
     }
 
     pub fn new_const_column_arg<T: ArgType>(scalar: T::Scalar, num_rows: usize) -> Self {
@@ -91,8 +80,8 @@ impl BlockEntry {
         }
 
         match value {
-            Value::Column(c) => Self(InnerEntry::Column(c)),
-            Value::Scalar(s) => Self(InnerEntry::Const(s, data_type, None)),
+            Value::Column(c) => BlockEntry::Column(c),
+            Value::Scalar(s) => BlockEntry::Const(s, data_type, None),
         }
     }
 
@@ -101,26 +90,26 @@ impl BlockEntry {
     }
 
     pub fn remove_nullable(self) -> Self {
-        match self.0 {
-            InnerEntry::Column(Column::Nullable(col)) => col.column_ref().clone().into(),
+        match self {
+            BlockEntry::Column(Column::Nullable(col)) => col.column().clone().into(),
             _ => self,
         }
     }
 
     pub fn memory_size(&self) -> usize {
-        match &self.0 {
-            InnerEntry::Const(scalar, _, _) => scalar.as_ref().memory_size(),
-            InnerEntry::Column(column) => column.memory_size(),
+        match self {
+            BlockEntry::Const(scalar, _, _) => scalar.as_ref().memory_size(),
+            BlockEntry::Column(column) => column.memory_size(),
         }
     }
 
     pub fn to_column(&self, num_rows: usize) -> Column {
-        match &self.0 {
-            InnerEntry::Const(scalar, data_type, n) => {
+        match self {
+            BlockEntry::Const(scalar, data_type, n) => {
                 debug_assert_eq!(num_rows, n.unwrap_or(num_rows));
                 Value::<AnyType>::Scalar(scalar.clone()).convert_to_full_column(data_type, num_rows)
             }
-            InnerEntry::Column(column) => {
+            BlockEntry::Column(column) => {
                 debug_assert_eq!(num_rows, column.len());
                 column.clone()
             }
@@ -128,44 +117,30 @@ impl BlockEntry {
     }
 
     pub fn data_type(&self) -> DataType {
-        match &self.0 {
-            InnerEntry::Const(_, data_type, _) => data_type.clone(),
-            InnerEntry::Column(column) => column.data_type(),
-        }
-    }
-
-    pub fn as_column(&self) -> Option<&Column> {
-        match &self.0 {
-            InnerEntry::Const(_, _, _) => None,
-            InnerEntry::Column(column) => Some(column),
+        match self {
+            BlockEntry::Const(_, data_type, _) => data_type.clone(),
+            BlockEntry::Column(column) => column.data_type(),
         }
     }
 
     pub fn as_scalar(&self) -> Option<&Scalar> {
-        match &self.0 {
-            InnerEntry::Const(scalar, _, _) => Some(scalar),
-            InnerEntry::Column(_) => None,
-        }
-    }
-
-    pub fn into_column(self) -> std::result::Result<Column, Self> {
-        match self.0 {
-            InnerEntry::Column(column) => Ok(column),
-            _ => Err(self),
+        match self {
+            BlockEntry::Const(scalar, _, _) => Some(scalar),
+            BlockEntry::Column(_) => None,
         }
     }
 
     pub fn value(&self) -> Value<AnyType> {
-        match &self.0 {
-            InnerEntry::Const(scalar, _, _) => Value::Scalar(scalar.clone()),
-            InnerEntry::Column(column) => Value::Column(column.clone()),
+        match self {
+            BlockEntry::Const(scalar, _, _) => Value::Scalar(scalar.clone()),
+            BlockEntry::Column(column) => Value::Column(column.clone()),
         }
     }
 
     pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
-        match &self.0 {
-            InnerEntry::Const(scalar, _, Some(n)) if index < *n => Some(scalar.as_ref()),
-            InnerEntry::Column(column) => column.index(index),
+        match self {
+            BlockEntry::Const(scalar, _, Some(n)) if index < *n => Some(scalar.as_ref()),
+            BlockEntry::Column(column) => column.index(index),
             _ => unreachable!(),
         }
     }
@@ -174,8 +149,8 @@ impl BlockEntry {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
-        match &self.0 {
-            InnerEntry::Const(scalar, _, n) => {
+        match self {
+            BlockEntry::Const(scalar, _, n) => {
                 #[cfg(debug_assertions)]
                 match *n {
                     Some(n) if index < n => (),
@@ -187,7 +162,7 @@ impl BlockEntry {
 
                 scalar.as_ref()
             }
-            InnerEntry::Column(column) => column.index_unchecked(index),
+            BlockEntry::Column(column) => column.index_unchecked(index),
         }
     }
 }
@@ -196,8 +171,7 @@ impl From<Column> for BlockEntry {
     fn from(col: Column) -> Self {
         #[cfg(debug_assertions)]
         col.check_valid().unwrap();
-
-        Self(InnerEntry::Column(col))
+        BlockEntry::Column(col)
     }
 }
 
@@ -248,8 +222,8 @@ impl DataBlock {
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
         for entry in entries.iter_mut() {
-            match &mut entry.0 {
-                InnerEntry::Const(_, _, n) if n.is_none() => *n = Some(num_rows),
+            match entry {
+                BlockEntry::Const(_, _, n) if n.is_none() => *n = Some(num_rows),
                 _ => (),
             }
         }
@@ -264,15 +238,15 @@ impl DataBlock {
 
     fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
         for entry in columns.iter() {
-            match &entry.0 {
-                InnerEntry::Const(_, _, n) => {
+            match entry {
+                BlockEntry::Const(_, _, n) => {
                     if *n != Some(num_rows) {
                         return Err(ErrorCode::Internal(format!(
                             "DataBlock corrupted, const column length mismatch, const rows: {n:?}, num_rows: {num_rows}",
                         )));
                     }
                 }
-                InnerEntry::Column(c) => {
+                BlockEntry::Column(c) => {
                     #[cfg(debug_assertions)]
                     c.check_valid()?;
                     if c.len() != num_rows {
@@ -380,9 +354,9 @@ impl DataBlock {
     pub fn domains(&self) -> Vec<Domain> {
         self.entries
             .iter()
-            .map(|entry| match &entry.0 {
-                InnerEntry::Const(scalar, data_type, _) => scalar.as_ref().domain(data_type),
-                InnerEntry::Column(column) => column.domain(),
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, data_type, _) => scalar.as_ref().domain(data_type),
+                BlockEntry::Column(column) => column.domain(),
             })
             .collect()
     }
@@ -400,7 +374,7 @@ impl DataBlock {
         if self
             .columns()
             .iter()
-            .all(|entry| matches!(entry.0, InnerEntry::Column(_)))
+            .all(|entry| matches!(entry, BlockEntry::Column(_)))
         {
             return self;
         }
@@ -412,12 +386,12 @@ impl DataBlock {
         let entries = self
             .entries
             .iter()
-            .map(|entry| match &entry.0 {
-                InnerEntry::Const(s, data_type, _) => {
+            .map(|entry| match entry {
+                BlockEntry::Const(s, data_type, _) => {
                     let builder = ColumnBuilder::repeat(&s.as_ref(), self.num_rows, data_type);
                     builder.build().into()
                 }
-                InnerEntry::Column(c) => c.clone().into(),
+                BlockEntry::Column(c) => c.clone().into(),
             })
             .collect();
         Self {
@@ -437,13 +411,13 @@ impl DataBlock {
         let entries = self
             .entries
             .iter()
-            .map(|entry| match &entry.0 {
-                InnerEntry::Const(scalar, data_type, Some(_)) => BlockEntry(InnerEntry::Const(
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, data_type, Some(_)) => BlockEntry::Const(
                     scalar.clone(),
                     data_type.clone(),
                     Some(range.end - range.start),
-                )),
-                InnerEntry::Column(c) => c.slice(range.clone()).into(),
+                ),
+                BlockEntry::Column(c) => c.slice(range.clone()).into(),
                 _ => unreachable!(),
             })
             .collect();
@@ -515,9 +489,9 @@ impl DataBlock {
         self.entries.reserve(block.num_columns());
         for other in block.entries.into_iter() {
             #[cfg(debug_assertions)]
-            match &other.0 {
-                InnerEntry::Const(_, _, Some(n)) => assert_eq!(*n, self.num_rows),
-                InnerEntry::Column(column) => assert_eq!(column.len(), self.num_rows),
+            match &other {
+                BlockEntry::Const(_, _, Some(n)) => assert_eq!(*n, self.num_rows),
+                BlockEntry::Column(column) => assert_eq!(column.len(), self.num_rows),
                 _ => unreachable!(),
             }
             self.entries.push(other);
@@ -526,7 +500,8 @@ impl DataBlock {
 
     #[inline]
     pub fn add_entry(&mut self, mut entry: BlockEntry) {
-        if let InnerEntry::Const(_, _, n) = &mut entry.0 {
+        if let BlockEntry::Const(_, _, n) = &mut entry {
+            debug_assert_eq!(n.unwrap_or(self.num_rows), self.num_rows);
             *n = Some(self.num_rows)
         }
         self.entries.push(entry);
@@ -539,12 +514,10 @@ impl DataBlock {
         self.add_entry(column.into());
     }
 
+    #[inline]
     pub fn add_const_column(&mut self, scalar: Scalar, data_type: DataType) {
-        self.entries.push(BlockEntry(InnerEntry::Const(
-            scalar,
-            data_type,
-            Some(self.num_rows),
-        )));
+        self.entries
+            .push(BlockEntry::Const(scalar, data_type, Some(self.num_rows)));
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
     }
@@ -736,7 +709,6 @@ impl DataBlock {
 
     #[inline]
     pub fn get_last_column(&self) -> &Column {
-        debug_assert!(!self.entries.is_empty());
         self.entries.last().unwrap().as_column().unwrap()
     }
 
@@ -761,15 +733,13 @@ impl DataBlock {
         let num_rows = self.num_rows();
         self.columns()
             .iter()
-            .map(|entry| match &entry.0 {
-                InnerEntry::Column(Column::Nullable(col))
-                    if col.validity_ref().true_count() == 0 =>
-                {
+            .map(|entry| match entry {
+                BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,
                     // only the size of the validity bitmap is counted.
                     col.validity.as_slice().0.len()
                 }
-                InnerEntry::Const(s, data_type, _) => {
+                BlockEntry::Const(s, data_type, _) => {
                     s.as_ref().estimated_scalar_repeat_size(num_rows, data_type)
                 }
                 _ => entry.memory_size(),

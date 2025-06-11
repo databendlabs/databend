@@ -44,7 +44,7 @@ impl MutationSplitMutator {
         }
 
         let filter = match split_entry.as_column().unwrap() {
-            Column::Nullable(nullable_column) => nullable_column.validity_ref().clone(),
+            Column::Nullable(nullable_column) => nullable_column.validity().clone(),
             _ => {
                 return Err(ErrorCode::InvalidRowIdIndex(
                     "row id column should be a nullable column, but it's a normal column",
