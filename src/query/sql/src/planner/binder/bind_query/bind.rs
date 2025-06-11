@@ -72,8 +72,10 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let mut with = query.with.clone();
         if self.ctx.get_settings().get_enable_auto_materialize_cte()? {
-            if let Some(with) = &mut with {
-                self.auto_materialize_cte(with, query)?;
+            if let Some(with    ) = &mut with {
+                if !with.recursive {
+                    self.auto_materialize_cte(with, query)?;
+                }
             }
         }
         // Initialize cte map.
