@@ -25,12 +25,14 @@ use opendal::raw::LayeredAccess;
 use opendal::raw::OpCreateDir;
 use opendal::raw::OpDelete;
 use opendal::raw::OpList;
+use opendal::raw::OpPresign;
 use opendal::raw::OpRead;
 use opendal::raw::OpStat;
 use opendal::raw::OpWrite;
 use opendal::raw::RpCreateDir;
 use opendal::raw::RpDelete;
 use opendal::raw::RpList;
+use opendal::raw::RpPresign;
 use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
@@ -174,6 +176,15 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
                 let r = RuntimeIO::new(r, self.runtime.clone());
                 (rp, r)
             })
+    }
+
+    async fn presign(&self, path: &str, args: OpPresign) -> Result<RpPresign> {
+        let op = self.inner.clone();
+        let path = path.to_string();
+        self.runtime
+            .spawn(async move { op.presign(&path, args).await })
+            .await
+            .expect("join must success")
     }
 
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
