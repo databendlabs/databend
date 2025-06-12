@@ -15,6 +15,7 @@ databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
 chrono = { workspace = true }
+log = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true }

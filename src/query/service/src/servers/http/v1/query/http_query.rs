@@ -562,7 +562,7 @@ impl HttpQuery {
         let user_name = session.get_current_user()?.name;
 
         if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
+            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session, &query_id);
         };
         let has_temp_table_before_run = !session.temp_tbl_mgr().lock().is_empty();
 

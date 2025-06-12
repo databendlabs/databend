@@ -215,7 +215,7 @@ impl Database for IcebergDatabase {
                     db_id: 0,
                     db_name: req.db_name().to_string(),
                     engine: req.table_meta.engine.to_string(),
-                    session_id: "".to_string(),
+                    temp_prefix: "".to_string(),
                 })
                 .await?;
             }

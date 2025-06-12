@@ -79,7 +79,10 @@ impl SimpleTableFunc for FuseVacuumTemporaryTable {
                 .is_none()
             {
                 let path = format!("{}/{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name, session_id);
-                info!("Removing temporary table: {}", path);
+                info!(
+                    "[TEMP TABLE] session={session_id} vacuum temporary table: {}",
+                    path
+                );
                 op.remove_all(&path).await?;
             }
         }
