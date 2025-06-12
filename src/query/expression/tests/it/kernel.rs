@@ -122,10 +122,12 @@ pub fn test_pass() {
         for i in 0..3 {
             let mut columns = Vec::with_capacity(3);
             columns.push(UInt8Type::from_data(vec![(i + 10) as u8; 4]).into());
-            columns.push(UInt8Type::from_data_with_validity(
-                vec![(i + 10) as u8; 4],
-                vec![true, true, false, false],
-            ));
+            columns.push(
+                UInt8Type::from_data_with_validity(vec![(i + 10) as u8; 4], vec![
+                    true, true, false, false,
+                ])
+                .into(),
+            );
             blocks.push(DataBlock::new(columns, 4))
         }
 
