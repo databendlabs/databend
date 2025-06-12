@@ -80,11 +80,15 @@ impl DataBlock {
                 }
 
                 // if they are all same scalars
-                if entries[0].is_const() {
+                if let Some((scalar, data_type, _)) = entries[0].as_const() {
                     let all_same_scalar =
                         entries.iter().copied().map(BlockEntry::value).all_equal();
                     if all_same_scalar {
-                        return entries[0].clone();
+                        return BlockEntry::new_const_column(
+                            data_type.clone(),
+                            scalar.clone(),
+                            result_size,
+                        );
                     }
                 }
 

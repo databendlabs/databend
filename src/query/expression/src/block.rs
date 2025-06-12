@@ -68,8 +68,7 @@ impl BlockEntry {
     }
 
     pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
-        #[cfg(debug_assertions)]
-        check_type(&data_type, &Value::Scalar(scalar.clone()));
+        debug_assert!(scalar.as_ref().is_value_of_type(&data_type));
         BlockEntry::Const(scalar, data_type, num_rows)
     }
 
@@ -240,12 +239,13 @@ impl DataBlock {
     fn check_columns_valid(entries: &[BlockEntry], num_rows: usize) -> Result<()> {
         for entry in entries.iter() {
             match entry {
-                BlockEntry::Const(_, _, n) => {
+                BlockEntry::Const(scalar, data_type, n) => {
                     if *n != num_rows {
                         return Err(ErrorCode::Internal(format!(
                             "DataBlock corrupted, const column length mismatch, const rows: {n:?}, num_rows: {num_rows}",
                         )));
                     }
+                    debug_assert!(scalar.as_ref().is_value_of_type(data_type));
                 }
                 BlockEntry::Column(c) => {
                     #[cfg(debug_assertions)]
@@ -505,8 +505,11 @@ impl DataBlock {
 
     #[inline]
     pub fn add_const_column(&mut self, scalar: Scalar, data_type: DataType) {
-        self.entries
-            .push(BlockEntry::Const(scalar, data_type, self.num_rows));
+        self.entries.push(BlockEntry::new_const_column(
+            data_type,
+            scalar,
+            self.num_rows,
+        ));
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
     }
@@ -768,26 +771,6 @@ impl PartialEq for Box<dyn BlockMetaInfo> {
 impl Clone for Box<dyn BlockMetaInfo> {
     fn clone(&self) -> Self {
         self.clone_self()
-    }
-}
-
-fn check_type(data_type: &DataType, value: &Value<AnyType>) {
-    match value {
-        Value::Scalar(Scalar::Null) => {
-            assert!(data_type.is_nullable_or_null());
-        }
-        Value::Scalar(Scalar::Tuple(fields)) => {
-            // Check if data_type is Tuple type.
-            let data_type = data_type.remove_nullable();
-            assert!(matches!(data_type, DataType::Tuple(_)));
-            if let DataType::Tuple(dts) = data_type {
-                for (s, dt) in fields.iter().zip(dts.iter()) {
-                    check_type(dt, &Value::Scalar(s.clone()));
-                }
-            }
-        }
-        Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
-        Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
 }
 

@@ -190,12 +190,8 @@ impl PlanFragment {
                     for i in 0..values.num_rows {
                         indices.push((i % num_executors) as u32);
                     }
-                    #[cfg(debug_assertions)]
-                    block.check_valid().unwrap();
                     let blocks = block.scatter(&indices, num_executors)?;
                     for (executor, block) in executors.iter().zip(blocks) {
-                        #[cfg(debug_assertions)]
-                        block.check_valid().unwrap();
                         let columns = block
                             .columns()
                             .iter()
