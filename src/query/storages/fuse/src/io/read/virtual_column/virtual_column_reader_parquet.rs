@@ -175,7 +175,7 @@ impl VirtualColumnReader {
         let record_batches = if let Some(virtual_data) = virtual_data {
             let columns_chunks = virtual_data.data.columns_chunks()?;
             let chunks = column_chunks_to_record_batch(
-                &self.virtual_column_info.schema,
+                &virtual_data.schema,
                 virtual_data.num_rows,
                 &columns_chunks,
                 &virtual_data.compression,
