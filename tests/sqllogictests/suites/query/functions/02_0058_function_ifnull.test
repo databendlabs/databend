@@ -87,6 +87,12 @@ NULL 0 0
 NULL 1 1
 NULL NULL NULL
 
+query R
+select ifnull(number::string, 0) from numbers(3);
+----
+0.00000
+1.00000
+2.00000
+
 statement ok
 DROP TABLE t
-

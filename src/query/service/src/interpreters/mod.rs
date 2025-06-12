@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod access;
+mod access_log;
 pub(crate) mod common;
 mod hook;
 mod interpreter;

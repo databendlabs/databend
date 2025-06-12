@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use jiff::civil::date;
 use jiff::civil::datetime;
 use jiff::civil::Date;
+use jiff::civil::Time;
 use jiff::civil::Weekday;
 use jiff::tz::TimeZone;
 use jiff::SignedDuration;
@@ -806,6 +807,59 @@ pub fn today_date(now: &Zoned, tz: &TimeZone) -> i32 {
         .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
         .unwrap()
         .get_days()
+}
+
+// Summer Time in 1990 began at 2 a.m. (Beijing time) on Sunday, April 15th and ended at 2 a.m. (Beijing Daylight Saving Time) on Sunday, September 16th.
+// During this period, the summer working hours will be implemented, namely from April 15th to September 16th.
+// The working hours of all departments of The State Council are from 8 a.m. to 12 p.m. and from 1:30 p.m. to 5:30 p.m. The winter working hours will be implemented after September 17th.
+pub fn calc_date_to_timestamp(val: i32, tz: TimeZone) -> std::result::Result<i64, String> {
+    let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
+    let z = ts.to_timestamp(tz.clone());
+
+    // tomorrow midnight
+    let tomorrow_date = z
+        .date()
+        .tomorrow()
+        .map_err(|e| format!("Calc tomorrow midnight with error {}", e))?;
+
+    let tomorrow_zoned = tomorrow_date.to_zoned(tz.clone()).unwrap_or(z.clone());
+    let tomorrow_is_dst = tz.to_offset_info(tomorrow_zoned.timestamp()).dst().is_dst();
+
+    // yesterday midnight
+    let yesterday_date = z
+        .date()
+        .yesterday()
+        .map_err(|e| format!("Calc yesterday midnight with error {}", e))?;
+    let yesterday_zoned = yesterday_date.to_zoned(tz.clone()).unwrap_or(z.clone());
+    let yesterday_is_std = tz
+        .to_offset_info(yesterday_zoned.timestamp())
+        .dst()
+        .is_std();
+
+    // today midnight
+    let today_datetime_midnight = z.date().to_datetime(Time::midnight());
+    let today_zoned = if let Some(tz) = tz.iana_name() {
+        today_datetime_midnight
+            .in_tz(tz)
+            .map_err(|e| format!("Calc today midnight with error {}", e))?
+    } else {
+        return Err("Timezone can not decode as IANA time zone".to_string());
+    };
+    let today_is_dst = tz.to_offset_info(today_zoned.timestamp()).dst().is_dst();
+
+    let tz_offset_micros = tz
+        .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
+        .unwrap()
+        .as_microsecond();
+
+    let base_res = ts + tz_offset_micros;
+
+    // Origin：(today_is_dst && tomorrow_is_dst && !yesterday_is_std) || (today_is_dst && !tomorrow_is_dst && yesterday_is_std)
+    if today_is_dst && (tomorrow_is_dst != yesterday_is_std) {
+        Ok(base_res - 3600 * MICROS_PER_SEC)
+    } else {
+        Ok(base_res)
+    }
 }
 
 pub trait ToNumber<N> {
