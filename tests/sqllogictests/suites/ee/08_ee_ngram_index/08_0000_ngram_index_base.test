@@ -37,7 +37,7 @@ select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram
 4 1049482 1048617
 
 statement ok
-CREATE TABLE t2 (id int, content string)
+CREATE TABLE t2 (id int, content string, name string)
 
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 0
@@ -50,6 +50,9 @@ CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 511
 
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 10485761
+
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content, name) gram_size = 5 bloom_size = 1048576
 
 statement ok
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576

@@ -82,7 +82,7 @@ impl BloomBlockFilterReader for Location {
 
 /// load index column data
 #[fastrace::trace]
-async fn load_bloom_filter_by_columns<'a>(
+pub async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
     index_path: &'a str,

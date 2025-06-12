@@ -18,6 +18,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
@@ -45,6 +46,7 @@ pub trait TableIndexHandler: Sync + Send {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         index_name: String,
+        index_schema: TableSchemaRef,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
@@ -84,11 +86,20 @@ impl TableIndexHandlerWrapper {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         index_name: String,
+        index_schema: TableSchemaRef,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.handler
-            .do_refresh_table_index(index_ty, table, ctx, index_name, segment_locs, pipeline)
+            .do_refresh_table_index(
+                index_ty,
+                table,
+                ctx,
+                index_name,
+                index_schema,
+                segment_locs,
+                pipeline,
+            )
             .await
     }
 }

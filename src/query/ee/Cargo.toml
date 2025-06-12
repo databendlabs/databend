@@ -33,7 +33,6 @@ databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
-databend-common-storages-parquet = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
@@ -60,7 +59,6 @@ futures-util = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-parquet = { workspace = true, features = ["async", "arrow"] }
 tempfile = { workspace = true }
 uuid = { workspace = true }
 

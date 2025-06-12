@@ -19,6 +19,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
@@ -59,12 +60,21 @@ impl TableIndexHandler for RealTableIndexHandler {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         index_name: String,
+        index_schema: TableSchemaRef,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         match index_ty {
             TableIndexType::Ngram => {
-                do_refresh_ngram_index(table, ctx, index_name, segment_locs, pipeline).await?;
+                do_refresh_ngram_index(
+                    table,
+                    ctx,
+                    index_name,
+                    index_schema,
+                    segment_locs,
+                    pipeline,
+                )
+                .await?;
             }
             _ => {
                 return Err(ErrorCode::RefreshIndexError("Only Ngram support Refresh"));

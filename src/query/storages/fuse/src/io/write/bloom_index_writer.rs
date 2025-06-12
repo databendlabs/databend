@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,10 +20,13 @@ use std::sync::Arc;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet;
@@ -35,10 +39,27 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::BlockRea
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::TableCompression;
+use itertools::Itertools;
 use opendal::Operator;
 
 use crate::io::BlockReader;
 use crate::FuseStorageFormat;
+
+pub struct NewNgramIndexColumn {
+    column_id: ColumnId,
+    column: BlockEntry,
+    ngram_args: NgramArgs,
+}
+
+impl NewNgramIndexColumn {
+    pub fn new(column_id: ColumnId, column: BlockEntry, ngram_args: NgramArgs) -> Self {
+        Self {
+            column_id,
+            column,
+            ngram_args,
+        }
+    }
+}
 
 pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
@@ -49,11 +70,51 @@ pub struct BloomIndexState {
 }
 
 impl BloomIndexState {
-    pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
-        let index_block = bloom_index.serialize_to_data_block()?;
+    pub fn from_bloom_index(
+        bloom_index: &BloomIndex,
+        location: Location,
+        new_index_column: Option<NewNgramIndexColumn>,
+    ) -> Result<Self> {
+        let mut index_block = bloom_index.serialize_to_data_block()?;
+        let filter_schema = if let Some(NewNgramIndexColumn {
+            column_id,
+            column: new_column,
+            ngram_args,
+        }) = new_index_column
+        {
+            let ngram_name = BloomIndex::build_filter_ngram_name(
+                column_id,
+                ngram_args.gram_size(),
+                ngram_args.bloom_size(),
+            );
+            let mut new_filter_schema = TableSchema::clone(&bloom_index.filter_schema);
+            let ngram_field = TableField::new(&ngram_name, TableDataType::Binary);
+
+            match bloom_index
+                .filter_schema
+                .fields()
+                .iter()
+                .find_position(|field| field.name().cmp(&ngram_name).is_gt())
+            {
+                None => {
+                    new_filter_schema.add_columns(&[ngram_field])?;
+                    index_block.add_column(new_column);
+                }
+                Some((offset, _)) => {
+                    let row = index_block.num_rows();
+                    let mut columns = index_block.take_columns();
+                    columns.insert(offset, new_column);
+                    new_filter_schema.add_column(&ngram_field, offset)?;
+
+                    index_block = DataBlock::new(columns, row);
+                }
+            }
+            Cow::Owned(Arc::new(new_filter_schema))
+        } else {
+            Cow::Borrowed(&bloom_index.filter_schema)
+        };
         // Calculate ngram index size
-        let ngram_indexes = &bloom_index
-            .filter_schema
+        let ngram_indexes = filter_schema
             .fields()
             .iter()
             .enumerate()
@@ -72,7 +133,7 @@ impl BloomIndexState {
         };
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
         let _ = blocks_to_parquet(
-            &bloom_index.filter_schema,
+            &filter_schema,
             vec![index_block],
             &mut data,
             TableCompression::None,
@@ -100,7 +161,7 @@ impl BloomIndexState {
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
-            Ok(Some(Self::from_bloom_index(&bloom_index, location)?))
+            Ok(Some(Self::from_bloom_index(&bloom_index, location, None)?))
         } else {
             Ok(None)
         }
@@ -119,6 +180,7 @@ impl BloomIndexState {
     }
 }
 
+#[derive(Clone)]
 pub struct BloomIndexRebuilder {
     pub table_ctx: Arc<dyn TableContext>,
     pub table_schema: TableSchemaRef,
@@ -177,7 +239,11 @@ impl BloomIndexRebuilder {
         match maybe_bloom_index {
             None => Ok(None),
             Some(bloom_index) => Ok(Some((
-                BloomIndexState::from_bloom_index(&bloom_index, bloom_index_location.clone())?,
+                BloomIndexState::from_bloom_index(
+                    &bloom_index,
+                    bloom_index_location.clone(),
+                    None,
+                )?,
                 bloom_index,
             ))),
         }

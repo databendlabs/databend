@@ -82,8 +82,8 @@ impl Interpreter for RefreshTableIndexInterpreter {
         let table_meta = &table.get_table_info().meta;
         let Some(index) = table_meta.indexes.get(&index_name) else {
             return Err(ErrorCode::RefreshIndexError(format!(
-                "Inverted index {} does not exist",
-                index_name
+                "{} index {} does not exist",
+                self.plan.index_type, index_name
             )));
         };
         let mut index_fields = Vec::with_capacity(index.column_ids.len());
@@ -97,8 +97,8 @@ impl Interpreter for RefreshTableIndexInterpreter {
         }
         if index_fields.len() != index.column_ids.len() {
             return Err(ErrorCode::RefreshIndexError(format!(
-                "Inverted index {} is invalid",
-                index_name
+                "{} index {} is invalid",
+                self.plan.index_type, index_name
             )));
         }
         let index_version = index.version.clone();
@@ -130,6 +130,7 @@ impl Interpreter for RefreshTableIndexInterpreter {
                         fuse_table,
                         self.ctx.clone(),
                         index_name,
+                        index_schema,
                         segment_locs,
                         &mut build_res.main_pipeline,
                     )

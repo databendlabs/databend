@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::slice;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Projection;
@@ -23,9 +24,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FieldIndex;
-use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
@@ -33,11 +34,15 @@ use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::index::filters::BlockFilter;
+use databend_common_storages_fuse::index::BloomIndexBuilder;
+use databend_common_storages_fuse::index::BloomIndexMeta;
+use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_index_meta;
 use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::BloomIndexState;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::io::NewNgramIndexColumn;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use databend_common_storages_fuse::operations::CommitSink;
@@ -47,9 +52,10 @@ use databend_common_storages_fuse::operations::MutationLogs;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_parquet::ParquetFileReader;
 use databend_query::storages::index::BloomIndex;
 use databend_query::storages::index::NgramArgs;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -58,13 +64,12 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
-use opendal::Reader;
-use parquet::arrow::async_reader::AsyncFileReader;
 
 pub async fn do_refresh_ngram_index(
     fuse_table: &FuseTable,
     ctx: Arc<dyn TableContext>,
     index_name: String,
+    _index_schema: TableSchemaRef,
     segment_locs: Option<Vec<Location>>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
@@ -73,15 +78,26 @@ pub async fn do_refresh_ngram_index(
         .meta
         .indexes
         .get(&index_name)
-        .ok_or_else(|| ErrorCode::RefreshIndexError("Ngram index: {index_name} not found"))?;
+        .ok_or_else(|| {
+            ErrorCode::RefreshIndexError(format!("Ngram index: {index_name} not found"))
+        })?;
     let Some(snapshot) = fuse_table.read_table_snapshot().await? else {
         // no snapshot
         return Ok(());
     };
-
     let table_schema = &fuse_table.get_table_info().meta.schema;
-    // Read blocks in segment.
-    let projection = Projection::Columns((0..table_schema.fields().len()).collect());
+    let index_column_id = index.column_ids[0];
+    let projection = Projection::Columns(vec![table_schema
+        .fields()
+        .iter()
+        .position(|f| f.column_id() == index_column_id)
+        .unwrap()]);
+    let index_ngram_args = FuseTable::create_ngram_index_args(
+        &fuse_table.get_table_info().meta,
+        &projection.project_schema(table_schema),
+    )?
+    .pop()
+    .unwrap();
 
     let block_reader =
         fuse_table.create_block_reader(ctx.clone(), projection, false, false, false)?;
@@ -103,7 +119,6 @@ pub async fn do_refresh_ngram_index(
         return Ok(());
     }
     let operator = fuse_table.get_operator_ref();
-    let ngram_args = FuseTable::create_ngram_index_args(&fuse_table.get_table_info().meta)?;
 
     // Read the segment infos and collect the block metas that need to generate the index.
     let mut block_metas = VecDeque::new();
@@ -124,25 +139,18 @@ pub async fn do_refresh_ngram_index(
                     &block_meta.location.0,
                 );
             // only generate bloom index if it is not exist.
-            if let Ok(content_length) = operator
+            let bloom_meta = if let Ok(content_length) = operator
                 .stat(&index_location)
                 .await
                 .map(|meta| meta.content_length())
             {
                 let bloom_index_meta =
                     load_index_meta(operator.clone(), &index_location, content_length).await?;
-                let index_column_id = index.column_ids[0];
 
-                let Some(ngram_arg) = ngram_args
-                    .iter()
-                    .find(|arg| arg.field().column_id() == index_column_id)
-                else {
-                    continue;
-                };
                 let ngram_index_name = BloomIndex::build_filter_ngram_name(
                     index_column_id,
-                    ngram_arg.gram_size(),
-                    ngram_arg.bloom_size(),
+                    index_ngram_args.gram_size(),
+                    index_ngram_args.bloom_size(),
                 );
                 if bloom_index_meta
                     .columns
@@ -151,11 +159,20 @@ pub async fn do_refresh_ngram_index(
                 {
                     continue;
                 }
-            }
-            block_meta_index_map.insert(block_meta.location.clone(), BlockMetaIndex {
-                segment_idx,
-                block_idx,
-            });
+                Some(bloom_index_meta)
+            } else {
+                None
+            };
+            block_meta_index_map.insert(
+                block_meta.location.clone(),
+                (
+                    BlockMetaIndex {
+                        segment_idx,
+                        block_idx,
+                    },
+                    bloom_meta,
+                ),
+            );
             block_metas.push_back(block_meta);
         }
     }
@@ -166,9 +183,6 @@ pub async fn do_refresh_ngram_index(
     let settings = ReadSettings::from_ctx(&ctx)?;
     let write_settings = fuse_table.get_write_settings();
     let storage_format = write_settings.storage_format;
-    let bloom_columns_map = fuse_table
-        .bloom_index_cols()
-        .bloom_index_fields(table_schema.clone(), BloomIndex::supported_type)?;
 
     pipeline.add_source(
         |output| {
@@ -191,9 +205,9 @@ pub async fn do_refresh_ngram_index(
         NgramIndexTransform::new(
             ctx.clone(),
             operator.clone(),
-            bloom_columns_map.clone(),
-            ngram_args.clone(),
+            index_ngram_args.clone(),
             block_meta_index_map.clone(),
+            index_column_id,
         )
     });
 
@@ -288,25 +302,25 @@ impl AsyncSource for NgramIndexSource {
 pub struct NgramIndexTransform {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
-    bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-    ngram_args: Vec<NgramArgs>,
-    block_meta_index_map: HashMap<Location, BlockMetaIndex>,
+    index_ngram_args: NgramArgs,
+    block_meta_index_map: HashMap<Location, (BlockMetaIndex, Option<Arc<BloomIndexMeta>>)>,
+    ngram_column_id: ColumnId,
 }
 
 impl NgramIndexTransform {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         operator: Operator,
-        bloom_columns_map: BTreeMap<FieldIndex, TableField>,
-        ngram_args: Vec<NgramArgs>,
-        block_meta_index_map: HashMap<Location, BlockMetaIndex>,
+        index_ngram_args: NgramArgs,
+        block_meta_index_map: HashMap<Location, (BlockMetaIndex, Option<Arc<BloomIndexMeta>>)>,
+        ngram_column_id: ColumnId,
     ) -> Self {
         Self {
             ctx,
             operator,
-            bloom_columns_map,
-            ngram_args,
+            index_ngram_args,
             block_meta_index_map,
+            ngram_column_id,
         }
     }
 }
@@ -322,27 +336,74 @@ impl AsyncTransform for NgramIndexTransform {
             .and_then(BlockMeta::downcast_ref_from)
             .unwrap();
 
-        let index_location =
-            TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
-                &block_meta.location.0,
-            );
+        let index_path = TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(
+            &block_meta.location.0,
+        );
 
         let mut new_block_meta = block_meta.clone();
-        if let Some(state) = BloomIndexState::from_data_block(
-            self.ctx.clone(),
-            &data_block,
-            (index_location.clone(), BlockFilter::VERSION),
-            self.bloom_columns_map.clone(),
-            &self.ngram_args,
-        )? {
-            new_block_meta.bloom_filter_index_size = state.size();
-            new_block_meta.ngram_filter_index_size = state.ngram_size();
-            write_data(state.data(), &self.operator, &index_location).await?;
-        }
-        let block_meta_index = self
+        let index_location = (index_path.clone(), BlockFilter::VERSION);
+
+        let (block_meta_index, bloom_index_meta) = self
             .block_meta_index_map
             .remove(&block_meta.location)
             .unwrap();
+
+        let mut builder = BloomIndexBuilder::create(
+            self.ctx.get_function_context()?,
+            BTreeMap::new(),
+            slice::from_ref(&self.index_ngram_args),
+        )?;
+        builder.add_block(&data_block)?;
+
+        if let Some(new_ngram_index) = builder.finalize()? {
+            let (index, new_ngram_index_column) = if let Some(bloom_index_meta) = bloom_index_meta {
+                let index_columns = bloom_index_meta
+                    .columns
+                    .iter()
+                    .map(|(name, _)| name.to_string())
+                    .collect::<Vec<_>>();
+                let filter = load_bloom_filter_by_columns(
+                    self.operator.clone(),
+                    &index_columns,
+                    &index_path,
+                    block_meta.bloom_filter_index_size,
+                )
+                .await?;
+                let old_index = BloomIndex::from_filter_block(
+                    self.ctx.get_function_context()?,
+                    filter.filter_schema,
+                    filter.filters,
+                    index_location.1,
+                )?;
+                let new_ngram_column = new_ngram_index
+                    .serialize_to_data_block()?
+                    .take_columns()
+                    .pop()
+                    .unwrap();
+
+                (
+                    old_index,
+                    Some(NewNgramIndexColumn::new(
+                        self.ngram_column_id,
+                        new_ngram_column,
+                        self.index_ngram_args.clone(),
+                    )),
+                )
+            } else {
+                (new_ngram_index, None)
+            };
+            let state =
+                BloomIndexState::from_bloom_index(&index, index_location, new_ngram_index_column)?;
+
+            // remove old bloom index meta
+            if let Some(cache) = CacheManager::instance().get_bloom_index_meta_cache() {
+                cache.evict(&index_path);
+            }
+
+            new_block_meta.bloom_filter_index_size = state.size();
+            new_block_meta.ngram_filter_index_size = state.ngram_size();
+            write_data(state.data(), &self.operator, &index_path).await?;
+        }
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: new_block_meta,
             draft_virtual_block_meta: None,
