@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::TableDataType;
-use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -31,10 +27,10 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_app::schema::TableMeta;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_table_meta::meta::Location;
-
-use crate::io::write::WriteSettings;
+use databend_storages_common_table_meta::table::TableCompression;
 
 #[derive(Debug, Clone)]
 pub struct VectorIndexState {
@@ -89,14 +85,10 @@ impl VectorIndexBuilder {
         }
     }
 
-    pub fn add_block(
-        &self,
-        block: &DataBlock,
-        write_settings: &WriteSettings,
-        location: Location,
-    ) -> Result<VectorIndexState> {
+    pub fn add_block(&self, block: &DataBlock, location: Location) -> Result<VectorIndexState> {
         let mut index_fields = Vec::new();
         let mut index_columns = Vec::new();
+        let mut metadata = BTreeMap::new();
 
         for (vector_index, offsets) in &self.vector_indexes {
             let m = match vector_index.options.get("m") {
@@ -110,40 +102,37 @@ impl VectorIndexBuilder {
 
             for (column_id, offset) in vector_index.column_ids.iter().zip(offsets.iter()) {
                 let block_entry = block.get_by_offset(*offset);
-                let column = block_entry.to_column(block.num_rows());
-                // println!("column={:?}", column);
-                let (graph_links, graph_data) = HNSWIndex::build(m, ef_construct, column)?;
-
-                let graph_links_column =
-                    BlockEntry::new(DataType::Binary, Value::Scalar(graph_links));
-                let graph_data_column =
-                    BlockEntry::new(DataType::Binary, Value::Scalar(graph_data));
-                index_columns.push(graph_links_column);
-                index_columns.push(graph_data_column);
-
-                let graph_links_name = format!("{}-graph_links", column_id);
-                let graph_links_field = TableField::new(&graph_links_name, TableDataType::Binary);
-                let graph_data_name = format!("{}-graph_data", column_id);
-                let graph_data_field = TableField::new(&graph_data_name, TableDataType::Binary);
-
-                index_fields.push(graph_links_field);
-                index_fields.push(graph_data_field);
+                let column = block_entry.to_column();
+                // Generate encoded vectors for each of the three different DistanceTypes,
+                // so that the indexes can be used by the various vector functions.
+                let distance_types = vec![DistanceType::Dot, DistanceType::L1, DistanceType::L2];
+                for distance_type in distance_types {
+                    let (mut hnsw_index_fields, mut hnsw_index_columns) = HNSWIndex::build(
+                        m,
+                        ef_construct,
+                        *column_id,
+                        column.clone(),
+                        distance_type,
+                    )?;
+                    index_fields.append(&mut hnsw_index_fields);
+                    index_columns.append(&mut hnsw_index_columns);
+                }
             }
+
+            metadata.insert(vector_index.name.clone(), vector_index.version.clone());
         }
 
         let index_schema = TableSchemaRefExt::create(index_fields);
         let index_block = DataBlock::new(index_columns, 1);
-        println!("index_schema={:?}", index_schema);
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-        let _file_meta = blocks_to_parquet(
+        let _ = blocks_to_parquet(
             index_schema.as_ref(),
             vec![index_block],
             &mut data,
-            write_settings.table_compression,
+            TableCompression::Zstd,
         )?;
 
-        println!("data.len={:?}", data.len());
         let size = data.len() as u64;
         let state = VectorIndexState {
             location,

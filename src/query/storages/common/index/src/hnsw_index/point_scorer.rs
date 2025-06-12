@@ -16,30 +16,88 @@
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::F32;
 use databend_common_expression::Column;
-use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_vector::cosine_distance;
+use databend_common_vector::l1_distance;
+use databend_common_vector::l2_distance;
 
 use crate::hnsw_index::common::types::PointOffsetType;
 use crate::hnsw_index::common::types::ScoreType;
 use crate::hnsw_index::common::types::ScoredPointOffset;
+use crate::hnsw_index::quantization::encoded_vectors::EncodedVectors;
+use crate::hnsw_index::quantization::EncodedQueryU8;
+use crate::hnsw_index::quantization::EncodedVectorsU8;
+use crate::DistanceType;
 
-pub enum RawScorer {
-    Index(usize),
-    Scalar(Scalar),
+pub enum RawScorer<'a> {
+    Original(OriginalRawScorer<'a>),
+    Quantized(QuantizedRawScorer<'a>),
+    #[allow(dead_code)]
+    Query(QueryRawScorer<'a>),
+}
+
+pub struct OriginalRawScorer<'a> {
+    pub distance_type: DistanceType,
+    pub index: usize,
+    pub column: &'a Column,
+}
+
+pub struct QuantizedRawScorer<'a> {
+    pub query: EncodedQueryU8,
+    pub vector: &'a EncodedVectorsU8<Vec<u8>>,
+}
+
+#[allow(dead_code)]
+pub struct QueryRawScorer<'a> {
+    pub distance_type: DistanceType,
+    pub scalar: ScalarRef<'a>,
+    pub column: &'a Column,
+}
+
+impl RawScorer<'_> {
+    pub fn score_point(&self, point_id: PointOffsetType) -> ScoreType {
+        match self {
+            RawScorer::Original(original) => {
+                let self_val = unsafe { original.column.index_unchecked(original.index) };
+                let point_val = unsafe { original.column.index_unchecked(point_id as usize) };
+                calculate_score(original.distance_type, self_val, point_val)
+            }
+            RawScorer::Query(query) => {
+                let point_val = unsafe { query.column.index_unchecked(point_id as usize) };
+                calculate_score(query.distance_type, query.scalar.clone(), point_val)
+            }
+            RawScorer::Quantized(quantized) => {
+                quantized.vector.score_point(&quantized.query, point_id)
+            }
+        }
+    }
+
+    pub fn score_internal(&self, point_a: PointOffsetType, point_b: PointOffsetType) -> ScoreType {
+        match self {
+            RawScorer::Original(original) => {
+                let point_a_val = unsafe { original.column.index_unchecked(point_a as usize) };
+                let point_b_val = unsafe { original.column.index_unchecked(point_b as usize) };
+                calculate_score(original.distance_type, point_a_val, point_b_val)
+            }
+            RawScorer::Query(query) => {
+                let point_a_val = unsafe { query.column.index_unchecked(point_a as usize) };
+                let point_b_val = unsafe { query.column.index_unchecked(point_b as usize) };
+                calculate_score(query.distance_type, point_a_val, point_b_val)
+            }
+            RawScorer::Quantized(quantized) => quantized.vector.score_internal(point_a, point_b),
+        }
+    }
 }
 
 pub struct FilteredScorer<'a> {
-    raw_scorer: &'a RawScorer,
-    column: &'a Column,
+    raw_scorer: &'a RawScorer<'a>,
     points_buffer: Vec<ScoredPointOffset>,
 }
 
 impl<'a> FilteredScorer<'a> {
-    pub fn new(raw_scorer: &'a RawScorer, column: &'a Column) -> Self {
+    pub fn new(raw_scorer: &'a RawScorer) -> Self {
         FilteredScorer {
             raw_scorer,
-            column,
             points_buffer: Vec::new(),
         }
     }
@@ -70,16 +128,8 @@ impl<'a> FilteredScorer<'a> {
                 .resize_with(limit, ScoredPointOffset::default);
         }
         let mut size: usize = 0;
-        let self_val = match self.raw_scorer {
-            RawScorer::Index(index) => unsafe { self.column.index_unchecked(*index) },
-            RawScorer::Scalar(scalar) => scalar.as_ref(),
-        };
-
         for point_id in point_ids.iter().copied() {
-            let point_val = unsafe { self.column.index_unchecked(point_id as usize) };
-            let score = calculate_score(self_val.clone(), point_val);
-            // println!("---point_id={:?} score={:?}", point_id, score);
-
+            let score = self.score_point(point_id);
             self.points_buffer[size] = ScoredPointOffset {
                 idx: point_id,
                 score,
@@ -94,22 +144,15 @@ impl<'a> FilteredScorer<'a> {
     }
 
     pub fn score_point(&self, point_id: PointOffsetType) -> ScoreType {
-        let self_val = match self.raw_scorer {
-            RawScorer::Index(index) => unsafe { self.column.index_unchecked(*index) },
-            RawScorer::Scalar(scalar) => scalar.as_ref(),
-        };
-        let point_val = unsafe { self.column.index_unchecked(point_id as usize) };
-        calculate_score(self_val, point_val)
+        self.raw_scorer.score_point(point_id)
     }
 
     pub fn score_internal(&self, point_a: PointOffsetType, point_b: PointOffsetType) -> ScoreType {
-        let point_a_val = unsafe { self.column.index_unchecked(point_a as usize) };
-        let point_b_val = unsafe { self.column.index_unchecked(point_b as usize) };
-        calculate_score(point_a_val, point_b_val)
+        self.raw_scorer.score_internal(point_a, point_b)
     }
 }
 
-fn calculate_score(lhs: ScalarRef, rhs: ScalarRef) -> f32 {
+fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) -> f32 {
     match (lhs, rhs) {
         (
             ScalarRef::Vector(VectorScalarRef::Int8(lhs)),
@@ -117,7 +160,11 @@ fn calculate_score(lhs: ScalarRef, rhs: ScalarRef) -> f32 {
         ) => {
             let l: Vec<_> = lhs.iter().map(|v| *v as f32).collect();
             let r: Vec<_> = rhs.iter().map(|v| *v as f32).collect();
-            cosine_distance(l.as_slice(), r.as_slice()).unwrap()
+            match distance_type {
+                DistanceType::Dot => cosine_distance(&l, &r).unwrap(),
+                DistanceType::L1 => l1_distance(&l, &r).unwrap(),
+                DistanceType::L2 => l2_distance(&l, &r).unwrap(),
+            }
         }
         (
             ScalarRef::Vector(VectorScalarRef::Float32(lhs)),
@@ -125,7 +172,11 @@ fn calculate_score(lhs: ScalarRef, rhs: ScalarRef) -> f32 {
         ) => {
             let l = unsafe { std::mem::transmute::<&[F32], &[f32]>(lhs) };
             let r = unsafe { std::mem::transmute::<&[F32], &[f32]>(rhs) };
-            cosine_distance(l, r).unwrap()
+            match distance_type {
+                DistanceType::Dot => cosine_distance(l, r).unwrap(),
+                DistanceType::L1 => l1_distance(l, r).unwrap(),
+                DistanceType::L2 => l2_distance(l, r).unwrap(),
+            }
         }
         (_, _) => 0.0,
     }

@@ -28,7 +28,7 @@ const HEADER_BITS: u8 = 5;
 
 /// A specialized packer to pack HNSW graph links.
 ///
-/// It assumes that the first `m` (or `m0`) values could be re-orderd for better
+/// It assumes that the first `m` (or `m0`) values could be re-ordered for better
 /// compression.
 ///
 /// Parameters:

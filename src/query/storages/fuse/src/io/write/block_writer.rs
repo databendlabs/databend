@@ -183,11 +183,8 @@ impl BlockBuilder {
         }
         let vector_index_state = if let Some(ref vector_index_builder) = self.vector_index_builder {
             let vector_index_location = self.meta_locations.block_vector_index_location(&block_id);
-            let vector_index_state = vector_index_builder.add_block(
-                &data_block,
-                &self.write_settings,
-                vector_index_location,
-            )?;
+            let vector_index_state =
+                vector_index_builder.add_block(&data_block, vector_index_location)?;
             Some(vector_index_state)
         } else {
             None

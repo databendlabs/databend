@@ -26,7 +26,7 @@
 //!
 //! # Format
 //!
-//! The compressed data consists of small, uniformely-sized chunks.
+//! The compressed data consists of small, uniformly-sized chunks.
 //! The size of each chunk is determined by compression parameters.
 //! The compression parameters are determined automatically during compression.
 //!
@@ -209,7 +209,6 @@ impl<'a> Reader<'a> {
     /// The number of values in the decompressed data.
     #[inline]
     #[allow(dead_code)]
-    //#[expect(clippy::len_without_is_empty, reason = "len() is cheap")]
     pub fn len(&self) -> usize {
         self.len
     }

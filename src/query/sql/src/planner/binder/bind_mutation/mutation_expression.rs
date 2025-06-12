@@ -465,7 +465,7 @@ impl Binder {
 
         let row_id_index: usize = column_binding.index;
 
-        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None);
+        *expr = expr.add_column_index_to_scans(table_index, row_id_index, &None, &None);
 
         self.metadata
             .write()

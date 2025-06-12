@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod distance;
+mod vector_index_loader;
+mod vector_index_reader;
 
-pub use distance::cosine_distance;
-pub use distance::cosine_distance_64;
-pub use distance::l1_distance;
-pub use distance::l1_distance_64;
-pub use distance::l2_distance;
-pub use distance::l2_distance_64;
+pub use vector_index_reader::VectorIndexReader;

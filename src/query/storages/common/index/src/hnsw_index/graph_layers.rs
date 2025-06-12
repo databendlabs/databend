@@ -265,7 +265,6 @@ impl GraphLayers {
             )?;
 
         let graph_links = GraphLinks::load(links_slice)?;
-
         Ok(Self {
             m: graph_data.m,
             m0: graph_data.m0,

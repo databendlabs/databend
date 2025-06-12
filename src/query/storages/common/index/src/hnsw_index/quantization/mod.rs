@@ -1,3 +1,4 @@
+// Copyright Qdrant
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,11 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod distance;
+pub mod encoded_storage;
+pub mod encoded_vectors;
+pub mod encoded_vectors_u8;
+pub mod quantile;
 
-pub use distance::cosine_distance;
-pub use distance::cosine_distance_64;
-pub use distance::l1_distance;
-pub use distance::l1_distance_64;
-pub use distance::l2_distance;
-pub use distance::l2_distance_64;
+pub use encoded_vectors::DistanceType;
+pub use encoded_vectors::VectorParameters;
+pub use encoded_vectors_u8::EncodedQueryU8;
+pub use encoded_vectors_u8::EncodedVectorsU8;

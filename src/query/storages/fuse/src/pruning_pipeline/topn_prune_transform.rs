@@ -22,7 +22,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::BlockMetaAccumulatingTransform;
 use databend_common_pipeline_transforms::BlockMetaAccumulatingTransformer;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
@@ -30,7 +30,7 @@ use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 // TopNPruneTransform is a processor that will accumulate the block meta and not push to
 // downstream until all data is received and pruned.
 pub struct TopNPruneTransform {
-    topn_pruner: TopNPrunner,
+    topn_pruner: TopNPruner,
     metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
 }
 
@@ -51,7 +51,7 @@ impl TopNPruneTransform {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        topn_pruner: TopNPrunner,
+        topn_pruner: TopNPruner,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(
             BlockMetaAccumulatingTransformer::create(input, output, TopNPruneTransform {

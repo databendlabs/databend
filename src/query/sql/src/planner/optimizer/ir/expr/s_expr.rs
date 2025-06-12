@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
@@ -391,6 +392,7 @@ impl SExpr {
         table_index: IndexType,
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
+        vector_index: &Option<VectorIndexInfo>,
     ) -> SExpr {
         #[recursive::recursive]
         fn add_column_index_to_scans_recursive(
@@ -398,6 +400,7 @@ impl SExpr {
             column_index: IndexType,
             table_index: IndexType,
             inverted_index: &Option<InvertedIndexInfo>,
+            vector_index: &Option<VectorIndexInfo>,
         ) -> SExpr {
             let mut s_expr = s_expr.clone();
             s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
@@ -405,6 +408,9 @@ impl SExpr {
                     p.columns.insert(column_index);
                     if inverted_index.is_some() {
                         p.inverted_index = inverted_index.clone();
+                    }
+                    if vector_index.is_some() {
+                        p.vector_index = vector_index.clone();
                     }
                 }
                 Arc::new(p.into())
@@ -422,6 +428,7 @@ impl SExpr {
                         column_index,
                         table_index,
                         inverted_index,
+                        vector_index,
                     )));
                 }
 
@@ -431,7 +438,13 @@ impl SExpr {
             }
         }
 
-        add_column_index_to_scans_recursive(self, column_index, table_index, inverted_index)
+        add_column_index_to_scans_recursive(
+            self,
+            column_index,
+            table_index,
+            inverted_index,
+            vector_index,
+        )
     }
 
     // The method will clear the applied rules of current SExpr and its children.
