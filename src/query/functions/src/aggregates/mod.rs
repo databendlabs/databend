@@ -23,6 +23,7 @@ mod aggregate_array_agg;
 mod aggregate_array_moving;
 mod aggregate_avg;
 mod aggregate_bitmap;
+mod aggregate_boolean;
 mod aggregate_combinator_distinct;
 mod aggregate_combinator_if;
 mod aggregate_combinator_state;
