@@ -205,16 +205,20 @@ pub fn project_block(
         .map(|(left, right)| {
             if is_left {
                 if let Some(expr) = &left.1 {
-                    let column = BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
-                    Ok(column)
+                    let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                        (expr.data_type().clone(), num_rows)
+                    });
+                    Ok(entry)
                 } else {
                     Ok(block
                         .get_by_offset(left_schema.index_of(&left.0.to_string())?)
                         .clone())
                 }
             } else if let Some(expr) = &right.1 {
-                let column = BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
-                Ok(column)
+                let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                    (expr.data_type().clone(), num_rows)
+                });
+                Ok(entry)
             } else if left.1.is_some() {
                 Ok(block
                     .get_by_offset(right_schema.index_of(&right.0.to_string())?)

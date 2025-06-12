@@ -383,7 +383,7 @@ impl NativeDeserializeDataTransform {
                     .map(|index| {
                         let data_type = self.src_schema.field(*index).data_type().clone();
                         let default_val = &self.block_reader.default_vals[*index];
-                        BlockEntry::new(data_type, Value::Scalar(default_val.to_owned()))
+                        BlockEntry::new_const_column(data_type, default_val.to_owned(), 1)
                     })
                     .collect::<Vec<_>>();
 

@@ -32,6 +32,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFLanguage;
@@ -332,8 +333,20 @@ impl TransformUdfScript {
             .map(|i| {
                 let arg = data_block.get_by_offset(*i).clone();
                 if contains_variant(&arg.data_type()) {
-                    let new_arg =
-                        BlockEntry::new(arg.data_type(), transform_variant(&arg.value(), true)?);
+                    let new_arg = match arg {
+                        BlockEntry::Const(scalar, data_type, n) => {
+                            let scalar = transform_variant(&Value::Scalar(scalar), true)?
+                                .into_scalar()
+                                .unwrap();
+                            BlockEntry::new_const_column(data_type, scalar, n)
+                        }
+                        BlockEntry::Column(column) => {
+                            transform_variant(&Value::Column(column), true)?
+                                .into_column()
+                                .unwrap()
+                                .into()
+                        }
+                    };
                     Ok(new_arg)
                 } else {
                     Ok(arg)
@@ -399,7 +412,9 @@ impl TransformUdfScript {
                     ))
                 },
             )?;
-            BlockEntry::new(func.data_type.as_ref().clone(), value)
+            BlockEntry::new(value, || {
+                (*func.data_type.to_owned(), data_block.num_rows())
+            })
         } else {
             result_block.get_by_offset(0).clone()
         };

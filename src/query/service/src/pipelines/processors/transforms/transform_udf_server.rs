@@ -136,8 +136,9 @@ impl TransformUdfServer {
             .map(|i| {
                 let arg = data_block.get_by_offset(*i).clone();
                 if contains_variant(&arg.data_type()) {
-                    let new_arg =
-                        BlockEntry::new(arg.data_type(), transform_variant(&arg.value(), true)?);
+                    let new_arg = BlockEntry::new(transform_variant(&arg.value(), true)?, || {
+                        (arg.data_type(), arg.num_rows())
+                    });
                     Ok(new_arg)
                 } else {
                     Ok(arg)
@@ -210,14 +211,13 @@ impl TransformUdfServer {
             )));
         }
 
-        let entry = if contains_variant(&func.data_type) {
+        if contains_variant(&func.data_type) {
             let value = transform_variant(&result_block.get_by_offset(0).value(), false)?;
-            BlockEntry::new(result_fields[0].data_type().clone(), value)
+            data_block.add_value(value, result_fields[0].data_type().clone());
         } else {
-            result_block.get_by_offset(0).clone()
+            data_block.add_entry(result_block.get_by_offset(0).clone());
         };
 
-        data_block.add_entry(entry);
         drop(permit);
         Ok(data_block)
     }

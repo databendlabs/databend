@@ -25,7 +25,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -249,7 +248,7 @@ impl Processor for MutationSource {
                             }
 
                             MutationAction::Update => {
-                                data_block.add_entry(BlockEntry::from_arg_value(predicates));
+                                data_block.add_value(predicates.upcast(), DataType::Boolean);
                                 if self.remain_reader.is_none() {
                                     self.state = State::PerformOperator(
                                         data_block,

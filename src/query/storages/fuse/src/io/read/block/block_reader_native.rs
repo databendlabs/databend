@@ -22,13 +22,11 @@ use arrow::datatypes::Schema as ArrowSchema;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_native::read::reader::read_meta_async;
 use databend_common_native::read::reader::NativeReader;
@@ -223,25 +221,30 @@ impl BlockReader {
         let mut entries = Vec::with_capacity(self.project_column_nodes.len());
         for (index, _) in self.project_column_nodes.iter().enumerate() {
             if let Some(column) = columns.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
-                entries.push(column.clone().into());
                 match nums_rows {
                     Some(rows) => {
                         debug_assert_eq!(rows, column.len(), "Column lengths are not equal")
                     }
                     None => nums_rows = Some(column.len()),
                 }
+                entries.push(column.into());
             } else if let Some(ref default_val_indices) = default_val_indices {
                 if default_val_indices.contains(&index) {
-                    let data_type: DataType = self.projected_schema.field(index).data_type().into();
-                    let default_val = &self.default_vals[index];
-                    entries.push(BlockEntry::new(
-                        data_type.clone(),
-                        Value::Scalar(default_val.to_owned()),
-                    ));
+                    let data_type = self.projected_schema.field(index).data_type().into();
+                    let default_val = self.default_vals[index].clone();
+                    entries.push(BlockEntry::new_const_column(data_type, default_val, 0));
                 }
             }
         }
-        Ok(DataBlock::new(entries, nums_rows.unwrap_or(0)))
+        let nums_rows = nums_rows.unwrap_or_default();
+        if nums_rows != 0 {
+            for entry in &mut entries {
+                if let Some((_, _, n)) = entry.as_const_mut() {
+                    *n = nums_rows;
+                }
+            }
+        }
+        Ok(DataBlock::new(entries, nums_rows))
     }
 
     #[async_backtrace::framed]

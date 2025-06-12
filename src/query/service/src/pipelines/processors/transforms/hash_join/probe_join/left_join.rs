@@ -21,7 +21,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::RowPtr;
 
@@ -387,15 +386,10 @@ impl HashJoinProbeState {
             None
         };
         let build_block = if build_state.is_build_projected {
-            let null_build_block = DataBlock::new(
-                self.hash_join_state
-                    .build_schema
-                    .fields()
-                    .iter()
-                    .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
-                    .collect(),
-                unmatched_idx,
-            );
+            let entries = self.hash_join_state.build_schema.fields().iter().map(|df| {
+                BlockEntry::new_const_column(df.data_type().clone(), Scalar::Null, unmatched_idx)
+            });
+            let null_build_block = DataBlock::from_iter(entries, unmatched_idx);
             Some(null_build_block)
         } else {
             None
@@ -449,22 +443,22 @@ impl HashJoinProbeState {
                 &build_state.build_num_rows,
             )?;
             // For left or full join, wrap nullable for build block.
-            let nullable_columns = if build_state.build_num_rows == 0 {
-                build_block
-                    .columns()
-                    .iter()
-                    .map(|c| {
-                        BlockEntry::new(c.data_type().wrap_nullable(), Value::Scalar(Scalar::Null))
-                    })
-                    .collect::<Vec<_>>()
+            if build_state.build_num_rows == 0 {
+                let entries = build_block.columns().iter().map(|c| {
+                    BlockEntry::new_const_column(
+                        c.data_type().wrap_nullable(),
+                        Scalar::Null,
+                        matched_idx,
+                    )
+                });
+                Some(DataBlock::from_iter(entries, matched_idx))
             } else {
-                build_block
+                let entries = build_block
                     .columns()
                     .iter()
-                    .map(|c| wrap_true_validity(c, matched_idx, &probe_state.true_validity))
-                    .collect::<Vec<_>>()
-            };
-            Some(DataBlock::new(nullable_columns, matched_idx))
+                    .map(|c| wrap_true_validity(c, matched_idx, &probe_state.true_validity));
+                Some(DataBlock::from_iter(entries, matched_idx))
+            }
         } else {
             None
         };

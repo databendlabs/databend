@@ -178,7 +178,7 @@ impl<T: ArgType> SimpleRowConverter<T> {
 
         match entry {
             BlockEntry::Const(_, _, n) => {
-                let col = entry.to_column(n.unwrap());
+                let col = entry.to_column(*n);
                 R::from_column(&col)
             }
             BlockEntry::Column(c) => R::from_column(c),

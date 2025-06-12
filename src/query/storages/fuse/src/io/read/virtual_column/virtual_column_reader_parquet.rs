@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::eval_function;
 use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -180,7 +179,7 @@ impl VirtualColumnReader {
                 let orig_type: DataType = orig_field.data_type().into();
                 let column = Column::from_arrow_rs(arrow_array, &orig_type)?;
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                let entry = if orig_type != data_type {
+                if orig_type != data_type {
                     let cast_func_name = format!(
                         "to_{}",
                         data_type.remove_nullable().to_string().to_lowercase()
@@ -193,11 +192,10 @@ impl VirtualColumnReader {
                         data_block.num_rows(),
                         &BUILTIN_FUNCTIONS,
                     )?;
-                    BlockEntry::new(cast_data_type, cast_value)
+                    data_block.add_value(cast_value, cast_data_type);
                 } else {
-                    column.into()
+                    data_block.add_column(column);
                 };
-                data_block.add_entry(entry);
                 continue;
             }
             let src_index = self
@@ -220,7 +218,7 @@ impl VirtualColumnReader {
                 &BUILTIN_FUNCTIONS,
             )?;
 
-            let entry = if let Some(cast_func_name) = &virtual_column_field.cast_func_name {
+            if let Some(cast_func_name) = &virtual_column_field.cast_func_name {
                 let (cast_value, cast_data_type) = eval_function(
                     None,
                     cast_func_name,
@@ -229,11 +227,10 @@ impl VirtualColumnReader {
                     data_block.num_rows(),
                     &BUILTIN_FUNCTIONS,
                 )?;
-                BlockEntry::new(cast_data_type, cast_value)
+                data_block.add_value(cast_value, cast_data_type);
             } else {
-                BlockEntry::new(data_type, value)
+                data_block.add_value(value, data_type);
             };
-            data_block.add_entry(entry);
         }
 
         Ok(data_block)

@@ -170,12 +170,10 @@ impl WindowPartitionTopNExchange {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::ArgType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::StringType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
-    use databend_common_expression::Value;
 
     use super::*;
 
@@ -246,14 +244,8 @@ mod tests {
 
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![7, 7, 7, 6, 5, 5, 4, 1, 3, 1, 1])),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![7, 6, 5, 5, 5, 4, 3, 3, 2, 3, 3])),
-                ),
+                Int32Type::from_data(vec![7, 7, 7, 6, 5, 5, 4, 1, 3, 1, 1]).into(),
+                Int32Type::from_data(vec![7, 6, 5, 5, 5, 4, 3, 3, 2, 3, 3]).into(),
             ],
             11,
         );
@@ -291,14 +283,8 @@ mod tests {
 
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![5, 2, 3, 3, 2, 2, 1, 1, 1, 1, 1])),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![2, 2, 4, 3, 2, 2, 5, 4, 3, 3, 3])),
-                ),
+                Int32Type::from_data(vec![5, 2, 3, 3, 2, 2, 1, 1, 1, 1, 1]).into(),
+                Int32Type::from_data(vec![2, 2, 4, 3, 2, 2, 5, 4, 3, 3, 3]).into(),
             ],
             11,
         );

@@ -51,45 +51,12 @@ pub struct DataBlock {
 
 #[derive(Clone, Debug, PartialEq, EnumAsInner)]
 pub enum BlockEntry {
-    Const(Scalar, DataType, Option<usize>), // todo: replace Option<usize> with usize
+    Const(Scalar, DataType, usize),
     Column(Column),
 }
 
 impl BlockEntry {
-    pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
-        #[cfg(debug_assertions)]
-        check_type(&data_type, &Value::Scalar(scalar.clone()));
-        BlockEntry::Const(scalar, data_type, Some(num_rows))
-    }
-
-    pub fn new_const_column_arg<T: ArgType>(scalar: T::Scalar, num_rows: usize) -> Self {
-        Self::new_const_column(T::data_type(), T::upcast_scalar(scalar), num_rows)
-    }
-
-    pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
-        #[cfg(debug_assertions)]
-        {
-            match &value {
-                Value::Column(c) => {
-                    c.check_valid().unwrap();
-                }
-                Value::Scalar(_) => {
-                    check_type(&data_type, &value);
-                }
-            }
-        }
-
-        match value {
-            Value::Column(c) => BlockEntry::Column(c),
-            Value::Scalar(s) => BlockEntry::Const(s, data_type, None),
-        }
-    }
-
-    pub fn from_arg_value<T: ArgType>(value: Value<T>) -> Self {
-        Self::new(T::data_type(), value.upcast())
-    }
-
-    pub fn from_value<F>(value: Value<AnyType>, on_scalar: F) -> Self
+    pub fn new<F>(value: Value<AnyType>, on_scalar: F) -> Self
     where F: FnOnce() -> (DataType, usize) {
         match value {
             Value::Column(c) => c.into(),
@@ -98,6 +65,16 @@ impl BlockEntry {
                 BlockEntry::new_const_column(data_type, s, num_rows)
             }
         }
+    }
+
+    pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
+        #[cfg(debug_assertions)]
+        check_type(&data_type, &Value::Scalar(scalar.clone()));
+        BlockEntry::Const(scalar, data_type, num_rows)
+    }
+
+    pub fn new_const_column_arg<T: ArgType>(scalar: T::Scalar, num_rows: usize) -> Self {
+        Self::new_const_column(T::data_type(), T::upcast_scalar(scalar), num_rows)
     }
 
     pub fn remove_nullable(self) -> Self {
@@ -117,7 +94,7 @@ impl BlockEntry {
     pub fn to_column(&self, num_rows: usize) -> Column {
         match self {
             BlockEntry::Const(scalar, data_type, n) => {
-                debug_assert_eq!(num_rows, n.unwrap_or(num_rows));
+                debug_assert_eq!(num_rows, *n);
                 Value::<AnyType>::Scalar(scalar.clone()).convert_to_full_column(data_type, num_rows)
             }
             BlockEntry::Column(column) => {
@@ -150,9 +127,9 @@ impl BlockEntry {
 
     pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
         match self {
-            BlockEntry::Const(scalar, _, Some(n)) if index < *n => Some(scalar.as_ref()),
+            BlockEntry::Const(scalar, _, n) if index < *n => Some(scalar.as_ref()),
             BlockEntry::Column(column) => column.index(index),
-            _ => unreachable!(),
+            _ => None,
         }
     }
 
@@ -163,17 +140,23 @@ impl BlockEntry {
         match self {
             BlockEntry::Const(scalar, _, n) => {
                 #[cfg(debug_assertions)]
-                match *n {
-                    Some(n) if index < n => (),
-                    _ => panic!(
+                if index >= *n {
+                    panic!(
                         "index out of bounds: the len is {:?} but the index is {}",
                         n, index
-                    ),
+                    )
                 }
 
                 scalar.as_ref()
             }
             BlockEntry::Column(column) => column.index_unchecked(index),
+        }
+    }
+
+    pub fn num_rows(&self) -> usize {
+        match self {
+            BlockEntry::Const(_, _, n) => *n,
+            BlockEntry::Column(column) => column.len(),
         }
     }
 }
@@ -237,18 +220,17 @@ impl DataBlock {
         DataBlock::new_with_meta(entries, num_rows, None)
     }
 
+    pub fn from_iter<T>(iter: T, num_rows: usize) -> Self
+    where T: IntoIterator<Item = BlockEntry> {
+        DataBlock::new_with_meta(iter.into_iter().collect(), num_rows, None)
+    }
+
     #[inline]
     pub fn new_with_meta(
-        mut entries: Vec<BlockEntry>,
+        entries: Vec<BlockEntry>,
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        for entry in entries.iter_mut() {
-            match entry {
-                BlockEntry::Const(_, _, n) if n.is_none() => *n = Some(num_rows),
-                _ => (),
-            }
-        }
         Self::check_columns_valid(&entries, num_rows).unwrap();
 
         Self {
@@ -262,7 +244,7 @@ impl DataBlock {
         for entry in columns.iter() {
             match entry {
                 BlockEntry::Const(_, _, n) => {
-                    if *n != Some(num_rows) {
+                    if *n != num_rows {
                         return Err(ErrorCode::Internal(format!(
                             "DataBlock corrupted, const column length mismatch, const rows: {n:?}, num_rows: {num_rows}",
                         )));
@@ -430,13 +412,10 @@ impl DataBlock {
             .entries
             .iter()
             .map(|entry| match entry {
-                BlockEntry::Const(scalar, data_type, Some(_)) => BlockEntry::Const(
-                    scalar.clone(),
-                    data_type.clone(),
-                    Some(range.end - range.start),
-                ),
+                BlockEntry::Const(scalar, data_type, _) => {
+                    BlockEntry::Const(scalar.clone(), data_type.clone(), range.end - range.start)
+                }
                 BlockEntry::Column(c) => c.slice(range.clone()).into(),
-                _ => unreachable!(),
             })
             .collect();
         Self {
@@ -508,20 +487,15 @@ impl DataBlock {
         for other in block.entries.into_iter() {
             #[cfg(debug_assertions)]
             match &other {
-                BlockEntry::Const(_, _, Some(n)) => assert_eq!(*n, self.num_rows),
+                BlockEntry::Const(_, _, n) => assert_eq!(*n, self.num_rows),
                 BlockEntry::Column(column) => assert_eq!(column.len(), self.num_rows),
-                _ => unreachable!(),
             }
             self.entries.push(other);
         }
     }
 
     #[inline]
-    pub fn add_entry(&mut self, mut entry: BlockEntry) {
-        if let BlockEntry::Const(_, _, n) = &mut entry {
-            debug_assert_eq!(n.unwrap_or(self.num_rows), self.num_rows);
-            *n = Some(self.num_rows)
-        }
+    pub fn add_entry(&mut self, entry: BlockEntry) {
         self.entries.push(entry);
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
@@ -535,9 +509,20 @@ impl DataBlock {
     #[inline]
     pub fn add_const_column(&mut self, scalar: Scalar, data_type: DataType) {
         self.entries
-            .push(BlockEntry::Const(scalar, data_type, Some(self.num_rows)));
+            .push(BlockEntry::Const(scalar, data_type, self.num_rows));
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
+    }
+
+    #[inline]
+    pub fn add_value(&mut self, value: Value<AnyType>, data_type: DataType) {
+        match value {
+            Value::Scalar(scalar) => self.add_const_column(scalar, data_type),
+            Value::Column(column) => {
+                debug_assert_eq!(data_type, column.data_type());
+                self.add_column(column)
+            }
+        }
     }
 
     #[inline]
@@ -619,26 +604,28 @@ impl DataBlock {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
 
-        let mut columns = Vec::with_capacity(default_vals.len());
+        let mut entries = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
 
-            let column = match default_val {
-                Some(default_val) => {
-                    BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
-                }
+            let entry = match default_val {
+                Some(default_val) => BlockEntry::new_const_column(
+                    data_type.clone(),
+                    default_val.to_owned(),
+                    num_rows,
+                ),
                 None => {
                     let value = Value::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
                     chunk_idx += 1;
-                    BlockEntry::new(data_type.clone(), value)
+                    BlockEntry::new(value, || (data_type.clone(), num_rows))
                 }
             };
 
-            columns.push(column);
+            entries.push(entry);
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 
     pub fn create_with_default_value(
@@ -677,15 +664,16 @@ impl DataBlock {
         let data_block_columns = data_block.columns();
 
         let schema_fields = schema.fields();
-        let mut columns = Vec::with_capacity(default_vals.len());
+        let mut entries = Vec::with_capacity(default_vals.len());
         for (i, field) in schema_fields.iter().enumerate() {
             let column_id = field.column_id();
-            let column = if !block_column_ids.contains(&column_id) {
+            let entry = if !block_column_ids.contains(&column_id) {
                 let default_val = &default_vals[i];
                 let table_data_type = field.data_type();
-                BlockEntry::new(
+                BlockEntry::new_const_column(
                     table_data_type.into(),
-                    Value::Scalar(default_val.to_owned()),
+                    default_val.to_owned(),
+                    num_rows,
                 )
             } else {
                 let chunk_column = &data_block_columns[data_block_columns_idx];
@@ -693,10 +681,10 @@ impl DataBlock {
                 chunk_column.clone()
             };
 
-            columns.push(column);
+            entries.push(entry);
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 
     #[inline]

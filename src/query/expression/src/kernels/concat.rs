@@ -69,7 +69,7 @@ impl DataBlock {
         let num_columns = blocks[0].num_columns();
         let mut concat_columns = Vec::with_capacity(num_columns);
         for i in 0..num_columns {
-            concat_columns.push(BlockEntry::from_value(
+            concat_columns.push(BlockEntry::new(
                 Self::concat_columns(&block_refs, i)?,
                 || (blocks[0].data_type(i), num_rows),
             ))

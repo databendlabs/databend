@@ -188,13 +188,11 @@ pub(crate) fn wrap_true_validity(
     true_validity: &Bitmap,
 ) -> BlockEntry {
     let col = entry.to_column(num_rows);
-    let data_type = &entry.data_type();
     if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         entry.clone()
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        let col = NullableColumn::new_column(col, validity);
-        BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
+        NullableColumn::new_column(col, validity).into()
     }
 }

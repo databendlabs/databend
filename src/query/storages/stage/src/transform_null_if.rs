@@ -190,7 +190,7 @@ impl Transform for TransformNullIf {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num_rows = data_block.num_rows();
         for (field, expr) in self.schema.fields().iter().zip(self.exprs.iter()) {
-            let entry = BlockEntry::from_value(evaluator.run(expr)?, || {
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
                 (field.data_type().clone(), num_rows)
             });
             entries.push(entry);

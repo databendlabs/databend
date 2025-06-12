@@ -1186,7 +1186,7 @@ impl<'a> Evaluator<'a> {
                 Value::Column(col) => col.len(),
             });
 
-        let entry = BlockEntry::from_value(value, || (src_type.clone(), num_rows));
+        let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
         let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;

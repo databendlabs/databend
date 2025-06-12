@@ -68,7 +68,7 @@ pub fn eval_function(
                     data_type: ty.clone(),
                     display_name: String::new(),
                 },
-                BlockEntry::from_value(val, || (ty, num_rows)),
+                BlockEntry::new(val, || (ty, num_rows)),
             )
         })
         .unzip();

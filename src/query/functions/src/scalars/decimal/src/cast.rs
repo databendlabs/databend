@@ -1109,9 +1109,7 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
             if let Some((_, msg)) = ctx.errors.take() {
                 Err(msg)
             } else {
-                Ok(BlockEntry::from_value(value, || {
-                    (entry.data_type(), num_rows)
-                }))
+                Ok(BlockEntry::new(value, || (entry.data_type(), num_rows)))
             }
         })
         .collect::<Result<Vec<_>, _>>()?;

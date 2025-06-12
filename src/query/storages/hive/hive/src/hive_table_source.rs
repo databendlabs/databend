@@ -231,19 +231,12 @@ fn check_block_schema(schema: &DataSchema, mut block: DataBlock) -> Result<DataB
         // If the field is nullable but the actual data is not nullable,
         // we should wrap nullable for the data.
         if field.is_nullable() && !entry.data_type().is_nullable_or_null() {
-            *entry = match entry {
-                BlockEntry::Const(scalar, data_type, n) => BlockEntry::new_const_column(
-                    data_type.wrap_nullable(),
-                    scalar.clone(),
-                    n.unwrap(),
-                ),
-                BlockEntry::Column(column) => todo!(),
+            match entry {
+                BlockEntry::Const(_, data_type, _) => {
+                    *data_type = data_type.wrap_nullable();
+                }
+                BlockEntry::Column(column) => *column = column.clone().wrap_nullable(None),
             };
-
-            //  BlockEntry::new(
-            //     col.data_type().wrap_nullable(),
-            //     col.value().wrap_nullable(None),
-            // );
         }
     }
 

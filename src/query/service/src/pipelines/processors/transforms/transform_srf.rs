@@ -377,10 +377,9 @@ impl BlockingTransform for TransformSRF {
                     }
                     let data_block = DataBlock::concat(&result_data_blocks)?;
                     debug_assert!(data_block.num_rows() == result_size);
-                    let block_entry =
-                        BlockEntry::from_value(data_block.get_by_offset(0).value(), || {
-                            (data_block.data_type(0), result_size)
-                        });
+                    let block_entry = BlockEntry::new(data_block.get_by_offset(0).value(), || {
+                        (data_block.data_type(0), result_size)
+                    });
                     if block_is_empty {
                         result = DataBlock::new(vec![block_entry], result_size);
                         block_is_empty = false;

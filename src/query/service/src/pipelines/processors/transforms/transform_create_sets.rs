@@ -21,7 +21,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 
 use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
@@ -130,14 +129,15 @@ impl Processor for TransformCreateSets {
         if let Some(data) = self.input_data.take() {
             let num_rows = data.num_rows();
             let start_index = self.schema.fields().len() - self.sub_queries_result.len();
-            let mut new_columns = Vec::with_capacity(self.sub_queries_result.len());
+            let mut entries = Vec::with_capacity(self.sub_queries_result.len());
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
-                let col = BlockEntry::new(data_type.clone(), Value::Scalar(result.clone()));
-                new_columns.push(col);
+                let entry =
+                    BlockEntry::new_const_column(data_type.clone(), result.clone(), num_rows);
+                entries.push(entry);
             }
 
-            self.output_data = Some(DataBlock::new(new_columns, num_rows));
+            self.output_data = Some(DataBlock::new(entries, num_rows));
         }
 
         Ok(())

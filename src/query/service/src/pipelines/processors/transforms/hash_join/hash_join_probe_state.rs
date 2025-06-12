@@ -36,7 +36,6 @@ use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::HashJoinHashtableLike;
 use databend_common_hashtable::Interval;
@@ -503,15 +502,14 @@ impl HashJoinProbeState {
 
             let probe_block = if !projected_probe_fields.is_empty() {
                 // Create null chunk for unmatched rows in probe side
-                Some(DataBlock::new(
-                    projected_probe_fields
-                        .iter()
-                        .map(|df| {
-                            BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null))
-                        })
-                        .collect(),
-                    build_indexes_occupied,
-                ))
+                let entries = projected_probe_fields.iter().map(|df| {
+                    BlockEntry::new_const_column(
+                        df.data_type().clone(),
+                        Scalar::Null,
+                        build_indexes_occupied,
+                    )
+                });
+                Some(DataBlock::from_iter(entries, build_indexes_occupied))
             } else {
                 None
             };

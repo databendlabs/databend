@@ -26,7 +26,6 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
@@ -113,27 +112,28 @@ impl AggIndexReader {
 
         // 2. Compute the output block
         // Fill dummy columns first.
-        let mut output_columns = vec![
-            BlockEntry::new(DataType::Null, Value::Scalar(Scalar::Null));
-            self.actual_table_field_len
-        ];
+        let mut entries =
+            vec![
+                BlockEntry::new_const_column(DataType::Null, Scalar::Null, block.num_rows());
+                self.actual_table_field_len
+            ];
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         for (expr, offset) in self.selection.iter() {
             let data_type = expr.data_type().clone();
             let value = evaluator.run(expr)?;
-            let col = BlockEntry::new(data_type, value);
+            let entry = BlockEntry::new(value, || (data_type, block.num_rows()));
 
             if let Some(pos) = offset {
-                output_columns[*pos] = col;
+                entries[*pos] = entry;
             } else {
-                output_columns.push(col);
+                entries.push(entry);
             }
         }
 
-        let num_evals = output_columns.len() - self.actual_table_field_len;
+        let num_evals = entries.len() - self.actual_table_field_len;
 
         Ok(DataBlock::new_with_meta(
-            output_columns,
+            entries,
             block.num_rows(),
             Some(AggIndexMeta::create(
                 self.is_agg,

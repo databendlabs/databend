@@ -125,7 +125,7 @@ fn fake_data_schema(block: &DataBlock) -> DataSchema {
 
 fn bare_blocks_from_arrow_ipc(layout: &[usize], mut data: Buffer) -> Result<DataBlock> {
     assert!(!layout.is_empty());
-    let mut columns = Vec::with_capacity(layout.len());
+    let mut entries = Vec::with_capacity(layout.len());
     let mut read_array = |layout: usize| -> Result<(ArrayRef, DataType)> {
         let ls = BufList::from_iter(data.slice(0..layout));
         data.advance(layout);
@@ -142,13 +142,13 @@ fn bare_blocks_from_arrow_ipc(layout: &[usize], mut data: Buffer) -> Result<Data
     let (array, data_type) = read_array(layout[0])?;
     let num_rows = array.len();
     let val = Value::from_arrow_rs(array, &data_type)?;
-    columns.push(BlockEntry::new(data_type, val));
+    entries.push(BlockEntry::new(val, || (data_type, num_rows)));
     for &layout in layout.iter().skip(1) {
         let (array, data_type) = read_array(layout)?;
         let val = Value::from_arrow_rs(array, &data_type)?;
-        columns.push(BlockEntry::new(data_type, val));
+        entries.push(BlockEntry::new(val, || (data_type, num_rows)));
     }
-    Ok(DataBlock::new(columns, num_rows))
+    Ok(DataBlock::new(entries, num_rows))
 }
 
 /// Deserialize bare data block from parquet format.
@@ -163,8 +163,8 @@ fn bare_blocks_from_parquet<R: ChunkReader + 'static>(data: R) -> Result<DataBlo
         for (array, field) in record_batch.columns().iter().zip(schema.fields()) {
             let data_type = field.data_type();
             columns.push(BlockEntry::new(
-                data_type.clone(),
                 Value::from_arrow_rs(array.clone(), data_type)?,
+                || (data_type.clone(), num_rows),
             ))
         }
         let block = DataBlock::new(columns, num_rows);

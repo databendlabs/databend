@@ -37,7 +37,7 @@ impl CopyProjectionEvaluator {
         let mut entries = Vec::with_capacity(projection.len());
         let num_rows = block.num_rows();
         for (field, expr) in self.schema.fields().iter().zip(projection.iter()) {
-            let entry = BlockEntry::from_value(evaluator.run(expr)?, || {
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
                 (field.data_type().clone(), num_rows)
             });
             entries.push(entry);

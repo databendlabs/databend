@@ -163,7 +163,7 @@ impl StripeDecoderForCopy {
                     unreachable!("expect value: array of tuple")
                 }
             }
-            let entry = BlockEntry::from_value(evaluator.run(expr)?, || {
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
                 (field.data_type().clone(), num_rows)
             });
             entries.push(entry);

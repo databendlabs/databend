@@ -277,7 +277,7 @@ impl InvertedIndexWriter {
 
         let index_columns = values
             .into_iter()
-            .map(|v| BlockEntry::new(DataType::Binary, Value::Scalar(v)))
+            .map(|v| BlockEntry::new_const_column(DataType::Binary, v, 1))
             .collect();
         let inverted_index_block = DataBlock::new(index_columns, 1);
 

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -70,9 +69,7 @@ impl BlockOperator {
                     for expr in exprs {
                         let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                         let result = evaluator.run(expr)?;
-                        let entry = BlockEntry::new(expr.data_type().clone(), result);
-
-                        input.add_entry(entry);
+                        input.add_value(result, expr.data_type().clone());
                     }
                     match projections {
                         Some(projections) => Ok(input.project(projections)),
