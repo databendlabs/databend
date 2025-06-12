@@ -204,9 +204,9 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         if self
             .bind_context
             .aggregate_info
-            .group_items_map
-            .values()
-            .any(|item| *item == column.column.index)
+            .group_items
+            .iter()
+            .any(|item| item.index == column.column.index)
         {
             return Ok(());
         }

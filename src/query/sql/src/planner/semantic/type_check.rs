@@ -175,10 +175,12 @@ use crate::plans::WindowOrderBy;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
+use crate::Visibility;
 
 /// A helper for type checking.
 ///
@@ -307,7 +309,35 @@ impl<'a> TypeChecker<'a> {
                             data_type,
                         )
                     }
-                    NameResolutionResult::Alias { scalar, .. } => {
+                    NameResolutionResult::Alias { scalar, alias } => {
+                        for col in self.metadata.read().columns() {
+                            let value = Some(scalar.clone());
+                            match col {
+                                ColumnEntry::DerivedColumn(derived_column)
+                                    if derived_column.alias == alias
+                                        && derived_column.scalar_expr == value =>
+                                {
+                                    let column = ColumnBindingBuilder::new(
+                                        alias,
+                                        derived_column.column_index,
+                                        Box::new(derived_column.data_type.clone()),
+                                        Visibility::Visible,
+                                    )
+                                    .build();
+
+                                    return Ok(Box::new((
+                                        BoundColumnRef {
+                                            span: *span,
+                                            column,
+                                        }
+                                        .into(),
+                                        scalar.data_type()?,
+                                    )));
+                                }
+                                _ => {}
+                            }
+                        }
+
                         (scalar.clone(), scalar.data_type()?)
                     }
                 };

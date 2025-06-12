@@ -75,6 +75,21 @@ SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalar
 2
 3
 
+statement error
+select number %3 a, number %4 b ,  row_number() over(order by number % 11) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b ,  row_number() over(partition by number % 3 order by number % 4) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b ,  row_number() over(partition by b order by a) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b ,  row_number() over(partition by b order by a % 2) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b ,  row_number() over(partition by b % 2 order by a) from range(1, 10) t(number)  group by a,b;
+
 # rank_dense
 query TII
 SELECT depname, salary, dense_rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary order by depname, salary

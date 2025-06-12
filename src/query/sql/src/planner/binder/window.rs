@@ -556,6 +556,27 @@ impl<'a> WindowRewriter<'a> {
                     }
                 }
             }
+            // For window expr works with group by expr alias, we need to replace the expr with the alias index
+            // eg: select number %3 a, number %4 b ,  row_number() over(partition by b % 2) from range(1, 10) t(number)  group by a,b;
+            let mut arg = arg.clone();
+            for group_expr in self.bind_context.aggregate_info.group_items.iter() {
+                if !group_expr.scalar.is_column_ref() {
+                    let column = ColumnBindingBuilder::new(
+                        "group_item".to_string(),
+                        group_expr.index,
+                        Box::new(group_expr.scalar.data_type()?),
+                        Visibility::Visible,
+                    )
+                    .build();
+                    let col = BoundColumnRef {
+                        span: arg.span(),
+                        column,
+                    };
+                    let expr = ScalarExpr::BoundColumnRef(col.clone());
+                    arg.replace_sub_scalar(group_expr.scalar.clone(), expr)?;
+                }
+            }
+
             let ty = arg.data_type()?;
             let index = self.metadata.write().add_derived_column(
                 name.to_string(),
