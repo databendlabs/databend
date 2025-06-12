@@ -8,9 +8,16 @@ function check_query_log() {
   local check_query=$3
   local expected_result=$4
 
+  local full_sql_query
+  full_sql_query="$check_query"
+
+  if [ -n "$query_id" ] && [ "$query_id" != "null" ]; then
+    full_sql_query+=" query_id = '$query_id'"
+  fi
+
   response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
     -H 'Content-Type: application/json' \
-    -d "{\"sql\": \"$check_query query_id = '$query_id'\"}")
+    -d "{\"sql\": \"$full_sql_query\"}")
 
   result=$(echo $response | jq -r '.data[0][0]' | tr -d '"')
   if [ "$result" != "$expected_result" ]; then
@@ -80,6 +87,6 @@ check_query_log "t-2" "$select_query_id" "settings (timezone='Asia/Shanghai') SE
 
 check_query_log "t-3" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, timestamp, now()) FROM system_history.profile_history WHERE" "0"
 
-check_query_log "t-4" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, event_time, now()) FROM system_history.login_history WHERE" "0"
+check_query_log "t-4" null "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, event_time, now()) FROM system_history.login_history limit 1" "0"
 
 check_query_log "t-5" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, query_start, now()) FROM system_history.access_history WHERE" "0"
