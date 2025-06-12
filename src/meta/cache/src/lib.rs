@@ -94,9 +94,58 @@
 //! |                                    Update by other threads
 //! ```
 
-mod cache;
-mod cache_data;
-pub mod errors;
-mod event_watcher;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::sync::Arc;
 
-pub use cache::Cache;
+use databend_common_meta_client::ClientHandle;
+
+mod cache_impl;
+
+pub struct Cache {
+    pub(crate) inner: sub_cache::Cache<cache_impl::MetaCacheTypes>,
+}
+
+impl Deref for Cache {
+    type Target = sub_cache::Cache<cache_impl::MetaCacheTypes>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl DerefMut for Cache {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+impl Cache {
+    /// Create a new cache with the given prefix and meta client.
+    ///
+    /// The cache will start watching for changes immediately.
+    ///
+    /// # Parameters
+    ///
+    /// * `meta_client` - The meta client to interact with the remote data store.
+    /// * `prefix` - The prefix for the cache, used to identify the cache instance.
+    /// * `name` - The name of the cache, used for debugging and logging purposes.
+    pub async fn new(
+        meta_client: Arc<ClientHandle>,
+        prefix: impl ToString,
+        name: impl ToString,
+    ) -> Self {
+        let name = name.to_string();
+        let inner = sub_cache::Cache::new(
+            cache_impl::MetaClientSource {
+                client: meta_client,
+                name: name.clone(),
+            },
+            prefix,
+            name,
+        )
+        .await;
+
+        Cache { inner }
+    }
+}
