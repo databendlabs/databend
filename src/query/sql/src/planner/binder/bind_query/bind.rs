@@ -15,7 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::CreateOption;
+use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
@@ -31,6 +33,7 @@ use databend_common_ast::Span;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::convert_to_type_name;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
@@ -276,13 +279,40 @@ impl Binder {
         };
         expr_replacer.replace_query(&mut as_query);
 
+        let source = if cte.alias.columns.is_empty() {
+            None
+        } else {
+            let mut bind_context = BindContext::new();
+            let (_, bind_context) = self.bind_query(&mut bind_context, &as_query)?;
+            let columns = &bind_context.columns;
+            if columns.len() != cte.alias.columns.len() {
+                return Err(ErrorCode::Internal("Number of columns does not match"));
+            }
+            Some(CreateTableSource::Columns(
+                columns
+                    .iter()
+                    .zip(cte.alias.columns.iter())
+                    .map(|(column, ident)| {
+                        let data_type = convert_to_type_name(&column.data_type);
+                        ColumnDefinition {
+                            name: ident.clone(),
+                            data_type,
+                            expr: None,
+                            comment: None,
+                        }
+                    })
+                    .collect(),
+                None,
+            ))
+        };
+
         let catalog = self.ctx.get_current_catalog();
         let create_table_stmt = CreateTableStmt {
             create_option: CreateOption::Create,
             catalog: Some(Identifier::from_name(Span::None, catalog.clone())),
             database: Some(Identifier::from_name(Span::None, database.clone())),
             table: table_identifier,
-            source: None,
+            source,
             engine: Some(engine),
             uri_location: None,
             cluster_by: None,
