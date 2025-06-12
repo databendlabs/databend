@@ -237,8 +237,8 @@ impl DataBlock {
         }
     }
 
-    fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
-        for entry in columns.iter() {
+    fn check_columns_valid(entries: &[BlockEntry], num_rows: usize) -> Result<()> {
+        for entry in entries.iter() {
             match entry {
                 BlockEntry::Const(_, _, n) => {
                     if *n != num_rows {
@@ -400,10 +400,10 @@ impl DataBlock {
 
     pub fn slice(&self, range: Range<usize>) -> Self {
         assert!(
-            range.end <= self.num_rows(),
+            range.end <= self.num_rows,
             "range {:?} out of len {}",
             range,
-            self.num_rows()
+            self.num_rows
         );
         let entries = self
             .entries
