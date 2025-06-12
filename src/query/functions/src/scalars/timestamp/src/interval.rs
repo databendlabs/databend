@@ -15,6 +15,9 @@
 use std::io::Write;
 
 use databend_common_column::types::months_days_micros;
+use databend_common_expression::date_helper::calc_date_to_timestamp;
+use databend_common_expression::date_helper::today_date;
+use databend_common_expression::date_helper::DateConverter;
 use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::interval::interval_to_string;
@@ -31,6 +34,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
+use jiff::Zoned;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS interval)
@@ -180,6 +184,55 @@ fn register_interval_add_sub_mul(registry: &mut FunctionRegistry) {
             ),
         );
 
+    registry
+        .register_passthrough_nullable_2_arg::<TimestampType, TimestampType, IntervalType, _, _>(
+            "age",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<TimestampType, TimestampType, IntervalType>(
+                |t1, t2, output, ctx| {
+                    let mut is_negative = false;
+                    let mut t1 = t1;
+                    let mut t2 = t2;
+                    if t1 < t2 {
+                        std::mem::swap(&mut t1, &mut t2);
+                        is_negative = true;
+                    }
+                    let tz = &ctx.func_ctx.tz;
+                    let t1 = t1.to_timestamp(tz.clone());
+                    let t2 = t2.to_timestamp(tz.clone());
+                    output.push(calc_age(t1, t2, is_negative));
+                },
+            ),
+        );
+
+    // age(ts) == age(now() at midnight, ts);
+    registry.register_passthrough_nullable_1_arg::<TimestampType, IntervalType, _, _>(
+        "age",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<TimestampType, IntervalType>(|t2, output, ctx| {
+            let mut is_negative = false;
+            let tz = &ctx.func_ctx.tz;
+
+            let today_date = today_date(&ctx.func_ctx.now, &ctx.func_ctx.tz);
+            match calc_date_to_timestamp(today_date, tz.clone()) {
+                Ok(t) => {
+                    let mut t1 = t.to_timestamp(tz.clone());
+                    let mut t2 = t2.to_timestamp(tz.clone());
+
+                    if t1 < t2 {
+                        std::mem::swap(&mut t1, &mut t2);
+                        is_negative = true;
+                    }
+                    output.push(calc_age(t1, t2, is_negative));
+                }
+                Err(e) => {
+                    ctx.set_error(output.len(), e);
+                    output.push(months_days_micros::new(0, 0, 0));
+                }
+            }
+        }),
+    );
+
     registry.register_passthrough_nullable_2_arg::<Int64Type, IntervalType, IntervalType, _, _>(
         "multiply",
         |_, _, _| FunctionDomain::Full,
@@ -325,7 +378,7 @@ fn register_number_to_interval(registry: &mut FunctionRegistry) {
         "to_month",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
-            output.push(val.months() as i64);
+            output.push(val.months() as i64 % 12);
         }),
     );
     // Directly return interval days. Extract need named to_day_of_month
@@ -381,4 +434,42 @@ fn register_number_to_interval(registry: &mut FunctionRegistry) {
             output.push(total_seconds.into());
         }),
     );
+}
+
+fn calc_age(t1: Zoned, t2: Zoned, is_negative: bool) -> months_days_micros {
+    let mut years = t1.year() - t2.year();
+    let mut months = t1.month() - t2.month();
+    let mut days = t1.day() - t2.day();
+
+    let t1_total_nanos = (t1.hour() as i64 * 3600 + t1.minute() as i64 * 60 + t1.second() as i64)
+        * 1_000_000_000
+        + t1.subsec_nanosecond() as i64;
+    let t2_total_nanos = (t2.hour() as i64 * 3600 + t2.minute() as i64 * 60 + t2.second() as i64)
+        * 1_000_000_000
+        + t2.subsec_nanosecond() as i64;
+    let mut total_nanoseconds_diff = t1_total_nanos - t2_total_nanos;
+
+    if total_nanoseconds_diff < 0 {
+        total_nanoseconds_diff += 24 * 3600 * 1_000_000_000;
+        days -= 1;
+    }
+
+    if days < 0 {
+        let days_in_month_of_t2 = t2.date().days_in_month();
+        days += days_in_month_of_t2;
+        months -= 1;
+    }
+
+    if months < 0 {
+        months += 12;
+        years -= 1;
+    }
+
+    let total_months = months as i32 + (years as i32 * 12);
+
+    if is_negative {
+        months_days_micros::new(-total_months, -days as i32, -total_nanoseconds_diff / 1000)
+    } else {
+        months_days_micros::new(total_months, days as i32, total_nanoseconds_diff / 1000)
+    }
 }

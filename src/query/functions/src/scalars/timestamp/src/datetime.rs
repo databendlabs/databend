@@ -138,6 +138,21 @@ pub fn int64_to_timestamp(mut n: i64) -> i64 {
     }
 }
 
+#[inline]
+pub fn int32_to_timestamp(n: i32) -> i64 {
+    let n = n as i64 * 24 * 3600 * MICROS_PER_SEC;
+    int64_to_timestamp(n)
+}
+
+fn int32_domain_to_timestamp_domain<T: AsPrimitive<i32>>(
+    domain: &SimpleDomain<T>,
+) -> Option<SimpleDomain<i64>> {
+    Some(SimpleDomain {
+        min: int32_to_timestamp(domain.min.as_()),
+        max: int32_to_timestamp(domain.max.as_()),
+    })
+}
+
 fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
     domain: &SimpleDomain<T>,
 ) -> Option<SimpleDomain<i64>> {
@@ -464,42 +479,38 @@ fn string_to_format_datetime(
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, TimestampType, _, _>(
         "to_timestamp",
-        |ctx, domain| {
-            FunctionDomain::Domain(SimpleDomain {
-                min: calc_date_to_timestamp(domain.min, ctx.tz.clone()),
-                max: calc_date_to_timestamp(domain.max, ctx.tz.clone()),
-            })
+        |_, domain| {
+            int32_domain_to_timestamp_domain(domain)
+                .map(FunctionDomain::Domain)
+                .unwrap_or(FunctionDomain::MayThrow)
         },
         eval_date_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<DateType, TimestampType, _, _>(
         "try_to_timestamp",
-        |ctx, domain| {
-            FunctionDomain::Domain(NullableDomain {
-                has_null: false,
-                value: Some(Box::new(SimpleDomain {
-                    min: calc_date_to_timestamp(domain.min, ctx.tz.clone()),
-                    max: calc_date_to_timestamp(domain.max, ctx.tz.clone()),
-                })),
-            })
+        |_, domain| {
+            if let Some(domain) = int32_domain_to_timestamp_domain(domain) {
+                FunctionDomain::Domain(NullableDomain {
+                    has_null: false,
+                    value: Some(Box::new(domain)),
+                })
+            } else {
+                FunctionDomain::Full
+            }
         },
         error_to_null(eval_date_to_timestamp),
     );
 
     fn eval_date_to_timestamp(val: Value<DateType>, ctx: &mut EvalContext) -> Value<TimestampType> {
-        vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, _| {
-            output.push(calc_date_to_timestamp(val, ctx.func_ctx.tz.clone()));
+        vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, ctx| {
+            match calc_date_to_timestamp(val, ctx.func_ctx.tz.clone()) {
+                Ok(t) => output.push(t),
+                Err(e) => {
+                    ctx.set_error(output.len(), e);
+                    output.push(0);
+                }
+            }
         })(val, ctx)
-    }
-
-    fn calc_date_to_timestamp(val: i32, tz: TimeZone) -> i64 {
-        let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
-
-        let tz_offset_micros = tz
-            .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
-            .unwrap()
-            .as_microsecond();
-        ts + tz_offset_micros
     }
 }
 

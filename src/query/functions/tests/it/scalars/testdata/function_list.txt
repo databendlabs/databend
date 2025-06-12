@@ -131,6 +131,10 @@ Functions overloads:
 1 add_years(Date NULL, Int64 NULL) :: Date NULL
 2 add_years(Timestamp, Int64) :: Timestamp
 3 add_years(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 age(Timestamp, Timestamp) :: Interval
+1 age(Timestamp NULL, Timestamp NULL) :: Interval NULL
+2 age(Timestamp) :: Interval
+3 age(Timestamp NULL) :: Interval NULL
 0 ai_embedding_vector(String) :: Array(Float32)
 1 ai_embedding_vector(String NULL) :: Array(Float32) NULL
 0 ai_text_completion(String) :: String
