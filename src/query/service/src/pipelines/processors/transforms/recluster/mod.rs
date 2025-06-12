@@ -19,6 +19,7 @@ mod recluster_sample_state;
 mod transform_add_order_column;
 mod transform_range_partition_indexer;
 mod transform_recluster_collect;
+mod transform_recluster_partition;
 
 pub use range_bound_sampler::RangeBoundSampler;
 pub use recluster_partition_exchange::ReclusterPartitionExchange;
@@ -29,3 +30,4 @@ pub use transform_add_order_column::TransformAddOrderColumn;
 pub use transform_range_partition_indexer::TransformRangePartitionIndexer;
 pub use transform_recluster_collect::ReclusterSampleMeta;
 pub use transform_recluster_collect::TransformReclusterCollect;
+pub use transform_recluster_partition::TransformReclusterPartition;

@@ -116,6 +116,7 @@ impl Processor for TransformBlockBuilder {
         }
 
         if self.output.is_finished() {
+            self.input.finish();
             return Ok(Event::Finished);
         }
 

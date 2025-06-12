@@ -46,7 +46,6 @@ use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::SimpleRowConverter;
 use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
-use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::Recluster;
@@ -61,13 +60,12 @@ use match_template::match_template;
 
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::transforms::ReclusterPartitionExchange;
-use crate::pipelines::processors::transforms::ReclusterPartitionStrategy;
 use crate::pipelines::processors::transforms::SampleState;
 use crate::pipelines::processors::transforms::TransformAddOrderColumn;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
-use crate::pipelines::processors::transforms::TransformPartitionCollect;
 use crate::pipelines::processors::transforms::TransformRangePartitionIndexer;
 use crate::pipelines::processors::transforms::TransformReclusterCollect;
+use crate::pipelines::processors::transforms::TransformReclusterPartition;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -209,23 +207,15 @@ impl PipelineBuilder {
                         ReclusterPartitionExchange::create(0, partitions),
                     );
                     let processor_id = AtomicUsize::new(0);
-                    let settings = self.ctx.get_settings();
-                    let memory_settings = MemorySettings::disable_spill();
                     self.main_pipeline.add_transform(|input, output| {
-                        Ok(ProcessorPtr::create(Box::new(
-                            TransformPartitionCollect::new(
-                                self.ctx.clone(),
-                                input,
-                                output,
-                                &settings,
-                                processor_id.fetch_add(1, atomic::Ordering::AcqRel),
-                                num_processors,
-                                partitions,
-                                memory_settings.clone(),
-                                None,
-                                ReclusterPartitionStrategy::new(properties.clone()),
-                            )?,
-                        )))
+                        TransformReclusterPartition::try_create(
+                            input,
+                            output,
+                            properties.clone(),
+                            processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                            num_processors,
+                            partitions,
+                        )
                     })?;
 
                     self.main_pipeline.add_async_accumulating_transformer(|| {
