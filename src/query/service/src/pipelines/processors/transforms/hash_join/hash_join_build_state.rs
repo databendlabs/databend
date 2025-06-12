@@ -700,10 +700,7 @@ impl HashJoinBuildState {
                 .map(|index| {
                     let full_columns = data_blocks
                         .iter()
-                        .map(|block| {
-                            let rows = block.num_rows();
-                            block.get_by_offset(index).to_column(rows)
-                        })
+                        .map(|block| block.get_by_offset(index).to_column())
                         .collect::<Vec<_>>();
                     Column::take_downcast_column_vec(&full_columns)
                 })

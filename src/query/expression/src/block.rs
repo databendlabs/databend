@@ -91,16 +91,13 @@ impl BlockEntry {
         }
     }
 
-    pub fn to_column(&self, num_rows: usize) -> Column {
+    pub fn to_column(&self) -> Column {
         match self {
-            BlockEntry::Const(scalar, data_type, n) => {
-                debug_assert_eq!(num_rows, *n);
-                Value::<AnyType>::Scalar(scalar.clone()).convert_to_full_column(data_type, num_rows)
+            BlockEntry::Const(scalar, data_type, num_rows) => {
+                Value::<AnyType>::Scalar(scalar.clone())
+                    .convert_to_full_column(data_type, *num_rows)
             }
-            BlockEntry::Column(column) => {
-                debug_assert_eq!(num_rows, column.len());
-                column.clone()
-            }
+            BlockEntry::Column(column) => column.clone(),
         }
     }
 

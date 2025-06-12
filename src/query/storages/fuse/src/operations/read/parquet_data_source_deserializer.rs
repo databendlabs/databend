@@ -162,7 +162,7 @@ impl DeserializeDataTransform {
         for (idx, filter) in self.cached_runtime_filter.as_ref().unwrap().iter() {
             let mut bitmap = MutableBitmap::from_len_zeroed(data_block.num_rows());
             let probe_block_entry = data_block.get_by_offset(*idx);
-            let probe_column = probe_block_entry.to_column(data_block.num_rows());
+            let probe_column = probe_block_entry.to_column();
 
             // Apply bloom filter
             ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;

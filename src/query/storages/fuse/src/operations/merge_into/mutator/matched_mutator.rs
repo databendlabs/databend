@@ -184,7 +184,7 @@ impl MatchedAggregator {
         debug_assert!(
             row_id_col.data_type().remove_nullable() == DataType::Number(NumberDataType::UInt64)
         );
-        let row_ids = row_id_col.to_column(data_block.num_rows());
+        let row_ids = row_id_col.to_column();
         let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
         match row_id_kind {
             RowIdKind::Update => {

@@ -128,8 +128,8 @@ impl IEJoinState {
             return false;
         }
 
-        let left_l1_column = left_block.get_by_offset(0).to_column(left_len);
-        let right_l1_column = right_block.get_by_offset(0).to_column(right_len);
+        let left_l1_column = left_block.get_by_offset(0).to_column();
+        let right_l1_column = right_block.get_by_offset(0).to_column();
         // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
         let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) = match self.l1_order {
             true => {
@@ -216,9 +216,8 @@ impl RangeJoinState {
         // Merge `left_sorted_blocks` to one block
         let mut merged_blocks = DataBlock::concat(&left_sorted_blocks)?;
         // extract the second column
-        let num_rows = merged_blocks.num_rows();
-        let l1 = &merged_blocks.get_by_offset(0).to_column(num_rows);
-        let l1_index_column = merged_blocks.get_by_offset(2).to_column(num_rows);
+        let l1 = &merged_blocks.get_by_offset(0).to_column();
+        let l1_index_column = merged_blocks.get_by_offset(2).to_column();
 
         let mut l2_sorted_blocks = Vec::with_capacity(left_sorted_blocks.len());
         for block in left_sorted_blocks.iter() {

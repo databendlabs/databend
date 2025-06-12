@@ -62,7 +62,7 @@ async fn test_spill_with_partition() -> Result<()> {
     assert_eq!(block.num_rows(), 100);
     assert_eq!(block.num_columns(), 2);
     for (col_idx, col) in block.columns().iter().enumerate() {
-        for (idx, cell) in col.to_column(100).iter().enumerate() {
+        for (idx, cell) in col.to_column().iter().enumerate() {
             assert_eq!(
                 cell,
                 ScalarRef::Number(NumberScalar::Int32((col_idx + idx) as i32))

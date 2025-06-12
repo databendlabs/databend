@@ -168,13 +168,13 @@ where F: RowsFetcher + Send + Sync + 'static
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let num_rows = data.num_rows();
         let entry = &data.columns()[self.row_id_col_offset];
-        let value = entry.to_column(num_rows);
+        let column = entry.to_column();
         let row_id_column = if matches!(entry.data_type(), DataType::Number(NumberDataType::UInt64))
         {
-            value.into_number().unwrap().into_u_int64().unwrap()
+            column.into_number().unwrap().into_u_int64().unwrap()
         } else {
             // From merge into matched data, the row id column is nullable but has no null value.
-            let value = *value.into_nullable().unwrap();
+            let value = *column.into_nullable().unwrap();
             debug_assert!(value.validity.null_count() == 0);
             value.column.into_number().unwrap().into_u_int64().unwrap()
         };

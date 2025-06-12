@@ -106,8 +106,7 @@ impl SessionExecutor {
             if let Ok((mut rows, _, _, _)) = rows {
                 while let Some(row) = rows.next().await {
                     if let Ok(row) = row {
-                        let num_rows = row.num_rows();
-                        let col = row.get_by_offset(0).to_column(num_rows);
+                        let col = row.get_by_offset(0).to_column();
                         let value = StringType::try_downcast_column(&col).unwrap();
                         for r in value.iter() {
                             keywords.push(r.to_string());

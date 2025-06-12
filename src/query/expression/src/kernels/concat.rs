@@ -93,11 +93,9 @@ impl DataBlock {
             return Ok(entry0.value());
         }
 
-        let columns_iter = blocks.iter().map(|block| {
-            block
-                .get_by_offset(column_index)
-                .to_column(block.num_rows())
-        });
+        let columns_iter = blocks
+            .iter()
+            .map(|block| block.get_by_offset(column_index).to_column());
         Ok(Value::Column(Column::concat_columns(columns_iter)?))
     }
 }

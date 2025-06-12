@@ -195,7 +195,7 @@ impl PlanFragment {
                         let columns = block
                             .columns()
                             .iter()
-                            .map(|entry| entry.to_column(block.num_columns()))
+                            .map(|entry| entry.to_column())
                             .collect::<Vec<Column>>();
                         let source = DataSource::ConstTable(ConstTableColumn {
                             columns,

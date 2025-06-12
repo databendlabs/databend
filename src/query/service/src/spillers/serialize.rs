@@ -82,10 +82,10 @@ impl BlocksEncoder {
             } else {
                 DataBlock::concat(&std::mem::take(&mut blocks)).unwrap()
             };
-            let num_rows = block.num_rows();
-            let columns_layout = std::iter::once(self.size())
+            let columns_layout = Some(self.size())
+                .into_iter()
                 .chain(block.take_columns().into_iter().map(|entry| {
-                    let column = entry.to_column(num_rows);
+                    let column = entry.to_column();
                     write_column(&column, &mut self.buf).unwrap();
                     self.size()
                 }))

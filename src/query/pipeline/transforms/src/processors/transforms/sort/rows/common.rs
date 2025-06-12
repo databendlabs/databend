@@ -86,7 +86,7 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                     let s = Scalar::Variant(buf);
                     ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type()).build()
                 }
-                BlockEntry::Const(_, _, _) => entry.to_column(num_rows),
+                BlockEntry::Const(_, _, _) => entry.to_column(),
 
                 BlockEntry::Column(c) => {
                     let data_type = c.data_type();

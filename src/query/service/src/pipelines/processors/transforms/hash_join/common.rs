@@ -187,8 +187,8 @@ pub(crate) fn wrap_true_validity(
     num_rows: usize,
     true_validity: &Bitmap,
 ) -> BlockEntry {
-    let col = entry.to_column(num_rows);
-    if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
+    let col = entry.to_column();
+    if col.is_null() || col.is_nullable() {
         entry.clone()
     } else {
         let mut validity = true_validity.clone();

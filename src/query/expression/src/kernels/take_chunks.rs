@@ -69,29 +69,27 @@ impl DataBlock {
 
         let result_columns = (0..num_columns)
             .map(|index| {
-                let columns = blocks
+                let entries = blocks
                     .iter()
-                    .map(|block| (block.get_by_offset(index), block.num_rows()))
+                    .map(|block| block.get_by_offset(index))
                     .collect_vec();
 
-                let ty = columns[0].0.data_type();
+                let ty = entries[0].data_type();
                 if ty.is_null() {
                     return BlockEntry::new_const_column(ty, Scalar::Null, result_size);
                 }
 
                 // if they are all same scalars
-                if columns[0].0.as_scalar().is_some() {
+                if entries[0].is_const() {
                     let all_same_scalar =
-                        columns.iter().map(|(entry, _)| entry.value()).all_equal();
+                        entries.iter().copied().map(BlockEntry::value).all_equal();
                     if all_same_scalar {
-                        return (*columns[0].0).clone();
+                        return entries[0].clone();
                     }
                 }
 
-                let full_columns: Vec<_> = columns
-                    .iter()
-                    .map(|(entry, rows)| entry.to_column(*rows))
-                    .collect();
+                let full_columns: Vec<_> =
+                    entries.iter().copied().map(BlockEntry::to_column).collect();
 
                 Column::take_column_indices(&full_columns, indices, result_size).into()
             })
@@ -106,20 +104,20 @@ impl DataBlock {
         indices: &[RowPtr],
         result_size: usize,
     ) -> Self {
-        let num_columns = build_columns.len();
-        let result_columns = (0..num_columns)
-            .map(|index| {
-                let data_type = &build_columns_data_type[index];
-                Column::take_column_vec_indices(
-                    &build_columns[index],
-                    data_type.clone(),
-                    indices,
-                    result_size,
-                )
-                .into()
-            })
-            .collect();
-        DataBlock::new(result_columns, result_size)
+        let result_entries =
+            build_columns
+                .iter()
+                .zip(build_columns_data_type)
+                .map(|(columns, data_type)| {
+                    Column::take_column_vec_indices(
+                        columns,
+                        data_type.clone(),
+                        indices,
+                        result_size,
+                    )
+                    .into()
+                });
+        DataBlock::from_iter(result_entries, result_size)
     }
 
     pub fn take_by_slice_limit(
