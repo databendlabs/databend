@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod access_log;
 mod access_logger;
+mod log_entry;
 
 pub use access_logger::AccessLogger;

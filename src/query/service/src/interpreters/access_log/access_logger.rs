@@ -26,12 +26,12 @@ use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use log::info;
 
-use crate::interpreters::access_log::access_log::AccessLogEntry;
-use crate::interpreters::access_log::access_log::AccessObject;
-use crate::interpreters::access_log::access_log::AccessObjectColumn;
-use crate::interpreters::access_log::access_log::DDLOperationType;
-use crate::interpreters::access_log::access_log::ModifyByDDLObject;
-use crate::interpreters::access_log::access_log::ObjectDomain;
+use crate::interpreters::access_log::log_entry::AccessLogEntry;
+use crate::interpreters::access_log::log_entry::AccessObject;
+use crate::interpreters::access_log::log_entry::AccessObjectColumn;
+use crate::interpreters::access_log::log_entry::DDLOperationType;
+use crate::interpreters::access_log::log_entry::ModifyByDDLObject;
+use crate::interpreters::access_log::log_entry::ObjectDomain;
 use crate::sessions::convert_query_log_timestamp;
 use crate::sessions::QueryContext;
 
@@ -164,7 +164,7 @@ impl AccessLogger {
                         operation_type,
                         properties: HashMap::from([(
                             "new_database".to_string(),
-                            entity.new_database.clone(),
+                            serde_json::to_value(entity.new_database.clone()).unwrap(),
                         )]),
                     });
                 });
@@ -195,11 +195,11 @@ impl AccessLogger {
                     properties: HashMap::from([
                         (
                             "columns".to_string(),
-                            serde_json::to_string(&columns).unwrap(),
+                            serde_json::to_value(&columns).unwrap(),
                         ),
                         (
                             "create_options".to_string(),
-                            serde_json::to_string(&plan.options).unwrap(),
+                            serde_json::to_value(&plan.options).unwrap(),
                         ),
                     ]),
                 });
@@ -218,7 +218,7 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "set_options".to_string(),
-                        serde_json::to_string(&plan.set_options).unwrap(),
+                        serde_json::to_value(&plan.set_options).unwrap(),
                     )]),
                 });
             }
@@ -231,7 +231,7 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "unset_options".to_string(),
-                        serde_json::to_string(&plan.options).unwrap(),
+                        serde_json::to_value(&plan.options).unwrap(),
                     )]),
                 });
             }
@@ -264,7 +264,8 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "new_table".to_string(),
-                        format!("{}.{}", plan.new_database, plan.new_table),
+                        serde_json::to_value(format!("{}.{}", plan.new_database, plan.new_table))
+                            .unwrap(),
                     )]),
                 });
             }
@@ -286,7 +287,7 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "columns".to_string(),
-                        serde_json::to_string(&columns).unwrap(),
+                        serde_json::to_value(&columns).unwrap(),
                     )]),
                 });
             }
@@ -308,7 +309,7 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "columns".to_string(),
-                        serde_json::to_string(&columns).unwrap(),
+                        serde_json::to_value(&columns).unwrap(),
                     )]),
                 });
             }
@@ -332,7 +333,7 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "columns".to_string(),
-                        serde_json::to_string(&columns).unwrap(),
+                        serde_json::to_value(&columns).unwrap(),
                     )]),
                 });
             }
@@ -379,7 +380,7 @@ impl AccessLogger {
                     operation_type,
                     properties: HashMap::from([(
                         "stage_type".to_string(),
-                        plan.stage_info.stage_type.to_string(),
+                        serde_json::to_value(plan.stage_info.stage_type.to_string()).unwrap(),
                     )]),
                 });
             }
@@ -424,11 +425,11 @@ impl AccessLogger {
         // Log the base objects accessed by the insert operation's select part
         match &plan.source {
             InsertInputSource::SelectPlan(plan) => {
-                self.log(&plan);
+                self.log(plan);
             }
             InsertInputSource::Values(_) => {}
             InsertInputSource::Stage(plan) => {
-                self.log(&plan);
+                self.log(plan);
             }
             InsertInputSource::StreamingLoad { .. } => {}
         }
@@ -488,7 +489,7 @@ impl AccessLogger {
         }
 
         let json = serde_json::to_string(&self.entry).unwrap();
-        info!(target: "databend::log::access_history", "{}", json);
+        info!(target: "databend::log::access", "{}", json);
     }
 }
 
