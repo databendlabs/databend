@@ -489,6 +489,14 @@ impl NumberScalar {
         }
     }
 
+    pub fn to_f32(&self) -> F32 {
+        crate::with_integer_mapped_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(num) => (*num as f32).into(),
+            NumberScalar::Float32(num) => *num,
+            NumberScalar::Float64(num) => (num.into_inner() as f32).into(),
+        })
+    }
+
     pub fn to_f64(&self) -> F64 {
         crate::with_integer_mapped_type!(|NUM_TYPE| match self {
             NumberScalar::NUM_TYPE(num) => (*num as f64).into(),
