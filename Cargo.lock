@@ -3671,14 +3671,14 @@ name = "databend-common-meta-cache"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "databend-common-base",
  "databend-common-meta-client",
  "databend-common-meta-types",
  "futures",
  "log",
  "pretty_assertions",
- "thiserror 1.0.69",
- "tokio",
+ "sub-cache",
  "tonic",
 ]
 
@@ -14473,6 +14473,18 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.101",
+]
+
+[[package]]
+name = "sub-cache"
+version = "0.2.0"
+source = "git+https://github.com/databendlabs/sub-cache?tag=v0.2.0#4d9a848cf4a98076318e4a837235a51a2d47961c"
+dependencies = [
+ "async-trait",
+ "futures",
+ "log",
+ "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]

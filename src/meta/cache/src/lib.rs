@@ -95,8 +95,7 @@
 //! ```
 
 mod cache;
-mod cache_data;
-pub mod errors;
-mod event_watcher;
+mod meta_cache_types;
+mod meta_client_source;
 
 pub use cache::Cache;
