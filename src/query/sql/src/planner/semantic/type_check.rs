@@ -3032,21 +3032,25 @@ impl<'a> TypeChecker<'a> {
 
         let mut folded_args = match &expr {
             expr::Expr::FunctionCall(expr::FunctionCall {
-                args: checked_args, ..
-            }) => {
-                let mut folded_args = Vec::with_capacity(args.len());
-                for (checked_arg, arg) in checked_args.iter().zip(args.iter()) {
-                    match self.try_fold_constant(checked_arg, true) {
-                        Some(constant) if arg.evaluable() => {
-                            folded_args.push(constant.0);
-                        }
-                        _ => {
-                            folded_args.push(arg.clone());
-                        }
-                    }
-                }
-                folded_args
-            }
+                function,
+                args: checked_args,
+                ..
+            }) => checked_args
+                .iter()
+                .zip(
+                    function
+                        .signature
+                        .args_type
+                        .iter()
+                        .map(DataType::is_generic),
+                )
+                .map(|(checked_arg, is_generic)| self.try_fold_constant(checked_arg, !is_generic))
+                .zip(args)
+                .map(|(folded, arg)| match folded {
+                    Some(box (constant, _)) if arg.evaluable() => constant,
+                    _ => arg,
+                })
+                .collect(),
             _ => args,
         };
 
