@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_ast::ast::OnErrorMode;
 use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -55,7 +54,6 @@ pub enum InsertInputSource {
 #[derive(Clone, Debug)]
 pub struct StreamingLoadPlan {
     pub file_format: Box<FileFormatParams>,
-    pub on_error_mode: OnErrorMode,
 
     // given SQL: ... into table (c1, c2, c3, c4) values (1, ?, 'a', ?)
     // required_values_schema = (c1, c2, c3, c4)
@@ -196,10 +194,7 @@ pub(crate) fn format_insert_source(
             .format_pretty()?),
         },
         InsertInputSource::StreamingLoad(plan) => {
-            let stage_node = vec![
-                FormatTreeNode::new(format!("format: {}", plan.file_format)),
-                FormatTreeNode::new(format!("on_error_mode: {}", plan.on_error_mode)),
-            ];
+            let stage_node = vec![FormatTreeNode::new(format!("format: {}", plan.file_format))];
             children.extend(stage_node);
 
             Ok(FormatTreeNode::with_children(

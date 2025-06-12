@@ -60,7 +60,6 @@ pub fn build_streaming_load_pipeline(
     schema: TableSchemaRef,
     default_exprs: Option<Vec<RemoteDefaultExpr>>,
     block_compact_thresholds: BlockThresholds,
-    on_error_mode: OnErrorMode,
 ) -> Result<()> {
     pipeline.add_source(
         |output| {
@@ -88,7 +87,7 @@ pub fn build_streaming_load_pipeline(
         block_compact_thresholds,
         vec![],
         "".to_string(),
-        on_error_mode,
+        OnErrorMode::AbortNum(1),
     )?);
     match file_format_params {
         FileFormatParams::Parquet(parquet_file_format) => {
