@@ -74,6 +74,9 @@ pub fn build_streaming_load_pipeline(
 
     let max_threads = settings.get_max_threads()? as usize;
 
+    // since there are only ony source, a few processor is fast enough.
+    let max_threads = max_threads.max(4);
+
     let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings, false)?;
 
     let load_ctx = Arc::new(LoadContext::try_create(
