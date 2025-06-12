@@ -451,11 +451,29 @@ async fn test_client_query_id() -> Result<()> {
     let sql = "select * from numbers(1)";
     let ep = create_endpoint()?;
     let mut headers = HeaderMap::new();
+    headers.insert("x-databend-query-id", "testqueryid".parse().unwrap());
+    let (status, result) =
+        post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, headers).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.id, "testqueryid");
+
+    Ok(())
+}
+
+// `-` in query id will be trimmed.
+#[tokio::test(flavor = "current_thread")]
+async fn test_client_compatible_query_id() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let wait_time_secs = 5;
+    let sql = "select * from numbers(1)";
+    let ep = create_endpoint()?;
+    let mut headers = HeaderMap::new();
     headers.insert("x-databend-query-id", "test-query-id".parse().unwrap());
     let (status, result) =
         post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, headers).await?;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.id, "test-query-id");
+    assert_eq!(result.id, "testqueryid");
 
     Ok(())
 }
