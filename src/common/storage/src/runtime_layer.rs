@@ -96,7 +96,7 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
     type BlockingWriter = A::BlockingWriter;
     type Lister = RuntimeIO<A::Lister>;
     type BlockingLister = A::BlockingLister;
-    type Deleter = RuntimeIO<RuntimeIO<A::Deleter>>;
+    type Deleter = RuntimeIO<A::Deleter>;
     type BlockingDeleter = A::BlockingDeleter;
 
     fn inner(&self) -> &Self::Inner {
@@ -155,10 +155,6 @@ impl<A: Access> LayeredAccess for RuntimeAccessor<A> {
             .spawn(async move { op.delete().await })
             .await
             .expect("join must success")
-            .map(|(rp, r)| {
-                let r = RuntimeIO::new(r, self.runtime.clone());
-                (rp, r)
-            })
             .map(|(rp, r)| {
                 let r = RuntimeIO::new(r, self.runtime.clone());
                 (rp, r)
