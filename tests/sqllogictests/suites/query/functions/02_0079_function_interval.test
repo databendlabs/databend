@@ -210,6 +210,11 @@ statement ok
 set timezone='America/New_York';
 
 query T
+select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
+----
+1
+
+query T
 WITH sample_dates(name, birth_date) AS (
 VALUES
 ('Alice', '1990-05-15'::DATE),
@@ -236,6 +241,11 @@ Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 2
 
 statement ok
 set timezone='Asia/Shanghai';
+
+query T
+select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
+----
+1
 
 query T
 WITH sample_dates(name, birth_date) AS (
@@ -265,6 +275,11 @@ Charlie 1995-07-22 1995-07-22 00:00:00.000000 29 years 10 months 21 days 29 10 2
 
 statement ok
 set timezone='UTC';
+
+query T
+select age(today(), '2022-02-02'::date)=age('2022-02-02'::date);
+----
+1
 
 query T
 WITH sample_dates(name, birth_date) AS (
