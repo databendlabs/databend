@@ -165,4 +165,5 @@ jobs:
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
       runner_provider: aws
+      runner_capacity: spot
       target: ${{ needs.info.outputs.target }}
