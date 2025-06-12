@@ -171,7 +171,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 self.get_table_info().catalog(),
                 ctx.session_state(),
             )
-            .await?;
+            .await?
+            .disable_table_info_refresh()?;
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
         if let Some((catalog_name, db_name)) =
