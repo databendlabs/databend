@@ -372,15 +372,15 @@ impl BlockingTransform for TransformSRF {
                             );
                         }
 
-                        let block_entry = BlockEntry::new(srf_expr.return_type.clone(), row_result);
+                        let block_entry = row_result.into_column().unwrap().into();
                         result_data_blocks.push(DataBlock::new(vec![block_entry], self.num_rows[i]))
                     }
                     let data_block = DataBlock::concat(&result_data_blocks)?;
                     debug_assert!(data_block.num_rows() == result_size);
-                    let block_entry = BlockEntry::new(
-                        data_block.data_type(0),
-                        data_block.get_by_offset(0).value(),
-                    );
+                    let block_entry =
+                        BlockEntry::from_value(data_block.get_by_offset(0).value(), || {
+                            (data_block.data_type(0), result_size)
+                        });
                     if block_is_empty {
                         result = DataBlock::new(vec![block_entry], result_size);
                         block_is_empty = false;

@@ -76,7 +76,7 @@ impl DataBlock {
 
                 let ty = columns[0].0.data_type();
                 if ty.is_null() {
-                    return BlockEntry::new(ty, Value::Scalar(Scalar::Null));
+                    return BlockEntry::new_const_column(ty, Scalar::Null, result_size);
                 }
 
                 // if they are all same scalars

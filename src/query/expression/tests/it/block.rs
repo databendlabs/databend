@@ -85,14 +85,11 @@ fn test_box_render_block() {
 fn test_block_entry_memory_size() {
     let scalar_u8 = Scalar::Number(NumberScalar::UInt8(1));
 
-    let entry = BlockEntry::new(
-        DataType::Number(NumberDataType::UInt8),
-        Value::<AnyType>::Scalar(scalar_u8),
-    );
+    let entry = BlockEntry::new_const_column(DataType::Number(NumberDataType::UInt8), scalar_u8, 1);
     assert_eq!(1, entry.memory_size());
 
     let scalar_str = Scalar::String("abc".to_string());
-    let entry = BlockEntry::new(DataType::String, Value::<AnyType>::Scalar(scalar_str));
+    let entry = BlockEntry::new_const_column(DataType::String, scalar_str, 1);
     assert_eq!(3, entry.memory_size());
 
     let col = StringType::from_data((0..10).map(|x| x.to_string()).collect::<Vec<_>>());

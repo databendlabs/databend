@@ -47,7 +47,9 @@ impl DataBlock {
             .map(|entry| {
                 taker.visit_value(entry.value())?;
                 let result = taker.result.take().unwrap();
-                Ok(BlockEntry::new(entry.data_type(), result))
+                Ok(BlockEntry::from_value(result, || {
+                    (entry.data_type(), num_rows)
+                }))
             })
             .collect::<Result<Vec<_>>>()?;
 
