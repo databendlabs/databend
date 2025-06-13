@@ -204,6 +204,16 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
         if self
             .bind_context
             .aggregate_info
+            .group_items
+            .iter()
+            .any(|item| item.index == column.column.index)
+        {
+            return Ok(());
+        }
+
+        if self
+            .bind_context
+            .aggregate_info
             .get_aggregate_function(&column.column.column_name)
             .is_some()
         {

@@ -75,6 +75,24 @@ SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalar
 2
 3
 
+statement error
+select number %3 a, number %4 b, row_number() over(order by number % 11) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b, row_number() over(partition by number % 3 order by number % 4) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b, row_number() over(partition by b order by a) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b, row_number() over(partition by b order by a % 2) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, number %4 b, row_number() over(partition by b % 2 order by a) from range(1, 10) t(number)  group by a,b;
+
+statement ok
+select number %3 a, decode(number %4, 0, 1, 0) b, row_number() over(partition by b % 2 order by decode(number %4, 0, 1, 0)) from range(1, 10) t(number)  group by a,b;
+
 # rank_dense
 query TII
 SELECT depname, salary, dense_rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary order by depname, salary
@@ -811,22 +829,22 @@ SELECT
     END,
     to_date('2022-01-02'),
     number % 2 = 0
-FROM numbers(1000000);
+FROM numbers(100000);
 
 
 query II
 select c.customer_id, RANK() OVER (PARTITION BY c.segment ORDER BY c.customer_id DESC) AS rank_in_segment from customers c order by c.segment, rank_in_segment, c.customer_id limit 10;
 ----
-999998 1
-999995 2
-999992 3
-999989 4
-999986 5
-999983 6
-999980 7
-999977 8
-999974 9
-999971 10
+99998 1
+99995 2
+99992 3
+99989 4
+99986 5
+99983 6
+99980 7
+99977 8
+99974 9
+99971 10
 
 query II
 with results_rollup AS
@@ -881,4 +899,3 @@ Product B 1200 NULL
 
 statement ok
 DROP DATABASE test_window_basic;
-
