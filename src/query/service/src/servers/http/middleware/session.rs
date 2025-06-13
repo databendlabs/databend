@@ -365,6 +365,7 @@ impl<E> HTTPSessionEndpoint<E> {
         req: &Request,
         query_id: String,
         login_history: &mut LoginHistory,
+        is_sticky_node: bool,
     ) -> Result<HttpQueryContext> {
         let client_host = get_client_ip(req);
         let node_id = GlobalConfig::instance().query.node_id.clone();
@@ -506,6 +507,7 @@ impl<E> HTTPSessionEndpoint<E> {
             client_host,
             client_session_id,
             user_name,
+            is_sticky_node,
         })
     }
 }
@@ -583,6 +585,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         let headers = req.headers().clone();
 
+        let mut is_sticky_node = false;
+
         if self.endpoint_kind.may_need_sticky() {
             if let Some(sticky_node_id) = headers.get(HEADER_STICKY) {
                 let sticky_node_id = sticky_node_id
@@ -593,6 +597,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         )))
                     })?
                     .to_string();
+                is_sticky_node = true;
                 let local_id = GlobalConfig::instance().query.node_id.clone();
                 if local_id != sticky_node_id {
                     return if let Some(node) = ClusterDiscovery::instance()
@@ -664,7 +669,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
                 log::warn!("Ignore header ({HEADER_WAREHOUSE}: {warehouse:?})");
             }
-        }
+        };
 
         let method = req.method().clone();
         let uri = req.uri().clone();
@@ -680,7 +685,10 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         login_history.connection_uri = uri.to_string();
 
         ThreadTracker::tracking_future(async move {
-            match self.auth(&req, query_id, &mut login_history).await {
+            match self
+                .auth(&req, query_id, &mut login_history, is_sticky_node)
+                .await
+            {
                 Ok(ctx) => {
                     login_history.event_type = LoginEventType::LoginSuccess;
                     login_history.write_to_log();
