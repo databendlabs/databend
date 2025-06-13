@@ -1852,7 +1852,7 @@ impl TableContext for QueryContext {
                 db_id: db.get_db_info().database_id.db_id,
                 db_name: db.name().to_string(),
                 engine: table.engine().to_string(),
-                session_id: table
+                temp_prefix: table
                     .options()
                     .get(OPT_KEY_TEMP_PREFIX)
                     .cloned()

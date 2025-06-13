@@ -669,7 +669,7 @@ pub struct DropTableByIdReq {
 
     pub engine: String,
 
-    pub session_id: String,
+    pub temp_prefix: String,
 }
 
 impl DropTableByIdReq {

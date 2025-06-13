@@ -126,7 +126,7 @@ impl Interpreter for DropTableInterpreter {
                 db_id: db.get_db_info().database_id.db_id,
                 db_name: db.name().to_string(),
                 engine: tbl.engine().to_string(),
-                session_id: tbl
+                temp_prefix: tbl
                     .options()
                     .get(OPT_KEY_TEMP_PREFIX)
                     .cloned()
