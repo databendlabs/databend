@@ -93,6 +93,7 @@ impl TableMetaTimestamps {
 }
 
 /// used in ut
+#[cfg(test)]
 impl Default for TableMetaTimestamps {
     fn default() -> Self {
         // for unit test, set delta to 1 hour

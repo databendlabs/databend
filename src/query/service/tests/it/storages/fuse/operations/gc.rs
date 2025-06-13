@@ -91,8 +91,11 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
             .snapshot_location_from_uuid(&orphan_snapshot_id, TableSnapshot::VERSION)?;
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
-        let orphan_snapshot =
-            TableSnapshot::try_from_previous(current_snapshot.clone(), None, Default::default())?;
+        let orphan_snapshot = TableSnapshot::try_from_previous(
+            current_snapshot.clone(),
+            None,
+            TestFixture::default_table_meta_timestamps(),
+        )?;
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)
             .await?;
@@ -202,7 +205,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
         num_of_segments,
         blocks_per_segment,
         false,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )
     .await?;
     let (segment_locations, _segment_info): (Vec<_>, Vec<_>) = segments.into_iter().unzip();
@@ -222,7 +225,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
             num_of_segments,
             blocks_per_segment,
             false,
-            Default::default(),
+            TestFixture::default_table_meta_timestamps(),
         )
         .await?;
         let segment_locations: Vec<Location> = segments.into_iter().map(|(l, _)| l).collect();

@@ -156,8 +156,8 @@ pub struct FuseTable {
 
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
-// default schema refreshing timeout is 5 seconds.
 impl FuseTable {
+    // TODO rename these creators
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
     }

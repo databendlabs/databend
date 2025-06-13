@@ -586,6 +586,10 @@ impl QueryContext {
     pub fn get_node_peek_memory_usage(&self) -> HashMap<String, usize> {
         self.shared.get_nodes_peek_memory_usage()
     }
+
+    pub fn clear_table_meta_timestamps_cache(&self) {
+        self.shared.table_meta_timestamps.lock().clear();
+    }
 }
 
 #[async_trait::async_trait]
@@ -1528,53 +1532,84 @@ impl TableContext for QueryContext {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         let table_id = table.get_id();
-        let cache = self.shared.get_table_meta_timestamps();
-        let cached_item = cache.lock().get(&table_id).copied();
 
-        match cached_item {
-            Some(ts) => Ok(ts),
-            None => {
-                let delta = {
-                    let fuse_table = FuseTable::try_from_table(table)?;
-                    let duration = if fuse_table.is_transient() {
-                        Duration::from_secs(0)
-                    } else {
-                        let settings = self.get_settings();
-                        let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
-                        if max_exec_time_secs != 0 {
-                            Duration::from_secs(max_exec_time_secs)
-                        } else {
-                            // no limit, use retention period as delta
-                            // prefer table-level retention setting.
-                            match fuse_table.get_table_retention_period() {
-                                None => {
-                                    Duration::from_days(settings.get_data_retention_time_in_days()?)
-                                }
-                                Some(v) => v,
-                            }
-                        }
-                    };
+        let cached_table_timestamps = {
+            self.shared
+                .table_meta_timestamps
+                .lock()
+                .get(&table_id)
+                .copied()
+        };
 
-                    chrono::Duration::from_std(duration).map_err(|e| {
-                        ErrorCode::Internal(format!(
-                            "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
-                        ))
-                    })?
-                };
-                let ts = self.txn_mgr().lock().get_table_meta_timestamps(
-                    table_id,
-                    previous_snapshot,
-                    delta,
-                );
-                cache.lock().insert(table_id, ts);
-                Ok(ts)
+        if let Some(ts) = cached_table_timestamps {
+            return Ok(ts);
+        }
+
+        let delta = {
+            let fuse_table = FuseTable::try_from_table(table)?;
+            let duration = if fuse_table.is_transient() {
+                Duration::from_secs(0)
+            } else {
+                let settings = self.get_settings();
+                let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                if max_exec_time_secs != 0 {
+                    Duration::from_secs(max_exec_time_secs)
+                } else {
+                    // no limit, use retention period as delta
+                    // prefer table-level retention setting.
+                    match fuse_table.get_table_retention_period() {
+                        None => Duration::from_days(settings.get_data_retention_time_in_days()?),
+                        Some(v) => v,
+                    }
+                }
+            };
+
+            chrono::Duration::from_std(duration).map_err(|e| {
+                ErrorCode::Internal(format!(
+                    "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
+                ))
+            })?
+        };
+
+        let table_meta_timestamps = TableMetaTimestamps::new(previous_snapshot, delta);
+
+        {
+            let txn_mgr_ref = self.txn_mgr();
+            let mut txn_mgr = txn_mgr_ref.lock();
+
+            if txn_mgr.is_active() {
+                // Transaction Timestamp Tracking:
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
+
+                if let Some(existing_ts) = existing_timestamp {
+                    // Defensively check that:
+                    // Inside an active transaction, if we already have a transaction timestamp for this table,
+                    // ensure the new segment_block_timestamp is greater than or equal to it.
+                    // This maintains timestamp monotonicity within the transaction, which is crucial for
+                    // the safety of vacuum operation.
+                    if table_meta_timestamps.segment_block_timestamp < existing_ts {
+                        return Err(ErrorCode::Internal(format!(
+                            "[QUERY-CTX] Transaction timestamp violation: table_id = {}, new segment timestamp {:?} is lesser than existing transaction timestamp {:?}",
+                            table_id, table_meta_timestamps.segment_block_timestamp, existing_ts
+                        )));
+                    }
+                } else {
+                    // When a table is first mutated within an active transaction, record its
+                    // segment_block_timestamp as the transaction's begin timestamp for this table.
+                    txn_mgr.set_table_txn_begin_timestamp(
+                        table_id,
+                        table_meta_timestamps.segment_block_timestamp,
+                    );
+                }
             }
         }
-    }
 
-    fn clear_table_meta_timestamps_cache(&self) {
-        let cache = self.shared.get_table_meta_timestamps();
-        cache.lock().clear();
+        {
+            let mut cache = self.shared.table_meta_timestamps.lock();
+            cache.insert(table_id, table_meta_timestamps);
+        }
+
+        Ok(table_meta_timestamps)
     }
 
     fn get_read_block_thresholds(&self) -> BlockThresholds {

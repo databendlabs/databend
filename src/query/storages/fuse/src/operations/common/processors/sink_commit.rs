@@ -48,11 +48,11 @@ use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
 use log::error;
 use log::info;
-use log::warn;
 use opendal::Operator;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::set_backoff;
+use crate::operations::vacuum::vacuum_table;
 use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
@@ -60,6 +60,7 @@ use crate::operations::TransformMergeCommitMeta;
 use crate::operations::TruncateGenerator;
 use crate::FuseTable;
 use crate::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
+
 enum State {
     None,
     FillDefault,
@@ -274,27 +275,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
             .is_some()
     }
 
-    async fn exec_auto_vacuum2(&self, tbl: &FuseTable, vacuum_handler: &VacuumHandlerWrapper) {
-        warn!(
-            "Vacuuming table: {}, ident: {}",
-            tbl.table_info.name, tbl.table_info.ident
-        );
-
-        let respect_flash_back = true;
-        if let Err(e) = vacuum_handler
-            .do_vacuum2(tbl, self.ctx.clone(), respect_flash_back)
-            .await
-        {
-            // Vacuum in a best-effort manner, errors are ignored
-            warn!("Vacuum table {} failed : {}", tbl.table_info.name, e);
-        } else {
-            info!(
-                "[SINK-COMMIT] Vacuum completed for table {}",
-                tbl.table_info.name
-            );
-        }
-    }
-
     async fn clean_history(&self, purge_mode: &PurgeMode) -> Result<()> {
         {
             let table_info = self.table.get_table_info();
@@ -308,7 +288,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         let tbl = FuseTable::try_from_table(latest.as_ref())?;
 
         if let Some(vacuum_handler) = &self.vacuum_handler {
-            self.exec_auto_vacuum2(tbl, vacuum_handler.as_ref()).await;
+            let respect_flash_back = true;
+            vacuum_table(tbl, self.ctx.clone(), vacuum_handler, respect_flash_back).await;
         } else {
             info!("[SINK-COMMIT] No vacuum handler available for auto vacuuming, please verify your license");
         }
@@ -517,6 +498,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
                 {
                     Ok(_) => {
                         if self.need_truncate() {
+                            // Truncate table operation should be executed in the context of ddl,
+                            // which implies auto commit mode.
+                            // Note that `catalog.truncate_table` may mutate table state in the meta server.
+                            assert!(!self.ctx.txn_mgr().lock().is_active());
                             catalog
                                 .truncate_table(&table_info, TruncateTableReq {
                                     table_id: table_info.ident.table_id,
@@ -526,7 +511,22 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         }
 
                         if let Some(purge_mode) = &self.purge_mode {
-                            self.clean_history(purge_mode).await?;
+                            // Flag to determine whether to vacuum data immediately or defer it
+                            let mut purge_immediately = true;
+                            {
+                                let txn_mgr_ref = self.ctx.txn_mgr();
+                                let mut txn_mgr = txn_mgr_ref.lock();
+                                if txn_mgr.is_active() {
+                                    // If inside an active transaction, schedule the table for purging after
+                                    // the transaction completes
+                                    txn_mgr.defer_table_purge(table_info);
+                                    purge_immediately = false;
+                                }
+                            }
+                            if purge_immediately {
+                                // No inside an active transaction, safe to vacuum data immediately
+                                self.clean_history(purge_mode).await?;
+                            }
                         }
 
                         metrics_inc_commit_mutation_success();
