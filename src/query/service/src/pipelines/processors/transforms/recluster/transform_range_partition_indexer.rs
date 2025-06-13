@@ -19,14 +19,10 @@ use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -164,10 +160,7 @@ where
             builder.push(low as u64);
         }
 
-        block.add_column(BlockEntry::new(
-            DataType::Number(NumberDataType::UInt64),
-            Value::Column(UInt64Type::from_data(builder)),
-        ));
+        block.add_column(UInt64Type::from_data(builder));
         self.output_data.push_back(block);
         log::info!("Recluster range output: {:?}", start.elapsed());
         Ok(())

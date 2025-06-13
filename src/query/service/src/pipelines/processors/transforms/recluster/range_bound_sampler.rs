@@ -56,7 +56,7 @@ where
     pub fn add_block(&mut self, data: &DataBlock) {
         let rows = data.num_rows();
         assert!(rows > 0);
-        let column = data.get_by_offset(self.offset).to_column(rows);
+        let column = data.get_by_offset(self.offset).to_column();
 
         let sample_size = std::cmp::min(self.sample_size, rows);
         let mut indices = (0..rows).collect::<Vec<_>>();

@@ -16,11 +16,9 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::Transform;
@@ -63,10 +61,7 @@ where
             .row_converter
             .convert(&order_by_cols, data.num_rows())?;
         let order_col = rows.to_column();
-        data.add_column(BlockEntry {
-            data_type: order_col.data_type(),
-            value: Value::Column(order_col),
-        });
+        data.add_column(order_col);
         Ok(data)
     }
 }
