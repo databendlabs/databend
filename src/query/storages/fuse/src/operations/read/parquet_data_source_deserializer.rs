@@ -167,7 +167,7 @@ impl DeserializeDataTransform {
                 .convert_to_full_column(&probe_block_entry.data_type, data_block.num_rows());
 
             // Apply bloom filter
-            ExprBloomFilter::new(filter.clone()).apply(probe_column, &mut bitmap)?;
+            ExprBloomFilter::new(filter).apply(probe_column, &mut bitmap)?;
             bitmaps.push(bitmap);
         }
         if !bitmaps.is_empty() {
