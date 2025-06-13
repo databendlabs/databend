@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use arrow_array::Array;
 use arrow_array::ArrayRef;
 use arrow_array::RecordBatch;
 use arrow_array::StructArray;
@@ -35,6 +36,7 @@ mod adapter;
 mod deserialize;
 
 pub use adapter::RowGroupImplBuilder;
+use databend_common_exception::Result;
 pub use deserialize::column_chunks_to_record_batch;
 
 use crate::io::read::block::block_reader_merge_io::DataItem;
@@ -48,17 +50,41 @@ impl BlockReader {
         column_chunks: HashMap<ColumnId, DataItem>,
         compression: &Compression,
         block_path: &str,
-    ) -> databend_common_exception::Result<DataBlock> {
+    ) -> Result<DataBlock> {
+        let mut blocks = self.deserialize_parquet_to_blocks(
+            num_rows,
+            column_metas,
+            column_chunks,
+            compression,
+            block_path,
+            None,
+        )?;
+        // Defensive check: using `num_rows` as batch_size, expects only one block
+        assert_eq!(blocks.len(), 1);
+        Ok(blocks.pop().unwrap())
+    }
+
+    pub(crate) fn deserialize_parquet_to_blocks(
+        &self,
+        num_rows: usize,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        compression: &Compression,
+        block_path: &str,
+        batch_size_hint: Option<usize>,
+    ) -> Result<Vec<DataBlock>> {
         if column_chunks.is_empty() {
-            return self.build_default_values_block(num_rows);
+            return Ok(vec![self.build_default_values_block(num_rows)?]);
         }
-        let record_batch = column_chunks_to_record_batch(
+
+        let record_batches = column_chunks_to_record_batch(
             &self.original_schema,
             num_rows,
             &column_chunks,
             compression,
+            batch_size_hint,
         )?;
-        let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
+
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
         let array_cache = if self.put_cache {
@@ -67,58 +93,89 @@ impl BlockReader {
             None
         };
 
-        for ((i, field), column_node) in self
-            .projected_schema
-            .fields
-            .iter()
-            .enumerate()
-            .zip(self.project_column_nodes.iter())
-        {
-            let data_type = field.data_type().into();
+        let mut blocks = Vec::with_capacity(record_batches.len());
+        let mut array_cache_buffer = HashMap::with_capacity(record_batches.len());
 
-            // NOTE, there is something tricky here:
-            // - `column_chunks` always contains data of leaf columns
-            // - here we may processing a nested type field
-            // - But, even if the field being processed is a field with multiple leaf columns
-            //    `column_chunks.get(&field.column_id)` will still return Some(DataItem::_)[^1],
-            //    even if we are getting data from `column_chunks` using a non-leaf
-            //    `column_id` of `projected_schema.fields`
-            //
-            //   [^1]: Except in the current block, there is no data stored for the
-            //         corresponding field, and a default value has been declared for
-            //         the corresponding field.
-            //
-            //  Yes, it is too obscure, we need to polish it later.
+        let mut offset = 0;
+        for record_batch in record_batches {
+            let num_rows_record_batch = record_batch.num_rows();
+            let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
+            for ((i, field), column_node) in self
+                .projected_schema
+                .fields
+                .iter()
+                .enumerate()
+                .zip(self.project_column_nodes.iter())
+            {
+                let data_type = field.data_type().into();
 
-            let value = match column_chunks.get(&field.column_id) {
-                Some(DataItem::RawData(data)) => {
-                    // get the deserialized arrow array, which may be a nested array
-                    let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                    if !column_node.is_nested {
-                        if let Some(cache) = &array_cache {
+                // NOTE, there is something tricky here:
+                // - `column_chunks` always contains data of leaf columns
+                // - here we may processing a nested type field
+                // - But, even if the field being processed is a field with multiple leaf columns
+                //    `column_chunks.get(&field.column_id)` will still return Some(DataItem::_)[^1],
+                //    even if we are getting data from `column_chunks` using a non-leaf
+                //    `column_id` of `projected_schema.fields`
+                //
+                //   [^1]: Except in the current block, there is no data stored for the
+                //         corresponding field, and a default value has been declared for
+                //         the corresponding field.
+                //
+                //  It is too confusing, we need to polish it SOON.
+
+                let value = match column_chunks.get(&field.column_id) {
+                    Some(DataItem::RawData(data)) => {
+                        // get the deserialized arrow array, which may be a nested array
+                        let arrow_array = column_by_name(&record_batch, &name_paths[i]);
+                        if !column_node.is_nested && array_cache.is_some() {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
                             let key =
                                 TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.insert(key.into(), (arrow_array.clone(), data.len()));
+                            array_cache_buffer
+                                .entry(key)
+                                .and_modify(|v: &mut Vec<_>| {
+                                    v.push((arrow_array.clone(), data.len()))
+                                })
+                                .or_insert(vec![(arrow_array.clone(), data.len())]);
                         }
+                        Value::from_arrow_rs(arrow_array, &data_type)?
                     }
-                    Value::from_arrow_rs(arrow_array, &data_type)?
-                }
-                Some(DataItem::ColumnArray(cached)) => {
-                    if column_node.is_nested {
-                        // a defensive check, should never happen
-                        return Err(ErrorCode::StorageOther(
-                            "unexpected nested field: nested leaf field hits cached",
-                        ));
+                    Some(DataItem::ColumnArray(cached)) => {
+                        if column_node.is_nested {
+                            // a defensive check, should never happen
+                            return Err(ErrorCode::StorageOther(
+                                "unexpected nested field: nested leaf field hits cached",
+                            ));
+                        }
+                        let array = cached.0.slice(offset, record_batch.num_rows());
+                        Value::from_arrow_rs(array, &data_type)?
                     }
-                    Value::from_arrow_rs(cached.0.clone(), &data_type)?
-                }
-                None => Value::Scalar(self.default_vals[i].clone()),
-            };
-            columns.push(BlockEntry::new(data_type, value));
+                    None => Value::Scalar(self.default_vals[i].clone()),
+                };
+                columns.push(BlockEntry::new(data_type, value));
+            }
+
+            offset += record_batch.num_rows();
+            blocks.push(DataBlock::new(columns, num_rows_record_batch));
         }
-        Ok(DataBlock::new(columns, num_rows))
+
+        // TODO doc this
+        if let Some(array_cache) = &array_cache {
+            for (key, items) in array_cache_buffer {
+                let mut arrays = Vec::with_capacity(items.len());
+                let mut len = 0;
+                for (array, size) in &items {
+                    arrays.push(array.as_ref());
+                    len += size;
+                }
+                use arrow::compute::concat;
+                let result = concat(&arrays)?;
+                array_cache.insert(key.into(), (result, len));
+            }
+        }
+
+        Ok(blocks)
     }
 }
 

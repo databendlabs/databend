@@ -34,6 +34,7 @@ FROM      (
           SELECT    *
           FROM      lineitem,
                     part
+          ORDER BY lineitem.l_orderkey, part.p_partkey
           LIMIT     10000000
           );
 ----

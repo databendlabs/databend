@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::vec;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -167,6 +168,6 @@ impl AggIndexReader {
             blocks.push(block);
         }
         let block = DataBlock::concat(&blocks)?;
-        self.apply_agg_info(block)
+        self.apply_agg_info_to_block(block)
     }
 }
