@@ -24,18 +24,22 @@ use crate::pipelines::processors::transforms::WindowPartitionMeta;
 pub struct ReclusterPartitionExchange {
     start: u64,
     width: usize,
+    start_time: Instant,
 }
 
 impl ReclusterPartitionExchange {
     pub fn create(start: u64, width: usize) -> Arc<ReclusterPartitionExchange> {
-        Arc::new(ReclusterPartitionExchange { start, width })
+        Arc::new(ReclusterPartitionExchange {
+            start,
+            width,
+            start_time: Instant::now(),
+        })
     }
 }
 
 impl Exchange for ReclusterPartitionExchange {
     const NAME: &'static str = "Recluster";
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        let start = Instant::now();
         let range_ids = data_block
             .get_last_column()
             .as_number()
@@ -60,7 +64,7 @@ impl Exchange for ReclusterPartitionExchange {
                 output_data_blocks[target].push((partition_id, block));
             }
         }
-        log::info!("Recluster range exchange: {:?}", start.elapsed());
+        log::info!("Recluster range exchange: {:?}", self.start_time.elapsed());
 
         // Union data blocks for each processor.
         Ok(output_data_blocks

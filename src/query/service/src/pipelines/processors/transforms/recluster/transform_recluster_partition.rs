@@ -162,6 +162,7 @@ impl Processor for TransformReclusterPartition {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.step, Step::Consume) {
             Step::Collect => {
+                let start_cost = self.start.elapsed();
                 let data_block = self.input.pull_data().unwrap()?;
                 if let Some(meta) = data_block
                     .get_owned_meta()
@@ -212,6 +213,11 @@ impl Processor for TransformReclusterPartition {
                         }
                     }
                 }
+                log::info!(
+                    "Recluster: start collect: {:?}, end: {:?}",
+                    start_cost,
+                    self.start.elapsed()
+                );
             }
             Step::Flush => {
                 while let Some(mut partition_data) = self.partition_data.pop() {
