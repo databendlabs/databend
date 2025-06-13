@@ -104,7 +104,8 @@ where T: Clone
 impl<T> HashMethodFixedKeys<T>
 where T: Clone
 {
-    pub fn deserialize_group_columns(
+    #[expect(dead_code)]
+    fn deserialize_group_columns(
         &self,
         keys: Vec<T>,
         group_items: &[(usize, DataType)],

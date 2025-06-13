@@ -29,10 +29,10 @@ use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::Decimal64As128Type;
 use crate::types::DecimalColumn;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalScalar;
-use crate::types::DecimalType;
+use crate::types::DecimalView;
 use crate::types::GeographyColumn;
 use crate::types::GeographyType;
 use crate::types::GeometryType;
@@ -47,7 +47,7 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::types::VariantType;
 use crate::visitor::ValueVisitor;
-use crate::with_decimal_type;
+use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
@@ -107,18 +107,16 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
         Ok(())
     }
 
-    fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
-        match column {
-            DecimalColumn::Decimal64(buffer, _) => {
-                self.combine_group_hash_type_column::<Decimal64As128Type>(&buffer);
+    fn visit_any_decimal(&mut self, decimal_column: DecimalColumn) -> Result<()> {
+        with_decimal_mapped_type!(|F| match decimal_column {
+            DecimalColumn::F(buffer, size) => {
+                with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    DecimalDataKind::T => {
+                        self.combine_group_hash_type_column::<DecimalView<F, T>>(&buffer);
+                    }
+                });
             }
-            DecimalColumn::Decimal128(buffer, _) => {
-                self.combine_group_hash_type_column::<DecimalType<i128>>(&buffer);
-            }
-            DecimalColumn::Decimal256(buffer, _) => {
-                self.combine_group_hash_type_column::<DecimalType<i256>>(&buffer);
-            }
-        }
+        });
         Ok(())
     }
 
@@ -329,10 +327,15 @@ where I: Index
     }
 
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
-        with_decimal_type!(|DECIMAL_TYPE| match column {
-            DecimalColumn::DECIMAL_TYPE(buffer, _) => {
-                let buffer = buffer.as_ref();
-                self.visit_indices(|i| buffer[i.to_usize()].agg_hash())
+        with_decimal_mapped_type!(|F| match &column {
+            DecimalColumn::F(_, size) => {
+                with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    DecimalDataKind::T => {
+                        type D = DecimalView<F, T>;
+                        let buffer = D::try_downcast_column(&Column::Decimal(column)).unwrap();
+                        self.visit_indices(|i| buffer[i.to_usize()].agg_hash())
+                    }
+                })
             }
         })
     }
