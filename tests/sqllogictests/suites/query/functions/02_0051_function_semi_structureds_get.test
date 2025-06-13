@@ -536,12 +536,12 @@ select id, get(arr, 'a') from t4
 statement ok
 set max_block_size = 2;
 
-query ITS
+query IT?
 select id, json_path_query(arr, '$[2, 1 to last -1]'), typeof(json_path_query(arr, '$[2, 1 to last -1]')) from t1
 ----
-1 3 VARIANT NULL
-1 2 VARIANT NULL
-1 3 VARIANT NULL
+1 3 number
+1 2 number
+1 3 number
 
 query IT
 select id, json_path_query(arr, '$[*]?(@ > 1 && @ <= 3)') from t1
