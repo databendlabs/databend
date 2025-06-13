@@ -348,7 +348,7 @@ impl Binder {
 }
 
 #[derive(VisitorMut)]
-#[visitor(TableReference(enter), Expr(enter), Identifier(enter))]
+#[visitor(TableReference(enter), Expr(enter))]
 pub struct TableNameReplacer {
     database: String,
     new_name: HashMap<String, String>,
@@ -368,7 +368,7 @@ impl TableNameReplacer {
         }
     }
 
-    fn enter_identifier(&mut self, identifier: &mut Identifier) {
+    fn replace_identifier(&mut self, identifier: &mut Identifier) {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
         if let Some(new_name) = self.new_name.get(&name) {
             identifier.name = new_name.clone();
@@ -381,7 +381,7 @@ impl TableNameReplacer {
         } = table_reference
         {
             if database.is_none() || database.as_ref().unwrap().name == self.database {
-                self.enter_identifier(table);
+                self.replace_identifier(table);
             }
         }
     }
@@ -391,7 +391,7 @@ impl TableNameReplacer {
             if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
             {
                 if let Some(table_identifier) = &mut column.table {
-                    self.enter_identifier(table_identifier);
+                    self.replace_identifier(table_identifier);
                 }
             }
         }
