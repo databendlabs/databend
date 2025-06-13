@@ -44,6 +44,10 @@ impl WatchNotify {
     pub fn notify_waiters(&self) {
         let _ = self.tx.send_replace(true);
     }
+
+    pub fn is_notified(&self) -> bool {
+        *self.rx.borrow()
+    }
 }
 
 #[cfg(test)]

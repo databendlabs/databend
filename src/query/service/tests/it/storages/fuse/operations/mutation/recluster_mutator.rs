@@ -156,6 +156,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         cluster_key_id,
         1,
         column_ids,
+        1,
     );
     let (_, parts) = mutator
         .target_select(compact_segments, ReclusterMode::Recluster)
@@ -280,6 +281,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             cluster_key_id,
             max_tasks,
             column_ids,
+            500,
         ));
         let (mode, selected_segs) = mutator.select_segments(&compact_segments, 8)?;
         // select the blocks with the highest depth.
