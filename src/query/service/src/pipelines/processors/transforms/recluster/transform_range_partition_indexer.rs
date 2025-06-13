@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
@@ -45,6 +46,8 @@ where T: ArgType
     output_data: VecDeque<DataBlock>,
     bounds: Vec<T::Scalar>,
     max_value: Option<T::Scalar>,
+
+    start: Instant,
 }
 
 impl<T> TransformRangePartitionIndexer<T>
@@ -65,6 +68,7 @@ where
             output_data: VecDeque::new(),
             bounds: vec![],
             max_value: None,
+            start: Instant::now(),
         })
     }
 }
@@ -121,6 +125,7 @@ where
             .expect("require a ReclusterSampleMeta");
         self.input_data = meta.blocks;
         self.state.merge_sample::<T>(meta.sample_values)?;
+        log::info!("Recluster range partition: {:?}", self.start.elapsed());
         Ok(Event::Async)
     }
 
