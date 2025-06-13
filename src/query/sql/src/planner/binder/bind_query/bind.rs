@@ -16,28 +16,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnDefinition;
-use databend_common_ast::ast::ColumnFilter;
 use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::JoinCondition;
-use databend_common_ast::ast::MapAccessor;
-use databend_common_ast::ast::Pivot;
-use databend_common_ast::ast::PivotValues;
 use databend_common_ast::ast::Query;
-use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
-use databend_common_ast::ast::TemporalClause;
-use databend_common_ast::ast::TimeTravelPoint;
-use databend_common_ast::ast::Window;
-use databend_common_ast::ast::WindowFrameBound;
-use databend_common_ast::ast::WindowSpec;
 use databend_common_ast::ast::With;
 use databend_common_ast::ast::CTE;
 use databend_common_ast::Span;
@@ -46,7 +34,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::convert_to_type_name;
 use derive_visitor::Drive;
+use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
@@ -279,7 +269,7 @@ impl Binder {
             )));
         }
 
-        let expr_replacer = ExprReplacer::new(
+        let mut expr_replacer = TableNameReplacer::new(
             database.clone(),
             self.m_cte_table_name.clone(),
             self.name_resolution_ctx.clone(),
@@ -292,7 +282,7 @@ impl Binder {
         } else {
             None
         };
-        expr_replacer.replace_query(&mut as_query);
+        as_query.drive_mut(&mut expr_replacer);
 
         let source = if cte.alias.columns.is_empty() {
             None
@@ -357,13 +347,15 @@ impl Binder {
     }
 }
 
-pub struct ExprReplacer {
+#[derive(VisitorMut)]
+#[visitor(TableReference(enter), Expr(enter), Identifier(enter))]
+pub struct TableNameReplacer {
     database: String,
     new_name: HashMap<String, String>,
     name_resolution_ctx: NameResolutionContext,
 }
 
-impl ExprReplacer {
+impl TableNameReplacer {
     pub fn new(
         database: String,
         new_name: HashMap<String, String>,
@@ -376,434 +368,32 @@ impl ExprReplacer {
         }
     }
 
-    #[recursive::recursive]
-    pub fn replace_query(&self, query: &mut Query) {
-        if let Some(with) = &mut query.with {
-            for cte in with.ctes.iter_mut() {
-                self.replace_query(&mut cte.query);
-            }
-        }
-
-        self.replace_set_expr(&mut query.body);
-
-        for order_by in query.order_by.iter_mut() {
-            self.replace_expr(&mut order_by.expr);
-        }
-
-        for limit in query.limit.iter_mut() {
-            self.replace_expr(limit);
-        }
-
-        if let Some(offset) = &mut query.offset {
-            self.replace_expr(offset);
-        }
-    }
-
-    fn replace_identifier(&self, identifier: &mut Identifier) {
+    fn enter_identifier(&mut self, identifier: &mut Identifier) {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
         if let Some(new_name) = self.new_name.get(&name) {
             identifier.name = new_name.clone();
         }
     }
 
-    fn replace_time_travel_point(&self, time_travel_point: &mut TimeTravelPoint) {
-        match time_travel_point {
-            TimeTravelPoint::Timestamp(timestamp) => {
-                self.replace_expr(timestamp);
-            }
-            TimeTravelPoint::Offset(offset) => {
-                self.replace_expr(offset);
-            }
-            _ => (),
-        }
-    }
-
-    fn replace_pivot(&self, pivot: &mut Pivot) {
-        self.replace_expr(&mut pivot.aggregate);
-        match &mut pivot.values {
-            PivotValues::ColumnValues(exprs) => {
-                for expr in exprs.iter_mut() {
-                    self.replace_expr(expr);
-                }
-            }
-            PivotValues::Subquery(subquery) => {
-                self.replace_query(subquery);
+    fn enter_table_reference(&mut self, table_reference: &mut TableReference) {
+        if let TableReference::Table {
+            database, table, ..
+        } = table_reference
+        {
+            if database.is_none() || database.as_ref().unwrap().name == self.database {
+                self.enter_identifier(table);
             }
         }
     }
 
-    #[recursive::recursive]
-    fn replace_table_table_reference(&self, table_reference: &mut TableReference) {
-        match table_reference {
-            TableReference::Table {
-                database,
-                table,
-                temporal,
-                pivot,
-                ..
-            } => {
-                if database.is_none() || database.as_ref().unwrap().name == self.database {
-                    self.replace_identifier(table);
-                }
-                if let Some(temporal) = temporal {
-                    match temporal {
-                        TemporalClause::TimeTravel(time_travel) => {
-                            self.replace_time_travel_point(time_travel);
-                        }
-                        TemporalClause::Changes(changes) => {
-                            self.replace_time_travel_point(&mut changes.at_point);
-                            if let Some(end_point) = &mut changes.end_point {
-                                self.replace_time_travel_point(end_point);
-                            }
-                        }
-                    }
-                }
-                if let Some(pivot) = pivot {
-                    self.replace_pivot(pivot);
-                }
-            }
-            TableReference::TableFunction {
-                params,
-                named_params,
-                ..
-            } => {
-                for param in params.iter_mut() {
-                    self.replace_expr(param);
-                }
-                for named_param in named_params.iter_mut() {
-                    self.replace_expr(&mut named_param.1);
-                }
-            }
-            TableReference::Subquery {
-                subquery, pivot, ..
-            } => {
-                self.replace_query(subquery);
-                if let Some(pivot) = pivot {
-                    self.replace_pivot(pivot);
-                }
-            }
-            TableReference::Join { join, .. } => {
-                if let JoinCondition::On(expr) = &mut join.condition {
-                    self.replace_expr(expr);
-                }
-                self.replace_table_table_reference(&mut join.left);
-                self.replace_table_table_reference(&mut join.right);
-            }
-            TableReference::Location { .. } => (),
-        }
-    }
-
-    #[recursive::recursive]
-    fn replace_group_by(&self, group_by: &mut GroupBy) {
-        match group_by {
-            GroupBy::Normal(exprs) | GroupBy::Cube(exprs) | GroupBy::Rollup(exprs) => {
-                for expr in exprs.iter_mut() {
-                    self.replace_expr(expr);
-                }
-            }
-            GroupBy::GroupingSets(expr_sets) => {
-                for exprs in expr_sets.iter_mut() {
-                    for expr in exprs.iter_mut() {
-                        self.replace_expr(expr);
-                    }
-                }
-            }
-            GroupBy::Combined(groups) => {
-                for group_by in groups.iter_mut() {
-                    self.replace_group_by(group_by);
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn replace_window_spec(&self, window_spec: &mut WindowSpec) {
-        for partition_expr in window_spec.partition_by.iter_mut() {
-            self.replace_expr(partition_expr);
-        }
-        for order_by in window_spec.order_by.iter_mut() {
-            self.replace_expr(&mut order_by.expr);
-        }
-        if let Some(window_frame) = &mut window_spec.window_frame {
-            if let WindowFrameBound::Preceding(expr) | WindowFrameBound::Following(expr) =
-                &mut window_frame.start_bound
+    fn enter_expr(&mut self, expr: &mut Expr) {
+        if let Expr::ColumnRef { column, .. } = expr {
+            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
             {
-                if let Some(expr) = expr {
-                    self.replace_expr(expr);
+                if let Some(table_identifier) = &mut column.table {
+                    self.enter_identifier(table_identifier);
                 }
             }
-            if let WindowFrameBound::Preceding(expr) | WindowFrameBound::Following(expr) =
-                &mut window_frame.end_bound
-            {
-                if let Some(expr) = expr {
-                    self.replace_expr(expr);
-                }
-            }
-        }
-    }
-
-    #[recursive::recursive]
-    fn replace_set_expr(&self, set_expr: &mut SetExpr) {
-        match set_expr {
-            SetExpr::Query(query) => {
-                self.replace_query(query);
-            }
-            SetExpr::Select(select) => {
-                if let Some(hints) = &mut select.hints {
-                    for hint in hints.hints_list.iter_mut() {
-                        self.replace_expr(&mut hint.expr);
-                    }
-                }
-
-                for select_list_item in select.select_list.iter_mut() {
-                    match select_list_item {
-                        SelectTarget::AliasedExpr { expr, .. } => {
-                            self.replace_expr(expr);
-                        }
-                        SelectTarget::StarColumns { column_filter, .. } => {
-                            if let Some(ColumnFilter::Lambda(lambda)) = column_filter {
-                                self.replace_expr(&mut lambda.expr);
-                            }
-                        }
-                    }
-                }
-
-                for table_reference in select.from.iter_mut() {
-                    self.replace_table_table_reference(table_reference);
-                }
-
-                if let Some(selection) = &mut select.selection {
-                    self.replace_expr(selection);
-                }
-
-                if let Some(group_by) = &mut select.group_by {
-                    self.replace_group_by(group_by);
-                }
-
-                if let Some(having) = &mut select.having {
-                    self.replace_expr(having);
-                }
-
-                if let Some(window_list) = &mut select.window_list {
-                    for window in window_list.iter_mut() {
-                        self.replace_window_spec(&mut window.spec);
-                    }
-                }
-
-                if let Some(qualify) = &mut select.qualify {
-                    self.replace_expr(qualify);
-                }
-            }
-            SetExpr::SetOperation(set_operation) => {
-                self.replace_set_expr(&mut set_operation.left);
-                self.replace_set_expr(&mut set_operation.right);
-            }
-            SetExpr::Values { values, .. } => {
-                for value in values.iter_mut() {
-                    for expr in value.iter_mut() {
-                        self.replace_expr(expr);
-                    }
-                }
-            }
-        }
-    }
-
-    #[recursive::recursive]
-    fn replace_expr(&self, expr: &mut Expr) {
-        match expr {
-            Expr::ColumnRef { column, .. } => {
-                if column.database.is_none()
-                    || column.database.as_ref().unwrap().name == self.database
-                {
-                    if let Some(table_identifier) = &mut column.table {
-                        self.replace_identifier(table_identifier);
-                    }
-                }
-            }
-            Expr::IsNull { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::IsDistinctFrom { left, right, .. } => {
-                self.replace_expr(left);
-                self.replace_expr(right);
-            }
-
-            Expr::InList { expr, list, .. } => {
-                self.replace_expr(expr);
-                for expr in list.iter_mut() {
-                    self.replace_expr(expr);
-                }
-            }
-            Expr::InSubquery { expr, subquery, .. } | Expr::LikeSubquery { expr, subquery, .. } => {
-                self.replace_expr(expr);
-                self.replace_query(subquery);
-            }
-            Expr::Between {
-                expr, low, high, ..
-            } => {
-                self.replace_expr(expr);
-                self.replace_expr(low);
-                self.replace_expr(high);
-            }
-            Expr::UnaryOp { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::BinaryOp { left, right, .. }
-            | Expr::LikeWithEscape { left, right, .. }
-            | Expr::LikeAnyWithEscape { left, right, .. } => {
-                self.replace_expr(left);
-                self.replace_expr(right);
-            }
-            Expr::JsonOp { left, right, .. } => {
-                self.replace_expr(left);
-                self.replace_expr(right);
-            }
-            Expr::Cast { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::TryCast { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::Extract { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::DatePart { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::Position {
-                substr_expr,
-                str_expr,
-                ..
-            } => {
-                self.replace_expr(substr_expr);
-                self.replace_expr(str_expr);
-            }
-            Expr::Substring {
-                expr,
-                substring_from,
-                substring_for,
-                ..
-            } => {
-                self.replace_expr(expr);
-                self.replace_expr(substring_from);
-                if let Some(substring_for) = substring_for {
-                    self.replace_expr(substring_for);
-                }
-            }
-            Expr::Trim {
-                expr, trim_where, ..
-            } => {
-                self.replace_expr(expr);
-                if let Some((_, trim_str)) = trim_where {
-                    self.replace_expr(trim_str);
-                }
-            }
-            Expr::CountAll { window, .. } => {
-                if let Some(Window::WindowSpec(window_spec)) = window {
-                    self.replace_window_spec(window_spec);
-                }
-            }
-            Expr::Tuple { exprs, .. } => {
-                for expr in exprs.iter_mut() {
-                    self.replace_expr(expr);
-                }
-            }
-            Expr::FunctionCall { func, .. } => {
-                for arg in func.args.iter_mut() {
-                    self.replace_expr(arg);
-                }
-                for param in func.params.iter_mut() {
-                    self.replace_expr(param);
-                }
-                if let Some(window_desc) = &mut func.window {
-                    if let Window::WindowSpec(window_spec) = &mut window_desc.window {
-                        self.replace_window_spec(window_spec);
-                    }
-                }
-                if let Some(lambda) = &mut func.lambda {
-                    self.replace_expr(&mut lambda.expr);
-                }
-            }
-            Expr::Case {
-                operand,
-                conditions,
-                results,
-                else_result,
-                ..
-            } => {
-                if let Some(op) = operand {
-                    self.replace_expr(op);
-                }
-                for (cond, res) in conditions.iter_mut().zip(results.iter_mut()) {
-                    self.replace_expr(cond);
-                    self.replace_expr(res);
-                }
-                if let Some(el) = else_result {
-                    self.replace_expr(el);
-                }
-            }
-            Expr::Exists { subquery, .. } => {
-                self.replace_query(subquery);
-            }
-            Expr::Subquery { subquery, .. } => {
-                self.replace_query(subquery);
-            }
-            Expr::MapAccess { expr, accessor, .. } => {
-                self.replace_expr(expr);
-                if let MapAccessor::Bracket { key } = accessor {
-                    self.replace_expr(key);
-                }
-            }
-            Expr::Array { exprs, .. } => {
-                for expr in exprs.iter_mut() {
-                    self.replace_expr(expr);
-                }
-            }
-            Expr::Map { kvs, .. } => {
-                for (_, v) in kvs.iter_mut() {
-                    self.replace_expr(v);
-                }
-            }
-            Expr::Interval { expr, .. } => {
-                self.replace_expr(expr);
-            }
-            Expr::DateAdd { interval, date, .. } => {
-                self.replace_expr(interval);
-                self.replace_expr(date);
-            }
-            Expr::DateDiff {
-                date_start,
-                date_end,
-                ..
-            } => {
-                self.replace_expr(date_start);
-                self.replace_expr(date_end);
-            }
-            Expr::DateBetween {
-                date_start,
-                date_end,
-                ..
-            } => {
-                self.replace_expr(date_start);
-                self.replace_expr(date_end);
-            }
-            Expr::DateSub { interval, date, .. } => {
-                self.replace_expr(interval);
-                self.replace_expr(date);
-            }
-            Expr::DateTrunc { date, .. } => {
-                self.replace_expr(date);
-            }
-            Expr::LastDay { date, .. } => {
-                self.replace_expr(date);
-            }
-            Expr::PreviousDay { date, .. } => {
-                self.replace_expr(date);
-            }
-            Expr::NextDay { date, .. } => {
-                self.replace_expr(date);
-            }
-            Expr::Literal { .. } | Expr::Hole { .. } | Expr::Placeholder { .. } => (),
         }
     }
 }
