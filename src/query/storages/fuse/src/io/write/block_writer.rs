@@ -97,7 +97,7 @@ pub fn serialize_block(
             let batch: Vec<Column> = block
                 .take_columns()
                 .into_iter()
-                .map(|x| x.value.into_column().unwrap())
+                .map(|x| x.into_column().unwrap())
                 .collect();
 
             writer.start()?;

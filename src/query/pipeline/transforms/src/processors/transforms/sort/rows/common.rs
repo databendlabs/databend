@@ -19,7 +19,6 @@ use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -28,7 +27,6 @@ use databend_common_expression::RowConverter as CommonRowConverter;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortField;
-use databend_common_expression::Value;
 use jsonb::RawJsonb;
 
 use super::RowConverter;
@@ -80,51 +78,47 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
     fn convert(&self, columns: &[BlockEntry], num_rows: usize) -> Result<BinaryColumn> {
         let columns = columns
             .iter()
-            .map(|entry| match &entry.value {
-                Value::Scalar(s) => match s {
-                    Scalar::Variant(val) => {
-                        // convert variant value to comparable format.
-                        let raw_jsonb = RawJsonb::new(val);
-                        let buf = raw_jsonb.convert_to_comparable();
-                        let s = Scalar::Variant(buf);
-                        ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
-                    }
-                    _ => ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build(),
-                },
-                Value::Column(c) => {
+            .map(|entry| match entry {
+                BlockEntry::Const(Scalar::Variant(val), _, _) => {
+                    // convert variant value to comparable format.
+                    let raw_jsonb = RawJsonb::new(val);
+                    let buf = raw_jsonb.convert_to_comparable();
+                    let s = Scalar::Variant(buf);
+                    ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type()).build()
+                }
+                BlockEntry::Const(_, _, _) => entry.to_column(),
+
+                BlockEntry::Column(c) => {
                     let data_type = c.data_type();
-                    match data_type.remove_nullable() {
-                        DataType::Variant => {
-                            // convert variant value to comparable format.
-                            let (_, validity) = c.validity();
-                            let col = c.remove_nullable();
-                            let col = col.as_variant().unwrap();
-                            let mut builder = BinaryColumnBuilder::with_capacity(
-                                col.len(),
-                                col.total_bytes_len(),
-                            );
-                            for (i, val) in col.iter().enumerate() {
-                                if let Some(validity) = validity {
-                                    if unsafe { !validity.get_bit_unchecked(i) } {
-                                        builder.commit_row();
-                                        continue;
-                                    }
-                                }
-                                let raw_jsonb = RawJsonb::new(val);
-                                let buf = raw_jsonb.convert_to_comparable();
-                                builder.put_slice(buf.as_ref());
+                    if !data_type.remove_nullable().is_variant() {
+                        return c.clone();
+                    }
+
+                    // convert variant value to comparable format.
+                    let (_, validity) = c.validity();
+                    let col = c.remove_nullable();
+                    let col = col.as_variant().unwrap();
+                    let mut builder =
+                        BinaryColumnBuilder::with_capacity(col.len(), col.total_bytes_len());
+                    for (i, val) in col.iter().enumerate() {
+                        if let Some(validity) = validity {
+                            if unsafe { !validity.get_bit_unchecked(i) } {
                                 builder.commit_row();
-                            }
-                            if data_type.is_nullable() {
-                                NullableColumn::new_column(
-                                    Column::Variant(builder.build()),
-                                    validity.unwrap().clone(),
-                                )
-                            } else {
-                                Column::Variant(builder.build())
+                                continue;
                             }
                         }
-                        _ => c.clone(),
+                        let raw_jsonb = RawJsonb::new(val);
+                        let buf = raw_jsonb.convert_to_comparable();
+                        builder.put_slice(buf.as_ref());
+                        builder.commit_row();
+                    }
+                    if data_type.is_nullable() {
+                        NullableColumn::new_column(
+                            Column::Variant(builder.build()),
+                            validity.unwrap().clone(),
+                        )
+                    } else {
+                        Column::Variant(builder.build())
                     }
                 }
             })

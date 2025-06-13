@@ -186,13 +186,15 @@ impl Transform for TransformNullIf {
     const NAME: &'static str = "NullIfTransform";
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        let mut columns = Vec::with_capacity(self.exprs.len());
+        let mut entries = Vec::with_capacity(self.exprs.len());
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let num_rows = data_block.num_rows();
         for (field, expr) in self.schema.fields().iter().zip(self.exprs.iter()) {
-            let value = evaluator.run(expr)?;
-            let column = BlockEntry::new(field.data_type().clone(), value);
-            columns.push(column);
+            let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                (field.data_type().clone(), num_rows)
+            });
+            entries.push(entry);
         }
-        Ok(DataBlock::new(columns, data_block.num_rows()))
+        Ok(DataBlock::new(entries, data_block.num_rows()))
     }
 }

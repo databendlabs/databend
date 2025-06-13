@@ -13,13 +13,10 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
@@ -46,27 +43,11 @@ impl RangeJoinState {
         let left_len = left_sorted_block.num_rows();
         let right_len = right_sort_block.num_rows();
 
-        let left_idx_col = &left_sorted_block.columns()[1]
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::Int64), left_len);
-        let left_join_key_col = &left_sorted_block.columns()[0].value.convert_to_full_column(
-            self.conditions[0]
-                .left_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type(),
-            left_sorted_block.num_rows(),
-        );
+        let left_idx_col = &left_sorted_block.get_by_offset(1).to_column();
+        let left_join_key_col = &left_sorted_block.get_by_offset(0).to_column();
 
-        let right_idx_col = &right_sort_block.columns()[1]
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::Int64), right_len);
-        let right_join_key_col = &right_sort_block.columns()[0].value.convert_to_full_column(
-            self.conditions[0]
-                .right_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type(),
-            right_sort_block.num_rows(),
-        );
+        let right_idx_col = &right_sort_block.get_by_offset(1).to_column();
+        let right_join_key_col = &right_sort_block.get_by_offset(0).to_column();
 
         let mut i = 0;
         let mut j = 0;
@@ -124,9 +105,7 @@ impl RangeJoinState {
                         indices.len(),
                     );
                     // Merge left_result_block and right_result_block
-                    for col in right_result_block.columns() {
-                        left_result_block.add_column(col.clone());
-                    }
+                    left_result_block.merge_block(right_result_block);
                     for filter in self.other_conditions.iter() {
                         left_result_block = filter_block(left_result_block, filter)?;
                     }

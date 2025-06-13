@@ -30,7 +30,6 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
@@ -41,7 +40,6 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
@@ -696,24 +694,13 @@ impl HashJoinBuildState {
         {
             let num_columns = data_blocks[0].num_columns();
             let columns_data_type: Vec<DataType> = (0..num_columns)
-                .map(|index| data_blocks[0].get_by_offset(index).data_type.clone())
+                .map(|index| data_blocks[0].data_type(index))
                 .collect();
             let columns: Vec<ColumnVec> = (0..num_columns)
                 .map(|index| {
                     let full_columns = data_blocks
                         .iter()
-                        .map(|block| {
-                            let entry = block.get_by_offset(index);
-                            let rows = block.num_rows();
-                            match &entry.value {
-                                Value::Scalar(s) => {
-                                    let builder =
-                                        ColumnBuilder::repeat(&s.as_ref(), rows, &entry.data_type);
-                                    builder.build()
-                                }
-                                Value::Column(c) => c.clone(),
-                            }
-                        })
+                        .map(|block| block.get_by_offset(index).to_column())
                         .collect::<Vec<_>>();
                     Column::take_downcast_column_vec(&full_columns)
                 })

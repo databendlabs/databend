@@ -45,7 +45,7 @@ fn test_cse() {
                 RawExpr::ColumnRef {
                     span: None,
                     id: 0usize,
-                    data_type: schema.field(0).data_type().clone(),
+                    data_type: schema.field(0).data_type(),
                     display_name: schema.field(0).name().clone(),
                 },
                 RawExpr::Constant {
@@ -68,7 +68,7 @@ fn test_cse() {
                         RawExpr::ColumnRef {
                             span: None,
                             id: 0usize,
-                            data_type: schema.field(0).data_type().clone(),
+                            data_type: schema.field(0).data_type(),
                             display_name: schema.field(0).name().clone(),
                         },
                         RawExpr::Constant {

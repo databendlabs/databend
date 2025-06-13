@@ -100,11 +100,11 @@ fn test_block_sort() -> Result<()> {
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(
-                entry.value.as_column().unwrap(),
+                entry.as_column().unwrap(),
                 expect,
                 "the column after sort is wrong, expect: {:?}, got: {:?}",
                 expect,
-                entry.value
+                entry.value()
             );
         }
     }
@@ -181,11 +181,11 @@ fn test_block_sort() -> Result<()> {
 
         for (entry, expect) in res.columns().iter().zip(expected.iter()) {
             assert_eq!(
-                entry.value.as_column().unwrap(),
+                entry.as_column().unwrap(),
                 expect,
                 "the column after sort is wrong, expect: {:?}, got: {:?}",
                 expect,
-                entry.value
+                entry.value()
             );
         }
     }
@@ -235,8 +235,8 @@ fn sort_concat() {
         let columns_1 = block_1.columns();
         let columns_2 = block_2.columns();
         for idx in 0..columns_1.len() {
-            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+            assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+            assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
 }

@@ -159,7 +159,6 @@ impl Client for ScriptClient {
             ))
         })?;
         let cell = col
-            .value
             .index(row)
             .ok_or_else(|| {
                 ErrorCode::ScriptExecutionError(format!(

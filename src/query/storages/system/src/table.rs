@@ -368,11 +368,7 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
         {
             use databend_common_expression::types::DataType;
             let table_info = self.inner.get_table_info();
-            let data_types: Vec<DataType> = block
-                .columns()
-                .iter()
-                .map(|v| v.data_type.clone())
-                .collect();
+            let data_types: Vec<DataType> = block.columns().iter().map(|v| v.data_type()).collect();
 
             let table_info_types: Vec<DataType> = table_info
                 .schema()

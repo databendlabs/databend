@@ -375,7 +375,7 @@ impl ReclusterTableInterpreter {
 
         // Store each clustering key's bounds in the variables collection
         for entry in keys_bounds.columns().iter() {
-            let v = entry.value.index(0).unwrap().to_owned();
+            let v = entry.index(0).unwrap().to_owned();
             variables.push_back(v);
         }
 

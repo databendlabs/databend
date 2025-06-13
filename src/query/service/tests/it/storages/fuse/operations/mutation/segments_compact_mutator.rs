@@ -219,12 +219,12 @@ impl AppendRow for TestFixture {
 
 async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    match &blocks[0].get_by_offset(0).value {
+    match &blocks[0].get_by_offset(0).value() {
         Value::Scalar(Scalar::Number(NumberScalar::UInt64(s))) => Ok(*s),
         Value::Column(Column::Number(NumberColumn::UInt64(c))) => Ok(c[0]),
         _ => Err(ErrorCode::BadDataValueType(format!(
             "Expected UInt64, but got {:?}",
-            blocks[0].get_by_offset(0).value
+            blocks[0].get_by_offset(0).value()
         ))),
     }
 }
@@ -731,9 +731,9 @@ impl CompactSegmentTestFixture {
                     } else {
                         cluster_key_id.map(|v| {
                             let val = block.get_by_offset(0);
-                            let left = vec![unsafe { val.value.index_unchecked(0) }.to_owned()];
+                            let left = vec![unsafe { val.value().index_unchecked(0) }.to_owned()];
                             let right =
-                                vec![unsafe { val.value.index_unchecked(val.value.len() - 1) }
+                                vec![unsafe { val.index_unchecked(val.value().len() - 1) }
                                     .to_owned()];
                             let level = if left.eq(&right)
                                 && block.num_rows() >= thresholds.block_per_segment

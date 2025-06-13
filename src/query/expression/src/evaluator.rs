@@ -133,13 +133,13 @@ impl<'a> Evaluator<'a> {
         let column_refs = expr.column_refs();
         for (index, data_type) in column_refs.iter() {
             let column = self.data_block.get_by_offset(*index);
-            if (column.data_type == DataType::Null && data_type.is_nullable())
-                || (column.data_type.is_nullable() && data_type == &DataType::Null)
+            if (column.data_type() == DataType::Null && data_type.is_nullable())
+                || (column.data_type().is_nullable() && data_type == &DataType::Null)
             {
                 continue;
             }
             assert_eq!(
-                &column.data_type,
+                &column.data_type(),
                 data_type,
                 "column data type mismatch at index: {index}, expr: {}",
                 expr.fmt_with_options(true)
@@ -187,9 +187,7 @@ impl<'a> Evaluator<'a> {
 
         let result = match expr {
             Expr::Constant(Constant { scalar, .. }) => Value::Scalar(scalar.clone()),
-            Expr::ColumnRef(ColumnRef { id, .. }) => {
-                self.data_block.get_by_offset(*id).value.clone()
-            }
+            Expr::ColumnRef(ColumnRef { id, .. }) => self.data_block.get_by_offset(*id).value(),
             Expr::Cast(Cast {
                 span,
                 is_try,
@@ -1188,7 +1186,8 @@ impl<'a> Evaluator<'a> {
                 Value::Column(col) => col.len(),
             });
 
-        let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
+        let entry = BlockEntry::new(value, || (src_type.clone(), num_rows));
+        let block = DataBlock::new(vec![entry], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         let result = evaluator.eval_common_call(&call, validity, expr_display, options)?;
         Ok(Some(result))
@@ -1214,10 +1213,7 @@ impl<'a> Evaluator<'a> {
             .data_block
             .columns()
             .iter()
-            .find_map(|col| match &col.value {
-                Value::Column(col) => Some(col.len()),
-                _ => None,
-            });
+            .find_map(|col| col.as_column().map(Column::len));
 
         // Evaluate the condition first and then partially evaluate the result branches.
         let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));
@@ -1400,11 +1396,10 @@ impl<'a> Evaluator<'a> {
         for i in 1..column.len() {
             let arg1 = unsafe { column.index_unchecked(i).to_owned() };
             let mut entries = col_entries.clone();
-            entries.push(BlockEntry::new(
-                col_type.clone(),
-                Value::Scalar(arg0.clone()),
-            ));
-            entries.push(BlockEntry::new(col_type.clone(), Value::Scalar(arg1)));
+            entries.extend_from_slice(&[
+                BlockEntry::new_const_column(col_type.clone(), arg0.clone(), 1),
+                BlockEntry::new_const_column(col_type.clone(), arg1, 1),
+            ]);
             let block = DataBlock::new(entries, 1);
             let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
             let result = evaluator.run(expr)?;
@@ -1447,7 +1442,7 @@ impl<'a> Evaluator<'a> {
                 for i in 0..lambda_idx {
                     let scalar = unsafe { args[i].index_unchecked(idx) };
                     let entry =
-                        BlockEntry::new(data_types[i].clone(), Value::Scalar(scalar.to_owned()));
+                        BlockEntry::new_const_column(data_types[i].clone(), scalar.to_owned(), 1);
                     entries.push(entry);
                 }
                 let scalar = unsafe { args[lambda_idx].index_unchecked(idx) };
@@ -1497,7 +1492,6 @@ impl<'a> Evaluator<'a> {
                 },
                 _ => unreachable!(),
             };
-            let inner_ty = inner_col.data_type();
 
             if func_name == "map_filter"
                 || func_name == "map_transform_keys"
@@ -1507,13 +1501,10 @@ impl<'a> Evaluator<'a> {
                     Column::Tuple(t) => (t[0].clone(), t[1].clone()),
                     _ => unreachable!(),
                 };
-                let key_entry =
-                    BlockEntry::new(key_col.data_type().clone(), Value::Column(key_col.clone()));
-                let value_entry = BlockEntry::new(
-                    value_col.data_type().clone(),
-                    Value::Column(value_col.clone()),
+                let block = DataBlock::new(
+                    vec![key_col.clone().into(), value_col.clone().into()],
+                    inner_col.len(),
                 );
-                let block = DataBlock::new(vec![key_entry, value_entry], inner_col.len());
 
                 let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                 let result = evaluator.run(&expr)?;
@@ -1580,7 +1571,7 @@ impl<'a> Evaluator<'a> {
                 };
                 return Ok(col);
             } else {
-                let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
+                let entry = inner_col.clone().into();
                 let block = DataBlock::new(vec![entry], inner_col.len());
                 let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                 let result = evaluator.run(&expr)?;
@@ -1626,21 +1617,26 @@ impl<'a> Evaluator<'a> {
         let lambda_idx = args.len() - 1;
         let mut builder = ColumnBuilder::with_capacity(return_type, len.unwrap_or(1));
         for idx in 0..(len.unwrap_or(1)) {
-            let mut entries = Vec::with_capacity(args.len());
-            for i in 0..lambda_idx {
-                let scalar = unsafe { args[i].index_unchecked(idx) };
-                let entry =
-                    BlockEntry::new(data_types[i].clone(), Value::Scalar(scalar.to_owned()));
-                entries.push(entry);
-            }
+            let scalars = (0..lambda_idx)
+                .map(|i| {
+                    let scalar = unsafe { args[i].index_unchecked(idx) };
+
+                    (scalar.to_owned(), data_types[i].clone())
+                })
+                .collect::<Vec<_>>();
             let scalar = unsafe { args[lambda_idx].index_unchecked(idx) };
             match scalar {
                 ScalarRef::Array(col) => {
                     // add lambda array scalar value as a column
                     let col_len = col.len();
-                    let entry =
-                        BlockEntry::new(col.data_type().clone(), Value::Column(col.clone()));
-                    entries.push(entry);
+                    let entries = scalars
+                        .into_iter()
+                        .map(|(scalar, data_type)| {
+                            BlockEntry::new_const_column(data_type, scalar, col_len)
+                        })
+                        .chain(Some(col.into()))
+                        .collect();
+
                     let block = DataBlock::new(entries, col_len);
 
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
@@ -1652,7 +1648,7 @@ impl<'a> Evaluator<'a> {
                         let bitmap = result_col.as_boolean().unwrap();
 
                         let src_entry = block.get_by_offset(lambda_idx);
-                        let src_col = src_entry.value.as_column().unwrap();
+                        let src_col = src_entry.as_column().unwrap();
                         let filtered_col = src_col.filter(bitmap);
                         Scalar::Array(filtered_col)
                     } else {
@@ -1666,16 +1662,15 @@ impl<'a> Evaluator<'a> {
                         Column::Tuple(t) => (t[0].clone(), t[1].clone()),
                         _ => unreachable!(),
                     };
-                    let key_entry = BlockEntry::new(
-                        key_col.data_type().clone(),
-                        Value::Column(key_col.clone()),
-                    );
-                    let value_entry = BlockEntry::new(
-                        value_col.data_type().clone(),
-                        Value::Column(value_col.clone()),
-                    );
-                    entries.push(key_entry);
-                    entries.push(value_entry);
+
+                    let entries = scalars
+                        .into_iter()
+                        .map(|(scalar, data_type)| {
+                            BlockEntry::new_const_column(data_type, scalar, col_len)
+                        })
+                        .chain([key_col.clone().into(), value_col.clone().into()])
+                        .collect();
+
                     let block = DataBlock::new(entries, col_len);
 
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
@@ -1689,8 +1684,8 @@ impl<'a> Evaluator<'a> {
                             let (key_entry, value_entry) =
                                 (block.get_by_offset(0), block.get_by_offset(1));
                             let (key_col, value_col) = (
-                                key_entry.value.as_column().unwrap(),
-                                value_entry.value.as_column().unwrap(),
+                                key_entry.as_column().unwrap(),
+                                value_entry.as_column().unwrap(),
                             );
                             let (filtered_key_col, filtered_value_col) =
                                 (key_col.filter(bitmap), value_col.filter(bitmap));
@@ -1781,7 +1776,7 @@ impl<'a> Evaluator<'a> {
             )),
             Expr::ColumnRef(ColumnRef { id, .. }) => {
                 let entry = self.data_block.get_by_offset(*id);
-                Ok((entry.value.clone(), entry.data_type.clone()))
+                Ok((entry.value().clone(), entry.data_type()))
             }
             Expr::Cast(Cast {
                 span,

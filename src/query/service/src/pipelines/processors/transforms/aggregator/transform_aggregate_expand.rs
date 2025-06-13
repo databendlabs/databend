@@ -19,7 +19,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
 
 pub struct TransformExpandGroupingSets {
@@ -46,42 +45,46 @@ impl Transform for TransformExpandGroupingSets {
         let dup_group_by_cols = self
             .group_bys
             .iter()
-            .map(|i| data.columns()[*i].clone())
+            .map(|i| data.get_by_offset(*i).clone())
             .collect::<Vec<_>>();
 
         for &id in &self.grouping_ids {
             // Repeat data for each grouping set.
-            let grouping_id_column = BlockEntry::new(
+            let grouping_id_column = BlockEntry::new_const_column(
                 DataType::Number(NumberDataType::UInt32),
-                Value::Scalar(Scalar::Number(NumberScalar::UInt32(id as u32))),
+                Scalar::Number(NumberScalar::UInt32(id as u32)),
+                num_rows,
             );
-            let mut columns = data
+            let mut entries = data
                 .columns()
                 .iter()
                 .cloned()
-                .chain(dup_group_by_cols.iter().cloned())
-                .chain(vec![grouping_id_column])
+                .chain(dup_group_by_cols.clone())
+                .chain(Some(grouping_id_column))
                 .collect::<Vec<_>>();
             let bits = !id;
             for i in 0..num_group_bys {
                 let entry = unsafe {
                     let offset = self.group_bys.get_unchecked(i);
-                    columns.get_unchecked_mut(*offset)
+                    entries.get_unchecked_mut(*offset)
                 };
                 if bits & (1 << i) == 0 {
                     // This column should be set to NULLs.
-                    *entry = BlockEntry::new(
-                        entry.data_type.wrap_nullable(),
-                        Value::Scalar(Scalar::Null),
+                    *entry = BlockEntry::new_const_column(
+                        entry.data_type().wrap_nullable(),
+                        Scalar::Null,
+                        num_rows,
                     )
                 } else {
-                    *entry = BlockEntry::new(
-                        entry.data_type.wrap_nullable(),
-                        entry.value.clone().wrap_nullable(None),
-                    )
+                    match entry {
+                        BlockEntry::Const(_, data_type, _) => {
+                            *data_type = data_type.wrap_nullable();
+                        }
+                        BlockEntry::Column(column) => *column = column.clone().wrap_nullable(None),
+                    };
                 }
             }
-            output_blocks.push(DataBlock::new(columns, num_rows));
+            output_blocks.push(DataBlock::new(entries, num_rows));
         }
 
         DataBlock::concat(&output_blocks)

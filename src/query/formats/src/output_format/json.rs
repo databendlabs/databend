@@ -201,7 +201,7 @@ impl OutputFormat for JSONOutputFormat {
             }
             res.push(b'{');
             for (c, value) in data_block.columns().iter().enumerate() {
-                let scalar = unsafe { value.value.index_unchecked(row) };
+                let scalar = unsafe { value.index_unchecked(row) };
                 let value = scalar_to_json(scalar, &self.format_settings);
 
                 res.push(b'\"');

@@ -64,7 +64,7 @@ impl BloomIndexState {
             let mut ngram_size = 0;
             for i in ngram_indexes {
                 let column = index_block.get_by_offset(*i);
-                ngram_size += column.value.memory_size() as u64;
+                ngram_size += column.value().memory_size() as u64;
             }
             Some(ngram_size)
         } else {

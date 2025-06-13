@@ -200,10 +200,7 @@ impl ColumnOrientedSegment {
 
     pub fn col_by_name(&self, name: &[&str]) -> Option<Column> {
         let (index, field) = self.segment_schema.column_with_name(name[0])?;
-        let column = self
-            .block_metas
-            .get_by_offset(index)
-            .to_column(self.block_metas.num_rows());
+        let column = self.block_metas.get_by_offset(index).to_column();
         if name.len() == 1 {
             Some(column)
         } else {

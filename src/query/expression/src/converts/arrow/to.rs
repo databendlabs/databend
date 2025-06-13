@@ -249,7 +249,7 @@ impl DataBlock {
             .into_iter()
             .zip(arrow_schema.fields())
         {
-            let column = entry.value.into_column().unwrap();
+            let column = entry.into_column().unwrap();
             let column = column.maybe_gc();
             let array = column.into_arrow_rs();
 

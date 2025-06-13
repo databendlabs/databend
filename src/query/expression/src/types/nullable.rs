@@ -295,11 +295,11 @@ impl<T: AccessType> NullableColumn<T> {
         self.validity.len()
     }
 
-    pub fn column_ref(&self) -> &T::Column {
+    pub fn column(&self) -> &T::Column {
         &self.column
     }
 
-    pub fn validity_ref(&self) -> &Bitmap {
+    pub fn validity(&self) -> &Bitmap {
         &self.validity
     }
 

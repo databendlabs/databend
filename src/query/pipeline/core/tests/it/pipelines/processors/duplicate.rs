@@ -136,8 +136,8 @@ async fn test_duplicate_processor() -> Result<()> {
     let out1 = downstream_input1.pull_data().unwrap()?;
     let out2 = downstream_input2.pull_data().unwrap()?;
 
-    assert!(out1.columns()[0].value.as_column().unwrap().eq(&col));
-    assert!(out2.columns()[0].value.as_column().unwrap().eq(&col));
+    assert!(out1.columns()[0].as_column().unwrap().eq(&col));
+    assert!(out2.columns()[0].as_column().unwrap().eq(&col));
 
     Ok(())
 }

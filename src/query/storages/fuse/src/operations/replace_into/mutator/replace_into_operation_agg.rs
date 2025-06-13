@@ -26,11 +26,8 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::MutableBitmap;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::UInt64Type;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
@@ -38,7 +35,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
@@ -456,7 +452,7 @@ impl AggregationContext {
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for (field, _) in on_conflict_fields.iter().enumerate() {
             let on_conflict_field_index = field;
-            columns.push(&key_columns_data
+            let entry_value = key_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -465,8 +461,10 @@ impl AggregationContext {
                         on_conflict_field_index, segment_index, block_index
                     ))
                 })?
-                .value);
+                .value();
+            columns.push(entry_value);
         }
+        let columns: Vec<_> = columns.iter().collect();
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
@@ -526,9 +524,7 @@ impl AggregationContext {
                     remain_columns_data.filter_with_bitmap(&bitmap)?;
 
                 // merge the remaining columns
-                for col in remain_columns_data_after_deletion.columns() {
-                    key_columns_data_after_deletion.add_column(col.clone());
-                }
+                key_columns_data_after_deletion.merge_block(remain_columns_data_after_deletion);
 
                 // resort the block
                 let col_indexes = self
@@ -551,11 +547,8 @@ impl AggregationContext {
             for i in 0..num_rows {
                 row_ids.push(i as u64);
             }
-            let value = Value::Column(Column::filter(&UInt64Type::from_data(row_ids), &bitmap));
-            let row_num = BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-                value.wrap_nullable(None),
-            );
+            let row_num =
+                Column::filter(&UInt64Type::from_data(row_ids), &bitmap).wrap_nullable(None);
             new_block.add_column(row_num);
 
             let stream_meta = gen_mutation_stream_meta(None, &block_meta.location.0)?;

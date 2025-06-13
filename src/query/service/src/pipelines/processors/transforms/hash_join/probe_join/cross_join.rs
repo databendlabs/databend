@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -39,11 +37,8 @@ impl HashJoinProbeState {
         let build_block = DataBlock::concat(build_blocks)?;
         if build_num_rows == 1 {
             for col in build_block.columns() {
-                let scalar = unsafe { col.value.index_unchecked(0) };
-                probe_block.add_column(BlockEntry::new(
-                    col.data_type.clone(),
-                    Value::Scalar(scalar.to_owned()),
-                ));
+                let scalar = unsafe { col.index_unchecked(0) };
+                probe_block.add_const_column(scalar.to_owned(), col.data_type());
             }
             return Ok(vec![probe_block]);
         }
@@ -71,15 +66,10 @@ impl HashJoinProbeState {
         let mut replicated_probe_block = DataBlock::new(columns, build_num_rows);
 
         for col in probe_block.columns() {
-            let scalar = unsafe { col.value.index_unchecked(take_index) };
-            replicated_probe_block.add_column(BlockEntry::new(
-                col.data_type.clone(),
-                Value::Scalar(scalar.to_owned()),
-            ));
+            let scalar = unsafe { col.index_unchecked(take_index) };
+            replicated_probe_block.add_const_column(scalar.to_owned(), col.data_type());
         }
-        for col in build_block.columns() {
-            replicated_probe_block.add_column(col.clone());
-        }
+        replicated_probe_block.merge_block(build_block.clone());
         Ok(replicated_probe_block)
     }
 }

@@ -24,7 +24,6 @@ use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::principal::GrantObject;
@@ -107,10 +106,7 @@ impl SessionExecutor {
             if let Ok((mut rows, _, _, _)) = rows {
                 while let Some(row) = rows.next().await {
                     if let Ok(row) = row {
-                        let num_rows = row.num_rows();
-                        let col = row.columns()[0]
-                            .value
-                            .convert_to_full_column(&DataType::String, num_rows);
+                        let col = row.get_by_offset(0).to_column();
                         let value = StringType::try_downcast_column(&col).unwrap();
                         for r in value.iter() {
                             keywords.push(r.to_string());

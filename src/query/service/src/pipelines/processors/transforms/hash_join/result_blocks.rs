@@ -19,7 +19,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
@@ -152,19 +151,10 @@ impl HashJoinProbeState {
             None
         };
         let build_block = if build_state.generation_state.is_build_projected {
-            let null_build_block = DataBlock::new(
-                self.hash_join_state
-                    .build_schema
-                    .fields()
-                    .iter()
-                    .map(|df| BlockEntry {
-                        data_type: df.data_type().clone(),
-                        value: Value::Scalar(Scalar::Null),
-                    })
-                    .collect(),
-                input_num_rows,
-            );
-            Some(null_build_block)
+            let entries = self.hash_join_state.build_schema.fields().iter().map(|df| {
+                BlockEntry::new_const_column(df.data_type().clone(), Scalar::Null, input_num_rows)
+            });
+            Some(DataBlock::from_iter(entries, input_num_rows))
         } else {
             None
         };

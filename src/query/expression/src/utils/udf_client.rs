@@ -207,7 +207,7 @@ impl UDFFlightClient {
             .collect::<Vec<_>>();
         let expect_return_type = output_fields
             .iter()
-            .map(|f| f.data_type().clone())
+            .map(|f| f.data_type())
             .collect::<Vec<_>>();
         if remote_arg_types != arg_types {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
@@ -226,7 +226,7 @@ impl UDFFlightClient {
             )));
         }
 
-        if &expect_return_type[0] != return_type {
+        if expect_return_type[0] != return_type {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
                 "UDF return type mismatch on UDF function {}, expected return type: {}, actual return type: {}",
                 func_name,

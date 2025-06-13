@@ -20,6 +20,7 @@ use std::ops::Range;
 use arrow_array::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use enum_as_inner::EnumAsInner;
 
 use crate::schema::DataSchema;
 use crate::types::AnyType;
@@ -43,64 +44,135 @@ pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 /// DataBlock is a lightweight container for a group of columns.
 #[derive(Clone)]
 pub struct DataBlock {
-    columns: Vec<BlockEntry>,
+    entries: Vec<BlockEntry>,
     num_rows: usize,
     meta: Option<BlockMetaInfoPtr>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct BlockEntry {
-    pub data_type: DataType,
-    pub value: Value<AnyType>,
+#[derive(Clone, Debug, PartialEq, EnumAsInner)]
+pub enum BlockEntry {
+    Const(Scalar, DataType, usize),
+    Column(Column),
 }
 
 impl BlockEntry {
-    pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
-        #[cfg(debug_assertions)]
-        {
-            use crate::Value;
-            match &value {
-                Value::Column(c) => {
-                    c.check_valid().unwrap();
-                }
-                Value::Scalar(_) => {
-                    check_type(&data_type, &value);
-                }
+    pub fn new<F>(value: Value<AnyType>, on_scalar: F) -> Self
+    where F: FnOnce() -> (DataType, usize) {
+        match value {
+            Value::Column(c) => c.into(),
+            Value::Scalar(s) => {
+                let (data_type, num_rows) = on_scalar();
+                BlockEntry::new_const_column(data_type, s, num_rows)
             }
         }
-
-        Self { data_type, value }
     }
 
-    pub fn from_arg_value<T: ArgType>(value: Value<T>) -> Self {
-        Self::new(T::data_type(), value.upcast())
+    pub fn new_const_column(data_type: DataType, scalar: Scalar, num_rows: usize) -> Self {
+        debug_assert!(scalar.as_ref().is_value_of_type(&data_type));
+        BlockEntry::Const(scalar, data_type, num_rows)
     }
 
-    pub fn from_arg_scalar<T: ArgType>(scalar: T::Scalar) -> Self {
-        Self::new(T::data_type(), Value::Scalar(T::upcast_scalar(scalar)))
+    pub fn new_const_column_arg<T: ArgType>(scalar: T::Scalar, num_rows: usize) -> Self {
+        Self::new_const_column(T::data_type(), T::upcast_scalar(scalar), num_rows)
     }
 
     pub fn remove_nullable(self) -> Self {
-        match self.value {
-            Value::Column(Column::Nullable(col)) => {
-                Self::new(self.data_type.remove_nullable(), Value::Column(col.column))
-            }
+        match self {
+            BlockEntry::Column(Column::Nullable(col)) => col.column().clone().into(),
             _ => self,
         }
     }
 
-    pub fn to_column(&self, num_rows: usize) -> Column {
-        self.value.convert_to_full_column(&self.data_type, num_rows)
+    pub fn memory_size(&self) -> usize {
+        match self {
+            BlockEntry::Const(scalar, _, _) => scalar.as_ref().memory_size(),
+            BlockEntry::Column(column) => column.memory_size(),
+        }
     }
 
-    pub fn into_column(self, num_rows: usize) -> Column {
-        self.value.into_full_column(&self.data_type, num_rows)
+    pub fn to_column(&self) -> Column {
+        match self {
+            BlockEntry::Const(scalar, data_type, num_rows) => {
+                Value::<AnyType>::Scalar(scalar.clone())
+                    .convert_to_full_column(data_type, *num_rows)
+            }
+            BlockEntry::Column(column) => column.clone(),
+        }
+    }
+
+    pub fn data_type(&self) -> DataType {
+        match self {
+            BlockEntry::Const(_, data_type, _) => data_type.clone(),
+            BlockEntry::Column(column) => column.data_type(),
+        }
+    }
+
+    pub fn as_scalar(&self) -> Option<&Scalar> {
+        match self {
+            BlockEntry::Const(scalar, _, _) => Some(scalar),
+            BlockEntry::Column(_) => None,
+        }
+    }
+
+    pub fn value(&self) -> Value<AnyType> {
+        match self {
+            BlockEntry::Const(scalar, _, _) => Value::Scalar(scalar.clone()),
+            BlockEntry::Column(column) => Value::Column(column.clone()),
+        }
+    }
+
+    pub fn index(&self, index: usize) -> Option<ScalarRef<'_>> {
+        match self {
+            BlockEntry::Const(scalar, _, n) if index < *n => Some(scalar.as_ref()),
+            BlockEntry::Column(column) => column.index(index),
+            _ => None,
+        }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
+        match self {
+            BlockEntry::Const(scalar, _, n) => {
+                #[cfg(debug_assertions)]
+                if index >= *n {
+                    panic!(
+                        "index out of bounds: the len is {:?} but the index is {}",
+                        n, index
+                    )
+                }
+
+                scalar.as_ref()
+            }
+            BlockEntry::Column(column) => column.index_unchecked(index),
+        }
+    }
+
+    pub fn num_rows(&self) -> usize {
+        match self {
+            BlockEntry::Const(_, _, n) => *n,
+            BlockEntry::Column(column) => column.len(),
+        }
     }
 }
 
 impl From<Column> for BlockEntry {
-    fn from(v: Column) -> Self {
-        Self::new(v.data_type(), Value::Column(v))
+    fn from(col: Column) -> Self {
+        #[cfg(debug_assertions)]
+        col.check_valid().unwrap();
+        BlockEntry::Column(col)
+    }
+}
+
+impl TryFrom<Value<AnyType>> for BlockEntry {
+    type Error = Scalar;
+
+    fn try_from(value: Value<AnyType>) -> std::result::Result<Self, Self::Error> {
+        match value {
+            Value::Scalar(scalar) => Err(scalar),
+            Value::Column(column) => Ok(column.into()),
+        }
     }
 }
 
@@ -140,37 +212,51 @@ impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
 
 impl DataBlock {
     #[inline]
-    pub fn new(columns: Vec<BlockEntry>, num_rows: usize) -> Self {
-        DataBlock::new_with_meta(columns, num_rows, None)
+    pub fn new(entries: Vec<BlockEntry>, num_rows: usize) -> Self {
+        DataBlock::new_with_meta(entries, num_rows, None)
+    }
+
+    pub fn from_iter<T>(iter: T, num_rows: usize) -> Self
+    where T: IntoIterator<Item = BlockEntry> {
+        DataBlock::new_with_meta(iter.into_iter().collect(), num_rows, None)
     }
 
     #[inline]
     pub fn new_with_meta(
-        columns: Vec<BlockEntry>,
+        entries: Vec<BlockEntry>,
         num_rows: usize,
         meta: Option<BlockMetaInfoPtr>,
     ) -> Self {
-        Self::check_columns_valid(&columns, num_rows).unwrap();
+        Self::check_columns_valid(&entries, num_rows).unwrap();
 
         Self {
-            columns,
+            entries,
             num_rows,
             meta,
         }
     }
 
-    fn check_columns_valid(columns: &[BlockEntry], num_rows: usize) -> Result<()> {
-        for entry in columns.iter() {
-            if let Value::Column(c) = &entry.value {
-                #[cfg(debug_assertions)]
-                c.check_valid()?;
-                if c.len() != num_rows {
-                    return Err(ErrorCode::Internal(format!(
-                        "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {}, datatype: {}",
+    fn check_columns_valid(entries: &[BlockEntry], num_rows: usize) -> Result<()> {
+        for entry in entries.iter() {
+            match entry {
+                BlockEntry::Const(scalar, data_type, n) => {
+                    if *n != num_rows {
+                        return Err(ErrorCode::Internal(format!(
+                            "DataBlock corrupted, const column length mismatch, const rows: {n:?}, num_rows: {num_rows}",
+                        )));
+                    }
+                    debug_assert!(scalar.as_ref().is_value_of_type(data_type));
+                }
+                BlockEntry::Column(c) => {
+                    #[cfg(debug_assertions)]
+                    c.check_valid()?;
+                    if c.len() != num_rows {
+                        return Err(ErrorCode::Internal(format!(
+                        "DataBlock corrupted, column length mismatch, col rows: {}, num_rows: {num_rows}, datatype: {}",
                         c.len(),
-                        num_rows,
                         c.data_type()
                     )));
+                    }
                 }
             }
         }
@@ -178,7 +264,7 @@ impl DataBlock {
     }
 
     pub fn check_valid(&self) -> Result<()> {
-        Self::check_columns_valid(&self.columns, self.num_rows)
+        Self::check_columns_valid(&self.entries, self.num_rows)
     }
 
     #[inline]
@@ -187,11 +273,7 @@ impl DataBlock {
         let num_rows = columns[0].len();
         debug_assert!(columns.iter().all(|c| c.len() == num_rows));
 
-        let columns = columns
-            .into_iter()
-            .map(|col| BlockEntry::new(col.data_type(), Value::Column(col)))
-            .collect();
-
+        let columns = columns.into_iter().map(|col| col.into()).collect();
         DataBlock::new(columns, num_rows)
     }
 
@@ -212,8 +294,7 @@ impl DataBlock {
             .iter()
             .map(|f| {
                 let builder = ColumnBuilder::with_capacity(f.data_type(), 0);
-                let col = builder.build();
-                BlockEntry::new(f.data_type().clone(), Value::Column(col))
+                builder.build().into()
             })
             .collect();
         DataBlock::new(columns, 0)
@@ -231,22 +312,22 @@ impl DataBlock {
 
     #[inline]
     pub fn columns(&self) -> &[BlockEntry] {
-        &self.columns
+        &self.entries
     }
 
     #[inline]
     pub fn columns_mut(&mut self) -> &mut [BlockEntry] {
-        &mut self.columns
+        &mut self.entries
     }
 
     #[inline]
     pub fn take_columns(self) -> Vec<BlockEntry> {
-        self.columns
+        self.entries
     }
 
     #[inline]
     pub fn get_by_offset(&self, offset: usize) -> &BlockEntry {
-        &self.columns[offset]
+        &self.entries[offset]
     }
 
     #[inline]
@@ -256,7 +337,7 @@ impl DataBlock {
 
     #[inline]
     pub fn num_columns(&self) -> usize {
-        self.columns.len()
+        self.entries.len()
     }
 
     #[inline]
@@ -267,14 +348,17 @@ impl DataBlock {
     // Full empty means no row, no column, no meta
     #[inline]
     pub fn is_full_empty(&self) -> bool {
-        self.is_empty() && self.meta.is_none() && self.columns.is_empty()
+        self.is_empty() && self.meta.is_none() && self.entries.is_empty()
     }
 
     #[inline]
     pub fn domains(&self) -> Vec<Domain> {
-        self.columns
+        self.entries
             .iter()
-            .map(|entry| entry.value.domain(&entry.data_type))
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, data_type, _) => scalar.as_ref().domain(data_type),
+                BlockEntry::Column(column) => column.domain(),
+            })
             .collect()
     }
 
@@ -283,12 +367,12 @@ impl DataBlock {
         self.columns().iter().map(|entry| entry.memory_size()).sum()
     }
 
+    pub fn data_type(&self, offset: usize) -> DataType {
+        self.entries[offset].data_type()
+    }
+
     pub fn consume_convert_to_full(self) -> Self {
-        if self
-            .columns()
-            .iter()
-            .all(|entry| entry.value.as_column().is_some())
-        {
+        if self.columns().iter().all(BlockEntry::is_column) {
             return self;
         }
 
@@ -296,23 +380,19 @@ impl DataBlock {
     }
 
     pub fn convert_to_full(&self) -> Self {
-        let columns = self
-            .columns()
+        let entries = self
+            .entries
             .iter()
-            .map(|entry| match &entry.value {
-                Value::Scalar(s) => {
-                    let builder =
-                        ColumnBuilder::repeat(&s.as_ref(), self.num_rows, &entry.data_type);
-                    let col = builder.build();
-                    BlockEntry::new(entry.data_type.clone(), Value::Column(col))
+            .map(|entry| match entry {
+                BlockEntry::Const(s, data_type, _) => {
+                    let builder = ColumnBuilder::repeat(&s.as_ref(), self.num_rows, data_type);
+                    builder.build().into()
                 }
-                Value::Column(c) => {
-                    BlockEntry::new(entry.data_type.clone(), Value::Column(c.clone()))
-                }
+                BlockEntry::Column(c) => c.clone().into(),
             })
             .collect();
         Self {
-            columns,
+            entries,
             num_rows: self.num_rows,
             meta: self.meta.clone(),
         }
@@ -320,26 +400,23 @@ impl DataBlock {
 
     pub fn slice(&self, range: Range<usize>) -> Self {
         assert!(
-            range.end <= self.num_rows(),
+            range.end <= self.num_rows,
             "range {:?} out of len {}",
             range,
-            self.num_rows()
+            self.num_rows
         );
-        let columns = self
-            .columns()
+        let entries = self
+            .entries
             .iter()
-            .map(|entry| match &entry.value {
-                Value::Scalar(s) => {
-                    BlockEntry::new(entry.data_type.clone(), Value::Scalar(s.clone()))
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, data_type, _) => {
+                    BlockEntry::Const(scalar.clone(), data_type.clone(), range.end - range.start)
                 }
-                Value::Column(c) => BlockEntry::new(
-                    entry.data_type.clone(),
-                    Value::Column(c.slice(range.clone())),
-                ),
+                BlockEntry::Column(c) => c.slice(range.clone()).into(),
             })
             .collect();
         Self {
-            columns,
+            entries,
             num_rows: if range.is_empty() {
                 0
             } else {
@@ -403,28 +480,55 @@ impl DataBlock {
 
     #[inline]
     pub fn merge_block(&mut self, block: DataBlock) {
-        self.columns.reserve(block.num_columns());
-        for column in block.columns.into_iter() {
+        self.entries.reserve(block.num_columns());
+        for other in block.entries.into_iter() {
             #[cfg(debug_assertions)]
-            if let Value::Column(col) = &column.value {
-                assert_eq!(self.num_rows, col.len());
-                assert_eq!(col.data_type(), column.data_type);
+            match &other {
+                BlockEntry::Const(_, _, n) => assert_eq!(*n, self.num_rows),
+                BlockEntry::Column(column) => assert_eq!(column.len(), self.num_rows),
             }
-            self.columns.push(column);
+            self.entries.push(other);
         }
     }
 
     #[inline]
-    pub fn add_column(&mut self, entry: BlockEntry) {
-        self.columns.push(entry);
+    pub fn add_entry(&mut self, entry: BlockEntry) {
+        self.entries.push(entry);
         #[cfg(debug_assertions)]
         self.check_valid().unwrap();
     }
 
     #[inline]
+    pub fn add_column(&mut self, column: Column) {
+        self.add_entry(column.into());
+    }
+
+    #[inline]
+    pub fn add_const_column(&mut self, scalar: Scalar, data_type: DataType) {
+        self.entries.push(BlockEntry::new_const_column(
+            data_type,
+            scalar,
+            self.num_rows,
+        ));
+        #[cfg(debug_assertions)]
+        self.check_valid().unwrap();
+    }
+
+    #[inline]
+    pub fn add_value(&mut self, value: Value<AnyType>, data_type: DataType) {
+        match value {
+            Value::Scalar(scalar) => self.add_const_column(scalar, data_type),
+            Value::Column(column) => {
+                debug_assert_eq!(data_type, column.data_type());
+                self.add_column(column)
+            }
+        }
+    }
+
+    #[inline]
     pub fn pop_columns(&mut self, num: usize) {
-        debug_assert!(num <= self.columns.len());
-        self.columns.truncate(self.columns.len() - num);
+        debug_assert!(num <= self.entries.len());
+        self.entries.truncate(self.entries.len() - num);
     }
 
     /// Resort the columns according to the schema.
@@ -451,7 +555,7 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Self {
-            columns,
+            entries: columns,
             num_rows: self.num_rows,
             meta: self.meta,
         })
@@ -466,7 +570,7 @@ impl DataBlock {
         }
 
         Ok(Self {
-            columns: self.columns,
+            entries: self.entries,
             num_rows: self.num_rows,
             meta,
         })
@@ -500,26 +604,28 @@ impl DataBlock {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
 
-        let mut columns = Vec::with_capacity(default_vals.len());
+        let mut entries = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
 
-            let column = match default_val {
-                Some(default_val) => {
-                    BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
-                }
+            let entry = match default_val {
+                Some(default_val) => BlockEntry::new_const_column(
+                    data_type.clone(),
+                    default_val.to_owned(),
+                    num_rows,
+                ),
                 None => {
                     let value = Value::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
                     chunk_idx += 1;
-                    BlockEntry::new(data_type.clone(), value)
+                    BlockEntry::new(value, || (data_type.clone(), num_rows))
                 }
             };
 
-            columns.push(column);
+            entries.push(entry);
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 
     pub fn create_with_default_value(
@@ -529,16 +635,19 @@ impl DataBlock {
     ) -> Result<DataBlock> {
         let schema_fields = schema.fields();
 
-        let mut columns = Vec::with_capacity(default_vals.len());
+        let mut entries = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
             let field = &schema_fields[i];
             let data_type = field.data_type();
 
-            let column = BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()));
-            columns.push(column);
+            entries.push(BlockEntry::new_const_column(
+                data_type.clone(),
+                default_val.to_owned(),
+                num_rows,
+            ));
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 
     // If block_column_ids not contain schema.field[i].column_id,
@@ -555,15 +664,16 @@ impl DataBlock {
         let data_block_columns = data_block.columns();
 
         let schema_fields = schema.fields();
-        let mut columns = Vec::with_capacity(default_vals.len());
+        let mut entries = Vec::with_capacity(default_vals.len());
         for (i, field) in schema_fields.iter().enumerate() {
             let column_id = field.column_id();
-            let column = if !block_column_ids.contains(&column_id) {
+            let entry = if !block_column_ids.contains(&column_id) {
                 let default_val = &default_vals[i];
                 let table_data_type = field.data_type();
-                BlockEntry::new(
+                BlockEntry::new_const_column(
                     table_data_type.into(),
-                    Value::Scalar(default_val.to_owned()),
+                    default_val.to_owned(),
+                    num_rows,
                 )
             } else {
                 let chunk_column = &data_block_columns[data_block_columns_idx];
@@ -571,30 +681,30 @@ impl DataBlock {
                 chunk_column.clone()
             };
 
-            columns.push(column);
+            entries.push(entry);
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 
     #[inline]
     pub fn project(mut self, projections: &ColumnSet) -> Self {
-        let mut columns = Vec::with_capacity(projections.len());
-        for (index, column) in self.columns.into_iter().enumerate() {
+        let mut entries = Vec::with_capacity(projections.len());
+        for (index, column) in self.entries.into_iter().enumerate() {
             if !projections.contains(&index) {
                 continue;
             }
-            columns.push(column);
+            entries.push(column);
         }
-        self.columns = columns;
+        self.entries = entries;
         self
     }
 
     #[inline]
     pub fn project_with_agg_index(self, projections: &ColumnSet, num_evals: usize) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
-        let eval_offset = self.columns.len() - num_evals;
-        for (index, column) in self.columns.into_iter().enumerate() {
+        let eval_offset = self.entries.len() - num_evals;
+        for (index, column) in self.entries.into_iter().enumerate() {
             if !projections.contains(&index) && index < eval_offset {
                 continue;
             }
@@ -605,9 +715,7 @@ impl DataBlock {
 
     #[inline]
     pub fn get_last_column(&self) -> &Column {
-        debug_assert!(!self.columns.is_empty());
-        debug_assert!(self.columns.last().unwrap().value.as_column().is_some());
-        self.columns.last().unwrap().value.as_column().unwrap()
+        self.entries.last().unwrap().as_column().unwrap()
     }
 
     pub fn infer_schema(&self) -> DataSchema {
@@ -615,17 +723,14 @@ impl DataBlock {
             .columns()
             .iter()
             .enumerate()
-            .map(|(index, e)| DataField::new(&format!("col_{index}"), e.data_type.clone()))
+            .map(|(index, e)| DataField::new(&format!("col_{index}"), e.data_type()))
             .collect();
         DataSchema::new(fields)
     }
 
     // This is inefficient, don't use it in hot path
     pub fn value_at(&self, col: usize, row: usize) -> Option<ScalarRef<'_>> {
-        if col >= self.columns.len() {
-            return None;
-        }
-        self.columns[col].value.index(row)
+        self.entries.get(col)?.index(row)
     }
 
     /// Calculates the memory size of a `DataBlock` for writing purposes.
@@ -634,27 +739,18 @@ impl DataBlock {
         let num_rows = self.num_rows();
         self.columns()
             .iter()
-            .map(|entry| match &entry.value {
-                Value::Column(Column::Nullable(col)) if col.validity.true_count() == 0 => {
+            .map(|entry| match entry {
+                BlockEntry::Column(Column::Nullable(col)) if col.validity().true_count() == 0 => {
                     // For `Nullable` columns with no valid values,
                     // only the size of the validity bitmap is counted.
                     col.validity.as_slice().0.len()
                 }
-                Value::Scalar(v) => v
-                    .as_ref()
-                    .estimated_scalar_repeat_size(num_rows, &entry.data_type),
+                BlockEntry::Const(s, data_type, _) => {
+                    s.as_ref().estimated_scalar_repeat_size(num_rows, data_type)
+                }
                 _ => entry.memory_size(),
             })
             .sum()
-    }
-}
-
-impl BlockEntry {
-    pub fn memory_size(&self) -> usize {
-        match &self.value {
-            Value::Scalar(s) => s.as_ref().memory_size(),
-            Value::Column(c) => c.memory_size(),
-        }
     }
 }
 
@@ -675,26 +771,6 @@ impl PartialEq for Box<dyn BlockMetaInfo> {
 impl Clone for Box<dyn BlockMetaInfo> {
     fn clone(&self) -> Self {
         self.clone_self()
-    }
-}
-
-fn check_type(data_type: &DataType, value: &Value<AnyType>) {
-    match value {
-        Value::Scalar(Scalar::Null) => {
-            assert!(data_type.is_nullable_or_null());
-        }
-        Value::Scalar(Scalar::Tuple(fields)) => {
-            // Check if data_type is Tuple type.
-            let data_type = data_type.remove_nullable();
-            assert!(matches!(data_type, DataType::Tuple(_)));
-            if let DataType::Tuple(dts) = data_type {
-                for (s, dt) in fields.iter().zip(dts.iter()) {
-                    check_type(dt, &Value::Scalar(s.clone()));
-                }
-            }
-        }
-        Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
-        Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
 }
 

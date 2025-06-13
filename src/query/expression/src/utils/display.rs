@@ -93,8 +93,8 @@ impl Debug for DataBlock {
         for (i, entry) in self.columns().iter().enumerate() {
             table.add_row(vec![
                 i.to_string(),
-                entry.data_type.to_string(),
-                format!("{:?}", entry.value),
+                entry.data_type().to_string(),
+                format!("{:?}", entry.value()),
             ]);
         }
 
@@ -113,7 +113,7 @@ impl Display for DataBlock {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|entry| entry.value.index(index).unwrap().to_string())
+                .map(|entry| entry.index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);

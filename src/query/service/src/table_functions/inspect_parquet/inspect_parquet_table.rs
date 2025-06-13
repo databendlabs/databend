@@ -260,15 +260,19 @@ impl AsyncSource for InspectParquetSource {
         }
         let block = DataBlock::new(
             vec![
-                BlockEntry::from_arg_scalar::<StringType>(created),
-                BlockEntry::from_arg_scalar::<UInt64Type>(num_columns),
-                BlockEntry::from_arg_scalar::<UInt64Type>(
+                BlockEntry::new_const_column_arg::<StringType>(created, 1),
+                BlockEntry::new_const_column_arg::<UInt64Type>(num_columns, 1),
+                BlockEntry::new_const_column_arg::<UInt64Type>(
                     parquet_schema.file_metadata().num_rows() as _,
+                    1,
                 ),
-                BlockEntry::from_arg_scalar::<UInt64Type>(parquet_schema.num_row_groups() as _),
-                BlockEntry::from_arg_scalar::<UInt64Type>(serialized_size),
-                BlockEntry::from_arg_scalar::<Int64Type>(max_compressed),
-                BlockEntry::from_arg_scalar::<Int64Type>(max_uncompressed),
+                BlockEntry::new_const_column_arg::<UInt64Type>(
+                    parquet_schema.num_row_groups() as _,
+                    1,
+                ),
+                BlockEntry::new_const_column_arg::<UInt64Type>(serialized_size, 1),
+                BlockEntry::new_const_column_arg::<Int64Type>(max_compressed, 1),
+                BlockEntry::new_const_column_arg::<Int64Type>(max_uncompressed, 1),
             ],
             1,
         );
