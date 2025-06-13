@@ -22,7 +22,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_system::LogType;
 use databend_common_storages_system::QueryLogElement;
-use databend_common_storages_system::QueryLogQueue;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use log::error;
 use log::info;
@@ -71,7 +70,7 @@ impl InterpreterQueryLog {
         info!(target: "databend::log::query", "{}", event_str);
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
-        QueryLogQueue::instance()?.append_data(event)
+        Ok(())
     }
 
     pub fn fail_to_start(ctx: Arc<QueryContext>, err: ErrorCode) {

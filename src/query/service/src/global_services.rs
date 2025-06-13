@@ -34,7 +34,6 @@ use databend_common_meta_store::MetaStoreProvider;
 use databend_common_storage::DataOperator;
 use databend_common_storage::ShareTableConfig;
 use databend_common_storages_hive::HiveCreator;
-use databend_common_storages_system::ProfilesLogQueue;
 use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
@@ -162,8 +161,6 @@ impl GlobalServices {
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
         }
-
-        ProfilesLogQueue::init(config.query.max_cached_queries_profiles);
 
         #[cfg(feature = "enable_queries_executor")]
         {

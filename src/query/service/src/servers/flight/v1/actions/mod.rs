@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod flight_actions;
-mod get_profile;
 mod get_running_query_dump;
 mod init_query_env;
 mod init_query_fragments;
@@ -31,7 +30,6 @@ use databend_common_exception::Result;
 use databend_common_settings::Settings;
 pub use flight_actions::flight_actions;
 pub use flight_actions::FlightActions;
-pub use get_profile::GET_PROFILE;
 pub use get_running_query_dump::GET_RUNNING_QUERY_DUMP;
 pub use init_query_env::INIT_QUERY_ENV;
 pub use init_query_fragments::init_query_fragments;
