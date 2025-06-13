@@ -136,9 +136,11 @@ where
 pub struct AggregateJsonArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+    _t: PhantomData<(T, State)>,
 }
+
+unsafe impl<T, State> Send for AggregateJsonArrayAggFunction<T, State> {}
+unsafe impl<T, State> Sync for AggregateJsonArrayAggFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
 where
@@ -287,8 +289,7 @@ where
         let func = AggregateJsonArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: PhantomData,
-            _state: PhantomData,
+            _t: Default::default(),
         };
         Ok(Arc::new(func))
     }

@@ -328,8 +328,7 @@ where T: Decimal
         let size = inner_type.as_decimal().unwrap();
 
         let inner_col = T::upcast_column(sum_values.into(), *size);
-        let array_value = ScalarRef::Array(inner_col);
-        builder.push(array_value);
+        builder.push(ScalarRef::Array(inner_col));
 
         Ok(())
     }
@@ -372,9 +371,9 @@ where T: Decimal
 
         let data_type = builder.data_type();
         let inner_type = data_type.as_array().unwrap();
-        let decimal_type = inner_type.as_decimal().unwrap();
+        let decimal_size = inner_type.as_decimal().unwrap();
 
-        let inner_col = T::upcast_column(avg_values.into(), *decimal_type);
+        let inner_col = T::upcast_column(avg_values.into(), *decimal_size);
         let array_value = ScalarRef::Array(inner_col);
         builder.push(array_value);
 

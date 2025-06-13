@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
@@ -21,9 +22,14 @@ use std::sync::Arc;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
+use databend_common_expression::types::date::CoreDate;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
+use databend_common_expression::types::interval::CoreInterval;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::simple_type::SimpleType;
+use databend_common_expression::types::simple_type::SimpleValueType;
+use databend_common_expression::types::timestamp::CoreTimestamp;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
@@ -47,10 +53,9 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
-use crate::with_simple_no_number_mapped_type;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct ArrayAggState<T>
+pub struct ArrayAggStateAny<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -58,7 +63,7 @@ where
     pub(crate) values: Vec<T::Scalar>,
 }
 
-impl<T> Default for ArrayAggState<T>
+impl<T> Default for ArrayAggStateAny<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -68,7 +73,7 @@ where
     }
 }
 
-impl<T> ScalarStateFunc<T> for ArrayAggState<T>
+impl<T> ScalarStateFunc<T> for ArrayAggStateAny<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
@@ -104,33 +109,10 @@ where
         let inner_type = data_type.as_array().unwrap();
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
-        match inner_type.remove_nullable() {
-            DataType::Decimal(size) => {
-                let values = mem::take(&mut self.values);
-                for value in values.into_iter() {
-                    let val = T::upcast_scalar_with_type(value, &DataType::Decimal(size));
-                    let decimal_val = val.as_decimal().unwrap();
-                    let new_val = match decimal_val {
-                        DecimalScalar::Decimal64(v, _) => {
-                            ScalarRef::Decimal(DecimalScalar::Decimal64(*v, size))
-                        }
-                        DecimalScalar::Decimal128(v, _) => {
-                            ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
-                        }
-                        DecimalScalar::Decimal256(v, _) => {
-                            ScalarRef::Decimal(DecimalScalar::Decimal256(*v, size))
-                        }
-                    };
-                    inner_builder.push(new_val);
-                }
-            }
-            _ => {
-                let values = mem::take(&mut self.values);
-                for value in values.into_iter() {
-                    let val = T::upcast_scalar_with_type(value, inner_type);
-                    inner_builder.push(val.as_ref());
-                }
-            }
+        let values = mem::take(&mut self.values);
+        for value in values.into_iter() {
+            let val = T::upcast_scalar_with_type(value, inner_type);
+            inner_builder.push(val.as_ref());
         }
         let array_value = ScalarRef::Array(inner_builder.build());
         builder.push(array_value);
@@ -210,52 +192,162 @@ where
         let inner_type = data_type.as_array().unwrap();
 
         let mut inner_builder = ColumnBuilder::with_capacity(inner_type, self.values.len());
-        match inner_type.remove_nullable() {
-            DataType::Decimal(size) => {
-                for value in &self.values {
-                    match value {
-                        Some(value) => {
-                            let val =
-                                T::upcast_scalar_with_type(value.clone(), &DataType::Decimal(size));
-                            let decimal_val = val.as_decimal().unwrap();
-                            let new_val = match decimal_val {
-                                DecimalScalar::Decimal64(v, _) => {
-                                    ScalarRef::Decimal(DecimalScalar::Decimal64(*v, size))
-                                }
-                                DecimalScalar::Decimal128(v, _) => {
-                                    ScalarRef::Decimal(DecimalScalar::Decimal128(*v, size))
-                                }
-                                DecimalScalar::Decimal256(v, _) => {
-                                    ScalarRef::Decimal(DecimalScalar::Decimal256(*v, size))
-                                }
-                            };
-                            inner_builder.push(new_val);
-                        }
-                        None => {
-                            inner_builder.push(ScalarRef::Null);
-                        }
-                    }
+        for value in &self.values {
+            match value {
+                Some(value) => {
+                    let val =
+                        T::upcast_scalar_with_type(value.clone(), &inner_type.remove_nullable());
+                    inner_builder.push(val.as_ref());
                 }
-            }
-            _ => {
-                for value in &self.values {
-                    match value {
-                        Some(value) => {
-                            let val = T::upcast_scalar_with_type(
-                                value.clone(),
-                                &inner_type.remove_nullable(),
-                            );
-                            inner_builder.push(val.as_ref());
-                        }
-                        None => {
-                            inner_builder.push(ScalarRef::Null);
-                        }
-                    }
+                None => {
+                    inner_builder.push(ScalarRef::Null);
                 }
             }
         }
+
         let array_value = ScalarRef::Array(inner_builder.build());
         builder.push(array_value);
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct ArrayAggStateSimple<T, const NULLABLE: bool>
+where T: Debug
+{
+    values: Vec<T>,
+    validity: MutableBitmap,
+}
+
+unsafe impl<T: Debug, const NULLABLE: bool> Send for ArrayAggStateSimple<T, NULLABLE> {}
+
+impl<T, const NULLABLE: bool> BorshSerialize for ArrayAggStateSimple<T, NULLABLE>
+where T: Debug + BorshSerialize
+{
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        if NULLABLE {
+            borsh::to_writer(
+                writer,
+                &(
+                    &self.values,
+                    Column::Boolean(self.validity.clone().freeze()),
+                ),
+            )
+        } else {
+            borsh::to_writer(writer, &self.values)
+        }
+    }
+}
+
+impl<T, const NULLABLE: bool> BorshDeserialize for ArrayAggStateSimple<T, NULLABLE>
+where T: Debug + BorshDeserialize
+{
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        if NULLABLE {
+            let (values, Column::Boolean(validity)) = borsh::from_reader(reader)? else {
+                unreachable!()
+            };
+            Ok(Self {
+                values,
+                validity: validity.make_mut(),
+            })
+        } else {
+            let values = borsh::from_reader(reader)?;
+            Ok(Self {
+                values,
+                ..Default::default()
+            })
+        }
+    }
+}
+
+impl<T: Debug, const NULLABLE: bool> Default for ArrayAggStateSimple<T, NULLABLE> {
+    fn default() -> Self {
+        Self {
+            values: Vec::new(),
+            validity: MutableBitmap::new(),
+        }
+    }
+}
+
+impl<V, const NULLABLE: bool> ScalarStateFunc<SimpleValueType<V>>
+    for ArrayAggStateSimple<V::Scalar, NULLABLE>
+where
+    V: SimpleType,
+    Self: BorshSerialize + BorshDeserialize,
+{
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn add(&mut self, other: Option<V::Scalar>) {
+        match other {
+            Some(scalar) => {
+                self.values.push(scalar);
+                if NULLABLE {
+                    self.validity.push(true);
+                }
+            }
+            None if NULLABLE => {
+                self.values.push(V::Scalar::default());
+                self.validity.push(false);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn add_batch(&mut self, column: &Buffer<V::Scalar>, validity: Option<&Bitmap>) -> Result<()> {
+        let length = column.len();
+        if length == 0 {
+            return Ok(());
+        }
+
+        if let Some(validity) = validity {
+            for (value, valid) in column.iter().zip(validity) {
+                if valid {
+                    self.values.push(*value);
+                    self.validity.push(true);
+                } else {
+                    self.values.push(V::Scalar::default());
+                    self.validity.push(false);
+                }
+            }
+        } else {
+            self.values.extend(column.iter().copied());
+            if NULLABLE {
+                self.validity.extend_constant(length, true);
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.values.extend_from_slice(&rhs.values);
+        self.validity
+            .extend_from_slice(rhs.validity.as_slice(), 0, rhs.validity.len());
+
+        Ok(())
+    }
+
+    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        let data_type = builder.data_type();
+        let inner_type = data_type.as_array().unwrap();
+
+        let column = mem::take(&mut self.values).into();
+        let item = if !NULLABLE {
+            SimpleValueType::<V>::upcast_column_with_type(column, inner_type)
+        } else {
+            let column = SimpleValueType::<V>::upcast_column_with_type(
+                column,
+                &inner_type.remove_nullable(),
+            );
+            Column::Nullable(Box::new(NullableColumn::new(
+                column,
+                mem::take(&mut self.validity).freeze(),
+            )))
+        };
+
+        builder.push(ScalarRef::Array(item));
         Ok(())
     }
 }
@@ -268,9 +360,12 @@ pub struct AggregateArrayAggFunction<T, State> {
     _state: PhantomData<State>,
 }
 
+unsafe impl<T, State> Send for AggregateArrayAggFunction<T, State> {}
+unsafe impl<T, State> Sync for AggregateArrayAggFunction<T, State> {}
+
 impl<T, State> AggregateFunction for AggregateArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: AccessType,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
@@ -411,7 +506,7 @@ where
     T: ValueType + Send + Sync,
     State: ScalarStateFunc<T>,
 {
-    fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
+    fn create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
@@ -421,6 +516,11 @@ where
         Ok(Arc::new(func))
     }
 }
+
+type ArrayAggrSimple<V, const N: bool> = AggregateArrayAggFunction<
+    SimpleValueType<V>,
+    ArrayAggStateSimple<<V as SimpleType>::Scalar, N>,
+>;
 
 pub fn try_create_aggregate_array_agg_function(
     display_name: &str,
@@ -432,76 +532,166 @@ pub fn try_create_aggregate_array_agg_function(
     let data_type = argument_types[0].clone();
     let is_nullable = data_type.is_nullable_or_null();
     let return_type = DataType::Array(Box::new(data_type.clone()));
+    let not_null_type = data_type.remove_nullable();
 
-    with_simple_no_number_mapped_type!(|T| match data_type.remove_nullable() {
-        DataType::T => {
-            if is_nullable {
-                type State = NullableArrayAggState<T>;
-                AggregateArrayAggFunction::<T, State>::try_create(display_name, return_type)
-            } else {
-                type State = ArrayAggState<T>;
-                AggregateArrayAggFunction::<T, State>::try_create(display_name, return_type)
-            }
-        }
+    match not_null_type {
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
                     if is_nullable {
-                        type State = NullableArrayAggState<NumberType<NUM>>;
-                        AggregateArrayAggFunction::<NumberType<NUM>, State>::try_create(
-                            display_name,
-                            return_type,
-                        )
+                        ArrayAggrSimple::<CoreNumber<NUM>, true>::create(display_name, return_type)
                     } else {
-                        type State = ArrayAggState<NumberType<NUM>>;
-                        AggregateArrayAggFunction::<NumberType<NUM>, State>::try_create(
-                            display_name,
-                            return_type,
-                        )
+                        ArrayAggrSimple::<CoreNumber<NUM>, false>::create(display_name, return_type)
                     }
                 }
             })
         }
-        DataType::Decimal(size) if size.can_carried_by_128() => {
+        DataType::Decimal(size) => {
             if is_nullable {
-                type State = NullableArrayAggState<DecimalType<i128>>;
-                AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
+                if size.can_carried_by_128() {
+                    ArrayAggrSimple::<CoreDecimal<i128>, true>::create(display_name, return_type)
+                } else {
+                    ArrayAggrSimple::<CoreDecimal<i256>, true>::create(display_name, return_type)
+                }
+            } else if size.can_carried_by_128() {
+                ArrayAggrSimple::<CoreDecimal<i128>, false>::create(display_name, return_type)
+            } else {
+                ArrayAggrSimple::<CoreDecimal<i256>, false>::create(display_name, return_type)
+            }
+        }
+        DataType::Date => {
+            if is_nullable {
+                ArrayAggrSimple::<CoreDate, true>::create(display_name, return_type)
+            } else {
+                ArrayAggrSimple::<CoreDate, false>::create(display_name, return_type)
+            }
+        }
+        DataType::Timestamp => {
+            if is_nullable {
+                ArrayAggrSimple::<CoreTimestamp, true>::create(display_name, return_type)
+            } else {
+                ArrayAggrSimple::<CoreTimestamp, false>::create(display_name, return_type)
+            }
+        }
+        DataType::Interval => {
+            if is_nullable {
+                ArrayAggrSimple::<CoreInterval, true>::create(display_name, return_type)
+            } else {
+                ArrayAggrSimple::<CoreInterval, false>::create(display_name, return_type)
+            }
+        }
+
+        DataType::Null => {
+            if is_nullable {
+                type State = NullableArrayAggState<NullType>;
+                AggregateArrayAggFunction::<NullType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<NullType>;
+                AggregateArrayAggFunction::<NullType, State>::create(display_name, return_type)
+            }
+        }
+        DataType::EmptyArray => {
+            if is_nullable {
+                type State = NullableArrayAggState<EmptyArrayType>;
+                AggregateArrayAggFunction::<EmptyArrayType, State>::create(
                     display_name,
                     return_type,
                 )
             } else {
-                type State = ArrayAggState<DecimalType<i128>>;
-                AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
+                type State = ArrayAggStateAny<EmptyArrayType>;
+                AggregateArrayAggFunction::<EmptyArrayType, State>::create(
                     display_name,
                     return_type,
                 )
             }
         }
-        DataType::Decimal(_) => {
+        DataType::EmptyMap => {
             if is_nullable {
-                type State = NullableArrayAggState<DecimalType<i256>>;
-                AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(
-                    display_name,
-                    return_type,
-                )
+                type State = NullableArrayAggState<EmptyMapType>;
+                AggregateArrayAggFunction::<EmptyMapType, State>::create(display_name, return_type)
             } else {
-                type State = ArrayAggState<DecimalType<i256>>;
-                AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(
-                    display_name,
-                    return_type,
-                )
+                type State = ArrayAggStateAny<EmptyMapType>;
+                AggregateArrayAggFunction::<EmptyMapType, State>::create(display_name, return_type)
             }
         }
+
+        DataType::String => {
+            if is_nullable {
+                type State = NullableArrayAggState<StringType>;
+                AggregateArrayAggFunction::<StringType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<StringType>;
+                AggregateArrayAggFunction::<StringType, State>::create(display_name, return_type)
+            }
+        }
+        DataType::Boolean => {
+            if is_nullable {
+                type State = NullableArrayAggState<BooleanType>;
+                AggregateArrayAggFunction::<BooleanType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<BooleanType>;
+                AggregateArrayAggFunction::<BooleanType, State>::create(display_name, return_type)
+            }
+        }
+
+        DataType::Variant => {
+            if is_nullable {
+                type State = NullableArrayAggState<VariantType>;
+                AggregateArrayAggFunction::<VariantType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<VariantType>;
+                AggregateArrayAggFunction::<VariantType, State>::create(display_name, return_type)
+            }
+        }
+        DataType::Geometry => {
+            if is_nullable {
+                type State = NullableArrayAggState<GeometryType>;
+                AggregateArrayAggFunction::<GeometryType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<GeometryType>;
+                AggregateArrayAggFunction::<GeometryType, State>::create(display_name, return_type)
+            }
+        }
+        DataType::Geography => {
+            if is_nullable {
+                type State = NullableArrayAggState<GeographyType>;
+                AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<GeographyType>;
+                AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
+            }
+        }
+
+        DataType::Binary => {
+            if is_nullable {
+                type State = NullableArrayAggState<BinaryType>;
+                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<BinaryType>;
+                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
+            }
+        }
+        DataType::Bitmap => {
+            if is_nullable {
+                type State = NullableArrayAggState<BitmapType>;
+                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<BitmapType>;
+                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
+            }
+        }
+
+        DataType::Nullable(_) | DataType::Generic(_) => unreachable!(),
         _ => {
             if is_nullable {
                 type State = NullableArrayAggState<AnyType>;
-                AggregateArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
+                AggregateArrayAggFunction::<AnyType, State>::create(display_name, return_type)
             } else {
-                type State = ArrayAggState<AnyType>;
-                AggregateArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
+                type State = ArrayAggStateAny<AnyType>;
+                AggregateArrayAggFunction::<AnyType, State>::create(display_name, return_type)
             }
         }
-    })
+    }
 }
 
 pub fn aggregate_array_agg_function_desc() -> AggregateFunctionDescription {

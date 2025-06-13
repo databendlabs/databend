@@ -197,13 +197,15 @@ where
 pub struct AggregateStCollectFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+    _t: PhantomData<(T, State)>,
 }
+
+unsafe impl<T, State> Send for AggregateStCollectFunction<T, State> {}
+unsafe impl<T, State> Sync for AggregateStCollectFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateStCollectFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
@@ -346,15 +348,14 @@ impl<T, State> fmt::Display for AggregateStCollectFunction<T, State> {
 
 impl<T, State> AggregateStCollectFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateStCollectFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: PhantomData,
-            _state: PhantomData,
+            _t: Default::default(),
         };
         Ok(Arc::new(func))
     }
