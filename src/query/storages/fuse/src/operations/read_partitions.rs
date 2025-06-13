@@ -144,6 +144,7 @@ impl FuseTable {
                 };
                 let segment_len = segment_locs.len();
 
+                // snapshot.summary.block_count
                 let snapshot_loc = self
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
