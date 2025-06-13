@@ -1,4 +1,7 @@
 statement ok
+set enable_auto_materialize_cte = 0;
+
+statement ok
 CREATE DATABASE IF NOT EXISTS test_explain_window
 
 statement ok

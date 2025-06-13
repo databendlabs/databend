@@ -425,6 +425,7 @@ async fn test_optimizer() -> Result<()> {
     let suite = TestSuite::new(base_path.clone(), subdir);
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_enable_auto_materialize_cte(0)?;
 
     suite.setup_tables(&ctx).await?;
 
