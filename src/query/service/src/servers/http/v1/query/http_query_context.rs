@@ -44,6 +44,7 @@ pub struct HttpQueryContext {
     pub client_host: Option<String>,
     pub client_session_id: Option<String>,
     pub user_name: String,
+    pub is_sticky_node: bool,
 }
 
 impl HttpQueryContext {
