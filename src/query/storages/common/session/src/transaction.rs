@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -65,8 +64,6 @@ pub struct TxnBuffer {
     deduplicated_labels: HashSet<String>,
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
-
-    pub table_meta_timestamps: HashMap<u64, TableMetaTimestamps>,
 
     temp_table_desc_to_id: HashMap<String, u64>,
     mutated_temp_tables: HashMap<u64, TempTable>,
@@ -366,23 +363,10 @@ impl TxnManager {
 
     pub fn get_table_meta_timestamps(
         &mut self,
-        table_id: u64,
         previous_snapshot: Option<Arc<TableSnapshot>>,
         delta: Duration,
     ) -> TableMetaTimestamps {
-        if !self.is_active() {
-            return TableMetaTimestamps::new(previous_snapshot, delta);
-        }
-
-        let entry = self.txn_buffer.table_meta_timestamps.entry(table_id);
-        match entry {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
-                let timestamps = TableMetaTimestamps::new(previous_snapshot, delta);
-                e.insert(timestamps);
-                timestamps
-            }
-        }
+        TableMetaTimestamps::new(previous_snapshot, delta)
     }
 
     pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {

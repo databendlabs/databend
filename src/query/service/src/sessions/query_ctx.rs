@@ -1565,11 +1565,10 @@ impl TableContext for QueryContext {
                         ))
                     })?
                 };
-                let ts = self.txn_mgr().lock().get_table_meta_timestamps(
-                    table_id,
-                    previous_snapshot,
-                    delta,
-                );
+                let ts = self
+                    .txn_mgr()
+                    .lock()
+                    .get_table_meta_timestamps(previous_snapshot, delta);
                 cache.lock().insert(table_id, ts);
                 Ok(ts)
             }
