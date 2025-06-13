@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -34,6 +35,7 @@ impl ReclusterPartitionExchange {
 impl Exchange for ReclusterPartitionExchange {
     const NAME: &'static str = "Recluster";
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+        let start = Instant::now();
         let range_ids = data_block
             .get_last_column()
             .as_number()
@@ -58,6 +60,7 @@ impl Exchange for ReclusterPartitionExchange {
                 output_data_blocks[target].push((partition_id, block));
             }
         }
+        log::info!("Recluster range exchange: {:?}", start.elapsed());
 
         // Union data blocks for each processor.
         Ok(output_data_blocks

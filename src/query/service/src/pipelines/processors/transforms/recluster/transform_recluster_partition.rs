@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -68,6 +69,9 @@ pub struct TransformReclusterPartition {
     partition_data: Vec<PartitionData>,
     output_data: VecDeque<DataBlock>,
 
+    start: Instant,
+    cnt: usize,
+
     step: Step,
 }
 
@@ -98,6 +102,8 @@ impl TransformReclusterPartition {
                 partition_data,
                 output_data: VecDeque::new(),
                 step: Step::Consume,
+                start: Instant::now(),
+                cnt: 0,
             },
         )))
     }
@@ -133,6 +139,10 @@ impl Processor for TransformReclusterPartition {
 
         if self.input.is_finished() {
             if !self.partition_data.is_empty() {
+                if self.cnt == 0 {
+                    log::info!("Recluster: start flush: {:?}", self.start.elapsed());
+                }
+                self.cnt += 1;
                 self.step = Step::Flush;
                 return Ok(Event::Sync);
             }
