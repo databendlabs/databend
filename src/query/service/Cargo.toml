@@ -126,7 +126,6 @@ futures-util = { workspace = true }
 geozero = { workspace = true }
 headers = { workspace = true }
 hex = { workspace = true }
-highway = { workspace = true }
 http = { workspace = true }
 humantime = { workspace = true }
 indicatif = { workspace = true }
