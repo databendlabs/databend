@@ -39,7 +39,6 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::BlockRea
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::TableCompression;
-use itertools::Itertools;
 use opendal::Operator;
 
 use crate::io::BlockReader;
@@ -90,25 +89,16 @@ impl BloomIndexState {
             let mut new_filter_schema = TableSchema::clone(&bloom_index.filter_schema);
             let ngram_field = TableField::new(&ngram_name, TableDataType::Binary);
 
-            match bloom_index
-                .filter_schema
+            if let Some(pos) = new_filter_schema
                 .fields()
                 .iter()
-                .find_position(|field| field.name().cmp(&ngram_name).is_gt())
+                .position(|f| f.name().starts_with(format!("Ngram({column_id})").as_str()))
             {
-                None => {
-                    new_filter_schema.add_columns(&[ngram_field])?;
-                    index_block.add_column(new_column);
-                }
-                Some((offset, _)) => {
-                    let row = index_block.num_rows();
-                    let mut columns = index_block.take_columns();
-                    columns.insert(offset, new_column);
-                    new_filter_schema.add_column(&ngram_field, offset)?;
-
-                    index_block = DataBlock::new(columns, row);
-                }
+                new_filter_schema.fields.remove(pos);
+                index_block.remove_column(pos);
             }
+            new_filter_schema.add_columns(&[ngram_field])?;
+            index_block.add_entry(new_column);
             Cow::Owned(Arc::new(new_filter_schema))
         } else {
             Cow::Borrowed(&bloom_index.filter_schema)
@@ -124,7 +114,7 @@ impl BloomIndexState {
         let ngram_size = if !ngram_indexes.is_empty() {
             let mut ngram_size = 0;
             for i in ngram_indexes {
-                let column = index_block.get_by_offset(*i);
+                let column = index_block.get_by_offset(i);
                 ngram_size += column.value().memory_size() as u64;
             }
             Some(ngram_size)

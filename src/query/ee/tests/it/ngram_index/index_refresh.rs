@@ -45,16 +45,38 @@ async fn test_fuse_do_refresh_ngram_index() -> Result<()> {
         .execute_command("CREATE NGRAM INDEX idx2 ON default.t3(d);")
         .await?;
 
-    let old_meta = get_bloom_index_meta(&fixture).await?;
+    let meta_0 = get_bloom_index_meta(&fixture).await?;
+    assert_eq!(meta_0.columns.len(), 5);
     fixture
         .execute_command("REFRESH NGRAM INDEX idx2 ON default.t3;")
         .await?;
-    let new_meta = get_bloom_index_meta(&fixture).await?;
+    let meta_1 = get_bloom_index_meta(&fixture).await?;
 
-    assert_eq!(&old_meta.columns[..], &new_meta.columns[..5]);
+    assert_eq!(&meta_0.columns[..], &meta_1.columns[..5]);
+    assert_eq!(meta_1.columns.len(), 6);
     assert_eq!(
-        &new_meta.columns[5],
+        &meta_1.columns[5],
         &("Ngram(3)_3_1048576".to_string(), SingleColumnMeta {
+            offset: 424,
+            len: 1048644,
+            num_values: 1,
+        })
+    );
+
+    fixture
+        .execute_command("DROP NGRAM INDEX idx2 ON default.t3;")
+        .await?;
+    fixture
+        .execute_command("CREATE NGRAM INDEX idx2 ON default.t3(d) gram_size = 5;")
+        .await?;
+    fixture
+        .execute_command("REFRESH NGRAM INDEX idx2 ON default.t3;")
+        .await?;
+    let meta_2 = get_bloom_index_meta(&fixture).await?;
+    assert_eq!(meta_2.columns.len(), 6);
+    assert_eq!(
+        &meta_2.columns[5],
+        &("Ngram(3)_5_1048576".to_string(), SingleColumnMeta {
             offset: 424,
             len: 1048644,
             num_values: 1,
@@ -74,17 +96,15 @@ async fn get_bloom_index_meta(fixture: &TestFixture) -> Result<Arc<BloomIndexMet
         .await
         .transpose()?
         .unwrap();
-    let path = block.columns()[0]
-        .to_column(block.num_rows())
-        .remove_nullable();
+    let path = block.columns()[0].to_column().remove_nullable();
     let path_scalar = path.as_string().unwrap().index(0).unwrap();
-    let length = block.columns()[1].to_column(block.num_rows());
+    let length = block.columns()[1].to_column();
     let length_scalar = length.as_number().unwrap().index(0).unwrap();
 
-    Ok(load_index_meta(
+    load_index_meta(
         DataOperator::instance().operator(),
         path_scalar,
         *length_scalar.as_u_int64().unwrap(),
     )
-    .await?)
+    .await
 }
