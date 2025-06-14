@@ -1531,48 +1531,36 @@ impl TableContext for QueryContext {
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
-        let table_id = table.get_id();
-        let cache = self.shared.get_table_meta_timestamps();
-        let cached_item = cache.lock().get(&table_id).copied();
+        let delta = {
+            let fuse_table = FuseTable::try_from_table(table)?;
+            let duration = if fuse_table.is_transient() {
+                Duration::from_secs(0)
+            } else {
+                let settings = self.get_settings();
+                let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                if max_exec_time_secs != 0 {
+                    Duration::from_secs(max_exec_time_secs)
+                } else {
+                    // no limit, use retention period as delta
+                    // prefer table-level retention setting.
+                    match fuse_table.get_table_retention_period() {
+                        None => Duration::from_days(settings.get_data_retention_time_in_days()?),
+                        Some(v) => v,
+                    }
+                }
+            };
 
-        match cached_item {
-            Some(ts) => Ok(ts),
-            None => {
-                let delta = {
-                    let fuse_table = FuseTable::try_from_table(table)?;
-                    let duration = if fuse_table.is_transient() {
-                        Duration::from_secs(0)
-                    } else {
-                        let settings = self.get_settings();
-                        let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
-                        if max_exec_time_secs != 0 {
-                            Duration::from_secs(max_exec_time_secs)
-                        } else {
-                            // no limit, use retention period as delta
-                            // prefer table-level retention setting.
-                            match fuse_table.get_table_retention_period() {
-                                None => {
-                                    Duration::from_days(settings.get_data_retention_time_in_days()?)
-                                }
-                                Some(v) => v,
-                            }
-                        }
-                    };
-
-                    chrono::Duration::from_std(duration).map_err(|e| {
-                        ErrorCode::Internal(format!(
-                            "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
-                        ))
-                    })?
-                };
-                let ts = self
-                    .txn_mgr()
-                    .lock()
-                    .get_table_meta_timestamps(previous_snapshot, delta);
-                cache.lock().insert(table_id, ts);
-                Ok(ts)
-            }
-        }
+            chrono::Duration::from_std(duration).map_err(|e| {
+                ErrorCode::Internal(format!(
+                    "[QUERY-CTX] Unable to construct delta duration of table meta timestamp: {e}",
+                ))
+            })?
+        };
+        let ts = self
+            .txn_mgr()
+            .lock()
+            .get_table_meta_timestamps(previous_snapshot, delta);
+        Ok(ts)
     }
 
     fn clear_table_meta_timestamps_cache(&self) {
@@ -1947,3 +1935,4 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
 }
+
