@@ -92,7 +92,10 @@ impl FuseTable {
         let bloom_columns_map = self
             .bloom_index_cols()
             .bloom_index_fields(new_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(&self.table_info.meta)?;
+        let ngram_args = FuseTable::create_ngram_index_args(
+            &self.table_info.meta,
+            &self.table_info.meta.schema,
+        )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
 
         let block_builder = BlockBuilder {

@@ -168,8 +168,9 @@ impl BloomPrunerCreator {
                 }
                 if let Some(ngram_arg) = self.ngram_args.iter().find(|arg| arg.field() == field) {
                     acc.push(BloomIndex::build_filter_ngram_name(
-                        field,
+                        field.column_id(),
                         ngram_arg.gram_size(),
+                        ngram_arg.bloom_size(),
                     ));
                 }
                 Ok::<_, ErrorCode>(acc)

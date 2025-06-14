@@ -504,6 +504,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn remove_column(&mut self, index: usize) {
+        self.entries.remove(index);
+    }
+
+    #[inline]
     pub fn add_const_column(&mut self, scalar: Scalar, data_type: DataType) {
         self.entries.push(BlockEntry::new_const_column(
             data_type,

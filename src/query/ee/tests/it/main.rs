@@ -16,5 +16,6 @@
 mod aggregating_index;
 mod inverted_index;
 mod license;
+mod ngram_index;
 mod storages;
 mod stream;

@@ -91,6 +91,7 @@ async fn test_fuse_do_refresh_inverted_index() -> Result<()> {
     assert!(res.is_ok());
 
     let refresh_index_plan = RefreshTableIndexPlan {
+        index_type: databend_common_ast::ast::TableIndexType::Inverted,
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),

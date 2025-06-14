@@ -34,10 +34,10 @@ INSERT INTO t1 VALUES
 query III
 select row_count, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1')
 ----
-4 1049458 1048617
+4 1049482 1048617
 
 statement ok
-CREATE TABLE t2 (id int, content string)
+CREATE TABLE t2 (id int, content string, name string)
 
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 0
@@ -50,6 +50,9 @@ CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 511
 
 statement error
 CREATE NGRAM INDEX idx2 ON t2(content) bloom_size = 10485761
+
+statement error
+CREATE NGRAM INDEX idx2 ON t2(content, name) gram_size = 5 bloom_size = 1048576
 
 statement ok
 CREATE NGRAM INDEX idx2 ON t2(content) gram_size = 5 bloom_size = 1048576
@@ -75,6 +78,32 @@ query T
 show create table t1;
 ----
 t1 CREATE TABLE t1 (     id INT NULL,     content VARCHAR NULL,     SYNC NGRAM INDEX idx1 (content) bloom_size = '1048576', gram_size = '5'   ) ENGINE=FUSE
+
+statement ok
+CREATE OR REPLACE TABLE t1 (id int, content string)
+
+statement ok
+INSERT INTO t1 VALUES
+(1, 'The quick brown fox jumps over the lazy dog'),
+(2, 'A picture is worth a thousand words'),
+(3, 'The early bird catches the worm'),
+(4, 'Actions speak louder than words');
+
+query II
+select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1');
+----
+206 654 NULL
+
+statement ok
+CREATE NGRAM INDEX idx1 ON t1(content) gram_size = 5 bloom_size = 1048576
+
+statement ok
+REFRESH NGRAM INDEX idx1 ON t1
+
+query II
+select block_size, bloom_filter_size, ngram_index_size from fuse_block('test_gram_index', 't1');
+----
+206 1049482 1048617
 
 statement ok
 use default

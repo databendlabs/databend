@@ -27,6 +27,7 @@ pub use block_writer::BlockSerialization;
 pub use block_writer::BlockWriter;
 pub use bloom_index_writer::BloomIndexRebuilder;
 pub use bloom_index_writer::BloomIndexState;
+pub use bloom_index_writer::NewNgramIndexColumn;
 pub(crate) use inverted_index_writer::create_index_schema;
 pub(crate) use inverted_index_writer::create_inverted_index_builders;
 pub(crate) use inverted_index_writer::create_tokenizer_manager;

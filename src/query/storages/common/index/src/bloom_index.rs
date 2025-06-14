@@ -489,8 +489,12 @@ impl BloomIndex {
         }
     }
 
-    pub fn build_filter_ngram_name(field: &TableField, gram_size: usize) -> String {
-        format!("Ngram({})_{gram_size}", field.column_id())
+    pub fn build_filter_ngram_name(
+        column_id: ColumnId,
+        gram_size: usize,
+        bloom_size: u64,
+    ) -> String {
+        format!("Ngram({column_id})_{gram_size}_{bloom_size}")
     }
 
     fn find(
@@ -508,7 +512,11 @@ impl BloomIndex {
                 // The column doesn't have a Ngram Arg.
                 return Ok(FilterEvalResult::Uncertain);
             };
-            BloomIndex::build_filter_ngram_name(table_field, ngram_arg.gram_size)
+            BloomIndex::build_filter_ngram_name(
+                table_field.column_id(),
+                ngram_arg.gram_size,
+                ngram_arg.bloom_size,
+            )
         } else {
             BloomIndex::build_filter_bloom_name(self.version, table_field)?
         };
@@ -572,6 +580,7 @@ struct ColumnFilterBuilder {
     index: FieldIndex,
     field: TableField,
     gram_size: usize,
+    bloom_size: u64,
     builder: FilterImplBuilder,
 }
 
@@ -619,6 +628,7 @@ impl BloomIndexBuilder {
                 index,
                 field: field.clone(),
                 gram_size: 0,
+                bloom_size: 0,
                 builder: FilterImplBuilder::Xor(Xor8Builder::create()),
             });
         }
@@ -627,6 +637,7 @@ impl BloomIndexBuilder {
                 index: arg.index,
                 field: arg.field.clone(),
                 gram_size: arg.gram_size,
+                bloom_size: arg.bloom_size,
                 builder: FilterImplBuilder::Ngram(BloomBuilder::create(
                     arg.bloom_size,
                     NGRAM_HASH_SEED,
@@ -792,8 +803,11 @@ impl BloomIndexBuilder {
         }
         for ngram_column in self.ngram_columns.iter_mut() {
             let filter = ngram_column.builder.build()?;
-            let filter_name =
-                BloomIndex::build_filter_ngram_name(&ngram_column.field, ngram_column.gram_size);
+            let filter_name = BloomIndex::build_filter_ngram_name(
+                ngram_column.field.column_id(),
+                ngram_column.gram_size,
+                ngram_column.bloom_size,
+            );
             filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }

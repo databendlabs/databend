@@ -813,7 +813,7 @@ impl Binder {
             limit: _,
         } = stmt;
 
-        if !matches!(index_type, TableIndexType::Inverted) {
+        if !matches!(index_type, TableIndexType::Inverted | TableIndexType::Ngram) {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table index {} does not support refresh",
                 index_type
@@ -825,6 +825,7 @@ impl Binder {
         let index_name = self.normalize_object_identifier(index_name);
 
         let plan = RefreshTableIndexPlan {
+            index_type: *index_type,
             catalog,
             database,
             table,
