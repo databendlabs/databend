@@ -1580,7 +1580,6 @@ impl TableContext for QueryContext {
             })?
         };
         let ts = TableMetaTimestamps::new(previous_snapshot, delta);
-        //        cache.lock().insert(table_id, ts);
         Ok(ts)
     }
 
