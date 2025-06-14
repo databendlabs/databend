@@ -1935,4 +1935,3 @@ pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
         .unwrap_or(Duration::new(0, 0))
         .as_micros() as i64
 }
-
