@@ -1531,6 +1531,29 @@ impl TableContext for QueryContext {
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
+        let table_id = table.get_id();
+        {
+            // Defensively check that:
+            // For each table, the previous_snapshot's timestamp passed in is strictly increasing,
+            // Or put it another way, caller should always pass in the same or newer snapshot of the same table.
+            let table_snapshot_timestamp_history =
+                self.shared.get_table_snapshot_timestamp_history();
+            let mut history = table_snapshot_timestamp_history.lock();
+            let previous_snapshot_timestamp = previous_snapshot.as_ref().and_then(|s| s.timestamp);
+            if let Some(last_accessed) = history.get(&table_id) {
+                if last_accessed > &previous_snapshot_timestamp {
+                    return Err(ErrorCode::Internal(
+                        format!(
+                            "[QUERY-CTX] Generating new table meta timestamps failed: table_id = {}, previous_snapshot_timestamp {:?} is lesser than the snapshot timestamp accessed last time {:?}",
+                            table_id, previous_snapshot_timestamp, last_accessed
+                        )
+                    ));
+                }
+            }
+            history.insert(table_id, previous_snapshot_timestamp);
+            drop(history)
+        }
+
         let delta = {
             let fuse_table = FuseTable::try_from_table(table)?;
             let duration = if fuse_table.is_transient() {
@@ -1556,16 +1579,9 @@ impl TableContext for QueryContext {
                 ))
             })?
         };
-        let ts = self
-            .txn_mgr()
-            .lock()
-            .get_table_meta_timestamps(previous_snapshot, delta);
+        let ts = TableMetaTimestamps::new(previous_snapshot, delta);
+        //        cache.lock().insert(table_id, ts);
         Ok(ts)
-    }
-
-    fn clear_table_meta_timestamps_cache(&self) {
-        let cache = self.shared.get_table_meta_timestamps();
-        cache.lock().clear();
     }
 
     fn get_read_block_thresholds(&self) -> BlockThresholds {

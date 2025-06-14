@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::Duration;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -29,8 +28,6 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -359,14 +356,6 @@ impl TxnManager {
 
     pub fn need_purge_files(&mut self) -> Vec<(StageInfo, Vec<String>)> {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
-    }
-
-    pub fn get_table_meta_timestamps(
-        &mut self,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-        delta: Duration,
-    ) -> TableMetaTimestamps {
-        TableMetaTimestamps::new(previous_snapshot, delta)
     }
 
     pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {
