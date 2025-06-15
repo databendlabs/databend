@@ -34,9 +34,9 @@ use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::FormatSettings;
-use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
+use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
 use http::StatusCode;
 use log::error;
@@ -290,9 +290,6 @@ pub struct HttpSessionConf {
     pub role: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secondary_roles: Option<Vec<String>>,
-    // todo: remove this later
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keep_server_session_secs: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub settings: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -301,12 +298,17 @@ pub struct HttpSessionConf {
     pub need_sticky: bool,
     #[serde(default)]
     pub need_keep_alive: bool,
+
+    // TODO: move to internal later
     // used to check if the session is still on the same server
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_server_info: Option<ServerInfo>,
+
+    // TODO: move to internal later
     /// last_query_ids[0] is the last query id, last_query_ids[1] is the second last query id, etc.
     #[serde(default)]
     pub last_query_ids: Vec<String>,
+
     /// hide state not useful to clients
     /// so client only need to know there is a String field `internal`,
     /// which need to carry with session/conn
@@ -377,10 +379,8 @@ pub enum ExpireResult {
 
 pub struct HttpQuery {
     pub(crate) id: String,
-    pub(crate) tenant: Tenant,
     pub(crate) user_name: String,
     pub(crate) client_session_id: Option<String>,
-    pub(crate) session_id: String,
     pub(crate) node_id: String,
     request: HttpQueryRequest,
     executor: Arc<Mutex<Executor>>,
@@ -393,9 +393,7 @@ pub struct HttpQuery {
 
     pub(crate) is_txn_mgr_saved: AtomicBool,
 
-    pub(crate) has_temp_table_before_run: bool,
-    pub(crate) has_temp_table_after_run: Mutex<Option<bool>>,
-    pub(crate) is_session_handle_refreshed: AtomicBool,
+    pub(crate) temp_tbl_mgr: TempTblMgrRef,
     pub(crate) query_mem_stat: Option<Arc<MemStat>>,
     last_session_conf: Arc<Mutex<Option<HttpSessionConf>>>,
 }
@@ -449,7 +447,6 @@ impl HttpQuery {
             .map_err(|err| {
                 ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
             })?;
-        let session_id = session.get_id();
 
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
@@ -591,13 +588,11 @@ impl HttpQuery {
         }));
 
         let format_settings: Arc<parking_lot::RwLock<Option<FormatSettings>>> = Default::default();
-        let tenant = session.get_current_tenant();
         let user_name = session.get_current_user()?.name;
 
         if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session, &query_id);
+            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
         };
-        let has_temp_table_before_run = !session.temp_tbl_mgr().lock().is_empty();
 
         let data = Arc::new(TokioMutex::new(PageManager::new(
             req.pagination.max_rows_per_page,
@@ -607,23 +602,16 @@ impl HttpQuery {
 
         Ok(HttpQuery {
             id: query_id,
-            tenant,
             user_name,
             client_session_id: http_ctx.client_session_id.clone(),
-            session_id,
             node_id,
             request: req,
-            state,
+            executor,
             page_manager: data,
             result_timeout_secs,
 
-            expire_state: Arc::new(Mutex::new(ExpireState::Working)),
-
-            has_temp_table_before_run,
-
-            is_txn_mgr_saved: Default::default(),
-            has_temp_table_after_run: Default::default(),
-            is_session_handle_refreshed: Default::default(),
+            state: Arc::new(Mutex::new(HttpQueryState::Working)),
+            temp_tbl_mgr: session.temp_tbl_mgr().clone(),
             query_mem_stat: ctx.get_query_memory_tracking(),
             is_txn_mgr_saved: Default::default(),
             last_session_conf: Default::default(),
@@ -643,9 +631,9 @@ impl HttpQuery {
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session: Some(session),
+            session,
             node_id: self.node_id.clone(),
-            session_id: self.session_id.clone(),
+            session_id: self.client_session_id.clone().unwrap_or_default(),
             result_timeout_secs: self.result_timeout_secs,
         })
     }
@@ -655,7 +643,7 @@ impl HttpQuery {
 
         Ok(HttpQueryResponseInternal {
             data: None,
-            session_id: self.session_id.clone(),
+            session_id: self.client_session_id.clone().unwrap_or_default(),
             node_id: self.node_id.clone(),
             state,
             session: None,
@@ -664,7 +652,7 @@ impl HttpQuery {
     }
 
     fn get_state(&self) -> ResponseState {
-        let state = self.state.lock();
+        let state = self.executor.lock();
         state.get_response_state()
     }
 
@@ -678,7 +666,7 @@ impl HttpQuery {
         // - query cache: last_query_id and result_scan
 
         let (session_state, is_stopped) = {
-            let executor = self.state.lock();
+            let executor = self.executor.lock();
 
             let session_state = executor.get_session_state();
             let is_stopped = matches!(executor.state, ExecuteState::Stopped(_));
@@ -709,73 +697,32 @@ impl HttpQuery {
             None
         };
 
-        if is_stopped {
-            if let Some(cid) = &self.client_session_id {
-                let (has_temp_table_after_run, just_changed) = {
-                    let mut guard = self.has_temp_table_after_run.lock();
-                    match *guard {
-                        None => {
-                            let not_empty = !session_state.temp_tbl_mgr.lock().is_empty();
-                            *guard = Some(not_empty);
-                            ClientSessionManager::instance().on_query_finish(
-                                cid,
-                                &self.user_name,
-                                session_state.temp_tbl_mgr,
-                                !not_empty,
-                                not_empty != self.has_temp_table_before_run,
-                            );
-                            (not_empty, true)
-                        }
-                        Some(v) => (v, false),
-                    }
-                };
-
-                if !self.has_temp_table_before_run
-                    && has_temp_table_after_run
-                    && just_changed
-                    && self
-                        .is_session_handle_refreshed
-                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
-                        .is_ok()
-                {
-                    ClientSessionManager::instance()
-                        .refresh_session_handle(
-                            self.tenant.clone(),
-                            self.user_name.to_string(),
-                            cid,
-                        )
-                        .await?;
-                }
-            }
-
-            if txn_state != TxnState::AutoCommit
-                && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
-                && self
-                    .is_txn_mgr_saved
-                    .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
-                    .is_ok()
-            {
-                let timeout = session_state
-                    .settings
-                    .get_idle_transaction_timeout_secs()
-                    .unwrap();
-                HttpQueryManager::instance()
-                    .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
-                    .await;
-            }
+        if is_stopped
+            && txn_state != TxnState::AutoCommit
+            && !self.is_txn_mgr_saved.load(Ordering::Relaxed)
+            && self
+                .is_txn_mgr_saved
+                .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+                .is_ok()
+        {
+            let timeout = session_state
+                .settings
+                .get_idle_transaction_timeout_secs()
+                .unwrap();
+            HttpQueryManager::instance()
+                .add_txn(self.id.clone(), session_state.txn_manager.clone(), timeout)
+                .await;
         }
-        let has_temp_table =
-            (*self.has_temp_table_after_run.lock()).unwrap_or(self.has_temp_table_before_run);
+        let has_temp_table = !self.temp_tbl_mgr.lock().is_empty();
 
         let need_sticky = txn_state != TxnState::AutoCommit || has_temp_table;
-        let need_keep_alive = need_sticky || has_temp_table;
+        let need_keep_alive = need_sticky;
 
         Ok(HttpSessionConf {
             catalog: Some(catalog),
             database: Some(database),
             role,
             secondary_roles,
-            keep_server_session_secs: None,
             settings: Some(settings),
             txn_state: Some(txn_state),
             need_sticky,

@@ -34,7 +34,6 @@ use databend_storages_common_session::drop_all_temp_tables;
 use databend_storages_common_session::TempTblMgrRef;
 use log::error;
 use log::info;
-use log::warn;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use sha2::Digest;
@@ -59,13 +58,8 @@ fn hash_token(token: &[u8]) -> String {
     hex::encode_upper(Sha256::digest(token))
 }
 
-enum QueryState {
-    InUse(String),
-    Idle(Instant),
-}
-
 struct SessionState {
-    pub query_state: QueryState,
+    pub last_access: Instant,
     pub temp_tbl_mgr: TempTblMgrRef,
 }
 
@@ -86,7 +80,7 @@ pub struct ClientSessionManager {
     ///
     /// # Ops
     /// add:
-    /// - write temp table
+    /// - create temp table
     ///
     /// rm:
     ///  - all temp table deleted
@@ -94,8 +88,7 @@ pub struct ClientSessionManager {
     ///  - timeout
     ///
     /// refresh:
-    ///  - query start/stop
-    ///  - /session/refresh
+    ///  - auth (with min interval)
     session_state: Mutex<BTreeMap<String, SessionState>>,
 }
 
@@ -125,23 +118,15 @@ impl ClientSessionManager {
     async fn check_timeout(self: Arc<Self>) {
         loop {
             let now = Instant::now();
-            let mut in_use = vec![];
-            let mut idle = vec![];
+            let mut remained = vec![];
             let mut expired = vec![];
             {
                 let guard = self.session_state.lock();
                 for (key, session_state) in &*guard {
-                    match session_state.query_state {
-                        QueryState::InUse(_) => {
-                            in_use.push(key.clone());
-                        }
-                        QueryState::Idle(t) => {
-                            if (now - t) > self.session_token_ttl {
-                                expired.push((key.clone(), session_state.temp_tbl_mgr.clone()));
-                            } else {
-                                idle.push(key.clone());
-                            }
-                        }
+                    if (now - session_state.last_access) > self.session_token_ttl {
+                        expired.push((key.clone(), session_state.temp_tbl_mgr.clone()));
+                    } else {
+                        remained.push(key.clone());
                     }
                 }
             };
@@ -155,9 +140,12 @@ impl ClientSessionManager {
                 drop_all_temp_tables_with_logging(&key, mgr, "idle").await;
             }
 
-            if !(in_use.is_empty() && idle.is_empty()) {
-                info!("[TEMP TABLE] sessions after cleanup, {} idle {} in use, idle sessions: {:?}, in use sessions: {:?}",
-                idle.len(), in_use.len(), idle, in_use);
+            if !(remained.is_empty()) {
+                info!(
+                    "[TEMP TABLE] sessions after cleanup, {} remained: {:?}",
+                    remained.len(),
+                    remained
+                );
             }
             tokio::time::sleep(self.session_token_ttl / 4).await;
         }
@@ -174,7 +162,7 @@ impl ClientSessionManager {
             .upsert_client_session_id(
                 client_session_id,
                 &user_name,
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + STATE_REFRESH_INTERVAL_META,
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + MIN_STATE_REFRESH_INTERVAL,
             )
             .await?;
         Ok(())
@@ -378,56 +366,32 @@ impl ClientSessionManager {
         }
     }
 
-    pub fn on_query_start(
-        &self,
-        client_session_id: &str,
-        user_name: &str,
-        session: &Arc<Session>,
-        query_id: &str,
-    ) {
+    pub fn on_query_start(&self, client_session_id: &str, user_name: &str, session: &Arc<Session>) {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
         guard.entry(key).and_modify(|e| {
-            if let QueryState::InUse(old_id) = &e.query_state {
-                warn!(
-                    "[TEMP TABLE] session = {client_session_id} last query {old_id} not finished."
-                )
-            }
-            e.query_state = QueryState::InUse(query_id.to_string());
             session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
         });
     }
-    pub fn on_query_finish(
-        &self,
-        client_session_id: &str,
-        user_name: &str,
-        temp_tbl_mgr: TempTblMgrRef,
-        is_empty: bool,
-        just_changed: bool,
-    ) {
-        let key = Self::state_key(client_session_id, user_name);
-        if !is_empty || just_changed {
-            let mut guard = self.session_state.lock();
-            match guard.entry(key) {
-                Entry::Vacant(e) => {
-                    if !is_empty {
-                        e.insert(SessionState {
-                            query_state: QueryState::Idle(Instant::now()),
-                            temp_tbl_mgr,
-                        });
-                        info!("[TEMP-TABLE] session={client_session_id} added to ClientSessionManager");
-                    }
-                }
-                Entry::Occupied(mut e) => {
-                    if !is_empty {
-                        e.get_mut().query_state = QueryState::Idle(Instant::now())
-                    } else {
-                        e.remove();
-                        // all temp table dropped by user, data should have been removed when executing drop.
-                        info!("[TEMP-TABLE] session={client_session_id} removed from ClientSessionManager");
-                    }
-                }
-            }
+
+    pub fn add_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: TempTblMgrRef) {
+        let mut guard = self.session_state.lock();
+        let state = SessionState {
+            last_access: Instant::now(),
+            temp_tbl_mgr,
+        };
+        if guard.insert(prefix.clone(), state).is_none() {
+            info!("[TEMP TABLE] session={prefix} added to ClientSessionManager");
+        }
+    }
+
+    pub fn remove_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: TempTblMgrRef) {
+        let mut guard = self.session_state.lock();
+        let is_empty = temp_tbl_mgr.lock().is_empty();
+        if is_empty {
+            guard.remove(&prefix);
+            // all temp table dropped by user, data should have been removed when executing drop.
+            info!("[TEMP TABLE] session={prefix} removed from ClientSessionManager");
         }
     }
 
