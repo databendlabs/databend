@@ -114,7 +114,7 @@ impl SampleStateInner {
             let weight = weights[idx];
             cum_weight += weight;
 
-            if cum_weight >= target && previous_bound.map_or(true, |prev| value > prev) {
+            if cum_weight >= target && previous_bound.is_none_or(|prev| value > prev) {
                 if unlikely(value == max_val) {
                     self.max_value = Some(max_val.clone());
                     break;

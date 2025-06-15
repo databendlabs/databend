@@ -39,7 +39,6 @@ use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::StreamContext;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::StreamBlockProperties;
-use databend_common_storages_fuse::operations::TransformBlockBuilder;
 use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
@@ -47,14 +46,13 @@ use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::transforms::ReclusterPartitionExchange;
-use crate::pipelines::processors::transforms::ReclusterPartitionStrategys;
+use crate::pipelines::processors::transforms::ReclusterPartitionStrategy;
 use crate::pipelines::processors::transforms::SampleState;
 use crate::pipelines::processors::transforms::TransformAddOrderColumn;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::processors::transforms::TransformPartitionCollect;
 use crate::pipelines::processors::transforms::TransformRangePartitionIndexer;
 use crate::pipelines::processors::transforms::TransformReclusterCollect;
-use crate::pipelines::processors::transforms::TransformReclusterPartition;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
@@ -173,7 +171,6 @@ impl PipelineBuilder {
                     let fields_with_cluster_key = properties.fields_with_cluster_key();
                     let schema = DataSchemaRefExt::create(fields_with_cluster_key);
                     let schema = add_order_field(schema, &sort_desc);
-                    let order_offset = schema.fields.len() - 1;
 
                     let num_processors = self.main_pipeline.output_len();
                     let sample_size = self
@@ -203,44 +200,24 @@ impl PipelineBuilder {
                     let processor_id = AtomicUsize::new(0);
 
                     let settings = self.ctx.get_settings();
-                    let enable_writings = settings.get_enable_block_stream_writes()?;
-                    if enable_writings {
-                        let memory_settings = MemorySettings::disable_spill();
-                        self.main_pipeline.add_transform(|input, output| {
-                            let strategy =
-                                ReclusterPartitionStrategys::new(properties.clone(), order_offset);
-
-                            Ok(ProcessorPtr::create(Box::new(
-                                TransformPartitionCollect::new(
-                                    self.ctx.clone(),
-                                    input,
-                                    output,
-                                    &settings,
-                                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
-                                    num_processors,
-                                    partitions,
-                                    memory_settings.clone(),
-                                    None,
-                                    strategy,
-                                )?,
-                            )))
-                        })?;
-
-                        self.main_pipeline.add_transform(|input, output| {
-                            TransformBlockBuilder::try_create(input, output, properties.clone())
-                        })?;
-                    } else {
-                        self.main_pipeline.add_transform(|input, output| {
-                            TransformReclusterPartition::try_create(
+                    let memory_settings = MemorySettings::disable_spill();
+                    self.main_pipeline.add_transform(|input, output| {
+                        let strategy = ReclusterPartitionStrategy::new(properties.clone());
+                        Ok(ProcessorPtr::create(Box::new(
+                            TransformPartitionCollect::new(
+                                self.ctx.clone(),
                                 input,
                                 output,
-                                properties.clone(),
+                                &settings,
                                 processor_id.fetch_add(1, atomic::Ordering::AcqRel),
                                 num_processors,
                                 partitions,
-                            )
-                        })?;
-                    }
+                                memory_settings.clone(),
+                                None,
+                                strategy,
+                            )?,
+                        )))
+                    })?;
 
                     self.main_pipeline.add_async_accumulating_transformer(|| {
                         TransformBlockWriter::create(

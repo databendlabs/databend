@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::LimitType;
-use databend_common_expression::SortColumnDescription;
 use databend_common_storages_fuse::io::StreamBlockBuilder;
 use databend_common_storages_fuse::io::StreamBlockProperties;
 
@@ -33,10 +31,6 @@ pub struct ReclusterPartitionStrategy {
 impl ReclusterPartitionStrategy {
     pub fn new(properties: Arc<StreamBlockProperties>) -> Self {
         Self { properties }
-    }
-
-    fn concat_blocks(blocks: Vec<DataBlock>) -> Result<DataBlock> {
-        DataBlock::concat(&blocks)
     }
 }
 
@@ -74,7 +68,7 @@ impl PartitionProcessStrategy for ReclusterPartitionStrategy {
                 continue;
             }
             if !staged_blocks.is_empty() {
-                compacted.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
+                compacted.push(std::mem::take(&mut staged_blocks));
             }
             std::mem::swap(&mut staged_blocks, &mut pending_blocks);
             accumulated_rows = 0;
@@ -82,13 +76,15 @@ impl PartitionProcessStrategy for ReclusterPartitionStrategy {
         }
         staged_blocks.append(&mut pending_blocks);
         if !staged_blocks.is_empty() {
-            compacted.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
+            compacted.push(std::mem::take(&mut staged_blocks));
         }
 
         let mut result = Vec::new();
         let mut builder = StreamBlockBuilder::try_new_with_config(self.properties.clone())?;
-        for block in compacted {
-            builder.write(block)?;
+        for blocks in compacted {
+            for block in blocks {
+                builder.write(block)?;
+            }
             if builder.need_flush() {
                 let serialized = builder.finish()?;
                 result.push(DataBlock::empty_with_meta(Box::new(serialized)));
@@ -174,92 +170,6 @@ impl PartitionProcessStrategy for CompactPartitionStrategy {
             result.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
         }
 
-        Ok(result)
-    }
-}
-
-pub struct ReclusterPartitionStrategys {
-    properties: Arc<StreamBlockProperties>,
-    sort_desc: Vec<SortColumnDescription>,
-}
-
-impl ReclusterPartitionStrategys {
-    pub fn new(properties: Arc<StreamBlockProperties>, offset: usize) -> Self {
-        Self {
-            properties,
-            sort_desc: vec![SortColumnDescription {
-                offset,
-                asc: true,
-                nulls_first: false,
-            }],
-        }
-    }
-
-    fn concat_blocks(blocks: Vec<DataBlock>) -> Result<DataBlock> {
-        DataBlock::concat(&blocks)
-    }
-}
-
-impl PartitionProcessStrategy for ReclusterPartitionStrategys {
-    const NAME: &'static str = "Recluster";
-
-    fn calc_partitions(
-        &self,
-        processor_id: usize,
-        num_processors: usize,
-        num_partitions: usize,
-    ) -> Vec<usize> {
-        (0..num_partitions)
-            .filter(|&partition| (partition * num_processors) / num_partitions == processor_id)
-            .collect()
-    }
-
-    /// Stream write each block, and flush it conditionally based on builder status
-    /// and input size estimation.
-    fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
-        let blocks_num = data_blocks.len();
-        let mut accumulated_rows = 0;
-        let mut accumulated_bytes = 0;
-        let mut pending_blocks = Vec::with_capacity(blocks_num);
-        let mut staged_blocks = Vec::with_capacity(blocks_num);
-        let mut compacted = Vec::with_capacity(blocks_num);
-        for block in data_blocks {
-            accumulated_rows += block.num_rows();
-            accumulated_bytes += block.estimate_block_size();
-            pending_blocks.push(block);
-            if !self
-                .properties
-                .check_large_enough(accumulated_rows, accumulated_bytes)
-            {
-                continue;
-            }
-            if !staged_blocks.is_empty() {
-                compacted.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
-            }
-            std::mem::swap(&mut staged_blocks, &mut pending_blocks);
-            accumulated_rows = 0;
-            accumulated_bytes = 0;
-        }
-        staged_blocks.append(&mut pending_blocks);
-        if !staged_blocks.is_empty() {
-            compacted.push(Self::concat_blocks(std::mem::take(&mut staged_blocks))?);
-        }
-
-        let mut result = Vec::new();
-        let mut builder = StreamBlockBuilder::try_new_with_config(self.properties.clone())?;
-        for block in compacted {
-            let block = DataBlock::sort_with_type(&block, &self.sort_desc, LimitType::None)?;
-            builder.write(block)?;
-            if builder.need_flush() {
-                let serialized = builder.finish()?;
-                result.push(DataBlock::empty_with_meta(Box::new(serialized)));
-                builder = StreamBlockBuilder::try_new_with_config(self.properties.clone())?;
-            }
-        }
-        if !builder.is_empty() {
-            let serialized = builder.finish()?;
-            result.push(DataBlock::empty_with_meta(Box::new(serialized)));
-        }
         Ok(result)
     }
 }
