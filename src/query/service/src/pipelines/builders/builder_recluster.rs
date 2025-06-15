@@ -20,16 +20,6 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::row::RowConverter as CommonConverter;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::SortColumnDescription;
@@ -41,28 +31,27 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::build_compact_block_no_split_pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_pipeline_transforms::sort::CommonRows;
-use databend_common_pipeline_transforms::sort::RowConverter;
-use databend_common_pipeline_transforms::sort::Rows;
-use databend_common_pipeline_transforms::sort::SimpleRowConverter;
-use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
+use databend_common_pipeline_transforms::sort::utils::add_order_field;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::StreamContext;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::StreamBlockProperties;
+use databend_common_storages_fuse::operations::TransformBlockBuilder;
 use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use match_template::match_template;
 
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::transforms::ReclusterPartitionExchange;
+use crate::pipelines::processors::transforms::ReclusterPartitionStrategys;
 use crate::pipelines::processors::transforms::SampleState;
 use crate::pipelines::processors::transforms::TransformAddOrderColumn;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
+use crate::pipelines::processors::transforms::TransformPartitionCollect;
 use crate::pipelines::processors::transforms::TransformRangePartitionIndexer;
 use crate::pipelines::processors::transforms::TransformReclusterCollect;
 use crate::pipelines::processors::transforms::TransformReclusterPartition;
@@ -172,9 +161,7 @@ impl PipelineBuilder {
                         });
                     }
 
-                    let fields_with_cluster_key = properties.fields_with_cluster_key();
-                    let schema = DataSchemaRefExt::create(fields_with_cluster_key);
-                    let sort_descs: Vec<_> = properties
+                    let sort_desc: Vec<_> = properties
                         .cluster_key_index()
                         .iter()
                         .map(|&offset| SortColumnDescription {
@@ -183,6 +170,10 @@ impl PipelineBuilder {
                             nulls_first: false,
                         })
                         .collect();
+                    let fields_with_cluster_key = properties.fields_with_cluster_key();
+                    let schema = DataSchemaRefExt::create(fields_with_cluster_key);
+                    let schema = add_order_field(schema, &sort_desc);
+                    let order_offset = schema.fields.len() - 1;
 
                     let num_processors = self.main_pipeline.output_len();
                     let sample_size = self
@@ -196,9 +187,12 @@ impl PipelineBuilder {
                         task.total_compressed,
                     );
                     let state = SampleState::new(num_processors, partitions);
-                    let recluster_pipeline_builder =
-                        ReclusterPipelineBuilder::create(schema, sort_descs.into(), sample_size)
-                            .with_state(state);
+                    let recluster_pipeline_builder = ReclusterPipelineBuilder::create(
+                        schema.clone(),
+                        sort_desc.clone(),
+                        sample_size,
+                    )
+                    .with_state(state);
                     recluster_pipeline_builder
                         .build_recluster_sample_pipeline(&mut self.main_pipeline)?;
 
@@ -207,16 +201,46 @@ impl PipelineBuilder {
                         ReclusterPartitionExchange::create(0, partitions),
                     );
                     let processor_id = AtomicUsize::new(0);
-                    self.main_pipeline.add_transform(|input, output| {
-                        TransformReclusterPartition::try_create(
-                            input,
-                            output,
-                            properties.clone(),
-                            processor_id.fetch_add(1, atomic::Ordering::AcqRel),
-                            num_processors,
-                            partitions,
-                        )
-                    })?;
+
+                    let settings = self.ctx.get_settings();
+                    let enable_writings = settings.get_enable_block_stream_writes()?;
+                    if enable_writings {
+                        let memory_settings = MemorySettings::disable_spill();
+                        self.main_pipeline.add_transform(|input, output| {
+                            let strategy =
+                                ReclusterPartitionStrategys::new(properties.clone(), order_offset);
+
+                            Ok(ProcessorPtr::create(Box::new(
+                                TransformPartitionCollect::new(
+                                    self.ctx.clone(),
+                                    input,
+                                    output,
+                                    &settings,
+                                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                                    num_processors,
+                                    partitions,
+                                    memory_settings.clone(),
+                                    None,
+                                    strategy,
+                                )?,
+                            )))
+                        })?;
+
+                        self.main_pipeline.add_transform(|input, output| {
+                            TransformBlockBuilder::try_create(input, output, properties.clone())
+                        })?;
+                    } else {
+                        self.main_pipeline.add_transform(|input, output| {
+                            TransformReclusterPartition::try_create(
+                                input,
+                                output,
+                                properties.clone(),
+                                processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                                num_processors,
+                                partitions,
+                            )
+                        })?;
+                    }
 
                     self.main_pipeline.add_async_accumulating_transformer(|| {
                         TransformBlockWriter::create(
@@ -249,7 +273,7 @@ impl PipelineBuilder {
                     // construct output fields
                     let output_fields = cluster_stats_gen.out_fields.clone();
                     let schema = DataSchemaRefExt::create(output_fields);
-                    let sort_descs: Vec<_> = cluster_stats_gen
+                    let sort_desc: Vec<_> = cluster_stats_gen
                         .cluster_key_index
                         .iter()
                         .map(|offset| SortColumnDescription {
@@ -267,10 +291,9 @@ impl PipelineBuilder {
                     );
 
                     let sort_pipeline_builder =
-                        SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs.into())?
+                        SortPipelineBuilder::create(self.ctx.clone(), schema, sort_desc.into())?
                             .with_block_size_hit(sort_block_size)
                             .remove_order_col_at_last();
-                    // Todo(zhyass): Recluster will no longer perform sort in the near future.
                     sort_pipeline_builder.build_full_sort_pipeline(&mut self.main_pipeline)?;
 
                     // Compact after merge sort.
@@ -306,7 +329,7 @@ impl PipelineBuilder {
 
 struct ReclusterPipelineBuilder {
     schema: DataSchemaRef,
-    sort_desc: Arc<[SortColumnDescription]>,
+    sort_desc: Vec<SortColumnDescription>,
     state: Option<Arc<SampleState>>,
     sample_size: usize,
     seed: u64,
@@ -315,7 +338,7 @@ struct ReclusterPipelineBuilder {
 impl ReclusterPipelineBuilder {
     fn create(
         schema: DataSchemaRef,
-        sort_desc: Arc<[SortColumnDescription]>,
+        sort_desc: Vec<SortColumnDescription>,
         sample_size: usize,
     ) -> Self {
         Self {
@@ -339,53 +362,17 @@ impl ReclusterPipelineBuilder {
     }
 
     fn build_recluster_sample_pipeline(&self, pipeline: &mut Pipeline) -> Result<()> {
-        match self.sort_desc.as_ref() {
-            [desc] => {
-                let schema = self.schema.clone();
-                let sort_type = schema.field(desc.offset).data_type();
-                assert!(desc.asc);
-
-                match_template! {
-                    T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
-                    match sort_type {
-                        DataType::T => {
-                            self.visit_type::<SimpleRowsAsc<T>, SimpleRowConverter<T>>(pipeline)
-                        },
-                        DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                            NumberDataType::NUM_TYPE => {
-                                self.visit_type::<SimpleRowsAsc<NumberType<NUM_TYPE>>, SimpleRowConverter<NumberType<NUM_TYPE>>>(pipeline)
-                            }
-                        }),
-                        _ => self.visit_type::<CommonRows, CommonConverter>(pipeline)
-                    }
-                }
-            }
-            _ => self.visit_type::<CommonRows, CommonConverter>(pipeline),
-        }
-    }
-
-    fn visit_type<R, C>(&self, pipeline: &mut Pipeline) -> Result<()>
-    where
-        R: Rows + 'static,
-        C: RowConverter<R> + Send + 'static,
-        R::Type: ArgType + Send + Sync,
-        <R::Type as AccessType>::Scalar: Ord + Send + Sync,
-    {
         pipeline.try_add_transformer(|| {
-            TransformAddOrderColumn::<R, C>::try_new(self.sort_desc.clone(), self.schema.clone())
+            TransformAddOrderColumn::try_new(self.sort_desc.clone(), self.schema.clone())
         })?;
-        let offset = self.schema.num_fields();
+        let offset = self.schema.num_fields() - 1;
         pipeline.add_accumulating_transformer(|| {
-            TransformReclusterCollect::<R::Type>::new(offset, self.sample_size, self.seed)
+            TransformReclusterCollect::new(offset, self.sample_size, self.seed)
         });
         pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformRangePartitionIndexer::<
-                R::Type,
-            >::create(
-                input,
-                output,
-                self.state.clone().unwrap(),
-            )))
+            Ok(ProcessorPtr::create(
+                TransformRangePartitionIndexer::create(input, output, self.state.clone().unwrap()),
+            ))
         })
     }
 }

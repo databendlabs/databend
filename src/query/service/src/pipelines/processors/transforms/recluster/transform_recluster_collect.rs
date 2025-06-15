@@ -14,41 +14,27 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::local_block_meta_serde;
-use databend_common_expression::types::ArgType;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_pipeline_transforms::AccumulatingTransform;
 
 use crate::pipelines::processors::transforms::RangeBoundSampler;
 
-pub struct TransformReclusterCollect<T>
-where
-    T: ArgType + Send + Sync,
-    T::Scalar: Ord + Send,
-{
+pub struct TransformReclusterCollect {
     input_data: Vec<DataBlock>,
-    sampler: RangeBoundSampler<T>,
+    sampler: RangeBoundSampler,
 }
 
-impl<T> TransformReclusterCollect<T>
-where
-    T: ArgType + Send + Sync,
-    T::Scalar: Ord + Send,
-{
+impl TransformReclusterCollect {
     pub fn new(offset: usize, sample_size: usize, seed: u64) -> Self {
         Self {
             input_data: vec![],
-            sampler: RangeBoundSampler::<T>::new(offset, sample_size, seed),
+            sampler: RangeBoundSampler::new(offset, sample_size, seed),
         }
     }
 }
 
-impl<T> AccumulatingTransform for TransformReclusterCollect<T>
-where
-    T: ArgType + Send + Sync,
-    T::Scalar: Ord + Send,
-{
+impl AccumulatingTransform for TransformReclusterCollect {
     const NAME: &'static str = "TransformReclusterCollect";
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
@@ -72,7 +58,7 @@ where
 #[derive(Debug)]
 pub struct ReclusterSampleMeta {
     pub blocks: Vec<DataBlock>,
-    pub sample_values: Vec<(u64, Vec<Scalar>)>,
+    pub sample_values: Vec<(u64, Vec<Vec<u8>>)>,
 }
 
 local_block_meta_serde!(ReclusterSampleMeta);

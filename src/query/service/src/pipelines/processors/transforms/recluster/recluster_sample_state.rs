@@ -12,14 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 use std::sync::RwLock;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_exception::Result;
 use databend_common_expression::compare_columns;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::Scalar;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::FromData;
 
 pub struct SampleState {
     pub inner: RwLock<SampleStateInner>,
@@ -41,38 +42,21 @@ impl SampleState {
         })
     }
 
-    pub fn merge_sample<T>(&self, values: Vec<(u64, Vec<Scalar>)>) -> Result<()>
-    where
-        T: ArgType,
-        T::Scalar: Ord,
-    {
+    pub fn merge_sample(&self, values: Vec<(u64, Vec<Vec<u8>>)>) -> Result<()> {
         let mut inner = self.inner.write().unwrap();
         inner.completed_inputs += 1;
         inner.values.extend_from_slice(&values);
 
         if inner.completed_inputs >= inner.total_inputs {
-            inner.determine_bounds::<T>()?;
+            inner.determine_bounds()?;
             self.done.notify_waiters();
         }
         Ok(())
     }
 
-    pub fn get_bounds<T>(&self) -> (Vec<T::Scalar>, Option<T::Scalar>)
-    where
-        T: ArgType,
-        T::Scalar: Ord,
-    {
+    pub fn get_bounds(&self) -> (Vec<Vec<u8>>, Option<Vec<u8>>) {
         let inner = self.inner.read().unwrap();
-        let bounds = inner
-            .bounds
-            .iter()
-            .map(|v| T::to_owned_scalar(T::try_downcast_scalar(&v.as_ref()).unwrap()))
-            .collect();
-        let max_value = inner
-            .max_value
-            .as_ref()
-            .map(|v| T::to_owned_scalar(T::try_downcast_scalar(&v.as_ref()).unwrap()));
-        (bounds, max_value)
+        (inner.bounds.clone(), inner.max_value.clone())
     }
 }
 
@@ -81,18 +65,14 @@ pub struct SampleStateInner {
     total_inputs: usize,
 
     completed_inputs: usize,
-    bounds: Vec<Scalar>,
-    max_value: Option<Scalar>,
+    bounds: Vec<Vec<u8>>,
+    max_value: Option<Vec<u8>>,
 
-    values: Vec<(u64, Vec<Scalar>)>,
+    values: Vec<(u64, Vec<Vec<u8>>)>,
 }
 
 impl SampleStateInner {
-    fn determine_bounds<T>(&mut self) -> Result<()>
-    where
-        T: ArgType,
-        T::Scalar: Ord,
-    {
+    fn determine_bounds(&mut self) -> Result<()> {
         if self.partitions < 2 {
             return Ok(());
         }
@@ -111,16 +91,15 @@ impl SampleStateInner {
         for (num, values) in values.into_iter() {
             let weight = num as f64 / values.len() as f64;
             values.into_iter().for_each(|v| {
-                let val = T::to_owned_scalar(T::try_downcast_scalar(&v.as_ref()).unwrap());
-                data.push(val);
+                data.push(v);
                 weights.push(weight);
             });
         }
-        let col = T::upcast_column(T::column_from_vec(data.clone(), &[]));
+        let col = BinaryType::from_data(data.clone());
         let indices = compare_columns(vec![col], total_samples)?;
 
         let max_index = indices[total_samples - 1] as usize;
-        let max_val = data[max_index].clone();
+        let max_val = &data[max_index];
 
         let mut cum_weight = 0.0;
         let mut target = step;
@@ -131,22 +110,20 @@ impl SampleStateInner {
         let mut j = 0;
         while i < total_samples && j < self.partitions - 1 {
             let idx = indices[i] as usize;
+            let value = &data[idx];
             let weight = weights[idx];
             cum_weight += weight;
-            if cum_weight >= target {
-                let data = &data[idx];
-                if previous_bound.as_ref().is_none_or(|prev| data > prev) {
-                    if data == &max_val {
-                        self.max_value = Some(T::upcast_scalar(max_val));
-                        break;
-                    }
 
-                    let bound = T::upcast_scalar(data.clone());
-                    bounds.push(bound);
-                    target += step;
-                    j += 1;
-                    previous_bound = Some(data.clone());
+            if cum_weight >= target && previous_bound.map_or(true, |prev| value > prev) {
+                if unlikely(value == max_val) {
+                    self.max_value = Some(max_val.clone());
+                    break;
                 }
+
+                bounds.push(value.clone());
+                previous_bound = Some(value);
+                target += step;
+                j += 1;
             }
             i += 1;
         }

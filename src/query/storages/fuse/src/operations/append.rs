@@ -65,16 +65,32 @@ impl FuseTable {
                 table_meta_timestamps,
             )?;
 
-            let cluster_operators = properties.cluster_operators();
-            if !cluster_operators.is_empty() {
-                let num_input_columns = self.table_info.schema().num_fields();
-                let func_ctx = ctx.get_function_context()?;
-                pipeline.add_transformer(move || {
-                    CompoundBlockOperator::new(
-                        cluster_operators.clone(),
-                        func_ctx.clone(),
-                        num_input_columns,
-                    )
+            let cluster_key_index = properties.cluster_key_index();
+            if !cluster_key_index.is_empty() {
+                let cluster_operators = properties.cluster_operators();
+                if !cluster_operators.is_empty() {
+                    let num_input_columns = self.table_info.schema().num_fields();
+                    let func_ctx = ctx.get_function_context()?;
+                    pipeline.add_transformer(move || {
+                        CompoundBlockOperator::new(
+                            cluster_operators.clone(),
+                            func_ctx.clone(),
+                            num_input_columns,
+                        )
+                    });
+                }
+
+                let sort_desc: Vec<SortColumnDescription> = cluster_key_index
+                    .iter()
+                    .map(|index| SortColumnDescription {
+                        offset: *index,
+                        asc: true,
+                        nulls_first: false,
+                    })
+                    .collect();
+                let sort_desc: Arc<[_]> = sort_desc.into();
+                pipeline.add_transformer(|| {
+                    TransformSortPartial::new(LimitType::None, sort_desc.clone())
                 });
             }
 
