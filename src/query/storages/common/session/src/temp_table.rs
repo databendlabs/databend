@@ -85,7 +85,11 @@ impl TempTblMgr {
         self.id_to_table.is_empty()
     }
 
-    pub fn create_table(&mut self, req: CreateTableReq) -> Result<CreateTableReply> {
+    pub fn create_table(
+        &mut self,
+        req: CreateTableReq,
+        prefix: String,
+    ) -> Result<CreateTableReply> {
         let CreateTableReq {
             create_option,
             name_ident,
@@ -103,6 +107,7 @@ impl TempTblMgr {
         let db_id = db_id.parse::<u64>()?;
 
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
+        let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
         let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
             (true, CreateOption::Create) => {
@@ -117,7 +122,7 @@ impl TempTblMgr {
                     .as_ref()
                     .map(|o| format!("{}.{}", name_ident.db_name, o))
                     .unwrap_or(desc);
-                let old_id = self.name_to_id.insert(desc, table_id);
+                let old_id = self.name_to_id.insert(desc.clone(), table_id);
                 if let Some(old_id) = old_id {
                     self.id_to_table.remove(&old_id);
                 }
@@ -128,9 +133,14 @@ impl TempTblMgr {
                     copied_files: BTreeMap::new(),
                 });
                 self.inc_next_id();
+                info!(
+                    "[TEMP TABLE] session={prefix} created {} table {desc}, id = {db_id}.{table_id}.",
+                    engine
+                );
                 true
             }
         };
+
         Ok(CreateTableReply {
             table_id,
             table_id_seq: Some(0),
