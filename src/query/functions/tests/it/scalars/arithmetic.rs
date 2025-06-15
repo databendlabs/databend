@@ -319,5 +319,10 @@ fn test_decimal() {
             columns: &columns,
             ..Default::default()
         },
-    )
+    );
+
+    run_ast_with_context(file, "1964831797.0000 - 0.0214642400000", TestContext {
+        columns: &columns,
+        ..Default::default()
+    })
 }
