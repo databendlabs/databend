@@ -397,6 +397,7 @@ pub struct HttpQuery {
     pub(crate) has_temp_table_after_run: Mutex<Option<bool>>,
     pub(crate) is_session_handle_refreshed: AtomicBool,
     pub(crate) query_mem_stat: Option<Arc<MemStat>>,
+    last_session_conf: Arc<Mutex<Option<HttpSessionConf>>>,
 }
 
 fn try_set_txn(
@@ -624,6 +625,8 @@ impl HttpQuery {
             has_temp_table_after_run: Default::default(),
             is_session_handle_refreshed: Default::default(),
             query_mem_stat: ctx.get_query_memory_tracking(),
+            is_txn_mgr_saved: Default::default(),
+            last_session_conf: Default::default(),
         })
     }
 
@@ -632,7 +635,10 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state();
-        let session = self.get_response_session().await?;
+        let mut session = Some(self.get_response_session().await?);
+        if session == *self.last_session_conf.lock() {
+            session = None
+        }
 
         Ok(HttpQueryResponseInternal {
             data,
@@ -799,7 +805,7 @@ impl HttpQuery {
 
     pub async fn start_query(&mut self, sql: String) -> Result<()> {
         let (block_sender, query_context) = {
-            let state = self.state.lock();
+            let state = self.executor.lock();
             let ExecuteState::Starting(state) = &state.state else {
                 return Err(ErrorCode::Internal(
                     "[HTTP-QUERY] Invalid query state: expected Starting state",
@@ -811,7 +817,7 @@ impl HttpQuery {
 
         let query_session = query_context.get_current_session();
 
-        let query_state = self.state.clone();
+        let query_state = self.executor.clone();
 
         let query_format_settings = {
             let page_manager = self.page_manager.lock().await;
@@ -864,7 +870,7 @@ impl HttpQuery {
         // the query will be removed from the query manager before the session is dropped.
         self.detach().await;
 
-        Executor::stop(&self.state, Err(reason));
+        Executor::stop(&self.executor, Err(reason));
     }
 
     #[async_backtrace::framed]
@@ -882,23 +888,28 @@ impl HttpQuery {
                 Duration::new(0, 0)
             };
         let deadline = Instant::now() + duration;
-        let mut t = self.expire_state.lock();
-        *t = ExpireState::ExpireAt(deadline);
+        let mut t = self.state.lock();
+        *t = HttpQueryState::ExpireAt(deadline);
     }
 
     pub fn mark_removed(&self, remove_reason: RemoveReason) -> bool {
-        let mut t = self.expire_state.lock();
-        if !matches!(*t, ExpireState::Removed(_)) {
-            *t = ExpireState::Removed(remove_reason);
+        let mut t = self.state.lock();
+        if !matches!(*t, HttpQueryState::Removed(_)) {
+            *t = HttpQueryState::Removed(remove_reason);
             true
         } else {
             false
         }
     }
 
+    pub fn wait_for_final(&self) {
+        let mut t = self.state.lock();
+        *t = HttpQueryState::WaitForFinal;
+    }
+
     pub fn check_removed(&self) -> Option<RemoveReason> {
-        let t = self.expire_state.lock();
-        if let ExpireState::Removed(r) = *t {
+        let t = self.state.lock();
+        if let HttpQueryState::Removed(r) = *t {
             Some(r)
         } else {
             None
@@ -908,9 +919,9 @@ impl HttpQuery {
     // return Duration to sleep
     #[async_backtrace::framed]
     pub async fn check_expire(&self) -> ExpireResult {
-        let expire_state = self.expire_state.lock();
+        let expire_state = self.state.lock();
         match *expire_state {
-            ExpireState::ExpireAt(expire_at) => {
+            HttpQueryState::ExpireAt(expire_at) => {
                 let now = Instant::now();
                 if now >= expire_at {
                     ExpireResult::Expired
@@ -918,25 +929,23 @@ impl HttpQuery {
                     ExpireResult::Sleep(expire_at - now)
                 }
             }
-            ExpireState::Removed(_) => ExpireResult::Removed,
-            ExpireState::Working => {
-                ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
-            }
+            HttpQueryState::Removed(_) => ExpireResult::Removed,
+            _ => ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs)),
         }
     }
 
     #[async_backtrace::framed]
     pub fn on_heartbeat(&self) -> bool {
-        let mut expire_state = self.expire_state.lock();
+        let mut expire_state = self.state.lock();
         match *expire_state {
-            ExpireState::ExpireAt(_) => {
+            HttpQueryState::ExpireAt(_) => {
                 let duration = Duration::from_secs(self.result_timeout_secs);
                 let deadline = Instant::now() + duration;
-                *expire_state = ExpireState::ExpireAt(deadline);
+                *expire_state = HttpQueryState::ExpireAt(deadline);
                 true
             }
-            ExpireState::Removed(_) => false,
-            ExpireState::Working => true,
+            HttpQueryState::Removed(_) => false,
+            HttpQueryState::Working | HttpQueryState::WaitForFinal => true,
         }
     }
 
