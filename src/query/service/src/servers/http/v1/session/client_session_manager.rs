@@ -40,7 +40,6 @@ use sha2::Digest;
 use sha2::Sha256;
 use tokio::time::Instant;
 
-use crate::servers::http::v1::session::consts::MIN_STATE_REFRESH_INTERVAL;
 use crate::servers::http::v1::session::consts::REFRESH_TOKEN_TTL;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
@@ -64,7 +63,6 @@ struct SessionState {
 }
 
 pub struct ClientSessionManager {
-    pub session_token_ttl: Duration,
     /// cache of tokens to avoid request for MetaServer on each auth.
     ///
     /// store hash only for hit ratio with limited memory, feasible because:
@@ -90,6 +88,8 @@ pub struct ClientSessionManager {
     /// refresh:
     ///  - auth (with min interval)
     session_state: Mutex<BTreeMap<String, SessionState>>,
+    pub session_token_ttl: Duration,
+    pub min_refresh_interval: Duration,
 }
 
 impl ClientSessionManager {
@@ -104,9 +104,12 @@ impl ClientSessionManager {
     #[async_backtrace::framed]
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let mgr = Arc::new(Self {
-            session_token_ttl: Duration::from_secs(cfg.query.http_session_timeout_secs),
             session_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
             refresh_tokens: RwLock::new(LruCache::with_items_capacity(1024)),
+            session_token_ttl: Duration::from_secs(cfg.query.http_session_timeout_secs),
+            min_refresh_interval: Duration::from_secs(
+                (cfg.query.http_session_timeout_secs / 10).min(300),
+            ),
             session_state: Default::default(),
         });
         GlobalInstance::set(mgr.clone());
@@ -162,7 +165,7 @@ impl ClientSessionManager {
             .upsert_client_session_id(
                 client_session_id,
                 &user_name,
-                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + MIN_STATE_REFRESH_INTERVAL,
+                REFRESH_TOKEN_TTL + TTL_GRACE_PERIOD_META + self.min_refresh_interval,
             )
             .await?;
         Ok(())
@@ -404,7 +407,7 @@ impl ClientSessionManager {
     ) -> Result<bool> {
         match last_refresh_time.elapsed() {
             Ok(elapsed) => {
-                if elapsed > MIN_STATE_REFRESH_INTERVAL {
+                if elapsed > self.min_refresh_interval {
                     info!(
                         "[HTTP-SESSION] refreshing session {client_session_id} after {} seconds",
                         elapsed.as_secs(),
