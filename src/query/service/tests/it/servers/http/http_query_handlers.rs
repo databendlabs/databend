@@ -1538,7 +1538,6 @@ async fn test_affect() -> Result<()> {
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
-                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
@@ -1564,7 +1563,6 @@ async fn test_affect() -> Result<()> {
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
-                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
                     "6".to_string(),
@@ -1585,7 +1583,6 @@ async fn test_affect() -> Result<()> {
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
-                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
                     "6".to_string(),
@@ -1608,7 +1605,6 @@ async fn test_affect() -> Result<()> {
                 database: Some("db2".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
-                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
                     "6".to_string(),
@@ -1633,7 +1629,6 @@ async fn test_affect() -> Result<()> {
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
-                keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "timezone".to_string(),
                     "Asia/Shanghai".to_string(),
