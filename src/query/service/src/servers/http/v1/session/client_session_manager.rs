@@ -41,9 +41,8 @@ use sha2::Digest;
 use sha2::Sha256;
 use tokio::time::Instant;
 
+use crate::servers::http::v1::session::consts::MIN_STATE_REFRESH_INTERVAL;
 use crate::servers::http::v1::session::consts::REFRESH_TOKEN_TTL;
-use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_MEMORY;
-use crate::servers::http::v1::session::consts::STATE_REFRESH_INTERVAL_META;
 use crate::servers::http::v1::session::consts::TOMBSTONE_TTL;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_META;
 use crate::servers::http::v1::session::consts::TTL_GRACE_PERIOD_QUERY;
@@ -367,12 +366,16 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) {
+    fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) -> bool {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
-        guard.entry(key).and_modify(|e| {
-            e.query_state = QueryState::Idle(Instant::now());
-        });
+        match guard.entry(key) {
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().last_access = Instant::now();
+                true
+            }
+            Entry::Vacant(_) => false,
+        }
     }
 
     pub fn on_query_start(
@@ -433,19 +436,34 @@ impl ClientSessionManager {
         tenant: Tenant,
         client_session_id: &str,
         user_name: &str,
-        last_access_time: &SystemTime,
-    ) -> Result<()> {
-        let Ok(elapsed) = last_access_time.elapsed() else {
-            return Ok(());
-        };
-        if elapsed > STATE_REFRESH_INTERVAL_MEMORY {
-            self.refresh_in_memory_states(client_session_id, user_name);
+        last_refresh_time: &SystemTime,
+    ) -> Result<bool> {
+        match last_refresh_time.elapsed() {
+            Ok(elapsed) => {
+                if elapsed > MIN_STATE_REFRESH_INTERVAL {
+                    info!(
+                        "[HTTP-SESSION] refreshing session {client_session_id} after {} seconds",
+                        elapsed.as_secs(),
+                    );
+                    if self.refresh_in_memory_states(client_session_id, user_name) {
+                        self.refresh_session_handle(
+                            tenant,
+                            user_name.to_string(),
+                            client_session_id,
+                        )
+                        .await?;
+                    }
+                    return Ok(true);
+                }
+            }
+            Err(err) => {
+                log::error!(
+                        "[HTTP-SESSION] Invalid last_refresh_time: detected clock drift or incorrect timestamp, difference: {:?}",
+                        err.duration()
+                    );
+            }
         }
-        if elapsed > STATE_REFRESH_INTERVAL_META {
-            self.refresh_session_handle(tenant, user_name.to_string(), client_session_id)
-                .await?
-        }
-        Ok(())
+        Ok(false)
     }
 }
 
