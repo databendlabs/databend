@@ -12,30 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::ValueType;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use rand::prelude::SliceRandom;
 use rand::prelude::SmallRng;
 use rand::SeedableRng;
 
-pub struct RangeBoundSampler<T>
-where T: ValueType
-{
+pub struct RangeBoundSampler {
     offset: usize,
     sample_size: usize,
     rng: SmallRng,
 
-    values: Vec<(u64, Vec<Scalar>)>,
-    _t: PhantomData<T>,
+    values: Vec<(u64, Vec<Vec<u8>>)>,
 }
 
-impl<T> RangeBoundSampler<T>
-where T: ValueType
-{
+impl RangeBoundSampler {
     pub fn new(offset: usize, sample_size: usize, seed: u64) -> Self {
         let rng = SmallRng::seed_from_u64(seed);
         Self {
@@ -43,16 +33,11 @@ where T: ValueType
             sample_size,
             rng,
             values: vec![],
-            _t: PhantomData,
         }
     }
 }
 
-impl<T> RangeBoundSampler<T>
-where
-    T: ArgType,
-    T::Scalar: Ord + Send,
-{
+impl RangeBoundSampler {
     pub fn add_block(&mut self, data: &DataBlock) {
         let rows = data.num_rows();
         assert!(rows > 0);
@@ -63,19 +48,15 @@ where
         indices.shuffle(&mut self.rng);
         let sampled_indices = &indices[..sample_size];
 
-        let column = T::try_downcast_column(&column).unwrap();
+        let column = column.as_binary().unwrap();
         let sample_values = sampled_indices
             .iter()
-            .map(|i| {
-                T::upcast_scalar(T::to_owned_scalar(unsafe {
-                    T::index_column_unchecked(&column, *i)
-                }))
-            })
+            .map(|i| unsafe { column.index_unchecked(*i) }.to_vec())
             .collect::<Vec<_>>();
         self.values.push((rows as u64, sample_values));
     }
 
-    pub fn sample_values(&mut self) -> Vec<(u64, Vec<Scalar>)> {
+    pub fn sample_values(&mut self) -> Vec<(u64, Vec<Vec<u8>>)> {
         std::mem::take(&mut self.values)
     }
 }

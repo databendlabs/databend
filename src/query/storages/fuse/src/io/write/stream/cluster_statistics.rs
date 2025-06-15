@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -25,7 +24,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_functions::aggregates::eval_aggr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -115,8 +113,8 @@ impl ClusterStatisticsBuilder {
 }
 
 pub struct ClusterStatisticsState {
-    mins: Vec<Scalar>,
-    maxs: Vec<Scalar>,
+    min_values: Vec<Vec<Scalar>>,
+    max_values: Vec<Vec<Scalar>>,
 
     builder: Arc<ClusterStatisticsBuilder>,
 }
@@ -124,8 +122,8 @@ pub struct ClusterStatisticsState {
 impl ClusterStatisticsState {
     pub fn new(builder: Arc<ClusterStatisticsBuilder>) -> Self {
         Self {
-            mins: vec![],
-            maxs: vec![],
+            min_values: vec![],
+            max_values: vec![],
             builder,
         }
     }
@@ -135,20 +133,20 @@ impl ClusterStatisticsState {
             return Ok(input);
         }
 
-        let num_rows = input.num_rows();
-        let cols = self
-            .builder
-            .cluster_key_index
-            .iter()
-            .map(|&i| input.get_by_offset(i).to_column())
-            .collect();
-        let tuple = Column::Tuple(cols);
-        let (min, _) = eval_aggr("min", vec![], &[tuple.clone()], num_rows, vec![])?;
-        let (max, _) = eval_aggr("max", vec![], &[tuple.clone()], num_rows, vec![])?;
-        assert_eq!(min.len(), 1);
-        assert_eq!(max.len(), 1);
-        self.mins.push(min.index(0).unwrap().to_owned());
-        self.maxs.push(max.index(0).unwrap().to_owned());
+        let mut min = Vec::with_capacity(self.builder.cluster_key_index.len());
+        let mut max = Vec::with_capacity(self.builder.cluster_key_index.len());
+        for key in self.builder.cluster_key_index.iter() {
+            let val = input.get_by_offset(*key);
+            let left = unsafe { val.index_unchecked(0) }.to_owned();
+            min.push(left);
+
+            // The maximum in cluster statistics needn't larger than the non-trimmed one.
+            // So we use trim_min directly.
+            let right = unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
+            max.push(right);
+        }
+        self.min_values.push(min);
+        self.max_values.push(max);
         input.pop_columns(self.builder.extra_key_num);
         Ok(input)
     }
@@ -158,22 +156,8 @@ impl ClusterStatisticsState {
             return Ok(None);
         }
 
-        let min = self
-            .mins
-            .into_iter()
-            .min_by(|x, y| x.as_ref().cmp(&y.as_ref()))
-            .unwrap()
-            .as_tuple()
-            .unwrap()
-            .clone();
-        let max = self
-            .maxs
-            .into_iter()
-            .max_by(|x, y| x.as_ref().cmp(&y.as_ref()))
-            .unwrap()
-            .as_tuple()
-            .unwrap()
-            .clone();
+        let min = self.min_values.into_iter().min().unwrap();
+        let max = self.max_values.into_iter().max().unwrap();
 
         let level = if min == max && perfect {
             -1

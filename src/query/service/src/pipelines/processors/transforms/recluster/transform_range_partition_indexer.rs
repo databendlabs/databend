@@ -14,11 +14,11 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::ArgType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -31,26 +31,20 @@ use databend_common_pipeline_core::processors::Processor;
 use crate::pipelines::processors::transforms::ReclusterSampleMeta;
 use crate::pipelines::processors::transforms::SampleState;
 
-pub struct TransformRangePartitionIndexer<T>
-where T: ArgType
-{
+pub struct TransformRangePartitionIndexer {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
     state: Arc<SampleState>,
     input_data: Vec<DataBlock>,
     output_data: VecDeque<DataBlock>,
-    bounds: Vec<T::Scalar>,
-    max_value: Option<T::Scalar>,
+    bounds: Vec<Vec<u8>>,
+    max_value: Option<Vec<u8>>,
 
     start: Instant,
 }
 
-impl<T> TransformRangePartitionIndexer<T>
-where
-    T: ArgType + Send + Sync,
-    T::Scalar: Ord + Send + Sync,
-{
+impl TransformRangePartitionIndexer {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -70,11 +64,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<T> Processor for TransformRangePartitionIndexer<T>
-where
-    T: ArgType + Send + Sync,
-    T::Scalar: Ord + Send + Sync,
-{
+impl Processor for TransformRangePartitionIndexer {
     fn name(&self) -> String {
         "TransformRangePartitionIndexer".to_owned()
     }
@@ -120,48 +110,36 @@ where
             .and_then(ReclusterSampleMeta::downcast_from)
             .expect("require a ReclusterSampleMeta");
         self.input_data = meta.blocks;
-        self.state.merge_sample::<T>(meta.sample_values)?;
+        self.state.merge_sample(meta.sample_values)?;
         log::info!("Recluster range partition: {:?}", self.start.elapsed());
         Ok(Event::Async)
     }
 
     fn process(&mut self) -> Result<()> {
         let start = Instant::now();
-        let mut block = {
-            let blocks = std::mem::take(&mut self.input_data);
-            DataBlock::concat(&blocks)?
-        };
-
-        let bound_len = self.bounds.len();
-        let num_rows = block.num_rows();
-        let last = block.get_last_column().clone();
-        block.pop_columns(1);
-        let mut builder = Vec::with_capacity(num_rows);
-        let last_col = T::try_downcast_column(&last.remove_nullable()).unwrap();
-        for index in 0..num_rows {
-            let val = T::to_owned_scalar(unsafe { T::index_column_unchecked(&last_col, index) });
-            if self.max_value.as_ref().is_some_and(|v| val >= *v) {
-                let range_id = bound_len + 1;
-                builder.push(range_id as u64);
-                continue;
-            }
-
-            let mut low = 0;
-            let mut high = bound_len;
-            while low < high {
-                let mid = low + ((high - low) / 2);
-                let bound = unsafe { self.bounds.get_unchecked(mid) }.clone();
-                if val > bound {
-                    low = mid + 1;
-                } else {
-                    high = mid;
+        if let Some(mut block) = self.input_data.pop() {
+            let bound_len = self.bounds.len();
+            let num_rows = block.num_rows();
+            let mut builder = Vec::with_capacity(num_rows);
+            let last_col = block.get_last_column().as_binary().unwrap();
+            for index in 0..num_rows {
+                let val = unsafe { last_col.index_unchecked(index) };
+                if unlikely(self.max_value.as_ref().is_some_and(|v| val >= v.as_slice())) {
+                    let range_id = bound_len + 1;
+                    builder.push(range_id as u64);
+                    continue;
                 }
-            }
-            builder.push(low as u64);
-        }
 
-        block.add_column(UInt64Type::from_data(builder));
-        self.output_data.push_back(block);
+                let idx = self
+                    .bounds
+                    .binary_search_by(|b| b.as_slice().cmp(val))
+                    .unwrap_or_else(|i| i);
+                builder.push(idx as u64);
+            }
+
+            block.add_column(UInt64Type::from_data(builder));
+            self.output_data.push_back(block);
+        }
         log::info!("Recluster range output: {:?}", start.elapsed());
         Ok(())
     }
@@ -169,7 +147,7 @@ where
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         self.state.done.notified().await;
-        (self.bounds, self.max_value) = self.state.get_bounds::<T>();
+        (self.bounds, self.max_value) = self.state.get_bounds();
         Ok(())
     }
 }

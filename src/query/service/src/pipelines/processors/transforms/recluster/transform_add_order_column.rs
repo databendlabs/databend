@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
-use std::sync::Arc;
-
 use databend_common_exception::Result;
+use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -23,32 +21,22 @@ use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::Transform;
 
-pub struct TransformAddOrderColumn<R, C> {
-    row_converter: C,
-    sort_desc: Arc<[SortColumnDescription]>,
-    _r: PhantomData<R>,
+pub struct TransformAddOrderColumn {
+    row_converter: CommonConverter,
+    sort_desc: Vec<SortColumnDescription>,
 }
 
-impl<R, C> TransformAddOrderColumn<R, C>
-where
-    R: Rows,
-    C: RowConverter<R>,
-{
-    pub fn try_new(sort_desc: Arc<[SortColumnDescription]>, schema: DataSchemaRef) -> Result<Self> {
-        let row_converter = C::create(&sort_desc, schema.clone())?;
+impl TransformAddOrderColumn {
+    pub fn try_new(sort_desc: Vec<SortColumnDescription>, schema: DataSchemaRef) -> Result<Self> {
+        let row_converter = CommonConverter::create(&sort_desc, schema.clone())?;
         Ok(Self {
             row_converter,
             sort_desc,
-            _r: PhantomData,
         })
     }
 }
 
-impl<R, C> Transform for TransformAddOrderColumn<R, C>
-where
-    R: Rows + 'static,
-    C: RowConverter<R> + Send + 'static,
-{
+impl Transform for TransformAddOrderColumn {
     const NAME: &'static str = "TransformAddOrderColumn";
 
     fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {

@@ -122,7 +122,7 @@ impl ClusterStatsGenerator {
             let left = unsafe { val.index_unchecked(0) }.to_owned();
             min.push(left);
 
-            // The maximum in cluster statistics neednot larger than the non-trimmed one.
+            // The maximum in cluster statistics needn't larger than the non-trimmed one.
             // So we use trim_min directly.
             let right = unsafe { val.index_unchecked(val.value().len() - 1) }.to_owned();
             max.push(right);
