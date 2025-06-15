@@ -25,7 +25,6 @@ pub use range_bound_sampler::RangeBoundSampler;
 pub use recluster_partition_exchange::ReclusterPartitionExchange;
 pub use recluster_partition_strategy::CompactPartitionStrategy;
 pub use recluster_partition_strategy::ReclusterPartitionStrategy;
-pub use recluster_partition_strategy::ReclusterPartitionStrategys;
 pub use recluster_sample_state::SampleState;
 pub use transform_add_order_column::TransformAddOrderColumn;
 pub use transform_range_partition_indexer::TransformRangePartitionIndexer;

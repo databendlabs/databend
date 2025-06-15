@@ -118,28 +118,40 @@ impl Processor for TransformRangePartitionIndexer {
     fn process(&mut self) -> Result<()> {
         let start = Instant::now();
         if let Some(mut block) = self.input_data.pop() {
-            let bound_len = self.bounds.len();
             let num_rows = block.num_rows();
             let mut builder = Vec::with_capacity(num_rows);
             let last_col = block.get_last_column().as_binary().unwrap();
-            for index in 0..num_rows {
-                let val = unsafe { last_col.index_unchecked(index) };
-                if unlikely(self.max_value.as_ref().is_some_and(|v| val >= v.as_slice())) {
-                    let range_id = bound_len + 1;
-                    builder.push(range_id as u64);
-                    continue;
+            if let Some(max_value) = self.max_value.as_ref() {
+                let bound_len = self.bounds.len();
+                for index in 0..num_rows {
+                    let val = unsafe { last_col.index_unchecked(index) };
+                    if unlikely(val >= max_value.as_slice()) {
+                        let range_id = bound_len + 1;
+                        builder.push(range_id as u64);
+                        continue;
+                    }
+
+                    let idx = self
+                        .bounds
+                        .binary_search_by(|b| b.as_slice().cmp(val))
+                        .unwrap_or_else(|i| i);
+                    builder.push(idx as u64);
                 }
-
-                let idx = self
-                    .bounds
-                    .binary_search_by(|b| b.as_slice().cmp(val))
-                    .unwrap_or_else(|i| i);
-                builder.push(idx as u64);
+            } else {
+                for index in 0..num_rows {
+                    let val = unsafe { last_col.index_unchecked(index) };
+                    let idx = self
+                        .bounds
+                        .binary_search_by(|b| b.as_slice().cmp(val))
+                        .unwrap_or_else(|i| i);
+                    builder.push(idx as u64);
+                }
             }
-
+            block.pop_columns(1);
             block.add_column(UInt64Type::from_data(builder));
             self.output_data.push_back(block);
         }
+
         log::info!("Recluster range output: {:?}", start.elapsed());
         Ok(())
     }
