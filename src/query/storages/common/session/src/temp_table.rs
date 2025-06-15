@@ -321,7 +321,7 @@ pub async fn drop_table_by_id(
 ) -> Result<Option<DropTableReply>> {
     let DropTableByIdReq { tb_id, engine, .. } = &req;
     info!(
-        "[TEMP-TABLE] session={} dropping {} table {tb_id}.",
+        "[TEMP TABLE] session={} dropping {} table {tb_id}.",
         req.temp_prefix,
         engine.as_str()
     );
@@ -412,7 +412,7 @@ pub async fn drop_all_temp_tables(
     let num_mem_table = mem_tbl_ids.len();
 
     info!(
-        "[TEMP-TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table."
+        "[TEMP TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table."
         , num_fuse_table, num_mem_table
     );
 

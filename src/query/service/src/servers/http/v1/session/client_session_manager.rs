@@ -460,14 +460,14 @@ pub async fn drop_all_temp_tables_with_logging(
         Ok(_) => {
             let duration = start.elapsed().as_millis();
             info!(
-                "[TEMP-TABLE] session={} clean up completed in {}ms",
+                "[TEMP TABLE] session={} clean up completed in {}ms",
                 user_name_session_id, duration
             );
         }
         Err(e) => {
             let duration = start.elapsed().as_millis();
             error!(
-                "[TEMP-TABLE] session={} clean up failed after {}ms: error={:?}",
+                "[TEMP TABLE] session={} clean up failed after {}ms: error={:?}",
                 user_name_session_id, duration, e
             );
         }
