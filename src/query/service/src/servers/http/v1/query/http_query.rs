@@ -361,8 +361,9 @@ pub struct HttpQueryResponseInternal {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ExpireState {
+pub enum HttpQueryState {
     Working,
+    WaitForFinal,
     ExpireAt(Instant),
     Removed(RemoveReason),
 }
@@ -382,9 +383,9 @@ pub struct HttpQuery {
     pub(crate) session_id: String,
     pub(crate) node_id: String,
     request: HttpQueryRequest,
-    state: Arc<Mutex<Executor>>,
+    executor: Arc<Mutex<Executor>>,
     page_manager: Arc<TokioMutex<PageManager>>,
-    expire_state: Arc<Mutex<ExpireState>>,
+    state: Arc<Mutex<HttpQueryState>>,
     /// The timeout for the query result polling. In the normal case, the client driver
     /// should fetch the paginated result in a timely manner, and the interval should not
     /// exceed this result_timeout_secs.
@@ -492,6 +493,17 @@ impl HttpQuery {
                     session.set_all_variables(state.get_variables()?)
                 }
                 if let Some(id) = session_conf.last_query_ids.first() {
+                    if let Some(last_query) = http_query_manager.queries.get(id) {
+                        let state = *last_query.state.lock();
+                        if !matches!(
+                            state,
+                            HttpQueryState::Removed(
+                                RemoveReason::Finished | RemoveReason::Canceled
+                            )
+                        ) {
+                            warn!("[HTTP-QUERY] Last query id not finished yet, id = {}, state = {:?}", id, state);
+                        }
+                    }
                     if !id.is_empty() && !state.last_query_result_cache_key.is_empty() {
                         session.update_query_ids_results(
                             id.to_owned(),
@@ -569,7 +581,7 @@ impl HttpQuery {
 
         let (sender, block_receiver) = sized_spsc(req.pagination.max_rows_in_buffer);
 
-        let state = Arc::new(Mutex::new(Executor {
+        let executor = Arc::new(Mutex::new(Executor {
             query_id: query_id.clone(),
             state: ExecuteState::Starting(ExecuteStarting {
                 ctx: ctx.clone(),
