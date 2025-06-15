@@ -34,6 +34,7 @@ use databend_storages_common_session::drop_all_temp_tables;
 use databend_storages_common_session::TempTblMgrRef;
 use log::error;
 use log::info;
+use log::warn;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use sha2::Digest;
@@ -373,7 +374,12 @@ impl ClientSessionManager {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
         guard.entry(key).and_modify(|e| {
-            session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
+            if e.temp_tbl_mgr.lock().is_empty() {
+                warn!("[TEMP TABLE] session={client_session_id} empty temp_tbl_mgr in ClientSessionManager.");
+            } else {
+                info!("[TEMP TABLE] session={client_session_id} restore temp_tbl_mgr");
+                session.set_temp_tbl_mgr(e.temp_tbl_mgr.clone());
+            }
         });
     }
 
