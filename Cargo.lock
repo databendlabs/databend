@@ -14478,14 +14478,15 @@ dependencies = [
 
 [[package]]
 name = "sub-cache"
-version = "0.2.0"
-source = "git+https://github.com/databendlabs/sub-cache?tag=v0.2.0#4d9a848cf4a98076318e4a837235a51a2d47961c"
+version = "0.2.1"
+source = "git+https://github.com/databendlabs/sub-cache?tag=v0.2.1#2826eb3290f6f9830b469d3808aefdca444f893f"
 dependencies = [
  "async-trait",
  "futures",
  "log",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
