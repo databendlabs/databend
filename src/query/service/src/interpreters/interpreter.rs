@@ -41,8 +41,6 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
-use databend_common_storages_system::ProfilesLogElement;
-use databend_common_storages_system::ProfilesLogQueue;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
@@ -363,11 +361,6 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
                 statistics_desc: get_statistics_desc(),
             })?
         );
-        let profiles_queue = ProfilesLogQueue::instance()?;
-        profiles_queue.append_data(ProfilesLogElement {
-            query_id: query_ctx.get_id(),
-            profiles: query_profiles,
-        })?;
     }
 
     hook_clear_m_cte_temp_table(&query_ctx)?;

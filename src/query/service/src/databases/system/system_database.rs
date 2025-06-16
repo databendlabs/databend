@@ -51,9 +51,7 @@ use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
-use databend_common_storages_system::QueriesProfilingTable;
 use databend_common_storages_system::QueryCacheTable;
-use databend_common_storages_system::QueryLogTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::StagesTable;
@@ -157,17 +155,12 @@ impl SystemDatabase {
                 TempFilesTable::create(sys_db_meta.next_table_id()),
                 TasksTable::create(sys_db_meta.next_table_id()),
                 TaskHistoryTable::create(sys_db_meta.next_table_id()),
-                QueriesProfilingTable::create(sys_db_meta.next_table_id()),
                 LocksTable::create(sys_db_meta.next_table_id(), ctl_name),
                 NotificationsTable::create(sys_db_meta.next_table_id()),
                 NotificationHistoryTable::create(sys_db_meta.next_table_id()),
                 ViewsTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
                 TemporaryTablesTable::create(sys_db_meta.next_table_id()),
                 DictionariesTable::create(sys_db_meta.next_table_id()),
-                Arc::new(QueryLogTable::create(
-                    sys_db_meta.next_table_id(),
-                    config.query.max_query_log_size,
-                )),
                 Arc::new(ClusteringHistoryTable::create(
                     sys_db_meta.next_table_id(),
                     config.query.max_query_log_size,
