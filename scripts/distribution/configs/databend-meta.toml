@@ -28,3 +28,6 @@ raft_advertise_host = "localhost"
 
 # Start up mode: single node cluster
 single        = true
+
+# Start up mode: join a cluster
+# join          = ["127.0.0.1:28104"]
