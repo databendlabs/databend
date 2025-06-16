@@ -279,6 +279,7 @@ impl StreamBlockBuilder {
             Some(BloomIndexState::from_bloom_index(
                 &bloom_index,
                 bloom_index_location,
+                None,
             )?)
         } else {
             None
@@ -388,7 +389,10 @@ impl StreamBlockProperties {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
-        let ngram_args = FuseTable::create_ngram_index_args(&table.table_info.meta)?;
+        let ngram_args = FuseTable::create_ngram_index_args(
+            &table.table_info.meta,
+            &table.table_info.meta.schema,
+        )?;
         let bloom_column_ids = bloom_columns_map
             .values()
             .map(|v| v.column_id())

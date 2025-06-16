@@ -16,11 +16,20 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
+use databend_common_meta_app::schema::TableIndexType;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_table_index::TableIndexHandler;
 use databend_enterprise_table_index::TableIndexHandlerWrapper;
+use databend_storages_common_table_meta::meta::Location;
+
+use crate::storages::fuse::operations::ngram_index::do_refresh_ngram_index;
 
 pub struct RealTableIndexHandler {}
 
@@ -42,6 +51,36 @@ impl TableIndexHandler for RealTableIndexHandler {
         req: DropTableIndexReq,
     ) -> Result<()> {
         catalog.drop_table_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn do_refresh_table_index(
+        &self,
+        index_ty: TableIndexType,
+        table: &FuseTable,
+        ctx: Arc<dyn TableContext>,
+        index_name: String,
+        index_schema: TableSchemaRef,
+        segment_locs: Option<Vec<Location>>,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        match index_ty {
+            TableIndexType::Ngram => {
+                do_refresh_ngram_index(
+                    table,
+                    ctx,
+                    index_name,
+                    index_schema,
+                    segment_locs,
+                    pipeline,
+                )
+                .await?;
+            }
+            _ => {
+                return Err(ErrorCode::RefreshIndexError("Only Ngram support Refresh"));
+            }
+        }
+        Ok(())
     }
 }
 

@@ -297,7 +297,8 @@ impl FuseTable {
                 )
             };
         let bloom_index_cols = self.bloom_index_cols();
-        let ngram_args = Self::create_ngram_index_args(&self.table_info.meta)?;
+        let ngram_args =
+            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
         let mut pruner = FusePruner::create_with_pages(
             &ctx,
             self.get_operator(),

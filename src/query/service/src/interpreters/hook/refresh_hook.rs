@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
@@ -21,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_meta_types::MetaId;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
@@ -263,7 +265,13 @@ async fn generate_refresh_inverted_index_plan(
         if index.sync_creation {
             continue;
         }
+        let index_type = match index.index_type {
+            TableIndexType::Inverted => ast::TableIndexType::Inverted,
+            TableIndexType::Ngram => ast::TableIndexType::Ngram,
+            TableIndexType::Vector => ast::TableIndexType::Vector,
+        };
         let plan = RefreshTableIndexPlan {
+            index_type,
             catalog: desc.catalog.clone(),
             database: desc.database.clone(),
             table: desc.table.clone(),
