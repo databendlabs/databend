@@ -173,6 +173,7 @@ mod util;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
+pub use hook::vacuum_hook::hook_clear_m_cte_temp_table;
 pub use hook::HookOperator;
 pub use interpreter::interpreter_plan_sql;
 pub use interpreter::Interpreter;

@@ -113,6 +113,8 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::Catalog;
+use crate::servers::http::v1::ClientSessionManager;
+
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
     inner: MutableCatalog,
@@ -421,8 +423,8 @@ impl Catalog for SessionCatalog {
     }
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
-        match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX) {
-            Some(_) => self.temp_tbl_mgr.lock().create_table(req),
+        match req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
+            Some(prefix) => self.temp_tbl_mgr.lock().create_table(req, prefix.clone()),
             None => self.inner.create_table(req).await,
         }
     }
@@ -434,6 +436,8 @@ impl Catalog for SessionCatalog {
         )
         .await?
         {
+            ClientSessionManager::instance()
+                .remove_temp_tbl_mgr(req.temp_prefix, self.temp_tbl_mgr.clone());
             return Ok(reply);
         }
         self.inner.drop_table_by_id(req).await
