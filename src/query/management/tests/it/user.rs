@@ -58,7 +58,7 @@ mock! {
 
         async fn get_kv_stream(&self, key: &[String]) -> Result<KVStream<MetaError>, MetaError>;
 
-        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
+        async fn list_kv_collect(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
 
         async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError>;
 
@@ -347,7 +347,7 @@ mod get_users {
         let mut kv = MockKV::new();
         {
             let k = "__fd_users/tenant1/";
-            kv.expect_prefix_list_kv()
+            kv.expect_list_kv_collect()
                 .with(predicate::eq(k))
                 .times(1)
                 .return_once(|_p| Ok(res));
@@ -376,7 +376,7 @@ mod get_users {
         let mut kv = MockKV::new();
         {
             let k = "__fd_users/tenant1/";
-            kv.expect_prefix_list_kv()
+            kv.expect_list_kv_collect()
                 .with(predicate::eq(k))
                 .times(1)
                 .return_once(|_p| Ok(res));

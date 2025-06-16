@@ -311,7 +311,7 @@ impl kvapi::TestSuite {
 
         info!("--- list should not return expired");
         {
-            let res = kv.prefix_list_kv("k").await?;
+            let res = kv.list_kv_collect("k").await?;
             let res_vec = res.iter().map(|(key, _)| key.clone()).collect::<Vec<_>>();
 
             assert_eq!(res_vec, vec!["k2".to_string(),]);
@@ -446,7 +446,7 @@ impl kvapi::TestSuite {
             kv.upsert_kv(UpsertKV::update("v", b"")).await?;
         }
 
-        let res = kv.prefix_list_kv("__users/").await?;
+        let res = kv.list_kv_collect("__users/").await?;
         assert_eq!(
             res.iter()
                 .map(|(_key, val)| val.data.clone())
@@ -1421,7 +1421,7 @@ impl kvapi::TestSuite {
 
         info!("--- test list on other node");
         {
-            let res = kv2.prefix_list_kv("__users/").await?;
+            let res = kv2.list_kv_collect("__users/").await?;
             assert_eq!(
                 res.iter()
                     .map(|(_key, val)| val.data.clone())
