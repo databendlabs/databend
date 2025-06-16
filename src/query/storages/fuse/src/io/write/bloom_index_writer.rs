@@ -127,6 +127,7 @@ impl BloomIndexState {
             vec![index_block],
             &mut data,
             TableCompression::None,
+            false,
         )?;
         let data_size = data.len() as u64;
         Ok(Self {
