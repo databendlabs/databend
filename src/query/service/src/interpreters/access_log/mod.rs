@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod connection_closed;
-mod either;
-mod unsupported;
+mod access_logger;
+mod log_entry;
 
-pub use connection_closed::ConnectionClosed;
-pub use either::Either;
-pub use unsupported::Unsupported;
+pub use access_logger::AccessLogger;

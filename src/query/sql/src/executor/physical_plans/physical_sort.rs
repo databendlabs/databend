@@ -116,12 +116,11 @@ impl PhysicalPlanBuilder {
         });
 
         // If the query will be optimized by lazy reading, we don't need to do pre-projection.
-        let pre_projection = if self.metadata.read().lazy_columns().is_empty() {
-            Some(required.iter().copied().collect())
+        let pre_projection: Option<Vec<usize>> = if self.metadata.read().lazy_columns().is_empty() {
+            sort.pre_projection.clone()
         } else {
             None
         };
-
         let input_plan = self.build(s_expr.child(0)?, required).await?;
 
         let order_by = sort

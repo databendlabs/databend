@@ -246,25 +246,22 @@ impl HttpQueryManager {
     pub(crate) fn check_sticky_for_temp_table(
         &self,
         last_server_info: &Option<ServerInfo>,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), String> {
         if let Some(ServerInfo { id, start_time }) = last_server_info {
             if self.server_info.id != *id {
-                return Err(ErrorCode::InvalidSessionState(format!(
-                    "[HTTP-QUERY] Session contains temporary tables but request was routed to the wrong server: current server is {}, expected server is {}",
+                return Err(format!(
+                    "contains temporary tables but request was routed to the wrong server: current server is {}, expected server is {}",
                     self.server_info.id, id
-                )));
+                ));
             }
             if self.server_info.start_time != *start_time {
-                return Err(ErrorCode::InvalidSessionState(format!(
-                    "[HTTP-QUERY] Temporary tables were lost because server restarted at {}",
+                return Err(format!(
+                    "temporary tables were lost because server restarted at {}",
                     start_time
-                )));
+                ));
             }
         } else {
-            return Err(ErrorCode::InvalidSessionState(
-                "[HTTP-QUERY] Session contains temporary tables but missing server_info field"
-                    .to_string(),
-            ));
+            return Err("contains temporary tables but missing last_server_info field".to_string());
         }
         Ok(())
     }

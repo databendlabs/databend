@@ -13,16 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 
 #[derive(Default)]
@@ -49,22 +44,9 @@ impl DataSummary {
 
     pub fn to_block(&self) -> DataBlock {
         let entries = vec![
-            BlockEntry::new(
-                DataType::Number(NumberDataType::UInt64),
-                Value::Scalar(Scalar::Number(NumberScalar::UInt64(self.row_counts as u64))),
-            ),
-            BlockEntry::new(
-                DataType::Number(NumberDataType::UInt64),
-                Value::Scalar(Scalar::Number(NumberScalar::UInt64(
-                    self.input_bytes as u64,
-                ))),
-            ),
-            BlockEntry::new(
-                DataType::Number(NumberDataType::UInt64),
-                Value::Scalar(Scalar::Number(NumberScalar::UInt64(
-                    self.output_bytes as u64,
-                ))),
-            ),
+            BlockEntry::new_const_column_arg::<UInt64Type>(self.row_counts as _, 1),
+            BlockEntry::new_const_column_arg::<UInt64Type>(self.input_bytes as _, 1),
+            BlockEntry::new_const_column_arg::<UInt64Type>(self.output_bytes as _, 1),
         ];
         DataBlock::new(entries, 1)
     }
@@ -75,11 +57,12 @@ impl DataSummary {
         let values = &block
             .columns()
             .iter()
-            .map(|x| match x.value {
-                Value::Scalar(Scalar::Number(NumberScalar::UInt64(n))) => n,
-                _ => {
-                    unreachable!()
-                }
+            .map(|x| {
+                x.as_scalar()
+                    .and_then(|x| x.as_number())
+                    .and_then(|x| x.as_u_int64())
+                    .copied()
+                    .unwrap()
             })
             .collect::<Vec<u64>>();
         DataSummary {

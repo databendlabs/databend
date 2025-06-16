@@ -140,8 +140,8 @@ pub fn run_ast_with_context(file: &mut impl Write, text: impl AsRef<str>, mut ct
         let block = DataBlock::new(
             ctx.columns
                 .iter()
-                .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
-                .collect::<Vec<_>>(),
+                .map(|(_, col)| col.clone().into())
+                .collect(),
             num_rows,
         );
 
@@ -367,14 +367,12 @@ fn test_if_function() -> Result<()> {
     let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
     let block = DataBlock::new(
         vec![
-            BlockEntry {
-                data_type: UInt8Type::data_type(),
-                value: Value::Column(UInt8Type::from_data(vec![2_u8, 1])),
-            },
-            BlockEntry {
-                data_type: Int32Type::data_type().wrap_nullable(),
-                value: Value::Scalar(Scalar::Number(NumberScalar::Int32(2400_i32))),
-            },
+            UInt8Type::from_data(vec![2_u8, 1]).into(),
+            BlockEntry::new_const_column(
+                Int32Type::data_type().wrap_nullable(),
+                Scalar::Number(NumberScalar::Int32(2400)),
+                2,
+            ),
         ],
         2,
     );

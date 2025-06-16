@@ -65,12 +65,11 @@ impl DataBlock {
             .columns()
             .iter()
             .map(|entry| {
-                taker.visit_value(entry.value.clone())?;
+                taker.visit_value(entry.value())?;
                 let result = taker.result.take().unwrap();
-                Ok(BlockEntry {
-                    value: result,
-                    data_type: entry.data_type.clone(),
-                })
+                Ok(BlockEntry::new(result, || {
+                    (entry.data_type(), taker.indices.len())
+                }))
             })
             .collect::<Result<Vec<_>>>()?;
 

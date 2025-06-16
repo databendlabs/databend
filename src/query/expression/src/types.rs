@@ -46,6 +46,7 @@ use std::ops::Range;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_ast::ast::TypeName;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -370,6 +371,52 @@ impl DataType {
                 | DataType::Geometry
                 | DataType::Geography
         )
+    }
+}
+
+pub fn convert_to_type_name(ty: &DataType) -> TypeName {
+    match ty {
+        DataType::Boolean => TypeName::Boolean,
+        DataType::Number(NumberDataType::UInt8) => TypeName::UInt8,
+        DataType::Number(NumberDataType::UInt16) => TypeName::UInt16,
+        DataType::Number(NumberDataType::UInt32) => TypeName::UInt32,
+        DataType::Number(NumberDataType::UInt64) => TypeName::UInt64,
+        DataType::Number(NumberDataType::Int8) => TypeName::Int8,
+        DataType::Number(NumberDataType::Int16) => TypeName::Int16,
+        DataType::Number(NumberDataType::Int32) => TypeName::Int32,
+        DataType::Number(NumberDataType::Int64) => TypeName::Int64,
+        DataType::Number(NumberDataType::Float32) => TypeName::Float32,
+        DataType::Number(NumberDataType::Float64) => TypeName::Float64,
+        DataType::Decimal(size) => TypeName::Decimal {
+            precision: size.precision(),
+            scale: size.scale(),
+        },
+        DataType::Date => TypeName::Date,
+        DataType::Timestamp => TypeName::Timestamp,
+        DataType::String => TypeName::String,
+        DataType::Bitmap => TypeName::Bitmap,
+        DataType::Variant => TypeName::Variant,
+        DataType::Binary => TypeName::Binary,
+        DataType::Geometry => TypeName::Geometry,
+        DataType::Nullable(box inner_ty) => {
+            TypeName::Nullable(Box::new(convert_to_type_name(inner_ty)))
+        }
+        DataType::Array(box inner_ty) => TypeName::Array(Box::new(convert_to_type_name(inner_ty))),
+        DataType::Map(box inner_ty) => match inner_ty {
+            DataType::Tuple(inner_tys) => TypeName::Map {
+                key_type: Box::new(convert_to_type_name(&inner_tys[0])),
+                val_type: Box::new(convert_to_type_name(&inner_tys[1])),
+            },
+            _ => unreachable!(),
+        },
+        DataType::Tuple(inner_tys) => TypeName::Tuple {
+            fields_name: None,
+            fields_type: inner_tys
+                .iter()
+                .map(convert_to_type_name)
+                .collect::<Vec<_>>(),
+        },
+        _ => TypeName::String,
     }
 }
 

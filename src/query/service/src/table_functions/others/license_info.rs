@@ -28,15 +28,14 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 pub use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
-use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_license::license::Feature;
 use databend_common_license::license::LicenseInfo;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -153,44 +152,28 @@ impl LicenseInfoSource {
         let feature_str = info.custom.display_features();
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(
-                        info.issuer.clone().unwrap_or("".to_string()),
-                    )),
+                BlockEntry::new_const_column_arg::<StringType>(
+                    info.issuer.clone().unwrap_or("".to_string()),
+                    1,
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(
-                        info.custom.r#type.clone().unwrap_or("".to_string()),
-                    )),
+                BlockEntry::new_const_column_arg::<StringType>(
+                    info.custom.r#type.clone().unwrap_or("".to_string()),
+                    1,
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(
-                        info.custom.org.clone().unwrap_or("".to_string()),
-                    )),
+                BlockEntry::new_const_column_arg::<StringType>(
+                    info.custom.org.clone().unwrap_or("".to_string()),
+                    1,
                 ),
-                BlockEntry::new(
-                    DataType::Timestamp,
-                    Value::Scalar(Scalar::Timestamp(
-                        info.issued_at.unwrap_or_default().as_micros() as i64,
-                    )),
+                BlockEntry::new_const_column_arg::<TimestampType>(
+                    info.issued_at.unwrap_or_default().as_micros() as i64,
+                    1,
                 ),
-                BlockEntry::new(
-                    DataType::Timestamp,
-                    Value::Scalar(Scalar::Timestamp(
-                        info.expires_at.unwrap_or_default().as_micros() as i64,
-                    )),
+                BlockEntry::new_const_column_arg::<TimestampType>(
+                    info.expires_at.unwrap_or_default().as_micros() as i64,
+                    1,
                 ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(human_readable_available_time)),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(feature_str.to_string())),
-                ),
+                BlockEntry::new_const_column_arg::<StringType>(human_readable_available_time, 1),
+                BlockEntry::new_const_column_arg::<StringType>(feature_str.to_string(), 1),
             ],
             1,
         ))

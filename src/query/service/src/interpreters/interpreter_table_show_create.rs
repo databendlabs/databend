@@ -21,12 +21,10 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::plans::ShowCreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
@@ -105,14 +103,8 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(table.name().to_string())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(create_query)),
-                ),
+                BlockEntry::new_const_column_arg::<StringType>(table.name().to_string(), 1),
+                BlockEntry::new_const_column_arg::<StringType>(create_query, 1),
             ],
             1,
         );

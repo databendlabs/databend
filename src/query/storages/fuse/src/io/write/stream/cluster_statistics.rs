@@ -129,7 +129,7 @@ impl ClusterStatisticsState {
             .builder
             .cluster_key_index
             .iter()
-            .map(|&i| block.get_by_offset(i).to_column(num_rows))
+            .map(|&i| block.get_by_offset(i).to_column())
             .collect();
         let tuple = Column::Tuple(cols);
         let (min, _) = eval_aggr("min", vec![], &[tuple.clone()], num_rows, vec![])?;

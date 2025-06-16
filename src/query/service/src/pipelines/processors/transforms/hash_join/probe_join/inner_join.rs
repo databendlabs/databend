@@ -241,7 +241,7 @@ impl HashJoinProbeState {
                         &probe_state.true_validity,
                     ),
                 };
-                result_block.add_column(entry);
+                result_block.add_entry(entry);
             }
         }
 

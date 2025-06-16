@@ -43,7 +43,7 @@ use crate::BUILTIN_FUNCTIONS;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
-    let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL).expect("failed to parse expr");
     transform_expr(expr, columns)
 }
 

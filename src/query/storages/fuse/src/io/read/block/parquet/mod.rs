@@ -58,7 +58,7 @@ impl BlockReader {
             &column_chunks,
             compression,
         )?;
-        let mut columns = Vec::with_capacity(self.projected_schema.fields.len());
+        let mut entries = Vec::with_capacity(self.projected_schema.fields.len());
         let name_paths = column_name_paths(&self.projection, &self.original_schema);
 
         let array_cache = if self.put_cache {
@@ -116,9 +116,9 @@ impl BlockReader {
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };
-            columns.push(BlockEntry::new(data_type, value));
+            entries.push(BlockEntry::new(value, || (data_type, num_rows)));
         }
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(DataBlock::new(entries, num_rows))
     }
 }
 

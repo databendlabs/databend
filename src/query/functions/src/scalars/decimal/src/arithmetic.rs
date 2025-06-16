@@ -128,19 +128,9 @@ impl ArithmeticOp {
                 ))
             }
 
-            ArithmeticOp::Plus | ArithmeticOp::Minus => Some((
-                if scale == a.scale() {
-                    *a
-                } else {
-                    DecimalSize::new(a.precision(), scale).ok()?
-                },
-                if scale == b.scale() {
-                    *b
-                } else {
-                    DecimalSize::new(b.precision(), scale).ok()?
-                },
-                result_type,
-            )),
+            ArithmeticOp::Plus | ArithmeticOp::Minus => {
+                Some((result_type, result_type, result_type))
+            }
         }
     }
 }

@@ -71,7 +71,7 @@ impl AggIndexSink {
 
     fn process_block(&mut self, block: &mut DataBlock) {
         let col = block.get_by_offset(self.block_name_offset);
-        let block_name_col = col.value.try_downcast::<StringType>().unwrap();
+        let block_name_col = col.value().try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
             let location = block_name_col.index(i).unwrap().to_string();
@@ -81,15 +81,20 @@ impl AggIndexSink {
                 .and_modify(|idx_vec| idx_vec.push((block_id as u32, i as u32, 1)))
                 .or_insert(vec![(block_id as u32, i as u32, 1)]);
         }
-        let mut result = DataBlock::new(vec![], block.num_rows());
 
-        for (idx, col) in block.columns().iter().enumerate() {
-            if !self.keep_block_name_col && idx == self.block_name_offset {
-                continue;
-            }
-            result.add_column(col.clone());
-        }
-
+        let entries = block
+            .columns()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, entry)| {
+                if self.keep_block_name_col || idx != self.block_name_offset {
+                    Some(entry.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let result = DataBlock::new(entries, block.num_rows());
         self.blocks.push(result);
     }
 }

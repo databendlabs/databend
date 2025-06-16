@@ -198,16 +198,15 @@ pub fn agg_spilling_aggregate_payload(
             continue;
         }
 
-        let data_block = payload.aggregate_flush_all()?;
+        let data_block = payload.aggregate_flush_all()?.consume_convert_to_full();
         rows += data_block.num_rows();
 
         let begin = write_size;
-        let columns = data_block.columns().to_vec();
+        let columns = data_block.columns();
         let mut columns_data = Vec::with_capacity(columns.len());
         let mut columns_layout = Vec::with_capacity(columns.len());
-        for column in columns.into_iter() {
-            let column = column.into_column(data_block.num_rows());
-            let column_data = serialize_column(&column);
+        for entry in columns.iter() {
+            let column_data = serialize_column(entry.as_column().unwrap());
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);
             columns_data.push(column_data);

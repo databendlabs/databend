@@ -47,8 +47,6 @@ use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::BindContext;
 use crate::Binder;
-use crate::ColumnEntry;
-use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -339,10 +337,10 @@ impl<'a> WindowRewriter<'a> {
                     let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
                     aggregate_rewriter.visit(&mut arg)?;
                     let name = format!("{window_func_name}_arg_{i}");
-                    let replaced_arg = self.replace_expr(&name, &arg)?;
+                    let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
                     window_args.push(ScalarItem {
                         index: replaced_arg.column.index,
-                        scalar: arg,
+                        scalar,
                     });
                     replaced_args.push(replaced_arg.into());
                 }
@@ -355,14 +353,11 @@ impl<'a> WindowRewriter<'a> {
                     aggregate_rewriter.visit(&mut expr)?;
 
                     let name = format!("{window_func_name}_sort_desc_{i}");
-                    let replaced_expr = self.replace_expr(&name, &expr)?;
+                    let (replaced_expr, scalar) = self.replace_expr(&name, &expr)?;
 
                     let index = replaced_expr.column.index;
                     let is_reuse_index = window_args.iter().map(|item| item.index).contains(&index);
-                    window_args.push(ScalarItem {
-                        index,
-                        scalar: expr,
-                    });
+                    window_args.push(ScalarItem { index, scalar });
                     replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
                         expr: replaced_expr.into(),
                         is_reuse_index,
@@ -398,10 +393,10 @@ impl<'a> WindowRewriter<'a> {
                 let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
                 aggregate_rewriter.visit(&mut arg)?;
                 let name = format!("{window_func_name}_arg");
-                let replaced_arg = self.replace_expr(&name, &arg)?;
+                let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
                 window_args.push(ScalarItem {
                     index: replaced_arg.column.index,
-                    scalar: arg,
+                    scalar,
                 });
                 WindowFuncType::NthValue(NthValueFunction {
                     n: func.n,
@@ -420,10 +415,10 @@ impl<'a> WindowRewriter<'a> {
             let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
             aggregate_rewriter.visit(&mut part)?;
             let name = format!("{window_func_name}_part_{i}");
-            let replaced_part = self.replace_expr(&name, &part)?;
+            let (replaced_part, scalar) = self.replace_expr(&name, &part)?;
             partition_by_items.push(ScalarItem {
                 index: replaced_part.column.index,
-                scalar: part,
+                scalar,
             });
             replaced_partition_items.push(replaced_part.into());
         }
@@ -436,11 +431,11 @@ impl<'a> WindowRewriter<'a> {
             let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
             aggregate_rewriter.visit(&mut order_expr)?;
             let name = format!("{window_func_name}_order_{i}");
-            let replaced_order = self.replace_expr(&name, &order_expr)?;
+            let (replaced_order, scalar) = self.replace_expr(&name, &order_expr)?;
             order_by_items.push(WindowOrderByInfo {
                 order_by_item: ScalarItem {
                     index: replaced_order.column.index,
-                    scalar: order_expr,
+                    scalar,
                 },
                 asc: order.asc,
                 nulls_first: order.nulls_first,
@@ -503,9 +498,9 @@ impl<'a> WindowRewriter<'a> {
         let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
         aggregate_rewriter.visit(&mut arg)?;
         let name = format!("{window_func_name}_arg");
-        let replaced_arg = self.replace_expr(&name, &arg)?;
+        let (replaced_arg, scalar) = self.replace_expr(&name, &arg)?;
         window_args.push(ScalarItem {
-            scalar: arg,
+            scalar,
             index: replaced_arg.column.index,
         });
         let new_default = match &f.default {
@@ -515,9 +510,9 @@ impl<'a> WindowRewriter<'a> {
                 let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
                 aggregate_rewriter.visit(&mut d)?;
                 let name = format!("{window_func_name}_default_value");
-                let replaced_default = self.replace_expr(&name, &d)?;
+                let (replaced_default, scalar) = self.replace_expr(&name, &d)?;
                 window_args.push(ScalarItem {
-                    scalar: d,
+                    scalar,
                     index: replaced_default.column.index,
                 });
                 Some(Box::new(replaced_default.into()))
@@ -527,38 +522,32 @@ impl<'a> WindowRewriter<'a> {
         Ok((replaced_arg.into(), new_default))
     }
 
-    fn replace_expr(&self, name: &str, arg: &ScalarExpr) -> Result<BoundColumnRef> {
+    fn replace_expr(&self, name: &str, arg: &ScalarExpr) -> Result<(BoundColumnRef, ScalarExpr)> {
         if let ScalarExpr::BoundColumnRef(col) = &arg {
-            Ok(col.clone())
+            Ok((col.clone(), arg.clone()))
         } else {
-            for entry in self.metadata.read().columns() {
-                if let ColumnEntry::DerivedColumn(DerivedColumn {
-                    scalar_expr,
-                    alias,
-                    column_index,
-                    data_type,
-                    ..
-                }) = entry
-                {
-                    if scalar_expr.as_ref() == Some(arg) {
-                        // Generate a ColumnBinding for each argument of aggregates
-                        let column = ColumnBindingBuilder::new(
-                            alias.to_string(),
-                            *column_index,
-                            Box::new(data_type.clone()),
-                            Visibility::Visible,
-                        )
-                        .build();
-
-                        return Ok(BoundColumnRef {
-                            span: arg.span(),
-                            column,
-                        });
-                    }
+            // For window expr works with group by expr alias, we need to replace the expr with the alias index
+            // eg: select number %3 a, number %4 b ,  row_number() over(partition by b % 2) from range(1, 10) t(number)  group by a,b;
+            let mut arg = arg.clone();
+            for group_expr in self.bind_context.aggregate_info.group_items.iter() {
+                if !group_expr.scalar.is_column_ref() {
+                    let column = ColumnBindingBuilder::new(
+                        "group_item".to_string(),
+                        group_expr.index,
+                        Box::new(group_expr.scalar.data_type()?),
+                        Visibility::Visible,
+                    )
+                    .build();
+                    let col = BoundColumnRef {
+                        span: arg.span(),
+                        column,
+                    };
+                    let expr = ScalarExpr::BoundColumnRef(col.clone());
+                    arg.replace_sub_scalar(group_expr.scalar.clone(), expr)?;
                 }
             }
-            let ty = arg.data_type()?;
 
+            let ty = arg.data_type()?;
             let index = self.metadata.write().add_derived_column(
                 name.to_string(),
                 ty.clone(),
@@ -573,10 +562,13 @@ impl<'a> WindowRewriter<'a> {
                 Visibility::Visible,
             )
             .build();
-            Ok(BoundColumnRef {
-                span: arg.span(),
-                column,
-            })
+            Ok((
+                BoundColumnRef {
+                    span: arg.span(),
+                    column,
+                },
+                arg.clone(),
+            ))
         }
     }
 

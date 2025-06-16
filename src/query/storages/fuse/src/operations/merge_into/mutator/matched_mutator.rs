@@ -182,11 +182,9 @@ impl MatchedAggregator {
         // that's row_id
         let row_id_col = data_block.get_by_offset(0);
         debug_assert!(
-            row_id_col.data_type.remove_nullable() == DataType::Number(NumberDataType::UInt64)
+            row_id_col.data_type().remove_nullable() == DataType::Number(NumberDataType::UInt64)
         );
-        let row_ids = row_id_col
-            .value
-            .convert_to_full_column(&row_id_col.data_type, data_block.num_rows());
+        let row_ids = row_id_col.to_column();
         let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
         match row_id_kind {
             RowIdKind::Update => {
@@ -400,7 +398,7 @@ impl AggregationContext {
         let origin_num_rows = origin_data_block.num_rows();
         if self.stream_ctx.is_some() {
             let row_num = build_origin_block_row_num(origin_num_rows);
-            origin_data_block.add_column(row_num);
+            origin_data_block.add_entry(row_num);
         }
 
         // apply delete

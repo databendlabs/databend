@@ -844,10 +844,7 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
             .segment_schema
             .column_with_name(BLOOM_FILTER_INDEX_LOCATION)
             .unwrap();
-        let column = value
-            .block_metas
-            .get_by_offset(index)
-            .to_column(value.block_metas.num_rows());
+        let column = value.block_metas.get_by_offset(index).to_column();
         for value in column.iter() {
             match value {
                 ScalarRef::Null => {}

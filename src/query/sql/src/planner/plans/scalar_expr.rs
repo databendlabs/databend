@@ -293,6 +293,34 @@ impl ScalarExpr {
         Ok(())
     }
 
+    pub fn replace_sub_scalar(
+        &mut self,
+        from_scalar: ScalarExpr,
+        to_scalar: ScalarExpr,
+    ) -> Result<()> {
+        struct ReplaceColumnVisitor {
+            from_scalar: ScalarExpr,
+            to_scalar: ScalarExpr,
+        }
+
+        impl VisitorMut<'_> for ReplaceColumnVisitor {
+            fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+                if expr == &self.from_scalar {
+                    *expr = self.to_scalar.clone();
+                    return Ok(());
+                }
+                walk_expr_mut(self, expr)
+            }
+        }
+
+        let mut visitor = ReplaceColumnVisitor {
+            from_scalar,
+            to_scalar,
+        };
+        visitor.visit(self)?;
+        Ok(())
+    }
+
     pub fn columns_and_data_types(&self, metadata: MetadataRef) -> HashMap<usize, DataType> {
         struct UsedColumnsVisitor {
             columns: HashMap<IndexType, DataType>,

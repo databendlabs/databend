@@ -78,6 +78,9 @@ table_name = "profile_history"
 [[log.history.tables]]
 table_name = "login_history"
 
+[[log.history.tables]]
+table_name = "access_history"
+
 [meta]
 endpoints = ["0.0.0.0:9191"]
 username = "root"

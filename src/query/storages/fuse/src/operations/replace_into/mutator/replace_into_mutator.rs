@@ -154,7 +154,7 @@ impl ReplaceIntoMutator {
             let mut should_keep = true;
             // for each column, check if it may have conflict
             for field in &self.on_conflict_fields {
-                let column: &Value<AnyType> = &data_block.columns()[field.field_index].value;
+                let column = &data_block.get_by_offset(field.field_index).value();
                 let value = column.row_scalar(row_idx)?;
                 let stats = column_stats.get(&field.table_field.column_id);
                 if let Some(stats) = stats {
@@ -177,6 +177,7 @@ impl ReplaceIntoMutator {
     ) -> Result<ReplaceIntoOperation> {
         let num_rows = data_block.num_rows();
         let column_values = on_conflict_key_column_values(&self.on_conflict_fields, data_block);
+        let column_values: Vec<_> = column_values.iter().collect();
 
         match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
@@ -415,6 +416,8 @@ impl Partitioner {
         // extract the on-conflict column values
         let on_conflict_column_values =
             on_conflict_key_column_values(&self.on_conflict_fields, data_block);
+        let on_conflict_column_values: Vec<&Value<AnyType>> =
+            on_conflict_column_values.iter().collect();
 
         // partitions by the left-most cluster key expression
         let mut partitions: HashMap<Scalar, Partition> = HashMap::new();
@@ -469,18 +472,18 @@ impl Partitioner {
     }
 }
 
-fn on_conflict_key_column_values<'a>(
+fn on_conflict_key_column_values(
     on_conflict_fields: &[OnConflictField],
-    data_block: &'a DataBlock,
-) -> Vec<&'a Value<AnyType>> {
+    data_block: &DataBlock,
+) -> Vec<Value<AnyType>> {
     on_conflict_fields
         .iter()
         .map(|field| {
             let field_index = field.field_index;
-            let entry = &data_block.columns()[field_index];
-            &entry.value
+            let entry = data_block.get_by_offset(field_index);
+            entry.value()
         })
-        .collect::<Vec<_>>()
+        .collect()
 }
 
 #[cfg(test)]

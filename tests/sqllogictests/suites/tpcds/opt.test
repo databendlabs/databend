@@ -1,4 +1,7 @@
 statement ok
+set enable_auto_materialize_cte = 0;
+
+statement ok
 set sandbox_tenant = 'test_tenant';
 
 statement ok

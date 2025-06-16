@@ -153,6 +153,7 @@ pub struct AggregateInfo {
     /// For example, `SELECT count(*) FROM t GROUP BY a+1 HAVING a+1+1`.
     /// The group item `a+1` is involved in `a+1+1`, so it's a valid `HAVING`.
     /// We will check the validity by lookup this map with display name.
+    /// The Index is the index of the group item in `group_items`, eg [0, 1, 2]
     pub group_items_map: HashMap<ScalarExpr, usize>,
 
     /// Information of grouping sets

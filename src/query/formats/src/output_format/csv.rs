@@ -81,7 +81,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
             .convert_to_full()
             .columns()
             .iter()
-            .map(|val| val.value.clone().into_column().unwrap())
+            .map(|val| val.as_column().unwrap().clone())
             .collect();
 
         for row_index in 0..rows_size {

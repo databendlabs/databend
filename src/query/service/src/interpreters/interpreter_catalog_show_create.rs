@@ -19,7 +19,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
@@ -92,12 +91,9 @@ impl Interpreter for ShowCreateCatalogInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(name))),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(catalog_type)),
-                ),
-                BlockEntry::new(DataType::String, Value::Scalar(Scalar::String(option))),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(name), 1),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(catalog_type), 1),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(option), 1),
             ],
             1,
         );

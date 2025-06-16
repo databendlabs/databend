@@ -1,3 +1,6 @@
+statement ok
+set enable_auto_materialize_cte = 0;
+
 # push down filter left outer join
 statement ok
 drop table if exists t1;

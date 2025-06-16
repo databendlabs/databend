@@ -100,7 +100,7 @@ impl BlockWriter for BlockWriterImpl {
                 let batch: Vec<Column> = block
                     .take_columns()
                     .into_iter()
-                    .map(|x| x.value.into_column().unwrap())
+                    .map(|x| x.into_column().unwrap())
                     .collect();
                 writer.write(&batch)?;
             }

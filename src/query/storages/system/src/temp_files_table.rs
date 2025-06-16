@@ -25,7 +25,6 @@ use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -33,12 +32,10 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Scalar;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -181,27 +178,15 @@ impl TempFilesTable {
         file_lens: Vec<u64>,
         file_last_modifieds: Vec<Option<i64>>,
     ) -> DataBlock {
-        let row_number = names.len();
+        let num_rows = names.len();
         DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String("Spill".to_string())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(StringType::from_data(names)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Column(NumberType::from_data(file_lens)),
-                ),
-                BlockEntry::new(
-                    DataType::Timestamp.wrap_nullable(),
-                    Value::Column(TimestampType::from_opt_data(file_last_modifieds)),
-                ),
+                BlockEntry::new_const_column_arg::<StringType>("Spill".to_string(), num_rows),
+                StringType::from_data(names).into(),
+                NumberType::from_data(file_lens).into(),
+                TimestampType::from_opt_data(file_last_modifieds).into(),
             ],
-            row_number,
+            num_rows,
         )
     }
 

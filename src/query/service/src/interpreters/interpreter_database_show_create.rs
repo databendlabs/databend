@@ -20,7 +20,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 use databend_common_sql::plans::ShowCreateDatabasePlan;
 
 use crate::interpreters::Interpreter;
@@ -74,14 +73,8 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(name.to_string())),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(info.clone())),
-                ),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(name.to_string()), 1),
+                BlockEntry::new_const_column(DataType::String, Scalar::String(info.clone()), 1),
             ],
             1,
         )])

@@ -26,6 +26,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_scalars;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::VariantType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -38,7 +41,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
@@ -446,23 +448,12 @@ impl<'a> ClusteringInformationImpl<'a> {
 fn build_block<A: Serialize>(info: ClusteringStatisticsWrapper<A>) -> Result<DataBlock> {
     Ok(DataBlock::new(
         vec![
-            BlockEntry::new(
-                DataType::String,
-                Value::Scalar(Scalar::String(info.cluster_key)),
-            ),
-            BlockEntry::new(
-                DataType::String,
-                Value::Scalar(Scalar::String(info.cluster_type)),
-            ),
-            BlockEntry::new(
-                DataType::Timestamp,
-                Value::Scalar(Scalar::Timestamp(info.timestamp)),
-            ),
-            BlockEntry::new(
-                DataType::Variant,
-                Value::Scalar(Scalar::Variant(
-                    JsonbValue::from(serde_json::to_value(&info.info)?).to_vec(),
-                )),
+            BlockEntry::new_const_column_arg::<StringType>(info.cluster_key, 1),
+            BlockEntry::new_const_column_arg::<StringType>(info.cluster_type, 1),
+            BlockEntry::new_const_column_arg::<TimestampType>(info.timestamp, 1),
+            BlockEntry::new_const_column_arg::<VariantType>(
+                JsonbValue::from(serde_json::to_value(&info.info)?).to_vec(),
+                1,
             ),
         ],
         1,

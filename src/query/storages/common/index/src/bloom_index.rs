@@ -31,6 +31,7 @@ use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
@@ -232,13 +233,14 @@ impl BloomIndex {
     }
 
     pub fn serialize_to_data_block(&self) -> Result<DataBlock> {
-        let fields = self.filter_schema.fields();
-        let mut filter_columns = Vec::with_capacity(fields.len());
-        for filter in &self.filters {
-            let serialized_bytes = filter.to_bytes()?;
-            let filter_value = Value::Scalar(Scalar::Binary(serialized_bytes));
-            filter_columns.push(BlockEntry::new(DataType::Binary, filter_value));
-        }
+        let filter_columns = self
+            .filters
+            .iter()
+            .map(|filter| {
+                let bs = filter.to_bytes()?;
+                Ok(BlockEntry::new_const_column_arg::<BinaryType>(bs, 1))
+            })
+            .collect::<Result<_>>()?;
         Ok(DataBlock::new(filter_columns, 1))
     }
 
@@ -652,19 +654,16 @@ impl BloomIndexBuilder {
         let mut bloom_keys_to_remove = Vec::with_capacity(self.bloom_columns.len());
 
         for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
-            let field_type = &block.get_by_offset(index_column.index).data_type;
+            let field_type = &block.data_type(index_column.index);
             if !Xor8Filter::supported_type(field_type) {
                 bloom_keys_to_remove.push(index);
                 continue;
             }
 
-            let column = match &block.get_by_offset(index_column.index).value {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
-                    builder.build()
-                }
-                Value::Column(c) => c.clone(),
-            };
+            let column = block
+                .get_by_offset(index_column.index)
+                .value()
+                .convert_to_full_column(field_type, 1);
 
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
@@ -744,14 +743,11 @@ impl BloomIndexBuilder {
             }
         }
         for index_column in self.ngram_columns.iter_mut() {
-            let field_type = &block.get_by_offset(index_column.index).data_type;
-            let column = match &block.get_by_offset(index_column.index).value {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
-                    builder.build()
-                }
-                Value::Column(c) => c.clone(),
-            };
+            let field_type = &block.data_type(index_column.index);
+            let column = block
+                .get_by_offset(index_column.index)
+                .value()
+                .convert_to_full_column(field_type, 1);
 
             for digests in BloomIndex::calculate_ngram_nullable_column(
                 Value::Column(column),

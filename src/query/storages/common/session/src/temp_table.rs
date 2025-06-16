@@ -43,9 +43,11 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
+use databend_storages_common_table_meta::meta::TEMP_TABLE_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use databend_storages_common_table_meta::table_id_ranges::TEMP_TBL_ID_BEGIN;
+use log::info;
 use parking_lot::Mutex;
 
 #[derive(Debug, Clone)]
@@ -318,6 +320,11 @@ pub async fn drop_table_by_id(
     req: DropTableByIdReq,
 ) -> Result<Option<DropTableReply>> {
     let DropTableByIdReq { tb_id, engine, .. } = &req;
+    info!(
+        "[TEMP-TABLE] session={} dropping {} table {tb_id}.",
+        req.temp_prefix,
+        engine.as_str()
+    );
     match engine.as_str() {
         "FUSE" => {
             let dir = {
@@ -363,7 +370,7 @@ pub async fn drop_table_by_id(
                 }
             }
             let key = InMemoryDataKey {
-                temp_prefix: Some(req.session_id.clone()),
+                temp_prefix: Some(req.temp_prefix.clone()),
                 table_id: *tb_id,
             };
             let mut in_mem_data = IN_MEMORY_DATA.write();
@@ -380,40 +387,52 @@ pub async fn drop_table_by_id(
     Ok(Some(DropTableReply {}))
 }
 
-pub async fn drop_all_temp_tables(session_id: &str, mgr: TempTblMgrRef) -> Result<()> {
-    let (fuse_dirs, mem_tbl_ids) = {
+pub async fn drop_all_temp_tables(
+    user_name_session_id: &str,
+    mgr: TempTblMgrRef,
+    reason: &str,
+) -> Result<()> {
+    let (num_fuse_table, mem_tbl_ids) = {
         let mut guard = mgr.lock();
-        let mut fuse_dirs = Vec::new();
+        let mut num_fuse_table = 0;
         let mut mem_tbl_ids = Vec::new();
         for (id, table) in &guard.id_to_table {
             let engine = table.meta.engine.as_str();
-            let dir = parse_storage_prefix(&table.meta.options, *id)?;
             if engine == "FUSE" {
-                fuse_dirs.push(dir);
+                num_fuse_table += 1;
             } else if engine == "MEMORY" {
                 mem_tbl_ids.push(*id);
             }
         }
         guard.id_to_table.clear();
         guard.name_to_id.clear();
-        (fuse_dirs, mem_tbl_ids)
+        (num_fuse_table, mem_tbl_ids)
     };
-    if !fuse_dirs.is_empty() {
+
+    let num_mem_table = mem_tbl_ids.len();
+
+    info!(
+        "[TEMP-TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table."
+        , num_fuse_table, num_mem_table
+    );
+
+    let path = format!("{}/{}", TEMP_TABLE_STORAGE_PREFIX, user_name_session_id);
+
+    if num_fuse_table > 0 {
         let op = DataOperator::instance().operator();
-        for dir in fuse_dirs {
-            op.remove_all(&dir).await?;
-        }
+        op.remove_all(&path).await?;
     }
     if !mem_tbl_ids.is_empty() {
         let mut in_mem_data = IN_MEMORY_DATA.write();
         for id in mem_tbl_ids {
             let key = InMemoryDataKey {
-                temp_prefix: Some(session_id.to_string()),
+                temp_prefix: Some(user_name_session_id.to_string()),
                 table_id: id,
             };
             in_mem_data.remove(&key);
         }
     }
+
     Ok(())
 }
 

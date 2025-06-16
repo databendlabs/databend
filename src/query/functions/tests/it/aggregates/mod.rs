@@ -25,7 +25,6 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -68,10 +67,7 @@ pub fn run_agg_ast(
 
     let num_rows = columns.iter().map(|col| col.1.len()).max().unwrap_or(0);
     let block = DataBlock::new(
-        columns
-            .iter()
-            .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
-            .collect::<Vec<_>>(),
+        columns.iter().map(|(_, col)| col.clone().into()).collect(),
         num_rows,
     );
 

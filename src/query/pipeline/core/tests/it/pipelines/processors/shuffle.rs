@@ -155,7 +155,7 @@ async fn test_shuffle_processor() -> Result<()> {
 
     let block = downstream_input1.pull_data().unwrap()?;
     downstream_input1.set_need_data();
-    assert!(block.columns()[0].value.as_column().unwrap().eq(&col1));
+    assert!(block.columns()[0].as_column().unwrap().eq(&col1));
     assert!(matches!(
         processor.event_with_cause(EventCause::Output(0))?,
         Event::NeedData
@@ -195,7 +195,7 @@ async fn test_shuffle_processor() -> Result<()> {
 
     let block = downstream_input2.pull_data().unwrap()?;
     downstream_input2.set_need_data();
-    assert!(block.columns()[0].value.as_column().unwrap().eq(&col3));
+    assert!(block.columns()[0].as_column().unwrap().eq(&col3));
     assert!(matches!(
         processor.event_with_cause(EventCause::Output(1))?,
         Event::NeedData
@@ -233,7 +233,7 @@ async fn test_shuffle_processor() -> Result<()> {
 
     let block = downstream_input3.pull_data().unwrap()?;
     downstream_input3.set_need_data();
-    assert!(block.columns()[0].value.as_column().unwrap().eq(&col2));
+    assert!(block.columns()[0].as_column().unwrap().eq(&col2));
     assert!(matches!(
         processor.event_with_cause(EventCause::Output(2))?,
         Event::NeedData
@@ -271,7 +271,7 @@ async fn test_shuffle_processor() -> Result<()> {
 
     let block = downstream_input4.pull_data().unwrap()?;
     downstream_input4.set_need_data();
-    assert!(block.columns()[0].value.as_column().unwrap().eq(&col4));
+    assert!(block.columns()[0].as_column().unwrap().eq(&col4));
     assert!(matches!(
         processor.event_with_cause(EventCause::Output(3))?,
         Event::NeedData

@@ -980,6 +980,14 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_virtual_column")? == 1)
     }
 
+    pub fn get_enable_auto_materialize_cte(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_materialize_cte")? == 1)
+    }
+
+    pub fn set_enable_auto_materialize_cte(&self, val: u64) -> Result<()> {
+        self.try_set_u64("enable_auto_materialize_cte", val)
+    }
+
     pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_restore_worker")
     }

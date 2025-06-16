@@ -39,6 +39,7 @@ use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
+use crate::interpreters::access_log::AccessLogger;
 use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_assign_warehouse_nodes::AssignWarehouseNodesInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
@@ -120,7 +121,9 @@ impl InterpreterFactory {
                 error!("Access.denied(v2): {:?}", e);
             }
         })?;
-
+        let mut access_logger = AccessLogger::create(ctx.clone());
+        access_logger.log(plan);
+        access_logger.output();
         Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
     }
 

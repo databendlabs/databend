@@ -26,7 +26,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -206,16 +205,20 @@ pub fn project_block(
         .map(|(left, right)| {
             if is_left {
                 if let Some(expr) = &left.1 {
-                    let column = BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
-                    Ok(column)
+                    let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                        (expr.data_type().clone(), num_rows)
+                    });
+                    Ok(entry)
                 } else {
                     Ok(block
                         .get_by_offset(left_schema.index_of(&left.0.to_string())?)
                         .clone())
                 }
             } else if let Some(expr) = &right.1 {
-                let column = BlockEntry::new(expr.data_type().clone(), evaluator.run(expr)?);
-                Ok(column)
+                let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                    (expr.data_type().clone(), num_rows)
+                });
+                Ok(entry)
             } else if left.1.is_some() {
                 Ok(block
                     .get_by_offset(right_schema.index_of(&right.0.to_string())?)
@@ -254,15 +257,13 @@ fn check_type(
     }
 
     if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
-        let origin_column = block.get_by_offset(index).clone();
+        let origin = block.get_by_offset(index).clone();
         let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
-        let value = origin_column.value;
         for idx in 0..block.num_rows() {
-            let scalar = value.index(idx).unwrap();
+            let scalar = origin.index(idx).unwrap();
             builder.push(scalar);
         }
-        let col = builder.build();
-        Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
+        Ok(builder.build().into())
     } else {
         Err(ErrorCode::IllegalDataType(
             "The data type on both sides of the union does not match",

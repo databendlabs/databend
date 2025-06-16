@@ -17,9 +17,6 @@ use std::time::Duration;
 /// used for both client session id and refresh token TTL
 pub const REFRESH_TOKEN_TTL: Duration = Duration::from_hours(4);
 
-/// used for session token TTL
-pub const SESSION_TOKEN_TTL: Duration = Duration::from_hours(1);
-
 /// client start timing for TTL later then meta
 pub const TTL_GRACE_PERIOD_META: Duration = Duration::from_secs(300);
 

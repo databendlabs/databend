@@ -39,6 +39,7 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_session::TxnState;
 use http::StatusCode;
+use log::error;
 use log::info;
 use log::warn;
 use parking_lot::Mutex;
@@ -434,11 +435,19 @@ fn try_set_txn(
 impl HttpQuery {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn try_create(ctx: &HttpQueryContext, req: HttpQueryRequest) -> Result<HttpQuery> {
+    pub async fn try_create(
+        http_ctx: &HttpQueryContext,
+        req: HttpQueryRequest,
+    ) -> Result<HttpQuery> {
         let http_query_manager = HttpQueryManager::instance();
-        let session = ctx.upgrade_session(SessionType::HTTPQuery).map_err(|err| {
-            ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
-        })?;
+        let client_session_id = http_ctx.client_session_id.as_deref().unwrap_or("None");
+        let query_id = http_ctx.query_id.clone();
+        let session = http_ctx
+            .upgrade_session(SessionType::HTTPQuery)
+            .map_err(|err| {
+                ErrorCode::Internal(format!("[HTTP-QUERY] Failed to upgrade session: {err}"))
+            })?;
+        let session_id = session.get_id();
 
         // Read the session variables in the request, and set them to the current session.
         // the session variables includes:
@@ -492,24 +501,36 @@ impl HttpQuery {
                 }
             }
 
-            try_set_txn(&ctx.query_id, &session, session_conf, &http_query_manager)?;
+            try_set_txn(
+                &http_ctx.query_id,
+                &session,
+                session_conf,
+                &http_query_manager,
+            )?;
 
             if session_conf.need_sticky
                 && matches!(session_conf.txn_state, None | Some(TxnState::AutoCommit))
             {
-                http_query_manager.check_sticky_for_temp_table(&session_conf.last_server_info)?;
+                http_query_manager
+                    .check_sticky_for_temp_table(&session_conf.last_server_info)
+                    .map_err(|e| {
+                        let msg = format!(
+                            "[TEMP TABLE] invalid session, session_id={} query_id={}, error={e}, is_sticky_node={}",
+                           client_session_id, query_id, http_ctx.is_sticky_node,
+                        );
+                        error!("{}, session_state={:?}", msg, session_conf);
+                        ErrorCode::InvalidSessionState(msg)
+                    })?;
             }
         };
 
         let settings = session.get_settings();
         let result_timeout_secs = settings.get_http_handler_result_timeout_secs()?;
-        let deduplicate_label = &ctx.deduplicate_label;
-        let user_agent = &ctx.user_agent;
-        let query_id = ctx.query_id.clone();
+        let deduplicate_label = &http_ctx.deduplicate_label;
+        let user_agent = &http_ctx.user_agent;
 
-        session.set_client_host(ctx.client_host.clone());
+        session.set_client_host(http_ctx.client_host.clone());
 
-        let http_ctx = ctx;
         let ctx = session.create_query_context().await?;
 
         // Deduplicate label is used on the DML queries which may be retried by the client.
@@ -526,10 +547,9 @@ impl HttpQuery {
         // TODO: validate the query_id to be uuid format
         ctx.update_init_query_id(query_id.clone());
 
-        let session_id = session.get_id().clone();
         let node_id = ctx.get_cluster().local_id.clone();
         let sql = &req.sql;
-        info!(query_id = query_id, session_id = session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
+        info!(query_id = query_id, session_id = client_session_id, node_id = node_id, sql = sql; "[HTTP-QUERY] Creating new query");
 
         // Stage attachment is used to carry the data payload to the INSERT/REPLACE statements.
         // When stage attachment is specified, the query may looks like `INSERT INTO mytbl VALUES;`,
@@ -562,7 +582,7 @@ impl HttpQuery {
         let user_name = session.get_current_user()?.name;
 
         if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session);
+            ClientSessionManager::instance().on_query_start(&cid, &user_name, &session, &query_id);
         };
         let has_temp_table_before_run = !session.temp_tbl_mgr().lock().is_empty();
 

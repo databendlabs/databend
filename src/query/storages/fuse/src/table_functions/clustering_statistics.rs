@@ -20,11 +20,9 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -34,7 +32,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_expression::Value;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
@@ -229,30 +226,12 @@ impl<'a> ClusteringStatisticsImpl<'a> {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(StringType::from_data(segment_name)),
-                ),
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Column(Column::String(block_name.build())),
-                ),
-                BlockEntry::new(
-                    DataType::String.wrap_nullable(),
-                    Value::Column(StringType::from_opt_data(min)),
-                ),
-                BlockEntry::new(
-                    DataType::String.wrap_nullable(),
-                    Value::Column(StringType::from_opt_data(max)),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::Int32).wrap_nullable(),
-                    Value::Column(Int32Type::from_opt_data(level)),
-                ),
-                BlockEntry::new(
-                    DataType::String.wrap_nullable(),
-                    Value::Column(StringType::from_opt_data(pages)),
-                ),
+                StringType::from_data(segment_name).into(),
+                Column::String(block_name.build()).into(),
+                StringType::from_opt_data(min).into(),
+                StringType::from_opt_data(max).into(),
+                Int32Type::from_opt_data(level).into(),
+                StringType::from_opt_data(pages).into(),
             ],
             row_num,
         ))

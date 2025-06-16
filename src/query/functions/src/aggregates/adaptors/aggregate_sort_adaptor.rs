@@ -28,13 +28,11 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use itertools::Itertools;
 
 use crate::aggregates::borsh_deserialize_state;
@@ -161,7 +159,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
                     for value in values {
                         builder.push(value.as_ref());
                     }
-                    BlockEntry::new(data_type.clone(), Value::Column(builder.build()))
+                    builder.build().into()
                 })
                 .collect_vec(),
             num_rows,
@@ -245,7 +243,7 @@ impl AggregateFunctionSortAdaptor {
             state.data_types = Vec::with_capacity(columns.len());
 
             for column in columns.iter() {
-                state.data_types.push(column.data_type().clone());
+                state.data_types.push(column.data_type());
                 state.columns.push(
                     num_rows
                         .map(|num| Vec::with_capacity(num))

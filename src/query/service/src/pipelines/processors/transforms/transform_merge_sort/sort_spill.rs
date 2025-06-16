@@ -615,10 +615,7 @@ impl Debug for SpillableBlock {
 }
 
 fn sort_column(data: &DataBlock, sort_row_offset: usize) -> &Column {
-    data.get_by_offset(sort_row_offset)
-        .value
-        .as_column()
-        .unwrap()
+    data.get_by_offset(sort_row_offset).as_column().unwrap()
 }
 
 /// BoundBlockStream is a stream of blocks that are cutoff less or equal than bound.
@@ -822,12 +819,10 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::StringType;
-    use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::DataField;
     use databend_common_expression::DataSchemaRefExt;
     use databend_common_expression::FromData;
-    use databend_common_expression::Value;
     use databend_common_pipeline_transforms::processors::sort::convert_rows;
     use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
     use databend_common_pipeline_transforms::sort::SimpleRowsDesc;
@@ -871,7 +866,7 @@ mod tests {
         .into_iter()
         .map(|mut data| {
             let col = convert_rows(schema.clone(), &sort_desc, data.clone()).unwrap();
-            data.add_column(BlockEntry::new(col.data_type(), Value::Column(col)));
+            data.add_column(col);
             SpillableBlock::new(data, sort_row_offset)
         })
         .collect::<VecDeque<_>>();

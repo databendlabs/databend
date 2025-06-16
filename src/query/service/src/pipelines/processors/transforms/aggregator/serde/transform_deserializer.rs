@@ -122,9 +122,8 @@ impl TransformDeserializer {
                             let columns = data_block
                                 .columns()
                                 .iter()
-                                .map(|c| c.value.clone().into_column())
-                                .try_collect::<Vec<_>>()
-                                .unwrap();
+                                .map(|c| c.as_column().unwrap().clone())
+                                .collect::<Vec<_>>();
 
                             let buckets =
                                 NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();

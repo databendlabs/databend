@@ -42,7 +42,7 @@ pub struct SerializedPayload {
 impl SerializedPayload {
     pub fn get_group_by_column(&self) -> &Column {
         let entry = self.data_block.columns().last().unwrap();
-        entry.value.as_column().unwrap()
+        entry.as_column().unwrap()
     }
 
     pub fn convert_to_aggregate_table(
