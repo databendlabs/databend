@@ -48,7 +48,7 @@ my_null	NULL	2021-01-01
 q5.parquet	643	1
 >>>> streaming load: q5.parquet error 'my_null':
 + curl -sS -H x-databend-query-id:load-q5 -H 'sql:insert into streaming_load_parquet(c1,c3) values file_format = (type='\''parquet'\'', missing_field_as=error, null_if=('\''my_null'\''))' -F upload=@/tmp/streaming_load_parquet/q5.parquet -u root: -XPUT http://localhost:8000/v1/streaming_load
-{"id":"load-q5","stats":{"rows":1,"bytes":7}}
+{"id":"loadq5","stats":{"rows":1,"bytes":7}}
 <<<<
 >>>> select * from streaming_load_parquet;
 NULL	NULL	2021-01-01
