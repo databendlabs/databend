@@ -76,10 +76,6 @@ impl AdminService {
                 get(super::v1::cluster::cluster_list_handler),
             )
             .at(
-                "v1/queries/:query_id/profiling",
-                get(super::v1::query_profiling::query_profiling_handler),
-            )
-            .at(
                 "v1/queries/:query_id/graph_dump",
                 get(super::v1::query_dump::running_query_dump),
             )
