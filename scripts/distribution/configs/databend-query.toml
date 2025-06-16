@@ -33,7 +33,8 @@ flight_sql_handler_port = 8900
 tenant_id = "default"
 cluster_id = "default"
 
-table_engine_memory_enabled = true
+
+# NOTE: comment out one of the following blocks to enable a user for the first run.
 
 # [[query.users]]
 # name = "root"

@@ -27,7 +27,10 @@ raft_listen_host = "127.0.0.1"
 raft_advertise_host = "localhost"
 
 # Start up mode: single node cluster
+# NOTE: comment out this line after the first run.
 single        = true
 
 # Start up mode: join a cluster
-# join          = ["127.0.0.1:28104"]
+# NOTE: change `join` to a list of addresses of all databend-meta nodes.
+# NOTE: uncomment this line after the first run.
+# join          = ["127.0.0.1:28004"]
