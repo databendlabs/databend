@@ -85,7 +85,11 @@ impl TempTblMgr {
         self.id_to_table.is_empty()
     }
 
-    pub fn create_table(&mut self, req: CreateTableReq) -> Result<CreateTableReply> {
+    pub fn create_table(
+        &mut self,
+        req: CreateTableReq,
+        prefix: String,
+    ) -> Result<CreateTableReply> {
         let CreateTableReq {
             create_option,
             name_ident,
@@ -103,6 +107,7 @@ impl TempTblMgr {
         let db_id = db_id.parse::<u64>()?;
 
         let desc = format!("{}.{}", name_ident.db_name, name_ident.table_name);
+        let engine = table_meta.engine.to_string();
         let table_id = self.next_id;
         let new_table = match (self.name_to_id.contains_key(&desc), create_option) {
             (true, CreateOption::Create) => {
@@ -117,7 +122,7 @@ impl TempTblMgr {
                     .as_ref()
                     .map(|o| format!("{}.{}", name_ident.db_name, o))
                     .unwrap_or(desc);
-                let old_id = self.name_to_id.insert(desc, table_id);
+                let old_id = self.name_to_id.insert(desc.clone(), table_id);
                 if let Some(old_id) = old_id {
                     self.id_to_table.remove(&old_id);
                 }
@@ -128,9 +133,14 @@ impl TempTblMgr {
                     copied_files: BTreeMap::new(),
                 });
                 self.inc_next_id();
+                info!(
+                    "[TEMP TABLE] session={prefix} created {} table {desc}, id = {db_id}.{table_id}.",
+                    engine
+                );
                 true
             }
         };
+
         Ok(CreateTableReply {
             table_id,
             table_id_seq: Some(0),
@@ -321,7 +331,7 @@ pub async fn drop_table_by_id(
 ) -> Result<Option<DropTableReply>> {
     let DropTableByIdReq { tb_id, engine, .. } = &req;
     info!(
-        "[TEMP-TABLE] session={} dropping {} table {tb_id}.",
+        "[TEMP TABLE] session={} dropping {} table {tb_id}.",
         req.temp_prefix,
         engine.as_str()
     );
@@ -412,7 +422,7 @@ pub async fn drop_all_temp_tables(
     let num_mem_table = mem_tbl_ids.len();
 
     info!(
-        "[TEMP-TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table."
+        "[TEMP TABLE] session={user_name_session_id} starting cleanup, reason = {reason}, {} fuse table, {} mem table."
         , num_fuse_table, num_mem_table
     );
 

@@ -81,7 +81,7 @@ use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
-const COOKIE_LAST_ACCESS_TIME: &str = "last_access_time";
+const COOKIE_LAST_REFRESH_TIME: &str = "last_refresh_time";
 const COOKIE_SESSION_ID: &str = "session_id";
 const COOKIE_COOKIE_ENABLED: &str = "cookie_enabled";
 #[derive(Debug, Copy, Clone)]
@@ -408,7 +408,6 @@ impl<E> HTTPSessionEndpoint<E> {
         if cookie_session_id.is_some() {
             login_history.disable_write = true;
         }
-
         let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
             (Some(id1), Some(id2)) => {
                 if id1 != id2 {
@@ -420,7 +419,9 @@ impl<E> HTTPSessionEndpoint<E> {
                 Some(id1.clone())
             }
             (Some(id), None) => {
-                req.cookie().add(make_cookie(COOKIE_SESSION_ID, id));
+                if cookie_enabled {
+                    req.cookie().add(make_cookie(COOKIE_SESSION_ID, id));
+                }
                 Some(id.clone())
             }
             (None, Some(id)) => Some(id.clone()),
@@ -439,33 +440,36 @@ impl<E> HTTPSessionEndpoint<E> {
 
         if let Some(id) = &client_session_id {
             session.set_client_session_id(id.clone());
-            let last_access_time = req
+        }
+
+        if cookie_enabled {
+            let last_refresh_time = req
                 .cookie()
-                .get(COOKIE_LAST_ACCESS_TIME)
+                .get(COOKIE_LAST_REFRESH_TIME)
                 .map(|s| s.value_str().to_string());
-            if let Some(ts) = &last_access_time {
+
+            let need_update = if let Some(ts) = &last_refresh_time {
                 let ts = ts.parse::<u64>().map_err(|_| {
                     ErrorCode::BadArguments(format!(
-                        "[HTTP-SESSION] Invalid last_access_time value: {}",
+                        "[HTTP-SESSION] Invalid last_refresh_time value: {}",
                         ts
                     ))
                 })?;
                 let ts = SystemTime::UNIX_EPOCH + Duration::from_secs(ts);
-                if let Err(err) = ts.elapsed() {
-                    log::error!(
-                        "[HTTP-SESSION] Invalid last_access_time: detected clock drift or incorrect timestamp, difference: {:?}",
-                        err.duration()
-                    );
-                };
-                ClientSessionManager::instance()
-                    .refresh_state(session.get_current_tenant(), id, &user_name, &ts)
-                    .await?;
+                if let Some(id) = &client_session_id {
+                    ClientSessionManager::instance()
+                        .refresh_state(session.get_current_tenant(), id, &user_name, &ts)
+                        .await?
+                } else {
+                    true
+                }
+            } else {
+                true
+            };
+            if need_update {
+                let ts = unix_ts().as_secs().to_string();
+                req.cookie().add(make_cookie(COOKIE_LAST_REFRESH_TIME, ts));
             }
-        }
-
-        if cookie_enabled {
-            let ts = unix_ts().as_secs().to_string();
-            req.cookie().add(make_cookie(COOKIE_LAST_ACCESS_TIME, ts));
         }
 
         let session = session_manager.register_session(session)?;
