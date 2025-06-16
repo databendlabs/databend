@@ -160,7 +160,7 @@ fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDi
         let col = col.as_nullable().unwrap();
         for (i, v) in col.validity.iter().enumerate() {
             if v {
-                let scalar = col.column.index(i).unwrap();
+                let scalar = unsafe { col.column.index_unchecked(i) };
                 scalar_update_hll_cardinality(&scalar, inner, hll);
             }
         }

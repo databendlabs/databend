@@ -15,23 +15,26 @@
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::io::StreamBlockProperties;
+use databend_common_storages_fuse::operations::TransformBlockWriter;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::CompactStrategy;
-use crate::pipelines::processors::transforms::HilbertPartitionExchange;
-use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
+use crate::pipelines::processors::transforms::CompactPartitionStrategy;
+use crate::pipelines::processors::transforms::ReclusterPartitionExchange;
+use crate::pipelines::processors::transforms::ReclusterPartitionStrategy;
+use crate::pipelines::processors::transforms::TransformPartitionCollect;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
 
@@ -43,10 +46,12 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(&partition.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        let enable_stream_writer = self.ctx.get_settings().get_enable_block_stream_write()?
+            && table.storage_format_as_parquet();
 
         self.main_pipeline.exchange(
             num_processors,
-            HilbertPartitionExchange::create(partition.num_partitions),
+            ReclusterPartitionExchange::create(partition.range_start, partition.range_width),
         );
 
         let settings = self.ctx.get_settings();
@@ -61,36 +66,68 @@ impl PipelineBuilder {
 
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
         let processor_id = AtomicUsize::new(0);
-        let max_bytes_per_block = std::cmp::min(
-            4 * table.get_option(
-                FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
-                DEFAULT_BLOCK_BUFFER_SIZE,
-            ),
-            400 * 1024 * 1024,
-        );
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(Box::new(
-                TransformWindowPartitionCollect::new(
+
+        if enable_stream_writer {
+            let properties = StreamBlockProperties::try_create(
+                self.ctx.clone(),
+                table,
+                MutationKind::Recluster,
+                None,
+                partition.table_meta_timestamps,
+            )?;
+
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(Box::new(
+                    TransformPartitionCollect::new(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        &settings,
+                        processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                        num_processors,
+                        partition.range_width,
+                        window_spill_settings.clone(),
+                        disk_spill.clone(),
+                        ReclusterPartitionStrategy::new(properties.clone()),
+                    )?,
+                )))
+            })?;
+
+            self.main_pipeline.add_async_accumulating_transformer(|| {
+                TransformBlockWriter::create(
+                    self.ctx.clone(),
+                    MutationKind::Recluster,
+                    table,
+                    false,
+                )
+            });
+            Ok(())
+        } else {
+            self.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(Box::new(
+                    TransformPartitionCollect::new(
+                        self.ctx.clone(),
+                        input,
+                        output,
+                        &settings,
+                        processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                        num_processors,
+                        partition.range_width,
+                        window_spill_settings.clone(),
+                        disk_spill.clone(),
+                        CompactPartitionStrategy::new(
+                            partition.rows_per_block,
+                            partition.bytes_per_block,
+                        ),
+                    )?,
+                )))
+            })?;
+
+            self.main_pipeline.add_transform(|input, output| {
+                let proc = TransformSerializeBlock::try_create(
                     self.ctx.clone(),
                     input,
                     output,
-                    &settings,
-                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
-                    num_processors,
-                    partition.num_partitions,
-                    window_spill_settings.clone(),
-                    disk_spill.clone(),
-                    CompactStrategy::new(partition.rows_per_block, max_bytes_per_block),
-                )?,
-            )))
-        })?;
-
-        self.main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                let proc = TransformSerializeBlock::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
                     table,
                     ClusterStatsGenerator::default(),
                     MutationKind::Recluster,
@@ -98,5 +135,6 @@ impl PipelineBuilder {
                 )?;
                 proc.into_processor()
             })
+        }
     }
 }

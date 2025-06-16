@@ -33,7 +33,7 @@ use databend_common_storage::DataOperator;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
-use crate::pipelines::processors::transforms::DataProcessorStrategy;
+use crate::pipelines::processors::transforms::PartitionProcessStrategy;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -59,7 +59,7 @@ pub enum AsyncStep {
     Restore,
 }
 
-pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
+pub struct TransformPartitionCollect<S: PartitionProcessStrategy> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -78,7 +78,7 @@ pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
     is_collect_finished: bool,
 }
 
-impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
+impl<S: PartitionProcessStrategy> TransformPartitionCollect<S> {
     pub fn new(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -92,9 +92,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         strategy: S,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
-        let partitions: Vec<usize> = (0..num_partitions)
-            .filter(|&partition| partition % num_processors == processor_id)
-            .collect();
+        let partitions = strategy.calc_partitions(processor_id, num_processors, num_partitions);
 
         // Map each partition id to new partition id.
         let mut partition_id = vec![0; num_partitions];
@@ -162,11 +160,7 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
         }
 
         if self.input.has_data() {
-            Self::collect_data_block(
-                self.input.pull_data().unwrap()?,
-                &self.partition_id,
-                &mut self.buffer,
-            );
+            self.collect_data_block()?;
         }
 
         // Check again. flush memory data to external storage if need
@@ -209,9 +203,9 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
 }
 
 #[async_trait::async_trait]
-impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> {
+impl<S: PartitionProcessStrategy> Processor for TransformPartitionCollect<S> {
     fn name(&self) -> String {
-        format!("TransformWindowPartitionCollect({})", S::NAME)
+        format!("TransformPartitionCollect({})", S::NAME)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -271,21 +265,19 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
     }
 }
 
-impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
-    fn collect_data_block(
-        data_block: DataBlock,
-        partition_ids: &[usize],
-        buffer: &mut WindowPartitionBuffer,
-    ) {
+impl<S: PartitionProcessStrategy> TransformPartitionCollect<S> {
+    fn collect_data_block(&mut self) -> Result<()> {
+        let data_block = self.input.pull_data().unwrap()?;
         if let Some(meta) = data_block
             .get_owned_meta()
             .and_then(WindowPartitionMeta::downcast_from)
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
-                let partition_id = partition_ids[partition_id];
-                buffer.add_data_block(partition_id, data_block);
+                let new_id = self.partition_id[partition_id];
+                self.buffer.add_data_block(new_id, data_block);
             }
         }
+        Ok(())
     }
 
     fn need_spill(&mut self) -> bool {
