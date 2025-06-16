@@ -138,8 +138,8 @@ data_cache_storage = "none"
 
 # data_cache_key_reload_policy = "fuzzy"
 
-[cache.disk]
-# cache path
-path = "/var/lib/databend/cache"
-# max bytes of cached data 20G
-max_bytes = 21474836480
+# [cache.disk]
+# # cache path
+# path = "/var/lib/databend/cache"
+# # max bytes of cached data 20G
+# max_bytes = 21474836480
