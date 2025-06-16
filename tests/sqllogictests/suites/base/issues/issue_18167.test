@@ -1,0 +1,23 @@
+statement ok
+create or replace database compact_transient;
+
+statement ok
+use compact_transient;
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 2;
+
+statement ok
+create transient table t(c int);
+
+statement ok
+insert into t values(1);
+
+statement ok
+insert into t values(2);
+
+
+query T
+select segment_count, block_count, row_count from fuse_snapshot('compact_transient', 't') limit 1;
+----
+1 1 2
