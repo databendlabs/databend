@@ -5,7 +5,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-export RM_UUID="sed -E ""s/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}/UUID/g"""
+export RM_UUID="sed -E ""s/[a-z0-9]{32}/UUID/g"""
 
 stmt "drop table if exists t1"
 stmt "create table t1 (a int)"
