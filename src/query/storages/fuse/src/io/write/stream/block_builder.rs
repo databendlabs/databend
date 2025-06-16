@@ -332,6 +332,8 @@ impl StreamBlockBuilder {
                 .unwrap_or_default(),
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
+            vector_index_size: None,
+            vector_index_location: None,
             create_on: Some(Utc::now()),
             ngram_filter_index_size: None,
             virtual_block_meta: None,
@@ -342,6 +344,7 @@ impl StreamBlockBuilder {
             bloom_index_state,
             inverted_index_states,
             virtual_column_state: None,
+            vector_index_state: None,
         };
         Ok(serialized)
     }

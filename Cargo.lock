@@ -5443,29 +5443,40 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "bincode 2.0.1",
+ "bitvec",
+ "bytemuck",
  "bytes",
  "cbordata",
  "databend-common-ast",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
+ "databend-common-vector",
  "databend-storages-common-table-meta",
  "divan",
  "fastrace",
  "goldenfile",
+ "itertools 0.13.0",
  "jsonb",
  "levenshtein_automata",
  "log",
  "match-template",
+ "num-traits",
+ "num_cpus",
+ "ordered-float 5.0.0",
+ "parking_lot 0.12.3",
  "parquet",
  "rand 0.8.5",
+ "rayon",
  "roaring",
+ "self_cell",
  "serde",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
  "thiserror 1.0.69",
  "xorfilter-rs",
+ "zerocopy",
 ]
 
 [[package]]
@@ -13498,6 +13509,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "self_cell"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f7d95a54511e0c7be3f51e8867aa8cf35148d7b9445d44de2f943e2b206e749"
 
 [[package]]
 name = "semver"
