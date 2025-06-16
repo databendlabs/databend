@@ -623,10 +623,16 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state();
-        let mut session = Some(self.get_response_session().await?);
-        if session == *self.last_session_conf.lock() {
-            session = None
-        }
+        let session = self.get_response_session().await?;
+        let session = {
+            let mut last = self.last_session_conf.lock();
+            if Some(&session) == last.as_ref() {
+                None
+            } else {
+                *last = Some(session.clone());
+                Some(session)
+            }
+        };
 
         Ok(HttpQueryResponseInternal {
             data,
