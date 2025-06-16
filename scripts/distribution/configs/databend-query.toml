@@ -42,13 +42,13 @@ table_engine_memory_enabled = true
 # [[query.users]]
 # name = "databend"
 # auth_type = "double_sha1_password"
-# # echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
+# # to generate auth_string: echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
 # auth_string = "3081f32caef285c232d066033c89a78d88a6d8a5"
 
 # [[query.users]]
 # name = "datafuselabs"
 # auth_type = "sha256_password"
-# #  echo -n "datafuselabs" | sha256sum
+# # to generate auth_string: echo -n "datafuselabs" | sha256sum
 # auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
 
 
