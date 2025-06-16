@@ -27,5 +27,3 @@ pub const TTL_GRACE_PERIOD_QUERY: Duration = Duration::from_secs(600);
 /// only required for refresh token.
 /// e.g. /session/refresh still need the token for auth when retrying.
 pub const TOMBSTONE_TTL: Duration = Duration::from_secs(90);
-pub const STATE_REFRESH_INTERVAL_META: Duration = Duration::from_secs(300);
-pub const STATE_REFRESH_INTERVAL_MEMORY: Duration = Duration::from_secs(60);

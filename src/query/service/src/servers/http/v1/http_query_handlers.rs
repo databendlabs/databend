@@ -170,7 +170,7 @@ impl QueryResponse {
         id: String,
         r: HttpQueryResponseInternal,
         is_final: bool,
-    ) -> impl IntoResponse {
+    ) -> (impl IntoResponse, bool) {
         let state = r.state.clone();
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -220,7 +220,12 @@ impl QueryResponse {
         };
         let rows = data.num_rows();
 
-        Json(QueryResponse {
+        let next_is_final = next_uri
+            .as_ref()
+            .map(|u| u.ends_with("final"))
+            .unwrap_or(false);
+
+        let resp = Json(QueryResponse {
             data,
             state: state.state,
             schema: state.schema.clone(),
@@ -241,7 +246,8 @@ impl QueryResponse {
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
-        .with_header(HEADER_QUERY_PAGE_ROWS, rows)
+        .with_header(HEADER_QUERY_PAGE_ROWS, rows);
+        (resp, next_is_final)
     }
 }
 
@@ -286,7 +292,7 @@ async fn query_final_handler(
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
-                Ok(QueryResponse::from_internal(query_id, response, true))
+                Ok(QueryResponse::from_internal(query_id, response, true).0)
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
         }
@@ -347,7 +353,7 @@ async fn query_state_handler(
                     let response = query
                         .get_response_state_only()
                         .map_err(HttpErrorCode::server_error)?;
-                    Ok(QueryResponse::from_internal(query_id, response, false))
+                    Ok(QueryResponse::from_internal(query_id, response, false).0)
                 }
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -398,7 +404,11 @@ async fn query_page_handler(
                     )
                 })?;
                 query.update_expire_time(false).await;
-                Ok(QueryResponse::from_internal(query_id, resp, false))
+                let (resp, next_is_final) = QueryResponse::from_internal(query_id, resp, false);
+                if next_is_final {
+                    query.wait_for_final()
+                }
+                Ok(resp)
             }
         }
     };
@@ -491,7 +501,12 @@ pub(crate) async fn query_handler(
                         &query.id, &resp.state, rows, next_page, mask_connection_info(&sql)
                     );
                 query.update_expire_time(false).await;
-                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
+                let (resp, next_is_final) =
+                    QueryResponse::from_internal(query.id.to_string(), resp, false);
+                if next_is_final {
+                    query.wait_for_final()
+                }
+                Ok(resp.into_response())
             }
         }
     };

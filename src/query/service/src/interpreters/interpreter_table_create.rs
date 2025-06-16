@@ -80,6 +80,7 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::Insert;
@@ -376,10 +377,24 @@ impl CreateTableInterpreter {
         }
 
         let reply = catalog.create_table(req.clone()).await?;
+        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
+            let session = self.ctx.get_current_session();
+            if let Some(id) = session.get_client_session_id() {
+                let client_session_manager = ClientSessionManager::instance();
+                client_session_manager.add_temp_tbl_mgr(prefix, session.temp_tbl_mgr().clone());
+                client_session_manager
+                    .refresh_session_handle(
+                        self.ctx.get_tenant(),
+                        self.ctx.get_current_user()?.name,
+                        &id,
+                    )
+                    .await?;
+            }
+        }
 
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
             // iceberg table do not need to generate ownership.
-            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in the future.
             if let Some(current_role) = self.ctx.get_current_role() {
                 let tenant = self.ctx.get_tenant();
                 let db = catalog.get_database(&tenant, &self.plan.database).await?;

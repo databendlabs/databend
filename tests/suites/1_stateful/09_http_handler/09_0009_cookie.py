@@ -47,7 +47,7 @@ def test_simple():
     # print(client.cookies)
     sid = client.cookies.get("session_id", path="/")
 
-    last_access_time1 = int(client.cookies.get("last_access_time"))
+    last_access_time1 = int(client.cookies.get("last_refresh_time"))
     # print(last_access_time1)
     assert time.time() - 10 < last_access_time1 <= time.time()
 
@@ -58,9 +58,9 @@ def test_simple():
     assert resp.json()["data"] == [["1"]], resp.text
     sid2 = client.cookies.get("session_id")
     # print(client.cookies)
-    last_access_time2 = int(client.cookies.get("last_access_time"))
+    last_access_time2 = int(client.cookies.get("last_refresh_time"))
     assert sid2 == sid
-    assert last_access_time1 < last_access_time2 <= time.time()
+    assert last_access_time1 == last_access_time2 <= time.time()
 
 
 def test_temp_table():
