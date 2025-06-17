@@ -35,6 +35,7 @@ use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::MetaHandshakeError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use display_more::DisplayOptionExt;
 use log::debug;
 use log::error;
 use log::info;
@@ -91,10 +92,21 @@ impl<T> HandleRPCResult<T> for Result<Response<T>, Status> {
                     set_res
                 };
 
-                info!(
-                    "{client} update_client: switch to use leader({}) for further RPC, result: {:?}",
-                    leader, update_leader_res,
-                );
+                match update_leader_res {
+                    Ok(prev) => {
+                        info!(
+                            "{client} update_client: switch to use leader({}) for further RPC, previous: {}",
+                            leader, prev.display(),
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            "{client} update_client: failed to update leader: {:?}, error: {}",
+                            leader,
+                            e,
+                        );
+                    }
+                }
             }
         })
             .inspect_err(|status| {

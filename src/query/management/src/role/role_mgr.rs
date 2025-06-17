@@ -237,7 +237,7 @@ impl RoleApi for RoleMgr {
     #[fastrace::trace]
     async fn get_raw_meta_roles(&self) -> Result<ListKVReply, ErrorCode> {
         let role_prefix = self.role_prefix();
-        Ok(self.kv_api.prefix_list_kv(role_prefix.as_str()).await?)
+        Ok(self.kv_api.list_kv_collect(role_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]
@@ -270,7 +270,7 @@ impl RoleApi for RoleMgr {
             kvs
         } else {
             self.kv_api
-                .prefix_list_kv(object_owner_prefix.as_str())
+                .list_kv_collect(object_owner_prefix.as_str())
                 .await?
         };
 

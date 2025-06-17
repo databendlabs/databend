@@ -874,15 +874,15 @@ fn new_net_err<D: Display>(
 }
 
 /// Create a function record the time cost of append sending.
-fn observe_append_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
-    move |t, _b| {
+fn observe_append_send_spent<T>(target: NodeId) -> impl Fn(&T, Duration, Duration) {
+    move |_output, t, _b| {
         raft_metrics::network::observe_append_sendto_spent(&target, t.as_secs() as f64);
     }
 }
 
 /// Create a function record the time cost of snapshot sending.
-fn observe_snapshot_send_spent(target: NodeId) -> impl Fn(Duration, Duration) {
-    move |t, _b| {
+fn observe_snapshot_send_spent<T>(target: NodeId) -> impl Fn(&T, Duration, Duration) {
+    move |_output, t, _b| {
         raft_metrics::network::observe_snapshot_sendto_spent(&target, t.as_secs() as f64);
     }
 }

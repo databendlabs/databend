@@ -153,7 +153,7 @@ pub async fn list_u64_value<K: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,
 ) -> Result<(Vec<K>, Vec<u64>), MetaError> {
-    let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
+    let res = kv_api.list_kv_collect(&key.to_string_key()).await?;
 
     let n = res.len();
 

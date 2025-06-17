@@ -155,7 +155,7 @@ impl UserApi for UserMgr {
     #[fastrace::trace]
     async fn get_raw_users(&self) -> Result<ListKVReply> {
         let user_prefix = self.user_prefix();
-        Ok(self.kv_api.prefix_list_kv(user_prefix.as_str()).await?)
+        Ok(self.kv_api.list_kv_collect(user_prefix.as_str()).await?)
     }
 
     #[async_backtrace::framed]
