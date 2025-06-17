@@ -13,17 +13,20 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::marker::PhantomData;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
+use databend_common_expression::types::boolean::TrueIdxIter;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
-use databend_common_expression::types::DecimalColumn;
-use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::Decimal128Type;
+use databend_common_expression::types::Decimal256Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
@@ -32,6 +35,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_storages_common_table_meta::meta::ColumnDistinctHLL;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -43,11 +47,11 @@ use crate::statistics::Trim;
 
 pub struct ColumnStatisticsState {
     col_stats: HashMap<ColumnId, Vec<ColumnStatistics>>,
-    distinct_columns: HashMap<ColumnId, ColumnDistinctHLL>,
+    distinct_columns: HashMap<ColumnId, Box<dyn ColumnNDVEstimator>>,
 }
 
 impl ColumnStatisticsState {
-    pub fn new(stats_columns: &[ColumnId], distinct_columns: &[ColumnId]) -> Self {
+    pub fn new(stats_columns: &[ColumnId], distinct_columns: &[(ColumnId, DataType)]) -> Self {
         let col_stats = stats_columns
             .iter()
             .map(|&col_id| (col_id, Vec::new()))
@@ -55,7 +59,7 @@ impl ColumnStatisticsState {
 
         let distinct_columns = distinct_columns
             .iter()
-            .map(|&col_id| (col_id, ColumnDistinctHLL::default()))
+            .map(|(col_id, data_type)| (*col_id, create_estimator(data_type)))
             .collect();
 
         Self {
@@ -80,8 +84,8 @@ impl ColumnStatisticsState {
                         in_memory_size as u64,
                         None,
                     );
-                    if let Some(hll) = self.distinct_columns.get_mut(&column_id) {
-                        scalar_update_hll_cardinality(&s.as_ref(), &data_type, hll);
+                    if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
+                        estimator.update_scalar(&s.as_ref());
                     }
                     self.col_stats.get_mut(&column_id).unwrap().push(col_stats);
                 }
@@ -128,8 +132,8 @@ impl ColumnStatisticsState {
                     self.col_stats.get_mut(&column_id).unwrap().push(col_stats);
 
                     // use distinct count calculated by the xor hash function to avoid repetitive operation.
-                    if let Some(hll) = self.distinct_columns.get_mut(&column_id) {
-                        column_update_hll_cardinality(&col, &data_type, hll);
+                    if let Some(estimator) = self.distinct_columns.get_mut(&column_id) {
+                        estimator.update_column(&col);
                     }
                 }
             }
@@ -146,8 +150,8 @@ impl ColumnStatisticsState {
             let mut col_stats = reduce_column_statistics(stats);
             if let Some(count) = column_distinct_count.get(id) {
                 col_stats.distinct_of_values = Some(*count as u64);
-            } else if let Some(hll) = self.distinct_columns.get(id) {
-                col_stats.distinct_of_values = Some(hll.count() as u64);
+            } else if let Some(estimator) = self.distinct_columns.get(id) {
+                col_stats.distinct_of_values = Some(estimator.finalize());
             }
             statistics.insert(*id, col_stats);
         }
@@ -155,93 +159,98 @@ impl ColumnStatisticsState {
     }
 }
 
-fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDistinctHLL) {
-    if let DataType::Nullable(inner) = ty {
-        let col = col.as_nullable().unwrap();
-        for (i, v) in col.validity.iter().enumerate() {
-            if v {
-                let scalar = unsafe { col.column.index_unchecked(i) };
-                scalar_update_hll_cardinality(&scalar, inner, hll);
-            }
-        }
-        return;
-    }
-
-    with_number_mapped_type!(|NUM_TYPE| match ty {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            let col = NumberType::<NUM_TYPE>::try_downcast_column(col).unwrap();
-            for v in col.iter() {
-                hll.add_object(v);
-            }
-        }
-        DataType::String => {
-            let col = StringType::try_downcast_column(col).unwrap();
-            for v in col.iter() {
-                hll.add_object(&v);
-            }
-        }
-        DataType::Date => {
-            let col = DateType::try_downcast_column(col).unwrap();
-            for v in col.iter() {
-                hll.add_object(v);
-            }
-        }
-        DataType::Timestamp => {
-            let col = TimestampType::try_downcast_column(col).unwrap();
-            for v in col.iter() {
-                hll.add_object(v);
-            }
-        }
-        DataType::Decimal(_) => {
-            match col {
-                Column::Decimal(DecimalColumn::Decimal128(col, _)) => {
-                    for v in col.iter() {
-                        hll.add_object(v);
-                    }
-                }
-                Column::Decimal(DecimalColumn::Decimal256(col, _)) => {
-                    for v in col.iter() {
-                        hll.add_object(v);
-                    }
-                }
-                _ => unreachable!(),
-            };
-        }
-        _ => unreachable!("Unsupported data type: {:?}", ty),
-    });
+pub trait ColumnNDVEstimator: Send + Sync {
+    fn update_column(&mut self, column: &Column);
+    fn update_scalar(&mut self, scalar: &ScalarRef);
+    fn finalize(&self) -> u64;
 }
 
-fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut ColumnDistinctHLL) {
-    if matches!(scalar, ScalarRef::Null) {
-        return;
-    }
-
-    let ty = ty.remove_nullable();
-
-    with_number_mapped_type!(|NUM_TYPE| match ty {
+pub fn create_estimator(data_type: &DataType) -> Box<dyn ColumnNDVEstimator> {
+    let inner_type = data_type.remove_nullable();
+    with_number_mapped_type!(|NUM_TYPE| match inner_type {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            let val = NumberType::<NUM_TYPE>::try_downcast_scalar(scalar).unwrap();
-            hll.add_object(&val);
+            ColumnNDVEstimatorImpl::<NumberType<NUM_TYPE>>::create()
         }
         DataType::String => {
-            let val = StringType::try_downcast_scalar(scalar).unwrap();
-            hll.add_object(&val);
+            ColumnNDVEstimatorImpl::<StringType>::create()
         }
         DataType::Date => {
-            let val = DateType::try_downcast_scalar(scalar).unwrap();
-            hll.add_object(&val);
+            ColumnNDVEstimatorImpl::<DateType>::create()
         }
         DataType::Timestamp => {
-            let val = TimestampType::try_downcast_scalar(scalar).unwrap();
-            hll.add_object(&val);
+            ColumnNDVEstimatorImpl::<TimestampType>::create()
+        }
+        DataType::Decimal(s) if s.can_carried_by_128() => {
+            ColumnNDVEstimatorImpl::<Decimal128Type>::create()
         }
         DataType::Decimal(_) => {
-            match scalar {
-                ScalarRef::Decimal(DecimalScalar::Decimal128(v, _)) => hll.add_object(&v),
-                ScalarRef::Decimal(DecimalScalar::Decimal256(v, _)) => hll.add_object(&v),
-                _ => unreachable!(),
+            ColumnNDVEstimatorImpl::<Decimal256Type>::create()
+        }
+        _ => unreachable!("Unsupported data type: {:?}", data_type),
+    })
+}
+
+pub struct ColumnNDVEstimatorImpl<T>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: Hash,
+{
+    hll: ColumnDistinctHLL,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ColumnNDVEstimatorImpl<T>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: Hash,
+{
+    pub fn create() -> Box<dyn ColumnNDVEstimator> {
+        Box::new(Self {
+            hll: ColumnDistinctHLL::new(),
+            _phantom: Default::default(),
+        })
+    }
+}
+
+impl<T> ColumnNDVEstimator for ColumnNDVEstimatorImpl<T>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: Hash,
+{
+    fn update_column(&mut self, column: &Column) {
+        if let Column::Nullable(box inner) = column {
+            let validity_len = inner.validity.len();
+            let column = T::try_downcast_column(&inner.column).unwrap();
+            if inner.validity.true_count() as f64 / validity_len as f64 >= SELECTIVITY_THRESHOLD {
+                for (data, valid) in T::iter_column(&column).zip(inner.validity.iter()) {
+                    if valid {
+                        self.hll.add_object(&T::to_owned_scalar(data));
+                    }
+                }
+            } else {
+                TrueIdxIter::new(validity_len, Some(&inner.validity)).for_each(|idx| {
+                    let val = unsafe { T::index_column_unchecked(&column, idx) };
+                    self.hll.add_object(&T::to_owned_scalar(val));
+                })
+            }
+        } else {
+            let column = T::try_downcast_column(column).unwrap();
+            for value in T::iter_column(&column) {
+                self.hll.add_object(&T::to_owned_scalar(value));
             }
         }
-        _ => unreachable!("Unsupported data type: {:?}", ty),
-    });
+    }
+
+    fn update_scalar(&mut self, scalar: &ScalarRef) {
+        if matches!(scalar, ScalarRef::Null) {
+            return;
+        }
+
+        let val = T::try_downcast_scalar(scalar).unwrap();
+        self.hll.add_object(&T::to_owned_scalar(val));
+    }
+
+    fn finalize(&self) -> u64 {
+        self.hll.count() as u64
+    }
 }

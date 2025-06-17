@@ -359,7 +359,7 @@ pub struct StreamBlockProperties {
 
     cluster_stats_builder: Arc<ClusterStatisticsBuilder>,
     stats_columns: Vec<ColumnId>,
-    distinct_columns: Vec<ColumnId>,
+    distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
@@ -417,12 +417,12 @@ impl StreamBlockProperties {
         let leaf_fields = source_schema.leaf_fields();
         for field in leaf_fields.iter() {
             let column_id = field.column_id();
-            if RangeIndex::supported_type(&DataType::from(field.data_type()))
-                && column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
+            let data_type = DataType::from(field.data_type());
+            if RangeIndex::supported_type(&data_type) && column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
             {
                 stats_columns.push(column_id);
                 if !bloom_column_ids.contains(&column_id) {
-                    distinct_columns.push(column_id);
+                    distinct_columns.push((column_id, data_type));
                 }
             }
         }
