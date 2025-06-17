@@ -402,7 +402,7 @@ mod update {
                 ..
             } => {
                 assert_eq!(*hash_method, PasswordHashMethod::Sha256);
-                assert_eq!(*need_change, true);
+                assert!(*need_change);
             }
             _ => panic!("Expected password auth info"),
         }
@@ -446,7 +446,7 @@ mod update {
                 ..
             } => {
                 assert_eq!(*hash_method, PasswordHashMethod::Sha256);
-                assert_eq!(*need_change, false);
+                assert!(!(*need_change));
             }
             _ => panic!("Expected password auth info"),
         }
@@ -490,7 +490,7 @@ mod update {
                 ..
             } => {
                 assert_eq!(*hash_method, PasswordHashMethod::DoubleSha1);
-                assert_eq!(*need_change, true);
+                assert!(*need_change);
             }
             _ => panic!("Expected password auth info"),
         }
