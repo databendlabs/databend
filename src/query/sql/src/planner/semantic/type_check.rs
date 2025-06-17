@@ -79,6 +79,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -3012,6 +3013,46 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
+        } else if (func_name.eq_ignore_ascii_case("to_number")
+            || func_name.eq_ignore_ascii_case("try_to_number"))
+            && params.is_empty()
+        {
+            if args.is_empty() || args.len() > 4 {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Invalid arguments for `{func_name}`, get {} params and {} arguments",
+                    params.len(),
+                    arguments.len()
+                )));
+            }
+            let func_ctx = self.ctx.get_function_context()?;
+            let arg_fn = |args: &[ScalarExpr],
+                          index: usize,
+                          arg_name: &str,
+                          default: u8|
+             -> Result<u8> {
+                Ok(args.get(index).map(|arg| {
+                    match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                        databend_common_expression::Expr::Constant(Constant {
+                                                                       scalar: Scalar::Number(num),
+                                                                       ..
+                                                                   }) => Ok(num.as_u_int8().cloned()),
+                        _ => Err(ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"))),
+                    }
+                }).transpose()?.flatten().unwrap_or(default))
+            };
+
+            let precision = arg_fn(&args, 2, "precision", 38)?;
+            let scale = arg_fn(&args, 3, "scale", 0)?;
+
+            if let Err(err) = DecimalSize::new(precision, scale) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Invalid arguments for `{func_name}`, {}",
+                    err,
+                )));
+            }
+
+            params.push(Scalar::Number(NumberScalar::UInt8(precision)));
+            params.push(Scalar::Number(NumberScalar::UInt8(scale)));
         }
 
         let raw_expr = RawExpr::FunctionCall {

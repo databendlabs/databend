@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ops::Div;
 use std::ops::Mul;
@@ -30,6 +31,7 @@ use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -1115,4 +1117,218 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(DataBlock::new(entries, num_rows))
+}
+
+pub fn register_decimal_to_number(registry: &mut FunctionRegistry) {
+    registry.register_function_factory(
+        "to_number",
+        FunctionFactory::Closure(Box::new(|params: &[Scalar], args_type: &[DataType]| {
+            let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+            let f = to_number_fn(params, args_type, "to_number")?;
+
+            if has_null {
+                Some(Arc::new(f.passthrough_nullable()))
+            } else {
+                Some(Arc::new(f))
+            }
+        })),
+    );
+    registry.register_function_factory(
+        "try_to_number",
+        FunctionFactory::Closure(Box::new(|params: &[Scalar], args_type: &[DataType]| {
+            let f = to_number_fn(params, args_type, "try_to_number")?;
+
+            Some(Arc::new(f.error_to_null().passthrough_nullable()))
+        })),
+    );
+}
+
+fn to_number_fn(
+    params: &[Scalar],
+    args_type: &[DataType],
+    function_name: &str,
+) -> Option<Function> {
+    let args_type = match args_type.len() {
+        1 => vec![DataType::String],
+        2 => vec![DataType::String; 2],
+        3 => vec![
+            DataType::String,
+            DataType::String,
+            DataType::Number(NumberDataType::UInt8),
+        ],
+        4 => vec![
+            DataType::String,
+            DataType::String,
+            DataType::Number(NumberDataType::UInt8),
+            DataType::Number(NumberDataType::UInt8),
+        ],
+        _ => return None,
+    };
+    let precision = params[0]
+        .as_number()
+        .and_then(NumberScalar::as_u_int8)
+        .unwrap();
+    let scale = params[1]
+        .as_number()
+        .and_then(NumberScalar::as_u_int8)
+        .unwrap();
+
+    let f = Function {
+        signature: FunctionSignature {
+            name: function_name.to_string(),
+            args_type,
+            // SAFETY: checked on `type_check`
+            return_type: DataType::Decimal(DecimalSize::new(*precision, *scale).unwrap()),
+        },
+        eval: FunctionEval::Scalar {
+            calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+            eval: Box::new(|args, ctx| {
+                let source_arg = args[0].try_downcast::<StringType>().unwrap();
+                let format_arg = if args.len() >= 2 {
+                    Some(args[1].try_downcast::<StringType>().unwrap())
+                } else {
+                    None
+                };
+                let precision = *args
+                    .get(2)
+                    .and_then(|value| {
+                        value
+                            .as_scalar()
+                            .and_then(|scalar| scalar.as_number().map(NumberScalar::as_u_int8))
+                    })
+                    .flatten()
+                    .unwrap_or(&38);
+                let scale = *args
+                    .get(3)
+                    .and_then(|value| {
+                        value
+                            .as_scalar()
+                            .and_then(|scalar| scalar.as_number().map(NumberScalar::as_u_int8))
+                    })
+                    .flatten()
+                    .unwrap_or(&0);
+
+                let dest_type = DecimalDataType::from(DecimalSize::new_unchecked(precision, scale));
+
+                with_decimal_mapped_type!(|DECIMAL_TYPE| match dest_type {
+                    DecimalDataType::DECIMAL_TYPE(_) => {
+                        to_number::<DECIMAL_TYPE>(source_arg, format_arg, ctx, dest_type)
+                    }
+                })
+            }),
+        },
+    };
+    Some(f)
+}
+
+fn to_number<T>(
+    input: Value<StringType>,
+    format: Option<Value<StringType>>,
+    ctx: &mut EvalContext,
+    dest_type: DecimalDataType,
+) -> Value<AnyType>
+where
+    T: Decimal,
+{
+    let is_scalar = input.as_scalar().is_some();
+    let len = if is_scalar { 1 } else { ctx.num_rows };
+    let mut builder = DecimalColumnBuilder::with_capacity(&dest_type, len);
+
+    for idx in 0..len {
+        let source = unsafe { input.index_unchecked(idx).trim() };
+        let format = format
+            .as_ref()
+            .map(|format_arg| unsafe { format_arg.index_unchecked(idx) });
+
+        let value = match format {
+            None => Cow::Borrowed(source),
+            Some(format) => match decimal_format(source, format) {
+                Ok(value) => Cow::Owned(value),
+                Err(err) => {
+                    ctx.set_error(idx, err);
+                    builder.push_default();
+                    continue;
+                }
+            },
+        };
+        let result = match read_decimal_with_size::<T>(
+            value.as_bytes(),
+            dest_type.size(),
+            false,
+            ctx.func_ctx.rounding_mode,
+        ) {
+            Ok((d, _)) => d,
+            Err(e) => {
+                ctx.set_error(builder.len(), e);
+                builder.push_default();
+                continue;
+            }
+        };
+        builder.push(result.to_scalar(dest_type.size()));
+    }
+    if is_scalar {
+        let scalar = builder.build_scalar();
+        Value::<AnyType>::Scalar(Scalar::Decimal(scalar))
+    } else {
+        Value::<AnyType>::Column(Column::Decimal(builder.build()))
+    }
+}
+
+fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
+    let mut result = String::new();
+
+    let mut input_chars = input.chars().peekable();
+    let mut is_negative = false;
+
+    for fmt_char in format.chars() {
+        match fmt_char {
+            '0' | '9' => match input_chars.next() {
+                Some(c) if c.is_ascii_digit() => result.push(c),
+                Some(_) => return Err("Expected digit"),
+                None => return Err("Unexpected end of input (0 required digit)"),
+            },
+            'G' => match input_chars.next() {
+                Some(',') => {}
+                Some(_) => return Err("Expected group separator ','"),
+                None => return Err("Unexpected end of input"),
+            },
+            'D' => match input_chars.next() {
+                Some('.') | Some(',') => result.push('.'),
+                Some(_) => return Err("Expected decimal point"),
+                None => return Err("Unexpected end of input"),
+            },
+            'S' => match input_chars.peek() {
+                Some('+') => {
+                    input_chars.next();
+                }
+                Some('-') => {
+                    input_chars.next();
+                    is_negative = true;
+                }
+                Some(_) => return Err("Expected '+' or '-' for sign"),
+                None => return Err("Unexpected end of input"),
+            },
+            expected => match input_chars.next() {
+                Some(c) if c == expected => {}
+                Some(_) => return Err("Unexpected character"),
+                None => return Err("Unexpected end of input"),
+            },
+        }
+    }
+
+    if input_chars.next().is_some() {
+        return Err("Input is longer than expected");
+    }
+    let trimmed_result = result.trim_start_matches('0');
+    let final_result = if trimmed_result.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed_result.to_string()
+    };
+
+    if is_negative {
+        Ok(format!("-{}", final_result))
+    } else {
+        Ok(final_result)
+    }
 }
