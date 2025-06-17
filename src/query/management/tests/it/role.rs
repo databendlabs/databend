@@ -21,7 +21,6 @@ use databend_common_management::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::UpsertKV;
-use mockall::predicate::*;
 
 fn make_role_key(role: &str) -> String {
     format!("__fd_roles/admin/{}", role)
