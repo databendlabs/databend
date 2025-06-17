@@ -49,6 +49,7 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_functions_scalar_decimal::register_decimal_to_float;
 use databend_functions_scalar_decimal::register_decimal_to_int;
+use databend_functions_scalar_decimal::register_decimal_to_number;
 use databend_functions_scalar_decimal::register_decimal_to_string;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
@@ -64,6 +65,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_string_to_number(registry);
     register_number_to_string(registry);
     register_number_to_number(registry);
+    register_decimal_to_number(registry);
 }
 
 macro_rules! register_bitwise_and {
