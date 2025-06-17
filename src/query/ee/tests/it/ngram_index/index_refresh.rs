@@ -71,7 +71,7 @@ async fn test_fuse_do_refresh_ngram_index() -> Result<()> {
         &block_filter_0.filter_schema.fields()[..],
         &block_filter_1.filter_schema.fields()[..5]
     );
-    if &block_filter_0.filters[..] != &block_filter_1.filters[..5] {
+    if block_filter_0.filters[..] != block_filter_1.filters[..5] {
         unreachable!()
     }
 
@@ -98,7 +98,7 @@ async fn test_fuse_do_refresh_ngram_index() -> Result<()> {
     assert_eq!(block_filter_2.filter_schema.fields().len(), 6);
     assert_eq!(block_filter_2.filters.len(), 6);
 
-    if &block_filter_1.filters[5] == &block_filter_2.filters[5] {
+    if block_filter_1.filters[5] == block_filter_2.filters[5] {
         unreachable!()
     }
 
