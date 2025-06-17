@@ -75,6 +75,7 @@ substring_utf8 -> substr
 subtract -> minus
 to_char -> to_string
 to_datetime -> to_timestamp
+to_numeric -> to_number
 to_start_of_iso_week -> to_monday
 to_text -> to_string
 to_varchar -> to_string
@@ -82,6 +83,7 @@ trunc -> truncate
 try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
+try_to_numeric -> try_to_number
 ucase -> upper
 unhex -> from_hex
 uuid -> gen_random_uuid
@@ -4161,6 +4163,7 @@ Functions overloads:
 3 to_next_wednesday(Timestamp NULL) :: Date NULL
 0 to_nullable(NULL) :: NULL
 1 to_nullable(T0 NULL) :: T0 NULL
+0 to_number FACTORY
 0 to_previous_friday(Date) :: Date
 1 to_previous_friday(Date NULL) :: Date NULL
 2 to_previous_friday(Timestamp) :: Date
@@ -4719,6 +4722,7 @@ Functions overloads:
 1 try_to_interval(Variant NULL) :: Interval NULL
 2 try_to_interval(String) :: Interval NULL
 3 try_to_interval(String NULL) :: Interval NULL
+0 try_to_number FACTORY
 0 try_to_string(Variant) :: String NULL
 1 try_to_string(Variant NULL) :: String NULL
 2 try_to_string(UInt8) :: String NULL

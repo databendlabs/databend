@@ -31,7 +31,6 @@ use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -1133,6 +1132,7 @@ pub fn register_decimal_to_number(registry: &mut FunctionRegistry) {
             }
         })),
     );
+    registry.register_aliases("to_number", &["to_numeric"]);
     registry.register_function_factory(
         "try_to_number",
         FunctionFactory::Closure(Box::new(|params: &[Scalar], args_type: &[DataType]| {
@@ -1141,6 +1141,7 @@ pub fn register_decimal_to_number(registry: &mut FunctionRegistry) {
             Some(Arc::new(f.error_to_null().passthrough_nullable()))
         })),
     );
+    registry.register_aliases("try_to_number", &["try_to_numeric"]);
 }
 
 fn to_number_fn(
@@ -1148,6 +1149,10 @@ fn to_number_fn(
     args_type: &[DataType],
     function_name: &str,
 ) -> Option<Function> {
+    if args_type.is_empty() || args_type[0].remove_nullable() != DataType::String {
+        return None;
+    }
+
     let args_type = match args_type.len() {
         1 => vec![DataType::String],
         2 => vec![DataType::String; 2],
@@ -1164,21 +1169,25 @@ fn to_number_fn(
         ],
         _ => return None,
     };
-    let precision = params[0]
+    if args_type.len() > 1 && args_type[1].remove_nullable() != DataType::String {
+        return None;
+    }
+    let precision = *params[0]
         .as_number()
         .and_then(NumberScalar::as_u_int8)
         .unwrap();
-    let scale = params[1]
+    let scale = *params[1]
         .as_number()
         .and_then(NumberScalar::as_u_int8)
         .unwrap();
+    let decimal_size = DecimalSize::new(precision, scale).ok()?;
 
     let f = Function {
         signature: FunctionSignature {
             name: function_name.to_string(),
             args_type,
             // SAFETY: checked on `type_check`
-            return_type: DataType::Decimal(DecimalSize::new(*precision, *scale).unwrap()),
+            return_type: DataType::Decimal(decimal_size),
         },
         eval: FunctionEval::Scalar {
             calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
@@ -1230,9 +1239,9 @@ fn to_number<T>(
 where
     T: Decimal,
 {
-    let is_scalar = input.as_scalar().is_some();
+    let is_scalar = input.is_scalar();
     let len = if is_scalar { 1 } else { ctx.num_rows };
-    let mut builder = DecimalColumnBuilder::with_capacity(&dest_type, len);
+    let mut builder = DecimalType::<T>::create_builder(len, &[]);
 
     for idx in 0..len {
         let source = unsafe { input.index_unchecked(idx).trim() };
@@ -1246,7 +1255,7 @@ where
                 Ok(value) => Cow::Owned(value),
                 Err(err) => {
                     ctx.set_error(idx, err);
-                    builder.push_default();
+                    builder.push(T::zero());
                     continue;
                 }
             },
@@ -1260,17 +1269,16 @@ where
             Ok((d, _)) => d,
             Err(e) => {
                 ctx.set_error(builder.len(), e);
-                builder.push_default();
+                builder.push(T::zero());
                 continue;
             }
         };
-        builder.push(result.to_scalar(dest_type.size()));
+        builder.push(result);
     }
     if is_scalar {
-        let scalar = builder.build_scalar();
-        Value::<AnyType>::Scalar(Scalar::Decimal(scalar))
+        Value::<AnyType>::Scalar(T::upcast_scalar(builder.remove(0), dest_type.size()))
     } else {
-        Value::<AnyType>::Column(Column::Decimal(builder.build()))
+        Value::<AnyType>::Column(T::upcast_column(Buffer::from(builder), dest_type.size()))
     }
 }
 
@@ -1285,7 +1293,7 @@ fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
             '0' | '9' => match input_chars.next() {
                 Some(c) if c.is_ascii_digit() => result.push(c),
                 Some(_) => return Err("Expected digit"),
-                None => return Err("Unexpected end of input (0 required digit)"),
+                None => return Err("Unexpected end of input"),
             },
             'G' => match input_chars.next() {
                 Some(',') => {}

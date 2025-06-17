@@ -1193,6 +1193,11 @@ SELECT to_number('1234.56', '9999D99');
 1235
 
 query I
+SELECT to_numeric('1234.56', '9999D99');
+----
+1235
+
+query I
 SELECT to_number('1234.56', '9999D99', 38, 1);
 ----
 1234.6
@@ -1265,6 +1270,11 @@ SELECT to_number('12.3000', '99D9999');
 
 query I
 SELECT try_to_number('12.34.56', '9999D99');
+----
+NULL
+
+query I
+SELECT try_to_numeric('12.34.56', '9999D99');
 ----
 NULL
 

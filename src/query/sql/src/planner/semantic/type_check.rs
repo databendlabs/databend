@@ -3014,7 +3014,9 @@ impl<'a> TypeChecker<'a> {
                 }
             }
         } else if (func_name.eq_ignore_ascii_case("to_number")
-            || func_name.eq_ignore_ascii_case("try_to_number"))
+            || func_name.eq_ignore_ascii_case("to_numeric")
+            || func_name.eq_ignore_ascii_case("try_to_number")
+            || func_name.eq_ignore_ascii_case("try_to_numeric"))
             && params.is_empty()
         {
             if args.is_empty() || args.len() > 4 {
