@@ -3584,7 +3584,6 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "mockall",
  "prost",
  "serde",
  "serde_json",

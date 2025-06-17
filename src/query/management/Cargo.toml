@@ -32,7 +32,6 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
-mockall = { workspace = true }
 
 [lints]
 workspace = true
