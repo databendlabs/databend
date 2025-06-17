@@ -26,6 +26,9 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sources::AsyncSource;
@@ -34,6 +37,7 @@ use databend_common_pipeline_transforms::AsyncTransform;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::index::filters::BlockFilter;
+use databend_common_storages_fuse::index::filters::Filter;
 use databend_common_storages_fuse::index::BloomIndexBuilder;
 use databend_common_storages_fuse::index::BloomIndexMeta;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
@@ -42,7 +46,6 @@ use databend_common_storages_fuse::io::write_data;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::BloomIndexState;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::io::NewNgramIndexColumn;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::BlockMetaIndex;
 use databend_common_storages_fuse::operations::CommitSink;
@@ -56,6 +59,7 @@ use databend_query::storages::index::BloomIndex;
 use databend_query::storages::index::NgramArgs;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::FilterImpl;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -356,63 +360,77 @@ impl AsyncTransform for NgramIndexTransform {
         builder.add_block(&data_block)?;
 
         if let Some(new_ngram_index) = builder.finalize()? {
-            let (index, new_ngram_index_column) = if let Some(bloom_index_meta) = bloom_index_meta {
-                let index_columns = bloom_index_meta
+            let (index, old_ngram_name) = if let Some(bloom_index_meta) = bloom_index_meta {
+                let mut old_ngram_name = None;
+
+                let mut index_columns = bloom_index_meta
                     .columns
                     .iter()
                     .map(|(name, _)| name.to_string())
                     .collect::<Vec<_>>();
-                let filter = load_bloom_filter_by_columns(
+                if let Some(old_ngram_column_pos) =
+                    bloom_index_meta.columns.iter().position(|(name, _)| {
+                        name.starts_with(format!("Ngram({})", self.ngram_column_id).as_str())
+                    })
+                {
+                    old_ngram_name = Some(index_columns.remove(old_ngram_column_pos));
+                }
+                let mut block_filter = load_bloom_filter_by_columns(
                     self.operator.clone(),
                     &index_columns,
                     &index_path,
                     block_meta.bloom_filter_index_size,
                 )
                 .await?;
-                let old_index = BloomIndex::from_filter_block(
-                    self.ctx.get_function_context()?,
-                    filter.filter_schema,
-                    filter.filters,
-                    index_location.1,
-                )?;
                 let new_ngram_column = new_ngram_index
                     .serialize_to_data_block()?
                     .take_columns()
                     .pop()
                     .unwrap();
-                (
-                    old_index,
-                    Some(NewNgramIndexColumn::new(
+                let (new_filter, _) = FilterImpl::from_bytes(
+                    unsafe { new_ngram_column.index_unchecked(0) }
+                        .as_binary()
+                        .unwrap(),
+                )?;
+
+                let mut new_filter_schema = TableSchema::clone(&block_filter.filter_schema);
+                new_filter_schema.add_columns(&[TableField::new(
+                    &BloomIndex::build_filter_ngram_name(
                         self.ngram_column_id,
-                        new_ngram_column.clone(),
-                        self.index_ngram_args.clone(),
-                    )),
-                )
+                        self.index_ngram_args.gram_size(),
+                        self.index_ngram_args.bloom_size(),
+                    ),
+                    TableDataType::Binary,
+                )])?;
+                block_filter.filter_schema = Arc::new(new_filter_schema);
+                block_filter.filters.push(Arc::new(new_filter));
+
+                let old_index = BloomIndex::from_filter_block(
+                    self.ctx.get_function_context()?,
+                    block_filter.filter_schema,
+                    block_filter.filters,
+                    index_location.1,
+                )?;
+                (old_index, old_ngram_name)
             } else {
                 (new_ngram_index, None)
             };
-            let state =
-                BloomIndexState::from_bloom_index(&index, index_location, new_ngram_index_column)?;
+            let state = BloomIndexState::from_bloom_index(&index, index_location)?;
+
+            new_block_meta.bloom_filter_index_size = state.size();
+            new_block_meta.ngram_filter_index_size = state.ngram_size();
+            write_data(state.data(), &self.operator, &index_path).await?;
 
             // remove old bloom index meta and filter
             if let Some(cache) = CacheManager::instance().get_bloom_index_meta_cache() {
                 cache.evict(&index_path);
             }
-            if let Some(cache) = CacheManager::instance().get_bloom_index_filter_cache() {
-                let cache_key = format!(
-                    "{index_path}-{}",
-                    BloomIndex::build_filter_ngram_name(
-                        self.ngram_column_id,
-                        self.index_ngram_args.gram_size(),
-                        self.index_ngram_args.bloom_size()
-                    )
-                );
-                cache.evict(&cache_key);
+            if let (Some(cache), Some(old_ngram_name)) = (
+                CacheManager::instance().get_bloom_index_filter_cache(),
+                old_ngram_name,
+            ) {
+                cache.evict(&format!("{index_path}-{}", old_ngram_name));
             }
-
-            new_block_meta.bloom_filter_index_size = state.size();
-            new_block_meta.ngram_filter_index_size = state.ngram_size();
-            write_data(state.data(), &self.operator, &index_path).await?;
         }
         let extended_block_meta = ExtendedBlockMeta {
             block_meta: new_block_meta,
