@@ -49,11 +49,12 @@ impl BloomColumnFilterReader {
     pub fn new(
         index_path: String,
         column_id: ColumnId,
+        filter_name: &str,
         column_chunk_meta: &SingleColumnMeta,
         operator: Operator,
         schema_desc: SchemaDescPtr,
     ) -> Self {
-        let cache_key = format!("{index_path}-{column_id}");
+        let cache_key = format!("{index_path}-{filter_name}");
 
         let SingleColumnMeta {
             offset,

@@ -279,7 +279,6 @@ impl StreamBlockBuilder {
             Some(BloomIndexState::from_bloom_index(
                 &bloom_index,
                 bloom_index_location,
-                None,
             )?)
         } else {
             None

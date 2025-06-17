@@ -50,7 +50,6 @@ pub use write::CachedMetaWriter;
 pub use write::InvertedIndexBuilder;
 pub use write::InvertedIndexWriter;
 pub use write::MetaWriter;
-pub use write::NewNgramIndexColumn;
 pub(crate) use write::StreamBlockBuilder;
 pub(crate) use write::StreamBlockProperties;
 pub use write::VirtualColumnBuilder;

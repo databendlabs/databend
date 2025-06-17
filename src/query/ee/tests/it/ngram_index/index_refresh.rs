@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::index::BloomIndexMeta;
-use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_index_meta;
+use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
 use databend_enterprise_query::test_kits::context::EESetup;
+use databend_query::storages::index::filters::BlockFilter;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -45,48 +42,70 @@ async fn test_fuse_do_refresh_ngram_index() -> Result<()> {
         .execute_command("CREATE NGRAM INDEX idx2 ON default.t3(d);")
         .await?;
 
-    let meta_0 = get_bloom_index_meta(&fixture).await?;
-    assert_eq!(meta_0.columns.len(), 5);
+    let block_filter_0 = get_block_filter(&fixture, &[
+        "Bloom(0)".to_string(),
+        "Bloom(1)".to_string(),
+        "Bloom(2)".to_string(),
+        "Bloom(3)".to_string(),
+        "Bloom(4)".to_string(),
+    ])
+    .await?;
+    assert_eq!(block_filter_0.filter_schema.fields().len(), 5);
+    assert_eq!(block_filter_0.filters.len(), 5);
     fixture
         .execute_command("REFRESH NGRAM INDEX idx2 ON default.t3;")
         .await?;
-    let meta_1 = get_bloom_index_meta(&fixture).await?;
+    let block_filter_1 = get_block_filter(&fixture, &[
+        "Bloom(0)".to_string(),
+        "Bloom(1)".to_string(),
+        "Bloom(2)".to_string(),
+        "Bloom(3)".to_string(),
+        "Bloom(4)".to_string(),
+        "Ngram(3)_3_1048576".to_string(),
+    ])
+    .await?;
+    assert_eq!(block_filter_1.filter_schema.fields().len(), 6);
+    assert_eq!(block_filter_1.filters.len(), 6);
 
-    assert_eq!(&meta_0.columns[..], &meta_1.columns[..5]);
-    assert_eq!(meta_1.columns.len(), 6);
     assert_eq!(
-        &meta_1.columns[5],
-        &("Ngram(3)_3_1048576".to_string(), SingleColumnMeta {
-            offset: 424,
-            len: 1048644,
-            num_values: 1,
-        })
+        &block_filter_0.filter_schema.fields()[..],
+        &block_filter_1.filter_schema.fields()[..5]
     );
+    if block_filter_0.filters[..] != block_filter_1.filters[..5] {
+        unreachable!()
+    }
 
     fixture
         .execute_command("DROP NGRAM INDEX idx2 ON default.t3;")
         .await?;
     fixture
-        .execute_command("CREATE NGRAM INDEX idx2 ON default.t3(d) gram_size = 5;")
+        .execute_command(
+            "CREATE NGRAM INDEX idx2 ON default.t3(d) gram_size = 8 bloom_size = 1048570;",
+        )
         .await?;
     fixture
         .execute_command("REFRESH NGRAM INDEX idx2 ON default.t3;")
         .await?;
-    let meta_2 = get_bloom_index_meta(&fixture).await?;
-    assert_eq!(meta_2.columns.len(), 6);
-    assert_eq!(
-        &meta_2.columns[5],
-        &("Ngram(3)_5_1048576".to_string(), SingleColumnMeta {
-            offset: 424,
-            len: 1048644,
-            num_values: 1,
-        })
-    );
+    let block_filter_2 = get_block_filter(&fixture, &[
+        "Bloom(0)".to_string(),
+        "Bloom(1)".to_string(),
+        "Bloom(2)".to_string(),
+        "Bloom(3)".to_string(),
+        "Bloom(4)".to_string(),
+        "Ngram(3)_8_1048570".to_string(),
+    ])
+    .await?;
+    assert_eq!(block_filter_2.filter_schema.fields().len(), 6);
+    assert_eq!(block_filter_2.filters.len(), 6);
+
+    if block_filter_1.filters[5] == block_filter_2.filters[5] {
+        unreachable!()
+    }
 
     Ok(())
 }
 
-async fn get_bloom_index_meta(fixture: &TestFixture) -> Result<Arc<BloomIndexMeta>> {
+async fn get_block_filter(fixture: &TestFixture, columns: &[String]) -> Result<BlockFilter> {
     let block = fixture
         .execute_query(
             "select bloom_filter_location, bloom_filter_size from fuse_block('default', 't3');",
@@ -101,8 +120,9 @@ async fn get_bloom_index_meta(fixture: &TestFixture) -> Result<Arc<BloomIndexMet
     let length = block.columns()[1].to_column();
     let length_scalar = length.as_number().unwrap().index(0).unwrap();
 
-    load_index_meta(
+    load_bloom_filter_by_columns(
         DataOperator::instance().operator(),
+        columns,
         path_scalar,
         *length_scalar.as_u_int64().unwrap(),
     )

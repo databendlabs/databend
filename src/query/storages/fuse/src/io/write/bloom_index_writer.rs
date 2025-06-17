@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,13 +19,10 @@ use std::sync::Arc;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
-use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet;
@@ -44,22 +40,6 @@ use opendal::Operator;
 use crate::io::BlockReader;
 use crate::FuseStorageFormat;
 
-pub struct NewNgramIndexColumn {
-    column_id: ColumnId,
-    column: BlockEntry,
-    ngram_args: NgramArgs,
-}
-
-impl NewNgramIndexColumn {
-    pub fn new(column_id: ColumnId, column: BlockEntry, ngram_args: NgramArgs) -> Self {
-        Self {
-            column_id,
-            column,
-            ngram_args,
-        }
-    }
-}
-
 pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
@@ -69,42 +49,11 @@ pub struct BloomIndexState {
 }
 
 impl BloomIndexState {
-    pub fn from_bloom_index(
-        bloom_index: &BloomIndex,
-        location: Location,
-        new_index_column: Option<NewNgramIndexColumn>,
-    ) -> Result<Self> {
-        let mut index_block = bloom_index.serialize_to_data_block()?;
-        let filter_schema = if let Some(NewNgramIndexColumn {
-            column_id,
-            column: new_column,
-            ngram_args,
-        }) = new_index_column
-        {
-            let ngram_name = BloomIndex::build_filter_ngram_name(
-                column_id,
-                ngram_args.gram_size(),
-                ngram_args.bloom_size(),
-            );
-            let mut new_filter_schema = TableSchema::clone(&bloom_index.filter_schema);
-            let ngram_field = TableField::new(&ngram_name, TableDataType::Binary);
-
-            if let Some(pos) = new_filter_schema
-                .fields()
-                .iter()
-                .position(|f| f.name().starts_with(format!("Ngram({column_id})").as_str()))
-            {
-                new_filter_schema.fields.remove(pos);
-                index_block.remove_column(pos);
-            }
-            new_filter_schema.add_columns(&[ngram_field])?;
-            index_block.add_entry(new_column);
-            Cow::Owned(Arc::new(new_filter_schema))
-        } else {
-            Cow::Borrowed(&bloom_index.filter_schema)
-        };
+    pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
+        let index_block = bloom_index.serialize_to_data_block()?;
         // Calculate ngram index size
-        let ngram_indexes = filter_schema
+        let ngram_indexes = bloom_index
+            .filter_schema
             .fields()
             .iter()
             .enumerate()
@@ -123,7 +72,7 @@ impl BloomIndexState {
         };
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
         let _ = blocks_to_parquet(
-            &filter_schema,
+            &bloom_index.filter_schema,
             vec![index_block],
             &mut data,
             TableCompression::None,
@@ -151,7 +100,7 @@ impl BloomIndexState {
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
-            Ok(Some(Self::from_bloom_index(&bloom_index, location, None)?))
+            Ok(Some(Self::from_bloom_index(&bloom_index, location)?))
         } else {
             Ok(None)
         }
@@ -229,11 +178,7 @@ impl BloomIndexRebuilder {
         match maybe_bloom_index {
             None => Ok(None),
             Some(bloom_index) => Ok(Some((
-                BloomIndexState::from_bloom_index(
-                    &bloom_index,
-                    bloom_index_location.clone(),
-                    None,
-                )?,
+                BloomIndexState::from_bloom_index(&bloom_index, bloom_index_location.clone())?,
                 bloom_index,
             ))),
         }
