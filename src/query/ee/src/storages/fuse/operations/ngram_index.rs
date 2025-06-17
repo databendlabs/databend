@@ -380,12 +380,11 @@ impl AsyncTransform for NgramIndexTransform {
                     .take_columns()
                     .pop()
                     .unwrap();
-
                 (
                     old_index,
                     Some(NewNgramIndexColumn::new(
                         self.ngram_column_id,
-                        new_ngram_column,
+                        new_ngram_column.clone(),
                         self.index_ngram_args.clone(),
                     )),
                 )
@@ -395,9 +394,20 @@ impl AsyncTransform for NgramIndexTransform {
             let state =
                 BloomIndexState::from_bloom_index(&index, index_location, new_ngram_index_column)?;
 
-            // remove old bloom index meta
+            // remove old bloom index meta and filter
             if let Some(cache) = CacheManager::instance().get_bloom_index_meta_cache() {
                 cache.evict(&index_path);
+            }
+            if let Some(cache) = CacheManager::instance().get_bloom_index_filter_cache() {
+                let cache_key = format!(
+                    "{index_path}-{}",
+                    BloomIndex::build_filter_ngram_name(
+                        self.ngram_column_id,
+                        self.index_ngram_args.gram_size(),
+                        self.index_ngram_args.bloom_size()
+                    )
+                );
+                cache.evict(&cache_key);
             }
 
             new_block_meta.bloom_filter_index_size = state.size();
