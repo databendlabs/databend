@@ -357,6 +357,8 @@ pub trait TableContext: Send + Sync {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
 
+    fn clear_table_meta_timestamps_cache(&self);
+
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 

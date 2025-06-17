@@ -891,6 +891,10 @@ impl TableContext for CtxDelegation {
     ) -> Result<TableMetaTimestamps> {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
     }
+
+    fn clear_table_meta_timestamps_cache(&self) {
+        self.ctx.clear_table_meta_timestamps_cache();
+    }
 }
 
 #[derive(Clone, Debug)]
