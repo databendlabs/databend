@@ -3630,10 +3630,10 @@ dependencies = [
  "anyhow",
  "chrono",
  "databend-common-ast",
- "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
+ "databend-common-meta-app-storage",
  "databend-common-meta-app-types",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
@@ -3645,7 +3645,6 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal",
  "paste",
  "prost",
  "serde",
@@ -3653,6 +3652,16 @@ dependencies = [
  "sha1",
  "sha2",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "databend-common-meta-app-storage"
+version = "0.1.0"
+dependencies = [
+ "databend-common-base",
+ "databend-common-exception",
+ "opendal",
+ "serde",
 ]
 
 [[package]]
@@ -4705,6 +4714,7 @@ dependencies = [
  "concurrent-queue",
  "databend-common-base",
  "databend-common-exception",
+ "databend-common-meta-app-storage",
  "defer",
  "fastrace",
  "fastrace-opentelemetry",

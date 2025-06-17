@@ -112,6 +112,7 @@ members = [
     "src/tests/sqlsmith",
     "src/bendsave",
     "src/bendpy",
+    "src/meta/app-storage",
 ]
 
 # Workspace dependencies
@@ -142,6 +143,7 @@ databend-common-license = { path = "src/common/license" }
 databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
+databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-app-types = { path = "src/meta/app-types" }
 databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/client" }
