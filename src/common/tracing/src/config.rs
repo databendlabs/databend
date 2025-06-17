@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_meta_app_storage::StorageParams;
 use itertools::Itertools;
 
 // use the uncommon usage of Pascal Case level name
@@ -346,6 +347,7 @@ pub struct HistoryConfig {
     pub level: String,
     pub retention_interval: usize,
     pub tables: Vec<HistoryTableConfig>,
+    pub storage_params: Option<StorageParams>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -358,7 +360,7 @@ impl Display for HistoryConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}]",
+            "enabled={}, log_only={}, interval={}, stage_name={}, level={}, retention_interval={}, tables=[{}], storage_params={}",
             self.on,
             self.log_only,
             self.interval,
@@ -368,7 +370,9 @@ impl Display for HistoryConfig {
             self.tables
                 .iter()
                 .map(|f| format!("{}({} hours)", f.table_name.clone(), f.retention))
-                .join(", ")
+                .join(", "),
+            self.storage_params.as_ref()
+                .map_or("None".to_string(), |p| p.to_string())
         )
     }
 }
@@ -385,6 +389,7 @@ impl Default for HistoryConfig {
             // Trigger the retention task every 24 hours
             retention_interval: 24,
             tables: vec![],
+            storage_params: None,
         }
     }
 }

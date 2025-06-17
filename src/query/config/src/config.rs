@@ -2788,6 +2788,13 @@ pub struct HistoryLogConfig {
     #[clap(skip)]
     #[serde(rename = "tables")]
     pub log_history_tables: Vec<HistoryLogTableConfig>,
+
+    /// Specifies the storage parameters for the history log
+    /// This is used to configure how the history log data is stored.
+    /// If not specified, the default storage parameters from `[storage]` will be used.
+    #[clap(skip)]
+    #[serde(rename = "storage")]
+    pub log_history_storage_params: Option<StorageConfig>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -2837,6 +2844,12 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerHistoryConfig> {
+        let storage_params: Option<InnerStorageConfig> =
+            if self.log_history_storage_params.is_some() {
+                Some(self.log_history_storage_params.unwrap().try_into()?)
+            } else {
+                None
+            };
         Ok(InnerHistoryConfig {
             on: self.log_history_on,
             log_only: self.log_history_log_only,
@@ -2849,12 +2862,20 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
                 .into_iter()
                 .map(|cfg| cfg.try_into())
                 .collect::<Result<Vec<_>>>()?,
+            storage_params: storage_params.and_then(|cfg| Some(cfg.params)),
         })
     }
 }
 
 impl From<InnerHistoryConfig> for HistoryLogConfig {
     fn from(inner: InnerHistoryConfig) -> Self {
+        let inner_storage_config: Option<InnerStorageConfig> =
+            inner.storage_params.and_then(|params| {
+                Some(InnerStorageConfig {
+                    params,
+                    ..Default::default()
+                })
+            });
         Self {
             log_history_on: inner.on,
             log_history_log_only: inner.log_only,
@@ -2863,6 +2884,7 @@ impl From<InnerHistoryConfig> for HistoryLogConfig {
             log_history_level: inner.level,
             log_history_retention_interval: inner.retention_interval,
             log_history_tables: inner.tables.into_iter().map(Into::into).collect(),
+            log_history_storage_params: inner_storage_config.map(Into::into),
         }
     }
 }

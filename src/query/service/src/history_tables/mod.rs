@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod session;
-
 mod alter_table;
+mod external;
 mod global_history_log;
+mod meta;
+mod session;
 
 pub use global_history_log::GlobalHistoryLog;
