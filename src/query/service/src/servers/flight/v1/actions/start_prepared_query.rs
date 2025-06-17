@@ -21,6 +21,7 @@ use crate::servers::flight::v1::exchange::DataExchangeManager;
 pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
 
 pub async fn start_prepared_query(id: String) -> Result<()> {
+    let id = id.replace('-', "");
     let ctx = DataExchangeManager::instance().get_query_ctx(&id)?;
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();

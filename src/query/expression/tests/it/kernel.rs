@@ -38,7 +38,6 @@ use databend_common_expression::FromData;
 use databend_common_expression::IterationStrategy;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::Value;
 use goldenfile::Mint;
 
 use crate::common::*;
@@ -120,19 +119,15 @@ pub fn test_pass() {
             (0, 0, 3),
         ];
         for i in 0..3 {
-            let mut columns = Vec::with_capacity(3);
-            columns.push(BlockEntry::new(
-                DataType::Number(NumberDataType::UInt8),
-                Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
-            ));
-            columns.push(BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                Value::Column(UInt8Type::from_data_with_validity(
-                    vec![(i + 10) as u8; 4],
-                    vec![true, true, false, false],
-                )),
-            ));
-            blocks.push(DataBlock::new(columns, 4))
+            let mut entries = Vec::with_capacity(3);
+            entries.push(UInt8Type::from_data(vec![(i + 10) as u8; 4]).into());
+            entries.push(
+                UInt8Type::from_data_with_validity(vec![(i + 10) as u8; 4], vec![
+                    true, true, false, false,
+                ])
+                .into(),
+            );
+            blocks.push(DataBlock::new(entries, 4))
         }
 
         run_take_block(&mut file, &indices, &blocks);
@@ -152,30 +147,23 @@ pub fn test_pass() {
         ];
         for i in 0..3 {
             let columns = vec![
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt8),
-                    Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
-                ),
-                BlockEntry::new(
-                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                    Value::Column(UInt8Type::from_data_with_validity(
-                        vec![(i + 10) as u8; 4],
-                        vec![true, true, false, false],
-                    )),
-                ),
-                BlockEntry::new(
+                UInt8Type::from_data(vec![(i + 10) as u8; 4]).into(),
+                UInt8Type::from_data_with_validity(vec![(i + 10) as u8; 4], vec![
+                    true, true, false, false,
+                ])
+                .into(),
+                BlockEntry::new_const_column(
                     DataType::Array(Box::new(DataType::String)),
-                    Value::Scalar(Scalar::Array(StringType::from_data(vec![
+                    Scalar::Array(StringType::from_data(vec![
                         (20 + i).to_string(),
                         (30 + i).to_string(),
-                    ]))),
-                ),
-                BlockEntry::new(
-                    DataType::Tuple(vec![DataType::Boolean, DataType::Date]),
-                    Value::Scalar(Scalar::Tuple(vec![
-                        Scalar::Boolean(i % 2 == 0),
-                        Scalar::Date(9 + i),
                     ])),
+                    4,
+                ),
+                BlockEntry::new_const_column(
+                    DataType::Tuple(vec![DataType::Boolean, DataType::Date]),
+                    Scalar::Tuple(vec![Scalar::Boolean(i % 2 == 0), Scalar::Date(9 + i)]),
+                    4,
                 ),
             ];
             blocks.push(DataBlock::new(columns, 4))
@@ -294,8 +282,8 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
                 FilterVisitor::new(&filter).with_strategy(IterationStrategy::IndexIterator);
 
             for col in random_block.columns() {
-                f1.visit_value(col.value.clone())?;
-                f2.visit_value(col.value.clone())?;
+                f1.visit_value(col.value())?;
+                f2.visit_value(col.value())?;
 
                 let l = f1.take_result();
                 let r = f2.take_result();
@@ -325,14 +313,7 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
         .map(|index| {
             let columns = blocks
                 .iter()
-                .map(|block| {
-                    block
-                        .get_by_offset(index)
-                        .value
-                        .clone()
-                        .into_column()
-                        .unwrap()
-                })
+                .map(|block| block.get_by_offset(index).value().into_column().unwrap())
                 .collect_vec();
             Column::take_downcast_column_vec(&columns)
         })
@@ -363,14 +344,14 @@ pub fn test_take_and_filter_and_concat() -> databend_common_exception::Result<()
     let columns_4 = block_4.columns();
     let columns_5 = block_5.columns();
     for idx in 0..columns_1.len() {
-        assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_2[idx].value);
-        assert_eq!(columns_1[idx].data_type, columns_3[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_3[idx].value);
-        assert_eq!(columns_1[idx].data_type, columns_4[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_4[idx].value);
-        assert_eq!(columns_1[idx].data_type, columns_5[idx].data_type);
-        assert_eq!(columns_1[idx].value, columns_5[idx].value);
+        assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_2[idx].value());
+        assert_eq!(columns_1[idx].data_type(), columns_3[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_3[idx].value());
+        assert_eq!(columns_1[idx].data_type(), columns_4[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_4[idx].value());
+        assert_eq!(columns_1[idx].data_type(), columns_5[idx].data_type());
+        assert_eq!(columns_1[idx].value(), columns_5[idx].value());
     }
 
     Ok(())
@@ -381,24 +362,23 @@ pub fn test_concat_scalar() -> databend_common_exception::Result<()> {
     use databend_common_expression::types::DataType;
     use databend_common_expression::DataBlock;
     use databend_common_expression::Scalar;
-    use databend_common_expression::Value;
 
     let ty = DataType::Number(NumberDataType::UInt8);
-    let scalar = Value::Scalar(Scalar::Number(NumberScalar::UInt8(1)));
-    let column = Value::Column(UInt8Type::from_data(vec![2, 3]));
+    let scalar = Scalar::Number(NumberScalar::UInt8(1));
+    let column = UInt8Type::from_data(vec![2, 3]);
 
     let blocks = [
         DataBlock::new(
             vec![
-                BlockEntry::new(ty.clone(), scalar.clone()),
-                BlockEntry::new(ty.clone(), scalar.clone()),
+                BlockEntry::new_const_column(ty.clone(), scalar.clone(), 2),
+                BlockEntry::new_const_column(ty.clone(), scalar.clone(), 2),
             ],
             2,
         ),
         DataBlock::new(
             vec![
-                BlockEntry::new(ty.clone(), scalar.clone()),
-                BlockEntry::new(ty.clone(), column),
+                BlockEntry::new_const_column(ty.clone(), scalar.clone(), 2),
+                column.into(),
             ],
             2,
         ),
@@ -406,11 +386,8 @@ pub fn test_concat_scalar() -> databend_common_exception::Result<()> {
     let block = DataBlock::concat(&blocks)?;
     let expect = DataBlock::new(
         vec![
-            BlockEntry::new(ty.clone(), scalar.clone()),
-            BlockEntry::new(
-                ty.clone(),
-                Value::Column(UInt8Type::from_data(vec![1, 1, 2, 3])),
-            ),
+            BlockEntry::new_const_column(ty.clone(), scalar.clone(), 4),
+            UInt8Type::from_data(vec![1, 1, 2, 3]).into(),
         ],
         4,
     );
@@ -449,8 +426,8 @@ pub fn test_take_compact() -> databend_common_exception::Result<()> {
         let columns_1 = block_1.columns();
         let columns_2 = block_2.columns();
         for idx in 0..columns_1.len() {
-            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+            assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+            assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
 
@@ -606,8 +583,8 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
         let columns_1 = block_1.columns();
         let columns_2 = block_2.columns();
         for idx in 0..columns_1.len() {
-            assert_eq!(columns_1[idx].data_type, columns_2[idx].data_type);
-            assert_eq!(columns_1[idx].value, columns_2[idx].value);
+            assert_eq!(columns_1[idx].data_type(), columns_2[idx].data_type());
+            assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
 

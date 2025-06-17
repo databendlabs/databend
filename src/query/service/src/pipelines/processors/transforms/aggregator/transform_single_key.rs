@@ -281,7 +281,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .enumerate()
         {
             for block in self.to_merge_data.iter() {
-                let state = block.get_by_offset(idx).value.as_column().unwrap();
+                let state = block.get_by_offset(idx).as_column().unwrap();
                 func.batch_merge_single(place, state)?;
             }
             func.merge_result(place, builder)?;

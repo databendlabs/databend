@@ -124,12 +124,7 @@ impl StreamColumnMeta {
 
 pub fn build_origin_block_row_num(num_rows: usize) -> BlockEntry {
     let row_ids = (0..num_rows as u64).collect();
-    let column = Value::Column(UInt64Type::from_data(row_ids));
-
-    BlockEntry::new(
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
-        column.wrap_nullable(None),
-    )
+    UInt64Type::from_data(row_ids).wrap_nullable(None).into()
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -198,10 +193,14 @@ impl StreamColumn {
     pub fn generate_column_values(&self, meta: &StreamColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
             StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
-            StreamColumnType::OriginBlockId => BlockEntry::new(
-                DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
-                meta.build_origin_block_id(),
-            ),
+            StreamColumnType::OriginBlockId => {
+                BlockEntry::new(meta.build_origin_block_id(), || {
+                    (
+                        DataType::Nullable(Box::new(DataType::Decimal(DecimalSize::default_128()))),
+                        num_rows,
+                    )
+                })
+            }
             StreamColumnType::OriginRowNum => build_origin_block_row_num(num_rows),
         }
     }

@@ -6,11 +6,11 @@ select $1  from @data/avro/decimal.avro(file_format=>'avro');
 {"c_39_2":1e36,"c_4_2":9.99,"c_76_2":1e73}
 
 query 
-select json_typeof($1:c_4_2)  from @data/avro/decimal.avro(file_format=>'avro');
+select json_typeof($1:c_4_2), typeof($1:c_4_2)  from @data/avro/decimal.avro(file_format=>'avro');
 ----
-decimal
-decimal
-decimal
+decimal decimal
+decimal decimal
+decimal decimal
 
 # same size
 query 

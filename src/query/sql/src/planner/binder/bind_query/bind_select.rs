@@ -562,7 +562,7 @@ impl<'a> SelectRewriter<'a> {
             }
             let columns = block.columns();
             for row in 0..block.num_rows() {
-                match columns[0].value.index(row).unwrap() {
+                match columns[0].index(row).unwrap() {
                     ScalarRef::String(s) => {
                         let literal = Expr::Literal {
                             span,

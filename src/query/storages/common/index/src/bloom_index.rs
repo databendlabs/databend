@@ -31,6 +31,7 @@ use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
@@ -232,13 +233,14 @@ impl BloomIndex {
     }
 
     pub fn serialize_to_data_block(&self) -> Result<DataBlock> {
-        let fields = self.filter_schema.fields();
-        let mut filter_columns = Vec::with_capacity(fields.len());
-        for filter in &self.filters {
-            let serialized_bytes = filter.to_bytes()?;
-            let filter_value = Value::Scalar(Scalar::Binary(serialized_bytes));
-            filter_columns.push(BlockEntry::new(DataType::Binary, filter_value));
-        }
+        let filter_columns = self
+            .filters
+            .iter()
+            .map(|filter| {
+                let bs = filter.to_bytes()?;
+                Ok(BlockEntry::new_const_column_arg::<BinaryType>(bs, 1))
+            })
+            .collect::<Result<_>>()?;
         Ok(DataBlock::new(filter_columns, 1))
     }
 
@@ -487,8 +489,12 @@ impl BloomIndex {
         }
     }
 
-    pub fn build_filter_ngram_name(field: &TableField, gram_size: usize) -> String {
-        format!("Ngram({})_{gram_size}", field.column_id())
+    pub fn build_filter_ngram_name(
+        column_id: ColumnId,
+        gram_size: usize,
+        bloom_size: u64,
+    ) -> String {
+        format!("Ngram({column_id})_{gram_size}_{bloom_size}")
     }
 
     fn find(
@@ -506,7 +512,11 @@ impl BloomIndex {
                 // The column doesn't have a Ngram Arg.
                 return Ok(FilterEvalResult::Uncertain);
             };
-            BloomIndex::build_filter_ngram_name(table_field, ngram_arg.gram_size)
+            BloomIndex::build_filter_ngram_name(
+                table_field.column_id(),
+                ngram_arg.gram_size,
+                ngram_arg.bloom_size,
+            )
         } else {
             BloomIndex::build_filter_bloom_name(self.version, table_field)?
         };
@@ -570,6 +580,7 @@ struct ColumnFilterBuilder {
     index: FieldIndex,
     field: TableField,
     gram_size: usize,
+    bloom_size: u64,
     builder: FilterImplBuilder,
 }
 
@@ -617,6 +628,7 @@ impl BloomIndexBuilder {
                 index,
                 field: field.clone(),
                 gram_size: 0,
+                bloom_size: 0,
                 builder: FilterImplBuilder::Xor(Xor8Builder::create()),
             });
         }
@@ -625,6 +637,7 @@ impl BloomIndexBuilder {
                 index: arg.index,
                 field: arg.field.clone(),
                 gram_size: arg.gram_size,
+                bloom_size: arg.bloom_size,
                 builder: FilterImplBuilder::Ngram(BloomBuilder::create(
                     arg.bloom_size,
                     NGRAM_HASH_SEED,
@@ -652,19 +665,16 @@ impl BloomIndexBuilder {
         let mut bloom_keys_to_remove = Vec::with_capacity(self.bloom_columns.len());
 
         for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
-            let field_type = &block.get_by_offset(index_column.index).data_type;
+            let field_type = &block.data_type(index_column.index);
             if !Xor8Filter::supported_type(field_type) {
                 bloom_keys_to_remove.push(index);
                 continue;
             }
 
-            let column = match &block.get_by_offset(index_column.index).value {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
-                    builder.build()
-                }
-                Value::Column(c) => c.clone(),
-            };
+            let column = block
+                .get_by_offset(index_column.index)
+                .value()
+                .convert_to_full_column(field_type, 1);
 
             let (column, data_type) = match field_type.remove_nullable() {
                 DataType::Map(box inner_ty) => {
@@ -744,14 +754,11 @@ impl BloomIndexBuilder {
             }
         }
         for index_column in self.ngram_columns.iter_mut() {
-            let field_type = &block.get_by_offset(index_column.index).data_type;
-            let column = match &block.get_by_offset(index_column.index).value {
-                Value::Scalar(s) => {
-                    let builder = ColumnBuilder::repeat(&s.as_ref(), 1, field_type);
-                    builder.build()
-                }
-                Value::Column(c) => c.clone(),
-            };
+            let field_type = &block.data_type(index_column.index);
+            let column = block
+                .get_by_offset(index_column.index)
+                .value()
+                .convert_to_full_column(field_type, 1);
 
             for digests in BloomIndex::calculate_ngram_nullable_column(
                 Value::Column(column),
@@ -796,8 +803,11 @@ impl BloomIndexBuilder {
         }
         for ngram_column in self.ngram_columns.iter_mut() {
             let filter = ngram_column.builder.build()?;
-            let filter_name =
-                BloomIndex::build_filter_ngram_name(&ngram_column.field, ngram_column.gram_size);
+            let filter_name = BloomIndex::build_filter_ngram_name(
+                ngram_column.field.column_id(),
+                ngram_column.gram_size,
+                ngram_column.bloom_size,
+            );
             filter_fields.push(TableField::new(&filter_name, TableDataType::Binary));
             filters.push(Arc::new(filter));
         }

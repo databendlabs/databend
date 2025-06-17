@@ -93,7 +93,7 @@ impl WindowPartitionTopNExchange {
         let mut sort_compare = SortCompare::with_force_equality(self.sort_desc.to_vec(), rows);
 
         for &offset in &self.partition_indices {
-            let array = block.get_by_offset(offset).value.clone();
+            let array = block.get_by_offset(offset).value();
             sort_compare.visit_value(array).unwrap();
             sort_compare.increment_column_index();
         }
@@ -101,7 +101,7 @@ impl WindowPartitionTopNExchange {
         let partition_equality = sort_compare.equality_index().to_vec();
 
         for desc in self.sort_desc.iter().skip(self.partition_indices.len()) {
-            let array = block.get_by_offset(desc.offset).value.clone();
+            let array = block.get_by_offset(desc.offset).value();
             sort_compare.visit_value(array).unwrap();
             sort_compare.increment_column_index();
         }
@@ -121,8 +121,7 @@ impl WindowPartitionTopNExchange {
         let mut hashes = vec![0u64; rows];
         for (i, &offset) in self.partition_indices.iter().enumerate() {
             let entry = block.get_by_offset(offset);
-            group_hash_value_spread(&hash_indices, entry.value.to_owned(), i == 0, &mut hashes)
-                .unwrap();
+            group_hash_value_spread(&hash_indices, entry.value(), i == 0, &mut hashes).unwrap();
         }
 
         let mut partition_permutation = vec![Vec::new(); self.num_partitions as usize];
@@ -171,13 +170,10 @@ impl WindowPartitionTopNExchange {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::ArgType;
     use databend_common_expression::types::Int32Type;
     use databend_common_expression::types::StringType;
     use databend_common_expression::BlockEntry;
     use databend_common_expression::FromData;
-    use databend_common_expression::Scalar;
-    use databend_common_expression::Value;
 
     use super::*;
 
@@ -197,24 +193,10 @@ mod tests {
 
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3])),
-                ),
-                BlockEntry::new(
-                    StringType::data_type(),
-                    Value::Scalar(Scalar::String("a".to_string())),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3])),
-                ),
-                BlockEntry::new(
-                    StringType::data_type(),
-                    Value::Column(StringType::from_data(vec![
-                        "a", "b", "c", "d", "e", "f", "g", "h", "i",
-                    ])),
-                ),
+                Int32Type::from_data(vec![3, 1, 2, 2, 4, 3, 7, 0, 3]).into(),
+                BlockEntry::new_const_column_arg::<StringType>("a".to_string(), 9),
+                Int32Type::from_data(vec![3, 1, 3, 2, 2, 3, 4, 3, 3]).into(),
+                StringType::from_data(vec!["a", "b", "c", "d", "e", "f", "g", "h", "i"]).into(),
             ],
             9,
         );
@@ -262,14 +244,8 @@ mod tests {
 
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![7, 7, 7, 6, 5, 5, 4, 1, 3, 1, 1])),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![7, 6, 5, 5, 5, 4, 3, 3, 2, 3, 3])),
-                ),
+                Int32Type::from_data(vec![7, 7, 7, 6, 5, 5, 4, 1, 3, 1, 1]).into(),
+                Int32Type::from_data(vec![7, 6, 5, 5, 5, 4, 3, 3, 2, 3, 3]).into(),
             ],
             11,
         );
@@ -307,14 +283,8 @@ mod tests {
 
         let data = DataBlock::new(
             vec![
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![5, 2, 3, 3, 2, 2, 1, 1, 1, 1, 1])),
-                ),
-                BlockEntry::new(
-                    Int32Type::data_type(),
-                    Value::Column(Int32Type::from_data(vec![2, 2, 4, 3, 2, 2, 5, 4, 3, 3, 3])),
-                ),
+                Int32Type::from_data(vec![5, 2, 3, 3, 2, 2, 1, 1, 1, 1, 1]).into(),
+                Int32Type::from_data(vec![2, 2, 4, 3, 2, 2, 5, 4, 3, 3, 3]).into(),
             ],
             11,
         );

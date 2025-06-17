@@ -183,18 +183,16 @@ impl HashJoinState {
 }
 
 pub(crate) fn wrap_true_validity(
-    column: &BlockEntry,
+    entry: &BlockEntry,
     num_rows: usize,
     true_validity: &Bitmap,
 ) -> BlockEntry {
-    let (value, data_type) = (&column.value, &column.data_type);
-    let col = value.convert_to_full_column(data_type, num_rows);
-    if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
-        column.clone()
+    let col = entry.to_column();
+    if col.is_null() || col.is_nullable() {
+        entry.clone()
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        let col = NullableColumn::new_column(col, validity);
-        BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
+        NullableColumn::new_column(col, validity).into()
     }
 }

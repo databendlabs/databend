@@ -30,7 +30,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -169,14 +168,13 @@ where F: RowsFetcher + Send + Sync + 'static
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let num_rows = data.num_rows();
         let entry = &data.columns()[self.row_id_col_offset];
-        let value = entry
-            .value
-            .convert_to_full_column(&entry.data_type, num_rows);
-        let row_id_column = if matches!(entry.data_type, DataType::Number(NumberDataType::UInt64)) {
-            value.into_number().unwrap().into_u_int64().unwrap()
+        let column = entry.to_column();
+        let row_id_column = if matches!(entry.data_type(), DataType::Number(NumberDataType::UInt64))
+        {
+            column.into_number().unwrap().into_u_int64().unwrap()
         } else {
             // From merge into matched data, the row id column is nullable but has no null value.
-            let value = *value.into_nullable().unwrap();
+            let value = *column.into_nullable().unwrap();
             debug_assert!(value.validity.null_count() == 0);
             value.column.into_number().unwrap().into_u_int64().unwrap()
         };
@@ -264,11 +262,11 @@ where F: RowsFetcher + Send + Sync + 'static
         // We ensure it in transform method
         self.fetcher.clear_cache();
 
-        for col in fetched_block.columns().iter() {
+        for entry in fetched_block.take_columns() {
             if self.need_wrap_nullable {
-                data.add_column(wrap_true_validity(col, num_rows));
+                data.add_entry(wrap_true_validity(&entry, num_rows));
             } else {
-                data.add_column(col.clone());
+                data.add_entry(entry);
             }
         }
 
@@ -284,12 +282,11 @@ where F: RowsFetcher + Send + Sync + 'static
 }
 
 fn wrap_true_validity(column: &BlockEntry, num_rows: usize) -> BlockEntry {
-    let (value, data_type) = (&column.value, &column.data_type);
+    let (value, data_type) = (&column.value(), &column.data_type());
     let col = value.convert_to_full_column(data_type, num_rows);
     if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         column.clone()
     } else {
-        let col = NullableColumn::new_column(col, Bitmap::new_trued(num_rows));
-        BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
+        NullableColumn::new_column(col, Bitmap::new_trued(num_rows)).into()
     }
 }

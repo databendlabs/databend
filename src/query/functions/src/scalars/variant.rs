@@ -1817,6 +1817,26 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg(
+        "typeof",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, StringType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            match type_of(v) {
+                Ok(result) => output.put_str(result),
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            };
+            output.commit_row();
+        }),
+    );
+
     let json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -2856,7 +2876,7 @@ fn cast_to_binary(val: &[u8]) -> Result<Option<Vec<u8>>, jsonb::Error> {
     }
 }
 
-fn type_of(v: &[u8]) -> Result<&'static str, jsonb::Error> {
+pub(crate) fn type_of(v: &[u8]) -> Result<&'static str, jsonb::Error> {
     match RawJsonb::new(v).type_of() {
         Ok(val) => Ok(val),
         Err(err) => {

@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::KeyAccessor;
@@ -130,7 +131,7 @@ impl HashJoinProbeState {
             .input
             .columns()
             .iter()
-            .map(|c| c.to_column(input_num_rows))
+            .map(BlockEntry::to_column)
             .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
         self.hash_join_state

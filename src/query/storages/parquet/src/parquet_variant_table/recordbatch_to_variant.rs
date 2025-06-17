@@ -15,12 +15,10 @@
 use arrow_array::RecordBatch;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableDataType;
-use databend_common_expression::Value;
 use jiff::tz::TimeZone;
 
 pub fn read_record_batch(
@@ -54,9 +52,8 @@ pub fn record_batch_to_block(
     read_record_batch(record_batch, &mut builder, tz, typ)?;
     let column = builder.build();
     let num_rows = column.len();
-    let entry = BlockEntry::new(
-        databend_common_expression::types::DataType::Variant,
-        Value::Column(Column::Variant(column)),
-    );
-    Ok(DataBlock::new(vec![entry], num_rows))
+    Ok(DataBlock::new(
+        vec![Column::Variant(column).into()],
+        num_rows,
+    ))
 }

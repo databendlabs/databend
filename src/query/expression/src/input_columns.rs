@@ -35,7 +35,7 @@ impl Index<usize> for InputColumns<'_> {
         match self {
             Self::Slice(slice) => slice.index(index),
             Self::Block(BlockProxy { args, data }) => {
-                data.get_by_offset(args[index]).value.as_column().unwrap()
+                data.get_by_offset(args[index]).as_column().unwrap()
             }
         }
     }
@@ -140,10 +140,8 @@ pub struct BlockProxy<'a> {
 }
 
 impl<'a> BlockProxy<'a> {
-    pub fn data_types(&self) -> Vec<&'a DataType> {
+    pub fn data_types(&self) -> Vec<DataType> {
         let Self { args, data } = self;
-        args.iter()
-            .map(|&i| &data.get_by_offset(i).data_type)
-            .collect::<Vec<_>>()
+        args.iter().map(|&i| data.data_type(i)).collect::<Vec<_>>()
     }
 }

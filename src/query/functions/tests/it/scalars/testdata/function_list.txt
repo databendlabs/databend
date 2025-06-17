@@ -4868,7 +4868,9 @@ Functions overloads:
 0 try_to_variant(T0) :: Variant NULL
 1 try_to_variant(T0 NULL) :: Variant NULL
 0 tuple FACTORY
-0 typeof(T0) :: String
+0 typeof(Variant) :: String
+1 typeof(Variant NULL) :: String NULL
+2 typeof(T0) :: String
 0 unicode(String) :: UInt32
 1 unicode(String NULL) :: UInt32 NULL
 0 unnest FACTORY

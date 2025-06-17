@@ -32,7 +32,6 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -180,7 +179,6 @@ impl<T: Number> TransformWindow<T> {
     fn column_at(&self, index: &RowPtr, column_index: usize) -> &Column {
         self.block_at(index)
             .get_by_offset(column_index)
-            .value
             .as_column()
             .unwrap()
     }
@@ -454,10 +452,7 @@ impl<T: Number> TransformWindow<T> {
                     ColumnBuilder::with_capacity(&data_type, 0),
                 );
                 let new_column = builder.build();
-                output.add_column(BlockEntry::new(
-                    new_column.data_type(),
-                    Value::Column(new_column),
-                ));
+                output.add_column(new_column);
                 self.outputs.push_back(output);
                 self.next_output_block += 1;
             } else {
@@ -564,21 +559,24 @@ impl<T: Number> TransformWindow<T> {
                 let value = if self.frame_start == self.frame_end {
                     match &ll.default {
                         LagLeadDefault::Null => Scalar::Null,
-                        LagLeadDefault::Index(col) => {
-                            let block =
-                                &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(*col).value;
-                            value.index(self.current_row.row).unwrap().to_owned()
-                        }
+                        LagLeadDefault::Index(col) => self.blocks
+                            [self.current_row.block - self.first_block]
+                            .block
+                            .get_by_offset(*col)
+                            .index(self.current_row.row)
+                            .unwrap()
+                            .to_owned(),
                     }
                 } else {
-                    let block = &self
-                        .blocks
-                        .get(self.frame_start.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    let value = &block.get_by_offset(ll.arg).value;
-                    value.index(self.frame_start.row).unwrap().to_owned()
+                    let value: Option<_> = try {
+                        self.blocks
+                            .get(self.frame_start.block - self.first_block)?
+                            .block
+                            .get_by_offset(ll.arg)
+                            .index(self.frame_start.row)?
+                            .to_owned()
+                    };
+                    value.unwrap()
                 };
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
@@ -678,15 +676,12 @@ impl<T: Number> TransformWindow<T> {
         let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
         let mut block_entry = block.get_by_offset(arg_index);
         if !ignore_null {
-            return match &block_entry.value {
-                Value::Scalar(scalar) => scalar.to_owned(),
-                Value::Column(col) => unsafe { col.index_unchecked(cur.row) }.to_owned(),
-            };
+            return unsafe { block_entry.index_unchecked(cur.row).to_owned() };
         }
 
         while (advance && cur < self.frame_end) || (!advance && cur >= self.frame_start) {
-            match &block_entry.value {
-                Value::Scalar(scalar) => {
+            match block_entry {
+                BlockEntry::Const(scalar, _, _) => {
                     if scalar != &Scalar::Null {
                         return scalar.to_owned();
                     }
@@ -703,9 +698,9 @@ impl<T: Number> TransformWindow<T> {
                         block_entry = block.get_by_offset(arg_index);
                     }
                 }
-                Value::Column(col) => {
+                BlockEntry::Column(col) => {
                     let value = col.index(cur.row).unwrap();
-                    if value != ScalarRef::Null {
+                    if !matches!(value, ScalarRef::Null) {
                         return value.to_owned();
                     }
 

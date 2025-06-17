@@ -197,7 +197,7 @@ impl Interpreter for SetInterpreter {
                 datablock
                     .columns()
                     .iter()
-                    .map(|c| c.value.index(0).unwrap().to_owned())
+                    .map(|c| c.index(0).unwrap().to_owned())
                     .collect()
             }
         };
