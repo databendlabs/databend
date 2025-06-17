@@ -49,8 +49,6 @@ use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::extract_number_param;
 use super::StateAddr;
 use crate::aggregates::aggregate_sum::SumState;
@@ -437,12 +435,12 @@ where State: SumState
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs = State::deserialize_reader(reader)?;
 
         state.merge(&rhs)
     }
@@ -613,12 +611,12 @@ where State: SumState
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs = State::deserialize_reader(reader)?;
 
         state.merge(&rhs)
     }

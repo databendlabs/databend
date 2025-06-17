@@ -49,8 +49,7 @@ use geozero::wkb::Ewkb;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
@@ -309,12 +308,12 @@ where
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs: State = borsh_partial_deserialize(reader)?;
 
         state.merge(&rhs)
     }

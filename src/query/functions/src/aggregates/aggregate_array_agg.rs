@@ -50,8 +50,6 @@ use databend_common_expression::ScalarRef;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
@@ -229,15 +227,13 @@ where T: Debug + BorshSerialize
 {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
         if NULLABLE {
-            borsh::to_writer(
-                writer,
-                &(
-                    &self.values,
-                    Column::Boolean(self.validity.clone().freeze()),
-                ),
+            (
+                &self.values,
+                Column::Boolean(self.validity.clone().freeze()),
             )
+                .serialize(writer)
         } else {
-            borsh::to_writer(writer, &self.values)
+            self.values.serialize(writer)
         }
     }
 }
@@ -247,7 +243,8 @@ where T: Debug + BorshDeserialize
 {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
         if NULLABLE {
-            let (values, Column::Boolean(validity)) = borsh::from_reader(reader)? else {
+            let (values, Column::Boolean(validity)) = BorshDeserialize::deserialize_reader(reader)?
+            else {
                 unreachable!()
             };
             Ok(Self {
@@ -255,7 +252,7 @@ where T: Debug + BorshDeserialize
                 validity: validity.make_mut(),
             })
         } else {
-            let values = borsh::from_reader(reader)?;
+            let values = BorshDeserialize::deserialize_reader(reader)?;
             Ok(Self {
                 values,
                 ..Default::default()
@@ -362,13 +359,13 @@ struct ArrayAggStateZST<const NULLABLE: bool> {
 
 impl<const NULLABLE: bool> BorshSerialize for ArrayAggStateZST<NULLABLE> {
     fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        borsh::to_writer(writer, &(Column::Boolean(self.validity.clone().freeze())))
+        Column::Boolean(self.validity.clone().freeze()).serialize(writer)
     }
 }
 
 impl<const NULLABLE: bool> BorshDeserialize for ArrayAggStateZST<NULLABLE> {
     fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let Column::Boolean(validity) = borsh::from_reader(reader)? else {
+        let Column::Boolean(validity) = BorshDeserialize::deserialize_reader(reader)? else {
             unreachable!()
         };
         Ok(Self {
@@ -553,12 +550,12 @@ where
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs = State::deserialize_reader(reader)?;
 
         state.merge(&rhs)
     }
@@ -606,15 +603,7 @@ where
     }
 }
 
-type ArrayAggrSimple<V, const N: bool> = AggregateArrayAggFunction<
-    SimpleValueType<V>,
-    ArrayAggStateSimple<<V as SimpleType>::Scalar, N>,
->;
-
-type ArrayAggrZST<V, const N: bool> =
-    AggregateArrayAggFunction<ZeroSizeValueType<V>, ArrayAggStateZST<N>>;
-
-pub fn try_create_aggregate_array_agg_function(
+fn try_create_aggregate_array_agg_function(
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
@@ -626,52 +615,49 @@ pub fn try_create_aggregate_array_agg_function(
     let return_type = DataType::Array(Box::new(data_type.clone()));
     let not_null_type = data_type.remove_nullable();
 
+    fn simple<V>(
+        display_name: &str,
+        return_type: DataType,
+        nullable: bool,
+    ) -> Result<Arc<dyn AggregateFunction>>
+    where
+        V: SimpleType + Send + Sync,
+        V::Scalar: BorshSerialize + BorshDeserialize,
+    {
+        if nullable {
+            AggregateArrayAggFunction::<
+                SimpleValueType<V>,
+                ArrayAggStateSimple<V::Scalar, true>,
+            >::create(display_name, return_type)
+        } else {
+            AggregateArrayAggFunction::<
+                SimpleValueType<V>,
+                ArrayAggStateSimple<V::Scalar, false>,
+            >::create(display_name, return_type)
+        }
+    }
+
+    type ArrayAggrZST<V, const N: bool> =
+        AggregateArrayAggFunction<ZeroSizeValueType<V>, ArrayAggStateZST<N>>;
+
     match not_null_type {
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
-                    if is_nullable {
-                        ArrayAggrSimple::<CoreNumber<NUM>, true>::create(display_name, return_type)
-                    } else {
-                        ArrayAggrSimple::<CoreNumber<NUM>, false>::create(display_name, return_type)
-                    }
+                    simple::<CoreNumber<NUM>>(display_name, return_type, is_nullable)
                 }
             })
         }
         DataType::Decimal(size) => {
-            if is_nullable {
-                if size.can_carried_by_128() {
-                    ArrayAggrSimple::<CoreDecimal<i128>, true>::create(display_name, return_type)
-                } else {
-                    ArrayAggrSimple::<CoreDecimal<i256>, true>::create(display_name, return_type)
-                }
-            } else if size.can_carried_by_128() {
-                ArrayAggrSimple::<CoreDecimal<i128>, false>::create(display_name, return_type)
+            if size.can_carried_by_128() {
+                simple::<CoreDecimal<i128>>(display_name, return_type, is_nullable)
             } else {
-                ArrayAggrSimple::<CoreDecimal<i256>, false>::create(display_name, return_type)
+                simple::<CoreDecimal<i256>>(display_name, return_type, is_nullable)
             }
         }
-        DataType::Date => {
-            if is_nullable {
-                ArrayAggrSimple::<CoreDate, true>::create(display_name, return_type)
-            } else {
-                ArrayAggrSimple::<CoreDate, false>::create(display_name, return_type)
-            }
-        }
-        DataType::Timestamp => {
-            if is_nullable {
-                ArrayAggrSimple::<CoreTimestamp, true>::create(display_name, return_type)
-            } else {
-                ArrayAggrSimple::<CoreTimestamp, false>::create(display_name, return_type)
-            }
-        }
-        DataType::Interval => {
-            if is_nullable {
-                ArrayAggrSimple::<CoreInterval, true>::create(display_name, return_type)
-            } else {
-                ArrayAggrSimple::<CoreInterval, false>::create(display_name, return_type)
-            }
-        }
+        DataType::Date => simple::<CoreDate>(display_name, return_type, is_nullable),
+        DataType::Timestamp => simple::<CoreTimestamp>(display_name, return_type, is_nullable),
+        DataType::Interval => simple::<CoreInterval>(display_name, return_type, is_nullable),
 
         DataType::Null => ArrayAggrZST::<CoreNull, false>::create(display_name, return_type),
         DataType::EmptyArray => {
@@ -708,6 +694,24 @@ pub fn try_create_aggregate_array_agg_function(
             }
         }
 
+        DataType::Binary => {
+            if is_nullable {
+                type State = NullableArrayAggStateAny<BinaryType>;
+                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<BinaryType>;
+                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
+            }
+        }
+        DataType::Bitmap => {
+            if is_nullable {
+                type State = NullableArrayAggStateAny<BitmapType>;
+                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
+            } else {
+                type State = ArrayAggStateAny<BitmapType>;
+                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
+            }
+        }
         DataType::Variant => {
             if is_nullable {
                 type State = NullableArrayAggStateAny<VariantType>;
@@ -733,25 +737,6 @@ pub fn try_create_aggregate_array_agg_function(
             } else {
                 type State = ArrayAggStateAny<GeographyType>;
                 AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
-            }
-        }
-
-        DataType::Binary => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<BinaryType>;
-                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<BinaryType>;
-                AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
-            }
-        }
-        DataType::Bitmap => {
-            if is_nullable {
-                type State = NullableArrayAggStateAny<BitmapType>;
-                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
-            } else {
-                type State = ArrayAggStateAny<BitmapType>;
-                AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
             }
         }
 
