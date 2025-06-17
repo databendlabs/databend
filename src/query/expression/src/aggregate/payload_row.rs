@@ -42,7 +42,7 @@ use crate::InputColumns;
 use crate::Scalar;
 use crate::SelectVector;
 
-pub fn rowformat_size(data_type: &DataType) -> usize {
+pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     match data_type {
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
         DataType::Boolean => 1,
@@ -73,7 +73,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
 }
 
 /// This serialize column into row format by fixed size
-pub unsafe fn serialize_column_to_rowformat(
+pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
     select_vector: &SelectVector,
@@ -195,7 +195,7 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
     }
 }
 
-pub unsafe fn row_match_columns(
+pub(super) unsafe fn row_match_columns(
     cols: InputColumns,
     address: &[*const u8],
     select_vector: &mut SelectVector,

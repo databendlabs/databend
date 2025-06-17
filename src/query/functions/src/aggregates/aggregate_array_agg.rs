@@ -413,7 +413,7 @@ where
                     self.validity.push(false);
                 }
             }
-        } else if NULLABLE {
+        } else {
             self.validity.extend_constant(*length, true);
         }
         Ok(())
@@ -673,13 +673,7 @@ pub fn try_create_aggregate_array_agg_function(
             }
         }
 
-        DataType::Null => {
-            if is_nullable {
-                ArrayAggrZST::<CoreNull, true>::create(display_name, return_type)
-            } else {
-                ArrayAggrZST::<CoreNull, false>::create(display_name, return_type)
-            }
-        }
+        DataType::Null => ArrayAggrZST::<CoreNull, false>::create(display_name, return_type),
         DataType::EmptyArray => {
             if is_nullable {
                 ArrayAggrZST::<CoreEmptyArray, true>::create(display_name, return_type)
