@@ -5502,6 +5502,7 @@ dependencies = [
 name = "databend-storages-common-session"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-types",
