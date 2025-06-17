@@ -16,6 +16,7 @@ format = "text"
 dir = "/var/log/databend"
 
 [raft_config]
+# NOTE: change this to the id of the node.
 id            = 0
 raft_dir      = "/var/lib/databend/raft"
 raft_api_port = 28004
