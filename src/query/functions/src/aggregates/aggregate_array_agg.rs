@@ -24,12 +24,17 @@ use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::date::CoreDate;
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::empty_array::CoreEmptyArray;
+use databend_common_expression::types::empty_map::CoreEmptyMap;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::interval::CoreInterval;
+use databend_common_expression::types::null::CoreNull;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::simple_type::SimpleType;
 use databend_common_expression::types::simple_type::SimpleValueType;
 use databend_common_expression::types::timestamp::CoreTimestamp;
+use databend_common_expression::types::zero_size_type::ZeroSizeType;
+use databend_common_expression::types::zero_size_type::ZeroSizeValueType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
@@ -55,12 +60,12 @@ use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct ArrayAggStateAny<T>
+struct ArrayAggStateAny<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    pub(crate) values: Vec<T::Scalar>,
+    values: Vec<T::Scalar>,
 }
 
 impl<T> Default for ArrayAggStateAny<T>
@@ -76,7 +81,7 @@ where
 impl<T> ScalarStateFunc<T> for ArrayAggStateAny<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send,
 {
     fn new() -> Self {
         Self::default()
@@ -121,7 +126,7 @@ where
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct NullableArrayAggState<T>
+struct NullableArrayAggStateAny<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -129,7 +134,7 @@ where
     values: Vec<Option<T::Scalar>>,
 }
 
-impl<T> Default for NullableArrayAggState<T>
+impl<T> Default for NullableArrayAggStateAny<T>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -139,10 +144,10 @@ where
     }
 }
 
-impl<T> ScalarStateFunc<T> for NullableArrayAggState<T>
+impl<T> ScalarStateFunc<T> for NullableArrayAggStateAny<T>
 where
     T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send,
 {
     fn new() -> Self {
         Self::default()
@@ -212,14 +217,12 @@ where
 }
 
 #[derive(Debug)]
-pub struct ArrayAggStateSimple<T, const NULLABLE: bool>
+struct ArrayAggStateSimple<T, const NULLABLE: bool>
 where T: Debug
 {
     values: Vec<T>,
     validity: MutableBitmap,
 }
-
-unsafe impl<T: Debug, const NULLABLE: bool> Send for ArrayAggStateSimple<T, NULLABLE> {}
 
 impl<T, const NULLABLE: bool> BorshSerialize for ArrayAggStateSimple<T, NULLABLE>
 where T: Debug + BorshSerialize
@@ -343,6 +346,92 @@ where
             );
             Column::Nullable(Box::new(NullableColumn::new(
                 column,
+                mem::take(&mut self.validity).freeze(),
+            )))
+        };
+
+        builder.push(ScalarRef::Array(item));
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct ArrayAggStateZST<const NULLABLE: bool> {
+    validity: MutableBitmap,
+}
+
+impl<const NULLABLE: bool> BorshSerialize for ArrayAggStateZST<NULLABLE> {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        borsh::to_writer(writer, &(Column::Boolean(self.validity.clone().freeze())))
+    }
+}
+
+impl<const NULLABLE: bool> BorshDeserialize for ArrayAggStateZST<NULLABLE> {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        let Column::Boolean(validity) = borsh::from_reader(reader)? else {
+            unreachable!()
+        };
+        Ok(Self {
+            validity: validity.make_mut(),
+        })
+    }
+}
+
+impl<V, const NULLABLE: bool> ScalarStateFunc<ZeroSizeValueType<V>> for ArrayAggStateZST<NULLABLE>
+where
+    V: ZeroSizeType,
+    Self: BorshSerialize + BorshDeserialize,
+{
+    fn new() -> Self {
+        Self {
+            validity: Default::default(),
+        }
+    }
+
+    fn add(&mut self, other: Option<()>) {
+        if other.is_some() {
+            self.validity.push(true);
+        } else if !NULLABLE {
+            unreachable!()
+        } else {
+            self.validity.push(false);
+        }
+    }
+
+    fn add_batch(&mut self, length: &usize, validity: Option<&Bitmap>) -> Result<()> {
+        if *length == 0 {
+            return Ok(());
+        }
+
+        if let Some(validity) = validity {
+            for valid in validity {
+                if valid {
+                    self.validity.push(true);
+                } else if !NULLABLE {
+                    unreachable!()
+                } else {
+                    self.validity.push(false);
+                }
+            }
+        } else if NULLABLE {
+            self.validity.extend_constant(*length, true);
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.validity
+            .extend_from_slice(rhs.validity.as_slice(), 0, rhs.validity.len());
+
+        Ok(())
+    }
+
+    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        let item = if !NULLABLE {
+            V::upcast_column(self.validity.len())
+        } else {
+            Column::Nullable(Box::new(NullableColumn::new(
+                V::upcast_column(self.validity.len()),
                 mem::take(&mut self.validity).freeze(),
             )))
         };
@@ -522,6 +611,9 @@ type ArrayAggrSimple<V, const N: bool> = AggregateArrayAggFunction<
     ArrayAggStateSimple<<V as SimpleType>::Scalar, N>,
 >;
 
+type ArrayAggrZST<V, const N: bool> =
+    AggregateArrayAggFunction<ZeroSizeValueType<V>, ArrayAggStateZST<N>>;
+
 pub fn try_create_aggregate_array_agg_function(
     display_name: &str,
     _params: Vec<Scalar>,
@@ -583,41 +675,29 @@ pub fn try_create_aggregate_array_agg_function(
 
         DataType::Null => {
             if is_nullable {
-                type State = NullableArrayAggState<NullType>;
-                AggregateArrayAggFunction::<NullType, State>::create(display_name, return_type)
+                ArrayAggrZST::<CoreNull, true>::create(display_name, return_type)
             } else {
-                type State = ArrayAggStateAny<NullType>;
-                AggregateArrayAggFunction::<NullType, State>::create(display_name, return_type)
+                ArrayAggrZST::<CoreNull, false>::create(display_name, return_type)
             }
         }
         DataType::EmptyArray => {
             if is_nullable {
-                type State = NullableArrayAggState<EmptyArrayType>;
-                AggregateArrayAggFunction::<EmptyArrayType, State>::create(
-                    display_name,
-                    return_type,
-                )
+                ArrayAggrZST::<CoreEmptyArray, true>::create(display_name, return_type)
             } else {
-                type State = ArrayAggStateAny<EmptyArrayType>;
-                AggregateArrayAggFunction::<EmptyArrayType, State>::create(
-                    display_name,
-                    return_type,
-                )
+                ArrayAggrZST::<CoreEmptyArray, false>::create(display_name, return_type)
             }
         }
         DataType::EmptyMap => {
             if is_nullable {
-                type State = NullableArrayAggState<EmptyMapType>;
-                AggregateArrayAggFunction::<EmptyMapType, State>::create(display_name, return_type)
+                ArrayAggrZST::<CoreEmptyMap, true>::create(display_name, return_type)
             } else {
-                type State = ArrayAggStateAny<EmptyMapType>;
-                AggregateArrayAggFunction::<EmptyMapType, State>::create(display_name, return_type)
+                ArrayAggrZST::<CoreEmptyMap, false>::create(display_name, return_type)
             }
         }
 
         DataType::String => {
             if is_nullable {
-                type State = NullableArrayAggState<StringType>;
+                type State = NullableArrayAggStateAny<StringType>;
                 AggregateArrayAggFunction::<StringType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<StringType>;
@@ -626,7 +706,7 @@ pub fn try_create_aggregate_array_agg_function(
         }
         DataType::Boolean => {
             if is_nullable {
-                type State = NullableArrayAggState<BooleanType>;
+                type State = NullableArrayAggStateAny<BooleanType>;
                 AggregateArrayAggFunction::<BooleanType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<BooleanType>;
@@ -636,7 +716,7 @@ pub fn try_create_aggregate_array_agg_function(
 
         DataType::Variant => {
             if is_nullable {
-                type State = NullableArrayAggState<VariantType>;
+                type State = NullableArrayAggStateAny<VariantType>;
                 AggregateArrayAggFunction::<VariantType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<VariantType>;
@@ -645,7 +725,7 @@ pub fn try_create_aggregate_array_agg_function(
         }
         DataType::Geometry => {
             if is_nullable {
-                type State = NullableArrayAggState<GeometryType>;
+                type State = NullableArrayAggStateAny<GeometryType>;
                 AggregateArrayAggFunction::<GeometryType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<GeometryType>;
@@ -654,7 +734,7 @@ pub fn try_create_aggregate_array_agg_function(
         }
         DataType::Geography => {
             if is_nullable {
-                type State = NullableArrayAggState<GeographyType>;
+                type State = NullableArrayAggStateAny<GeographyType>;
                 AggregateArrayAggFunction::<GeographyType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<GeographyType>;
@@ -664,7 +744,7 @@ pub fn try_create_aggregate_array_agg_function(
 
         DataType::Binary => {
             if is_nullable {
-                type State = NullableArrayAggState<BinaryType>;
+                type State = NullableArrayAggStateAny<BinaryType>;
                 AggregateArrayAggFunction::<BinaryType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<BinaryType>;
@@ -673,7 +753,7 @@ pub fn try_create_aggregate_array_agg_function(
         }
         DataType::Bitmap => {
             if is_nullable {
-                type State = NullableArrayAggState<BitmapType>;
+                type State = NullableArrayAggStateAny<BitmapType>;
                 AggregateArrayAggFunction::<BitmapType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<BitmapType>;
@@ -684,7 +764,7 @@ pub fn try_create_aggregate_array_agg_function(
         DataType::Nullable(_) | DataType::Generic(_) => unreachable!(),
         _ => {
             if is_nullable {
-                type State = NullableArrayAggState<AnyType>;
+                type State = NullableArrayAggStateAny<AnyType>;
                 AggregateArrayAggFunction::<AnyType, State>::create(display_name, return_type)
             } else {
                 type State = ArrayAggStateAny<AnyType>;
