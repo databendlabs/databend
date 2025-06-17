@@ -192,7 +192,6 @@ impl ReclusterTableInterpreter {
         push_downs: &mut Option<PushDownInfo>,
         hilbert_info: &mut Option<HilbertBuildInfo>,
     ) -> Result<bool> {
-        self.ctx.clear_table_meta_timestamps_cache();
         let start = SystemTime::now();
         let settings = self.ctx.get_settings();
 
