@@ -2862,7 +2862,7 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
                 .into_iter()
                 .map(|cfg| cfg.try_into())
                 .collect::<Result<Vec<_>>>()?,
-            storage_params: storage_params.and_then(|cfg| Some(cfg.params)),
+            storage_params: storage_params.map(|cfg| cfg.params),
         })
     }
 }
@@ -2870,11 +2870,9 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
 impl From<InnerHistoryConfig> for HistoryLogConfig {
     fn from(inner: InnerHistoryConfig) -> Self {
         let inner_storage_config: Option<InnerStorageConfig> =
-            inner.storage_params.and_then(|params| {
-                Some(InnerStorageConfig {
-                    params,
-                    ..Default::default()
-                })
+            inner.storage_params.map(|params| InnerStorageConfig {
+                params,
+                ..Default::default()
             });
         Self {
             log_history_on: inner.on,

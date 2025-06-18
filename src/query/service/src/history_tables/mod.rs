@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod alter_table;
-mod external;
 mod global_history_log;
 mod meta;
 mod session;
