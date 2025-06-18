@@ -119,6 +119,9 @@ impl PipelineBuilder {
 
             // hided plans in profile
             PhysicalPlan::Shuffle(_) => Ok(None),
+            PhysicalPlan::Exchange(_) => Ok(None),
+            PhysicalPlan::ExchangeSink(_) => Ok(None),
+            PhysicalPlan::ExchangeSource(_) => Ok(None),
             PhysicalPlan::ChunkCastSchema(_) => Ok(None),
             PhysicalPlan::ChunkFillAndReorder(_) => Ok(None),
             PhysicalPlan::ChunkMerge(_) => Ok(None),

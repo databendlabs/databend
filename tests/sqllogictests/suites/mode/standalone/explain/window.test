@@ -53,18 +53,46 @@ set enable_parallel_multi_merge_sort = 0;
 query T
 explain pipeline SELECT depname, empno, salary, sum(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno;
 ----
-CompoundBlockOperator(Project) × 1
-  Merge to MultiSortMerge × 1
-    TransformSortMerge × 4
-      SortPartialTransform × 4
-        Merge to Resize × 4
-          Transform Window × 1
-            TransformWindowPartitionCollect(Sort) × 1
-              ShuffleMergePartition(Window) × 1
-                ShufflePartition(Window) × 1
-                  DeserializeDataTransform × 1
-                    SyncReadParquetDataTransform × 1
-                      BlockPartitionSource × 1
+digraph {
+    0 [ label = "BlockPartitionSource" ]
+    1 [ label = "SyncReadParquetDataTransform" ]
+    2 [ label = "DeserializeDataTransform" ]
+    3 [ label = "ShufflePartition(Window)" ]
+    4 [ label = "ShuffleMergePartition(Window)" ]
+    5 [ label = "TransformWindowPartitionCollect(Sort)" ]
+    6 [ label = "Transform Window" ]
+    7 [ label = "Resize" ]
+    8 [ label = "SortPartialTransform" ]
+    9 [ label = "SortPartialTransform" ]
+    10 [ label = "SortPartialTransform" ]
+    11 [ label = "SortPartialTransform" ]
+    12 [ label = "TransformSortMerge" ]
+    13 [ label = "TransformSortMerge" ]
+    14 [ label = "TransformSortMerge" ]
+    15 [ label = "TransformSortMerge" ]
+    16 [ label = "MultiSortMerge" ]
+    17 [ label = "CompoundBlockOperator(Project)" ]
+    0 -> 1 [ label = "" ]
+    1 -> 2 [ label = "" ]
+    2 -> 3 [ label = "" ]
+    3 -> 4 [ label = "" ]
+    4 -> 5 [ label = "" ]
+    5 -> 6 [ label = "" ]
+    6 -> 7 [ label = "" ]
+    7 -> 8 [ label = "from: 0, to: 0" ]
+    7 -> 9 [ label = "from: 1, to: 0" ]
+    7 -> 10 [ label = "from: 2, to: 0" ]
+    7 -> 11 [ label = "from: 3, to: 0" ]
+    8 -> 12 [ label = "" ]
+    9 -> 13 [ label = "" ]
+    10 -> 14 [ label = "" ]
+    11 -> 15 [ label = "" ]
+    12 -> 16 [ label = "from: 0, to: 0" ]
+    13 -> 16 [ label = "from: 0, to: 1" ]
+    14 -> 16 [ label = "from: 0, to: 2" ]
+    15 -> 16 [ label = "from: 0, to: 3" ]
+    16 -> 17 [ label = "" ]
+}
 
 
 # Enable sort spilling
