@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -56,10 +56,10 @@ impl SyncSystemTable for TemporaryTablesTable {
 
         let client_session_manager = ClientSessionManager::instance();
         let all_temp_tables = client_session_manager.get_all_temp_tables()?;
-        
+
         let current_session_id = ctx.get_current_client_session_id();
         log::info!("current_session_id: {:?}", current_session_id);
-        
+
         for (session_key, table) in all_temp_tables {
             log::info!("session_key: {:?}", session_key);
             let desc = table.desc;
@@ -77,7 +77,10 @@ impl SyncSystemTable for TemporaryTablesTable {
 
             let user = session_key.split('/').next().unwrap().to_string();
             let session_id = session_key.split('/').nth(1).unwrap().to_string();
-            let is_current_session = current_session_id.as_ref().map(|id| id == &session_id).unwrap_or(false);
+            let is_current_session = current_session_id
+                .as_ref()
+                .map(|id| id == &session_id)
+                .unwrap_or(false);
             dbs.push(db_name.to_string());
             names.push(table.name);
             table_ids.push(table.ident.table_id);
