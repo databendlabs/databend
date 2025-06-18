@@ -89,7 +89,7 @@ impl FilterBuilder for BloomBuilder {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BloomFilter {
     size: u64,
     hashes: u64,

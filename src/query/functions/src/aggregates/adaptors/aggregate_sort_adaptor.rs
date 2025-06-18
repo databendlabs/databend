@@ -35,8 +35,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use itertools::Itertools;
 
-use crate::aggregates::borsh_deserialize_state;
-use crate::aggregates::borsh_serialize_state;
 use crate::aggregates::AggregateFunctionSortDesc;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
@@ -119,14 +117,12 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = Self::get_state(place);
-        borsh_serialize_state(writer, state)?;
-
-        Ok(())
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = Self::get_state(place);
-        let rhs: SortAggState = borsh_deserialize_state(reader)?;
+        let rhs = SortAggState::deserialize(reader)?;
 
         Self::merge_states_inner(state, &rhs);
         Ok(())

@@ -16,6 +16,7 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
+use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
 use databend_common_expression::types::Bitmap;
@@ -32,10 +33,9 @@ use databend_common_expression::Scalar;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
+use crate::aggregates::borsh_partial_deserialize;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 
@@ -157,12 +157,12 @@ impl AggregateFunction for AggregateCountFunction {
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        borsh_serialize_state(writer, &state.count)
+        Ok(state.count.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let other: u64 = borsh_deserialize_state(reader)?;
+        let other: u64 = borsh_partial_deserialize(reader)?;
         state.count += other;
         Ok(())
     }

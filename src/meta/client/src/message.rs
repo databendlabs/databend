@@ -107,7 +107,7 @@ pub enum Request {
     /// Export all data
     Export(ExportReq),
 
-    /// Get a initialized grpc-client
+    /// Get an initialized grpc-client
     MakeEstablishedClient(MakeEstablishedClient),
 
     /// Get endpoints, for test
@@ -147,11 +147,11 @@ pub enum Response {
     Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
     WatchWithInitialization(Result<tonic::codec::Streaming<WatchResponse>, MetaClientError>),
-    Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaError>),
+    Export(Result<tonic::codec::Streaming<ExportedChunk>, MetaClientError>),
     MakeEstablishedClient(Result<EstablishedClient, MetaClientError>),
     GetEndpoints(Result<Vec<String>, MetaError>),
-    GetClusterStatus(Result<ClusterStatus, MetaError>),
-    GetClientInfo(Result<ClientInfo, MetaError>),
+    GetClusterStatus(Result<ClusterStatus, MetaClientError>),
+    GetClientInfo(Result<ClientInfo, MetaClientError>),
 }
 
 impl fmt::Debug for Response {
@@ -196,79 +196,55 @@ impl fmt::Debug for Response {
 
 impl Response {
     pub fn err(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        /// Extract the error from the Result in each variant.
+        fn to_err<T, E>(res: &Result<T, E>) -> Option<&(dyn std::error::Error + 'static)>
+        where E: std::error::Error + 'static {
+            res.as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static))
+        }
+
         let e = match self {
-            Response::StreamMGet(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::StreamList(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::Upsert(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::Txn(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::Watch(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::WatchWithInitialization(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::Export(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::MakeEstablishedClient(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::GetEndpoints(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::GetClusterStatus(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::GetClientInfo(res) => res
-                .as_ref()
-                .err()
-                .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::StreamMGet(res) => to_err(res),
+            Response::StreamList(res) => to_err(res),
+            Response::Upsert(res) => to_err(res),
+            Response::Txn(res) => to_err(res),
+            Response::Watch(res) => to_err(res),
+            Response::WatchWithInitialization(res) => to_err(res),
+            Response::Export(res) => to_err(res),
+            Response::MakeEstablishedClient(res) => to_err(res),
+            Response::GetEndpoints(res) => to_err(res),
+            Response::GetClusterStatus(res) => to_err(res),
+            Response::GetClientInfo(res) => to_err(res),
         };
+
         e
     }
 }
 
 /// Export all data stored in metasrv
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ExportReq {
     /// Number of json strings contained in a export stream item.
     ///
-    /// By default meta-service use 32 for this field.
+    /// By default, meta-service use 32 for this field.
     pub chunk_size: Option<u64>,
 }
 
 /// Get a grpc-client that is initialized and has passed handshake
 ///
 /// This request is only used internally or for testing purpose.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct MakeEstablishedClient {}
 
 /// Get all meta server endpoints
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetEndpoints {}
 
 /// Get cluster status
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetClusterStatus {}
 
 /// Get info about client
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetClientInfo {}

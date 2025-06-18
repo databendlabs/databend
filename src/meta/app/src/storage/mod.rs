@@ -12,6 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod storage_params;
-
-pub use storage_params::*;
+use databend_common_meta_app_storage;
+pub use databend_common_meta_app_storage::*;

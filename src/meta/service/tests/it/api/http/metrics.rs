@@ -62,33 +62,133 @@ async fn test_metrics() -> anyhow::Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Sample output:
-    // metasrv_server_leader_changes 3
-    // metasrv_meta_network_rpc_delay_seconds_sum 0.015056999000000001
-    // metasrv_meta_network_rpc_delay_seconds{quantile="0"} 0.003751958
-    // metasrv_meta_network_rpc_delay_seconds{quantile="0.5"} 0.005509397423424308
-    // metasrv_meta_network_rpc_delay_seconds{quantile="0.9"} 0.005509397423424308
-    // metasrv_meta_network_rpc_delay_seconds{quantile="0.95"} 0.005509397423424308
-    // metasrv_meta_network_rpc_delay_seconds{quantile="0.99"} 0.005509397423424308
-    // metasrv_meta_network_rpc_delay_seconds{quantile="0.999"} 0.005509397423424308
-    // metasrv_meta_network_rpc_delay_seconds{quantile="1"} 0.005795875
-    // metasrv_raft_network_recv_bytes{from="127.0.0.1:62268"} 1752
-    // metasrv_raft_network_recv_bytes{from="127.0.0.1:62270"} 1535
-    // metasrv_raft_network_sent_bytes{to="1"} 1752
-    // metasrv_raft_network_sent_bytes{to="2"} 1535
-    // metasrv_server_last_log_index 6
-    // metasrv_server_proposals_pending 0
-    // metasrv_server_is_leader 0
-    // metasrv_server_node_is_health 1
-    // metasrv_server_last_seq 0
-    // metasrv_raft_network_active_peers{id="2",address="127.0.0.1:29006"} 0
-    // metasrv_raft_network_active_peers{id="1",address="127.0.0.1:29003"} 1
-    // metasrv_server_proposals_applied 6
+    //
+    // metasrv_meta_network_recv_bytes_total 1
+    // metasrv_meta_network_req_failed_total 0
+    // metasrv_meta_network_req_inflights 0
+    // metasrv_meta_network_req_success_total 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="+Inf"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="1.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="10.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="100.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="1000.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="10000.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="2.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="20.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="200.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="2000.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="30000.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="5.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="50.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="500.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="5000.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_bucket{le="60000.0"} 0
+    // metasrv_meta_network_rpc_delay_ms_count 0
+    // metasrv_meta_network_rpc_delay_ms_sum 0.0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="+Inf"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="1.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="10.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="2.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="20.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="3.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="30.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="4.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="5.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="6.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="60.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="7.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="8.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_bucket{le="9.0"} 0
+    // metasrv_meta_network_rpc_delay_seconds_count 0
+    // metasrv_meta_network_rpc_delay_seconds_sum 0.0
+    // metasrv_meta_network_sent_bytes_total 0
+    // metasrv_raft_network_active_peers{id="1",addr="127.0.0.1:29003"} 1
+    // metasrv_raft_network_active_peers{id="2",addr="127.0.0.1:29006"} 1
+    // metasrv_raft_network_append_sent_seconds_bucket{le="+Inf",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="+Inf",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.001",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.001",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.002",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.002",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.004",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.004",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.008",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.008",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.016",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.016",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.032",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.032",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.064",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.064",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.128",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.128",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.256",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.256",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.512",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="0.512",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="1.024",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="1.024",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="131.072",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="131.072",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="16.384",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="16.384",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="2.048",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="2.048",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="262.144",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="262.144",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="32.768",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="32.768",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="4.096",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="4.096",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="524.288",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="524.288",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="65.536",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="65.536",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_bucket{le="8.192",to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_bucket{le="8.192",to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_count{to="1"} 9
+    // metasrv_raft_network_append_sent_seconds_count{to="2"} 6
+    // metasrv_raft_network_append_sent_seconds_sum{to="1"} 0.0
+    // metasrv_raft_network_append_sent_seconds_sum{to="2"} 0.0
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59841"} 1830
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59843"} 1764
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59844"} 809
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59846"} 537
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59847"} 537
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59848"} 533
+    // metasrv_raft_network_recv_bytes_total{from="127.0.0.1:59849"} 673
+    // metasrv_raft_network_recv_bytes_total{from="addr"} 1
+    // metasrv_raft_network_sent_bytes_total{to="1"} 3709
+    // metasrv_raft_network_sent_bytes_total{to="2"} 2974
+    // metasrv_raft_storage_raft_store_write_failed_total{func="fun"} 1
+    // metasrv_server_applying_snapshot 0
     // metasrv_server_current_leader_id 0
     // metasrv_server_current_term 1
+    // metasrv_server_is_leader 1
+    // metasrv_server_last_log_index 9
+    // metasrv_server_last_seq 0
+    // metasrv_server_leader_changes_total 4
+    // metasrv_server_node_is_health 1
+    // metasrv_server_proposals_applied 9
+    // metasrv_server_proposals_failed_total 0
+    // metasrv_server_proposals_pending 0
+    // metasrv_server_raft_log_cache_items 10
+    // metasrv_server_raft_log_cache_used_size 867
+    // metasrv_server_raft_log_size 1712
+    // metasrv_server_raft_log_wal_closed_chunk_count 0
+    // metasrv_server_raft_log_wal_closed_chunk_total_size 0
+    // metasrv_server_raft_log_wal_offset 1712
+    // metasrv_server_raft_log_wal_open_chunk_size 1712
+    // metasrv_server_read_failed_total 0
+    // metasrv_server_snapshot_expire_index_count 0
+    // metasrv_server_snapshot_key_count 0
+    // metasrv_server_snapshot_primary_index_count 0
+    // metasrv_server_watchers 0
 
     let b = response.take_body();
     let txt = b.into_string().await?;
     info!("metrics response text: {}", txt);
+    println!("metrics response text: {}", txt);
 
     let metric_keys = {
         let lines = txt.split('\n');
@@ -122,17 +222,64 @@ async fn test_metrics() -> anyhow::Result<()> {
 
     // Only static keys are checked.
 
+    // Server metrics
     assert!(metric_keys.contains("metasrv_server_leader_changes_total"));
     assert!(metric_keys.contains("metasrv_server_last_log_index"));
     assert!(metric_keys.contains("metasrv_server_proposals_pending"));
-    assert!(metric_keys.contains("metasrv_raft_network_active_peers"));
-    assert!(metric_keys.contains("metasrv_raft_network_recv_bytes_total"));
     assert!(metric_keys.contains("metasrv_server_is_leader"));
     assert!(metric_keys.contains("metasrv_server_node_is_health"));
     assert!(metric_keys.contains("metasrv_server_last_seq"));
     assert!(metric_keys.contains("metasrv_server_proposals_applied"));
     assert!(metric_keys.contains("metasrv_server_current_leader_id"));
     assert!(metric_keys.contains("metasrv_server_current_term"));
+    assert!(metric_keys.contains("metasrv_server_applying_snapshot"));
+    assert!(metric_keys.contains("metasrv_server_proposals_failed_total"));
+    assert!(metric_keys.contains("metasrv_server_read_failed_total"));
+    assert!(metric_keys.contains("metasrv_server_watchers"));
+
+    // Server raft log metrics
+    assert!(metric_keys.contains("metasrv_server_raft_log_cache_items"));
+    assert!(metric_keys.contains("metasrv_server_raft_log_cache_used_size"));
+    assert!(metric_keys.contains("metasrv_server_raft_log_size"));
+    assert!(metric_keys.contains("metasrv_server_raft_log_wal_closed_chunk_count"));
+    assert!(metric_keys.contains("metasrv_server_raft_log_wal_closed_chunk_total_size"));
+    assert!(metric_keys.contains("metasrv_server_raft_log_wal_offset"));
+    assert!(metric_keys.contains("metasrv_server_raft_log_wal_open_chunk_size"));
+
+    // Server snapshot metrics
+    assert!(metric_keys.contains("metasrv_server_snapshot_key_count"));
+    assert!(metric_keys.contains("metasrv_server_snapshot_primary_index_count"));
+    assert!(metric_keys.contains("metasrv_server_snapshot_expire_index_count"));
+
+    // Meta network metrics
+    assert!(metric_keys.contains("metasrv_meta_network_recv_bytes_total"));
+    assert!(metric_keys.contains("metasrv_meta_network_req_failed_total"));
+    assert!(metric_keys.contains("metasrv_meta_network_req_inflights"));
+    assert!(metric_keys.contains("metasrv_meta_network_req_success_total"));
+    assert!(metric_keys.contains("metasrv_meta_network_sent_bytes_total"));
+
+    // Meta network RPC delay metrics (milliseconds)
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_bucket"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_count"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_ms_sum"));
+
+    // Meta network RPC delay metrics (seconds)
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_seconds_bucket"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_seconds_count"));
+    assert!(metric_keys.contains("metasrv_meta_network_rpc_delay_seconds_sum"));
+
+    // Raft network metrics
+    assert!(metric_keys.contains("metasrv_raft_network_active_peers"));
+    assert!(metric_keys.contains("metasrv_raft_network_recv_bytes_total"));
+    assert!(metric_keys.contains("metasrv_raft_network_sent_bytes_total"));
+
+    // Raft network append sent metrics
+    assert!(metric_keys.contains("metasrv_raft_network_append_sent_seconds_bucket"));
+    assert!(metric_keys.contains("metasrv_raft_network_append_sent_seconds_count"));
+    assert!(metric_keys.contains("metasrv_raft_network_append_sent_seconds_sum"));
+
+    // Raft storage metrics
+    assert!(metric_keys.contains("metasrv_raft_storage_raft_store_write_failed_total"));
 
     Ok(())
 }

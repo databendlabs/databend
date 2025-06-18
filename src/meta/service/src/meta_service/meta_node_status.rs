@@ -20,7 +20,7 @@ use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::NodeId;
 
-#[derive(serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct MetaNodeStatus {
     pub id: NodeId,
 
@@ -38,6 +38,11 @@ pub struct MetaNodeStatus {
 
     /// Total number of keys in current snapshot
     pub snapshot_key_count: u64,
+
+    /// The count of keys in each key space in the snapshot data.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub snapshot_key_space_stat: BTreeMap<String, u64>,
 
     /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,

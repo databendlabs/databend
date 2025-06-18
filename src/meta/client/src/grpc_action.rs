@@ -166,10 +166,6 @@ impl RequestFor for ListKVReq {
     type Reply = ListKVReply;
 }
 
-impl RequestFor for Streamed<GetKVReq> {
-    type Reply = BoxStream<StreamItem>;
-}
-
 impl RequestFor for Streamed<MGetKVReq> {
     type Reply = BoxStream<StreamItem>;
 }

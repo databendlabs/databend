@@ -23,9 +23,9 @@ SELECT COUNT(*) FROM (SELECT $1 AS a, rank() OVER (ORDER BY metadata$filename, m
 ----
 10000
 
-# data_af2ab6dc-8725-46e5-a601-3dad9c512769_0000_00000770.csv
+# data_af2ab6dc872546e5a6013dad9c512769_0000_00000770.csv
 query
-SELECT * from list_stage(location => '@s1') where substr(name, 43, 4) != '0000'
+SELECT * from list_stage(location => '@s1') where substr(name, 39, 4) != '0000'
 ----
 
 statement ok

@@ -145,6 +145,7 @@ impl MetaServiceImpl {
         let reply = match &req {
             MetaGrpcReq::UpsertKV(a) => {
                 let res = m
+                    .kv_api()
                     .upsert_kv(a.clone())
                     .log_elapsed_info(format!("UpsertKV: {:?}", a))
                     .await;

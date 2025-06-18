@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
@@ -138,8 +139,8 @@ impl<T: ValueType> ChangeIf<T> for CmpAny {
     }
 }
 
-pub trait ScalarStateFunc<T: ValueType>:
-    BorshSerialize + BorshDeserialize + Send + Sync + 'static
+pub trait ScalarStateFunc<T: AccessType>:
+    BorshSerialize + BorshDeserialize + Send + 'static
 {
     fn new() -> Self;
     fn mem_size() -> Option<usize> {

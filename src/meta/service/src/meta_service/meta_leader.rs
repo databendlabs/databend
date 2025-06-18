@@ -102,7 +102,7 @@ impl Handler<ForwardRequestBody> for MetaLeader<'_> {
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm.kv_api().prefix_list_kv(&req.prefix).await.unwrap();
+                let res = sm.kv_api().list_kv_collect(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }

@@ -52,7 +52,7 @@ impl BloomIndexState {
     pub fn from_bloom_index(bloom_index: &BloomIndex, location: Location) -> Result<Self> {
         let index_block = bloom_index.serialize_to_data_block()?;
         // Calculate ngram index size
-        let ngram_indexes = &bloom_index
+        let ngram_indexes = bloom_index
             .filter_schema
             .fields()
             .iter()
@@ -63,7 +63,7 @@ impl BloomIndexState {
         let ngram_size = if !ngram_indexes.is_empty() {
             let mut ngram_size = 0;
             for i in ngram_indexes {
-                let column = index_block.get_by_offset(*i);
+                let column = index_block.get_by_offset(i);
                 ngram_size += column.value().memory_size() as u64;
             }
             Some(ngram_size)
@@ -105,8 +105,21 @@ impl BloomIndexState {
             Ok(None)
         }
     }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn data(self) -> Vec<u8> {
+        self.data
+    }
+
+    pub fn ngram_size(&self) -> Option<u64> {
+        self.ngram_size
+    }
 }
 
+#[derive(Clone)]
 pub struct BloomIndexRebuilder {
     pub table_ctx: Arc<dyn TableContext>,
     pub table_schema: TableSchemaRef,

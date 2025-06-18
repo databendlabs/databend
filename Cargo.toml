@@ -112,6 +112,7 @@ members = [
     "src/tests/sqlsmith",
     "src/bendsave",
     "src/bendpy",
+    "src/meta/app-storage",
 ]
 
 # Workspace dependencies
@@ -142,6 +143,7 @@ databend-common-license = { path = "src/common/license" }
 databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
+databend-common-meta-app-storage = { path = "src/meta/app-storage" }
 databend-common-meta-app-types = { path = "src/meta/app-types" }
 databend-common-meta-cache = { path = "src/meta/cache" }
 databend-common-meta-client = { path = "src/meta/client" }
@@ -328,7 +330,6 @@ hashlink = "0.8"
 headers = "0.4.0"
 hex = "0.4.3"
 hickory-resolver = "0.25"
-highway = "1.1"
 hive_metastore = "0.1.0"
 hostname = "0.3.1"
 http = "1"
@@ -533,7 +534,7 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
-watcher = { version = "0.4.0" }
+watcher = { version = "0.4.1" }
 wiremock = "0.6"
 wkt = "0.11.1"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -659,5 +660,5 @@ sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" 
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
-watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.0" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.1" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

@@ -15,7 +15,6 @@
 use std::fmt::Display;
 
 use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
@@ -197,16 +196,7 @@ pub fn eval_aggr_for_test(
 }
 
 #[inline]
-pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
-    writer: &mut W,
-    value: &T,
-) -> Result<()> {
-    borsh::to_writer(writer, value)?;
-    Ok(())
-}
-
-#[inline]
-pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
+pub fn borsh_partial_deserialize<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
     Ok(T::deserialize(slice)?)
 }
 

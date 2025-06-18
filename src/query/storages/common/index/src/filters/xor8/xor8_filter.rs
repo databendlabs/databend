@@ -36,6 +36,7 @@ pub struct Xor8Builder {
     builder: xorfilter::Xor8Builder,
 }
 
+#[derive(Clone, Default, PartialEq)]
 pub struct Xor8Filter {
     pub filter: Xor8,
 }

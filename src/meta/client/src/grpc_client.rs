@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -137,7 +136,7 @@ impl Debug for MetaGrpcClient {
     }
 }
 
-impl fmt::Display for MetaGrpcClient {
+impl Display for MetaGrpcClient {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MetaGrpcClient({})", self.endpoints_str.join(","))
     }
@@ -335,34 +334,54 @@ impl MetaGrpcClient {
             message::Request::StreamMGet(r) => {
                 let strm = self
                     .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
-                    .with_timing_threshold(
-                        threshold(),
-                        info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
-                    )
+                    .with_timing(|result, total, busy| {
+                        log_future_result(
+                            result,
+                            total,
+                            busy,
+                            "MetaGrpcClient::kv_read_v1(MGetKV)",
+                            &req_str,
+                        )
+                    })
                     .await;
                 Response::StreamMGet(strm)
             }
             message::Request::StreamList(r) => {
                 let strm = self
                     .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
-                    .with_timing_threshold(
-                        threshold(),
-                        info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
-                    )
+                    .with_timing(|result, total, busy| {
+                        log_future_result(
+                            result,
+                            total,
+                            busy,
+                            "MetaGrpcClient::kv_read_v1(ListKV)",
+                            &req_str,
+                        )
+                    })
                     .await;
                 Response::StreamMGet(strm)
             }
             message::Request::Upsert(r) => {
                 let resp = self
                     .kv_api(r)
-                    .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                    .with_timing(|result, total, busy| {
+                        log_future_result(result, total, busy, "MetaGrpcClient::kv_api", &req_str)
+                    })
                     .await;
                 Response::Upsert(resp)
             }
             message::Request::Txn(r) => {
                 let resp = self
                     .transaction(r)
-                    .with_timing_threshold(threshold(), info_spent("MetaGrpcClient::transaction"))
+                    .with_timing(|result, total, busy| {
+                        log_future_result(
+                            result,
+                            total,
+                            busy,
+                            "MetaGrpcClient::transaction",
+                            &req_str,
+                        )
+                    })
                     .await;
                 Response::Txn(resp)
             }
@@ -770,7 +789,7 @@ impl MetaGrpcClient {
     pub(crate) async fn export(
         &self,
         export_request: message::ExportReq,
-    ) -> Result<Streaming<ExportedChunk>, MetaError> {
+    ) -> Result<Streaming<ExportedChunk>, MetaClientError> {
         debug!(
             "{} worker: handle export request: {:?}",
             self, export_request
@@ -793,7 +812,7 @@ impl MetaGrpcClient {
     /// Get cluster status
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
+    pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaClientError> {
         debug!("{}::get_cluster_status", self);
 
         let mut client = self.get_established_client().await?;
@@ -805,7 +824,7 @@ impl MetaGrpcClient {
     /// Export all data in json from metasrv.
     #[fastrace::trace]
     #[async_backtrace::framed]
-    pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
+    pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaClientError> {
         debug!("{}::get_client_info", self);
 
         let mut client = self.get_established_client().await?;
@@ -997,8 +1016,40 @@ fn threshold() -> Duration {
     Duration::from_millis(300)
 }
 
-fn info_spent(msg: impl Display) -> impl Fn(Duration, Duration) {
-    move |total, busy| {
-        info!("{} spent: total: {:?}, busy: {:?}", msg, total, busy);
+fn info_spent<T>(msg: impl Display) -> impl Fn(&T, Duration, Duration)
+where T: Debug {
+    move |output, total, busy| {
+        info!(
+            "{} spent: total: {:?}, busy: {:?}; result: {:?}",
+            msg, total, busy, output
+        );
+    }
+}
+
+fn log_future_result<T, E>(
+    t: &Result<T, E>,
+    total: Duration,
+    busy: Duration,
+    req_type: impl Display,
+    req_str: impl Display,
+) where
+    E: Debug,
+{
+    if let Err(e) = t {
+        warn!(
+            "{req_type}: done with error: Elapsed: total: {:?}, busy: {:?}; error: {:?}; request: {}",
+            total,
+            busy,
+            e,
+            req_str
+
+        );
+    }
+
+    if total > threshold() {
+        warn!(
+            "{req_type}: done slowly: Elapsed: total: {:?}, busy: {:?}; request: {}",
+            total, busy, req_str
+        );
     }
 }

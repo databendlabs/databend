@@ -16,6 +16,7 @@ chrono = { workspace = true }
 concurrent-queue = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-common-meta-app-storage = { workspace = true }
 defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }

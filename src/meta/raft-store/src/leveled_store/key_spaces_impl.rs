@@ -21,10 +21,11 @@ use std::io::Error;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
+use crate::leveled_store::map_api::MapKeyPrefix;
 use crate::state_machine::ExpireKey;
 
 impl MapKeyEncode for String {
-    const PREFIX: &'static str = "kv--";
+    const PREFIX: MapKeyPrefix = "kv--";
 
     fn encode<W: fmt::Write>(&self, mut w: W) -> Result<(), fmt::Error> {
         w.write_str(self.as_str())
@@ -38,7 +39,7 @@ impl MapKeyDecode for String {
 }
 
 impl MapKeyEncode for ExpireKey {
-    const PREFIX: &'static str = "exp-";
+    const PREFIX: MapKeyPrefix = "exp-";
 
     fn encode<W: fmt::Write>(&self, mut w: W) -> Result<(), fmt::Error> {
         // max u64 len is 20: 18446744073709551616

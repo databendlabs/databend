@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi;
@@ -34,18 +36,24 @@ use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 
-/// Impl kvapi::KVApi for MetaNode.
-///
-/// Write through raft-log.
-/// Read through local state machine, which may not be consistent.
-/// E.g. Read is not guaranteed to see a write.
+/// A wrapper of MetaNode that implements kvapi::KVApi.
+pub struct MetaKVApi<'a> {
+    inner: &'a MetaNode,
+}
+
+impl<'a> MetaKVApi<'a> {
+    pub fn new(inner: &'a MetaNode) -> Self {
+        Self { inner }
+    }
+}
+
 #[async_trait]
-impl kvapi::KVApi for MetaNode {
+impl<'a> kvapi::KVApi for MetaKVApi<'a> {
     type Error = MetaAPIError;
 
     async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
         let ent = LogEntry::new(Cmd::UpsertKV(act));
-        let rst = self.write(ent).await?;
+        let rst = self.inner.write(ent).await?;
 
         match rst {
             AppliedState::KV(x) => Ok(x),
@@ -62,6 +70,7 @@ impl kvapi::KVApi for MetaNode {
         };
 
         let res = self
+            .inner
             .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::MGetKV(req)))
             .await;
 
@@ -81,6 +90,7 @@ impl kvapi::KVApi for MetaNode {
         };
 
         let res = self
+            .inner
             .handle_forwardable_request(ForwardRequest::new(1, MetaGrpcReadReq::ListKV(req)))
             .await;
 
@@ -98,7 +108,7 @@ impl kvapi::KVApi for MetaNode {
         info!("MetaNode::transaction(): {}", txn);
 
         let ent = LogEntry::new(Cmd::Transaction(txn));
-        let rst = self.write(ent).await?;
+        let rst = self.inner.write(ent).await?;
 
         match rst {
             AppliedState::TxnReply(x) => Ok(x),
@@ -106,5 +116,37 @@ impl kvapi::KVApi for MetaNode {
                 unreachable!("expect type {}", "AppliedState::transaction",)
             }
         }
+    }
+}
+
+/// A wrapper of MetaNode that implements kvapi::KVApi.
+pub struct MetaKVApiOwned {
+    inner: Arc<MetaNode>,
+}
+
+impl MetaKVApiOwned {
+    pub fn new(inner: Arc<MetaNode>) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait]
+impl kvapi::KVApi for MetaKVApiOwned {
+    type Error = MetaAPIError;
+
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
+        self.inner.kv_api().upsert_kv(act).await
+    }
+
+    async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.inner.kv_api().get_kv_stream(keys).await
+    }
+
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        self.inner.kv_api().list_kv(prefix).await
+    }
+
+    async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
+        self.inner.kv_api().transaction(txn).await
     }
 }

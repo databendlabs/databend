@@ -448,8 +448,8 @@ fn remote_addr<T>(request: &Request<T>) -> String {
 }
 
 /// Create a function record the time cost of snapshot receiving.
-fn observe_snapshot_recv_spent(addr: &str) -> impl Fn(Duration, Duration) + '_ {
-    |t, _b| {
+fn observe_snapshot_recv_spent<T>(addr: &str) -> impl Fn(&T, Duration, Duration) + '_ {
+    |_output, t, _b| {
         raft_metrics::network::observe_snapshot_recvfrom_spent(
             addr.to_string(),
             t.as_secs() as f64,

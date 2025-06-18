@@ -33,6 +33,7 @@ use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::DecimalDataKind;
 use crate::types::DecimalSize;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
@@ -238,13 +239,17 @@ impl Payload {
                 NumberDataType::NUM_TYPE =>
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
-            DataType::Decimal(size) => {
-                if size.can_carried_by_128() {
+            DataType::Decimal(size) => match size.best_type().data_kind() {
+                DecimalDataKind::Decimal64 => {
+                    self.flush_decimal_column::<i64>(col_offset, state, size)
+                }
+                DecimalDataKind::Decimal128 => {
                     self.flush_decimal_column::<i128>(col_offset, state, size)
-                } else {
+                }
+                DecimalDataKind::Decimal256 => {
                     self.flush_decimal_column::<i256>(col_offset, state, size)
                 }
-            }
+            },
             DataType::Timestamp => self.flush_type_column::<TimestampType>(col_offset, state),
             DataType::Date => self.flush_type_column::<DateType>(col_offset, state),
             DataType::Binary => Column::Binary(self.flush_binary_column(col_offset, state)),

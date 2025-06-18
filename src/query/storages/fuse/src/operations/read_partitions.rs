@@ -37,6 +37,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIndexType;
@@ -144,6 +145,7 @@ impl FuseTable {
                 };
                 let segment_len = segment_locs.len();
 
+                // snapshot.summary.block_count
                 let snapshot_loc = self
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
@@ -634,7 +636,8 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         dal: Operator,
     ) -> Result<FusePruner> {
-        let ngram_args = Self::create_ngram_index_args(&self.table_info.meta)?;
+        let ngram_args =
+            Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
         let bloom_index_builder = if ctx
             .get_settings()
             .get_enable_auto_fix_missing_bloom_index()?
@@ -686,7 +689,10 @@ impl FuseTable {
         Ok(pruner)
     }
 
-    pub fn create_ngram_index_args(table_meta: &TableMeta) -> Result<Vec<NgramArgs>> {
+    pub fn create_ngram_index_args(
+        table_meta: &TableMeta,
+        table_schema: &TableSchema,
+    ) -> Result<Vec<NgramArgs>> {
         let mut ngram_index_args = Vec::with_capacity(table_meta.indexes.len());
         for index in table_meta.indexes.values() {
             if !matches!(index.index_type, TableIndexType::Ngram) {
@@ -696,8 +702,7 @@ impl FuseTable {
                 continue;
             }
 
-            let Some((pos, field)) = table_meta
-                .schema
+            let Some((pos, field)) = table_schema
                 .fields()
                 .iter()
                 .find_position(|field| field.column_id() == index.column_ids[0])

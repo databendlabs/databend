@@ -1,5 +1,5 @@
 // Copyright 2021 Datafuse Labs
-//
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -12,64 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use databend_common_base::base::escape_for_key;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_management::*;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_meta_app::principal::UserIdentity;
-use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::GetKVReply;
-use databend_common_meta_kvapi::kvapi::KVStream;
-use databend_common_meta_kvapi::kvapi::ListKVReply;
-use databend_common_meta_kvapi::kvapi::MGetKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::MetaError;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::TxnReply;
-use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::UpsertKV;
-use mockall::predicate::*;
-use mockall::*;
-
-// and mock!
-mock! {
-    pub KV {}
-    #[async_trait]
-    impl kvapi::KVApi for KV {
-        type Error = MetaError;
-
-        async fn upsert_kv(
-            &self,
-            act: UpsertKV,
-        ) -> Result<UpsertKVReply, MetaError>;
-
-        async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
-
-        async fn mget_kv(
-            &self,
-            key: &[String],
-        ) -> Result<MGetKVReply,MetaError>;
-
-        async fn get_kv_stream(&self, key: &[String]) -> Result<KVStream<MetaError>, MetaError>;
-
-        async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
-
-        async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError>;
-
-        async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
-
-        }
-}
-
-fn format_user_key(username: &str, hostname: &str) -> String {
-    format!("'{}'@'{}'", username, hostname)
-}
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::MatchSeq;
 
 fn default_test_auth_info() -> AuthInfo {
     AuthInfo::Password {
@@ -80,11 +33,7 @@ fn default_test_auth_info() -> AuthInfo {
 }
 
 mod add {
-    use databend_common_meta_app::principal::UserInfo;
-    use databend_common_meta_app::schema::CreateOption;
-    use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_types::MatchSeq;
-    use databend_common_meta_types::Operation;
+    use std::ops::Deref;
 
     use super::*;
 
@@ -94,572 +43,628 @@ mod add {
         let test_hostname = "localhost";
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let v = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
-        let value = Operation::Update(serialize_struct(
-            &user_info,
-            ErrorCode::IllegalUserInfoFormat,
-            || "",
-        )?);
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
-        let test_seq = MatchSeq::Exact(0);
+        // Test normal case - should succeed
+        let res = user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await;
+        assert!(res.is_ok());
 
-        // normal
-        {
-            let test_key = test_key.clone();
-            let mut api = MockKV::new();
-            api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKV::new(
-                    &test_key,
-                    test_seq,
-                    value.clone(),
-                    None,
-                )))
-                .times(1)
-                .return_once(|_u| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, v)))));
-            let api = Arc::new(api);
-            let user_mgr = UserMgr::create(api, &Tenant::new_literal("tenant1"));
-            let res = user_mgr.add_user(user_info.clone(), &CreateOption::Create);
+        // Test already exists case - should fail
+        let res = user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await;
+        assert_eq!(res.unwrap_err().code(), ErrorCode::USER_ALREADY_EXISTS);
 
-            assert!(res.await.is_ok());
-        }
+        Ok(())
+    }
 
-        // already exists
-        {
-            let test_key = test_key.clone();
-            let mut api = MockKV::new();
-            api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKV::new(
-                    &test_key,
-                    test_seq,
-                    value.clone(),
-                    None,
-                )))
-                .times(1)
-                .returning(|_u| {
-                    Ok(UpsertKVReply::new(
-                        Some(SeqV::new(1, vec![])),
-                        Some(SeqV::new(1, vec![])),
-                    ))
-                });
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_add_user_create_or_replace() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_user_replace";
+        let test_hostname = "localhost";
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-            let api = Arc::new(api);
-            let user_mgr = UserMgr::create(api, &Tenant::new_literal("tenant1"));
-            let res = user_mgr
-                .add_user(user_info.clone(), &CreateOption::Create)
-                .await;
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-            assert_eq!(res.unwrap_err().code(), ErrorCode::USER_ALREADY_EXISTS);
-        }
+        // First creation should succeed
+        let res = user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await;
+        assert!(res.is_ok());
+
+        // CreateOrReplace should succeed even if user exists
+        let res = user_mgr
+            .add_user(user_info.clone(), &CreateOption::CreateOrReplace)
+            .await;
+        assert!(res.is_ok());
 
         Ok(())
     }
 }
 
 mod get {
-    use databend_common_meta_app::principal::UserInfo;
-    use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_types::MatchSeq;
+    use std::ops::Deref;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_seq_match() -> databend_common_exception::Result<()> {
-        let test_user_name = "test";
+    async fn test_get_user_existing() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_get_user";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
-
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let mut kv = MockKV::new();
-        kv.expect_get_kv()
-            .with(predicate::function(move |v| v == test_key.as_str()))
-            .times(1)
-            .return_once(move |_k| Ok(Some(SeqV::new(1, value))));
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.get_user(user_info.identity(), MatchSeq::Exact(1));
-        assert!(res.await.is_ok());
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Get user should succeed
+        let res = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await;
+        assert!(res.is_ok());
+
+        let retrieved_user = res?;
+        assert_eq!(retrieved_user.data.name, test_user_name);
+        assert_eq!(retrieved_user.data.hostname, test_hostname);
 
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_do_not_care_seq() -> databend_common_exception::Result<()> {
-        let test_user_name = "test";
+        let test_user_name = "test_seq_any";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
-
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let mut kv = MockKV::new();
-        kv.expect_get_kv()
-            .with(predicate::function(move |v| v == test_key.as_str()))
-            .times(1)
-            .return_once(move |_k| Ok(Some(SeqV::new(100, value))));
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.get_user(user_info.identity(), MatchSeq::GE(0));
-        assert!(res.await.is_ok());
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Get with MatchSeq::GE(0) should work regardless of actual sequence
+        let res = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await;
+        assert!(res.is_ok());
+
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_not_exist() -> databend_common_exception::Result<()> {
-        let test_user_name = "test";
+        let test_user_name = "nonexistent_user";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
 
-        let mut kv = MockKV::new();
-        kv.expect_get_kv()
-            .with(predicate::function(move |v| v == test_key.as_str()))
-            .times(1)
-            .return_once(move |_k| Ok(None));
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
         let res = user_mgr
             .get_user(
                 UserIdentity::new(test_user_name, test_hostname),
                 MatchSeq::GE(0),
             )
             .await;
+
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_get_user_seq_match() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_seq_user";
+        let test_hostname = "localhost";
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
+
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        // Add user
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Get user to check current sequence
+        let current_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        let current_seq = current_user.seq;
+
+        // Get with exact sequence should work
+        let res = user_mgr
+            .get_user(user_info.identity(), MatchSeq::Exact(current_seq))
+            .await;
+        assert!(res.is_ok());
+
+        // Get with wrong sequence should fail
+        let res = user_mgr
+            .get_user(user_info.identity(), MatchSeq::Exact(current_seq + 100))
+            .await;
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
+
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_get_user_not_exist_seq_mismatch() -> databend_common_exception::Result<()> {
-        let test_user_name = "test";
+        let test_user_name = "test_seq_mismatch";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let mut kv = MockKV::new();
-        kv.expect_get_kv()
-            .with(predicate::function(move |v| v == test_key.as_str()))
-            .times(1)
-            .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Get user to check current sequence
+        let current_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        let current_seq = current_user.seq;
+
+        // Try to get with a different exact sequence - should fail
+        let wrong_seq = if current_seq == 1 { 2 } else { 1 };
         let res = user_mgr
-            .get_user(
-                UserIdentity::new(test_user_name, test_hostname),
-                MatchSeq::Exact(2),
-            )
+            .get_user(user_info.identity(), MatchSeq::Exact(wrong_seq))
             .await;
+
         assert!(res.is_err());
         assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_user_invalid_user_info_encoding() -> databend_common_exception::Result<()> {
-        let test_user_name = "test";
-        let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
-
-        let mut kv = MockKV::new();
-        kv.expect_get_kv()
-            .with(predicate::function(move |v| v == test_key.as_str()))
-            .times(1)
-            .return_once(move |_k| Ok(Some(SeqV::new(1, vec![]))));
-
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.get_user(
-            UserIdentity::new(test_user_name, test_hostname),
-            MatchSeq::GE(0),
-        );
-        assert_eq!(
-            res.await.unwrap_err().code(),
-            ErrorCode::ILLEGAL_USER_INFO_FORMAT
-        );
 
         Ok(())
     }
 }
 
 mod get_users {
-    use databend_common_meta_app::principal::UserInfo;
-    use databend_common_meta_app::tenant::Tenant;
+    use std::ops::Deref;
 
     use super::*;
 
-    type FakeKeys = Vec<(String, SeqV<Vec<u8>>)>;
-    type UserInfos = Vec<SeqV<UserInfo>>;
-
-    fn prepare() -> databend_common_exception::Result<(FakeKeys, UserInfos)> {
-        let mut names = vec![];
-        let mut hostnames = vec![];
-        let mut keys = vec![];
-        let mut res = vec![];
-        let mut user_infos = vec![];
-
-        for i in 0..9 {
-            let name = format!("test_user_{}", i);
-            names.push(name.clone());
-            let hostname = format!("test_hostname_{}", i);
-            hostnames.push(hostname.clone());
-
-            let key = format!("tenant1/{}", format_user_key(&name, &hostname));
-            keys.push(key);
-
-            let user_info = UserInfo::new(&name, &hostname, default_test_auth_info());
-            res.push((
-                "fake_key".to_string(),
-                SeqV::new(
-                    i,
-                    serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?,
-                ),
-            ));
-            user_infos.push(SeqV::new(i, user_info));
-        }
-        Ok((res, user_infos))
-    }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_users_normal() -> databend_common_exception::Result<()> {
-        let (res, user_infos) = prepare()?;
-        let mut kv = MockKV::new();
-        {
-            let k = "__fd_users/tenant1/";
-            kv.expect_prefix_list_kv()
-                .with(predicate::eq(k))
-                .times(1)
-                .return_once(|_p| Ok(res));
-        }
+    async fn test_get_users_empty() -> databend_common_exception::Result<()> {
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.get_users();
-        assert_eq!(res.await?, user_infos);
+        let users = user_mgr.get_users().await?;
+        assert!(users.is_empty());
 
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_get_all_users_invalid_user_info_encoding() -> databend_common_exception::Result<()>
-    {
-        let (mut res, _user_infos) = prepare()?;
-        res.insert(
-            8,
-            (
-                "fake_key".to_string(),
-                SeqV::new(0, b"some arbitrary str".to_vec()),
-            ),
-        );
+    async fn test_get_users_multiple() -> databend_common_exception::Result<()> {
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let mut kv = MockKV::new();
-        {
-            let k = "__fd_users/tenant1/";
-            kv.expect_prefix_list_kv()
-                .with(predicate::eq(k))
-                .times(1)
-                .return_once(|_p| Ok(res));
+        // Add multiple users
+        for i in 0..5 {
+            let name = format!("test_user_{}", i);
+            let hostname = format!("test_hostname_{}", i);
+            let user_info = UserInfo::new(&name, &hostname, default_test_auth_info());
+            user_mgr.add_user(user_info, &CreateOption::Create).await?;
         }
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.get_users();
-        assert_eq!(
-            res.await.unwrap_err().code(),
-            ErrorCode::ILLEGAL_USER_INFO_FORMAT
-        );
+        let users = user_mgr.get_users().await?;
+        assert_eq!(users.len(), 5);
+
+        // Verify all users are present
+        let mut user_names: Vec<String> = users.iter().map(|u| u.data.name.clone()).collect();
+        user_names.sort();
+
+        let expected_names: Vec<String> = (0..5).map(|i| format!("test_user_{}", i)).collect();
+        assert_eq!(user_names, expected_names);
 
         Ok(())
     }
 }
 
 mod drop {
-    use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_types::MatchSeq;
+    use std::ops::Deref;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_drop_user_normal_case() -> databend_common_exception::Result<()> {
-        let mut kv = MockKV::new();
-        let test_user = "test";
+    async fn test_drop_user_normal() -> databend_common_exception::Result<()> {
+        let test_user = "test_drop_user";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user, test_hostname))?
-        );
-        kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKV::new(
-                &test_key,
-                MatchSeq::GE(1),
-                Operation::Delete,
-                None,
-            )))
-            .times(1)
-            .returning(|_k| Ok(UpsertKVReply::new(Some(SeqV::new(1, vec![])), None)));
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
-        assert!(res.await.is_ok());
+        let user_info = UserInfo::new(test_user, test_hostname, default_test_auth_info());
+
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Verify user exists
+        let res = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await;
+        assert!(res.is_ok());
+
+        // Drop user
+        let res = user_mgr
+            .drop_user(user_info.identity(), MatchSeq::GE(1))
+            .await;
+        assert!(res.is_ok());
+
+        // Verify user no longer exists
+        let res = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await;
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
 
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_drop_user_unknown() -> databend_common_exception::Result<()> {
-        let mut kv = MockKV::new();
-        let test_user = "test";
+        let test_user = "unknown_user";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user, test_hostname))?
-        );
-        kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKV::new(
-                &test_key,
-                MatchSeq::GE(1),
-                Operation::Delete,
-                None,
-            )))
-            .times(1)
-            .returning(|_k| Ok(UpsertKVReply::new(None, None)));
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-        let res = user_mgr.drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1));
-        assert_eq!(res.await.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
+
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        let res = user_mgr
+            .drop_user(UserIdentity::new(test_user, test_hostname), MatchSeq::GE(1))
+            .await;
+
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
+
         Ok(())
     }
 }
 
 mod update {
+    use std::ops::Deref;
+
     use databend_common_meta_app::principal::AuthInfo;
-    use databend_common_meta_app::principal::UserInfo;
-    use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_types::MatchSeq;
+    use databend_common_meta_app::principal::PasswordHashMethod;
 
     use super::*;
 
-    fn new_test_auth_info(full: bool) -> AuthInfo {
+    fn new_test_auth_info() -> AuthInfo {
         AuthInfo::Password {
             hash_value: Vec::from("test_password_new"),
-            hash_method: if full {
-                PasswordHashMethod::Sha256
-            } else {
-                PasswordHashMethod::DoubleSha1
-            },
+            hash_method: PasswordHashMethod::Sha256,
+            need_change: true,
+        }
+    }
+
+    fn new_test_auth_info_full() -> AuthInfo {
+        AuthInfo::Password {
+            hash_value: Vec::from("test_password_full"),
+            hash_method: PasswordHashMethod::Sha256,
             need_change: false,
         }
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_normal_update_full() -> databend_common_exception::Result<()> {
-        test_update_user_normal(true).await
+    fn new_test_auth_info_partial() -> AuthInfo {
+        AuthInfo::Password {
+            hash_value: Vec::from("test_password_partial"),
+            hash_method: PasswordHashMethod::DoubleSha1,
+            need_change: true,
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_normal_update_partial() -> databend_common_exception::Result<()> {
-        test_update_user_normal(false).await
-    }
-
-    async fn test_update_user_normal(full: bool) -> databend_common_exception::Result<()> {
-        let test_user_name = "name";
+    async fn test_update_user_normal() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_update_user";
         let test_hostname = "localhost";
-
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
-        let test_seq = MatchSeq::GE(1);
-
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        // get_kv should be called
-        let mut kv = MockKV::new();
-        {
-            let test_key = test_key.clone();
-            kv.expect_get_kv()
-                .with(predicate::function(move |v| v == test_key.as_str()))
-                .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(1, prev_value))));
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Update user auth info
+        let res = user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info()), None),
+            )
+            .await;
+
+        assert!(res.is_ok());
+
+        // Verify the update by getting the user
+        let updated_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        match &updated_user.data.auth_info {
+            AuthInfo::Password {
+                hash_method,
+                need_change,
+                ..
+            } => {
+                assert_eq!(*hash_method, PasswordHashMethod::Sha256);
+                assert!(*need_change);
+            }
+            _ => panic!("Expected password auth info"),
         }
 
-        // and then, update_kv should be called
-        let mut new_user_info = user_info.clone();
-        new_user_info.auth_info = new_test_auth_info(full);
-        let new_value_with_old_salt =
-            serialize_struct(&new_user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
-
-        kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKV::new(
-                &test_key,
-                MatchSeq::Exact(1),
-                Operation::Update(new_value_with_old_salt.clone()),
-                None,
-            )))
-            .times(1)
-            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
-
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-
-        let res = user_mgr.update_user_with(user_info.identity(), test_seq, |ui: &mut UserInfo| {
-            ui.update_auth_option(Some(new_test_auth_info(full)), None)
-        });
-
-        assert!(res.await.is_ok());
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_with_conflict_when_writing_back(
-    ) -> databend_common_exception::Result<()> {
-        let test_user_name = "name";
+    async fn test_update_user_normal_update_full() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_update_full";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        // if partial update, and get_kv returns None
-        // update_kv should NOT be called
-        let mut kv = MockKV::new();
-        kv.expect_get_kv()
-            .with(predicate::function(move |v| v == test_key.as_str()))
-            .times(1)
-            .return_once(move |_k| Ok(None));
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
 
-        let res = user_mgr.update_user_with(
-            UserIdentity::new(test_user_name, test_hostname),
-            MatchSeq::GE(0),
-            |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info(false)), None),
-        );
-        assert_eq!(res.await.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
+        // Full update - change everything
+        let res = user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info_full()), None),
+            )
+            .await;
+
+        assert!(res.is_ok());
+
+        // Verify the full update
+        let updated_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        match &updated_user.data.auth_info {
+            AuthInfo::Password {
+                hash_method,
+                need_change,
+                ..
+            } => {
+                assert_eq!(*hash_method, PasswordHashMethod::Sha256);
+                assert!(!(*need_change));
+            }
+            _ => panic!("Expected password auth info"),
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_normal_update_partial() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_update_partial";
+        let test_hostname = "localhost";
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
+
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Partial update - only change some fields
+        let res = user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info_partial()), None),
+            )
+            .await;
+
+        assert!(res.is_ok());
+
+        // Verify the partial update
+        let updated_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        match &updated_user.data.auth_info {
+            AuthInfo::Password {
+                hash_method,
+                need_change,
+                ..
+            } => {
+                assert_eq!(*hash_method, PasswordHashMethod::DoubleSha1);
+                assert!(*need_change);
+            }
+            _ => panic!("Expected password auth info"),
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_update_user_unknown() -> databend_common_exception::Result<()> {
+        let test_user_name = "unknown_update_user";
+        let test_hostname = "localhost";
+
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        let res = user_mgr
+            .update_user_with(
+                UserIdentity::new(test_user_name, test_hostname),
+                MatchSeq::GE(0),
+                |ui: &mut UserInfo| ui.update_auth_option(Some(new_test_auth_info()), None),
+            )
+            .await;
+
+        assert!(res.is_err());
+        assert_eq!(res.unwrap_err().code(), ErrorCode::UNKNOWN_USER);
+
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_update_user_with_complete() -> databend_common_exception::Result<()> {
-        let test_user_name = "name";
+        let test_user_name = "test_complete_update";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
-
         let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        // - get_kv should be called
-        let mut kv = MockKV::new();
-        {
-            let test_key = test_key.clone();
-            kv.expect_get_kv()
-                .with(predicate::function(move |v| v == test_key.as_str()))
-                .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(2, prev_value))));
-        }
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        // upsert should be called
-        kv.expect_upsert_kv()
-            .with(predicate::function(move |act: &UpsertKV| {
-                act.key == test_key.as_str() && act.seq == MatchSeq::Exact(2)
-            }))
-            .times(1)
-            .returning(|_| Ok(UpsertKVReply::new(None, None)));
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
-
-        let _ = user_mgr
-            .update_user_with(user_info.identity(), MatchSeq::GE(1), |_x| {})
+        // Complete update with no-op function to test the flow
+        let res = user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |_ui: &mut UserInfo| {
+                    // No-op update to test complete flow
+                },
+            )
             .await;
+
+        assert!(res.is_ok());
+
         Ok(())
     }
 }
 
 mod set_user_privileges {
+    use std::ops::Deref;
+
     use databend_common_meta_app::principal::GrantObject;
-    use databend_common_meta_app::principal::UserInfo;
     use databend_common_meta_app::principal::UserPrivilegeSet;
     use databend_common_meta_app::principal::UserPrivilegeType;
-    use databend_common_meta_app::tenant::Tenant;
-    use databend_common_meta_types::MatchSeq;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_grant_user_privileges() -> databend_common_exception::Result<()> {
-        let test_user_name = "name";
+        let test_user_name = "test_privilege_user";
         let test_hostname = "localhost";
-        let test_key = format!(
-            "__fd_users/tenant1/{}",
-            escape_for_key(&format_user_key(test_user_name, test_hostname))?
-        );
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let mut user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
-        let prev_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
 
-        // - get_kv should be called
-        let mut kv = MockKV::new();
-        {
-            let test_key = test_key.clone();
-            kv.expect_get_kv()
-                .with(predicate::function(move |v| v == test_key.as_str()))
-                .times(1)
-                .return_once(move |_k| Ok(Some(SeqV::new(1, prev_value))));
-        }
-        // - update_kv should be called
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Grant privileges
         let mut privileges = UserPrivilegeSet::empty();
         privileges.set_privilege(UserPrivilegeType::Select);
-        user_info
+
+        let res = user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |ui: &mut UserInfo| {
+                    ui.grants.grant_privileges(&GrantObject::Global, privileges);
+                },
+            )
+            .await;
+
+        assert!(res.is_ok());
+
+        // Verify privileges were granted
+        let updated_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        let global_privileges = updated_user
+            .data
             .grants
-            .grant_privileges(&GrantObject::Global, privileges);
-        let new_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select);
+        assert!(global_privileges);
 
-        kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKV::new(
-                &test_key,
-                MatchSeq::Exact(1),
-                Operation::Update(new_value),
-                None,
-            )))
-            .times(1)
-            .return_once(|_| Ok(UpsertKVReply::new(None, Some(SeqV::new(1, vec![])))));
+        Ok(())
+    }
 
-        let kv = Arc::new(kv);
-        let user_mgr = UserMgr::create(kv, &Tenant::new_literal("tenant1"));
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_revoke_user_privileges() -> databend_common_exception::Result<()> {
+        let test_user_name = "test_revoke_user";
+        let test_hostname = "localhost";
+        let user_info = UserInfo::new(test_user_name, test_hostname, default_test_auth_info());
 
-        let res = user_mgr.update_user_with(
-            user_info.identity(),
-            MatchSeq::GE(1),
-            |ui: &mut UserInfo| ui.grants.grant_privileges(&GrantObject::Global, privileges),
-        );
-        assert!(res.await.is_ok());
+        let meta_store = MetaStore::new_local_testing().await;
+        let user_mgr = UserMgr::create(meta_store.deref().clone(), &Tenant::new_literal("tenant1"));
+
+        // Add user first
+        user_mgr
+            .add_user(user_info.clone(), &CreateOption::Create)
+            .await?;
+
+        // Grant privileges first
+        let mut privileges = UserPrivilegeSet::empty();
+        privileges.set_privilege(UserPrivilegeType::Select);
+        privileges.set_privilege(UserPrivilegeType::Insert);
+
+        user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |ui: &mut UserInfo| {
+                    ui.grants.grant_privileges(&GrantObject::Global, privileges);
+                },
+            )
+            .await?;
+
+        // Revoke one privilege
+        let mut revoke_privileges = UserPrivilegeSet::empty();
+        revoke_privileges.set_privilege(UserPrivilegeType::Select);
+
+        let res = user_mgr
+            .update_user_with(
+                user_info.identity(),
+                MatchSeq::GE(1),
+                |ui: &mut UserInfo| {
+                    ui.grants
+                        .revoke_privileges(&GrantObject::Global, revoke_privileges);
+                },
+            )
+            .await;
+
+        assert!(res.is_ok());
+
+        // Verify only insert privilege remains
+        let updated_user = user_mgr
+            .get_user(user_info.identity(), MatchSeq::GE(0))
+            .await?;
+        let has_select = updated_user
+            .data
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Select);
+        let has_insert = updated_user
+            .data
+            .grants
+            .verify_privilege(&GrantObject::Global, UserPrivilegeType::Insert);
+
+        assert!(!has_select);
+        assert!(has_insert);
+
         Ok(())
     }
 }

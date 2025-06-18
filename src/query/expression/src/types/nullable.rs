@@ -362,7 +362,7 @@ impl<T: ReturnType> NullableColumn<T> {
 impl NullableColumn<AnyType> {
     pub fn new(column: Column, validity: Bitmap) -> Self {
         debug_assert_eq!(column.len(), validity.len());
-        debug_assert!(!column.is_nullable());
+        debug_assert!(!column.is_nullable() && !column.is_null());
         NullableColumn { column, validity }
     }
 }

@@ -35,8 +35,7 @@ use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggrState;
@@ -145,12 +144,12 @@ impl AggregateFunction for AggregateRetentionFunction {
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let rhs: AggregateRetentionState = borsh_deserialize_state(reader)?;
+        let rhs: AggregateRetentionState = borsh_partial_deserialize(reader)?;
         state.merge(&rhs);
         Ok(())
     }
