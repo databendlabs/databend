@@ -24,7 +24,7 @@ use crate::raft_types::StoredMembership;
 /// Snapshot System data(non-user data).
 ///
 /// System data is **NOT** leveled. At each level, there is a complete copy of the system data.
-#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SysData {
     /// The last applied log id.
     last_applied: Option<LogId>,
@@ -39,6 +39,13 @@ pub struct SysData {
     ///
     /// A seq is globally unique and monotonically increasing.
     sequence: u64,
+
+    /// The number of keys in each sub key space.
+    ///
+    /// If it is absent in the serialized data, serde should skip it when deserializing.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    key_counts: BTreeMap<String, u64>,
 }
 
 impl SysData {
@@ -71,6 +78,14 @@ impl SysData {
         &mut self.nodes
     }
 
+    pub fn key_counts(&self) -> &BTreeMap<String, u64> {
+        &self.key_counts
+    }
+
+    pub fn key_counts_mut(&mut self) -> &mut BTreeMap<String, u64> {
+        &mut self.key_counts
+    }
+
     pub fn last_applied_ref(&self) -> &Option<LogId> {
         &self.last_applied
     }
@@ -81,5 +96,124 @@ impl SysData {
 
     pub fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
         &self.nodes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+    use crate::raft_types::new_log_id;
+    use crate::raft_types::Membership;
+    use crate::Endpoint;
+
+    #[test]
+    fn test_sys_data_serialize() {
+        let sys_data = SysData {
+            last_applied: Some(new_log_id(4, 5, 6)),
+            last_membership: StoredMembership::new(
+                Some(new_log_id(1, 2, 3)),
+                Membership::new(vec![BTreeSet::from([7, 8])], BTreeSet::from([7u64, 8, 9]))
+                    .unwrap(),
+            ),
+            nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
+            sequence: 5,
+            key_counts: BTreeMap::new(),
+        };
+
+        let want = r#"{"last_applied":{"leader_id":{"term":4,"node_id":5},"index":6},"last_membership":{"log_id":{"leader_id":{"term":1,"node_id":2},"index":3},"membership":{"configs":[[7,8]],"nodes":{"7":{},"8":{},"9":{}}}},"nodes":{"2":{"name":"node2","endpoint":{"addr":"127.0.0.1","port":16},"grpc_api_advertise_address":null}},"sequence":5}"#;
+
+        let serialized = serde_json::to_string(&sys_data).unwrap();
+        assert_eq!(want, serialized);
+    }
+
+    /// Test backward compatibility.
+    ///
+    /// Data format upto 2025_06_16 (inclusive)
+    #[test]
+    fn test_sys_data_deserialize_2025_06_16() {
+        // The string is serialized with old version SysData, never change it.
+        let serialized = r#"{
+          "last_applied": { "leader_id": { "term": 4, "node_id": 5 }, "index": 6 },
+          "last_membership": {
+            "log_id": { "leader_id": { "term": 1, "node_id": 2 }, "index": 3 },
+            "membership": {
+              "configs": [ [ 7, 8 ] ],
+              "nodes": { "7": {}, "8": {}, "9": {} }
+            }
+          },
+          "nodes": {
+            "2": {
+              "name": "node2",
+              "endpoint": { "addr": "127.0.0.1", "port": 16 },
+              "grpc_api_advertise_address": null
+            }
+          },
+          "sequence": 5
+        }
+        "#;
+
+        let want = SysData {
+            last_applied: Some(new_log_id(4, 5, 6)),
+            last_membership: StoredMembership::new(
+                Some(new_log_id(1, 2, 3)),
+                Membership::new(vec![BTreeSet::from([7, 8])], BTreeSet::from([7u64, 8, 9]))
+                    .unwrap(),
+            ),
+            nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
+            sequence: 5,
+            key_counts: BTreeMap::new(),
+        };
+
+        println!("{}", serde_json::to_string_pretty(&want).unwrap());
+
+        let deserialized: SysData = serde_json::from_str(serialized).unwrap();
+        assert_eq!(want, deserialized);
+    }
+
+    /// Test backward compatibility.
+    ///
+    /// 2025-06-17: add field `key_counts`
+    #[test]
+    fn test_sys_data_deserialize_2025_06_17() {
+        // The string is serialized with old version SysData, never change it.
+        let serialized = r#"{
+          "last_applied": { "leader_id": { "term": 4, "node_id": 5 }, "index": 6 },
+          "last_membership": {
+            "log_id": { "leader_id": { "term": 1, "node_id": 2 }, "index": 3 },
+            "membership": {
+              "configs": [ [ 7, 8 ] ],
+              "nodes": { "7": {}, "8": {}, "9": {} }
+            }
+          },
+          "nodes": {
+            "2": {
+              "name": "node2",
+              "endpoint": { "addr": "127.0.0.1", "port": 16 },
+              "grpc_api_advertise_address": null
+            }
+          },
+          "sequence": 5,
+          "key_counts": { "bar": 6, "foo": 5 }
+         }
+        "#;
+
+        let want = SysData {
+            last_applied: Some(new_log_id(4, 5, 6)),
+            last_membership: StoredMembership::new(
+                Some(new_log_id(1, 2, 3)),
+                Membership::new(vec![BTreeSet::from([7, 8])], BTreeSet::from([7u64, 8, 9]))
+                    .unwrap(),
+            ),
+            nodes: BTreeMap::from([(2, Node::new("node2", Endpoint::new("127.0.0.1", 16)))]),
+            sequence: 5,
+            key_counts: BTreeMap::from([("foo".to_string(), 5), ("bar".to_string(), 6)]),
+        };
+
+        println!("{}", serde_json::to_string_pretty(&want).unwrap());
+
+        let deserialized: SysData = serde_json::from_str(serialized).unwrap();
+        assert_eq!(want, deserialized);
     }
 }

@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
-use std::string::String;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::base::Stoppable;
+use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::node::Node;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::UpsertKV;
 use databend_meta::api::http::v1::cluster_state::nodes_handler;
-use databend_meta::api::http::v1::cluster_state::status_handler;
 use databend_meta::api::HttpService;
 use databend_meta::meta_service::MetaNode;
 use http::Method;
@@ -94,7 +96,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let _mn0 = MetaNode::start(&tc0.config).await?;
+    let mn0 = MetaNode::start(&tc0.config).await?;
 
     let mn1 = MetaNode::start(&tc1.config).await?;
     let _ = mn1
@@ -104,29 +106,130 @@ async fn test_cluster_state() -> anyhow::Result<()> {
         )
         .await?;
 
-    let cluster_router = Route::new()
-        .at("/cluster/status", get(status_handler))
-        .data(mn1.clone());
-    let response = cluster_router
-        .call(
-            Request::builder()
-                .uri(Uri::from_static("/cluster/status"))
-                .method(Method::GET)
-                .finish(),
-        )
-        .await
-        .unwrap();
+    info!("--- write sample data to the cluster ---");
+    {
+        mn0.kv_api()
+            .upsert_kv(UpsertKV::update("foo", b"foo").with_ttl(Duration::from_secs(3600)))
+            .await?;
+        mn0.kv_api()
+            .upsert_kv(UpsertKV::update("foo2", b"foo2"))
+            .await?;
+        mn0.kv_api()
+            .upsert_kv(UpsertKV::update("foo3", b"foo3"))
+            .await?;
+        mn0.kv_api()
+            .upsert_kv(UpsertKV::update("foo4", b"foo4"))
+            .await?;
+        mn0.kv_api()
+            .upsert_kv(UpsertKV::update("foo5", b"foo5"))
+            .await?;
+    }
 
-    assert_eq!(response.status(), StatusCode::OK);
+    info!("--- trigger snapshot ---");
+    {
+        mn0.raft.trigger().snapshot().await?;
+        mn0.raft
+            .wait(Some(Duration::from_secs(1)))
+            .snapshot(new_log_id(1, 0, 11), "trigger build snapshot")
+            .await?;
+    }
 
-    let body = response.into_body().into_vec().await.unwrap();
-    let state = serde_json::from_str::<serde_json::Value>(String::from_utf8_lossy(&body).as_ref())?;
-    let voters = state["voters"].as_array().unwrap();
-    let non_voters = state["non_voters"].as_array().unwrap();
-    let leader = state["leader"].as_object();
-    assert_eq!(voters.len(), 2);
-    assert_eq!(non_voters.len(), 0);
-    assert_ne!(leader, None);
+    let status = mn0.get_status().await?;
+
+    println!(
+        "status = {}",
+        serde_json::to_string_pretty(&status).unwrap()
+    );
+
+    // Assert key fields in the status response
+    assert_eq!(status.id, 0);
+    assert_eq!(status.state, "Leader");
+    assert_eq!(status.is_leader, true);
+    assert_eq!(status.current_term, 1);
+    assert_eq!(status.last_log_index, 11);
+    assert_eq!(status.snapshot_key_count, 6);
+    assert_eq!(
+        status.snapshot_key_space_stat,
+        BTreeMap::from_iter([("exp-".to_string(), 1), ("kv--".to_string(), 5),])
+    );
+    assert_eq!(status.last_seq, 5);
+
+    // Verify last_applied structure
+    assert_eq!(status.last_applied, new_log_id(1, 0, 11));
+
+    // Verify leader information
+    assert!(status.leader.is_some());
+    let leader = status.leader.unwrap();
+    assert_eq!(leader.name, "0");
+    assert!(leader.endpoint.to_string().starts_with("localhost:"));
+
+    // Verify voters and non_voters
+    assert_eq!(status.voters.len(), 2);
+    assert_eq!(status.non_voters.len(), 0);
+
+    // Verify replication status - check that we have replicas for both nodes
+    let replication = status.replication.clone().unwrap();
+    assert!(replication.contains_key(&0));
+    assert!(replication.contains_key(&1));
+
+    // Verify raft_log fields
+    assert!(status.raft_log.cache_items > 0);
+    assert!(status.raft_log.cache_used_size > 0);
+    assert!(status.raft_log.wal_total_size > 0);
+    assert_eq!(status.raft_log.wal_closed_chunk_count, 0);
+    assert_eq!(status.raft_log.wal_closed_chunk_total_size, 0);
+
+    // status = {
+    //     "id": 0,
+    //     "binary_version": "v1.2.757-nightly-9cd2f63257-simd(1.88.0-nightly-2025-06-18T01:24:12.760825000Z)",
+    //     "data_version": "V004",
+    //     "endpoint": "localhost:29000",
+    //     "raft_log": {
+    //       "cache_items": 7,
+    //       "cache_used_size": 578,
+    //       "wal_total_size": 1202,
+    //       "wal_open_chunk_size": 1202,
+    //       "wal_offset": 1202,
+    //       "wal_closed_chunk_count": 0,
+    //       "wal_closed_chunk_total_size": 0,
+    //       "wal_closed_chunk_sizes": {}
+    //     },
+    //     "snapshot_key_count": 0,
+    //     "snapshot_key_space_stat": {
+    //       "exp-": 1,
+    //       "kv--": 5
+    //     },
+    //     "state": "Leader",
+    //     "is_leader": true,
+    //     "current_term": 1,
+    //     "last_log_index": 6,
+    //     "last_applied": { "leader_id": { "term": 1, "node_id": 0 }, "index": 6 },
+    //     "snapshot_last_log_id": null,
+    //     "purged": null,
+    //     "leader": {
+    //       "name": "0",
+    //       "endpoint": { "addr": "localhost", "port": 29000 },
+    //       "grpc_api_advertise_address": "127.0.0.1:29001"
+    //     },
+    //     "replication": {
+    //       "0": { "leader_id": { "term": 1, "node_id": 0 }, "index": 6 },
+    //       "1": { "leader_id": { "term": 1, "node_id": 0 }, "index": 6 }
+    //     },
+    //     "voters": [
+    //       {
+    //         "name": "0",
+    //         "endpoint": { "addr": "localhost", "port": 29000 },
+    //         "grpc_api_advertise_address": "127.0.0.1:29001"
+    //       },
+    //       {
+    //         "name": "1",
+    //         "endpoint": { "addr": "localhost", "port": 29003 },
+    //         "grpc_api_advertise_address": "127.0.0.1:29004"
+    //       }
+    //     ],
+    //     "non_voters": [],
+    //     "last_seq": 0
+    //   }
 
     Ok(())
 }

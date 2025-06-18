@@ -53,7 +53,17 @@ pub mod server_metrics {
         node_is_health: Gauge,
         leader_changes: Counter,
         applying_snapshot: Gauge,
+
+        /// Primary index is index by string key. Each primary index has an optional expire index key.
+        ///
+        /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
         snapshot_key_count: Gauge,
+
+        /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
+        snapshot_primary_index_count: Gauge,
+
+        /// `snapshot_key_count = snapshot_primary_index_count + snapshot_expire_index_count`
+        snapshot_expire_index_count: Gauge,
 
         raft_log_cache_items: Gauge,
         raft_log_cache_used_size: Gauge,
@@ -83,6 +93,9 @@ pub mod server_metrics {
                 leader_changes: Counter::default(),
                 applying_snapshot: Gauge::default(),
                 snapshot_key_count: Gauge::default(),
+                snapshot_primary_index_count: Gauge::default(),
+                snapshot_expire_index_count: Gauge::default(),
+
                 raft_log_cache_items: Gauge::default(),
                 raft_log_cache_used_size: Gauge::default(),
                 raft_log_wal_open_chunk_size: Gauge::default(),
@@ -127,6 +140,16 @@ pub mod server_metrics {
                 key!("snapshot_key_count"),
                 "number of keys in the last snapshot",
                 metrics.snapshot_key_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_primary_index_count"),
+                "number of primary keys in the last snapshot",
+                metrics.snapshot_primary_index_count.clone(),
+            );
+            registry.register(
+                key!("snapshot_expire_index_count"),
+                "number of expire index keys in the last snapshot",
+                metrics.snapshot_expire_index_count.clone(),
             );
 
             registry.register(
@@ -227,6 +250,12 @@ pub mod server_metrics {
 
     pub fn set_snapshot_key_count(n: u64) {
         SERVER_METRICS.snapshot_key_count.set(n as i64);
+    }
+    pub fn set_snapshot_primary_index_count(n: u64) {
+        SERVER_METRICS.snapshot_primary_index_count.set(n as i64);
+    }
+    pub fn set_snapshot_expire_index_count(n: u64) {
+        SERVER_METRICS.snapshot_expire_index_count.set(n as i64);
     }
 
     pub fn set_raft_log_stat(st: RaftLogStat) {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::net::Ipv4Addr;
 use std::sync::atomic::AtomicI32;
@@ -91,6 +92,7 @@ use crate::message::LeaveRequest;
 use crate::meta_service::errors::grpc_error_to_network_err;
 use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
+use crate::meta_service::meta_node_kv_api_impl::MetaKVApi;
 use crate::meta_service::meta_node_status::MetaNodeStatus;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
@@ -466,6 +468,17 @@ impl MetaNode {
                 // metrics about server storage
                 server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
                 server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
+                {
+                    let stat = meta_node.get_snapshot_key_space_stat().await;
+
+                    server_metrics::set_snapshot_primary_index_count(
+                        stat.get("kv--").copied().unwrap_or_default(),
+                    );
+
+                    server_metrics::set_snapshot_expire_index_count(
+                        stat.get("exp-").copied().unwrap_or_default(),
+                    )
+                }
 
                 last_leader = mm.current_leader;
             }
@@ -874,6 +887,10 @@ impl MetaNode {
             .unwrap_or_default()
     }
 
+    async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
+        self.raft_store.get_snapshot_key_space_stat().await
+    }
+
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
             .raft_store
@@ -892,6 +909,7 @@ impl MetaNode {
 
         let raft_log_status = self.get_raft_log_stat().await.into();
         let snapshot_key_count = self.get_snapshot_key_count().await;
+        let snapshot_key_space_stat = self.get_snapshot_key_space_stat().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -910,6 +928,7 @@ impl MetaNode {
             endpoint: endpoint.to_string(),
             raft_log: raft_log_status,
             snapshot_key_count,
+            snapshot_key_space_stat,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
@@ -1174,6 +1193,11 @@ impl MetaNode {
             .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))??;
 
         Ok(stream_sender)
+    }
+
+    /// Get a kvapi::KVApi implementation.
+    pub fn kv_api(&self) -> MetaKVApi {
+        MetaKVApi::new(self)
     }
 }
 
