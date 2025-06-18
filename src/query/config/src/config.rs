@@ -2769,7 +2769,7 @@ pub struct HistoryLogConfig {
     #[clap(
         long = "log-history-level",
         value_name = "VALUE",
-        default_value = "WARN"
+        default_value = "INFO"
     )]
     #[serde(rename = "level")]
     pub log_history_level: String,

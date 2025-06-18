@@ -385,7 +385,7 @@ impl Default for HistoryConfig {
             log_only: false,
             // The default value of stage name uses an uuid to avoid conflicts with existing stages
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
-            level: "WARN".to_string(),
+            level: "INFO".to_string(),
             // Trigger the retention task every 24 hours
             retention_interval: 24,
             tables: vec![],
