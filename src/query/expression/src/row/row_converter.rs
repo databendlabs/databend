@@ -254,7 +254,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
             })
         }
         Column::Decimal(col) => match col {
-            DecimalColumn::Decimal64(buffer, size) => match size.data_kind() {
+            DecimalColumn::Decimal64(buffer, size) => match size.best_type().data_kind() {
                 DecimalDataKind::Decimal64 => {
                     fixed::encode(out, buffer, validity, asc, nulls_first)
                 }
@@ -267,7 +267,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
                     fixed::encode(out, iter, validity, asc, nulls_first)
                 }
             },
-            DecimalColumn::Decimal128(buffer, size) => match size.data_kind() {
+            DecimalColumn::Decimal128(buffer, size) => match size.best_type().data_kind() {
                 DecimalDataKind::Decimal64 => {
                     let iter = Decimal128As64Type::iter_column(&buffer);
                     fixed::encode(out, iter, validity, asc, nulls_first)
@@ -280,7 +280,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
                     fixed::encode(out, iter, validity, asc, nulls_first)
                 }
             },
-            DecimalColumn::Decimal256(buffer, size) => match size.data_kind() {
+            DecimalColumn::Decimal256(buffer, size) => match size.best_type().data_kind() {
                 DecimalDataKind::Decimal64 => {
                     let iter = Decimal256As64Type::iter_column(&buffer);
                     fixed::encode(out, iter, validity, asc, nulls_first)

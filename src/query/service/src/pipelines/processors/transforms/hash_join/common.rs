@@ -17,7 +17,10 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -125,19 +128,20 @@ impl HashJoinProbeState {
         merged_block: &DataBlock,
         filter: &Expr,
         func_ctx: &FunctionContext,
-    ) -> Result<Column> {
+    ) -> Result<NullableColumn<BooleanType>> {
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
+        let filter_vector: Value<AnyType> = evaluator.run_fast(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
         match filter_vector {
-            Column::Nullable(_) => Ok(filter_vector),
+            Column::Nullable(_) => {
+                Ok(NullableType::<BooleanType>::try_downcast_column(&filter_vector).unwrap())
+            }
             other => {
                 let validity = Bitmap::new_constant(true, other.len());
-                Ok(Column::Nullable(Box::new(NullableColumn::new(
-                    other, validity,
-                ))))
+                let column = NullableColumn::new(other, validity);
+                Ok(column.try_downcast().unwrap())
             }
         }
     }

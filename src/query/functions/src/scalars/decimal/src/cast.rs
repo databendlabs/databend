@@ -1130,7 +1130,7 @@ fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Val
     .upcast_with_type(&DataType::Number(T::data_type()))
 }
 
-pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
+pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock, String> {
     use DecimalDataType::*;
 
     let num_rows = data.num_rows();
@@ -1157,35 +1157,30 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
             };
 
             let size = from_type.size();
-            let value = match (size.can_carried_by_128(), from_type.data_kind()) {
-                (true, DecimalDataKind::Decimal128) | (false, DecimalDataKind::Decimal256) => {
-                    return Ok(entry)
-                }
-                (true, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal256) => {
-                    if nullable {
-                        let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
-                        let value = nullable_value.value().unwrap();
-                        let new_value =
-                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size));
-
-                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
-                    } else {
-                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal128(size))
-                    }
-                }
-                (false, DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128) => {
-                    if nullable {
-                        let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
-                        let value = nullable_value.value().unwrap();
-                        let new_value =
-                            decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size));
-
-                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
-                    } else {
-                        decimal_to_decimal(&value, &mut ctx, from_type, Decimal256(size))
-                    }
-                }
+            let to_kind = if best {
+                size.best_type().data_kind()
+            } else {
+                size.data_kind()
             };
+
+            if from_type.data_kind() == to_kind {
+                return Ok(entry);
+            }
+
+            let value = with_decimal_type!(|DECIMAL| match to_kind {
+                DecimalDataKind::DECIMAL => {
+                    if nullable {
+                        let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
+                        let value = nullable_value.value().unwrap();
+                        let new_value =
+                            decimal_to_decimal(&value, &mut ctx, from_type, DECIMAL(size));
+
+                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
+                    } else {
+                        decimal_to_decimal(&value, &mut ctx, from_type, DECIMAL(size))
+                    }
+                }
+            });
 
             if let Some((_, msg)) = ctx.errors.take() {
                 Err(msg)

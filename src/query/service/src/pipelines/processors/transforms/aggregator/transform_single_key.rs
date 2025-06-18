@@ -101,7 +101,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = strict_decimal_data_type(block)
+        let block = strict_decimal_data_type(block, false)
             .map_err(ErrorCode::Internal)?
             .consume_convert_to_full();
         if is_agg_index_block {

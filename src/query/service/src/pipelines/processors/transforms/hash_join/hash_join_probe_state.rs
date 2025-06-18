@@ -203,7 +203,7 @@ impl HashJoinProbeState {
             .iter()
             .map(|expr| {
                 Ok(evaluator
-                    .run(expr)?
+                    .run_fast(expr)?
                     .convert_to_full_column(expr.data_type(), input_num_rows))
             })
             .collect::<Result<Vec<_>>>()?;

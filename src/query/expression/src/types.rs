@@ -289,25 +289,32 @@ impl DataType {
         }
     }
 
-    pub fn numeric_byte_size(&self) -> Result<usize, String> {
-        use NumberDataType::*;
+    pub fn numeric_byte_size(&self) -> Option<usize> {
         match self {
-            DataType::Number(number) => match number {
-                UInt8 | Int8 => Ok(1),
-                UInt16 | Int16 => Ok(2),
-                UInt32 | Int32 | Float32 => Ok(4),
-                UInt64 | Int64 | Float64 => Ok(8),
-            },
-            DataType::Date => Ok(4),
-            DataType::Timestamp => Ok(8),
-            DataType::Decimal(size) => {
-                let s = if size.can_carried_by_128() { 16 } else { 32 };
-                Ok(s)
+            DataType::Number(number) => {
+                use NumberDataType::*;
+                let n = match number {
+                    UInt8 | Int8 => 1,
+                    UInt16 | Int16 => 2,
+                    UInt32 | Int32 | Float32 => 4,
+                    UInt64 | Int64 | Float64 => 8,
+                };
+                Some(n)
             }
-            _ => Result::Err(format!(
-                "Function number_byte_size argument must be numeric types, but got {:?}",
-                self
-            )),
+            DataType::Date => Some(4),
+            DataType::Timestamp => Some(8),
+            DataType::Interval => None, // todo
+            DataType::Decimal(size) => {
+                let n = if size.can_carried_by_64() {
+                    8
+                } else if size.can_carried_by_128() {
+                    16
+                } else {
+                    32
+                };
+                Some(n)
+            }
+            _ => None,
         }
     }
 

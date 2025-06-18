@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
+use databend_common_functions::scalars::strict_decimal_data_type;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 
@@ -350,7 +351,8 @@ impl Processor for TransformHashJoinProbe {
                         {
                             self.probe_hash_table(data_block)?;
                         } else if let Some(data_block) = self.input_data_blocks.pop_front() {
-                            let data_block = data_block.consume_convert_to_full();
+                            let data_block = strict_decimal_data_type(data_block, true)?
+                                .consume_convert_to_full();
                             self.probe_hash_table(data_block)?;
                         }
                     }
@@ -535,7 +537,8 @@ impl TransformHashJoinProbe {
 
     fn output_data_block(&mut self) -> Option<DataBlock> {
         if let Some(data_block) = self.output_data_blocks.pop_front() {
-            Some(data_block.project(&self.projections))
+            let output = data_block.project(&self.projections);
+            Some(strict_decimal_data_type(output, false).unwrap())
         } else {
             None
         }

@@ -62,7 +62,7 @@ pub fn get_hashes(
         .zip(is_null_equal)
         .map(|(expr, is_null_equal)| {
             let column = evaluator
-                .run(expr)?
+                .run_fast(expr)?
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             if !is_null_equal && expr.data_type().is_nullable() {
                 Ok(column.remove_nullable())
