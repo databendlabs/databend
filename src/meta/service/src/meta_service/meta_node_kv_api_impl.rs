@@ -131,7 +131,7 @@ impl MetaKVApiOwned {
 }
 
 #[async_trait]
-impl<'a> kvapi::KVApi for MetaKVApiOwned {
+impl kvapi::KVApi for MetaKVApiOwned {
     type Error = MetaAPIError;
 
     async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
