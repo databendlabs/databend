@@ -111,6 +111,22 @@ select count(*) from tmp;
 ----
 1000000
 
+
+query I
+select uniq(nextval(seq)) from numbers(10000000);
+----
+10000000
+
+query I
+select uniq(nextval(seq)) from numbers(10000000);
+----
+10000000
+
+query I
+select uniq(nextval(seq)) from numbers(10000000);
+----
+10000000
+
 statement ok
 DESC SEQUENCE SEQ
 
