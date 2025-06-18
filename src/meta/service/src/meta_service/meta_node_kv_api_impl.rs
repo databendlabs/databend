@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_kvapi::kvapi;
@@ -117,31 +119,34 @@ impl<'a> kvapi::KVApi for MetaKVApi<'a> {
     }
 }
 
-/// Impl kvapi::KVApi for MetaNode.
-///
-/// Write through raft-log.
-/// Read through local state machine, which may not be consistent.
-/// E.g. Read is not guaranteed to see a write.
+/// A wrapper of MetaNode that implements kvapi::KVApi.
+pub struct MetaKVApiOwned {
+    inner: Arc<MetaNode>,
+}
+
+impl MetaKVApiOwned {
+    pub fn new(inner: Arc<MetaNode>) -> Self {
+        Self { inner }
+    }
+}
+
 #[async_trait]
-impl kvapi::KVApi for MetaNode {
+impl kvapi::KVApi for MetaKVApiOwned {
     type Error = MetaAPIError;
 
     async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
-        self.kv_api().upsert_kv(act).await
+        self.inner.kv_api().upsert_kv(act).await
     }
 
-    #[fastrace::trace]
     async fn get_kv_stream(&self, keys: &[String]) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.kv_api().get_kv_stream(keys).await
+        self.inner.kv_api().get_kv_stream(keys).await
     }
 
-    #[fastrace::trace]
     async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-        self.kv_api().list_kv(prefix).await
+        self.inner.kv_api().list_kv(prefix).await
     }
 
-    #[fastrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
-        self.kv_api().transaction(txn).await
+        self.inner.kv_api().transaction(txn).await
     }
 }
