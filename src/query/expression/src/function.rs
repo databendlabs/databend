@@ -321,8 +321,8 @@ impl Function {
         debug_assert!(!self.signature.return_type.is_nullable_or_null());
 
         let mut signature = self.signature;
-        let return_type = signature.return_type;
-        signature.return_type = return_type.wrap_nullable();
+        let return_type = signature.return_type.wrap_nullable();
+        signature.return_type = return_type.clone();
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 

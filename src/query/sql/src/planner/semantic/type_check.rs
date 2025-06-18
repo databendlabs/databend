@@ -181,6 +181,9 @@ use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
 
+const DEFAULT_DECIMAL_PRECISION: u8 = 38;
+const DEFAULT_DECIMAL_SCALE: u8 = 0;
+
 /// A helper for type checking.
 ///
 /// `TypeChecker::resolve` will resolve types of `Expr` and transform `Expr` into
@@ -3014,7 +3017,11 @@ impl<'a> TypeChecker<'a> {
                 }
             }
         } else if (func_name.eq_ignore_ascii_case("to_number")
-            || func_name.eq_ignore_ascii_case("try_to_number"))
+            || func_name.eq_ignore_ascii_case("to_numeric")
+            || func_name.eq_ignore_ascii_case("to_decimal")
+            || func_name.eq_ignore_ascii_case("try_to_number")
+            || func_name.eq_ignore_ascii_case("try_to_numeric")
+            || func_name.eq_ignore_ascii_case("try_to_decimal"))
             && params.is_empty()
         {
             if args.is_empty() || args.len() > 4 {
@@ -3041,8 +3048,8 @@ impl<'a> TypeChecker<'a> {
                 }).transpose()?.flatten().unwrap_or(default))
             };
 
-            let precision = arg_fn(&args, 2, "precision", 38)?;
-            let scale = arg_fn(&args, 3, "scale", 0)?;
+            let precision = arg_fn(&args, 2, "precision", DEFAULT_DECIMAL_PRECISION)?;
+            let scale = arg_fn(&args, 3, "scale", DEFAULT_DECIMAL_SCALE)?;
 
             if let Err(err) = DecimalSize::new(precision, scale) {
                 return Err(ErrorCode::SemanticError(format!(

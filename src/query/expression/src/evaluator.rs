@@ -1160,8 +1160,8 @@ impl<'a> Evaluator<'a> {
 
         let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![
-                Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
+                Scalar::Number(NumberScalar::UInt8(ty.precision())),
+                Scalar::Number(NumberScalar::UInt8(ty.scale())),
             ]
         } else {
             vec![]
@@ -2579,10 +2579,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             display_name: String::new(),
         });
 
-        let params = if let DataType::Decimal(ty) = dest_type {
+        let params = if let DataType::Decimal(ty) = dest_type.remove_nullable() {
             vec![
-                Scalar::Number(NumberScalar::Int64(ty.precision() as _)),
-                Scalar::Number(NumberScalar::Int64(ty.scale() as _)),
+                Scalar::Number(NumberScalar::UInt8(ty.precision())),
+                Scalar::Number(NumberScalar::UInt8(ty.scale())),
             ]
         } else {
             vec![]

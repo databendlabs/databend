@@ -75,6 +75,8 @@ substring_utf8 -> substr
 subtract -> minus
 to_char -> to_string
 to_datetime -> to_timestamp
+to_number -> to_decimal
+to_numeric -> to_decimal
 to_start_of_iso_week -> to_monday
 to_text -> to_string
 to_varchar -> to_string
@@ -82,6 +84,8 @@ trunc -> truncate
 try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
 try_to_datetime -> try_to_timestamp
+try_to_number -> try_to_decimal
+try_to_numeric -> try_to_decimal
 ucase -> upper
 unhex -> from_hex
 uuid -> gen_random_uuid
@@ -3895,6 +3899,7 @@ Functions overloads:
 1 to_decades(Int64 NULL) :: Interval NULL
 0 to_decimal FACTORY
 1 to_decimal FACTORY
+2 to_decimal FACTORY
 0 to_float32(Variant) :: Float32 NULL
 1 to_float32(Variant NULL) :: Float32 NULL
 2 to_float32(String) :: Float32
@@ -4543,6 +4548,7 @@ Functions overloads:
 9 try_to_date(Int64 NULL) :: Date NULL
 0 try_to_decimal FACTORY
 1 try_to_decimal FACTORY
+2 try_to_decimal FACTORY
 0 try_to_float32(Variant) :: Float32 NULL
 1 try_to_float32(Variant NULL) :: Float32 NULL
 2 try_to_float32(String) :: Float32 NULL

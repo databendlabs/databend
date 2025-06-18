@@ -1188,80 +1188,95 @@ select sum(a * b) / sum(a * b), sum(a + b) / sum(a + b), sum(a - b) / sum(a - b)
 1.0000000000000000 1.0000000000000000 1.0000000000000000
 
 query I
+SELECT to_decimal('1234.56', '9999D99');
+----
+1235
+
+query I
 SELECT to_number('1234.56', '9999D99');
 ----
 1235
 
 query I
-SELECT to_number('1234.56', '9999D99', 38, 1);
+SELECT to_numeric('1234.56', '9999D99');
+----
+1235
+
+query I
+SELECT to_decimal('1234.56', '9999D99', 38, 1);
 ----
 1234.6
 
 query I
-SELECT to_number('1,234.56', '9G999D99');
+SELECT to_decimal('1,234.56', '9G999D99');
 ----
 1235
 
 query I
-SELECT to_number('-1234.56');
+SELECT to_decimal('-1234.56');
 ----
 -1235
 
 query I
-SELECT to_number('-1234.56', 'S9999D99');
+SELECT to_decimal('-1234.56', 'S9999D99');
 ----
 -1235
 
 # pg support
 statement error
-SELECT to_number('<1234.56>', '9999D99PR');
+SELECT to_decimal('<1234.56>', '9999D99PR');
 
 # pg support
 statement error
-SELECT to_number('00001234.56', '0000009999D99');
+SELECT to_decimal('00001234.56', '0000009999D99');
 
 statement error
-SELECT to_number('abc', '9999D99');
+SELECT to_decimal('abc', '9999D99');
 
 statement error
-SELECT to_number('12.34.56', '9999D99');
+SELECT to_decimal('12.34.56', '9999D99');
 
 statement error
-SELECT to_number('12,34', '9G999');
+SELECT to_decimal('12,34', '9G999');
 
 statement error
-SELECT to_number('', '9999D99');
+SELECT to_decimal('', '9999D99');
 
 statement error
-SELECT to_number('12.3x', '999D9');
+SELECT to_decimal('12.3x', '999D9');
 
 statement error
-SELECT to_number('1234.56', '999D');
+SELECT to_decimal('1234.56', '999D');
 
 query I
-SELECT to_number('00001234.56', '00009999D99');
+SELECT to_decimal('00001234.56', '00009999D99');
 ----
 1235
 
 query I
-SELECT to_number('0000.00', '0000D99');
+SELECT to_decimal('0000.00', '0000D99');
 ----
 0
 
 query I
-SELECT to_number('   1234.56   ', '9999D99');
+SELECT to_decimal('   1234.56   ', '9999D99');
 ----
 1235
 
 query I
-SELECT to_number('12.3', '99D9');
+SELECT to_decimal('12.3', '99D9');
 ----
 12
 
 query I
-SELECT to_number('12.3000', '99D9999');
+SELECT to_decimal('12.3000', '99D9999');
 ----
 12
+
+query I
+SELECT try_to_decimal('12.34.56', '9999D99');
+----
+NULL
 
 query I
 SELECT try_to_number('12.34.56', '9999D99');
@@ -1269,22 +1284,27 @@ SELECT try_to_number('12.34.56', '9999D99');
 NULL
 
 query I
-SELECT try_to_number('12,34', '9G999');
+SELECT try_to_numeric('12.34.56', '9999D99');
 ----
 NULL
 
 query I
-SELECT try_to_number('', '9999D99');
+SELECT try_to_decimal('12,34', '9G999');
 ----
 NULL
 
 query I
-SELECT try_to_number('12.3x', '999D9');
+SELECT try_to_decimal('', '9999D99');
 ----
 NULL
 
 query I
-SELECT try_to_number('1234.56', '999D');
+SELECT try_to_decimal('12.3x', '999D9');
+----
+NULL
+
+query I
+SELECT try_to_decimal('1234.56', '999D');
 ----
 NULL
 

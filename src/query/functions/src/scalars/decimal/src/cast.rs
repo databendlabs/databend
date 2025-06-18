@@ -31,7 +31,6 @@ use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -60,11 +59,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
 
         if !matches!(
             from_type,
-            DataType::Boolean
-                | DataType::Number(_)
-                | DataType::Decimal(_)
-                | DataType::String
-                | DataType::Variant
+            DataType::Boolean | DataType::Number(_) | DataType::Decimal(_) | DataType::Variant
         ) {
             return None;
         }
@@ -1121,10 +1116,10 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
 
 pub fn register_decimal_to_number(registry: &mut FunctionRegistry) {
     registry.register_function_factory(
-        "to_number",
+        "to_decimal",
         FunctionFactory::Closure(Box::new(|params: &[Scalar], args_type: &[DataType]| {
             let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-            let f = to_number_fn(params, args_type, "to_number")?;
+            let f = to_number_fn(params, args_type, "to_decimal")?;
 
             if has_null {
                 Some(Arc::new(f.passthrough_nullable()))
@@ -1133,14 +1128,16 @@ pub fn register_decimal_to_number(registry: &mut FunctionRegistry) {
             }
         })),
     );
+    registry.register_aliases("to_decimal", &["to_numeric", "to_number"]);
     registry.register_function_factory(
-        "try_to_number",
+        "try_to_decimal",
         FunctionFactory::Closure(Box::new(|params: &[Scalar], args_type: &[DataType]| {
-            let f = to_number_fn(params, args_type, "try_to_number")?;
+            let f = to_number_fn(params, args_type, "try_to_decimal")?;
 
             Some(Arc::new(f.error_to_null().passthrough_nullable()))
         })),
     );
+    registry.register_aliases("try_to_decimal", &["try_to_numeric", "try_to_number"]);
 }
 
 fn to_number_fn(
@@ -1148,6 +1145,10 @@ fn to_number_fn(
     args_type: &[DataType],
     function_name: &str,
 ) -> Option<Function> {
+    if args_type.is_empty() || args_type[0].remove_nullable() != DataType::String {
+        return None;
+    }
+
     let args_type = match args_type.len() {
         1 => vec![DataType::String],
         2 => vec![DataType::String; 2],
@@ -1164,49 +1165,42 @@ fn to_number_fn(
         ],
         _ => return None,
     };
-    let precision = params[0]
+    if args_type.len() > 1 && args_type[1].remove_nullable() != DataType::String {
+        return None;
+    }
+    let precision = *params[0]
         .as_number()
         .and_then(NumberScalar::as_u_int8)
         .unwrap();
-    let scale = params[1]
+    let scale = *params[1]
         .as_number()
         .and_then(NumberScalar::as_u_int8)
         .unwrap();
+    let decimal_size = DecimalSize::new(precision, scale).ok()?;
 
     let f = Function {
         signature: FunctionSignature {
             name: function_name.to_string(),
             args_type,
-            // SAFETY: checked on `type_check`
-            return_type: DataType::Decimal(DecimalSize::new(*precision, *scale).unwrap()),
+            return_type: DataType::Decimal(decimal_size),
         },
         eval: FunctionEval::Scalar {
-            calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-            eval: Box::new(|args, ctx| {
+            calc_domain: Box::new(move |ctx, d| {
+                if d.len() > 1 {
+                    return FunctionDomain::MayThrow;
+                }
+                let decimal_type = DecimalDataType::from(decimal_size);
+                convert_to_decimal_domain(ctx, d[0].clone(), decimal_type)
+                    .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
+                    .unwrap_or(FunctionDomain::MayThrow)
+            }),
+            eval: Box::new(move |args, ctx| {
                 let source_arg = args[0].try_downcast::<StringType>().unwrap();
                 let format_arg = if args.len() >= 2 {
                     Some(args[1].try_downcast::<StringType>().unwrap())
                 } else {
                     None
                 };
-                let precision = *args
-                    .get(2)
-                    .and_then(|value| {
-                        value
-                            .as_scalar()
-                            .and_then(|scalar| scalar.as_number().map(NumberScalar::as_u_int8))
-                    })
-                    .flatten()
-                    .unwrap_or(&38);
-                let scale = *args
-                    .get(3)
-                    .and_then(|value| {
-                        value
-                            .as_scalar()
-                            .and_then(|scalar| scalar.as_number().map(NumberScalar::as_u_int8))
-                    })
-                    .flatten()
-                    .unwrap_or(&0);
 
                 let dest_type = DecimalDataType::from(DecimalSize::new_unchecked(precision, scale));
 
@@ -1230,9 +1224,9 @@ fn to_number<T>(
 where
     T: Decimal,
 {
-    let is_scalar = input.as_scalar().is_some();
+    let is_scalar = input.is_scalar();
     let len = if is_scalar { 1 } else { ctx.num_rows };
-    let mut builder = DecimalColumnBuilder::with_capacity(&dest_type, len);
+    let mut builder = DecimalType::<T>::create_builder(len, &[]);
 
     for idx in 0..len {
         let source = unsafe { input.index_unchecked(idx).trim() };
@@ -1246,7 +1240,7 @@ where
                 Ok(value) => Cow::Owned(value),
                 Err(err) => {
                     ctx.set_error(idx, err);
-                    builder.push_default();
+                    builder.push(T::zero());
                     continue;
                 }
             },
@@ -1260,17 +1254,19 @@ where
             Ok((d, _)) => d,
             Err(e) => {
                 ctx.set_error(builder.len(), e);
-                builder.push_default();
+                builder.push(T::zero());
                 continue;
             }
         };
-        builder.push(result.to_scalar(dest_type.size()));
+        builder.push(result);
     }
     if is_scalar {
-        let scalar = builder.build_scalar();
-        Value::<AnyType>::Scalar(Scalar::Decimal(scalar))
+        Value::<AnyType>::Scalar(T::upcast_scalar(builder.remove(0), dest_type.size()))
     } else {
-        Value::<AnyType>::Column(Column::Decimal(builder.build()))
+        Value::<AnyType>::Column(T::upcast_column(
+            DecimalType::<T>::build_column(builder),
+            dest_type.size(),
+        ))
     }
 }
 
@@ -1285,7 +1281,7 @@ fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
             '0' | '9' => match input_chars.next() {
                 Some(c) if c.is_ascii_digit() => result.push(c),
                 Some(_) => return Err("Expected digit"),
-                None => return Err("Unexpected end of input (0 required digit)"),
+                None => return Err("Unexpected end of input"),
             },
             'G' => match input_chars.next() {
                 Some(',') => {}
