@@ -52,11 +52,15 @@ impl PipelineBuilder {
                 default_expr_binder
                     .split_async_default_exprs(source_schema.clone(), default_schema.clone())?
             {
+                let sequence_counters =
+                    TransformAsyncFunction::create_sequence_counters(async_funcs.len());
+
                 pipeline.try_add_async_transformer(|| {
                     Ok(TransformAsyncFunction::new(
                         ctx.clone(),
                         async_funcs.clone(),
                         BTreeMap::new(),
+                        sequence_counters.clone(),
                     ))
                 })?;
                 if new_default_schema != new_default_schema_no_cast {
