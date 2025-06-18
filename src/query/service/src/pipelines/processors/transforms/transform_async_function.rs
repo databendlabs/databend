@@ -158,7 +158,7 @@ impl TransformAsyncFunction {
                         let max = counter.max.load(Ordering::Relaxed);
                         // Calculate how many sequence numbers we need to fetch
                         // If there are remaining numbers, we'll use them first
-                        let remaining = if max > current { max - current } else { 0 };
+                        let remaining = max.saturating_sub(current);
                         let to_fetch = count.saturating_sub(remaining);
                         let batch_size = to_fetch.max(MIN_SEQUENCE_BATCH_SIZE);
 
