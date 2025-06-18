@@ -88,6 +88,7 @@ impl<'a> CompactingData<'a> {
     ///
     /// It returns a small chunk of sys data that is always copied across levels,
     /// and a stream contains `kv` and `expire` entries.
+    /// The stream Item is 2 items tuple of key, and value with seq.
     ///
     /// The exported stream contains encoded `String` key and rotbl value [`SeqMarked`]
     pub async fn compact(
@@ -109,8 +110,10 @@ impl<'a> CompactingData<'a> {
 
         let strm = (*self.immutable_levels).expire_map().range(..).await?;
         let expire_strm = strm.map(|item: Result<(ExpireKey, Marked<String>), io::Error>| {
-            let (k, v) = item?;
-            RotblCodec::encode_key_seq_marked(&k, v).map_err(|e| with_context(e, &k))
+            let (expire_key, marked_string) = item?;
+
+            RotblCodec::encode_key_seq_marked(&expire_key, marked_string)
+                .map_err(|e| with_context(e, &expire_key))
         });
 
         // kv: prefix: `kv--/`
@@ -118,6 +121,7 @@ impl<'a> CompactingData<'a> {
         let strm = (*self.immutable_levels).str_map().range(..).await?;
         let kv_strm = strm.map(|item: Result<(String, Marked), io::Error>| {
             let (k, v) = item?;
+
             RotblCodec::encode_key_seq_marked(&k, v).map_err(|e| with_context(e, &k))
         });
 

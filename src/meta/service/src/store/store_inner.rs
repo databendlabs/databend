@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::io::ErrorKind;
@@ -192,7 +193,7 @@ impl RaftStoreInner {
             w.acquire_compactor().await
         };
 
-        let (sys_data, mut strm) = compactor
+        let (mut sys_data, mut strm) = compactor
             .compact()
             .await
             .map_err(|e| StorageError::read_snapshot(None, &e))?;
@@ -224,6 +225,16 @@ impl RaftStoreInner {
                 .await
                 .map_err(|e| StorageError::read_snapshot(None, &e))?
             {
+                // The first 4 chars are key space, such as: "kv--/" or "exp-/"
+                // Get the first 4 chars as key space.
+                let prefix = &ent.0.as_str()[..4];
+                let ks = sys_data.key_counts_mut();
+                if let Some(count) = ks.get_mut(prefix) {
+                    *count += 1;
+                } else {
+                    ks.insert(prefix.to_string(), 1);
+                }
+
                 tx.send(WriteEntry::Data(ent))
                     .await
                     .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
@@ -281,6 +292,21 @@ impl RaftStoreInner {
         let sm = self.state_machine.read().await;
         let db = sm.levels().persisted()?;
         Some(db.stat().key_num)
+    }
+
+    /// Returns the count of keys in each key space from the snapshot data.
+    ///
+    /// Key spaces include:
+    /// - `"exp-"`: expire index data
+    /// - `"kv--"`: key-value data
+    ///
+    /// Returns an empty map if no snapshot exists.
+    pub(crate) async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
+        let sm = self.state_machine.read().await;
+        let Some(db) = sm.levels().persisted() else {
+            return Default::default();
+        };
+        db.sys_data().key_counts().clone()
     }
 
     /// Install a snapshot to build a state machine from it and replace the old state machine with the new one.

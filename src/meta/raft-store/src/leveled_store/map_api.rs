@@ -29,9 +29,15 @@ pub use map_api::IOResultStream;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 
+pub type MapKeyPrefix = &'static str;
+
 pub trait MapKeyEncode {
     /// PREFIX is the prefix of the key used to define key space in the on-disk storage.
-    const PREFIX: &'static str;
+    const PREFIX: MapKeyPrefix;
+
+    fn prefix(&self) -> MapKeyPrefix {
+        Self::PREFIX
+    }
 
     fn encode<W: Write>(&self, w: W) -> Result<(), fmt::Error>;
 }
