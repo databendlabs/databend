@@ -16,6 +16,7 @@ use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use arrow_array::RecordBatch;
 use arrow_udf_runtime::javascript::FunctionOptions;
@@ -38,6 +39,7 @@ use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
+use tempfile::TempDir;
 
 use super::runtime_pool::Pool;
 use super::runtime_pool::RuntimeBuilder;
@@ -49,8 +51,11 @@ pub enum ScriptRuntime {
     Python(python_pool::PyRuntimePool),
 }
 
+static PY_VERSION: LazyLock<String> =
+    LazyLock::new(|| uv::detect_python_version().unwrap_or("3.12".to_string()));
+
 impl ScriptRuntime {
-    pub fn try_create(func: &UdfFunctionDesc) -> Result<Self> {
+    pub fn try_create(func: &UdfFunctionDesc, temp_dir: &Option<TempDir>) -> Result<Self> {
         let UDFType::Script(UDFScriptCode { language, code, .. }) = &func.udf_type else {
             unreachable!()
         };
@@ -81,10 +86,22 @@ impl ScriptRuntime {
             }
             #[cfg(feature = "python-udf")]
             UDFLanguage::Python => {
+                let code = String::from_utf8(code.to_vec())?;
+                let code = if let Some(temp_dir) = temp_dir {
+                    format!(
+                        "import sys\nsys.path.append('{}/.venv/lib/python{}/site-packages')\n{}",
+                        temp_dir.path().display(),
+                        PY_VERSION.as_str(),
+                        code
+                    )
+                } else {
+                    code
+                };
+
                 let builder = PyRuntimeBuilder {
                     name: func.name.clone(),
                     handler: func.func_name.clone(),
-                    code: String::from_utf8(code.to_vec())?,
+                    code,
                     output_type: func.data_type.as_ref().clone(),
                     counter: Default::default(),
                 };
@@ -260,6 +277,7 @@ mod python_pool {
 pub struct TransformUdfScript {
     funcs: Vec<UdfFunctionDesc>,
     script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
+    py_temp_dir: Arc<Option<TempDir>>,
 }
 
 impl TransformUdfScript {
@@ -271,7 +289,13 @@ impl TransformUdfScript {
         Self {
             funcs,
             script_runtimes,
+            py_temp_dir: Arc::new(None),
         }
+    }
+
+    pub fn with_py_temp_dir(mut self, py_temp_dir: Arc<Option<TempDir>>) -> Self {
+        self.py_temp_dir = py_temp_dir;
+        self
     }
 }
 
@@ -298,9 +322,11 @@ impl Transform for TransformUdfScript {
 }
 
 impl TransformUdfScript {
-    pub fn init_runtime(funcs: &[UdfFunctionDesc]) -> Result<BTreeMap<String, Arc<ScriptRuntime>>> {
+    pub fn init_runtime(
+        funcs: &[UdfFunctionDesc],
+    ) -> Result<(BTreeMap<String, Arc<ScriptRuntime>>, Option<TempDir>)> {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
-
+        let temp_dir = Self::prepare_py_env(funcs)?;
         for func in funcs {
             let code = match &func.udf_type {
                 UDFType::Script(code) => code,
@@ -308,7 +334,7 @@ impl TransformUdfScript {
             };
 
             if let Entry::Vacant(entry) = script_runtimes.entry(func.name.clone()) {
-                let runtime = ScriptRuntime::try_create(func).map_err(|err| {
+                let runtime = ScriptRuntime::try_create(func, &temp_dir).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Failed to create UDF runtime for language {:?} with error: {err}",
                         code.language
@@ -318,7 +344,62 @@ impl TransformUdfScript {
             };
         }
 
-        Ok(script_runtimes)
+        Ok((script_runtimes, temp_dir))
+    }
+
+    // returns the injection codes for python
+    fn prepare_py_env(funcs: &[UdfFunctionDesc]) -> Result<Option<TempDir>> {
+        let mut dependencies = Vec::new();
+        for func in funcs {
+            match &func.udf_type {
+                UDFType::Script(UDFScriptCode {
+                    language: UDFLanguage::Python,
+                    code,
+                    ..
+                }) => {
+                    let code = String::from_utf8(code.to_vec())?;
+                    dependencies.extend_from_slice(&Self::extract_deps(&code));
+                }
+                _ => continue,
+            };
+        }
+
+        // use uv to install dependencies
+        if !dependencies.is_empty() {
+            dependencies.dedup();
+
+            let temp_dir = uv::create_uv_env(PY_VERSION.as_str())?;
+            uv::install_deps(temp_dir.path(), &dependencies)?;
+            return Ok(Some(temp_dir));
+        }
+
+        Ok(None)
+    }
+
+    fn extract_deps(script: &str) -> Vec<String> {
+        let mut ss = String::new();
+        let mut meta_start = false;
+        for line in script.lines() {
+            if meta_start {
+                if line.starts_with("# ///") {
+                    break;
+                }
+                ss.push_str(line.trim_start_matches('#').trim());
+                ss.push('\n');
+            }
+            if !meta_start && line.starts_with("# /// script") {
+                meta_start = true;
+            }
+        }
+
+        let parsed = ss.parse::<toml::Value>().unwrap();
+        if let Some(deps) = parsed["dependencies"].as_array() {
+            deps.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
     fn prepare_block_entries(
@@ -429,5 +510,73 @@ impl TransformUdfScript {
         }
         data_block.add_entry(entry);
         Ok(())
+    }
+}
+
+mod uv {
+    use std::path::Path;
+    use std::process::Command;
+
+    use tempfile::TempDir;
+
+    pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
+        let status = Command::new("uv")
+            .current_dir(temp_dir_path.join(".venv"))
+            .args(&["pip", "install"])
+            .args(deps)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|e| format!("Failed to install dependencies: {}", e))?;
+
+        log::info!("Dependency installation success {}", deps.join(", "));
+
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Dependency installation failed".into())
+        }
+    }
+
+    pub fn create_uv_env(python_version: &str) -> Result<TempDir, String> {
+        let temp_dir =
+            tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        let env_path = temp_dir.path().join(".venv");
+
+        Command::new("uv")
+            .args(&[
+                "venv",
+                "--python",
+                python_version,
+                env_path.to_str().unwrap(),
+            ])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map_err(|e| format!("Failed to create UV env: {}", e))?;
+
+        Ok(temp_dir)
+    }
+
+    pub fn detect_python_version() -> Result<String, String> {
+        let output = Command::new("python")
+            .arg("--version")
+            .output()
+            .map_err(|e| format!("Failed to detect python version: {}", e))?;
+
+        if output.status.success() {
+            let version = String::from_utf8_lossy(&output.stdout);
+            let version = version
+                .trim()
+                .to_string()
+                .replace("Python ", "")
+                .split('.')
+                .take(2)
+                .collect::<Vec<_>>()
+                .join(".");
+            Ok(version)
+        } else {
+            Err("Failed to detect python version".into())
+        }
     }
 }
