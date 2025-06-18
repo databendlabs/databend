@@ -55,7 +55,7 @@ static PY_VERSION: LazyLock<String> =
     LazyLock::new(|| uv::detect_python_version().unwrap_or("3.12".to_string()));
 
 impl ScriptRuntime {
-    pub fn try_create(func: &UdfFunctionDesc, temp_dir: &Option<TempDir>) -> Result<Self> {
+    pub fn try_create(func: &UdfFunctionDesc, _temp_dir: &Option<TempDir>) -> Result<Self> {
         let UDFType::Script(UDFScriptCode { language, code, .. }) = &func.udf_type else {
             unreachable!()
         };
@@ -87,7 +87,7 @@ impl ScriptRuntime {
             #[cfg(feature = "python-udf")]
             UDFLanguage::Python => {
                 let code = String::from_utf8(code.to_vec())?;
-                let code = if let Some(temp_dir) = temp_dir {
+                let code = if let Some(temp_dir) = _temp_dir {
                     format!(
                         "import sys\nsys.path.append('{}/.venv/lib/python{}/site-packages')\n{}",
                         temp_dir.path().display(),
@@ -321,10 +321,9 @@ impl Transform for TransformUdfScript {
     }
 }
 
+type RuntimeTimeRes = (BTreeMap<String, Arc<ScriptRuntime>>, Option<TempDir>);
 impl TransformUdfScript {
-    pub fn init_runtime(
-        funcs: &[UdfFunctionDesc],
-    ) -> Result<(BTreeMap<String, Arc<ScriptRuntime>>, Option<TempDir>)> {
+    pub fn init_runtime(funcs: &[UdfFunctionDesc]) -> Result<RuntimeTimeRes> {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
         let temp_dir = Self::prepare_py_env(funcs)?;
         for func in funcs {
