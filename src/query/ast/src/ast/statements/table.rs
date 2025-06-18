@@ -981,6 +981,24 @@ impl Display for CreateDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ColumnComment {
+    pub name: Identifier,
+    pub comment: String,
+}
+
+impl Display for ColumnComment {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{} COMMENT {}",
+            self.name,
+            QuotedString(&self.comment, '\'')
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum ModifyColumnAction {
     // (column name id, masking policy name)
     SetMaskingPolicy(Identifier, String),
@@ -990,6 +1008,8 @@ pub enum ModifyColumnAction {
     SetDataType(Vec<ColumnDefinition>),
     // column name id
     ConvertStoredComputedColumn(Identifier),
+    // (column name id, new comment)
+    Comment(Vec<ColumnComment>),
 }
 
 impl Display for ModifyColumnAction {
@@ -1007,6 +1027,7 @@ impl Display for ModifyColumnAction {
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 write!(f, "{} DROP STORED", column)?
             }
+            ModifyColumnAction::Comment(columns) => write_comma_separated_list(f, columns)?,
         }
 
         Ok(())

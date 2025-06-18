@@ -145,7 +145,7 @@ impl ModifyTableColumnInterpreter {
     async fn do_set_data_type(
         &self,
         table: Arc<dyn Table>,
-        field_and_comments: &[(TableField, String)],
+        field_and_comments: &[(TableField, Option<String>)],
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
@@ -237,9 +237,13 @@ impl ModifyTableColumnInterpreter {
                         }
                     }
                 }
-                if table_info.meta.field_comments[i] != *comment {
-                    table_info.meta.field_comments[i] = comment.to_string();
-                    modify_comment = true;
+
+                // None means only modify data type
+                if let Some(comment) = comment {
+                    if table_info.meta.field_comments[i] != *comment {
+                        table_info.meta.field_comments[i] = comment.to_string();
+                        modify_comment = true;
+                    }
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
