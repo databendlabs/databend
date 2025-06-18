@@ -358,7 +358,7 @@ pub struct StreamBlockProperties {
     source_schema: TableSchemaRef,
 
     cluster_stats_builder: Arc<ClusterStatisticsBuilder>,
-    stats_columns: Vec<ColumnId>,
+    stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
@@ -420,7 +420,7 @@ impl StreamBlockProperties {
             let data_type = DataType::from(field.data_type());
             if RangeIndex::supported_type(&data_type) && column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
             {
-                stats_columns.push(column_id);
+                stats_columns.push((column_id, data_type.clone()));
                 if !bloom_column_ids.contains(&column_id) {
                     distinct_columns.push((column_id, data_type));
                 }
