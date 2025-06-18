@@ -61,7 +61,6 @@ use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TaskHistoryTable;
 use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
-use databend_common_storages_system::TemporaryTablesTable;
 use databend_common_storages_system::TerseStreamsTable;
 use databend_common_storages_system::UserFunctionsTable;
 use databend_common_storages_system::UsersTable;
@@ -77,6 +76,7 @@ use databend_common_version::VERGEN_CARGO_FEATURES;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
+use crate::table_functions::TemporaryTablesTable;
 
 #[derive(Clone)]
 pub struct SystemDatabase {

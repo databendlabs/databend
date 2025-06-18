@@ -900,6 +900,10 @@ impl TableContext for QueryContext {
         self.get_current_session().get_id()
     }
 
+    fn get_current_client_session_id(&self) -> Option<String> {
+        self.get_current_session().get_client_session_id()
+    }
+
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
