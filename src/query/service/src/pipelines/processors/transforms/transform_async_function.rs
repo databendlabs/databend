@@ -84,9 +84,6 @@ impl SequenceCounter {
 // Shared sequence counters type
 pub type SequenceCounters = Vec<Arc<RwLock<SequenceCounter>>>;
 
-// Minimum batch size for fetching sequence numbers
-const MIN_SEQUENCE_BATCH_SIZE: u64 = 65536;
-
 pub struct TransformAsyncFunction {
     ctx: Arc<QueryContext>,
     // key is the index of async_func_desc
@@ -160,9 +157,11 @@ impl TransformAsyncFunction {
                         // If there are remaining numbers, we'll use them first
                         let remaining = if max > current { max - current } else { 0 };
                         let to_fetch = count.saturating_sub(remaining);
-                        let batch_size = to_fetch.max(MIN_SEQUENCE_BATCH_SIZE);
 
-                        // Calculate batch size - take the larger of count or MIN_SEQUENCE_BATCH_SIZE
+                        let step_size = ctx.get_settings().get_sequence_step_size()?;
+                        let batch_size = to_fetch.max(step_size);
+
+                        // Calculate batch size - take the larger of count or step_size
                         let req = GetSequenceNextValueReq {
                             ident: SequenceIdent::new(&tenant, sequence_name),
                             count: batch_size,
