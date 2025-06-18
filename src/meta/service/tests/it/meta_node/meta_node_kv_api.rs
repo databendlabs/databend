@@ -17,7 +17,7 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use databend_common_meta_kvapi::kvapi;
-use databend_meta::meta_service::MetaNode;
+use databend_meta::meta_service::MetaKVApiOwned;
 use maplit::btreeset;
 use test_harness::test;
 
@@ -32,8 +32,8 @@ struct MetaNodeUnitTestBuilder {
 }
 
 #[async_trait]
-impl kvapi::ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
-    async fn build(&self) -> Arc<MetaNode> {
+impl kvapi::ApiBuilder<MetaKVApiOwned> for MetaNodeUnitTestBuilder {
+    async fn build(&self) -> MetaKVApiOwned {
         let (_id, tc) = start_meta_node_leader().await.unwrap();
 
         let meta_node = tc.meta_node();
@@ -43,20 +43,20 @@ impl kvapi::ApiBuilder<Arc<MetaNode>> for MetaNodeUnitTestBuilder {
             tcs.push(tc);
         }
 
-        meta_node
+        meta_node.kv_api_owned()
     }
 
-    async fn build_cluster(&self) -> Vec<Arc<MetaNode>> {
+    async fn build_cluster(&self) -> Vec<MetaKVApiOwned> {
         let (_log_index, tcs) = start_meta_node_cluster(btreeset! {0,1,2}, btreeset! {3,4})
             .await
             .unwrap();
 
         let cluster = vec![
-            tcs[0].meta_node(),
-            tcs[1].meta_node(),
-            tcs[2].meta_node(),
-            tcs[3].meta_node(),
-            tcs[4].meta_node(),
+            tcs[0].meta_node().kv_api_owned(),
+            tcs[1].meta_node().kv_api_owned(),
+            tcs[2].meta_node().kv_api_owned(),
+            tcs[3].meta_node().kv_api_owned(),
+            tcs[4].meta_node().kv_api_owned(),
         ];
 
         {

@@ -16,6 +16,9 @@ mod errors;
 mod forwarder;
 mod meta_node_kv_api_impl;
 
+pub use meta_node_kv_api_impl::MetaKVApi;
+pub use meta_node_kv_api_impl::MetaKVApiOwned;
+
 pub(crate) mod snapshot_receiver_v1;
 
 pub mod meta_leader;

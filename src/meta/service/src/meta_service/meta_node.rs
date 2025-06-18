@@ -93,6 +93,7 @@ use crate::meta_service::errors::grpc_error_to_network_err;
 use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::meta_node_kv_api_impl::MetaKVApi;
+use crate::meta_service::meta_node_kv_api_impl::MetaKVApiOwned;
 use crate::meta_service::meta_node_status::MetaNodeStatus;
 use crate::meta_service::watcher::DispatcherHandle;
 use crate::meta_service::watcher::WatchTypes;
@@ -1198,6 +1199,10 @@ impl MetaNode {
     /// Get a kvapi::KVApi implementation.
     pub fn kv_api(&self) -> MetaKVApi {
         MetaKVApi::new(self)
+    }
+
+    pub fn kv_api_owned(self: &Arc<Self>) -> MetaKVApiOwned {
+        MetaKVApiOwned::new(self.clone())
     }
 }
 
