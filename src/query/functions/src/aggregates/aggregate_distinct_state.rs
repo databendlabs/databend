@@ -47,8 +47,7 @@ use databend_common_io::prelude::*;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 
 pub trait DistinctStateFunc: Sized + Send + Sync {
     fn new() -> Self;
@@ -87,11 +86,11 @@ impl DistinctStateFunc for AggregateDistinctState {
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        borsh_serialize_state(writer, &self.set)
+        Ok(self.set.serialize(writer)?)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        let set = borsh_deserialize_state(reader)?;
+        let set = borsh_partial_deserialize(reader)?;
         Ok(Self { set })
     }
 
@@ -109,7 +108,7 @@ impl DistinctStateFunc for AggregateDistinctState {
             .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
             .collect::<Vec<_>>();
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-        borsh_serialize_state(&mut buffer, &values)?;
+        values.serialize(&mut buffer)?;
         self.set.insert(buffer);
         Ok(())
     }
@@ -128,7 +127,7 @@ impl DistinctStateFunc for AggregateDistinctState {
                     .collect::<Vec<_>>();
 
                 let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-                borsh_serialize_state(&mut buffer, &values)?;
+                values.serialize(&mut buffer)?;
                 self.set.insert(buffer);
             }
         }
@@ -147,7 +146,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
         for data in self.set.iter() {
             let mut slice = data.as_slice();
-            let scalars: Vec<Scalar> = borsh_deserialize_state(&mut slice)?;
+            let scalars: Vec<Scalar> = borsh_partial_deserialize(&mut slice)?;
             scalars.iter().enumerate().for_each(|(idx, group_value)| {
                 builders[idx].push(group_value.as_ref());
             });
@@ -252,7 +251,7 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for e in self.set.iter() {
-            borsh_serialize_state(writer, e.key())?
+            e.key().serialize(writer)?;
         }
         Ok(())
     }
@@ -261,7 +260,7 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
         let size = reader.read_uvarint()?;
         let mut set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let t: T = borsh_deserialize_state(reader)?;
+            let t: T = borsh_partial_deserialize(reader)?;
             let _ = set.set_insert(t).is_ok();
         }
         Ok(Self { set })
@@ -333,7 +332,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            borsh_serialize_state(writer, value.key())?
+            value.key().serialize(writer)?;
         }
         Ok(())
     }
@@ -342,7 +341,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         let size = reader.read_uvarint()?;
         let mut set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let e = borsh_deserialize_state(reader)?;
+            let e = borsh_partial_deserialize(reader)?;
             let _ = set.set_insert(e).is_ok();
         }
         Ok(Self { set })

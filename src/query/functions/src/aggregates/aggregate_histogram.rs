@@ -23,7 +23,6 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
@@ -117,20 +116,10 @@ where
         };
 
         let mut buckets = build_histogram(&self.value_map, histogram_data.max_num_buckets);
-        let decimal_size = histogram_data.data_type.as_decimal().copied();
 
         let format_scalar = |scalar| {
             let scalar = T::upcast_scalar_with_type(scalar, &histogram_data.data_type);
-            let scalar = match scalar {
-                Scalar::Decimal(DecimalScalar::Decimal128(value, _)) => {
-                    i128::upcast_scalar(value, decimal_size.unwrap())
-                }
-                Scalar::Decimal(DecimalScalar::Decimal256(value, _)) => {
-                    i256::upcast_scalar(value, decimal_size.unwrap())
-                }
-                _ => scalar,
-            };
-            format!("{}", scalar)
+            format!("{scalar}")
         };
 
         let json_str = serde_json::to_string(

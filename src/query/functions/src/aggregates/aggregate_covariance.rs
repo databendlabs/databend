@@ -37,8 +37,7 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
@@ -235,12 +234,12 @@ where
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let rhs: AggregateCovarianceState = borsh_deserialize_state(reader)?;
+        let rhs: AggregateCovarianceState = borsh_partial_deserialize(reader)?;
         state.merge(&rhs);
         Ok(())
     }
