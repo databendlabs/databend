@@ -32,14 +32,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
-use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_semaphore::acquirer::Permit;
-use databend_common_meta_semaphore::Semaphore;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::Operation;
-use databend_common_meta_types::UpsertKV;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::init_history_tables;
@@ -54,12 +47,13 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::history_tables::alter_table::get_alter_table_sql;
+use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 
 pub struct GlobalHistoryLog {
-    meta_client: Arc<ClientHandle>,
+    meta_handle: HistoryMetaHandle,
     interval: u64,
     tenant_id: String,
     node_id: String,
@@ -82,6 +76,7 @@ impl GlobalHistoryLog {
         }
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
+        let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let stage_name = cfg.log.history.stage_name.clone();
         let runtime = Arc::new(Runtime::with_worker_threads(
             2,
@@ -89,7 +84,7 @@ impl GlobalHistoryLog {
         )?);
 
         let instance = Arc::new(Self {
-            meta_client,
+            meta_handle,
             interval: cfg.log.history.interval as u64,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             node_id: cfg.query.node_id.clone(),
@@ -147,15 +142,9 @@ impl GlobalHistoryLog {
                         Ok(acquired_lock) => {
                             if acquired_lock {
                                 consecutive_error = 0;
-                                let _ = log
-                                    .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                    .await;
                             }
                         }
                         Err(e) => {
-                            let _ = log
-                                .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                .await;
                             error!(
                                 "[HISTORY-TABLES] {} log transform failed due to {}, retry {}",
                                 table_clone.name, e, consecutive_error
@@ -183,23 +172,11 @@ impl GlobalHistoryLog {
             let log = GlobalHistoryLog::instance();
             let handle = spawn(async move {
                 loop {
-                    match log.clean(&table_clone, &meta_key).await {
-                        Ok(acquired_lock) => {
-                            if acquired_lock {
-                                let _ = log
-                                    .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                    .await;
-                            }
-                        }
-                        Err(e) => {
-                            let _ = log
-                                .finish_hook(&format!("{}/{}/lock", meta_key, table_clone.name))
-                                .await;
-                            error!(
-                                "[HISTORY-TABLES] {} log clean failed {}",
-                                table_clone.name, e
-                            );
-                        }
+                    if let Err(e) = log.clean(&table_clone, &meta_key).await {
+                        error!(
+                            "[HISTORY-TABLES] {} log clean failed {}",
+                            table_clone.name, e
+                        );
                     }
                     sleep(sleep_time).await;
                 }
@@ -208,61 +185,6 @@ impl GlobalHistoryLog {
         }
         join_all(handles).await;
 
-        Ok(())
-    }
-
-    /// Acquires a permit from a distributed semaphore with timestamp-based rate limiting.
-    ///
-    /// This function attempts to acquire a permit from a distributed semaphore identified by `meta_key`.
-    /// It also implements a rate limiting mechanism based on the last execution timestamp.g
-    pub async fn acquire(&self, meta_key: &str, interval: u64) -> Result<Option<Permit>> {
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        // prevent log table from logging its own logs
-        tracking_payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
-        let _guard = ThreadTracker::tracking(tracking_payload);
-        let acquired_guard = ThreadTracker::tracking_future(Semaphore::new_acquired(
-            self.meta_client.clone(),
-            meta_key,
-            1,
-            self.node_id.clone(),
-            Duration::from_secs(3),
-        ))
-        .await
-        .map_err(|_e| "acquire semaphore failed from GlobalHistoryLog")?;
-        if interval == 0 {
-            return Ok(Some(acquired_guard));
-        }
-        if match ThreadTracker::tracking_future(
-            self.meta_client
-                .get_kv(&format!("{}/last_timestamp", meta_key)),
-        )
-        .await?
-        {
-            Some(v) => {
-                let last: u64 = serde_json::from_slice(&v.data)?;
-                chrono::Utc::now().timestamp_millis() as u64
-                    - Duration::from_secs(interval).as_millis() as u64
-                    > last
-            }
-            None => true,
-        } {
-            Ok(Some(acquired_guard))
-        } else {
-            drop(acquired_guard);
-            Ok(None)
-        }
-    }
-
-    /// Updating the last execution timestamp in the metadata.
-    pub async fn finish_hook(&self, meta_key: &str) -> Result<()> {
-        self.meta_client
-            .upsert_kv(UpsertKV::new(
-                format!("{}/last_timestamp", meta_key),
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&chrono::Utc::now().timestamp_millis())?),
-                None,
-            ))
-            .await?;
         Ok(())
     }
 
@@ -312,11 +234,13 @@ impl GlobalHistoryLog {
 
     pub async fn transform(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
         let may_permit = self
-            .acquire(&format!("{}/{}/lock", meta_key, table.name), self.interval)
+            .meta_handle
+            .acquire_with_guard(&format!("{}/{}/lock", meta_key, table.name), self.interval)
             .await?;
         if let Some(_guard) = may_permit {
             let mut batch_number_end = 0;
             let batch_number_begin = self
+                .meta_handle
                 .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, table.name))
                 .await?
                 .unwrap_or(0);
@@ -324,6 +248,7 @@ impl GlobalHistoryLog {
                 table.assemble_log_history_transform(&self.stage_name, batch_number_begin)
             } else {
                 batch_number_end = self
+                    .meta_handle
                     .get_u64_from_meta(&format!("{}/{}/batch_number", meta_key, "log_history"))
                     .await?
                     .unwrap_or(0);
@@ -334,17 +259,19 @@ impl GlobalHistoryLog {
             };
             self.execute_sql(&sql).await?;
             if table.name == "log_history" {
-                self.set_u64_to_meta(
-                    &format!("{}/{}/batch_number", meta_key, table.name),
-                    batch_number_begin + 1,
-                )
-                .await?;
+                self.meta_handle
+                    .set_u64_to_meta(
+                        &format!("{}/{}/batch_number", meta_key, table.name),
+                        batch_number_begin + 1,
+                    )
+                    .await?;
             } else {
-                self.set_u64_to_meta(
-                    &format!("{}/{}/batch_number", meta_key, table.name),
-                    batch_number_end,
-                )
-                .await?;
+                self.meta_handle
+                    .set_u64_to_meta(
+                        &format!("{}/{}/batch_number", meta_key, table.name),
+                        batch_number_end,
+                    )
+                    .await?;
             }
             drop(_guard);
             return Ok(true);
@@ -354,7 +281,8 @@ impl GlobalHistoryLog {
 
     pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
         let may_permit = self
-            .acquire(
+            .meta_handle
+            .acquire_with_guard(
                 &format!("{}/{}/lock", meta_key, table.name),
                 Duration::from_hours(self.retention_interval as u64).as_secs(),
             )
@@ -379,28 +307,6 @@ impl GlobalHistoryLog {
             return Ok(true);
         }
         Ok(false)
-    }
-
-    pub async fn get_u64_from_meta(&self, meta_key: &str) -> Result<Option<u64>> {
-        match self.meta_client.get_kv(meta_key).await? {
-            Some(v) => {
-                let num: u64 = serde_json::from_slice(&v.data)?;
-                Ok(Some(num))
-            }
-            None => Ok(None),
-        }
-    }
-
-    pub async fn set_u64_to_meta(&self, meta_key: &str, value: u64) -> Result<()> {
-        self.meta_client
-            .upsert_kv(UpsertKV::new(
-                meta_key,
-                MatchSeq::Any,
-                Operation::Update(serde_json::to_vec(&value)?),
-                None,
-            ))
-            .await?;
-        Ok(())
     }
 
     pub async fn create_context(&self) -> Result<Arc<QueryContext>> {
