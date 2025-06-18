@@ -522,7 +522,7 @@ mod uv {
     pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
         let status = Command::new("uv")
             .current_dir(temp_dir_path.join(".venv"))
-            .args(&["pip", "install"])
+            .args(["pip", "install"])
             .args(deps)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -544,7 +544,7 @@ mod uv {
         let env_path = temp_dir.path().join(".venv");
 
         Command::new("uv")
-            .args(&[
+            .args([
                 "venv",
                 "--python",
                 python_version,
