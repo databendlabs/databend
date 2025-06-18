@@ -1248,7 +1248,7 @@ where
         let result = match read_decimal_with_size::<T>(
             value.as_bytes(),
             dest_type.size(),
-            false,
+            true,
             ctx.func_ctx.rounding_mode,
         ) {
             Ok((d, _)) => d,
