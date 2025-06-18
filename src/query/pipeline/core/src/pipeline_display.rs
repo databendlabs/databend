@@ -15,7 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::pipe::Pipe;
+use petgraph::dot::Dot;
+
 use crate::Pipeline;
 
 impl Pipeline {
@@ -28,35 +29,17 @@ struct PipelineIndentDisplayWrapper<'a> {
     pipeline: &'a Pipeline,
 }
 
-impl PipelineIndentDisplayWrapper<'_> {
-    fn pipe_name(pipe: &Pipe) -> String {
-        unsafe { pipe.items[0].processor.name() }
-    }
-}
-
 impl Display for PipelineIndentDisplayWrapper<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let pipes = &self.pipeline.pipes;
-        for (index, pipe) in pipes.iter().rev().enumerate() {
-            if index > 0 {
-                writeln!(f)?;
-            }
-
-            for _ in 0..index {
-                write!(f, "  ")?;
-            }
-
-            let pipe_name = Self::pipe_name(pipe);
-            if pipe.input_length == pipe.output_length
-                || pipe.input_length == 0
-                || pipe.output_length == 0
-            {
-                write!(f, "{} × {}", Self::pipe_name(pipe), pipe.items.len(),)?;
-            } else {
-                write!(f, "Merge to {pipe_name} × {}", pipe.output_length,)?;
-            }
-        }
-
-        Ok(())
+        write!(
+            f,
+            "{:?}",
+            Dot::with_attr_getters(
+                &self.pipeline.graph,
+                &[],
+                &|_, _| String::new(),
+                &|_, (_, _)| String::new(),
+            )
+        )
     }
 }

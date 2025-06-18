@@ -21,14 +21,12 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub fn build_exchange_source(&mut self, exchange_source: &ExchangeSource) -> Result<()> {
         let exchange_manager = self.ctx.get_exchange_manager();
-        let mut build_res = exchange_manager.get_fragment_source(
+        let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
             self.exchange_injector.clone(),
         )?;
 
-        // add profile
-        build_res.main_pipeline.reset_scopes(&self.main_pipeline);
         // add sharing data
         self.join_state = build_res.builder_data.input_join_state;
         self.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;

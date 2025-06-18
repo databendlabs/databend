@@ -64,14 +64,13 @@ impl PipelineBuilder {
         func_ctx: FunctionContext,
         settings: Arc<Settings>,
         ctx: Arc<QueryContext>,
-        scopes: Vec<PlanScope>,
     ) -> PipelineBuilder {
         PipelineBuilder {
             ctx,
             func_ctx,
             settings,
             pipelines: vec![],
-            main_pipeline: Pipeline::with_scopes(scopes),
+            main_pipeline: Pipeline::create(),
             exchange_injector: DefaultExchangeInjector::create(),
             merge_into_probe_data_fields: None,
             join_state: None,
@@ -138,7 +137,8 @@ impl PipelineBuilder {
                     Arc::new(desc),
                     Arc::new(profile_labels),
                 );
-                Ok(Some(self.main_pipeline.add_plan_scope(scope)))
+
+                Ok(Some(scope.enter_scope_guard()))
             }
         }
     }

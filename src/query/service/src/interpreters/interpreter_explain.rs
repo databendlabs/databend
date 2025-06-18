@@ -242,6 +242,7 @@ impl Interpreter for ExplainInterpreter {
                 }
 
                 Self::format_pipeline(&pipeline)
+                // eprintln!("explain interpreter {:?}");
             }
 
             ExplainKind::Fragments => match &self.plan {
@@ -379,6 +380,7 @@ impl ExplainInterpreter {
     fn format_pipeline(build_res: &PipelineBuildResult) -> Vec<DataBlock> {
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
+        eprintln!("pipeline {}", build_res.main_pipeline.display_indent());
         let line_split_result = format!("{}", build_res.main_pipeline.display_indent())
             .lines()
             .map(|l| l.to_string())
