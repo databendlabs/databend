@@ -41,8 +41,7 @@ use databend_common_expression::InputColumns;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::assert_unary_arguments;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::extract_number_param;
 use super::AggregateFunction;
 
@@ -114,12 +113,12 @@ impl AggregateFunction for MarkovTarin {
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<MarkovModel>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<MarkovModel>();
-        let mut rhs = borsh_deserialize_state::<MarkovModel>(reader)?;
+        let mut rhs = borsh_partial_deserialize::<MarkovModel>(reader)?;
         state.merge(&mut rhs);
 
         Ok(())

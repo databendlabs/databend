@@ -41,8 +41,7 @@ use jsonb::RawJsonb;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
@@ -136,9 +135,11 @@ where
 pub struct AggregateJsonArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+    _t: PhantomData<(T, State)>,
 }
+
+unsafe impl<T, State> Send for AggregateJsonArrayAggFunction<T, State> {}
+unsafe impl<T, State> Sync for AggregateJsonArrayAggFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
 where
@@ -241,12 +242,12 @@ where
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs: State = borsh_partial_deserialize(reader)?;
 
         state.merge(&rhs)
     }
@@ -287,8 +288,7 @@ where
         let func = AggregateJsonArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: PhantomData,
-            _state: PhantomData,
+            _t: Default::default(),
         };
         Ok(Arc::new(func))
     }

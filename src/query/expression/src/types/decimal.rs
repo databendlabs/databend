@@ -2815,6 +2815,8 @@ impl Ord for i256 {
     }
 }
 
+pub type DecimalView<F, T> = ComputeView<DecimalConvert<F, T>, CoreDecimal<F>, CoreDecimal<T>>;
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DecimalConvert<F, T>(std::marker::PhantomData<(F, T)>);
 

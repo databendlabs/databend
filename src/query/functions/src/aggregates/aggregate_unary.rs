@@ -232,7 +232,7 @@ where
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state: &mut S = place.get::<S>();
-        Ok(borsh::to_writer(writer, state)?)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {

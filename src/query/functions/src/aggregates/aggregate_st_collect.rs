@@ -49,8 +49,7 @@ use geozero::wkb::Ewkb;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ScalarStateFunc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
+use super::borsh_partial_deserialize;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
@@ -197,13 +196,15 @@ where
 pub struct AggregateStCollectFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+    _t: PhantomData<(T, State)>,
 }
+
+unsafe impl<T, State> Send for AggregateStCollectFunction<T, State> {}
+unsafe impl<T, State> Sync for AggregateStCollectFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateStCollectFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
@@ -307,12 +308,12 @@ where
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs: State = borsh_partial_deserialize(reader)?;
 
         state.merge(&rhs)
     }
@@ -346,15 +347,14 @@ impl<T, State> fmt::Display for AggregateStCollectFunction<T, State> {
 
 impl<T, State> AggregateStCollectFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateStCollectFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: PhantomData,
-            _state: PhantomData,
+            _t: Default::default(),
         };
         Ok(Arc::new(func))
     }

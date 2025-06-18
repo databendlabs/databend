@@ -21,7 +21,6 @@ use crate::read;
 use crate::store;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
-use crate::types::decimal::DecimalType;
 use crate::types::i256;
 use crate::types::AccessType;
 use crate::types::AnyType;
@@ -29,26 +28,29 @@ use crate::types::BinaryType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::Decimal128As256Type;
-use crate::types::Decimal256As128Type;
+use crate::types::DecimalDataKind;
+use crate::types::DecimalView;
 use crate::types::NumberColumn;
 use crate::types::NumberType;
 use crate::types::StringColumn;
 use crate::types::StringType;
 use crate::types::TimestampType;
+use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::InputColumns;
 use crate::Scalar;
 use crate::SelectVector;
 
-pub fn rowformat_size(data_type: &DataType) -> usize {
+pub(super) fn rowformat_size(data_type: &DataType) -> usize {
     match data_type {
         DataType::Null | DataType::EmptyArray | DataType::EmptyMap => 0,
         DataType::Boolean => 1,
         DataType::Number(n) => n.bit_width() as usize / 8,
-        DataType::Decimal(n) => {
-            if n.can_carried_by_128() {
+        DataType::Decimal(size) => {
+            if size.can_carried_by_64() {
+                8
+            } else if size.can_carried_by_128() {
                 16
             } else {
                 32
@@ -71,7 +73,7 @@ pub fn rowformat_size(data_type: &DataType) -> usize {
 }
 
 /// This serialize column into row format by fixed size
-pub unsafe fn serialize_column_to_rowformat(
+pub(super) unsafe fn serialize_column_to_rowformat(
     arena: &Bump,
     column: &Column,
     select_vector: &SelectVector,
@@ -89,33 +91,22 @@ pub unsafe fn serialize_column_to_rowformat(
                 }
             }
         }),
-        Column::Decimal(v) => match v {
-            DecimalColumn::Decimal64(_, _) => unimplemented!(),
-            DecimalColumn::Decimal128(buffer, size) => {
-                if size.can_carried_by_128() {
-                    for index in select_vector.iter().take(rows).copied() {
-                        store(&buffer[index], address[index].add(offset) as *mut u8);
-                    }
-                } else {
-                    for index in select_vector.iter().take(rows).copied() {
-                        let val = Decimal128As256Type::index_column_unchecked(buffer, index);
-                        store(&val, address[index].add(offset) as *mut u8);
-                    }
+        Column::Decimal(decimal_column) => {
+            with_decimal_mapped_type!(|F| match decimal_column {
+                DecimalColumn::F(buffer, size) => {
+                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                        DecimalDataKind::T => {
+                            serialize_fixed_size_column_to_rowformat::<DecimalView<F, T>>(
+                                buffer,
+                                &select_vector[0..rows],
+                                address,
+                                offset,
+                            );
+                        }
+                    });
                 }
-            }
-            DecimalColumn::Decimal256(buffer, size) => {
-                if size.can_carried_by_128() {
-                    for index in select_vector.iter().take(rows).copied() {
-                        let val = Decimal256As128Type::index_column_unchecked(buffer, index);
-                        store(&val, address[index].add(offset) as *mut u8);
-                    }
-                } else {
-                    for index in select_vector.iter().take(rows).copied() {
-                        store(&buffer[index], address[index].add(offset) as *mut u8);
-                    }
-                }
-            }
-        },
+            });
+        }
         Column::Boolean(v) => {
             if v.null_count() == 0 || v.null_count() == v.len() {
                 let val: u8 = if v.null_count() == 0 { 1 } else { 0 };
@@ -190,7 +181,21 @@ pub unsafe fn serialize_column_to_rowformat(
     }
 }
 
-pub unsafe fn row_match_columns(
+unsafe fn serialize_fixed_size_column_to_rowformat<T>(
+    column: &T::Column,
+    select_vector: &[usize],
+    address: &[*const u8],
+    offset: usize,
+) where
+    T: AccessType<Scalar: Copy>,
+{
+    for index in select_vector.iter().copied() {
+        let val = T::index_column_unchecked_scalar(column, index);
+        store(&val, address[index].add(offset) as *mut u8);
+    }
+}
+
+pub(super) unsafe fn row_match_columns(
     cols: InputColumns,
     address: &[*const u8],
     select_vector: &mut SelectVector,
@@ -226,7 +231,7 @@ pub unsafe fn row_match_columns(
     }
 }
 
-pub unsafe fn row_match_column(
+unsafe fn row_match_column(
     col: &Column,
     address: &[*const u8],
     select_vector: &mut SelectVector,
@@ -264,33 +269,28 @@ pub unsafe fn row_match_column(
                 )
             }
         }),
-        Column::Decimal(v) => match v {
-            DecimalColumn::Decimal64(_, _) => unreachable!(),
-            DecimalColumn::Decimal128(_, _) => row_match_column_type::<DecimalType<i128>>(
-                col,
-                validity,
-                address,
-                select_vector,
-                temp_vector,
-                count,
-                validity_offset,
-                col_offset,
-                no_match,
-                no_match_count,
-            ),
-            DecimalColumn::Decimal256(_, _) => row_match_column_type::<DecimalType<i256>>(
-                col,
-                validity,
-                address,
-                select_vector,
-                temp_vector,
-                count,
-                validity_offset,
-                col_offset,
-                no_match,
-                no_match_count,
-            ),
-        },
+        Column::Decimal(decimal_column) => {
+            with_decimal_mapped_type!(|F| match decimal_column {
+                DecimalColumn::F(_, size) => {
+                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                        DecimalDataKind::T => {
+                            row_match_column_type::<DecimalView<F, T>>(
+                                col,
+                                validity,
+                                address,
+                                select_vector,
+                                temp_vector,
+                                count,
+                                validity_offset,
+                                col_offset,
+                                no_match,
+                                no_match_count,
+                            )
+                        }
+                    });
+                }
+            });
+        }
         Column::Boolean(_) => row_match_column_type::<BooleanType>(
             col,
             validity,

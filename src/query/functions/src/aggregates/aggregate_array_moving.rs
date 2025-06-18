@@ -49,8 +49,6 @@ use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::borsh_deserialize_state;
-use super::borsh_serialize_state;
 use super::extract_number_param;
 use super::StateAddr;
 use crate::aggregates::aggregate_sum::SumState;
@@ -328,8 +326,7 @@ where T: Decimal
         let size = inner_type.as_decimal().unwrap();
 
         let inner_col = T::upcast_column(sum_values.into(), *size);
-        let array_value = ScalarRef::Array(inner_col);
-        builder.push(array_value);
+        builder.push(ScalarRef::Array(inner_col));
 
         Ok(())
     }
@@ -372,9 +369,9 @@ where T: Decimal
 
         let data_type = builder.data_type();
         let inner_type = data_type.as_array().unwrap();
-        let decimal_type = inner_type.as_decimal().unwrap();
+        let decimal_size = inner_type.as_decimal().unwrap();
 
-        let inner_col = T::upcast_column(avg_values.into(), *decimal_type);
+        let inner_col = T::upcast_column(avg_values.into(), *decimal_size);
         let array_value = ScalarRef::Array(inner_col);
         builder.push(array_value);
 
@@ -438,12 +435,12 @@ where State: SumState
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs = State::deserialize_reader(reader)?;
 
         state.merge(&rhs)
     }
@@ -614,12 +611,12 @@ where State: SumState
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        borsh_serialize_state(writer, state)
+        Ok(state.serialize(writer)?)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = borsh_deserialize_state(reader)?;
+        let rhs = State::deserialize_reader(reader)?;
 
         state.merge(&rhs)
     }
