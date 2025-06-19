@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::Udf;
@@ -27,15 +25,13 @@ impl PipelineBuilder {
         self.build_pipeline(&udf.input)?;
 
         if udf.script_udf {
-            let (runtimes, py_temp_dir) = TransformUdfScript::init_runtime(&udf.udf_funcs)?;
-            let py_temp_dir = Arc::new(py_temp_dir);
+            let runtimes = TransformUdfScript::init_runtime(&udf.udf_funcs)?;
             self.main_pipeline.try_add_transformer(|| {
                 Ok(TransformUdfScript::new(
                     self.func_ctx.clone(),
                     udf.udf_funcs.clone(),
                     runtimes.clone(),
-                )
-                .with_py_temp_dir(py_temp_dir.clone()))
+                ))
             })
         } else {
             let semaphore = TransformUdfServer::init_semaphore(self.ctx.clone())?;

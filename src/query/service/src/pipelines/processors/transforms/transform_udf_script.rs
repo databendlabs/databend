@@ -21,6 +21,7 @@ use std::sync::LazyLock;
 use arrow_array::RecordBatch;
 use arrow_udf_runtime::javascript::FunctionOptions;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_cache::Cache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
@@ -52,10 +53,10 @@ pub enum ScriptRuntime {
 }
 
 static PY_VERSION: LazyLock<String> =
-    LazyLock::new(|| uv::detect_python_version().unwrap_or("3.12".to_string()));
+    LazyLock::new(|| venv::detect_python_version().unwrap_or("3.12".to_string()));
 
 impl ScriptRuntime {
-    pub fn try_create(func: &UdfFunctionDesc, _temp_dir: &Option<TempDir>) -> Result<Self> {
+    pub fn try_create(func: &UdfFunctionDesc, _temp_dir: Option<Arc<TempDir>>) -> Result<Self> {
         let UDFType::Script(UDFScriptCode { language, code, .. }) = &func.udf_type else {
             unreachable!()
         };
@@ -89,9 +90,8 @@ impl ScriptRuntime {
                 let code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = _temp_dir {
                     format!(
-                        "import sys\nsys.path.append('{}/.venv/lib/python{}/site-packages')\n{}",
+                        "import sys\nsys.path.append('{}')\n{}",
                         temp_dir.path().display(),
-                        PY_VERSION.as_str(),
                         code
                     )
                 } else {
@@ -276,26 +276,19 @@ mod python_pool {
 
 pub struct TransformUdfScript {
     funcs: Vec<UdfFunctionDesc>,
-    script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
-    py_temp_dir: Arc<Option<TempDir>>,
+    script_runtimes: RuntimeTimeRes,
 }
 
 impl TransformUdfScript {
     pub fn new(
         _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
-        script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
+        script_runtimes: RuntimeTimeRes,
     ) -> Self {
         Self {
             funcs,
             script_runtimes,
-            py_temp_dir: Arc::new(None),
         }
-    }
-
-    pub fn with_py_temp_dir(mut self, py_temp_dir: Arc<Option<TempDir>>) -> Self {
-        self.py_temp_dir = py_temp_dir;
-        self
     }
 }
 
@@ -313,7 +306,7 @@ impl Transform for TransformUdfScript {
             let num_rows = data_block.num_rows();
             let block_entries = self.prepare_block_entries(func, &data_block)?;
             let input_batch = self.create_input_batch(block_entries, num_rows)?;
-            let runtime = self.script_runtimes.get(&func.name).unwrap();
+            let (runtime, _) = self.script_runtimes.get(&func.name).unwrap();
             let result_batch = runtime.handle_execution(func, &input_batch)?;
             self.update_datablock(func, result_batch, &mut data_block)?;
         }
@@ -321,58 +314,61 @@ impl Transform for TransformUdfScript {
     }
 }
 
-type RuntimeTimeRes = (BTreeMap<String, Arc<ScriptRuntime>>, Option<TempDir>);
+type RuntimeTimeRes = BTreeMap<String, (Arc<ScriptRuntime>, Option<Arc<TempDir>>)>;
+
 impl TransformUdfScript {
     pub fn init_runtime(funcs: &[UdfFunctionDesc]) -> Result<RuntimeTimeRes> {
-        let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
-        let temp_dir = Self::prepare_py_env(funcs)?;
+        let mut script_runtimes = BTreeMap::new();
         for func in funcs {
-            let code = match &func.udf_type {
-                UDFType::Script(code) => code,
+            let (code, code_str) = match &func.udf_type {
+                UDFType::Script(script_code) => {
+                    (script_code, String::from_utf8(script_code.code.to_vec())?)
+                }
                 _ => continue,
             };
 
+            let temp_dir = match &func.udf_type {
+                UDFType::Script(UDFScriptCode {
+                    language: UDFLanguage::Python,
+                    ..
+                }) => {
+                    let dependencies = Self::extract_deps(&code_str);
+                    if !dependencies.is_empty() {
+                        // try to find the temp dir from cache
+                        let key = venv::PyVenvKeyEntry {
+                            udf_desc: func.clone(),
+                        };
+                        let mut w = venv::PY_VENV_CACHE.write();
+                        let entry = w.get(&key);
+                        if let Some(entry) = entry {
+                            Some(entry.temp_dir.clone())
+                        } else {
+                            let temp_dir = Arc::new(venv::create_venv(PY_VERSION.as_str())?);
+                            venv::install_deps(temp_dir.path(), &dependencies)?;
+                            w.insert(key, venv::PyVenvCacheEntry {
+                                temp_dir: temp_dir.clone(),
+                            });
+                            Some(temp_dir)
+                        }
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            };
+
             if let Entry::Vacant(entry) = script_runtimes.entry(func.name.clone()) {
-                let runtime = ScriptRuntime::try_create(func, &temp_dir).map_err(|err| {
+                let runtime = ScriptRuntime::try_create(func, temp_dir.clone()).map_err(|err| {
                     ErrorCode::UDFDataError(format!(
                         "Failed to create UDF runtime for language {:?} with error: {err}",
                         code.language
                     ))
                 })?;
-                entry.insert(Arc::new(runtime));
+                entry.insert((Arc::new(runtime), temp_dir));
             };
         }
 
-        Ok((script_runtimes, temp_dir))
-    }
-
-    // returns the injection codes for python
-    fn prepare_py_env(funcs: &[UdfFunctionDesc]) -> Result<Option<TempDir>> {
-        let mut dependencies = Vec::new();
-        for func in funcs {
-            match &func.udf_type {
-                UDFType::Script(UDFScriptCode {
-                    language: UDFLanguage::Python,
-                    code,
-                    ..
-                }) => {
-                    let code = String::from_utf8(code.to_vec())?;
-                    dependencies.extend_from_slice(&Self::extract_deps(&code));
-                }
-                _ => continue,
-            };
-        }
-
-        // use uv to install dependencies
-        if !dependencies.is_empty() {
-            dependencies.dedup();
-
-            let temp_dir = uv::create_uv_env(PY_VERSION.as_str())?;
-            uv::install_deps(temp_dir.path(), &dependencies)?;
-            return Ok(Some(temp_dir));
-        }
-
-        Ok(None)
+        Ok(script_runtimes)
     }
 
     fn extract_deps(script: &str) -> Vec<String> {
@@ -512,17 +508,24 @@ impl TransformUdfScript {
     }
 }
 
-mod uv {
+mod venv {
     use std::path::Path;
     use std::process::Command;
+    use std::sync::Arc;
+    use std::sync::LazyLock;
 
+    use databend_common_cache::LruCache;
+    use databend_common_cache::MemSized;
+    use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
+    use parking_lot::RwLock;
     use tempfile::TempDir;
 
     pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
-        let status = Command::new("uv")
-            .current_dir(temp_dir_path.join(".venv"))
-            .args(["pip", "install"])
+        let target_path = temp_dir_path.display().to_string();
+        let status = Command::new("python")
+            .args(["-m", "pip", "install"])
             .args(deps)
+            .args(["--target", &target_path])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
@@ -537,22 +540,17 @@ mod uv {
         }
     }
 
-    pub fn create_uv_env(python_version: &str) -> Result<TempDir, String> {
+    pub fn create_venv(_python_version: &str) -> Result<TempDir, String> {
         let temp_dir =
             tempfile::tempdir().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-        let env_path = temp_dir.path().join(".venv");
 
-        Command::new("uv")
-            .args([
-                "venv",
-                "--python",
-                python_version,
-                env_path.to_str().unwrap(),
-            ])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .map_err(|e| format!("Failed to create UV env: {}", e))?;
+        // let env_path = temp_dir.path().join(".venv");
+        // Command::new("python")
+        //     .args(["-m", "venv", env_path.to_str().unwrap()])
+        //     .stdout(std::process::Stdio::null())
+        //     .stderr(std::process::Stdio::null())
+        //     .status()
+        //     .map_err(|e| format!("Failed to create venv: {}", e))?;
 
         Ok(temp_dir)
     }
@@ -578,4 +576,32 @@ mod uv {
             Err("Failed to detect python version".into())
         }
     }
+
+    // cached temp dir for python udf
+    // Add this after the PY_VERSION LazyLock declaration
+    // A simple LRU cache for Python virtual environments
+    #[derive(Clone)]
+    pub(crate) struct PyVenvCacheEntry {
+        pub(crate) temp_dir: Arc<TempDir>,
+    }
+
+    #[derive(Eq, Hash, PartialEq)]
+    pub(crate) struct PyVenvKeyEntry {
+        pub(crate) udf_desc: UdfFunctionDesc,
+    }
+
+    impl MemSized for PyVenvKeyEntry {
+        fn mem_bytes(&self) -> usize {
+            std::mem::size_of::<PyVenvKeyEntry>()
+        }
+    }
+
+    impl MemSized for PyVenvCacheEntry {
+        fn mem_bytes(&self) -> usize {
+            std::mem::size_of::<PyVenvCacheEntry>()
+        }
+    }
+
+    pub static PY_VENV_CACHE: LazyLock<RwLock<LruCache<PyVenvKeyEntry, PyVenvCacheEntry>>> =
+        LazyLock::new(|| RwLock::new(LruCache::with_items_capacity(64)));
 }
