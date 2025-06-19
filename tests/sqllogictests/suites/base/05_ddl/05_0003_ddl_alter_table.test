@@ -217,22 +217,22 @@ statement ok
 create table t(c1 int, c2 int);
 
 statement ok
-alter table t modify c1 varchar, c2 varchar;
+alter table t modify c1 varchar default 'x', c2 varchar default 'y';
 
 query TT
 DESC t;
 ----
-c1 VARCHAR YES NULL (empty)
-c2 VARCHAR YES NULL (empty)
+c1 VARCHAR YES 'x' (empty)
+c2 VARCHAR YES 'y' (empty)
 
 statement ok
-alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
+alter table t modify c1 comment 'c1-column', c2 comment 'test';
 
 query TTTTT
 select database,table,name,data_type,comment from system.columns where table='t' and database='default';
 ----
 default t c1 VARCHAR c1-column
-default t c2 INT test
+default t c2 VARCHAR test
 
 statement ok
 alter table t comment='s1';
@@ -245,7 +245,7 @@ t s1
 query TT
 show create table t;
 ----
-t CREATE TABLE t ( c1 VARCHAR NULL COMMENT 'c1-column', c2 INT NULL COMMENT 'test' ) ENGINE=FUSE COMMENT = 's1'
+t CREATE TABLE t ( c1 VARCHAR NULL DEFAULT 'x' COMMENT 'c1-column', c2 VARCHAR NULL DEFAULT 'y' COMMENT 'test' ) ENGINE=FUSE COMMENT = 's1'
 
 statement ok
 drop table if exists t1;
