@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::hash::DefaultHasher;
 use std::hash::Hasher;
 use std::ops::ControlFlow;
 use std::ops::Deref;
@@ -35,12 +36,18 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::visit_expr;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -347,6 +354,71 @@ impl BloomIndex {
         )?;
         let column = value.convert_to_full_column(target_type, column.len());
         Ok(column)
+    }
+
+    pub fn calculate_digest_by_type(data_type: &DataType, column: &Column) -> Result<Vec<u64>> {
+        let inner_type = data_type.remove_nullable();
+        with_number_mapped_type!(|NUM_TYPE| match inner_type {
+            DataType::Number(NumberDataType::NUM_TYPE) => {
+                Self::calculate_nullable_column_digests::<NumberType<NUM_TYPE>>(column)
+            }
+            DataType::String => {
+                Self::calculate_nullable_column_digests::<StringType>(column)
+            }
+            DataType::Date => {
+                Self::calculate_nullable_column_digests::<DateType>(column)
+            }
+            DataType::Timestamp => {
+                Self::calculate_nullable_column_digests::<TimestampType>(column)
+            }
+            _ => Err(ErrorCode::Internal(format!(
+                "Unsupported data type: {:?}",
+                data_type
+            ))),
+        })
+    }
+
+    #[inline(always)]
+    fn hash_one<T: DFHash>(v: &T) -> u64 {
+        let mut hasher = DefaultHasher::default();
+        DFHash::hash(v, &mut hasher);
+        hasher.finish()
+    }
+
+    fn calculate_nullable_column_digests<T: ValueType>(column: &Column) -> Result<Vec<u64>>
+    where for<'a> T::ScalarRef<'a>: DFHash {
+        let (column, validity) = if let Column::Nullable(box inner) = column {
+            let validity = if inner.validity.null_count() == 0 {
+                None
+            } else {
+                Some(&inner.validity)
+            };
+            (&inner.column, validity)
+        } else {
+            (column, None)
+        };
+
+        let capacity = validity.map_or(column.len(), |v| v.true_count() + 1);
+        let mut result = Vec::with_capacity(capacity);
+        if validity.is_some() {
+            result.push(0);
+        }
+        let column = T::try_downcast_column(column).unwrap();
+        if let Some(validity) = validity {
+            let column_iter = T::iter_column(&column);
+            let value_iter = column_iter
+                .zip(validity.iter())
+                .filter(|(_, v)| *v)
+                .map(|(v, _)| v);
+            for value in value_iter {
+                result.push(Self::hash_one(&value));
+            }
+        } else {
+            for value in T::iter_column(&column) {
+                result.push(Self::hash_one(&value));
+            }
+        }
+        Ok(result)
     }
 
     /// calculate digest for column that may have null values
@@ -734,24 +806,8 @@ impl BloomIndexBuilder {
                 }
             };
 
-            let (column, validity) =
-                BloomIndex::calculate_nullable_column_digest(&self.func_ctx, &column, &data_type)?;
-            // create filter per column
-            if validity.as_ref().map(|v| v.null_count()).unwrap_or(0) > 0 {
-                let validity = validity.unwrap();
-                let it = column.deref().iter().zip(validity.iter()).map(
-                    |(v, b)| {
-                        if !b {
-                            &0
-                        } else {
-                            v
-                        }
-                    },
-                );
-                index_column.builder.add_digests(it);
-            } else {
-                index_column.builder.add_digests(column.deref());
-            }
+            let column = BloomIndex::calculate_digest_by_type(&data_type, &column)?;
+            index_column.builder.add_digests(column.deref());
         }
         for index_column in self.ngram_columns.iter_mut() {
             let field_type = &block.data_type(index_column.index);

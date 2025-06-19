@@ -359,7 +359,10 @@ where
         for v in iter {
             if matches!(min.partial_cmp(&v), Some(Ordering::Greater)) {
                 min = v;
-            } else if matches!(max.partial_cmp(&v), Some(Ordering::Less)) {
+                continue;
+            }
+
+            if matches!(max.partial_cmp(&v), Some(Ordering::Less)) {
                 max = v;
             }
         }
