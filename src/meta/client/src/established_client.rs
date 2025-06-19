@@ -155,7 +155,7 @@ impl fmt::Display for EstablishedClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "EstablishedClient[uniq={}, {}]{{ target: {}, least_required_server: {}, endpoints: {} }}",
+            "EstablishedClient[uniq={}, {}]{{ target: {}, server_version: {}, endpoints: {} }}",
             self.uniq,
             self.created_at,
             self.target_endpoint,

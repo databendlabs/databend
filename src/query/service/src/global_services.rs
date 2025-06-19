@@ -135,6 +135,7 @@ impl GlobalServices {
             };
             UserApiProvider::init(
                 config.meta.to_meta_grpc_client_conf(),
+                &config.cache,
                 builtin,
                 &config.query.tenant_id,
                 config.query.tenant_quota.clone(),

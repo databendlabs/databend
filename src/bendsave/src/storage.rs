@@ -25,6 +25,7 @@ use bytes::BytesMut;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_config::CacheConfig;
 use databend_common_config::Config;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -106,6 +107,7 @@ pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     SessionManager::init(cfg)?;
     UserApiProvider::init(
         cfg.meta.to_meta_grpc_client_conf(),
+        &CacheConfig::default(),
         BuiltIn::default(),
         &cfg.query.tenant_id,
         cfg.query.tenant_quota.clone(),
