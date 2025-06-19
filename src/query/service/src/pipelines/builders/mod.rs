@@ -49,6 +49,7 @@ mod builder_union_all;
 mod builder_window;
 mod merge_into_join_optimizations;
 mod transform_builder;
+mod builder_materialized_cte;
 
 pub use builder_replace_into::RawValueSource;
 pub use builder_replace_into::ValueSource;

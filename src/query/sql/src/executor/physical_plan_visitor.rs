@@ -61,6 +61,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -124,6 +125,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
             PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
+            PhysicalPlan::MaterializedCTE(plan) => self.replace_materialized_cte(plan),
         }
     }
 
@@ -642,6 +644,17 @@ pub trait PhysicalPlanReplacer {
             },
         )))
     }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
+            stat_info: plan.stat_info.clone(),
+        })))
+    }
 }
 
 impl PhysicalPlan {
@@ -793,6 +806,10 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::BroadcastSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MaterializedCTE(plan) => {
+                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

@@ -292,6 +292,8 @@ impl PipelineBuilder {
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
+
+            PhysicalPlan::MaterializedCTE(cte) => self.build_materialized_cte(cte),
         }?;
 
         self.is_exchange_stack.pop();

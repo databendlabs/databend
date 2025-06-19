@@ -527,6 +527,16 @@ fn to_format_tree(
         PhysicalPlan::BroadcastSink(_plan) => {
             Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
         }
+        PhysicalPlan::MaterializedCTE(plan) => {
+            let mut children = Vec::new();
+            append_profile_info(&mut children, profs, plan.plan_id);
+            children.push(to_format_tree(&plan.left, metadata, profs, context)?);
+            children.push(to_format_tree(&plan.right, metadata, profs, context)?);
+            Ok(FormatTreeNode::with_children(
+                "MaterializedCTE".to_string(),
+                children,
+            ))
+        }
     }
 }
 
