@@ -22,16 +22,14 @@ use databend_common_pipeline_core::processors::Exchange;
 use crate::pipelines::processors::transforms::WindowPartitionMeta;
 
 pub struct ReclusterPartitionExchange {
-    start: u64,
-    width: usize,
+    num_partitions: usize,
     start_time: Instant,
 }
 
 impl ReclusterPartitionExchange {
-    pub fn create(start: u64, width: usize) -> Arc<ReclusterPartitionExchange> {
+    pub fn create(num_partitions: usize) -> Arc<ReclusterPartitionExchange> {
         Arc::new(ReclusterPartitionExchange {
-            start,
-            width,
+            num_partitions,
             start_time: Instant::now(),
         })
     }
@@ -50,18 +48,21 @@ impl Exchange for ReclusterPartitionExchange {
         // Scatter the data block to different partitions.
         let indices = range_ids
             .iter()
-            .map(|&id| (id - self.start) as u16)
+            .map(|&id| (id % self.num_partitions as u64) as u16)
             .collect::<Vec<_>>();
         data_block.pop_columns(1);
-
-        let scatter_indices = DataBlock::divide_indices_by_scatter_size(&indices, self.width);
+        let scatter_indices =
+            DataBlock::divide_indices_by_scatter_size(&indices, self.num_partitions);
         // Partition the data blocks to different processors.
         let mut output_data_blocks = vec![vec![]; n];
-        for (partition_id, indices) in scatter_indices.into_iter().take(self.width).enumerate() {
+        for (partition_id, indices) in scatter_indices
+            .into_iter()
+            .take(self.num_partitions)
+            .enumerate()
+        {
             if !indices.is_empty() {
-                let target = (partition_id * n) / self.width;
                 let block = data_block.take_with_optimize_size(&indices)?;
-                output_data_blocks[target].push((partition_id, block));
+                output_data_blocks[partition_id % n].push((partition_id, block));
             }
         }
         log::info!("Recluster range exchange: {:?}", self.start_time.elapsed());

@@ -66,7 +66,6 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                 Exchange::Broadcast => "Broadcast".to_string(),
                 Exchange::Merge => "Merge".to_string(),
                 Exchange::MergeSort => "MergeSort".to_string(),
-                Exchange::Modulo(scalar) => format!("Modulo({})", scalar.as_raw_expr()),
             })
         }
         RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),

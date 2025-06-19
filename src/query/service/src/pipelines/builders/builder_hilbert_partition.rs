@@ -51,7 +51,7 @@ impl PipelineBuilder {
 
         self.main_pipeline.exchange(
             num_processors,
-            ReclusterPartitionExchange::create(partition.range_start, partition.range_width),
+            ReclusterPartitionExchange::create(partition.num_partitions),
         );
 
         let settings = self.ctx.get_settings();
@@ -85,7 +85,7 @@ impl PipelineBuilder {
                         &settings,
                         processor_id.fetch_add(1, atomic::Ordering::AcqRel),
                         num_processors,
-                        partition.range_width,
+                        partition.num_partitions,
                         window_spill_settings.clone(),
                         disk_spill.clone(),
                         ReclusterPartitionStrategy::new(properties.clone()),
@@ -112,7 +112,7 @@ impl PipelineBuilder {
                         &settings,
                         processor_id.fetch_add(1, atomic::Ordering::AcqRel),
                         num_processors,
-                        partition.range_width,
+                        partition.num_partitions,
                         window_spill_settings.clone(),
                         disk_spill.clone(),
                         CompactPartitionStrategy::new(

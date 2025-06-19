@@ -81,14 +81,6 @@ impl PhysicalPlanBuilder {
                 allow_adjust_parallelism = false;
                 FragmentKind::Merge
             }
-            crate::plans::Exchange::Modulo(scalar) => {
-                let expr = scalar
-                    .type_check(input_schema.as_ref())?
-                    .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                keys.push(expr.as_remote_expr());
-                FragmentKind::Modulo
-            }
         };
         Ok(PhysicalPlan::Exchange(Exchange {
             plan_id: 0,

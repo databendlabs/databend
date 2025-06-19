@@ -28,7 +28,6 @@ use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -53,8 +52,6 @@ use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
 use databend_common_sql::plans::BoundColumnRef;
-use databend_common_sql::plans::ConstantExpr;
-use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::IdentifierNormalizer;
@@ -433,44 +430,22 @@ impl ReclusterTableInterpreter {
 
         // For distributed execution, add an exchange operator to distribute work
         if is_distributed {
-            let nodes_num = cluster.nodes.len() as u64;
-            let scalar_expr = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "div".to_string(),
-                params: vec![],
-                arguments: vec![
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "multiply".to_string(),
-                        params: vec![],
-                        arguments: vec![
-                            ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                span: None,
-                                column: bind_context.columns.last().unwrap().clone(),
-                            }),
-                            ScalarExpr::ConstantExpr(ConstantExpr {
-                                span: None,
-                                value: Scalar::Number(NumberScalar::UInt64(nodes_num)),
-                            }),
-                        ],
-                    }),
-                    ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: None,
-                        value: Scalar::Number(NumberScalar::UInt64(total_partitions as u64)),
-                    }),
-                ],
-            });
-
             // Create an expression for the partition column,
             // i.e.`range_partition_id(hilbert_range_index({hilbert_keys_str}), [...]) AS _predicate`
-            let expr = scalar_expr_to_remote_expr(&scalar_expr, plan.output_schema()?.as_ref())?;
+            let expr = scalar_expr_to_remote_expr(
+                &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: bind_context.columns.last().unwrap().clone(),
+                }),
+                plan.output_schema()?.as_ref(),
+            )?;
 
             // Add exchange operator for data distribution,
             // shuffling data based on the hash of range partition IDs derived from the Hilbert index.
             plan = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: plan,
-                kind: FragmentKind::Modulo,
+                kind: FragmentKind::Normal,
                 keys: vec![expr],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
@@ -487,8 +462,7 @@ impl ReclusterTableInterpreter {
             plan_id: 0,
             input: plan,
             table_info: table_info.clone(),
-            range_start: 0,
-            range_width: total_partitions,
+            num_partitions: total_partitions,
             table_meta_timestamps,
             bytes_per_block,
             rows_per_block,

@@ -37,17 +37,6 @@ impl ReclusterPartitionStrategy {
 impl PartitionProcessStrategy for ReclusterPartitionStrategy {
     const NAME: &'static str = "Recluster";
 
-    fn calc_partitions(
-        &self,
-        processor_id: usize,
-        num_processors: usize,
-        num_partitions: usize,
-    ) -> Vec<usize> {
-        (0..num_partitions)
-            .filter(|&partition| (partition * num_processors) / num_partitions == processor_id)
-            .collect()
-    }
-
     /// Stream write each block, and flush it conditionally based on builder status
     /// and input size estimation.
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
@@ -126,17 +115,6 @@ impl CompactPartitionStrategy {
 
 impl PartitionProcessStrategy for CompactPartitionStrategy {
     const NAME: &'static str = "Compact";
-
-    fn calc_partitions(
-        &self,
-        processor_id: usize,
-        num_processors: usize,
-        num_partitions: usize,
-    ) -> Vec<usize> {
-        (0..num_partitions)
-            .filter(|&partition| (partition * num_processors) / num_partitions == processor_id)
-            .collect()
-    }
 
     /// Collects blocks into batches and merges them via `concat` when size threshold is reached.
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {

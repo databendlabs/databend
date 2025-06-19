@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_common_sql::executor::physical_plans::CompactSource;
@@ -27,7 +26,6 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
@@ -41,7 +39,6 @@ use crate::schedulers::PlanFragment;
 use crate::servers::flight::v1::exchange::BroadcastExchange;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
-use crate::servers::flight::v1::exchange::ModuloExchange;
 use crate::servers::flight::v1::exchange::ShuffleDataExchange;
 use crate::sessions::QueryContext;
 use crate::sql::executor::PhysicalPlan;
@@ -69,7 +66,6 @@ enum State {
     Compact,
     Recluster,
     Other,
-    HilbertRecluster,
 }
 
 impl Fragmenter {
@@ -117,15 +113,6 @@ impl Fragmenter {
                 ))),
                 FragmentKind::Expansive => {
                     Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
-                }
-                FragmentKind::Modulo => {
-                    if plan.keys.len() != 1 {
-                        return Err(ErrorCode::Internal("Modulo exchange require one key"));
-                    }
-                    Ok(Some(ModuloExchange::create(
-                        Self::get_executors(ctx),
-                        plan.keys[0].clone(),
-                    )))
                 }
                 _ => Ok(None),
             },
@@ -211,15 +198,6 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
         self.state = State::Recluster;
         Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
-    }
-
-    fn replace_hilbert_serialize(&mut self, plan: &HilbertPartition) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        self.state = State::HilbertRecluster;
-        Ok(PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
     }
 
     fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
@@ -323,7 +301,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
-            State::HilbertRecluster => FragmentType::HilbertRecluster,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;

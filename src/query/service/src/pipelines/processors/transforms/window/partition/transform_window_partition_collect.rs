@@ -92,7 +92,9 @@ impl<S: PartitionProcessStrategy> TransformPartitionCollect<S> {
         strategy: S,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
-        let partitions = strategy.calc_partitions(processor_id, num_processors, num_partitions);
+        let partitions: Vec<usize> = (0..num_partitions)
+            .filter(|&partition| partition % num_processors == processor_id)
+            .collect();
 
         // Map each partition id to new partition id.
         let mut partition_id = vec![0; num_partitions];

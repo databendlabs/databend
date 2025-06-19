@@ -30,8 +30,7 @@ pub enum Exchange {
     Hash(Vec<ScalarExpr>),
     Broadcast,
     Merge,
-    MergeSort,               // For distributed sort
-    Modulo(Box<ScalarExpr>), // For recluster
+    MergeSort, // For distributed sort
 }
 
 impl Operator for Exchange {
@@ -50,7 +49,6 @@ impl Operator for Exchange {
                 Exchange::Broadcast => Distribution::Broadcast,
                 Exchange::Merge => Distribution::Serial,
                 Exchange::MergeSort => Distribution::Serial,
-                Exchange::Modulo(key) => Distribution::Modulo(key.clone()),
             },
         })
     }

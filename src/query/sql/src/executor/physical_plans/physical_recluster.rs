@@ -31,9 +31,8 @@ pub struct HilbertPartition {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
+    pub num_partitions: usize,
     pub table_meta_timestamps: TableMetaTimestamps,
     pub rows_per_block: usize,
     pub bytes_per_block: usize,
-    pub range_start: u64,
-    pub range_width: usize,
 }

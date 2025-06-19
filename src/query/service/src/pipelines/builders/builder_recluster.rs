@@ -195,7 +195,7 @@ impl PipelineBuilder {
 
                     self.main_pipeline.exchange(
                         num_processors,
-                        ReclusterPartitionExchange::create(0, partitions),
+                        ReclusterPartitionExchange::create(partitions),
                     );
                     let processor_id = AtomicUsize::new(0);
 

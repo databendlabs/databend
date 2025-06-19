@@ -397,7 +397,6 @@ fn exchange_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Exchange) -> F
         Exchange::Broadcast => "Exchange(Broadcast)",
         Exchange::Merge => "Exchange(Merge)",
         Exchange::MergeSort => "Exchange(MergeSort)",
-        Exchange::Modulo(_) => "Exchange(Modulo)",
     };
 
     match op {

@@ -22,14 +22,6 @@ use databend_common_settings::Settings;
 pub trait PartitionProcessStrategy: Send + Sync + 'static {
     const NAME: &'static str;
 
-    /// Partition assignment: map partition index to processor via proportional mapping.
-    fn calc_partitions(
-        &self,
-        processor_id: usize,
-        num_processors: usize,
-        num_partitions: usize,
-    ) -> Vec<usize>;
-
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>>;
 }
 
@@ -65,17 +57,6 @@ impl WindowPartitionStrategy {
 
 impl PartitionProcessStrategy for WindowPartitionStrategy {
     const NAME: &'static str = "Window";
-
-    fn calc_partitions(
-        &self,
-        processor_id: usize,
-        num_processors: usize,
-        num_partitions: usize,
-    ) -> Vec<usize> {
-        (0..num_partitions)
-            .filter(|&partition| partition % num_processors == processor_id)
-            .collect()
-    }
 
     fn process_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         let data_blocks = data_blocks
