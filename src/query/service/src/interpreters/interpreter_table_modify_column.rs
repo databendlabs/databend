@@ -145,14 +145,14 @@ impl ModifyTableColumnInterpreter {
     async fn do_set_data_type(
         &self,
         table: Arc<dyn Table>,
-        field_and_comments: &[TableField],
+        field_and_comments: &[(TableField, String)],
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         // first check default expr before lock table
-        for field in field_and_comments {
+        for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
                 // if the field has different leaf column numbers, we need drop the old column
                 // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
@@ -208,8 +208,9 @@ impl ModifyTableColumnInterpreter {
 
         let mut table_info = table.get_table_info().clone();
         table_info.meta.fill_field_comments();
-        for field in field_and_comments {
-            if let Some((_i, old_field)) = schema.column_with_name(&field.name) {
+        let mut modify_comment = false;
+        for (field, comment) in field_and_comments {
+            if let Some((i, old_field)) = schema.column_with_name(&field.name) {
                 if old_field.data_type != field.data_type {
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
@@ -236,6 +237,10 @@ impl ModifyTableColumnInterpreter {
                         }
                     }
                 }
+                if table_info.meta.field_comments[i] != *comment {
+                    table_info.meta.field_comments[i] = comment.to_string();
+                    modify_comment = true;
+                }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
@@ -245,14 +250,14 @@ impl ModifyTableColumnInterpreter {
         }
 
         // check if schema has changed
-        if schema == new_schema {
+        if schema == new_schema && !modify_comment {
             return Ok(PipelineBuildResult::create());
         }
 
         let mut modified_field_indices = HashSet::new();
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         if schema != new_schema {
-            for field in field_and_comments {
+            for (field, _) in field_and_comments {
                 let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
                 let old_field = schema.field_with_name(&field.name)?;
                 let is_alter_column_string_to_binary =
@@ -449,49 +454,6 @@ impl ModifyTableColumnInterpreter {
         .await
     }
 
-    // Set column comment.
-    async fn do_set_comment(
-        &self,
-        table: Arc<dyn Table>,
-        field_and_comments: &[(TableField, String)],
-    ) -> Result<PipelineBuildResult> {
-        let schema = table.schema().as_ref().clone();
-        let table_info = table.get_table_info();
-
-        let catalog_name = table_info.catalog();
-        let catalog = self.ctx.get_catalog(catalog_name).await?;
-
-        let mut table_info = table.get_table_info().clone();
-        table_info.meta.fill_field_comments();
-        let mut modify_comment = false;
-        for (field, comment) in field_and_comments {
-            if let Some((i, _)) = schema.column_with_name(&field.name) {
-                if table_info.meta.field_comments[i] != *comment {
-                    table_info.meta.field_comments[i] = comment.to_string();
-                    modify_comment = true;
-                }
-            } else {
-                return Err(ErrorCode::UnknownColumn(format!(
-                    "Cannot find column {}",
-                    field.name
-                )));
-            }
-        }
-
-        if modify_comment {
-            commit_table_meta(
-                &self.ctx,
-                table.as_ref(),
-                &table_info,
-                table_info.meta.clone(),
-                catalog,
-            )
-            .await?;
-        }
-
-        Ok(PipelineBuildResult::create())
-    }
-
     // unset data mask policy to a column is a ee feature.
     async fn do_unset_data_mask_policy(
         &self,
@@ -631,9 +593,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
                 self.do_unset_data_mask_policy(catalog, table, column.to_string())
                     .await?
             }
-            ModifyColumnAction::SetDataType(fields) => self.do_set_data_type(table, fields).await?,
-            ModifyColumnAction::Comment(field_and_comment) => {
-                self.do_set_comment(table, field_and_comment).await?
+            ModifyColumnAction::SetDataType(field_and_comment) => {
+                self.do_set_data_type(table, field_and_comment).await?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 self.do_convert_stored_computed_column(

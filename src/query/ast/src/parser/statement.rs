@@ -3729,19 +3729,27 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     ),));
 
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+
     map_res(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
-            : "`<column name> <type> [DEFAULT <expr>]`"
+            ~ ( #comment )?
+            : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints)| {
+        |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
-                comment: None,
+                comment,
             };
             for constraint in constraints {
                 match constraint {
@@ -3766,23 +3774,6 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
             }
             Ok(def)
         },
-    )(i)
-}
-
-pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
-    let comment = map(
-        rule! {
-            COMMENT ~ #literal_string
-        },
-        |(_, comment)| comment,
-    );
-    map_res(
-        rule! {
-            #ident
-            ~ #comment
-            : "`<column name> COMMENT '<comment>'`"
-        },
-        |(name, comment)| Ok(ColumnComment { name, comment }),
     )(i)
 }
 
@@ -3823,25 +3814,11 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
         },
     );
 
-    let modify_column_comment = map(
-        rule! {
-            #modify_column_comment ~ ("," ~ COLUMN? ~ #modify_column_comment)*
-        },
-        |(column_def, column_def_vec)| {
-            let mut column_defs = vec![column_def];
-            column_def_vec
-                .iter()
-                .for_each(|(_, _, column_def)| column_defs.push(column_def.clone()));
-            ModifyColumnAction::Comment(column_defs)
-        },
-    );
-
     rule!(
         #set_mask_policy
         | #unset_mask_policy
         | #convert_stored_computed_column
         | #modify_column_type
-        | #modify_column_comment
     )(i)
 }
 

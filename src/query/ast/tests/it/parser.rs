@@ -304,8 +304,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
         r#"ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;"#,
-        r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, b float NOT NULL;"#,
-        r#"ALTER TABLE t MODIFY COLUMN a comment 'column a', COLUMN b COMMENT 'column b';"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';"#,
         r#"ALTER TABLE t MODIFY COLUMN a int;"#,
         r#"ALTER TABLE t MODIFY a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
@@ -1042,7 +1041,6 @@ fn test_statement_error() {
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
         r#"SHOW GRANTS ON task t1;"#,
-        r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';"#,
         // dictionary
         r#"CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
             (
