@@ -12,23 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::visit_expr;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_storages_fuse::index::EqVisitor;
+use databend_common_storages_fuse::index::ResultRewrite;
+use databend_common_storages_fuse::index::Visitor;
 use databend_common_storages_fuse::TableContext;
 use log::warn;
 
@@ -50,19 +60,40 @@ impl AsyncSystemTable for IndexesTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        let mut database_names = None;
+        let mut table_names = None;
+
+        if let Some(filters) = push_downs.and_then(|info| info.filters) {
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+            let mut visitor = Visitor::new(TableFilterVisitor::default());
+            visit_expr(&expr, &mut visitor)?;
+
+            let inner = visitor.inner();
+            database_names = (!inner.database_names.is_empty()).then_some(inner.database_names);
+            table_names = (!inner.table_names.is_empty()).then_some(inner.table_names);
+        }
+
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let indexes = catalog
             .list_indexes(ListIndexesReq::new(&tenant, None))
             .await?;
 
-        let table_index_tables = self.list_table_index_tables(ctx.clone()).await?;
+        let table_index_tables = self
+            .list_table_index_tables(
+                ctx.clone(),
+                database_names.as_deref(),
+                table_names.as_deref(),
+            )
+            .await?;
 
         let len = indexes.len() + table_index_tables.len();
         let mut names = Vec::with_capacity(len);
         let mut types = Vec::with_capacity(len);
+        let mut databases = Vec::with_capacity(len);
+        let mut tables = Vec::with_capacity(len);
         let mut originals = Vec::with_capacity(len);
         let mut defs = Vec::with_capacity(len);
         let mut created_on = Vec::with_capacity(len);
@@ -71,6 +102,8 @@ impl AsyncSystemTable for IndexesTable {
         for (_, name, index) in indexes {
             names.push(name.clone());
             types.push(index.index_type.to_string());
+            databases.push(ctx.get_current_database());
+            tables.push(catalog.get_table_name_by_id(index.table_id).await?);
             originals.push(index.original_query.clone());
             defs.push(index.query.clone());
             created_on.push(index.created_on.timestamp_micros());
@@ -81,6 +114,8 @@ impl AsyncSystemTable for IndexesTable {
             for (name, index) in &table.meta.indexes {
                 names.push(name.clone());
                 types.push(index.index_type.to_string());
+                databases.push(table.database_name()?.to_string());
+                tables.push(Some(table.name.to_string()));
                 originals.push("".to_string());
 
                 let schema = table.schema();
@@ -111,6 +146,8 @@ impl AsyncSystemTable for IndexesTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(types),
+            StringType::from_data(databases),
+            StringType::from_opt_data(tables),
             StringType::from_data(originals),
             StringType::from_data(defs),
             TimestampType::from_data(created_on),
@@ -124,6 +161,11 @@ impl IndexesTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("type", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new(
+                "table",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
             TableField::new("original", TableDataType::String),
             TableField::new("definition", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
@@ -149,7 +191,12 @@ impl IndexesTable {
         AsyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    async fn list_table_index_tables(&self, ctx: Arc<dyn TableContext>) -> Result<Vec<TableInfo>> {
+    async fn list_table_index_tables(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_names: Option<&[String]>,
+        table_names: Option<&[String]>,
+    ) -> Result<Vec<TableInfo>> {
         let tenant = ctx.get_tenant();
         let visibility_checker = ctx.get_visibility_checker(false).await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
@@ -180,6 +227,11 @@ impl IndexesTable {
             let db_id = db.get_db_info().database_id.db_id;
             let db_name = db.name();
 
+            if let Some(database_names) = database_names {
+                if !database_names.iter().any(|name| name == db_name) {
+                    continue;
+                }
+            }
             let tables = match catalog.list_tables(&tenant, db_name).await {
                 Ok(tables) => tables,
                 Err(err) => {
@@ -194,6 +246,11 @@ impl IndexesTable {
                 if table_info.meta.indexes.is_empty() {
                     continue;
                 }
+                if let Some(table_names) = table_names {
+                    if !table_names.contains(&table_info.name) {
+                        continue;
+                    }
+                }
                 if visibility_checker.check_table_visibility(
                     &ctl_name,
                     db_name,
@@ -206,5 +263,50 @@ impl IndexesTable {
             }
         }
         Ok(index_tables)
+    }
+}
+
+#[derive(Debug, Default)]
+struct TableFilterVisitor {
+    database_names: Vec<String>,
+    table_names: Vec<String>,
+}
+
+impl EqVisitor for TableFilterVisitor {
+    fn enter_target(
+        &mut self,
+        _: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        _: &DataType,
+        _: &DataType,
+        is_like: bool,
+    ) -> ResultRewrite {
+        if is_like {
+            return Ok(ControlFlow::Break(None));
+        }
+        let Some(name) = scalar.as_string() else {
+            return Ok(ControlFlow::Break(None));
+        };
+        match col_name {
+            "table" => &mut self.table_names,
+            "database" => &mut self.database_names,
+            _ => return Ok(ControlFlow::Break(None)),
+        }
+        .push(name.clone());
+
+        Ok(ControlFlow::Break(None))
+    }
+
+    fn enter_map_column(
+        &mut self,
+        _: Span,
+        _: &[Expr<String>],
+        _: &Scalar,
+        _: &DataType,
+        _: &DataType,
+        _: bool,
+    ) -> ResultRewrite {
+        Ok(ControlFlow::Continue(None))
     }
 }

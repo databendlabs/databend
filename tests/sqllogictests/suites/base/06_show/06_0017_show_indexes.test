@@ -9,3 +9,62 @@ SHOW INDEXES WHERE name='test_idx' LIMIT 2
 
 statement error
 SHOW INDEXES WHERE index='test_idx' LIMIT 2
+
+statement ok
+DROP DATABASE IF EXISTS test_show_indexes_0
+
+statement ok
+CREATE DATABASE test_show_indexes_0
+
+statement ok
+USE test_show_indexes_0
+
+statement ok
+CREATE TABLE t1 (id int, title string, content string)
+
+statement ok
+CREATE INVERTED INDEX idx1 ON t1(content)
+
+statement ok
+CREATE NGRAM INDEX idx2 on t1(title)
+
+statement ok
+DROP DATABASE IF EXISTS test_show_indexes_1
+
+statement ok
+CREATE DATABASE test_show_indexes_1
+
+statement ok
+USE test_show_indexes_1
+
+statement ok
+CREATE TABLE t1 (id int, title string, content string)
+
+statement ok
+CREATE INVERTED INDEX idx1 ON t1(content)
+
+statement ok
+CREATE NGRAM INDEX idx2 on t1(title)
+
+query TTTT
+select name, type, database, table from system.indexes where database = 'test_show_indexes_0' or database = 'test_show_indexes_1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+idx1 INVERTED test_show_indexes_1 t1
+idx2 NGRAM test_show_indexes_1 t1
+
+
+query TTTT
+select name, type, database, table from system.indexes where table = 't1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+idx1 INVERTED test_show_indexes_1 t1
+idx2 NGRAM test_show_indexes_1 t1
+
+query TTTT
+select name, type, database, table from system.indexes where database = 'test_show_indexes_0' or table = 't1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
