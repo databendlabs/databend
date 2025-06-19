@@ -40,10 +40,13 @@ use databend_common_storages_fuse::index::EqVisitor;
 use databend_common_storages_fuse::index::ResultRewrite;
 use databend_common_storages_fuse::index::Visitor;
 use databend_common_storages_fuse::TableContext;
+use futures::future::try_join_all;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+
+const POINT_GET_TABLE_LIMIT: usize = 20;
 
 pub struct IndexesTable {
     table_info: TableInfo,
@@ -232,7 +235,21 @@ impl IndexesTable {
                     continue;
                 }
             }
-            let tables = match catalog.list_tables(&tenant, db_name).await {
+            let result = match (
+                table_names,
+                table_names.iter().len() <= POINT_GET_TABLE_LIMIT,
+            ) {
+                (Some(table_names), true) => {
+                    try_join_all(
+                        table_names
+                            .iter()
+                            .map(|table_name| db.get_table(table_name)),
+                    )
+                    .await
+                }
+                _ => catalog.list_tables(&tenant, db_name).await,
+            };
+            let tables = match result {
                 Ok(tables) => tables,
                 Err(err) => {
                     let msg = format!("Failed to list tables in database: {}, {}", db_name, err);
