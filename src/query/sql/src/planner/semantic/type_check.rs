@@ -3058,8 +3058,8 @@ impl<'a> TypeChecker<'a> {
                 )));
             }
 
-            params.push(Scalar::Number(NumberScalar::UInt8(precision)));
-            params.push(Scalar::Number(NumberScalar::UInt8(scale)));
+            params.push(Scalar::Number(NumberScalar::Int64(precision as _)));
+            params.push(Scalar::Number(NumberScalar::Int64(scale as _)));
         }
 
         let raw_expr = RawExpr::FunctionCall {
