@@ -40,7 +40,6 @@ use databend_common_expression::HashMethodSerializer;
 use databend_common_expression::HashMethodSingleBinary;
 use databend_common_expression::KeysState;
 use databend_common_expression::RemoteExpr;
-use databend_common_functions::scalars::strict_decimal_data_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_hashtable::BinaryHashJoinHashMap;
 use databend_common_hashtable::HashJoinHashMap;
@@ -157,7 +156,6 @@ impl HashJoinBuildState {
     }
 
     pub fn build(&self, input: DataBlock) -> Result<()> {
-        let input = strict_decimal_data_type(input, true)?;
         if let Some(data_block) = self.concat_buffer.lock().add_block(input)? {
             self.add_build_block(data_block)?;
         }

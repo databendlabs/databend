@@ -78,7 +78,7 @@ where T: Clone + Default
 trait FixedKey: FastHash + 'static + Sized + Clone + Default + Eq + Debug + Sync + Send {
     fn downcast(keys_state: &KeysState) -> Option<&Buffer<Self>>;
 
-    fn downcast_ownded(keys_state: KeysState) -> Option<Buffer<Self>>;
+    fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>>;
 
     fn upcast(buffer: Buffer<Self>) -> KeysState;
 
@@ -117,7 +117,7 @@ impl<T: FixedKey> HashMethod for HashMethodFixedKeys<T> {
         &self,
         keys_state: KeysState,
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-        let Some(buffer) = T::downcast_ownded(keys_state) else {
+        let Some(buffer) = T::downcast_owned(keys_state) else {
             unreachable!()
         };
         Ok(Box::new(PrimitiveKeyAccessor::new(buffer)))
@@ -142,7 +142,7 @@ macro_rules! impl_hash_method_fixed_keys {
             }
         }
 
-        fn downcast_ownded(keys_state: KeysState) -> Option<Buffer<Self>> {
+        fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>> {
             if let KeysState::Column(Column::Number(NumberColumn::$dt(col))) = keys_state {
                 Some(col)
             } else {
@@ -247,7 +247,7 @@ macro_rules! impl_hash_method_fixed_large_keys {
             }
         }
 
-        fn downcast_ownded(keys_state: KeysState) -> Option<Buffer<Self>> {
+        fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>> {
             match keys_state {
                 KeysState::$name(v) => Some(v),
                 _ => None,

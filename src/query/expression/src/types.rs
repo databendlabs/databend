@@ -525,6 +525,9 @@ pub trait ValueType: AccessType {
 
     fn downcast_builder(builder: &mut ColumnBuilder) -> Self::ColumnBuilderMut<'_>;
 
+    // removed by #18102, but there may be a need for this somewhere
+    // fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Self::ColumnBuilder>;
+
     fn try_upcast_column_builder(
         builder: Self::ColumnBuilder,
         data_type: &DataType,
