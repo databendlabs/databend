@@ -27,6 +27,7 @@ pub struct MaterializedCTE {
     pub stat_info: Option<PlanStatsInfo>,
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
+    pub cte_name: String,
 }
 
 impl MaterializedCTE {

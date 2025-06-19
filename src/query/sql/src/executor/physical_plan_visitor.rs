@@ -52,6 +52,7 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
@@ -61,7 +62,6 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -653,6 +653,7 @@ pub trait PhysicalPlanReplacer {
             left: Box::new(left),
             right: Box::new(right),
             stat_info: plan.stat_info.clone(),
+            cte_name: plan.cte_name.clone(),
         })))
     }
 }

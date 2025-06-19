@@ -27,9 +27,11 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
+use tokio::sync::watch::Receiver;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
+use crate::pipelines::processors::transforms::MaterializedCteData;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
@@ -57,6 +59,7 @@ pub struct PipelineBuilder {
     pub(crate) is_exchange_stack: Vec<bool>,
 
     pub contain_sink_processor: bool,
+    pub cte_receivers: HashMap<String, Receiver<Arc<MaterializedCteData>>>,
 }
 
 impl PipelineBuilder {
@@ -79,6 +82,7 @@ impl PipelineBuilder {
             r_cte_scan_interpreters: vec![],
             contain_sink_processor: false,
             is_exchange_stack: vec![],
+            cte_receivers: HashMap::new(),
         }
     }
 

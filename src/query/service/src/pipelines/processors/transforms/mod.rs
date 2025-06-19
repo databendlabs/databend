@@ -16,6 +16,7 @@ pub mod aggregator;
 #[allow(dead_code)]
 mod broadcast;
 mod hash_join;
+mod materialized_cte;
 pub(crate) mod range_join;
 mod runtime_pool;
 mod transform_add_computed_columns;
@@ -46,6 +47,8 @@ mod window;
 pub use broadcast::BroadcastSinkProcessor;
 pub use broadcast::BroadcastSourceProcessor;
 pub use hash_join::*;
+pub use materialized_cte::MaterializedCteData;
+pub use materialized_cte::MaterializedCteSink;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_add_internal_columns::TransformAddInternalColumns;
