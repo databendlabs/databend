@@ -28,6 +28,11 @@ runs:
       run: |
         bash ./tests/logging/test-logs.sh
 
+    - name: Run History Tables Tests
+      shell: bash
+      run: |
+        bash ./tests/logging/test-history-tables.sh
+
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure
