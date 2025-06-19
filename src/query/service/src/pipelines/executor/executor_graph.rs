@@ -96,7 +96,7 @@ pub(crate) struct Node {
 impl Node {
     pub fn create(
         pid: usize,
-        scope: Option<PlanScope>,
+        scope: Option<Arc<PlanScope>>,
         processor: &ProcessorPtr,
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
@@ -237,68 +237,32 @@ impl ExecutingGraph {
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
     ) {
-        #[derive(Debug)]
-        struct Edge {
-            source_port: usize,
-            source_node: NodeIndex,
-            target_port: usize,
-            target_node: NodeIndex,
-        }
+        let offset = graph.node_count();
+        for node in pipeline.graph.node_weights() {
+            let pid = graph.node_count();
+            let mut time_series_profile = None;
 
-        let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
-        for pipe in &pipeline.pipes {
-            assert_eq!(
-                pipe.input_length,
-                pipes_edges.last().map(|x| x.len()).unwrap_or_default()
-            );
-
-            let mut edge_index = 0;
-            let mut pipe_edges = Vec::with_capacity(pipe.output_length);
-
-            for item in &pipe.items {
-                let pid = graph.node_count();
-                let time_series_profile = if let Some(scope) = pipe.scope.as_ref() {
-                    let plan_id = scope.id;
-                    let time_series_profile =
-                        time_series_profile_builder.register_time_series_profile(plan_id);
-                    Some(time_series_profile)
-                } else {
-                    None
-                };
-                let node = Node::create(
-                    pid,
-                    pipe.scope.clone(),
-                    &item.processor,
-                    &item.inputs_port,
-                    &item.outputs_port,
-                    time_series_profile,
-                );
-
-                let graph_node_index = graph.add_node(node.clone());
-                unsafe {
-                    item.processor.set_id(graph_node_index);
-                }
-
-                for offset in 0..item.inputs_port.len() {
-                    let last_edges = pipes_edges.last_mut().unwrap();
-
-                    last_edges[edge_index].target_port = offset;
-                    last_edges[edge_index].target_node = graph_node_index;
-                    edge_index += 1;
-                }
-
-                for offset in 0..item.outputs_port.len() {
-                    pipe_edges.push(Edge {
-                        source_port: offset,
-                        source_node: graph_node_index,
-                        target_port: 0,
-                        target_node: Default::default(),
-                    });
-                }
+            if let Some(scope) = node.scope.as_ref() {
+                let plan_id = scope.id;
+                time_series_profile =
+                    Some(time_series_profile_builder.register_time_series_profile(plan_id));
             }
 
-            pipes_edges.push(pipe_edges);
+            let graph_node_index = graph.add_node(Node::create(
+                pid,
+                node.scope.clone(),
+                &node.proc,
+                &node.inputs,
+                &node.outputs,
+                time_series_profile,
+            ));
+
+            unsafe {
+                node.proc.set_id(graph_node_index);
+            }
         }
+
+        // FIXME:
         let query_time_series = Arc::new(time_series_profile_builder.build());
         let node_indices: Vec<_> = graph.node_indices().collect();
         for node_index in node_indices {
@@ -313,23 +277,24 @@ impl ExecutingGraph {
             }
         }
 
-        // The last pipe cannot contain any output edge.
-        assert!(pipes_edges.last().map(|x| x.is_empty()).unwrap_or_default());
-        pipes_edges.pop();
+        for edge in pipeline.graph.edge_indices() {
+            let index = EdgeIndex::new(edge.index());
+            if let Some((source, target)) = pipeline.graph.edge_endpoints(index) {
+                let source = NodeIndex::new(offset + source.index());
+                let target = NodeIndex::new(offset + target.index());
+                let edge_weight = pipeline.graph.edge_weight(index).unwrap();
 
-        for pipe_edges in &pipes_edges {
-            for edge in pipe_edges {
-                let edge_index = graph.add_edge(edge.source_node, edge.target_node, EdgeInfo {
-                    input_index: edge.target_port,
-                    output_index: edge.source_port,
+                let edge_index = graph.add_edge(source, target, EdgeInfo {
+                    input_index: edge_weight.input_index,
+                    output_index: edge_weight.output_index,
                 });
 
                 unsafe {
-                    let (target_node, target_port) = (edge.target_node, edge.target_port);
+                    let (target_node, target_port) = (target, edge_weight.input_index);
                     let input_trigger = graph[target_node].create_trigger(edge_index);
                     graph[target_node].inputs_port[target_port].set_trigger(input_trigger);
 
-                    let (source_node, source_port) = (edge.source_node, edge.source_port);
+                    let (source_node, source_port) = (source, edge_weight.output_index);
                     let output_trigger = graph[source_node].create_trigger(edge_index);
                     graph[source_node].outputs_port[source_port].set_trigger(output_trigger);
 

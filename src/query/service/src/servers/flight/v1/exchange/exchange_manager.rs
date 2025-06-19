@@ -1032,7 +1032,6 @@ impl FragmentCoordinator {
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
-                vec![],
             );
 
             let res = pipeline_builder.finalize(&self.physical_plan)?;

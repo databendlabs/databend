@@ -72,12 +72,8 @@ impl PipelineBuilder {
 
     fn expand_union_all(&mut self, input: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.as_ref());
-        let mut pipeline_builder = PipelineBuilder::create(
-            self.func_ctx.clone(),
-            self.settings.clone(),
-            union_ctx,
-            self.main_pipeline.get_scopes(),
-        );
+        let mut pipeline_builder =
+            PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), union_ctx);
         pipeline_builder.hash_join_states = self.hash_join_states.clone();
 
         let mut build_res = pipeline_builder.finalize(input)?;
