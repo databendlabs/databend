@@ -323,6 +323,37 @@ impl Display for Scalar {
     }
 }
 
+// convert scalar value to string without quotes
+pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
+    match value {
+        ScalarRef::String(s) => s.to_string(),
+        ScalarRef::Timestamp(t) => format!("{}", timestamp_to_string(*t, &TimeZone::UTC)),
+        ScalarRef::Date(d) => format!("{}", date_to_string(*d as i64, &TimeZone::UTC)),
+        ScalarRef::Interval(interval) => format!("{}", interval_to_string(interval)),
+        ScalarRef::Bitmap(bits) => {
+            let rb = deserialize_bitmap(bits).unwrap();
+            format!("{}", rb.into_iter().join(","))
+        }
+        ScalarRef::Variant(s) => {
+            let raw_jsonb = RawJsonb::new(s);
+            raw_jsonb.to_string()
+        }
+        ScalarRef::Geometry(s) => {
+            let geom = ewkb_to_geo(&mut Ewkb(s))
+                .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+            format!("{}", geom)
+        }
+        ScalarRef::Geography(v) => {
+            let geog = ewkb_to_geo(&mut Ewkb(v.0))
+                .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+            format!("{}", geog)
+        }
+        _ => format!("{}", value),
+    }
+}
+
 impl Debug for NumberScalar {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {

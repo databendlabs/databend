@@ -4148,7 +4148,6 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("array_sort_desc_null_last"),
             Ascii::new("array_remove_first"),
             Ascii::new("array_remove_last"),
-            Ascii::new("array_distinct"),
         ];
         ARRAY_FUNCTIONS
     }
