@@ -3729,19 +3729,27 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
         |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
     ),));
 
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+
     map_res(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
-            : "`<column name> <type> [DEFAULT <expr>]`"
+            ~ ( #comment )?
+            : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints)| {
+        |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
-                comment: None,
+                comment,
             };
             for constraint in constraints {
                 match constraint {

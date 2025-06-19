@@ -1044,25 +1044,14 @@ impl Binder {
                             .await?
                             .schema();
                         for column in column_def_vec {
-                            let (field, _, _) =
+                            let (field, comment, _) =
                                 self.analyze_add_column(column, schema.clone()).await?;
-                            field_and_comment.push((field, None));
+                            field_and_comment.push((field, comment));
                         }
                         ModifyColumnActionInPlan::SetDataType(field_and_comment)
                     }
                     ModifyColumnAction::Comment(column_comments) => {
                         let mut field_and_comment = Vec::with_capacity(column_comments.len());
-                        // try add lock table.
-                        lock_guard = self
-                            .ctx
-                            .clone()
-                            .acquire_table_lock(
-                                &catalog,
-                                &database,
-                                &table,
-                                &LockTableOption::LockWithRetry,
-                            )
-                            .await?;
                         let schema = self
                             .ctx
                             .get_table(&catalog, &database, &table)
@@ -1073,9 +1062,9 @@ impl Binder {
                             let column = self.normalize_object_identifier(&column_comment.name);
                             let field = schema.field_with_name(&column)?.clone();
                             let comment = column_comment.comment.to_string();
-                            field_and_comment.push((field, Some(comment)));
+                            field_and_comment.push((field, comment));
                         }
-                        ModifyColumnActionInPlan::SetDataType(field_and_comment)
+                        ModifyColumnActionInPlan::Comment(field_and_comment)
                     }
                 };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {

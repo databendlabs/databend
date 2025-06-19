@@ -145,7 +145,7 @@ impl ModifyTableColumnInterpreter {
     async fn do_set_data_type(
         &self,
         table: Arc<dyn Table>,
-        field_and_comments: &[(TableField, Option<String>)],
+        field_and_comments: &[(TableField, String)],
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
@@ -238,12 +238,9 @@ impl ModifyTableColumnInterpreter {
                     }
                 }
 
-                // None means only modify data type
-                if let Some(comment) = comment {
-                    if table_info.meta.field_comments[i] != *comment {
-                        table_info.meta.field_comments[i] = comment.to_string();
-                        modify_comment = true;
-                    }
+                if table_info.meta.field_comments[i] != *comment {
+                    table_info.meta.field_comments[i] = comment.to_string();
+                    modify_comment = true;
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
@@ -458,6 +455,49 @@ impl ModifyTableColumnInterpreter {
         .await
     }
 
+    // Set column comment.
+    async fn do_set_comment(
+        &self,
+        table: Arc<dyn Table>,
+        field_and_comments: &[(TableField, String)],
+    ) -> Result<PipelineBuildResult> {
+        let schema = table.schema().as_ref().clone();
+        let table_info = table.get_table_info();
+
+        let catalog_name = table_info.catalog();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+
+        let mut table_info = table.get_table_info().clone();
+        table_info.meta.fill_field_comments();
+        let mut modify_comment = false;
+        for (field, comment) in field_and_comments {
+            if let Some((i, _)) = schema.column_with_name(&field.name) {
+                if table_info.meta.field_comments[i] != *comment {
+                    table_info.meta.field_comments[i] = comment.to_string();
+                    modify_comment = true;
+                }
+            } else {
+                return Err(ErrorCode::UnknownColumn(format!(
+                    "Cannot find column {}",
+                    field.name
+                )));
+            }
+        }
+
+        if modify_comment {
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                &table_info,
+                table_info.meta.clone(),
+                catalog,
+            )
+            .await?;
+        }
+
+        Ok(PipelineBuildResult::create())
+    }
+
     // unset data mask policy to a column is a ee feature.
     async fn do_unset_data_mask_policy(
         &self,
@@ -599,6 +639,9 @@ impl Interpreter for ModifyTableColumnInterpreter {
             }
             ModifyColumnAction::SetDataType(field_and_comment) => {
                 self.do_set_data_type(table, field_and_comment).await?
+            }
+            ModifyColumnAction::Comment(field_and_comment) => {
+                self.do_set_comment(table, field_and_comment).await?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 self.do_convert_stored_computed_column(
