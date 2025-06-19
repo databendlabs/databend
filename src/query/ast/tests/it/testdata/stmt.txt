@@ -13988,9 +13988,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, b float NOT NULL;
+ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
 ---------- Output ---------
-ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL COMMENT 'column b'
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -14048,7 +14048,7 @@ AlterTable(
                     ColumnDefinition {
                         name: Identifier {
                             span: Some(
-                                50..51,
+                                57..58,
                             ),
                             name: "b",
                             quote: None,
@@ -14058,68 +14058,9 @@ AlterTable(
                             Float32,
                         ),
                         expr: None,
-                        comment: None,
-                    },
-                ],
-            ),
-        },
-    },
-)
-
-
----------- Input ----------
-ALTER TABLE t MODIFY COLUMN a comment 'column a', COLUMN b COMMENT 'column b';
----------- Output ---------
-ALTER TABLE t MODIFY COLUMN a COMMENT 'column a', b COMMENT 'column b'
----------- AST ------------
-AlterTable(
-    AlterTableStmt {
-        if_exists: false,
-        table_reference: Table {
-            span: Some(
-                12..13,
-            ),
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    12..13,
-                ),
-                name: "t",
-                quote: None,
-                ident_type: None,
-            },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-        action: ModifyColumn {
-            action: Comment(
-                [
-                    ColumnComment {
-                        name: Identifier {
-                            span: Some(
-                                28..29,
-                            ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        comment: "column a",
-                    },
-                    ColumnComment {
-                        name: Identifier {
-                            span: Some(
-                                57..58,
-                            ),
-                            name: "b",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        comment: "column b",
+                        comment: Some(
+                            "column b",
+                        ),
                     },
                 ],
             ),

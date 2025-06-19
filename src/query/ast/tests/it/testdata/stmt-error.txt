@@ -1049,16 +1049,6 @@ error:
 
 
 ---------- Input ----------
-ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
----------- Output ---------
-error: 
-  --> SQL:1:75
-  |
-1 | ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
-  |                                                                           ^^^^^^^ unexpected `COMMENT`, expecting `FORMAT`, `DEFAULT`, `NOT`, `NULL`, `,`, or `;`
-
-
----------- Input ----------
 CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary
             (
                 user_name String,

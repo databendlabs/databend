@@ -357,11 +357,9 @@ pub enum ModifyColumnAction {
     // column name
     UnsetMaskingPolicy(String),
     // modify column table field, field comments
-    SetDataType(Vec<TableField>),
+    SetDataType(Vec<(TableField, String)>),
     // column name
     ConvertStoredComputedColumn(String),
-    // modify column table field, field comments
-    Comment(Vec<(TableField, String)>),
 }
 
 // Table modify column
