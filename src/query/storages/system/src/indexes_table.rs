@@ -235,28 +235,40 @@ impl IndexesTable {
                     continue;
                 }
             }
-            let result = match (
+            let tables = match (
                 table_names,
                 table_names.iter().len() <= POINT_GET_TABLE_LIMIT,
             ) {
                 (Some(table_names), true) => {
-                    try_join_all(
-                        table_names
-                            .iter()
-                            .map(|table_name| db.get_table(table_name)),
-                    )
+                    match try_join_all(table_names.iter().map(|table_name| async {
+                        db.get_table(table_name)
+                            .await
+                            .map_err(|err| (table_name.to_string(), err))
+                    }))
                     .await
+                    {
+                        Ok(tables) => tables,
+                        Err((table_name, err)) => {
+                            let msg = format!(
+                                "Failed to get table: {} in database: {}, {}",
+                                table_name, db_name, err
+                            );
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
+                            continue;
+                        }
+                    }
                 }
-                _ => catalog.list_tables(&tenant, db_name).await,
-            };
-            let tables = match result {
-                Ok(tables) => tables,
-                Err(err) => {
-                    let msg = format!("Failed to list tables in database: {}, {}", db_name, err);
-                    warn!("{}", msg);
-                    ctx.push_warning(msg);
-                    continue;
-                }
+                _ => match catalog.list_tables(&tenant, db_name).await {
+                    Ok(tables) => tables,
+                    Err(err) => {
+                        let msg =
+                            format!("Failed to list tables in database: {}, {}", db_name, err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+                        continue;
+                    }
+                },
             };
             for table in tables {
                 let table_info = table.get_table_info();
