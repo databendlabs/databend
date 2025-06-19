@@ -42,8 +42,13 @@ mod operator;
 pub use operator::build_operator;
 pub use operator::check_operator;
 pub use operator::init_operator;
+pub use operator::init_operator_with_cache;
 pub use operator::DataOperator;
 pub use operator::OperatorRegistry;
+
+mod operator_cache;
+pub use operator_cache::get_operator_cache;
+pub use operator_cache::OperatorCache;
 
 pub mod metrics;
 pub use crate::metrics::StorageMetrics;

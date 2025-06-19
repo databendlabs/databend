@@ -59,6 +59,7 @@ use opendal::Operator;
 
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
+use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 use crate::StorageHttpClient;
@@ -67,7 +68,34 @@ static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, S
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
 
 /// init_operator will init an opendal operator based on storage config.
+/// This function uses caching to avoid frequent recreation of operators.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    // Use block_on to run async code in sync context
+    databend_common_base::runtime::block_on(async move {
+        let cache = get_operator_cache();
+        cache
+            .get_or_create(cfg)
+            .await
+            .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
+    })
+}
+
+/// init_operator_with_cache will init an opendal operator with caching support.
+/// This function will check the cache first, and return the cached operator if it exists.
+/// Otherwise, it will create a new operator and cache it.
+///
+/// This is now just an alias for init_operator since it uses caching by default.
+pub async fn init_operator_with_cache(cfg: &StorageParams) -> Result<Operator> {
+    let cache = get_operator_cache();
+    cache
+        .get_or_create(cfg)
+        .await
+        .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
+}
+
+/// init_operator_uncached will init an opendal operator without caching.
+/// This function creates a new operator every time it's called.
+pub(crate) fn init_operator_uncached(cfg: &StorageParams) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => {
             build_operator(init_azblob_operator(cfg)?, cfg.network_config.as_ref())?
