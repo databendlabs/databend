@@ -24,11 +24,15 @@ impl PipelineBuilder {
         self.build_pipeline(&async_function.input)?;
 
         let operators = TransformAsyncFunction::init_operators(&async_function.async_func_descs)?;
+        let sequence_counters =
+            TransformAsyncFunction::create_sequence_counters(async_function.async_func_descs.len());
+
         self.main_pipeline.add_async_transformer(|| {
             TransformAsyncFunction::new(
                 self.ctx.clone(),
                 async_function.async_func_descs.clone(),
                 operators.clone(),
+                sequence_counters.clone(),
             )
         });
 

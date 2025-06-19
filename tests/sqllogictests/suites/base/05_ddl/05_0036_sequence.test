@@ -37,6 +37,10 @@ CREATE TABLE tmp2(a uint64);
 statement ok
 CREATE TABLE tmp3(a int, b uint64, c int);
 
+
+statement ok
+set sequence_step_size = 1;
+
 statement ok
 INSERT INTO tmp1 values(nextval(seq));
 
@@ -104,12 +108,31 @@ select sum(nextval(seq)) from numbers(10);
 205
 
 statement ok
+unset sequence_step_size;
+
+statement ok
 INSERT INTO tmp select nextval(seq) from numbers(1000000);
 
 query I
 select count(*) from tmp;
 ----
 1000000
+
+
+query I
+select uniq(nextval(seq)) from numbers(10000000);
+----
+10000000
+
+query I
+select uniq(nextval(seq)) from numbers(10000000);
+----
+10000000
+
+query I
+select uniq(nextval(seq)) from numbers(10000000);
+----
+10000000
 
 statement ok
 DESC SEQUENCE SEQ

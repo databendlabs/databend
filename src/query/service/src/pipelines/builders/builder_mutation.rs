@@ -46,6 +46,7 @@ use crate::pipelines::processors::transforms::build_expression_transform;
 use crate::pipelines::processors::transforms::AsyncFunctionBranch;
 use crate::pipelines::processors::transforms::CastSchemaBranch;
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformBranchedAsyncFunction;
 use crate::pipelines::processors::transforms::TransformBranchedCastSchema;
 use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
@@ -159,8 +160,11 @@ impl PipelineBuilder {
                 default_expr_binder
                     .split_async_default_exprs(input_schema.clone(), default_schema.clone())?
             {
+                let sequence_counters =
+                    TransformAsyncFunction::create_sequence_counters(async_funcs.len());
                 async_function_branches.insert(idx, AsyncFunctionBranch {
                     async_func_descs: async_funcs,
+                    sequence_counters,
                 });
 
                 if new_default_schema != new_default_schema_no_cast {
@@ -201,6 +205,7 @@ impl PipelineBuilder {
 
         if !async_function_branches.is_empty() {
             let branches = Arc::new(async_function_branches);
+
             let mut builder = self
                 .main_pipeline
                 .try_create_async_transform_pipeline_builder_with_len(
