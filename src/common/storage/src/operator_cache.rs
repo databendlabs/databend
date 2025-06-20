@@ -66,7 +66,7 @@ impl OperatorCache {
     }
 
     /// Get or create an operator from cache
-    pub(crate) async fn get_or_create(&self, params: &StorageParams) -> DatabendResult<Operator> {
+    pub(crate) fn get_or_create(&self, params: &StorageParams) -> DatabendResult<Operator> {
         let cache_key = self.compute_cache_key(params);
 
         // Check if we have a cached operator

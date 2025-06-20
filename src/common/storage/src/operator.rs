@@ -69,14 +69,10 @@ static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, S
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
-    // Use block_on to run async code in sync context
-    databend_common_base::runtime::block_on(async move {
-        let cache = get_operator_cache();
-        cache
-            .get_or_create(cfg)
-            .await
-            .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
-    })
+    let cache = get_operator_cache();
+    cache
+        .get_or_create(cfg)
+        .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
 }
 
 /// init_operator_uncached will init an opendal operator without caching.
