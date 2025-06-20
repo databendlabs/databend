@@ -60,6 +60,7 @@ pub struct PipelineBuilder {
 
     pub contain_sink_processor: bool,
     pub cte_receivers: HashMap<String, Receiver<Arc<MaterializedCteData>>>,
+    pub next_cte_consumer_id: HashMap<String, usize>,
 }
 
 impl PipelineBuilder {
@@ -83,6 +84,7 @@ impl PipelineBuilder {
             contain_sink_processor: false,
             is_exchange_stack: vec![],
             cte_receivers: HashMap::new(),
+            next_cte_consumer_id: HashMap::new(),
         }
     }
 
@@ -298,6 +300,7 @@ impl PipelineBuilder {
             )),
 
             PhysicalPlan::MaterializedCTE(cte) => self.build_materialized_cte(cte),
+            PhysicalPlan::CTEConsumer(cte_consumer) => self.build_cte_consumer(cte_consumer),
         }?;
 
         self.is_exchange_stack.pop();

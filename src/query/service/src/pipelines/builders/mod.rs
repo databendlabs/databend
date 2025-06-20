@@ -22,6 +22,7 @@ mod builder_commit;
 mod builder_compact;
 mod builder_copy_into_location;
 mod builder_copy_into_table;
+mod builder_cte_consumer;
 mod builder_distributed_insert_select;
 mod builder_exchange;
 mod builder_fill_missing_columns;

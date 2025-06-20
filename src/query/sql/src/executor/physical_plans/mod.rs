@@ -61,6 +61,7 @@ mod physical_union_all;
 mod physical_window;
 mod physical_window_partition;
 
+mod physical_cte_consumer;
 pub use common::*;
 pub use physical_add_stream_column::AddStreamColumn;
 pub use physical_aggregate_expand::AggregateExpand;
@@ -78,6 +79,7 @@ pub use physical_compact_source::CompactSource;
 pub use physical_constant_table_scan::ConstantTableScan;
 pub use physical_copy_into_location::CopyIntoLocation;
 pub use physical_copy_into_table::*;
+pub use physical_cte_consumer::*;
 pub use physical_distributed_insert_select::DistributedInsertSelect;
 pub use physical_eval_scalar::EvalScalar;
 pub use physical_exchange::Exchange;

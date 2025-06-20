@@ -29,6 +29,7 @@ use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CTEConsumer;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -126,6 +127,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
             PhysicalPlan::MaterializedCTE(plan) => self.replace_materialized_cte(plan),
+            PhysicalPlan::CTEConsumer(plan) => self.replace_cte_consumer(plan),
         }
     }
 
@@ -656,6 +658,10 @@ pub trait PhysicalPlanReplacer {
             cte_name: plan.cte_name.clone(),
         })))
     }
+
+    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
+    }
 }
 
 impl PhysicalPlan {
@@ -679,6 +685,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_)
+                | PhysicalPlan::CTEConsumer(_)
                 | PhysicalPlan::BroadcastSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);

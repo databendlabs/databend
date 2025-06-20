@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::MaterializedCTE;
 
+use crate::pipelines::processors::transforms::MaterializedCteData;
 use crate::pipelines::processors::transforms::MaterializedCteSink;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -32,8 +35,9 @@ impl PipelineBuilder {
         // build cte pipeline
         let mut build_res = sub_builder.finalize(&cte.left)?;
         build_res.main_pipeline.try_resize(1)?;
-        let (tx, rx) = tokio::sync::watch::channel(Default::default());
+        let (tx, rx) = tokio::sync::watch::channel(Arc::new(MaterializedCteData::default()));
         self.cte_receivers.insert(cte.cte_name.clone(), rx);
+        self.next_cte_consumer_id.insert(cte.cte_name.clone(), 0);
         build_res
             .main_pipeline
             .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))?;

@@ -537,6 +537,22 @@ fn to_format_tree(
                 children,
             ))
         }
+        PhysicalPlan::CTEConsumer(plan) => {
+            let mut children = Vec::new();
+            children.push(FormatTreeNode::new(format!(
+                "cte_name: {}",
+                plan.cte_name.clone()
+            )));
+            children.push(FormatTreeNode::new(format!(
+                "cte_schema: [{}]",
+                format_output_columns(plan.cte_schema.clone(), metadata, false)
+            )));
+            append_profile_info(&mut children, profs, plan.plan_id);
+            Ok(FormatTreeNode::with_children(
+                "CTEConsumer".to_string(),
+                children,
+            ))
+        }
     }
 }
 

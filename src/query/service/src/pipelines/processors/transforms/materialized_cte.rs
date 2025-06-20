@@ -1,9 +1,12 @@
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 // Copyright 2021 Datafuse Labs
 //
@@ -20,6 +23,9 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 // limitations under the License.
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
+use tokio::sync::watch::Receiver;
 use tokio::sync::watch::Sender;
 
 pub struct MaterializedCteSink {
@@ -30,11 +36,29 @@ pub struct MaterializedCteSink {
 #[derive(Default)]
 pub struct MaterializedCteData {
     blocks: Vec<DataBlock>,
+    // consumer_id -> current_index
+    consumer_states: Arc<Mutex<HashMap<usize, usize>>>,
 }
 
 impl MaterializedCteData {
     pub fn new(blocks: Vec<DataBlock>) -> Self {
-        Self { blocks }
+        Self {
+            blocks,
+            consumer_states: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn get_next_block(&self, consumer_id: usize) -> Option<DataBlock> {
+        let mut states = self.consumer_states.lock().unwrap();
+        let current_index = states.get(&consumer_id).copied().unwrap_or(0);
+
+        if current_index < self.blocks.len() {
+            let block = self.blocks[current_index].clone();
+            states.insert(consumer_id, current_index + 1);
+            Some(block)
+        } else {
+            None
+        }
     }
 }
 
@@ -65,5 +89,48 @@ impl Sink for MaterializedCteSink {
                 ErrorCode::Internal("Failed to send blocks to materialized cte consumer")
             })?;
         Ok(())
+    }
+}
+
+pub struct CTESource {
+    receiver: Receiver<Arc<MaterializedCteData>>,
+    data: Option<Arc<MaterializedCteData>>,
+    consumer_id: usize,
+}
+
+impl CTESource {
+    pub fn create(
+        ctx: Arc<dyn databend_common_catalog::table_context::TableContext>,
+        output_port: Arc<OutputPort>,
+        receiver: Receiver<Arc<MaterializedCteData>>,
+        consumer_id: usize,
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx, output_port, Self {
+            receiver,
+            data: None,
+            consumer_id,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncSource for CTESource {
+    const NAME: &'static str = "CTEConsumerSource";
+
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
+        if self.data.is_none() {
+            self.receiver.changed().await.map_err(|_| {
+                ErrorCode::Internal("Failed to get data from receiver in CTEConsumerSource")
+            })?;
+            self.data = Some(self.receiver.borrow().clone());
+        }
+
+        if let Some(data) = &self.data {
+            if let Some(block) = data.get_next_block(self.consumer_id) {
+                return Ok(Some(block));
+            }
+        }
+        Ok(None)
     }
 }

@@ -37,6 +37,7 @@ use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CTEConsumer;
 use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
@@ -164,6 +165,7 @@ pub enum PhysicalPlan {
     BroadcastSink(BroadcastSink),
 
     MaterializedCTE(Box<MaterializedCTE>),
+    CTEConsumer(Box<CTEConsumer>),
 }
 
 impl PhysicalPlan {
@@ -431,6 +433,10 @@ impl PhysicalPlan {
                 plan.left.adjust_plan_id(next_id);
                 plan.right.adjust_plan_id(next_id);
             }
+            PhysicalPlan::CTEConsumer(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
         }
     }
 
@@ -490,6 +496,7 @@ impl PhysicalPlan {
             PhysicalPlan::BroadcastSource(v) => v.plan_id,
             PhysicalPlan::BroadcastSink(v) => v.plan_id,
             PhysicalPlan::MaterializedCTE(v) => v.plan_id,
+            PhysicalPlan::CTEConsumer(v) => v.plan_id,
         }
     }
 
@@ -548,6 +555,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkMerge(_) => todo!(),
             PhysicalPlan::ChunkCommitInsert(_) => todo!(),
             PhysicalPlan::MaterializedCTE(plan) => plan.output_schema(),
+            PhysicalPlan::CTEConsumer(plan) => plan.output_schema(),
         }
     }
 
@@ -612,6 +620,7 @@ impl PhysicalPlan {
             PhysicalPlan::BroadcastSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::BroadcastSink(_) => "RuntimeFilterSink".to_string(),
             PhysicalPlan::MaterializedCTE(_) => "MaterializedCTE".to_string(),
+            PhysicalPlan::CTEConsumer(_) => "CTEConsumer".to_string(),
         }
     }
 
@@ -625,6 +634,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::RecursiveCteScan(_)
+            | PhysicalPlan::CTEConsumer(_)
             | PhysicalPlan::BroadcastSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -702,6 +712,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::BroadcastSource(_)
+            | PhysicalPlan::CTEConsumer(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_mut())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_mut())),
@@ -824,7 +835,8 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkCommitInsert(_)
             | PhysicalPlan::BroadcastSource(_)
             | PhysicalPlan::BroadcastSink(_)
-            | PhysicalPlan::MaterializedCTE(_) => None,
+            | PhysicalPlan::MaterializedCTE(_)
+            | PhysicalPlan::CTEConsumer(_) => None,
         }
     }
 
