@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -46,7 +43,7 @@ const DEFAULT_CACHE_SIZE: usize = 1024;
 /// OperatorCache provides caching for storage operators to avoid
 /// frequent recreation and token refresh operations.
 pub(crate) struct OperatorCache {
-    cache: Arc<Mutex<LruCache<u64, Operator>>>,
+    cache: Arc<Mutex<LruCache<StorageParams, Operator>>>,
 }
 
 impl OperatorCache {
@@ -67,20 +64,18 @@ impl OperatorCache {
 
     /// Get or create an operator from cache
     pub(crate) fn get_or_create(&self, params: &StorageParams) -> DatabendResult<Operator> {
-        let cache_key = self.compute_cache_key(params);
-
         // Check if we have a cached operator
         {
             let mut cache = self.cache.lock().unwrap();
-            if let Some(operator) = cache.get(&cache_key) {
-                debug!("Operator cache hit for key: {}", cache_key);
+            if let Some(operator) = cache.get(params) {
+                debug!("Operator cache hit for params: {:?}", params);
                 CACHE_HIT_COUNT.inc();
                 return Ok(operator.clone());
             }
         }
 
         // Cache miss, create new operator
-        debug!("Operator cache miss for key: {}", cache_key);
+        debug!("Operator cache miss for params: {:?}", params);
         CACHE_MISS_COUNT.inc();
 
         let operator = init_operator_uncached(params)?;
@@ -88,18 +83,11 @@ impl OperatorCache {
         // Insert into cache
         {
             let mut cache = self.cache.lock().unwrap();
-            cache.put(cache_key, operator.clone());
+            cache.put(params.clone(), operator.clone());
             CACHE_SIZE.set(cache.len() as i64);
         }
 
         Ok(operator)
-    }
-
-    /// Compute a stable hash key for storage params
-    fn compute_cache_key(&self, params: &StorageParams) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        params.hash(&mut hasher);
-        hasher.finish()
     }
 }
 
