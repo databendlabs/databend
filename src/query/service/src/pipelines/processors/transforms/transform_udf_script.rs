@@ -405,11 +405,14 @@ impl TransformUdfScript {
                                     let mut fts = Vec::with_capacity(imports_stage_info.len());
                                     for (stage, path) in imports_stage_info.iter() {
                                         let op = init_stage_operator(stage)?;
-                                        let name =
-                                            path.trim_end_matches('/').split('/').last().unwrap();
+                                        let name = path
+                                            .trim_end_matches('/')
+                                            .split('/')
+                                            .next_back()
+                                            .unwrap();
                                         let temp_file = temp_dir_path.join(name);
                                         fts.push(async move {
-                                            let buffer = op.read(&path).await?;
+                                            let buffer = op.read(path).await?;
                                             databend_common_base::base::tokio::fs::write(
                                                 &temp_file,
                                                 buffer.to_bytes().as_ref(),
