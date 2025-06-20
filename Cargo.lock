@@ -4107,6 +4107,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-users",
+ "databend-common-version",
  "itertools 0.13.0",
  "log",
  "num_cpus",
