@@ -73,6 +73,7 @@ pub fn set_env_config() {
 }
 
 pub fn add_env_version() {
+    println!("cargo:return-if-env-changed=DATABEND_RELEASE_VERSION");
     let version = discover_version().expect(VERSION_ERROR_MESSAGE);
     println!("cargo:rustc-env=DATABEND_GIT_SEMVER={}", version);
 }
@@ -90,11 +91,13 @@ fn discover_version() -> Result<String> {
 }
 
 pub fn add_env_license() {
+    println!("cargo:return-if-env-changed=DATABEND_ENTERPRISE_LICENSE_EMBEDDED");
     let v = env::var("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").unwrap_or_default();
     println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_EMBEDDED={v}");
 }
 
 pub fn add_license_public_key() {
+    println!("cargo:return-if-env-changed=DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY");
     let v = env::var("DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY").unwrap_or_default();
     let v = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, v.as_bytes());
     println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY={v}");
