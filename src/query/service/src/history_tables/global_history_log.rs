@@ -272,7 +272,6 @@ impl GlobalHistoryLog {
 
         let log_history_table = get_log_table(self.create_context().await?).await?;
         if let Some(t) = log_history_table {
-            dbg!(t.get_table_info().meta.storage_params.clone());
             let mut params = self.current_params.lock();
             *params = t.get_table_info().meta.storage_params.clone();
         }
@@ -300,22 +299,13 @@ impl GlobalHistoryLog {
             .meta_handle
             .acquire_with_guard(&format!("{}/{}/lock", meta_key, table.name), self.interval)
             .await?;
+
+        // stage operator need to update when the params changed
+        // this will happen when another node has updated the configuration
         if table.name == "log_history" {
-            let log_history_table = get_log_table(self.create_context().await?).await?;
-            if let Some(t) = log_history_table {
-                let params_from_meta = t.get_table_info().meta.storage_params.clone();
-                {
-                    let mut params = self.current_params.lock();
-                    if params.as_ref() != params_from_meta.as_ref() {
-                        info!(
-                            "[HISTORY-TABLES] log_history table storage params changed, update log operator"
-                        );
-                        *params = params_from_meta.clone();
-                    }
-                }
-                setup_operator(&params_from_meta).await?;
-            }
+            self.check_params().await?;
         }
+
         if let Some(_guard) = may_permit {
             let mut batch_number_end = 0;
             let batch_number_begin = self
@@ -356,6 +346,26 @@ impl GlobalHistoryLog {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    pub async fn check_params(&self) -> Result<()> {
+        let log_history_table = get_log_table(self.create_context().await?).await?;
+        if let Some(t) = log_history_table {
+            let params_from_meta = t.get_table_info().meta.storage_params.clone();
+            {
+                let mut params = self.current_params.lock();
+                if params.as_ref() != params_from_meta.as_ref() {
+                    info!(
+                            "[HISTORY-TABLES] log_history table storage params changed, update log operator"
+                        );
+                    *params = params_from_meta.clone();
+                } else {
+                    return Ok(());
+                }
+            }
+            setup_operator(&params_from_meta).await?;
+        }
+        Ok(())
     }
 
     pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {

@@ -154,7 +154,7 @@ pub async fn get_log_table(context: Arc<QueryContext>) -> Result<Option<Arc<dyn 
     ))
     .await;
 
-    // If the table does not exist, we should not reset
+    // table is not exist
     if table.is_err() {
         return Ok(None);
     }
