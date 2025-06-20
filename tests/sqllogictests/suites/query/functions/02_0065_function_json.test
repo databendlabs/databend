@@ -54,9 +54,14 @@ SELECT json_typeof(parse_json('{"a":1,"b":2}'))
 object
 
 query T
-SELECT json_array()
+SELECT array_construct()
 ----
 []
+
+query T
+SELECT array_construct(true, 1, 'str', [1,2], {'k':'v'}, null)
+----
+[true,1,"str",[1,2],{"k":"v"},null]
 
 query T
 SELECT json_array(true, 1, 'str', [1,2], {'k':'v'}, null)
@@ -64,9 +69,14 @@ SELECT json_array(true, 1, 'str', [1,2], {'k':'v'}, null)
 [true,1,"str",[1,2],{"k":"v"},null]
 
 query T
-SELECT json_object()
+SELECT object_construct()
 ----
 {}
+
+query T
+SELECT object_construct('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
+----
+{"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
 query T
 SELECT json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
@@ -74,22 +84,27 @@ SELECT json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', nul
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
 statement error 1006
-SELECT json_object('k1', 1, 'k2', 'str', 'k3')
+SELECT object_construct('k1', 1, 'k2', 'str', 'k3')
 
 query T
-SELECT try_json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
+SELECT try_object_construct('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
 query T
-SELECT try_json_object('k1', 1, 'k2', 'str', 'k3')
+SELECT try_object_construct('k1', 1, 'k2', 'str', 'k3')
 ----
 NULL
 
 query T
-SELECT json_object_keep_null()
+SELECT object_construct_keep_null()
 ----
 {}
+
+query T
+SELECT object_construct_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
+----
+{"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
 query T
 SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
@@ -97,15 +112,15 @@ SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'},
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
 statement error 1006
-SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3')
+SELECT object_construct_keep_null('k1', 1, 'k2', 'str', 'k3')
 
 query T
-SELECT try_json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
+SELECT try_object_construct_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', null)
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
 query T
-SELECT try_json_object_keep_null('k1', 1, 'k2', 'str', 'k3')
+SELECT try_object_construct_keep_null('k1', 1, 'k2', 'str', 'k3')
 ----
 NULL
 
@@ -119,7 +134,7 @@ statement ok
 INSERT INTO t1(id, tag) VALUES(1, 'a'), (2, 'b'), (3, 'c'), (4, 'null'), (5, NULL)
 
 query T
-SELECT json_array(id, tag) FROM t1
+SELECT array_construct(id, tag) FROM t1
 ----
 [1,"a"]
 [2,"b"]
@@ -128,7 +143,7 @@ SELECT json_array(id, tag) FROM t1
 [5,null]
 
 query T
-SELECT json_object('id', id, 'tag', tag) FROM t1
+SELECT object_construct('id', id, 'tag', tag) FROM t1
 ----
 {"id":1,"tag":"a"}
 {"id":2,"tag":"b"}
@@ -137,7 +152,7 @@ SELECT json_object('id', id, 'tag', tag) FROM t1
 {"id":5}
 
 query T
-SELECT json_object_keep_null('id', id, 'tag', tag) FROM t1
+SELECT object_construct_keep_null('id', id, 'tag', tag) FROM t1
 ----
 {"id":1,"tag":"a"}
 {"id":2,"tag":"b"}
@@ -987,19 +1002,19 @@ DROP TABLE IF EXISTS t3
 
 # Basic jq usage tests
 query T
-SELECT * FROM jq('.[] | .', json_object('k1', 'v1', 'k2', 'v2')) ORDER BY 1
+SELECT * FROM jq('.[] | .', object_construct('k1', 'v1', 'k2', 'v2')) ORDER BY 1
 ----
 "v1"
 "v2"
 
 query T
-SELECT * FROM jq($$[.[] | .]$$, json_object('k1', 'v1', 'k2', 'v2'))
+SELECT * FROM jq($$[.[] | .]$$, object_construct('k1', 'v1', 'k2', 'v2'))
 ----
 ["v1","v2"]
 
 # Test with array input
 query T
-SELECT * FROM jq('.[]', json_array(1, 2, 3))
+SELECT * FROM jq('.[]', array_construct(1, 2, 3))
 ----
 1
 2
@@ -1007,26 +1022,26 @@ SELECT * FROM jq('.[]', json_array(1, 2, 3))
 
 # Test with nested objects
 query T
-SELECT * FROM jq('.a.b', json_object('a', json_object('b', 'nested_value')))
+SELECT * FROM jq('.a.b', object_construct('a', object_construct('b', 'nested_value')))
 ----
 "nested_value"
 
 # Test with array of objects
 query T
-SELECT * FROM jq('.[].name', json_array(json_object('name', 'Alice'), json_object('name', 'Bob')))
+SELECT * FROM jq('.[].name', array_construct(object_construct('name', 'Alice'), object_construct('name', 'Bob')))
 ----
 "Alice"
 "Bob"
 
 # Test with filtering
 query T
-SELECT * FROM jq('.[] | select(.age > 30)', json_array(json_object('name', 'Alice', 'age', 25), json_object('name', 'Bob', 'age', 35)))
+SELECT * FROM jq('.[] | select(.age > 30)', array_construct(object_construct('name', 'Alice', 'age', 25), object_construct('name', 'Bob', 'age', 35)))
 ----
 {"age":35,"name":"Bob"}
 
 # Test with multiple outputs per input element
 query T
-SELECT * FROM jq('.[] | .name, .age', json_array(json_object('name', 'Alice', 'age', 25), json_object('name', 'Bob', 'age', 35)))
+SELECT * FROM jq('.[] | .name, .age', array_construct(object_construct('name', 'Alice', 'age', 25), object_construct('name', 'Bob', 'age', 35)))
 ----
 "Alice"
 25
@@ -1040,35 +1055,35 @@ SELECT * FROM jq('.', NULL)
 
 # Test with empty object
 query T
-SELECT * FROM jq('.', json_object())
+SELECT * FROM jq('.', object_construct())
 ----
 {}
 
 # Test with empty array
 query T
-SELECT * FROM jq('.[]', json_array())
+SELECT * FROM jq('.[]', array_construct())
 ----
 
 # Test with invalid jq expression
 statement error
-SELECT * FROM jq('invalid_expression', json_object('k', 'v'))
+SELECT * FROM jq('invalid_expression', object_construct('k', 'v'))
 
 # Test with complex transformations
 query T
-SELECT * FROM jq('{min: min, max: max, sum: add, length: length}', json_array(1, 2, 3, 4, 5))
+SELECT * FROM jq('{min: min, max: max, sum: add, length: length}', array_construct(1, 2, 3, 4, 5))
 ----
 {"length":5,"max":5,"min":1,"sum":15}
 
 # Test with string manipulation
 query T
-SELECT * FROM jq('.[] | ascii_upcase', json_array('hello', 'world'))
+SELECT * FROM jq('.[] | ascii_upcase', array_construct('hello', 'world'))
 ----
 "HELLO"
 "WORLD"
 
 # Test with numeric operations
 query T
-SELECT * FROM jq('.[] * 2', json_array(1, 2, 3))
+SELECT * FROM jq('.[] * 2', array_construct(1, 2, 3))
 ----
 2
 4
@@ -1076,19 +1091,19 @@ SELECT * FROM jq('.[] * 2', json_array(1, 2, 3))
 
 # Test with object construction
 query T
-SELECT * FROM jq('{new_key: .key}', json_object('key', 'value'))
+SELECT * FROM jq('{new_key: .key}', object_construct('key', 'value'))
 ----
 {"new_key":"value"}
 
 # Test with array construction
 query T
-SELECT * FROM jq('[.[] | . * 2]', json_array(1, 2, 3))
+SELECT * FROM jq('[.[] | . * 2]', array_construct(1, 2, 3))
 ----
 [2,4,6]
 
 # Test with conditional logic
 query T
-SELECT * FROM jq('.[] | if . == 0 then "zero" elif . == 1 then "one" else "many" end', json_array(0, 1, 2))
+SELECT * FROM jq('.[] | if . == 0 then "zero" elif . == 1 then "one" else "many" end', array_construct(0, 1, 2))
 ----
 "zero"
 "one"
@@ -1144,22 +1159,22 @@ INSERT INTO t4(id, v1, v2) VALUES
 
 
 query T
-SELECT json_array_insert('[0,1,2,3]'::variant, 2, '"hello"'::variant)
+SELECT array_insert('[0,1,2,3]'::variant, 2, '"hello"'::variant)
 ----
 [0,1,"hello",2,3]
 
 query T
-SELECT json_array_insert('[0,1,2,3]'::variant, 7, '"hello"'::variant)
+SELECT array_insert('[0,1,2,3]'::variant, 7, '"hello"'::variant)
 ----
 [0,1,2,3,"hello"]
 
 query T
-SELECT json_array_insert('[0,1,2,3]'::variant, -1, '"hello"'::variant)
+SELECT array_insert('[0,1,2,3]'::variant, -1, '"hello"'::variant)
 ----
 [0,1,2,"hello",3]
 
 query T
-SELECT json_array_insert('["A","A","B",null,null]'::variant, 0, '[1,2,3]'::variant)
+SELECT array_insert('["A","A","B",null,null]'::variant, 0, '[1,2,3]'::variant)
 ----
 [[1,2,3],"A","A","B",null,null]
 
@@ -1169,7 +1184,7 @@ SELECT json_array_insert('"A"'::variant, 0, '[1,2,3]'::variant)
 [[1,2,3],"A"]
 
 query ITT
-SELECT id, json_array_insert(v1, 0, '100'::variant), json_array_insert(v2, 2, '[10,11]'::variant) from t4
+SELECT id, array_insert(v1, 0, '100'::variant), array_insert(v2, 2, '[10,11]'::variant) from t4
 ----
 1 [100,1,2,2,3,3,null] [2,3,[10,11],3]
 2 [100,"A","B","B","B","C"] ["B","B",[10,11],"D"]
@@ -1181,22 +1196,22 @@ SELECT id, json_array_insert(v1, 0, '100'::variant), json_array_insert(v2, 2, '[
 8 [100,{"k":[1,2]}] [{"k":[3]},[10,11]]
 
 query T
-SELECT json_array_distinct('["A","A","B",null,null]'::variant)
+SELECT array_distinct('["A","A","B",null,null]'::variant)
 ----
 ["A","B",null]
 
 query T
-SELECT json_array_distinct('[1,1,2,3,3,1,2,null,null]'::variant)
+SELECT array_distinct('[1,1,2,3,3,1,2,null,null]'::variant)
 ----
 [1,2,3,null]
 
 query T
-SELECT json_array_distinct('[[1,2],[1,2],[3,4,3,3],{"k":"v"},{"k":"v"}]'::variant)
+SELECT array_distinct('[[1,2],[1,2],[3,4,3,3],{"k":"v"},{"k":"v"}]'::variant)
 ----
 [[1,2],[3,4,3,3],{"k":"v"}]
 
 query T
-SELECT json_array_distinct('true'::variant)
+SELECT array_distinct('true'::variant)
 ----
 [true]
 
@@ -1206,7 +1221,7 @@ SELECT json_array_distinct('{"kk":[1,2]}'::variant)
 [{"kk":[1,2]}]
 
 query ITT
-SELECT id, json_array_distinct(v1), json_array_distinct(v2) from t4
+SELECT id, array_distinct(v1), array_distinct(v2) from t4
 ----
 1 [1,2,3,null] [2,3]
 2 ["A","B","C"] ["B","D"]
@@ -1218,52 +1233,52 @@ SELECT id, json_array_distinct(v1), json_array_distinct(v2) from t4
 8 [{"k":[1,2]}] [{"k":[3]}]
 
 query T
-SELECT json_array_intersection('["A","B"]'::variant, '["B","C"]'::variant)
+SELECT array_intersection('["A","B"]'::variant, '["B","C"]'::variant)
 ----
 ["B"]
 
 query T
-SELECT json_array_intersection('["A","B","C"]'::variant, '["B","C"]'::variant)
+SELECT array_intersection('["A","B","C"]'::variant, '["B","C"]'::variant)
 ----
 ["B","C"]
 
 query T
-SELECT json_array_intersection('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
+SELECT array_intersection('["A","B","B","B","C"]'::variant, '["B","B"]'::variant)
 ----
 ["B","B"]
 
 query T
-SELECT json_array_intersection('[1,2]'::variant, '[3,4]'::variant)
+SELECT array_intersection('[1,2]'::variant, '[3,4]'::variant)
 ----
 []
 
 query T
-SELECT json_array_intersection('[null,102,null]'::variant, '[null,null,103]'::variant)
+SELECT array_intersection('[null,102,null]'::variant, '[null,null,103]'::variant)
 ----
 [null,null]
 
 query T
-SELECT json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
+SELECT array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant)
 ----
 [{"a":1,"b":2}]
 
 query T
-SELECT json_array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant)
+SELECT array_intersection('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant)
 ----
 []
 
 query T
-SELECT json_array_intersection('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1}]'::variant);
+SELECT array_intersection('[{"a":1,"b":2,"c":3}]'::variant, '[{"c":3,"b":2,"a":1}]'::variant);
 ----
 [{"a":1,"b":2,"c":3}]
 
 query T
-SELECT json_array_intersection('true'::variant, '[true,false]'::variant)
+SELECT array_intersection('true'::variant, '[true,false]'::variant)
 ----
 [true]
 
 query T
-SELECT json_array_intersection('true'::variant, 'false'::variant)
+SELECT array_intersection('true'::variant, 'false'::variant)
 ----
 []
 
@@ -1273,7 +1288,7 @@ SELECT json_array_intersection('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
 [{"k":"v"}]
 
 query IT
-SELECT id, json_array_intersection(v1, v2) from t4
+SELECT id, array_intersection(v1, v2) from t4
 ----
 1 [2,3,3]
 2 ["B","B"]
@@ -1285,37 +1300,37 @@ SELECT id, json_array_intersection(v1, v2) from t4
 8 []
 
 query T
-SELECT json_array_except('["A","B"]'::variant, '["B","C"]'::variant);
+SELECT array_except('["A","B"]'::variant, '["B","C"]'::variant);
 ----
 ["A"]
 
 query T
-SELECT json_array_except('["A","B","C"]'::variant, '["B","C"]'::variant);
+SELECT array_except('["A","B","C"]'::variant, '["B","C"]'::variant);
 ----
 ["A"]
 
 query T
-SELECT json_array_except('["A","B","B","B","C"]'::variant, '["B"]'::variant);
+SELECT array_except('["A","B","B","B","C"]'::variant, '["B"]'::variant);
 ----
 ["A","B","B","C"]
 
 query T
-SELECT json_array_except('["A",null,null]'::variant, '["B",null]'::variant);
+SELECT array_except('["A",null,null]'::variant, '["B",null]'::variant);
 ----
 ["A",null]
 
 query T
-SELECT json_array_except('[{"a":1,"b":2},1]'::variant, '[{"a":1,"b":2},3]'::variant);
+SELECT array_except('[{"a":1,"b":2},1]'::variant, '[{"a":1,"b":2},3]'::variant);
 ----
 [1]
 
 query T
-SELECT json_array_except('true'::variant, '[true,false]'::variant)
+SELECT array_except('true'::variant, '[true,false]'::variant)
 ----
 []
 
 query T
-SELECT json_array_except('true'::variant, 'false'::variant)
+SELECT array_except('true'::variant, 'false'::variant)
 ----
 [true]
 
@@ -1325,7 +1340,7 @@ SELECT json_array_except('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
 [1]
 
 query IT
-SELECT id, json_array_except(v1, v2) from t4
+SELECT id, array_except(v1, v2) from t4
 ----
 1 [1,2,null]
 2 ["A","B","C"]
@@ -1337,37 +1352,37 @@ SELECT id, json_array_except(v1, v2) from t4
 8 [{"k":[1,2]}]
 
 query B
-SELECT json_array_overlap('["hello","aloha"]'::variant, '["hello","hi","hey"]'::variant);
+SELECT array_overlap('["hello","aloha"]'::variant, '["hello","hi","hey"]'::variant);
 ----
 1
 
 query B
-SELECT json_array_overlap('["hello","aloha"]'::variant, '["hola","bonjour","ciao"]'::variant);
+SELECT array_overlap('["hello","aloha"]'::variant, '["hola","bonjour","ciao"]'::variant);
 ----
 0
 
 query B
-SELECT json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant);
+SELECT array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"b":2,"c":3},3,4]'::variant);
 ----
 0
 
 query B
-SELECT json_array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant);
+SELECT array_overlap('[{"a":1,"b":2},1,2]'::variant, '[{"a":1,"b":2},3,4]'::variant);
 ----
 1
 
 query B
-SELECT json_array_overlap('[1,2,null]'::variant, '[3,null,5]'::variant);
+SELECT array_overlap('[1,2,null]'::variant, '[3,null,5]'::variant);
 ----
 1
 
 query B
-SELECT json_array_overlap('true'::variant, '[true,false]'::variant)
+SELECT array_overlap('true'::variant, '[true,false]'::variant)
 ----
 1
 
 query B
-SELECT json_array_overlap('true'::variant, 'false'::variant)
+SELECT array_overlap('true'::variant, 'false'::variant)
 ----
 0
 
@@ -1377,7 +1392,7 @@ SELECT json_array_overlap('[{"k":"v"}, 1]'::variant, '{"k":"v"}'::variant)
 1
 
 query IB
-SELECT id, json_array_overlap(v1, v2) from t4
+SELECT id, array_overlap(v1, v2) from t4
 ----
 1 1
 2 1
@@ -1402,63 +1417,73 @@ INSERT INTO t5(id, v1) VALUES
     (3, '{"a":1,"h":2,"m":3,"n":4}')
 
 query T
-SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'c', 3)
+SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'c', 3)
 ----
 {"a":1,"b":2,"c":3,"d":4}
 
 query T
-SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'x', 10)
+SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'x', 10)
 ----
 {"a":1,"b":2,"d":4,"x":10}
 
 query T
-SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'A', 10)
+SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'A', 10)
 ----
 {"A":10,"a":1,"b":2,"d":4}
 
 statement error 1006
-SELECT json_object_insert('{"a":1,"b":2,"d":4}'::variant, 'a', 10)
+SELECT object_insert('{"a":1,"b":2,"d":4}'::variant, 'a', 10)
 
 statement error 1006
-SELECT json_object_insert('1234'::variant, 'a', 10)
+SELECT object_insert('1234'::variant, 'a', 10)
 
 statement error 1006
-SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', false)
+SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', false)
 
 query T
-SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', true)
+SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'city', 'San Jose', true)
 ----
 {"city":"San Jose","state":"CA"}
 
 query T
-SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 94402::DOUBLE, false)
+SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 94402::DOUBLE, false)
 ----
 {"city":"San Mateo","state":"CA","zip_code":94402.0}
 
 query T
-SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', null)
+SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', null)
 ----
 {"city":"San Mateo","state":"CA"}
 
 query T
-SELECT json_object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 'null'::variant)
+SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, 'zip_code', 'null'::variant)
 ----
 {"city":"San Mateo","state":"CA","zip_code":null}
 
+query T
+SELECT object_insert('{"city":"San Mateo","state":"CA"}'::variant, to_date('2020-01-01'), 100)
+----
+{"2020-01-01":100,"city":"San Mateo","state":"CA"}
+
+query T
+SELECT json_object_insert('{"a":1}'::variant, 'a', null, true), json_object_insert('{"a":1}'::variant, 'a', null, false)
+----
+{} {"a":1}
+
 query IT
-SELECT id, json_object_insert(v1, 'b', '100'::variant) from t5
+SELECT id, object_insert(v1, 'b', '100'::variant) from t5
 ----
 1 {"b":100,"k1":"v1","k2":"v2"}
 2 {"a":[1,2,3],"b":100,"c":{"c1":"v1","c2":"v2"},"m":true}
 3 {"a":1,"b":100,"h":2,"m":3,"n":4}
 
 query T
-SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
+SELECT object_delete('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
 ----
 {"b":2,"d":4}
 
 query T
-SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
+SELECT object_delete('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
 ----
 {"a":1}
 
@@ -1468,22 +1493,22 @@ SELECT json_object_delete('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
 {"a":1,"b":2,"d":4}
 
 statement error 1006
-SELECT json_object_delete('1234'::variant, 'a')
+SELECT object_delete('1234'::variant, 'a')
 
 query IT
-SELECT id, json_object_delete(v1, 'a', 'k1') from t5
+SELECT id, object_delete(v1, 'a', 'k1') from t5
 ----
 1 {"k2":"v2"}
 2 {"c":{"c1":"v1","c2":"v2"},"m":true}
 3 {"h":2,"m":3,"n":4}
 
 query T
-SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
+SELECT object_pick('{"a":1,"b":2,"d":4}'::variant, 'a', 'c')
 ----
 {"a":1}
 
 query T
-SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
+SELECT object_pick('{"a":1,"b":2,"d":4}'::variant, 'b', 'b', null, 'd')
 ----
 {"b":2,"d":4}
 
@@ -1493,10 +1518,10 @@ SELECT json_object_pick('{"a":1,"b":2,"d":4}'::variant, 'A', 'B')
 {}
 
 statement error 1006
-SELECT json_object_pick('1234'::variant, 'a')
+SELECT object_pick('1234'::variant, 'a')
 
 query IT
-SELECT id, json_object_pick(v1, 'a', 'k1') from t5
+SELECT id, object_pick(v1, 'a', 'k1') from t5
 ----
 1 {"k1":"v1"}
 2 {"a":[1,2,3]}
@@ -1524,3 +1549,4 @@ SELECT id, data:address, data:address:zip, STRIP_NULL_VALUE(data:address), STRIP
 
 statement ok
 DROP TABLE IF EXISTS t6
+

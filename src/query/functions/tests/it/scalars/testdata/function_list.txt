@@ -30,6 +30,18 @@ hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
+json_array -> array_construct
+json_array_distinct -> array_distinct
+json_array_except -> array_except
+json_array_insert -> array_insert
+json_array_intersection -> array_intersection
+json_array_overlap -> array_overlap
+json_object -> object_construct
+json_object_delete -> object_delete
+json_object_insert -> object_insert
+json_object_keep_null -> object_construct_keep_null
+json_object_keys -> object_keys
+json_object_pick -> object_pick
 json_to_string -> to_string
 lcase -> lower
 length_utf8 -> length
@@ -38,7 +50,6 @@ mod -> modulo
 month -> to_month
 neg -> minus
 negate -> minus
-object_keys -> json_object_keys
 power -> pow
 quarter -> to_quarter
 remove_nullable -> assume_not_null
@@ -81,6 +92,8 @@ to_varchar -> to_string
 trunc -> truncate
 try_ipv4_num_to_string -> try_inet_ntoa
 try_ipv4_string_to_num -> try_inet_aton
+try_json_object -> try_object_construct
+try_json_object_keep_null -> try_object_construct_keep_null
 try_to_datetime -> try_to_timestamp
 ucase -> upper
 unhex -> from_hex
@@ -152,22 +165,33 @@ Functions overloads:
 1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_concat(Array(T0), Array(T0)) :: Array(T0)
 3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_construct FACTORY
 0 array_count FACTORY
-0 array_distinct(Array(Nothing)) :: Array(Nothing)
-1 array_distinct(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_distinct(Array(T0)) :: Array(T0)
-3 array_distinct(Array(T0) NULL) :: Array(T0) NULL
+0 array_distinct(Variant) :: Variant
+1 array_distinct(Variant NULL) :: Variant NULL
+2 array_distinct(Array(Nothing)) :: Array(Nothing)
+3 array_distinct(Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_distinct(Array(T0)) :: Array(T0)
+5 array_distinct(Array(T0) NULL) :: Array(T0) NULL
+0 array_except(Variant, Variant) :: Variant
+1 array_except(Variant NULL, Variant NULL) :: Variant NULL
 0 array_flatten(Array(Array(T0))) :: Array(T0)
 1 array_flatten(Array(Array(T0)) NULL) :: Array(T0) NULL
 0 array_indexof(NULL, NULL) :: NULL
 1 array_indexof(Array(T0), T0) :: UInt64
 2 array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
-0 array_intersection(Array(T0), Array(T0)) :: Array(T0)
-1 array_intersection(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_insert(Variant, Int32, Variant) :: Variant
+1 array_insert(Variant NULL, Int32 NULL, Variant NULL) :: Variant NULL
+0 array_intersection(Variant, Variant) :: Variant
+1 array_intersection(Variant NULL, Variant NULL) :: Variant NULL
+2 array_intersection(Array(T0), Array(T0)) :: Array(T0)
+3 array_intersection(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_kurtosis FACTORY
 0 array_max FACTORY
 0 array_median FACTORY
 0 array_min FACTORY
+0 array_overlap(Variant, Variant) :: Boolean
+1 array_overlap(Variant NULL, Variant NULL) :: Boolean NULL
 0 array_prepend(T0, Array(T0) NULL) :: Array(T0)
 0 array_remove_first(Array(Nothing)) :: Array(Nothing)
 1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
@@ -2183,18 +2207,7 @@ Functions overloads:
 0 jaro_winkler(String, String) :: Float64
 1 jaro_winkler(String NULL, String NULL) :: Float64 NULL
 0 jq FACTORY
-0 json_array FACTORY
-0 json_array_distinct(Variant) :: Variant
-1 json_array_distinct(Variant NULL) :: Variant NULL
 0 json_array_elements FACTORY
-0 json_array_except(Variant, Variant) :: Variant
-1 json_array_except(Variant NULL, Variant NULL) :: Variant NULL
-0 json_array_insert(Variant, Int32, Variant) :: Variant
-1 json_array_insert(Variant NULL, Int32 NULL, Variant NULL) :: Variant NULL
-0 json_array_intersection(Variant, Variant) :: Variant
-1 json_array_intersection(Variant NULL, Variant NULL) :: Variant NULL
-0 json_array_overlap(Variant, Variant) :: Boolean
-1 json_array_overlap(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_contains_in_left(Variant, Variant) :: Boolean
 1 json_contains_in_left(Variant NULL, Variant NULL) :: Boolean NULL
 0 json_contains_in_right(Variant, Variant) :: Boolean
@@ -2208,12 +2221,6 @@ Functions overloads:
 1 json_exists_key(Variant NULL, String NULL) :: Boolean NULL
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
-0 json_object FACTORY
-0 json_object_delete FACTORY
-0 json_object_insert FACTORY
-0 json_object_keep_null FACTORY
-0 json_object_keys(Variant NULL) :: Variant NULL
-0 json_object_pick FACTORY
 0 json_path_exists FACTORY
 0 json_path_match FACTORY
 0 json_path_query FACTORY
@@ -3279,6 +3286,12 @@ Functions overloads:
 76 noteq(Interval, Interval) :: Boolean
 77 noteq(Interval NULL, Interval NULL) :: Boolean NULL
 0 now() :: Timestamp
+0 object_construct FACTORY
+0 object_construct_keep_null FACTORY
+0 object_delete FACTORY
+0 object_insert FACTORY
+0 object_keys(Variant NULL) :: Variant NULL
+0 object_pick FACTORY
 0 oct(Int64) :: String
 1 oct(Int64 NULL) :: String NULL
 0 octet_length(String) :: UInt64
@@ -4491,8 +4504,8 @@ Functions overloads:
 1 try_inet_aton(String NULL) :: UInt32 NULL
 0 try_inet_ntoa(Int64) :: String NULL
 1 try_inet_ntoa(Int64 NULL) :: String NULL
-0 try_json_object FACTORY
-0 try_json_object_keep_null FACTORY
+0 try_object_construct FACTORY
+0 try_object_construct_keep_null FACTORY
 0 try_parse_json(Variant) :: Variant NULL
 1 try_parse_json(Variant NULL) :: Variant NULL
 2 try_parse_json(String) :: Variant NULL

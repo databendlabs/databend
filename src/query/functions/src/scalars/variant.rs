@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use databend_common_column::types::months_days_micros;
+use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::date::string_to_date;
@@ -80,8 +81,23 @@ use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_aliases("json_object_keys", &["object_keys"]);
     registry.register_aliases("to_string", &["json_to_string"]);
+    registry.register_aliases("array_construct", &["json_array"]);
+    registry.register_aliases("array_distinct", &["json_array_distinct"]);
+    registry.register_aliases("array_except", &["json_array_except"]);
+    registry.register_aliases("array_insert", &["json_array_insert"]);
+    registry.register_aliases("array_intersection", &["json_array_intersection"]);
+    registry.register_aliases("array_overlap", &["json_array_overlap"]);
+    registry.register_aliases("object_keys", &["json_object_keys"]);
+    registry.register_aliases("object_insert", &["json_object_insert"]);
+    registry.register_aliases("object_delete", &["json_object_delete"]);
+    registry.register_aliases("object_pick", &["json_object_pick"]);
+    registry.register_aliases("object_construct", &["json_object"]);
+    registry.register_aliases("try_object_construct", &["try_json_object"]);
+    registry.register_aliases("object_construct_keep_null", &["json_object_keep_null"]);
+    registry.register_aliases("try_object_construct_keep_null", &[
+        "try_json_object_keep_null",
+    ]);
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
         "parse_json",
@@ -231,7 +247,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
-        "json_object_keys",
+        "object_keys",
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<NullableType<VariantType>, NullableType<VariantType>>(|val, _| {
             val.and_then(|v| match RawJsonb::new(v).object_keys() {
@@ -1649,7 +1665,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_3_arg::<VariantType, Int32Type, VariantType, VariantType, _, _>(
-        "json_array_insert",
+        "array_insert",
         |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<VariantType, Int32Type, VariantType, VariantType>(
             |val, pos, new_val, output, ctx| {
@@ -1674,7 +1690,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
-        "json_array_distinct",
+        "array_distinct",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
@@ -1696,7 +1712,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
-        "json_array_intersection",
+        "array_intersection",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
@@ -1722,7 +1738,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
-        "json_array_except",
+        "array_except",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
             |left, right, output, ctx| {
@@ -1748,7 +1764,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, BooleanType, _, _>(
-        "json_array_overlap",
+        "array_overlap",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<VariantType, VariantType, BooleanType>(
             |left, right, output, ctx| {
@@ -1837,82 +1853,85 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    let json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_construct = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object".to_string(),
+                name: "object_construct".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_object_fn),
+                eval: Box::new(object_construct_fn),
             },
         }))
     }));
-    registry.register_function_factory("json_object", json_object);
+    registry.register_function_factory("object_construct", object_construct);
 
-    let try_json_object = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let try_object_construct = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         let f = Function {
             signature: FunctionSignature {
-                name: "try_json_object".to_string(),
+                name: "try_object_construct".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(json_object_fn),
+                eval: Box::new(object_construct_fn),
             },
         };
         Some(Arc::new(f.error_to_null()))
     }));
-    registry.register_function_factory("try_json_object", try_json_object);
+    registry.register_function_factory("try_object_construct", try_object_construct);
 
     let json_object_keep_null = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_keep_null".to_string(),
+                name: "object_construct_keep_null".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_object_keep_null_fn),
+                eval: Box::new(object_construct_keep_null_fn),
             },
         }))
     }));
-    registry.register_function_factory("json_object_keep_null", json_object_keep_null);
+    registry.register_function_factory("object_construct_keep_null", json_object_keep_null);
 
-    let try_json_object_keep_null = FunctionFactory::Closure(Box::new(|_, args_type| {
+    let try_object_construct_keep_null = FunctionFactory::Closure(Box::new(|_, args_type| {
         let f = Function {
             signature: FunctionSignature {
-                name: "try_json_object_keep_null".to_string(),
+                name: "try_object_construct_keep_null".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(json_object_keep_null_fn),
+                eval: Box::new(object_construct_keep_null_fn),
             },
         };
         Some(Arc::new(f.error_to_null()))
     }));
-    registry.register_function_factory("try_json_object_keep_null", try_json_object_keep_null);
+    registry.register_function_factory(
+        "try_object_construct_keep_null",
+        try_object_construct_keep_null,
+    );
 
-    let json_array = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let array_construct = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_array".to_string(),
+                name: "array_construct".to_string(),
                 args_type: (0..args_type.len()).map(DataType::Generic).collect(),
                 return_type: DataType::Variant,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(json_array_fn),
+                eval: Box::new(array_construct_fn),
             },
         }))
     }));
-    registry.register_function_factory("json_array", json_array);
+    registry.register_function_factory("array_construct", array_construct);
 
     registry.register_passthrough_nullable_2_arg(
         "json_contains_in_left",
@@ -2028,14 +2047,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    let json_object_insert = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_insert = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() != 3 && args_type.len() != 4 {
             return None;
         }
-        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
-            || (args_type[1].remove_nullable() != DataType::String
-                && args_type[1] != DataType::Null)
-        {
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
             return None;
         }
         if args_type.len() == 4
@@ -2052,19 +2068,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_insert".to_string(),
+                name: "object_insert".to_string(),
                 args_type: args_type.to_vec(),
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| json_object_insert_fn(args, ctx, is_nullable)),
+                eval: Box::new(move |args, ctx| object_insert_fn(args, ctx, is_nullable)),
             },
         }))
     }));
-    registry.register_function_factory("json_object_insert", json_object_insert);
+    registry.register_function_factory("object_insert", object_insert);
 
-    let json_object_pick = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_pick = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -2084,21 +2100,21 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_pick".to_string(),
+                name: "object_pick".to_string(),
                 args_type: args_type.to_vec(),
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    json_object_pick_or_delete_fn(args, ctx, true, is_nullable)
+                    object_pick_or_delete_fn(args, ctx, true, is_nullable)
                 }),
             },
         }))
     }));
-    registry.register_function_factory("json_object_pick", json_object_pick);
+    registry.register_function_factory("object_pick", object_pick);
 
-    let json_object_delete = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+    let object_delete = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
         if args_type.len() < 2 {
             return None;
         }
@@ -2118,19 +2134,19 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
         Some(Arc::new(Function {
             signature: FunctionSignature {
-                name: "json_object_delete".to_string(),
+                name: "object_delete".to_string(),
                 args_type: args_type.to_vec(),
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    json_object_pick_or_delete_fn(args, ctx, false, is_nullable)
+                    object_pick_or_delete_fn(args, ctx, false, is_nullable)
                 }),
             },
         }))
     }));
-    registry.register_function_factory("json_object_delete", json_object_delete);
+    registry.register_function_factory("object_delete", object_delete);
 
     registry.register_1_arg_core::<NullableType<VariantType>, NullableType<VariantType>, _, _>(
         "strip_null_value",
@@ -2146,7 +2162,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
-fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn array_construct_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let (columns, len) = prepare_args_columns(args, ctx);
     let cap = len.unwrap_or(1);
     let mut builder = BinaryColumnBuilder::with_capacity(cap, cap * 50);
@@ -2176,15 +2192,15 @@ fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTyp
     }
 }
 
-fn json_object_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    json_object_impl_fn(args, ctx, false)
+fn object_construct_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    object_construct_impl_fn(args, ctx, false)
 }
 
-fn json_object_keep_null_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    json_object_impl_fn(args, ctx, true)
+fn object_construct_keep_null_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    object_construct_impl_fn(args, ctx, true)
 }
 
-fn json_object_impl_fn(
+fn object_construct_impl_fn(
     args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     keep_null: bool,
@@ -2558,7 +2574,7 @@ fn path_predicate_fn<'a>(
     }
 }
 
-fn json_object_insert_fn(
+fn object_insert_fn(
     args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     is_nullable: bool,
@@ -2596,12 +2612,6 @@ fn json_object_insert_fn(
             Value::Scalar(scalar) => scalar.as_ref(),
             Value::Column(col) => unsafe { col.index_unchecked(idx) },
         };
-        if new_key == ScalarRef::Null || new_val == ScalarRef::Null {
-            builder.put(value.as_ref());
-            builder.commit_row();
-            validity.push(true);
-            continue;
-        }
         let update_flag = if args.len() == 4 {
             let v = match &args[3] {
                 Value::Scalar(scalar) => scalar.as_ref(),
@@ -2614,18 +2624,30 @@ fn json_object_insert_fn(
         } else {
             false
         };
-        let new_key = new_key.as_string().unwrap();
+        if new_key == ScalarRef::Null || (!update_flag && new_val == ScalarRef::Null) {
+            builder.put(value.as_ref());
+            builder.commit_row();
+            validity.push(true);
+            continue;
+        }
+        let new_key_str = scalar_ref_to_string(&new_key);
         let res = match new_val {
+            ScalarRef::Null => {
+                // if update_flag is true and value is NULL, remove the key.
+                let mut delete_keys = BTreeSet::new();
+                delete_keys.insert(new_key_str.as_str());
+                value.object_delete(&delete_keys)
+            }
             ScalarRef::Variant(new_val) => {
                 let new_val = RawJsonb::new(new_val);
-                value.object_insert(new_key, &new_val, update_flag)
+                value.object_insert(&new_key_str, &new_val, update_flag)
             }
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
                 cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf, None);
                 let new_val = RawJsonb::new(new_val_buf.as_bytes());
-                value.object_insert(new_key, &new_val, update_flag)
+                value.object_insert(&new_key_str, &new_val, update_flag)
             }
         };
         match res {
@@ -2662,7 +2684,7 @@ fn json_object_insert_fn(
     }
 }
 
-fn json_object_pick_or_delete_fn(
+fn object_pick_or_delete_fn(
     args: &[Value<AnyType>],
     ctx: &mut EvalContext,
     is_pick: bool,
