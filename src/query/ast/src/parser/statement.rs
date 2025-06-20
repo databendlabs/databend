@@ -3777,6 +3777,23 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
     )(i)
 }
 
+pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+    map_res(
+        rule! {
+            #ident
+            ~ #comment
+            : "`<column name> COMMENT '<comment>'`"
+        },
+        |(name, comment)| Ok(ColumnComment { name, comment }),
+    )(i)
+}
+
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     let set_mask_policy = map(
         rule! {
@@ -3814,11 +3831,25 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
         },
     );
 
+    let modify_column_comment = map(
+        rule! {
+            #modify_column_comment ~ ("," ~ COLUMN? ~ #modify_column_comment)*
+        },
+        |(column_def, column_def_vec)| {
+            let mut column_defs = vec![column_def];
+            column_def_vec
+                .iter()
+                .for_each(|(_, _, column_def)| column_defs.push(column_def.clone()));
+            ModifyColumnAction::Comment(column_defs)
+        },
+    );
+
     rule!(
         #set_mask_policy
         | #unset_mask_policy
         | #convert_stored_computed_column
         | #modify_column_type
+        | #modify_column_comment
     )(i)
 }
 

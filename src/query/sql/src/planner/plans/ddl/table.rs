@@ -360,6 +360,8 @@ pub enum ModifyColumnAction {
     SetDataType(Vec<(TableField, String)>),
     // column name
     ConvertStoredComputedColumn(String),
+    // modify column table field, field comments
+    Comment(Vec<(TableField, String)>),
 }
 
 // Table modify column
