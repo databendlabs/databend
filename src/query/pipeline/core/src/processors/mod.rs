@@ -19,6 +19,7 @@ mod duplicate_processor;
 mod port_trigger;
 mod profile;
 mod resize_processor;
+mod sequence_group;
 mod shuffle_processor;
 
 pub use duplicate_processor::DuplicateProcessor;
@@ -37,6 +38,7 @@ pub use profile::PlanScope;
 pub use profile::PlanScopeGuard;
 pub use resize_processor::create_resize_item;
 pub use resize_processor::ResizeProcessor;
+pub use sequence_group::SequenceGroupProcessor;
 pub use shuffle_processor::Exchange;
 pub use shuffle_processor::MergePartitionProcessor;
 pub use shuffle_processor::PartitionProcessor;

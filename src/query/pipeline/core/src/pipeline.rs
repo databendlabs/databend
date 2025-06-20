@@ -24,6 +24,7 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use petgraph::graph::EdgeIndex;
 use petgraph::matrix_graph::Zero;
 use petgraph::prelude::StableGraph;
 use petgraph::stable_graph::NodeIndex;
@@ -43,11 +44,13 @@ use crate::processors::PartitionProcessor;
 use crate::processors::PlanScope;
 use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
+use crate::processors::SequenceGroupProcessor;
 use crate::LockGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
 
+#[derive(Clone)]
 pub struct Node {
     pub proc: ProcessorPtr,
     pub inputs: Vec<Arc<InputPort>>,
@@ -61,6 +64,7 @@ impl Debug for Node {
     }
 }
 
+#[derive(Clone)]
 pub struct Edge {
     pub input_index: usize,
     pub output_index: usize,
@@ -135,8 +139,62 @@ impl Pipeline {
         Ok(!self.is_empty() && !self.is_pulling_pipeline()?)
     }
 
-    pub fn finalize(self) -> Pipeline {
+    pub fn finalize(mut self, root_scope: Option<Arc<PlanScope>>) -> Pipeline {
+        if root_scope.is_none() {
+            return self;
+        }
+
+        for node in self.graph.node_weights_mut() {
+            let Some(scope) = node.scope.as_mut() else {
+                node.scope = root_scope.clone();
+                continue;
+            };
+
+            if scope.parent_id.is_none() {
+                unsafe {
+                    let scope = Arc::get_mut_unchecked(scope);
+                    scope.parent_id = root_scope.as_ref().map(|x| x.id);
+                }
+            }
+        }
         self
+    }
+
+    // groups: (group_count, ignore_output)
+    // outputs: new_output_size
+    pub fn sequence_group(&mut self, groups: Vec<(usize, bool)>, outputs: usize) -> Result<()> {
+        if self.sinks.is_empty() {
+            return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+        }
+
+        let input_size = groups.iter().map(|x| x.0).sum::<usize>();
+
+        if self.sinks.len() != input_size {
+            return Err(ErrorCode::Internal(
+                "Sequence group sum must be eq sink length",
+            ));
+        }
+
+        if groups.is_empty() {
+            return Err(ErrorCode::Internal("Cannot sequence empty groups"));
+        }
+
+        if groups.len() == 1 && !groups[0].1 {
+            return self.resize(outputs, false);
+        }
+
+        let processor = SequenceGroupProcessor::create(groups, outputs)?;
+        let inputs_port = processor.get_inputs();
+        let outputs_port = processor.get_outputs();
+        self.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+            PipeItem::create(
+                ProcessorPtr::create(Box::new(processor)),
+                inputs_port,
+                outputs_port,
+            ),
+        ]));
+
+        Ok(())
     }
 
     pub fn add_pipe(&mut self, pipe: Pipe) {
@@ -495,6 +553,49 @@ impl Pipeline {
         let mut chain = FinishedCallbackChain::create();
         std::mem::swap(&mut self.on_finished_chain, &mut chain);
         chain
+    }
+
+    pub fn take_sinks(&mut self) -> VecDeque<(NodeIndex, usize)> {
+        std::mem::take(&mut self.sinks)
+    }
+
+    pub fn extend_sinks(&mut self, sinks: impl IntoIterator<Item = (NodeIndex, usize)>) {
+        self.sinks.extend(sinks)
+    }
+
+    pub fn merge(&mut self, mut other: Self) -> Result<VecDeque<(NodeIndex, usize)>> {
+        self.max_threads = std::cmp::max(self.max_threads, other.max_threads);
+        let offset = self.graph.node_count();
+
+        let mut other_sinks = VecDeque::with_capacity(other.output_len());
+        for (index, v) in other.take_sinks() {
+            other_sinks.push_back((NodeIndex::new(offset + index.index()), v));
+        }
+
+        for node in other.graph.node_weights() {
+            self.graph.add_node(node.clone());
+        }
+
+        for edge in other.graph.edge_indices() {
+            let index = EdgeIndex::new(edge.index());
+            if let Some((source, target)) = other.graph.edge_endpoints(index) {
+                let source = NodeIndex::new(offset + source.index());
+                let target = NodeIndex::new(offset + target.index());
+                let edge_weight = other.graph.edge_weight(index).unwrap();
+                self.graph.add_edge(source, target, edge_weight.clone());
+            }
+        }
+
+        self.lock_guards.extend(other.take_lock_guards());
+        self.on_finished_chain.extend(other.take_on_finished());
+
+        let self_on_init = self.take_on_init();
+        let other_on_init = other.take_on_init();
+        self.on_init = Some(Box::new(move || {
+            self_on_init().and_then(move |_| other_on_init())
+        }));
+
+        Ok(other_sinks)
     }
 }
 

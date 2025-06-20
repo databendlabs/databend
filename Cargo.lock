@@ -4000,7 +4000,6 @@ name = "databend-common-pipeline-sinks"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-channel 1.9.0",
  "async-trait",
  "databend-common-base",
  "databend-common-exception",

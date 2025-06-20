@@ -245,7 +245,7 @@ impl Interpreter for AnalyzeTableInterpreter {
 
                     build_res
                         .sources_pipelines
-                        .push(histogram_build_res.main_pipeline.finalize());
+                        .push(histogram_build_res.main_pipeline.finalize(None));
                     build_res
                         .sources_pipelines
                         .extend(histogram_build_res.sources_pipelines);

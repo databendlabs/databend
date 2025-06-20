@@ -21,7 +21,6 @@ mod empty_sink;
 mod sync_mpsc_sink;
 mod sync_sink;
 mod sync_sink_sender;
-mod union_receive_sink;
 
 pub use async_mpsc_sink::AsyncMpscSink;
 pub use async_mpsc_sink::AsyncMpscSinker;
@@ -33,4 +32,3 @@ pub use sync_mpsc_sink::SyncMpscSinker;
 pub use sync_sink::Sink;
 pub use sync_sink::Sinker;
 pub use sync_sink_sender::SyncSenderSink;
-pub use union_receive_sink::UnionReceiveSink;
