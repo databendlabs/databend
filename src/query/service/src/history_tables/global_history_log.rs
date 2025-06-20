@@ -38,6 +38,7 @@ use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_sql::Planner;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
+use databend_common_tracing::get_all_history_table_names;
 use databend_common_tracing::init_history_tables;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
@@ -290,10 +291,10 @@ impl GlobalHistoryLog {
         let drop_stage = format!("DROP STAGE IF EXISTS {}", self.stage_name);
         self.execute_sql(&drop_stage).await?;
 
-        let drop_tables = self
-            .tables
+        // drop all pre-defined history tables to keep the system_history's tables consistency
+        let drop_tables = get_all_history_table_names()
             .iter()
-            .map(|t| format!("DROP TABLE system_history.{}", t.name))
+            .map(|name| format!("DROP TABLE IF EXISTS system_history.{}", name))
             .collect::<Vec<_>>();
         for sql in drop_tables {
             self.execute_sql(&sql).await?;

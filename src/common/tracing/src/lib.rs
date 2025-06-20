@@ -52,6 +52,7 @@ pub use crate::init::start_trace_for_remote_request;
 pub use crate::init::GlobalLogger;
 pub use crate::panic_hook::log_panic;
 pub use crate::panic_hook::set_panic_hook;
+pub use crate::predefined_tables::get_all_history_table_names;
 pub use crate::predefined_tables::init_history_tables;
 pub use crate::predefined_tables::HistoryTable;
 pub use crate::remote_log::convert_to_batch;
