@@ -139,6 +139,11 @@ impl Pipeline {
         self
     }
 
+    pub fn sequence_group(&mut self, _groups: Vec<(usize, bool)>, outputs: usize) -> Result<()> {
+        self.resize(outputs, false)
+        // Ok(())
+    }
+
     pub fn add_pipe(&mut self, pipe: Pipe) {
         let plan_scope = PlanScope::get_plan_scope();
         let mut new_sinks = VecDeque::with_capacity(pipe.output_length);
@@ -495,6 +500,14 @@ impl Pipeline {
         let mut chain = FinishedCallbackChain::create();
         std::mem::swap(&mut self.on_finished_chain, &mut chain);
         chain
+    }
+
+    pub fn take_sinks(&mut self) -> VecDeque<(NodeIndex, usize)> {
+        std::mem::take(&mut self.sinks)
+    }
+
+    pub fn extend_sinks(&mut self, sinks: impl IntoIterator<Item = (NodeIndex, usize)>) {
+        self.sinks.extend(sinks)
     }
 }
 
