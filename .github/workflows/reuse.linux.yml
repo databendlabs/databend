@@ -124,6 +124,7 @@ jobs:
         timeout-minutes: 60
 
   test_metactl:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -131,13 +132,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
   test_compat_meta_query:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -145,13 +146,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_query
         timeout-minutes: 10
 
   test_compat_fuse:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -159,13 +160,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_fuse
         timeout-minutes: 20
 
   test_compat_meta_meta:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -173,13 +174,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_meta
         timeout-minutes: 20
 
   test_logs:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -187,7 +188,6 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -198,6 +198,7 @@ jobs:
         timeout-minutes: 20
 
   test_meta_cluster:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -205,13 +206,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
   test_stateless_standalone:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -219,13 +220,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
         timeout-minutes: 18
 
   test_stateless_cluster:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -233,7 +234,6 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -244,13 +244,14 @@ jobs:
         timeout-minutes: 18
 
   test_stateful_standalone:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-    needs: [build, check]
+      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
@@ -262,6 +263,7 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_cluster:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -269,7 +271,6 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -286,6 +287,7 @@ jobs:
 
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -293,13 +295,13 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
   test_stateful_iceberg_catalogs:
+    needs: [build, check]
     runs-on:
       - self-hosted
       - X64
@@ -307,7 +309,6 @@ jobs:
       - 2c8g
       - "${{ inputs.runner_provider }}"
       - "${{ inputs.runner_capacity }}"
-    needs: [build, check]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_iceberg_catalogs_standalone
