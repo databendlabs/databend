@@ -3,7 +3,7 @@ name: Retry Failed Workflow
 on:
   workflow_run:
     workflows:
-      - "dev.yml"
+      - Dev
     types:
       - completed
 
