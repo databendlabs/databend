@@ -354,37 +354,41 @@ impl TransformUdfScript {
                         } else {
                             let temp_dir = Arc::new(venv::create_venv(PY_VERSION.as_str())?);
                             venv::install_deps(temp_dir.path(), &dependencies)?;
+
+                            if !imports_stage_info.is_empty() {
+                                let imports_stage_info = imports_stage_info.clone();
+                                let temp_dir_path = temp_dir.path();
+                                databend_common_base::runtime::block_on(async move {
+                                    let mut fts = Vec::with_capacity(imports_stage_info.len());
+                                    for (stage, path) in imports_stage_info.iter() {
+                                        let op = init_stage_operator(stage)?;
+                                        let name =
+                                            path.trim_end_matches('/').split('/').last().unwrap();
+                                        let temp_file = temp_dir_path.join(name);
+                                        fts.push(async move {
+                                            let buffer = op.read(&path).await?;
+                                            databend_common_base::base::tokio::fs::write(
+                                                &temp_file,
+                                                buffer.to_bytes().as_ref(),
+                                            )
+                                            .await
+                                        });
+                                    }
+                                    let _ = futures::future::join_all(fts).await;
+                                    Ok::<(), ErrorCode>(())
+                                })?;
+                            }
+
                             w.insert(key, venv::PyVenvCacheEntry {
                                 temp_dir: temp_dir.clone(),
                             });
+
                             Some(temp_dir)
                         }
                     } else {
                         None
                     };
 
-                    if !imports_stage_info.is_empty() {
-                        let imports_stage_info = imports_stage_info.clone();
-                        let temp_dir_path = temp_dir.as_ref().unwrap().path();
-                        databend_common_base::runtime::block_on(async move {
-                            let mut fts = Vec::with_capacity(imports_stage_info.len());
-                            for (stage, path) in imports_stage_info.iter() {
-                                let op = init_stage_operator(stage)?;
-                                let name = path.trim_end_matches('/').split('/').last().unwrap();
-                                let temp_file = temp_dir_path.join(name);
-                                fts.push(async move {
-                                    let buffer = op.read(&path).await?;
-                                    databend_common_base::base::tokio::fs::write(
-                                        &temp_file,
-                                        buffer.to_bytes().as_ref(),
-                                    )
-                                    .await
-                                });
-                            }
-                            let _ = futures::future::join_all(fts).await;
-                            Ok::<(), ErrorCode>(())
-                        })?;
-                    }
                     temp_dir
                 }
                 _ => None,

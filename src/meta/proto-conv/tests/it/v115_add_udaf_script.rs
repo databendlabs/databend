@@ -61,6 +61,8 @@ fn test_decode_v115_add_udaf_script() -> anyhow::Result<()> {
             )],
             return_type: DataType::Number(NumberDataType::Float32),
             runtime_version: "".to_string(),
+            imports: vec![],
+            packages: vec![],
         }),
         created_on: DateTime::<Utc>::default(),
     };
