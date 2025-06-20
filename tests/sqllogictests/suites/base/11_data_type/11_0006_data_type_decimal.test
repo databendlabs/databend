@@ -1274,6 +1274,22 @@ SELECT to_decimal('12.3000', '99D9999');
 12
 
 query I
+SELECT TO_DECIMAL('123456789', 9);
+----
+123456789
+
+statement error
+SELECT TO_DECIMAL('1234567890', 9);
+
+query I
+SELECT TO_DECIMAL('123.45678', 9, 5);
+----
+123.45678
+
+statement error
+SELECT TO_DECIMAL('1234567.89012', 9, 5);
+
+query I
 SELECT try_to_decimal('12.34.56', '9999D99');
 ----
 NULL
@@ -1305,6 +1321,16 @@ NULL
 
 query I
 SELECT try_to_decimal('1234.56', '999D');
+----
+NULL
+
+query I
+SELECT TRY_TO_DECIMAL('1234567890', 9);
+----
+NULL
+
+query I
+SELECT TRY_TO_DECIMAL('1234567.89012', 9, 5);
 ----
 NULL
 

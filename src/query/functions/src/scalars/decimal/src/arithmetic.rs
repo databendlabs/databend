@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::ops::*;
-use std::slice;
 use std::sync::Arc;
 
 use databend_common_expression::types::compute_view::Compute;
@@ -147,7 +146,7 @@ fn convert_to_decimal(
         ((value_decimal, size), value_type)
     } else {
         let value_type = size.best_type();
-        let value_decimal = other_to_decimal(slice::from_ref(value), ctx, data_type, value_type);
+        let value_decimal = other_to_decimal(value, None, ctx, data_type, value_type);
         ((value_decimal, size), value_type)
     }
 }

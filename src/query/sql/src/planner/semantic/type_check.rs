@@ -181,8 +181,8 @@ use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
 
-const DEFAULT_DECIMAL_PRECISION: u8 = 38;
-const DEFAULT_DECIMAL_SCALE: u8 = 0;
+const DEFAULT_DECIMAL_PRECISION: i64 = 38;
+const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
 /// A helper for type checking.
 ///
@@ -3035,23 +3035,34 @@ impl<'a> TypeChecker<'a> {
             let arg_fn = |args: &[ScalarExpr],
                           index: usize,
                           arg_name: &str,
-                          default: u8|
-             -> Result<u8> {
+                          default: i64|
+             -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
                     match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
                         databend_common_expression::Expr::Constant(Constant {
-                                                                       scalar: Scalar::Number(num),
+                                                                       scalar,
                                                                        ..
-                                                                   }) => Ok(num.as_u_int8().cloned()),
+                                                                   }) => Ok(scalar.get_i64()),
                         _ => Err(ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"))),
                     }
                 }).transpose()?.flatten().unwrap_or(default))
             };
 
-            let precision = arg_fn(&args, 2, "precision", DEFAULT_DECIMAL_PRECISION)?;
-            let scale = arg_fn(&args, 3, "scale", DEFAULT_DECIMAL_SCALE)?;
+            let (precision_index, scale_index) =
+                if args.len() > 1 && args[1].data_type()?.remove_nullable().is_string() {
+                    (2, 3)
+                } else {
+                    (1, 2)
+                };
+            let precision = arg_fn(
+                &args,
+                precision_index,
+                "precision",
+                DEFAULT_DECIMAL_PRECISION,
+            )?;
+            let scale = arg_fn(&args, scale_index, "scale", DEFAULT_DECIMAL_SCALE)?;
 
-            if let Err(err) = DecimalSize::new(precision, scale) {
+            if let Err(err) = DecimalSize::new(precision as u8, scale as u8) {
                 return Err(ErrorCode::SemanticError(format!(
                     "Invalid arguments for `{func_name}`, {}",
                     err,
