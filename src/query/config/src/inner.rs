@@ -556,6 +556,9 @@ impl Default for LocalConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CacheConfig {
+    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    pub meta_service_ownership_cache: bool,
+
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     pub enable_table_meta_cache: bool,
 
@@ -727,6 +730,7 @@ impl Default for DiskCacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
+            meta_service_ownership_cache: false,
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
