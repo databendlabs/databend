@@ -119,7 +119,7 @@ impl PipelineBuilder {
         }
         build_res.main_pipeline.add_sink(create_sink_processor)?;
 
-        self.pipelines.push(build_res.main_pipeline.finalize());
+        self.pipelines.push(build_res.main_pipeline.finalize(None));
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }
@@ -217,7 +217,7 @@ impl PipelineBuilder {
                 ),
             ))
         })?;
-        self.pipelines.push(right_res.main_pipeline.finalize());
+        self.pipelines.push(right_res.main_pipeline.finalize(None));
         self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }

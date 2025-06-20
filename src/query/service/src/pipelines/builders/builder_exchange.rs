@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_pipeline_core::PlanScope;
 use databend_common_sql::executor::physical_plans::ExchangeSink;
@@ -24,32 +22,23 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub fn build_exchange_source(&mut self, exchange_source: &ExchangeSource) -> Result<()> {
         let exchange_manager = self.ctx.get_exchange_manager();
-        let mut build_res = exchange_manager.get_fragment_source(
+        let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
             self.exchange_injector.clone(),
         )?;
 
         let plan_scope = PlanScope::get_plan_scope();
-        for node in build_res.main_pipeline.graph.node_weights_mut() {
-            let Some(scope) = node.scope.as_mut() else {
-                node.scope = plan_scope.clone();
-                continue;
-            };
-
-            if scope.parent_id.is_none() {
-                unsafe {
-                    let scope = Arc::get_mut_unchecked(scope);
-                    scope.parent_id = plan_scope.as_ref().map(|x| x.id);
-                }
-            }
-        }
+        let build_pipeline = build_res.main_pipeline.finalize(plan_scope);
 
         // add sharing data
         self.join_state = build_res.builder_data.input_join_state;
         self.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
 
-        self.main_pipeline = build_res.main_pipeline;
+        // Merge pipeline
+        assert_eq!(self.main_pipeline.output_len(), 0);
+        let sinks = self.main_pipeline.merge(build_pipeline)?;
+        self.main_pipeline.extend_sinks(sinks);
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }

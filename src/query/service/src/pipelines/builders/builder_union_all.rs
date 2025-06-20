@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_channel::Receiver;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -26,7 +24,6 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::IndexType;
 
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
@@ -40,7 +37,7 @@ impl PipelineBuilder {
         let right_sinks = self.main_pipeline.take_sinks();
 
         let outputs = std::cmp::max(left_sinks.len(), right_sinks.len());
-        let sequence_groups = vec![(left_sinks.len(), true), (right_sinks.len(), true)];
+        let sequence_groups = vec![(left_sinks.len(), false), (right_sinks.len(), false)];
 
         self.main_pipeline.extend_sinks(left_sinks);
         self.main_pipeline.extend_sinks(right_sinks);
@@ -56,7 +53,7 @@ impl PipelineBuilder {
         input: &PhysicalPlan,
         projection: &[(IndexType, Option<RemoteExpr>)],
     ) -> Result<()> {
-        self.build_pipeline(&input)?;
+        self.build_pipeline(input)?;
         let output_schema = input.output_schema()?;
 
         let mut expr_offset = output_schema.num_fields();
