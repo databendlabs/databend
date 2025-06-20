@@ -26,7 +26,7 @@ use serde::Serialize;
 const DEFAULT_DETECT_REGION_TIMEOUT_SEC: u64 = 10;
 
 /// Storage params which contains the detailed storage info.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum StorageParams {
     Azblob(StorageAzblobConfig),
@@ -292,7 +292,7 @@ impl Display for StorageParams {
 }
 
 /// Config for storage backend azblob.
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageAzblobConfig {
     pub endpoint_url: String,
     pub container: String,
@@ -315,7 +315,7 @@ impl Debug for StorageAzblobConfig {
 }
 
 /// Config for storage backend fs.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageFsConfig {
     pub root: String,
 }
@@ -331,7 +331,7 @@ impl Default for StorageFsConfig {
 pub const STORAGE_FTP_DEFAULT_ENDPOINT: &str = "ftps://127.0.0.1";
 
 /// Config for FTP and FTPS data source
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageFtpConfig {
     pub endpoint: String,
     pub root: String,
@@ -366,7 +366,7 @@ impl Debug for StorageFtpConfig {
 pub static STORAGE_GCS_DEFAULT_ENDPOINT: &str = "https://storage.googleapis.com";
 
 /// Config for storage backend GCS.
-#[derive(Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct StorageGcsConfig {
     pub endpoint_url: String,
     pub bucket: String,
@@ -405,7 +405,7 @@ impl Debug for StorageGcsConfig {
 /// Ideally, we should export this config only when hdfs feature enabled.
 /// But export this struct without hdfs feature is safe and no harm. So we
 /// export it to make crates' lives that depend on us easier.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageHdfsConfig {
     pub name_node: String,
     pub root: String,
@@ -415,7 +415,7 @@ pub struct StorageHdfsConfig {
 pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";
 
 /// Config for storage backend s3.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageS3Config {
     pub endpoint_url: String,
     pub region: String,
@@ -489,7 +489,7 @@ impl Debug for StorageS3Config {
 }
 
 /// Config for storage backend http.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageHttpConfig {
     pub endpoint_url: String,
     pub paths: Vec<String>,
@@ -499,7 +499,7 @@ pub struct StorageHttpConfig {
 pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
 
 /// Config for IPFS storage backend
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageIpfsConfig {
     pub endpoint_url: String,
     pub root: String,
@@ -507,7 +507,7 @@ pub struct StorageIpfsConfig {
 }
 
 /// Config for storage backend obs.
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageObsConfig {
     pub endpoint_url: String,
     pub bucket: String,
@@ -533,7 +533,7 @@ impl Debug for StorageObsConfig {
 }
 
 /// config for Aliyun Object Storage Service
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageOssConfig {
     pub endpoint_url: String,
     pub presign_endpoint_url: String,
@@ -577,7 +577,7 @@ impl Debug for StorageOssConfig {
 }
 
 /// config for Moka Object Storage Service
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageMokaConfig {
     pub max_capacity: u64,
     pub time_to_live: i64,
@@ -599,7 +599,7 @@ impl Default for StorageMokaConfig {
 }
 
 /// config for WebHDFS Storage Service
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageWebhdfsConfig {
     pub endpoint_url: String,
     pub root: String,
@@ -624,7 +624,7 @@ impl Debug for StorageWebhdfsConfig {
     }
 }
 
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageCosConfig {
     pub secret_id: String,
     pub secret_key: String,
@@ -648,7 +648,7 @@ impl Debug for StorageCosConfig {
     }
 }
 
-#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageHuggingfaceConfig {
     /// repo_id for huggingface repo, looks like `opendal/huggingface-testdata`
     pub repo_id: String,
@@ -698,7 +698,7 @@ pub fn mask_string(s: &str, unmask_len: usize) -> String {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct StorageNetworkParams {
     pub retry_timeout: u64,
     pub retry_io_timeout: u64,

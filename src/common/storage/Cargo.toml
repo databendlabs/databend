@@ -28,6 +28,7 @@ futures = { workspace = true }
 http = { workspace = true }
 iceberg = { workspace = true }
 log = { workspace = true }
+lru = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 prometheus-client = { workspace = true }
