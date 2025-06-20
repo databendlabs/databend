@@ -830,19 +830,7 @@ impl BloomIndexBuilder {
     }
 }
 
-pub struct Visitor<T: EqVisitor>(T);
-
-impl<T> Visitor<T>
-where T: EqVisitor
-{
-    pub fn new(value: T) -> Self {
-        Visitor(value)
-    }
-
-    pub fn inner(self) -> T {
-        self.0
-    }
-}
+struct Visitor<T: EqVisitor>(T);
 
 impl<T> ExprVisitor<String> for Visitor<T>
 where T: EqVisitor
@@ -1044,9 +1032,9 @@ where T: EqVisitor
     }
 }
 
-pub type ResultRewrite = Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;
+type ResultRewrite = Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;
 
-pub trait EqVisitor {
+trait EqVisitor {
     fn enter_target(
         &mut self,
         span: Span,

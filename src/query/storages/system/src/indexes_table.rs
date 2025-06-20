@@ -12,20 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::ControlFlow;
 use std::sync::Arc;
 
-use databend_common_ast::Span;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::visit_expr;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -36,15 +31,13 @@ use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_storages_fuse::index::EqVisitor;
-use databend_common_storages_fuse::index::ResultRewrite;
-use databend_common_storages_fuse::index::Visitor;
 use databend_common_storages_fuse::TableContext;
 use futures::future::try_join_all;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_or_filter;
 
 const POINT_GET_TABLE_LIMIT: usize = 20;
 
@@ -65,17 +58,46 @@ impl AsyncSystemTable for IndexesTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let mut database_names = None;
-        let mut table_names = None;
+        let mut filtered_db_names = None;
+        let mut filtered_table_names = None;
+        let mut invalid_optimize = false;
 
         if let Some(filters) = push_downs.and_then(|info| info.filters) {
             let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
-            let mut visitor = Visitor::new(TableFilterVisitor::default());
-            visit_expr(&expr, &mut visitor)?;
 
-            let inner = visitor.inner();
-            database_names = (!inner.database_names.is_empty()).then_some(inner.database_names);
-            table_names = (!inner.table_names.is_empty()).then_some(inner.table_names);
+            let mut databases: Vec<String> = Vec::new();
+            let mut tables: Vec<String> = Vec::new();
+
+            invalid_optimize = find_eq_or_filter(
+                &expr,
+                &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(database) = scalar {
+                            if !databases.contains(database) {
+                                databases.push(database.clone());
+                            }
+                        }
+                    } else if col_name == "table" {
+                        if let Scalar::String(table) = scalar {
+                            if !tables.contains(table) {
+                                tables.push(table.clone());
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+                invalid_optimize,
+            );
+            if !databases.is_empty() {
+                filtered_db_names = Some(databases);
+            }
+            if !tables.is_empty() {
+                filtered_table_names = Some(tables);
+            }
+        }
+        if invalid_optimize {
+            filtered_db_names = None;
+            filtered_table_names = None;
         }
 
         let tenant = ctx.get_tenant();
@@ -87,8 +109,8 @@ impl AsyncSystemTable for IndexesTable {
         let table_index_tables = self
             .list_table_index_tables(
                 ctx.clone(),
-                database_names.as_deref(),
-                table_names.as_deref(),
+                filtered_db_names.as_deref(),
+                filtered_table_names.as_deref(),
             )
             .await?;
 
@@ -292,50 +314,5 @@ impl IndexesTable {
             }
         }
         Ok(index_tables)
-    }
-}
-
-#[derive(Debug, Default)]
-struct TableFilterVisitor {
-    database_names: Vec<String>,
-    table_names: Vec<String>,
-}
-
-impl EqVisitor for TableFilterVisitor {
-    fn enter_target(
-        &mut self,
-        _: Span,
-        col_name: &str,
-        scalar: &Scalar,
-        _: &DataType,
-        _: &DataType,
-        is_like: bool,
-    ) -> ResultRewrite {
-        if is_like {
-            return Ok(ControlFlow::Break(None));
-        }
-        let Some(name) = scalar.as_string() else {
-            return Ok(ControlFlow::Break(None));
-        };
-        match col_name {
-            "table" => &mut self.table_names,
-            "database" => &mut self.database_names,
-            _ => return Ok(ControlFlow::Break(None)),
-        }
-        .push(name.clone());
-
-        Ok(ControlFlow::Break(None))
-    }
-
-    fn enter_map_column(
-        &mut self,
-        _: Span,
-        _: &[Expr<String>],
-        _: &Scalar,
-        _: &DataType,
-        _: &DataType,
-        _: bool,
-    ) -> ResultRewrite {
-        Ok(ControlFlow::Continue(None))
     }
 }

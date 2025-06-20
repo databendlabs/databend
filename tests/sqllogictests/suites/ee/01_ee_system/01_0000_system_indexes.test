@@ -136,7 +136,15 @@ idx1 INVERTED test_show_indexes_1 t1
 idx2 NGRAM test_show_indexes_1 t1
 
 query TTTT
+select name, type, database, table from system.indexes where database = 'test_show_indexes_0' and table = 't1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+
+query TTTT
 select name, type, database, table from system.indexes where database = 'test_show_indexes_0' or table = 't1';
 ----
 idx1 INVERTED test_show_indexes_0 t1
 idx2 NGRAM test_show_indexes_0 t1
+idx1 INVERTED test_show_indexes_1 t1
+idx2 NGRAM test_show_indexes_1 t1
