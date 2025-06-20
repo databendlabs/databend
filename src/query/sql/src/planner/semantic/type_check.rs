@@ -3283,7 +3283,12 @@ impl<'a> TypeChecker<'a> {
         let func_name = match is_diff {
             Expr::DateDiff { .. } => format!("diff_{}s", interval_kind.to_string().to_lowercase()),
             Expr::DateSub { .. } | Expr::DateAdd { .. } => {
-                format!("add_{}s", interval_kind.to_string().to_lowercase())
+                let interval_kind = interval_kind.to_string().to_lowercase();
+                if interval_kind == "month" {
+                    format!("date_add_{}s", interval_kind.to_string().to_lowercase())
+                } else {
+                    format!("add_{}s", interval_kind.to_string().to_lowercase())
+                }
             }
             Expr::DateBetween { .. } => {
                 format!("between_{}s", interval_kind.to_string().to_lowercase())

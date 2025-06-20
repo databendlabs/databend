@@ -457,7 +457,7 @@ set timezone = 'UTC'
 query T
 select add_months(to_timestamp(1619822911999000), 1)
 ----
-2021-05-30 22:48:31.999000
+2021-05-31 22:48:31.999000
 
 query T
 select to_timestamp(1583013600000000)
