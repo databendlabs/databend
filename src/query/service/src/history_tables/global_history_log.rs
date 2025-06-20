@@ -34,6 +34,7 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_sql::Planner;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -131,8 +132,11 @@ impl GlobalHistoryLog {
     ///
     /// GlobalHistoryLog rely on other services, so we need to wait
     /// for all services to be initialized before starting the work.
-    pub fn initialized(&self) {
+    pub async fn initialized(&self) -> Result<()> {
+        let _ = should_reset(self.create_context().await?, &self.connection).await?;
+
         self.initialized.store(true, Ordering::SeqCst);
+        Ok(())
     }
 
     pub async fn work(&self) -> Result<()> {
@@ -238,7 +242,10 @@ impl GlobalHistoryLog {
             .map(|t| format!("{}/history_log_transform/{}/lock", self.tenant_id, t.name))
             .collect::<Vec<_>>();
         let prepare_key = format!("{}/history_log_prepare/lock", self.tenant_id);
-        let _guard = self.meta_handle.acquire_all(&prepare_key, &transform_keys);
+        let _guard: Vec<Permit> = self
+            .meta_handle
+            .acquire_all(&prepare_key, &transform_keys)
+            .await?;
 
         if should_reset(self.create_context().await?, &self.connection).await? {
             self.reset().await?;

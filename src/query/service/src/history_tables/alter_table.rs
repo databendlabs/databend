@@ -20,6 +20,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::parse_uri_location;
 use databend_common_sql::plans::Plan;
@@ -88,9 +89,12 @@ pub async fn get_alter_table_sql(
 /// Determines whether the history table should be reset based on its existence and new config storage parameters.
 ///
 /// Reset Condition:
-/// 1. Inner -> External: If the inner table exist, and config a new connection, reset the table.
-/// 2. External -> Inner: If the external table exist and new config connection is None, means we convert it back to inner table, reset the table.
-/// 3. External1 -> External2: If the external table exist and new config connection is different from the current one, reset the table.
+/// 1. Internal -> External: If the internal table exist, and config a new connection, reset the table.
+/// 2. External -> Internal: If the external table exist and new config connection is None, means we convert it back to internal table, need manually drop the table and stage first.
+/// 3. External1 -> External2: If the external table exist and new config connection is different from the current one, need manually drop the table and stage first.
+///
+/// Note: We only support converting from internal to external. For other cases, we will return a config error.
+/// It is used to prevent cyclic conversion.
 pub async fn should_reset(
     context: Arc<QueryContext>,
     connection: &Option<ExternalStorageConnection>,
@@ -107,22 +111,23 @@ pub async fn should_reset(
 
     let current_storage_params = table_info.meta.storage_params.as_ref();
 
-    // Meet Condition 1
+    // Internal -> External
     if current_storage_params.is_none() && connection.is_some() {
         info!(
-            "[HISTORY-TABLES] Converting inner table to external table, resetting: current None vs new {:?}",
+            "[HISTORY-TABLES] Converting internal table to external table, resetting: current None vs new {:?}",
             connection
         );
         return Ok(true);
     }
 
-    // Meet Condition 2
+    // External -> Internal
+    // return error to prevent cyclic conversion
     if current_storage_params.is_some() && connection.is_none() {
         info!(
-            "[HISTORY-TABLES] Converting external table to inner table, resetting: current {:?} vs new None",
+            "[HISTORY-TABLES] Converting external table to internal table, resetting: current {:?} vs new None",
             current_storage_params
         );
-        return Ok(true);
+        return Err(ErrorCode::InvalidConfig("[HISTORY-TABLES] Cannot convert external history table to internal table, please drop the tables and stage first."));
     }
 
     if let Some(c) = connection {
@@ -131,13 +136,16 @@ pub async fn should_reset(
         let (new_storage_params, _) =
             parse_uri_location(&mut uri_location, Some(context.as_ref())).await?;
 
-        // Meet Condition 3
+        // External1 -> External2
+        // return error to prevent cyclic conversion
         if current_storage_params != Some(&new_storage_params) {
             info!(
                 "[HISTORY-TABLES] Storage parameters have changed, resetting: current {:?} vs new {:?}",
                 current_storage_params, new_storage_params
             );
-            return Ok(true);
+            return Err(ErrorCode::InvalidConfig(
+                "[HISTORY-TABLES] Cannot change storage parameters of external history table, please drop the tables and stage first."
+            ));
         }
     }
     Ok(false)
@@ -252,12 +260,31 @@ mod tests {
         }
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-        async fn test_should_reset_inner_to_external() -> Result<(), ErrorCode> {
-            // Test Condition 1: Inner -> External conversion should trigger reset
+        async fn test_should_reset_both_inner() -> Result<(), ErrorCode> {
+            // Test: When log_history table is internal, config also internal, should_reset should return false
             let test_fixture = TestFixture::setup().await?;
             let ctx = test_fixture.new_query_ctx().await?;
 
-            // Create system_history database and inner log_history table
+            // Create system_history database and internal log_history table
+            let create_db = "CREATE DATABASE system_history";
+            let create_table = "CREATE TABLE system_history.log_history (timestamp TIMESTAMP, level STRING, message STRING)";
+            let _ = test_fixture.execute_query(create_db).await?;
+            let _ = test_fixture.execute_query(create_table).await?;
+
+            let connection = None;
+            let result = should_reset(ctx, &connection).await?;
+            assert!(!result, "Should not reset when table doesn't exist");
+
+            Ok(())
+        }
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+        async fn test_should_reset_inner_to_external() -> Result<(), ErrorCode> {
+            // Test Condition: Internal -> External conversion should trigger reset
+            let test_fixture = TestFixture::setup().await?;
+            let ctx = test_fixture.new_query_ctx().await?;
+
+            // Create system_history database and internal log_history table
             let create_db = "CREATE DATABASE system_history";
             let create_table = "CREATE TABLE system_history.log_history (timestamp TIMESTAMP, level STRING, message STRING)";
             let _ = test_fixture.execute_query(create_db).await?;
@@ -276,7 +303,7 @@ mod tests {
             let result = should_reset(ctx, &connection).await?;
             assert!(
                 result,
-                "Should reset when converting inner table to external"
+                "Should reset when converting internal table to external"
             );
 
             Ok(())

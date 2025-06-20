@@ -157,7 +157,8 @@ impl HistoryMetaHandle {
                     permits.push(permit);
                 }
             }
-            permits.push(prepare_permit)
+            permits.push(prepare_permit);
+            return Ok(permits);
         }
         Err(ErrorCode::Internal("Cannot acquire prepare semaphore"))
     }
