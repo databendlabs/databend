@@ -21,7 +21,8 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::SourceSchemaIndex;
 use databend_common_pipeline_transforms::processors::AsyncTransform;
 
-use crate::pipelines::processors::transforms::transform_async_function::transform_sequence;
+use crate::pipelines::processors::transforms::transform_async_function::SequenceCounters;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
 use crate::sql::executor::physical_plans::AsyncFunctionDesc;
 use crate::sql::plans::AsyncFunctionArgument;
@@ -34,6 +35,7 @@ pub struct TransformBranchedAsyncFunction {
 
 pub struct AsyncFunctionBranch {
     pub async_func_descs: Vec<AsyncFunctionDesc>,
+    pub sequence_counters: SequenceCounters,
 }
 
 #[async_trait::async_trait]
@@ -53,16 +55,20 @@ impl AsyncTransform for TransformBranchedAsyncFunction {
             return Ok(block);
         };
 
-        let AsyncFunctionBranch { async_func_descs } = branch;
+        let AsyncFunctionBranch {
+            async_func_descs,
+            sequence_counters,
+        } = branch;
 
-        for async_func_desc in async_func_descs.iter() {
+        for (i, async_func_desc) in async_func_descs.iter().enumerate() {
             match &async_func_desc.func_arg {
                 AsyncFunctionArgument::SequenceFunction(sequence_name) => {
-                    transform_sequence(
-                        &self.ctx,
+                    let counter_lock = sequence_counters[i].clone();
+                    TransformAsyncFunction::transform_sequence(
+                        self.ctx.clone(),
                         &mut block,
+                        counter_lock,
                         sequence_name,
-                        &async_func_desc.data_type,
                     )
                     .await?;
                 }

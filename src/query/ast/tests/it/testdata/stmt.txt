@@ -13988,6 +13988,86 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, b float NOT NULL;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                28..29,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Nullable(
+                            Int32,
+                        ),
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        47..48,
+                                    ),
+                                    value: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
+                        ),
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                50..51,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: NotNull(
+                            Float32,
+                        ),
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL COMMENT 'column b'
@@ -14061,6 +14141,151 @@ AlterTable(
                         comment: Some(
                             "column b",
                         ),
+                    },
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1 comment 'column a', COLUMN b float NOT NULL COMMENT 'column b';
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1 COMMENT 'column a', b Float32 NOT NULL COMMENT 'column b'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                28..29,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Nullable(
+                            Int32,
+                        ),
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        47..48,
+                                    ),
+                                    value: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
+                        ),
+                        comment: Some(
+                            "column a",
+                        ),
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                76..77,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: NotNull(
+                            Float32,
+                        ),
+                        expr: None,
+                        comment: Some(
+                            "column b",
+                        ),
+                    },
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a comment 'column a', COLUMN b COMMENT 'column b';
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a COMMENT 'column a', b COMMENT 'column b'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..13,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyColumn {
+            action: Comment(
+                [
+                    ColumnComment {
+                        name: Identifier {
+                            span: Some(
+                                28..29,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        comment: "column a",
+                    },
+                    ColumnComment {
+                        name: Identifier {
+                            span: Some(
+                                57..58,
+                            ),
+                            name: "b",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        comment: "column b",
                     },
                 ],
             ),

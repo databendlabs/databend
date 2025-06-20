@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -65,7 +66,7 @@ pub struct UserApiProvider {
     /// When UserApiProvider is created, the cache will be created and initialized.
     /// The `Cache` instance internally stores the status about if databend-meta service supports cache.
     /// If not, every access returns [`Unsupported`] error.
-    ownership_cache: Arc<Mutex<Cache>>,
+    ownership_cache: Option<Arc<Mutex<Cache>>>,
 
     builtin: BuiltIn,
 }
@@ -74,11 +75,12 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn init(
         conf: RpcClientConf,
+        cache_config: &CacheConfig,
         builtin: BuiltIn,
         tenant: &Tenant,
         quota: Option<TenantQuota>,
     ) -> Result<()> {
-        GlobalInstance::set(Self::try_create(conf, builtin, tenant).await?);
+        GlobalInstance::set(Self::try_create(conf, cache_config, builtin, tenant).await?);
         let user_mgr = UserApiProvider::instance();
 
         if let Some(q) = quota {
@@ -92,6 +94,7 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn try_create(
         conf: RpcClientConf,
+        cache_config: &CacheConfig,
         builtin: BuiltIn,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
@@ -104,8 +107,13 @@ impl UserApiProvider {
 
         let client = meta_store.deref().clone();
 
-        let cache = RoleMgr::new_cache(client.clone()).await;
-        let cache = Arc::new(Mutex::new(cache));
+        let cache = if cache_config.meta_service_ownership_cache {
+            let cache = RoleMgr::new_cache(client.clone()).await;
+            let cache = Arc::new(Mutex::new(cache));
+            Some(cache)
+        } else {
+            None
+        };
 
         let user_mgr = UserApiProvider {
             meta: meta_store.clone(),
@@ -137,7 +145,7 @@ impl UserApiProvider {
         conf: RpcClientConf,
         tenant: &Tenant,
     ) -> Result<Arc<UserApiProvider>> {
-        Self::try_create(conf, BuiltIn::default(), tenant).await
+        Self::try_create(conf, &CacheConfig::default(), BuiltIn::default(), tenant).await
     }
 
     pub fn instance() -> Arc<UserApiProvider> {

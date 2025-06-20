@@ -103,7 +103,7 @@ async fn new_role_api(
         test_api.clone(),
         &tenant,
         enable_meta_data_upgrade_json_to_pb_from_v307,
-        Arc::new(Mutex::new(cache)),
+        Some(Arc::new(Mutex::new(cache))),
     );
     Ok((test_api, mgr))
 }

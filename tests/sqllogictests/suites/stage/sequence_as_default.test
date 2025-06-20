@@ -8,6 +8,9 @@ statement ok
 create or replace table tmp (seq int default nextval(seq), a int, seq1 bigint not null default nextval(seq1));
 
 statement ok
+set sequence_step_size = 1;
+
+statement ok
 INSERT INTO tmp(seq, a) values (-1, 11),(-2, 22);
 
 statement ok

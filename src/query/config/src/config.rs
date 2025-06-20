@@ -3143,6 +3143,11 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct CacheConfig {
+    /// The data in meta-service using key `TenantOwnershipObjectIdent`
+    #[clap(long = "cache-enable-meta-service-ownership", default_value = "false")]
+    #[serde(default = "bool_false")]
+    pub meta_service_ownership_cache: bool,
+
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
     #[serde(default = "bool_true")]
@@ -3380,6 +3385,11 @@ fn bool_true() -> bool {
     true
 }
 
+#[inline]
+fn bool_false() -> bool {
+    false
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum CacheStorageTypeConfig {
@@ -3573,6 +3583,7 @@ mod cache_config_converters {
 
         fn try_from(value: CacheConfig) -> std::result::Result<Self, Self::Error> {
             Ok(Self {
+                meta_service_ownership_cache: value.meta_service_ownership_cache,
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
@@ -3607,6 +3618,7 @@ mod cache_config_converters {
     impl From<inner::CacheConfig> for CacheConfig {
         fn from(value: inner::CacheConfig) -> Self {
             Self {
+                meta_service_ownership_cache: value.meta_service_ownership_cache,
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
