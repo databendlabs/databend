@@ -631,24 +631,28 @@ fn check_transform_query(
 /// copy into mytable from @my_ext_stage
 ///     file_format = (type = csv);
 /// ```
-///
+/// location can be:
+/// - mystage
+/// - mystage/
+/// - mystage/abc
+/// - ~/abc
 /// Returns user's stage info and relative path towards the stage's root.
 ///
 /// If input location is empty we will convert it to `/` means the root of stage
 ///
-/// - @mystage => (mystage, "/")
+/// - mystage => (mystage, "/")
 ///
 /// If input location is endswith `/`, it's a folder.
 ///
-/// - @mystage/ => (mystage, "/")
+/// - mystage/ => (mystage, "/")
 ///
 /// Otherwise, it's a file
 ///
-/// - @mystage/abc => (mystage, "abc")
+/// - mystage/abc => (mystage, "abc")
 ///
 /// For internal stage, we will also add prefix `/stage/<stage>/`
 ///
-/// - @internal/abc => (internal, "/stage/internal/abc")
+/// - ~/abc => (internal, "/stage/internal/abc")
 #[async_backtrace::framed]
 pub async fn resolve_stage_location(
     ctx: &dyn TableContext,
@@ -670,6 +674,18 @@ pub async fn resolve_stage_location(
 
     debug!("parsed stage: {stage:?}, path: {path}");
     Ok((stage, path.to_string()))
+}
+
+#[async_backtrace::framed]
+pub async fn resolve_stage_locations(
+    ctx: &dyn TableContext,
+    locations: &[String],
+) -> Result<Vec<(StageInfo, String)>> {
+    let mut results = Vec::with_capacity(locations.len());
+    for location in locations {
+        results.push(resolve_stage_location(ctx, location).await?);
+    }
+    Ok(results)
 }
 
 #[async_backtrace::framed]

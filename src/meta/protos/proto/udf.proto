@@ -24,7 +24,7 @@ message LambdaUDF {
   uint64 min_reader_ver = 101;
 
   repeated string parameters = 1;
-  string definition = 2; 
+  string definition = 2;
 }
 
 message UDFServer {
@@ -49,6 +49,8 @@ message UDFScript {
   repeated DataType arg_types = 4;
   DataType return_type = 5;
   string runtime_version = 6;
+  repeated string imports = 7;
+  repeated string packages = 8;
 }
 
 message UDAFScript {
@@ -61,6 +63,8 @@ message UDAFScript {
   DataType return_type = 4;
   repeated DataType arg_types = 5;
   repeated DataField state_fields = 6;
+  repeated string imports = 7;
+  repeated string packages = 8;
 }
 
 message UserDefinedFunction {

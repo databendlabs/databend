@@ -40,6 +40,8 @@ pub struct UDFServer {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDFScript {
     pub code: String,
+    pub imports: Vec<String>,
+    pub packages: Vec<String>,
     pub handler: String,
     pub language: String,
     pub arg_types: Vec<DataType>,
@@ -50,6 +52,8 @@ pub struct UDFScript {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDAFScript {
     pub code: String,
+    pub imports: Vec<String>,
+    pub packages: Vec<String>,
     pub language: String,
     // aggregate function input types
     pub arg_types: Vec<DataType>,
@@ -167,6 +171,8 @@ impl UserDefinedFunction {
                 arg_types,
                 return_type,
                 runtime_version: runtime_version.to_string(),
+                imports: vec![],
+                packages: vec![],
             }),
             created_on: Utc::now(),
         }
@@ -226,6 +232,8 @@ impl Display for UDFDefinition {
                 handler,
                 language,
                 runtime_version,
+                imports,
+                packages,
             }) => {
                 for (i, item) in arg_types.iter().enumerate() {
                     if i > 0 {
@@ -235,7 +243,7 @@ impl Display for UDFDefinition {
                 }
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
+                    ") RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
             }
             UDFDefinition::UDAFScript(UDAFScript {
@@ -245,6 +253,8 @@ impl Display for UDFDefinition {
                 return_type,
                 language,
                 runtime_version,
+                imports,
+                packages,
             }) => {
                 for (i, item) in arg_types.iter().enumerate() {
                     if i > 0 {
@@ -259,7 +269,7 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{} {}", item.name(), item.data_type())?;
                 }
-                write!(f, " }} RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
+                write!(f, " }} RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
             }
         }
         Ok(())

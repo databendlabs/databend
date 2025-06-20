@@ -40,6 +40,7 @@ use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
+use databend_common_storage::init_stage_operator;
 use tempfile::TempDir;
 
 use super::runtime_pool::Pool;
@@ -90,7 +91,11 @@ impl ScriptRuntime {
                 let code = String::from_utf8(code.to_vec())?;
                 let code = if let Some(temp_dir) = _temp_dir {
                     format!(
-                        "import sys\nsys.path.append('{}')\n{}",
+                        r#"import sys
+sys._xoptions['databend_import_directory'] = '{}'
+sys.path.append('{}')
+{}"#,
+                        temp_dir.path().display(),
                         temp_dir.path().display(),
                         code
                     )
@@ -330,10 +335,14 @@ impl TransformUdfScript {
             let temp_dir = match &func.udf_type {
                 UDFType::Script(UDFScriptCode {
                     language: UDFLanguage::Python,
+                    packages,
+                    imports_stage_info,
                     ..
                 }) => {
-                    let dependencies = Self::extract_deps(&code_str);
-                    if !dependencies.is_empty() {
+                    let mut dependencies = Self::extract_deps(&code_str);
+                    dependencies.extend_from_slice(packages.as_slice());
+
+                    let temp_dir = if !dependencies.is_empty() || !imports_stage_info.is_empty() {
                         // try to find the temp dir from cache
                         let key = venv::PyVenvKeyEntry {
                             udf_desc: func.clone(),
@@ -352,7 +361,31 @@ impl TransformUdfScript {
                         }
                     } else {
                         None
+                    };
+
+                    if !imports_stage_info.is_empty() {
+                        let imports_stage_info = imports_stage_info.clone();
+                        let temp_dir_path = temp_dir.as_ref().unwrap().path();
+                        databend_common_base::runtime::block_on(async move {
+                            let mut fts = Vec::with_capacity(imports_stage_info.len());
+                            for (stage, path) in imports_stage_info.iter() {
+                                let op = init_stage_operator(stage)?;
+                                let name = path.trim_end_matches('/').split('/').last().unwrap();
+                                let temp_file = temp_dir_path.join(name);
+                                fts.push(async move {
+                                    let buffer = op.read(&path).await?;
+                                    databend_common_base::base::tokio::fs::write(
+                                        &temp_file,
+                                        buffer.to_bytes().as_ref(),
+                                    )
+                                    .await
+                                });
+                            }
+                            let _ = futures::future::join_all(fts).await;
+                            Ok::<(), ErrorCode>(())
+                        })?;
                     }
+                    temp_dir
                 }
                 _ => None,
             };
@@ -388,6 +421,11 @@ impl TransformUdfScript {
         }
 
         let parsed = ss.parse::<toml::Value>().unwrap();
+
+        if parsed.get("dependencies").is_none() {
+            return Vec::new();
+        }
+
         if let Some(deps) = parsed["dependencies"].as_array() {
             deps.iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
@@ -521,6 +559,9 @@ mod venv {
     use tempfile::TempDir;
 
     pub fn install_deps(temp_dir_path: &Path, deps: &[String]) -> Result<(), String> {
+        if deps.is_empty() {
+            return Ok(());
+        }
         let target_path = temp_dir_path.display().to_string();
         let status = Command::new("python")
             .args(["-m", "pip", "install"])

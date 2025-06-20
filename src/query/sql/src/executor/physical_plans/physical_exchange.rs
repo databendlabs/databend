@@ -64,6 +64,7 @@ impl PhysicalPlanBuilder {
         let mut allow_adjust_parallelism = true;
         let kind = match exchange {
             crate::plans::Exchange::Hash(scalars) => {
+                println!("exchange hash, scalars: {:?}", scalars);
                 for scalar in scalars {
                     let expr = scalar
                         .type_check(input_schema.as_ref())?

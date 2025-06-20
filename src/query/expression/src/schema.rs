@@ -365,6 +365,11 @@ impl DataSchema {
             }
         }
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
+        panic!(
+            "Unable to get field named \"{}\". Valid fields: {:?}",
+            name, valid_fields
+        );
+
         Err(ErrorCode::BadArguments(format!(
             "Unable to get field named \"{}\". Valid fields: {:?}",
             name, valid_fields

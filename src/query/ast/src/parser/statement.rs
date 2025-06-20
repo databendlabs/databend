@@ -4777,6 +4777,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
+            ~ ( IMPORTS ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
+            ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
@@ -4789,6 +4791,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             return_type,
             _,
             language,
+            imports,
+            packages,
             _,
             _,
             handler,
@@ -4800,6 +4804,12 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     arg_types,
                     return_type,
                     code: address_or_code.0,
+                    imports: imports
+                        .map(|(_, _, _, imports, _)| imports)
+                        .unwrap_or_default(),
+                    packages: packages
+                        .map(|(_, _, _, packages, _)| packages)
+                        .unwrap_or_default(),
                     handler,
                     language: language.to_string(),
                     // TODO inject runtime_version by user
@@ -4827,6 +4837,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
+            ~ ( IMPORTS ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
+            ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( HEADERS ~ ^"=" ~ "(" ~ #comma_separated_list0(udf_header) ~ ")" )?
             ~ #udf_script_or_address
         },
@@ -4842,6 +4854,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             return_type,
             _,
             language,
+            imports,
+            packages,
             headers,
             address_or_code,
         )| {
@@ -4852,6 +4866,12 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     return_type,
                     code: address_or_code.0,
                     language: language.to_string(),
+                    imports: imports
+                        .map(|(_, _, _, imports, _)| imports)
+                        .unwrap_or_default(),
+                    packages: packages
+                        .map(|(_, _, _, packages, _)| packages)
+                        .unwrap_or_default(),
                     // TODO inject runtime_version by user
                     // Now we use fixed runtime version
                     runtime_version: "".to_string(),

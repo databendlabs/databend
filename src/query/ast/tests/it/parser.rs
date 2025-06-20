@@ -828,6 +828,8 @@ SELECT * from s;"#,
             create or replace function addone(int)
             returns int
             language python
+            imports = ('@ss/abc')
+            packages = ('numpy', 'pandas')
             handler = 'addone_py'
             as '@data/abc/a.py';
         "#,

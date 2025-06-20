@@ -1342,6 +1342,10 @@ pub enum TokenKind {
     HEADERS,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
+    #[token("IMPORTS", ignore(ascii_case))]
+    IMPORTS,
+    #[token("PACKAGES", ignore(ascii_case))]
+    PACKAGES,
     #[token("STATE", ignore(ascii_case))]
     STATE,
     #[token("TASK", ignore(ascii_case))]
