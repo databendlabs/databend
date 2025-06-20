@@ -4636,14 +4636,14 @@ impl<'a> TypeChecker<'a> {
                 .collect::<Vec<String>>(),
         ))?;
 
-        let udf_type = UDFType::Script(UDFScriptCode {
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
             imports_stage_info,
             imports,
             packages,
-        });
+        }));
 
         let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
@@ -4695,14 +4695,14 @@ impl<'a> TypeChecker<'a> {
                 .collect::<Vec<String>>(),
         ))?;
 
-        let udf_type = UDFType::Script(UDFScriptCode {
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
             imports,
             imports_stage_info,
             packages,
-        });
+        }));
 
         let arguments = args
             .iter()

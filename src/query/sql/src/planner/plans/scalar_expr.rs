@@ -1117,7 +1117,7 @@ pub struct UDFScriptCode {
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
     Server(String), // server_addr
-    Script(UDFScriptCode),
+    Script(Box<UDFScriptCode>),
 }
 
 impl UDFType {

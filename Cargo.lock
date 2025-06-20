@@ -561,7 +561,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=92eeb3b#92eeb3b8ecf10a894b8bd861a8c118215426fa93"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=a442343#a44234332e9c182c247a510c3721b655572f323c"
 dependencies = [
  "anyhow",
  "arrow-array",

@@ -58,7 +58,7 @@ static PY_VERSION: LazyLock<String> =
 
 impl ScriptRuntime {
     pub fn try_create(func: &UdfFunctionDesc, _temp_dir: Option<Arc<TempDir>>) -> Result<Self> {
-        let UDFType::Script(UDFScriptCode { language, code, .. }) = &func.udf_type else {
+        let UDFType::Script(box UDFScriptCode { language, code, .. }) = &func.udf_type else {
             unreachable!()
         };
         match language {
@@ -250,12 +250,55 @@ pub struct PyRuntimeBuilder {
 mod python_pool {
     use super::*;
 
+    const RESTRICTED_PYTHON_CODE: &str = r#"
+import os
+import sys
+from pathlib import Path
+
+ALLOWED_BASE = Path("/tmp")
+
+_original_open = open
+_original_os_open = os.open if hasattr(os, 'open') else None
+
+def safe_open(file, mode='r', **kwargs):
+    file_path = Path(file).resolve()
+
+    try:
+        file_path.relative_to(ALLOWED_BASE)
+    except ValueError:
+        raise PermissionError(f"Access denied: {file} is outside allowed directory")
+
+    return _original_open(file, mode, **kwargs)
+
+def safe_os_open(path, flags, mode=0o777):
+    file_path = Path(path).resolve()
+    try:
+        file_path.relative_to(ALLOWED_BASE)
+    except ValueError:
+        raise PermissionError(f"Access denied: {path} is outside allowed directory")
+    return _original_os_open(path, flags, mode)
+
+import builtins, sys
+if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
+    builtins.open = safe_open
+    if _original_os_open:
+        os.open = safe_os_open
+
+    dangerous_modules = ['subprocess', 'os.system', 'eval', 'exec', 'compile']
+    for module in dangerous_modules:
+        if module in sys.modules:
+            del sys.modules[module]
+    sys._xoptions['DATABEND_RESTRICTED_PYTHON'] = '1'
+"#;
+
     impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
         type Error = ErrorCode;
 
         fn build(&self) -> Result<arrow_udf_runtime::python::Runtime> {
             let start = std::time::Instant::now();
-            let mut runtime = arrow_udf_runtime::python::Builder::default().build()?;
+            let mut runtime = arrow_udf_runtime::python::Builder::default()
+                .safe_codes(RESTRICTED_PYTHON_CODE.to_string())
+                .build()?;
             runtime.add_function_with_handler(
                 &self.name,
                 arrow_field_from_data_type(&self.name, self.output_type.clone()),
@@ -326,14 +369,14 @@ impl TransformUdfScript {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
             let (code, code_str) = match &func.udf_type {
-                UDFType::Script(script_code) => {
+                UDFType::Script(box script_code) => {
                     (script_code, String::from_utf8(script_code.code.to_vec())?)
                 }
                 _ => continue,
             };
 
             let temp_dir = match &func.udf_type {
-                UDFType::Script(UDFScriptCode {
+                UDFType::Script(box UDFScriptCode {
                     language: UDFLanguage::Python,
                     packages,
                     imports_stage_info,
