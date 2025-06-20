@@ -86,6 +86,8 @@ substring_utf8 -> substr
 subtract -> minus
 to_char -> to_string
 to_datetime -> to_timestamp
+to_number -> to_decimal
+to_numeric -> to_decimal
 to_start_of_iso_week -> to_monday
 to_text -> to_string
 to_varchar -> to_string
@@ -95,6 +97,8 @@ try_ipv4_string_to_num -> try_inet_aton
 try_json_object -> try_object_construct
 try_json_object_keep_null -> try_object_construct_keep_null
 try_to_datetime -> try_to_timestamp
+try_to_number -> try_to_decimal
+try_to_numeric -> try_to_decimal
 ucase -> upper
 unhex -> from_hex
 uuid -> gen_random_uuid
