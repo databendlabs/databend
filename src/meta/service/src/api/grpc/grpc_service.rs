@@ -53,7 +53,6 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
-use display_more::DisplayOptionExt;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -449,8 +448,11 @@ impl MetaService for MetaServiceImpl {
             let sm = &mn.raft_store.state_machine;
             let sm = sm.write().await;
 
-            let weak_sender = mn.add_watcher(watch, tx.clone()).await?;
-            let sender_str = weak_sender.upgrade().map(|s| s.to_string());
+            info!("enter sm write lock for watch {}", watch);
+
+            let sender = mn.new_watch_sender(watch, tx.clone())?;
+            let sender_str = sender.to_string();
+            let weak_sender = mn.insert_watch_sender(sender);
 
             // Build a closure to remove the stream tx from Dispatcher when the stream is dropped.
             let on_drop = {
@@ -467,8 +469,14 @@ impl MetaService for MetaServiceImpl {
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
                 let strm = sm.range_kv(key_range).await?;
 
+                info!("created initialization stream for {}", sender_str);
+
+                let sndr = sender_str.clone();
+
                 let fu = async move {
                     try_forward(strm, snk, ctx).await;
+
+                    info!("initialization flush complete for watcher {}", sndr);
 
                     // Send an empty message with `is_initialization=false` to indicate
                     // the end of the initialization flush.
@@ -478,12 +486,17 @@ impl MetaService for MetaServiceImpl {
                             error!("failed to send flush complete message: {}", e);
                         })
                         .ok();
+
+                    info!(
+                        "finished sending initialization complete flag for watcher {}",
+                        sndr
+                    );
                 };
                 let fu = Box::pin(fu);
 
                 info!(
                     "sending initial flush Future to watcher {} via Dispatcher",
-                    sender_str.display()
+                    sender_str
                 );
 
                 mn.dispatcher_handle.send_future(fu);
