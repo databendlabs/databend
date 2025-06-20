@@ -67,6 +67,9 @@ select number, gcd(number * 3, number * 6), gcd(3, gcd(number * 3, number * 6)) 
 4	12	3
 
 statement ok
+select gcd(number * 3, number) as c, uniq( gcd(number * 3, number * 2) ) from numbers(100) group by c;
+
+statement ok
 DROP FUNCTION gcd
 
 statement ok

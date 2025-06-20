@@ -54,6 +54,10 @@ impl ScalarItem {
     }
 
     pub fn bound_column_expr(&self, name: String) -> Result<ScalarExpr> {
+        if let ScalarExpr::BoundColumnRef(_) = &self.scalar {
+            return Ok(self.scalar.clone());
+        }
+
         let column_binding = self.column_binding(name)?;
         Ok(BoundColumnRef {
             span: None,
