@@ -39,8 +39,7 @@ impl StorageQuotaHandler for RealStorageQuotaHandler {
 
         let settings = session.get_settings();
         // check for valid license
-        LicenseManagerSwitch::instance()
-            .get_storage_quota(unsafe { settings.get_enterprise_license().unwrap_or_default() })
+        LicenseManagerSwitch::instance().get_storage_quota(settings.get_enterprise_license())
     }
 }
 
