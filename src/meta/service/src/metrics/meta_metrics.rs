@@ -377,6 +377,7 @@ pub mod raft_metrics {
             sent_bytes: Family<ToLabels, Counter>,
             recv_bytes: Family<FromLabels, Counter>,
             sent_failures: Family<ToLabels, Counter>,
+
             append_sent_seconds: Family<ToLabels, Histogram>,
             snapshot_send_success: Family<ToLabels, Counter>,
             snapshot_send_failure: Family<ToLabels, Counter>,
@@ -601,6 +602,7 @@ pub mod raft_metrics {
         use prometheus_client::encoding::EncodeLabelSet;
         use prometheus_client::metrics::counter::Counter;
         use prometheus_client::metrics::family::Family;
+        use prometheus_client::metrics::gauge::Gauge;
 
         use crate::metrics::registry::load_global_registry;
 
@@ -618,6 +620,14 @@ pub mod raft_metrics {
         struct StorageMetrics {
             raft_store_write_failed: Family<FuncLabels, Counter>,
             raft_store_read_failed: Family<FuncLabels, Counter>,
+
+            /// The number of tasks that are building a snapshot.
+            ///
+            /// It should be 0 or 1.
+            snapshot_building: Gauge,
+
+            /// The number of entries written to the snapshot file.
+            snapshot_written_entries: Counter,
         }
 
         impl StorageMetrics {
@@ -625,6 +635,9 @@ pub mod raft_metrics {
                 let metrics = Self {
                     raft_store_write_failed: Family::default(),
                     raft_store_read_failed: Family::default(),
+
+                    snapshot_building: Gauge::default(),
+                    snapshot_written_entries: Counter::default(),
                 };
 
                 let mut registry = load_global_registry();
@@ -638,6 +651,18 @@ pub mod raft_metrics {
                     "raft store read failed",
                     metrics.raft_store_read_failed.clone(),
                 );
+
+                registry.register(
+                    key!("snapshot_building"),
+                    "The number of tasks that are building a snapshot. It should be 0 or 1.",
+                    metrics.snapshot_building.clone(),
+                );
+                registry.register(
+                    key!("snapshot_written_entries"),
+                    "The number of entries written to the snapshot file.",
+                    metrics.snapshot_written_entries.clone(),
+                );
+
                 metrics
             }
         }
@@ -681,6 +706,14 @@ pub mod raft_metrics {
                     .get_or_create(&labels)
                     .inc();
             }
+        }
+
+        pub fn incr_snapshot_building_by(cnt: i64) {
+            STORAGE_METRICS.snapshot_building.inc_by(cnt);
+        }
+
+        pub fn incr_snapshot_written_entries() {
+            STORAGE_METRICS.snapshot_written_entries.inc();
         }
     }
 }
@@ -917,4 +950,13 @@ pub fn meta_metrics_to_prometheus_string() -> String {
     let mut text = String::new();
     prometheus_encode(&mut text, &registry).unwrap();
     text
+}
+
+#[derive(Default)]
+pub(crate) struct SnapshotBuilding;
+
+impl count::Count for SnapshotBuilding {
+    fn incr_count(&mut self, n: i64) {
+        raft_metrics::storage::incr_snapshot_building_by(n);
+    }
 }
