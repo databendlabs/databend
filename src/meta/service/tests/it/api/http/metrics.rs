@@ -285,5 +285,10 @@ async fn test_metrics() -> anyhow::Result<()> {
     assert!(metric_keys.contains("metasrv_meta_network_watch_initialization_total"));
     assert!(metric_keys.contains("metasrv_meta_network_watch_change_total"));
 
+    // Stream metrics
+    assert!(metric_keys.contains("metasrv_meta_network_stream_get_item_sent_total"));
+    assert!(metric_keys.contains("metasrv_meta_network_stream_mget_item_sent_total"));
+    assert!(metric_keys.contains("metasrv_meta_network_stream_list_item_sent_total"));
+
     Ok(())
 }

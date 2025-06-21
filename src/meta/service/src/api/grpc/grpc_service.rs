@@ -53,6 +53,7 @@ use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
+use databend_common_tracing::start_trace_for_remote_request;
 use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -160,10 +161,8 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_read_v1(
         &self,
-        request: Request<RaftRequest>,
+        req: MetaGrpcReadReq,
     ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
-        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
-
         debug!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
         let req = ForwardRequest::new(1, req);
@@ -296,8 +295,7 @@ impl MetaService for MetaServiceImpl {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
             let _guard = RequestInFlight::guard();
 
-            let root =
-                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+            let root = start_trace_for_remote_request(func_path!(), &request);
             let reply = self.handle_kv_api(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -316,12 +314,23 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
 
         let _guard = thread_tracking_guard(&request);
-        ThreadTracker::tracking_future(async move {
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let root =
-                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
-            let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+
+        let root = start_trace_for_remote_request(func_path!(), &request);
+
+        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+        let req_typ = req.type_name();
+
+        ThreadTracker::tracking_future(async move {
+            let (endpoint, strm) = self.handle_kv_read_v1(req).in_span(root).await?;
+
+            let strm = strm
+                .map(move |item| {
+                    network_metrics::incr_stream_sent_item(req_typ);
+                    item
+                })
+                .boxed();
 
             let mut resp = Response::new(strm);
             GrpcHelper::add_response_meta_leader(&mut resp, endpoint.as_ref());
@@ -343,8 +352,7 @@ impl MetaService for MetaServiceImpl {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
             let _guard = RequestInFlight::guard();
 
-            let root =
-                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+            let root = start_trace_for_remote_request(func_path!(), &request);
             let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
