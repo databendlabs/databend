@@ -76,12 +76,12 @@ impl HookOperator {
     pub async fn execute_compact(&self, pipeline: &mut Pipeline) {
         match self.ctx.get_settings().get_enable_compact_after_write() {
             Ok(false) => {
-                info!("auto compaction disabled");
+                info!("[TABLE-HOOK] Auto compaction is disabled");
                 return;
             }
             Err(e) => {
                 // swallow the exception, compaction hook should not prevent the main operation.
-                warn!("failed to get compaction settings, ignored. {}", e);
+                warn!("[TABLE-HOOK] Failed to retrieve compaction settings, continuing without compaction: {}", e);
                 return;
             }
             Ok(true) => {

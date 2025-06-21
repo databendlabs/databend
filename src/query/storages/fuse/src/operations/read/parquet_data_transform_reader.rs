@@ -215,7 +215,7 @@ impl Transform for ReadParquetDataTransform<true> {
         if unfinished_processors_count == 1 {
             let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
             let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("[RUNTIME-FILTER]ReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+            info!("[RUNTIME-FILTER] ReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
         }
         Ok(())
     }
@@ -324,7 +324,7 @@ impl AsyncTransform for ReadParquetDataTransform<false> {
         if unfinished_processors_count == 1 {
             let blocks_total = self.stats.blocks_total.load(Ordering::Relaxed);
             let blocks_pruned = self.stats.blocks_pruned.load(Ordering::Relaxed);
-            info!("[RUNTIME-FILTER]AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
+            info!("[RUNTIME-FILTER] AsyncReadParquetDataTransform finished, scan_id: {}, blocks_total: {}, blocks_pruned: {}", self.scan_id, blocks_total, blocks_pruned);
         }
         Ok(())
     }
