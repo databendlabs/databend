@@ -39,6 +39,7 @@ use crate::leveled_store::map_api::MarkedOf;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine_api::StateMachineApi;
+use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;
 
 #[async_trait::async_trait]
@@ -111,7 +112,9 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let strm = strm
             // Return only keys with the expected prefix
-            .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))))
+            .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))));
+
+        let strm = add_cooperative_yielding(strm, format!("list_kv: {prefix}"))
             // Skip tombstone
             .try_filter_map(|(k, marked)| future::ready(Ok(marked_to_seqv(k, marked))));
 
@@ -121,10 +124,15 @@ pub trait StateMachineApiExt: StateMachineApi {
     /// Return a range of kv entries.
     async fn range_kv<R>(&self, rng: R) -> Result<IOResultStream<(String, SeqV)>, io::Error>
     where R: RangeBounds<String> + Send + Sync + Clone + 'static {
-        let strm = self.map_ref().str_map().range(rng).await?;
+        let left = rng.start_bound().cloned();
+        let right = rng.end_bound().cloned();
 
-        // Skip tombstone
-        let strm = strm.try_filter_map(|(k, marked)| future::ready(Ok(marked_to_seqv(k, marked))));
+        let leveled_map = self.map_ref();
+        let strm = leveled_map.str_map().range(rng).await?;
+
+        let strm = add_cooperative_yielding(strm, format!("range_kv: {left:?} to {right:?}"))
+            // Skip tombstone
+            .try_filter_map(|(k, marked)| future::ready(Ok(marked_to_seqv(k, marked))));
 
         Ok(strm.boxed())
     }
@@ -181,12 +189,13 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let strm = self.map_ref().expire_map().range(start..end).await?;
 
-        let strm = strm
-            // Return only non-deleted records
-            .try_filter_map(|(k, marked)| {
-                let expire_entry = marked.unpack().map(|(v, _v_meta)| (k, v));
-                future::ready(Ok(expire_entry))
-            });
+        let strm =
+            add_cooperative_yielding(strm, format!("list_expire_index since {start} to {end}"))
+                // Return only non-deleted records
+                .try_filter_map(|(k, marked)| {
+                    let expire_entry = marked.unpack().map(|(v, _v_meta)| (k, v));
+                    future::ready(Ok(expire_entry))
+                });
 
         Ok(strm.boxed())
     }

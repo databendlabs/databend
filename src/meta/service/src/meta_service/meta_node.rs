@@ -1174,26 +1174,34 @@ impl MetaNode {
         }
     }
 
-    pub(crate) async fn add_watcher(
+    pub(crate) fn insert_watch_sender(
+        &self,
+        sender: Arc<WatchStreamSender<WatchTypes>>,
+    ) -> Weak<WatchStreamSender<WatchTypes>> {
+        let weak = Arc::downgrade(&sender);
+
+        self.dispatcher_handle
+            .request(move |dispatcher: &mut Dispatcher<WatchTypes>| {
+                dispatcher.insert_watch_stream_sender(sender);
+            });
+
+        weak
+    }
+
+    pub(crate) fn new_watch_sender(
         &self,
         request: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
-    ) -> Result<Weak<WatchStreamSender<WatchTypes>>, Status> {
-        let stream_sender = self
-            .dispatcher_handle
-            .request_blocking(move |dispatcher: &mut Dispatcher<WatchTypes>| {
-                let key_range = match build_key_range(&request.key, &request.key_end) {
-                    Ok(kr) => kr,
-                    Err(e) => return Err(Status::invalid_argument(e.to_string())),
-                };
+    ) -> Result<Arc<WatchStreamSender<WatchTypes>>, Status> {
+        let key_range = match build_key_range(&request.key, &request.key_end) {
+            Ok(kr) => kr,
+            Err(e) => return Err(Status::invalid_argument(e.to_string())),
+        };
 
-                let interested = event_filter_from_filter_type(request.filter_type());
-                Ok(dispatcher.add_watcher(key_range, interested, tx))
-            })
-            .await
-            .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))??;
+        let interested = event_filter_from_filter_type(request.filter_type());
 
-        Ok(stream_sender)
+        let sender = Dispatcher::new_watch_stream_sender(key_range.clone(), interested, tx);
+        Ok(sender)
     }
 
     /// Get a kvapi::KVApi implementation.
