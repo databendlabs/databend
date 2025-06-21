@@ -464,6 +464,13 @@ impl MetaService for MetaServiceImpl {
 
             let stream = WatchStream::new(rx, Box::new(on_drop));
 
+            let stream = stream.map(move |item| {
+                if let Ok(ref resp) = item {
+                    network_metrics::incr_watch_sent(resp);
+                }
+                item
+            });
+
             if flush {
                 let ctx = "watch-Dispatcher";
                 let snk = new_initialization_sink::<WatchTypes>(tx.clone(), ctx);
