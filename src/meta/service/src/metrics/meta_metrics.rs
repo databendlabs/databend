@@ -689,6 +689,7 @@ pub mod network_metrics {
     use std::sync::LazyLock;
     use std::time::Duration;
 
+    use databend_common_meta_types::protobuf::WatchResponse;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::Histogram;
@@ -710,6 +711,12 @@ pub mod network_metrics {
         req_inflights: Gauge,
         req_success: Counter,
         req_failed: Counter,
+
+        /// Number of items sent during watch stream initialization.
+        watch_initialization_item_sent: Counter,
+
+        /// Number of items sent when data changes in a watch stream.
+        watch_change_item_sent: Counter,
     }
 
     impl NetworkMetrics {
@@ -733,6 +740,9 @@ pub mod network_metrics {
                 req_inflights: Gauge::default(),
                 req_success: Counter::default(),
                 req_failed: Counter::default(),
+
+                watch_initialization_item_sent: Counter::default(),
+                watch_change_item_sent: Counter::default(),
             };
 
             let mut registry = load_global_registry();
@@ -759,6 +769,17 @@ pub mod network_metrics {
                 metrics.req_success.clone(),
             );
             registry.register(key!("req_failed"), "req failed", metrics.req_failed.clone());
+
+            registry.register(
+                key!("watch_initialization"),
+                "Number of items sent during watch stream initialization",
+                metrics.watch_initialization_item_sent.clone(),
+            );
+            registry.register(
+                key!("watch_change"),
+                "Number of items sent when data changes in a watch stream",
+                metrics.watch_change_item_sent.clone(),
+            );
 
             metrics
         }
@@ -789,6 +810,25 @@ pub mod network_metrics {
         } else {
             NETWORK_METRICS.req_failed.inc();
         }
+    }
+
+    /// Increment the number of items sent in a watch response.
+    ///
+    /// It determines the type of item based on the response type.
+    pub fn incr_watch_sent(resp: &WatchResponse) {
+        if resp.is_initialization {
+            incr_watch_sent_initialization_item();
+        } else {
+            incr_watch_sent_change_item();
+        }
+    }
+
+    pub fn incr_watch_sent_initialization_item() {
+        NETWORK_METRICS.watch_initialization_item_sent.inc();
+    }
+
+    pub fn incr_watch_sent_change_item() {
+        NETWORK_METRICS.watch_change_item_sent.inc();
     }
 }
 

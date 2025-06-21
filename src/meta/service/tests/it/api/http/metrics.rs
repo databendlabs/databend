@@ -281,5 +281,9 @@ async fn test_metrics() -> anyhow::Result<()> {
     // Raft storage metrics
     assert!(metric_keys.contains("metasrv_raft_storage_raft_store_write_failed_total"));
 
+    // Watch
+    assert!(metric_keys.contains("metasrv_meta_network_watch_initialization_total"));
+    assert!(metric_keys.contains("metasrv_meta_network_watch_change_total"));
+
     Ok(())
 }
