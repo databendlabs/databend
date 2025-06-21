@@ -73,6 +73,18 @@ fn test_variant() {
     test_object_delete(file);
     test_object_pick(file);
     test_strip_null_value(file);
+    test_array_append(file);
+    test_array_prepend(file);
+    test_array_compact(file);
+    test_array_flatten(file);
+    test_array_indexof(file);
+    test_array_remove(file);
+    test_array_remove_first(file);
+    test_array_remove_last(file);
+    test_array_reverse(file);
+    test_array_unique(file);
+    test_array_contains(file);
+    test_array_slice(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -2206,4 +2218,298 @@ fn test_strip_null_value(file: &mut impl Write) {
             vec![true, true, false, true],
         ),
     )]);
+}
+
+fn test_array_append(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_append(parse_json('[1, 2, 3]'), 4)", &[]);
+    run_ast(file, "array_append(parse_json('[]'), 1)", &[]);
+
+    // Test with null array
+    run_ast(file, "array_append(null, 1)", &[]);
+
+    // Test appending null
+    run_ast(file, "array_append(parse_json('[1, 2, 3]'), null)", &[]);
+
+    // Test with various data types
+    run_ast(file, "array_append(parse_json('[1, 2]'), 'string')", &[]);
+    run_ast(file, "array_append(parse_json('[1, 2]'), true)", &[]);
+    run_ast(
+        file,
+        "array_append(parse_json('[1, 2]'), parse_json('{\"a\": 1}'))",
+        &[],
+    );
+
+    // Test with column data
+    run_ast(file, "array_append(parse_json(c1), c2)", &[
+        ("c1", StringType::from_data(vec!["[1, 2, 3]", "[]", "null"])),
+        ("c2", StringType::from_data(vec!["a", "b", "c"])),
+    ]);
+}
+
+fn test_array_prepend(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_prepend(4, parse_json('[1, 2, 3]'))", &[]);
+    run_ast(file, "array_prepend(1, parse_json('[]'))", &[]);
+
+    // Test with null array
+    run_ast(file, "array_prepend(1, null)", &[]);
+
+    // Test prepending null
+    run_ast(file, "array_prepend(null, parse_json('[1, 2, 3]'))", &[]);
+
+    // Test with various data types
+    run_ast(file, "array_prepend('string', parse_json('[1, 2]'))", &[]);
+    run_ast(file, "array_prepend(true, parse_json('[1, 2]'))", &[]);
+    run_ast(
+        file,
+        "array_prepend(parse_json('{\"a\": 1}'), parse_json('[1, 2]'))",
+        &[],
+    );
+
+    // Test with column data
+    run_ast(file, "array_prepend(c2, parse_json(c1))", &[
+        ("c1", StringType::from_data(vec!["[1, 2, 3]", "[]", "null"])),
+        ("c2", StringType::from_data(vec!["a", "b", "c"])),
+    ]);
+}
+
+fn test_array_compact(file: &mut impl Write) {
+    // Test with arrays containing nulls
+    run_ast(file, "array_compact(parse_json('[1, null, 3, null]'))", &[]);
+    run_ast(file, "array_compact(parse_json('[null, null]'))", &[]);
+
+    // Test with array without nulls
+    run_ast(file, "array_compact(parse_json('[1, 2, 3]'))", &[]);
+
+    // Test with null
+    run_ast(file, "array_compact(null)", &[]);
+
+    // Test with non-array
+    run_ast(file, "array_compact(parse_json('\"not an array\"'))", &[]);
+
+    // Test with column data
+    run_ast(file, "array_compact(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec![
+            "[1, null, 3, null, \"a\"]",
+            "[null, [1, true], null]",
+            "[1, 2, 3]",
+        ]),
+    )]);
+}
+
+fn test_array_flatten(file: &mut impl Write) {
+    // Test with nested arrays
+    run_ast(file, "array_flatten(parse_json('[[1, 2], [3, 4]]'))", &[]);
+    run_ast(file, "array_flatten(parse_json('[[], [1, 2]]'))", &[]);
+
+    // Test with empty array
+    run_ast(file, "array_flatten(parse_json('[]'))", &[]);
+
+    // Test with null
+    run_ast(file, "array_flatten(null)", &[]);
+
+    // Test with non-array
+    run_ast(file, "array_flatten(parse_json('\"not an array\"'))", &[]);
+
+    // Test with column data
+    run_ast(file, "array_flatten(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[[1, 2], [3, \"aa\"]]", "[[], [1, 2]]", "[[]]"]),
+    )]);
+}
+
+fn test_array_indexof(file: &mut impl Write) {
+    // Test with string arrays
+    run_ast(
+        file,
+        "array_indexof(parse_json('[\"a\", \"b\", \"c\"]'), 'b')",
+        &[],
+    );
+
+    // Test with number arrays
+    run_ast(file, "array_indexof(parse_json('[1, 2, 3]'), 2)", &[]);
+
+    // Test with value not in array
+    run_ast(file, "array_indexof(parse_json('[1, 2, 3]'), 4)", &[]);
+
+    // Test with empty array
+    run_ast(file, "array_indexof(parse_json('[]'), 'a')", &[]);
+
+    // Test with null array
+    run_ast(file, "array_indexof(null, 'a')", &[]);
+
+    // Test with column data
+    run_ast(file, "array_indexof(parse_json(c1), c2)", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2, 3]", "[\"a\", \"b\"]", "null"]),
+        ),
+        ("c2", StringType::from_data(vec!["a", "b", "c"])),
+    ]);
+}
+
+fn test_array_remove(file: &mut impl Write) {
+    // Test removing a string value
+    run_ast(
+        file,
+        "array_remove(parse_json('[\"a\", \"b\", \"c\", \"b\"]'), 'b')",
+        &[],
+    );
+
+    // Test removing a number value
+    run_ast(file, "array_remove(parse_json('[1, 2, 3, 2]'), 2)", &[]);
+
+    // Test removing a value not in array
+    run_ast(file, "array_remove(parse_json('[1, 2, 3]'), 4)", &[]);
+
+    // Test with empty array
+    run_ast(file, "array_remove(parse_json('[]'), 'a')", &[]);
+
+    // Test with null array
+    run_ast(file, "array_remove(null, 'a')", &[]);
+
+    // Test with column data
+    run_ast(file, "array_remove(parse_json(c1), c2)", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2, 3]", "[\"a\", \"b\"]", "null"]),
+        ),
+        ("c2", StringType::from_data(vec!["a", "b", "c"])),
+    ]);
+}
+
+fn test_array_remove_first(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_remove_first(parse_json('[1, 2, 3]'))", &[]);
+    run_ast(file, "array_remove_first(parse_json('[1]'))", &[]);
+
+    // Test with empty array
+    run_ast(file, "array_remove_first(parse_json('[]'))", &[]);
+
+    // Test with null
+    run_ast(file, "array_remove_first(null)", &[]);
+
+    // Test with column data
+    run_ast(file, "array_remove_first(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[1, 2, 3]", "[\"a\", \"b\"]", "null"]),
+    )]);
+}
+
+fn test_array_remove_last(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_remove_last(parse_json('[1, 2, 3]'))", &[]);
+    run_ast(file, "array_remove_last(parse_json('[1]'))", &[]);
+
+    // Test with empty array
+    run_ast(file, "array_remove_last(parse_json('[]'))", &[]);
+
+    // Test with null
+    run_ast(file, "array_remove_last(null)", &[]);
+
+    // Test with column data
+    run_ast(file, "array_remove_last(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[1, 2, 3]", "[\"a\", \"b\"]", "null"]),
+    )]);
+}
+
+fn test_array_reverse(file: &mut impl Write) {
+    // Test with number arrays
+    run_ast(file, "array_reverse(parse_json('[1, 2, 3]'))", &[]);
+
+    // Test with string arrays
+    run_ast(
+        file,
+        "array_reverse(parse_json('[\"a\", \"b\", \"c\"]'))",
+        &[],
+    );
+
+    // Test with empty array
+    run_ast(file, "array_reverse(parse_json('[]'))", &[]);
+
+    // Test with null
+    run_ast(file, "array_reverse(null)", &[]);
+
+    // Test with column data
+    run_ast(file, "array_reverse(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[1, 2, 3]", "[\"a\", \"b\"]", "null"]),
+    )]);
+}
+
+fn test_array_unique(file: &mut impl Write) {
+    // Test with arrays containing duplicates
+    run_ast(file, "array_unique(parse_json('[1, 2, 2, 3, 3]'))", &[]);
+    run_ast(
+        file,
+        "array_unique(parse_json('[\"a\", \"b\", \"b\", \"c\"]'))",
+        &[],
+    );
+
+    // Test with array without duplicates
+    run_ast(file, "array_unique(parse_json('[1, 2, 3]'))", &[]);
+
+    // Test with empty array
+    run_ast(file, "array_unique(parse_json('[]'))", &[]);
+
+    // Test with null
+    run_ast(file, "array_unique(null)", &[]);
+
+    // Test with column data
+    run_ast(file, "array_unique(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[1, 1, 2, 3]", "[\"a\", \"b\", \"a\"]", "null"]),
+    )]);
+}
+
+fn test_array_contains(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "contains(parse_json('[1, 2, 3]'), 3)", &[]);
+    run_ast(file, "contains(parse_json('[]'), 1)", &[]);
+    run_ast(file, "contains(parse_json('[1, 2, 3]'), null)", &[]);
+
+    // Test with various data types
+    run_ast(file, "contains(parse_json('[1, 2]'), 'string')", &[]);
+    run_ast(file, "contains(parse_json('[1, 2, true]'), true)", &[]);
+    run_ast(
+        file,
+        "contains(parse_json('[1, 2, 3]'), parse_json('{\"a\": 1}'))",
+        &[],
+    );
+
+    // Test with column data
+    run_ast(file, "contains(parse_json(c1), c2)", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2, \"a\"]", "[]", "null"]),
+        ),
+        ("c2", StringType::from_data(vec!["a", "b", "c"])),
+    ]);
+}
+
+fn test_array_slice(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "slice(parse_json('[]'), 1)", &[]);
+    run_ast(file, "slice(parse_json('[0, 1, 2, 3]'), 2)", &[]);
+    run_ast(file, "slice(parse_json('[1]'), 1, 2)", &[]);
+    run_ast(file, "slice(parse_json('true'), 1, 2)", &[]);
+    run_ast(file, "slice(parse_json('[null, 1, 2, 3]'), 0, 2)", &[]);
+    run_ast(
+        file,
+        "slice(parse_json('[\"a\", \"b\", \"c\", \"d\"]'), -3, -1)",
+        &[],
+    );
+
+    // Test with column data
+    run_ast(file, "slice(parse_json(c1), c2, c3)", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2, \"a\"]", "[4, 5, 6, 7, 8]", "null"]),
+        ),
+        ("c2", Int64Type::from_data(vec![1, -3, 3])),
+        ("c3", Int64Type::from_data(vec![4, -1, 3])),
+    ]);
 }

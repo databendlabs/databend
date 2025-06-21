@@ -2916,12 +2916,6 @@ impl<'a> TypeChecker<'a> {
                 DataType::Number(NumberDataType::UInt32),
             )));
         }
-
-        if let Some(rewritten_func_func) =
-            self.try_rewrite_array_function(span, func_name, &params, &mut args, &mut arg_types)
-        {
-            return rewritten_func_func;
-        }
         if let Some(rewritten_variant_expr) =
             self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
         {
@@ -4196,90 +4190,6 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             _ => None,
-        }
-    }
-
-    fn array_functions() -> &'static [Ascii<&'static str>] {
-        static ARRAY_FUNCTIONS: &[Ascii<&'static str>] = &[
-            Ascii::new("array_count"),
-            Ascii::new("array_max"),
-            Ascii::new("array_min"),
-            Ascii::new("array_any"),
-            Ascii::new("array_approx_count_distinct"),
-            Ascii::new("array_unique"),
-            Ascii::new("array_sort_asc_null_first"),
-            Ascii::new("array_sort_desc_null_first"),
-            Ascii::new("array_sort_asc_null_last"),
-            Ascii::new("array_sort_desc_null_last"),
-            Ascii::new("array_remove_first"),
-            Ascii::new("array_remove_last"),
-        ];
-        ARRAY_FUNCTIONS
-    }
-
-    fn try_rewrite_array_function(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        params: &[Scalar],
-        args: &mut [ScalarExpr],
-        arg_types: &mut [DataType],
-    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        // Try auto cast the Variant type to Array(Variant),
-        // so that the array functions support Variant type as argument.
-        let uni_case_func_name = Ascii::new(func_name);
-        if Self::array_functions().contains(&uni_case_func_name)
-            && !arg_types.is_empty()
-            && arg_types[0].remove_nullable() == DataType::Variant
-        {
-            let target_type = if arg_types[0].is_nullable() {
-                DataType::Nullable(Box::new(DataType::Array(Box::new(DataType::Nullable(
-                    Box::new(DataType::Variant),
-                )))))
-            } else {
-                DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Variant))))
-            };
-            let arg = args[0].clone();
-            args[0] = ScalarExpr::CastExpr(CastExpr {
-                span: None,
-                is_try: false,
-                argument: Box::new(arg),
-                target_type: Box::new(target_type.clone()),
-            });
-            arg_types[0] = target_type;
-
-            let result =
-                self.resolve_scalar_function_call(span, func_name, params.to_vec(), args.to_vec());
-            if func_name == "array_remove_first"
-                || func_name == "array_remove_last"
-                || func_name == "array_distinct"
-                || func_name == "array_sort_asc_null_first"
-                || func_name == "array_sort_desc_null_first"
-                || func_name == "array_sort_asc_null_last"
-                || func_name == "array_sort_desc_null_last"
-            {
-                if result.is_err() {
-                    return Some(result);
-                }
-                let box (result_scalar, result_type) = result.unwrap();
-
-                let result_target_type = if result_type.is_nullable() {
-                    DataType::Nullable(Box::new(DataType::Variant))
-                } else {
-                    DataType::Variant
-                };
-                let result_target_scalar = ScalarExpr::CastExpr(CastExpr {
-                    span: None,
-                    is_try: false,
-                    argument: Box::new(result_scalar),
-                    target_type: Box::new(result_target_type.clone()),
-                });
-                Some(Ok(Box::new((result_target_scalar, result_target_type))))
-            } else {
-                Some(result)
-            }
-        } else {
-            None
         }
     }
 

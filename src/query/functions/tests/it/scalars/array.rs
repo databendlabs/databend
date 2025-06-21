@@ -53,6 +53,11 @@ fn test_array() {
     test_array_skewness(file);
     test_array_sort(file);
     test_arrays_zip(file);
+    test_array_compact(file);
+    test_array_except(file);
+    test_array_overlap(file);
+    test_array_remove(file);
+    test_array_reverse(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -81,6 +86,8 @@ fn test_length(file: &mut impl Write) {
 fn test_range(file: &mut impl Write) {
     run_ast(file, "range(10, 20)", &[]);
     run_ast(file, "range(10, 500000011)", &[]);
+    run_ast(file, "range(10, 20, 3)", &[]);
+    run_ast(file, "range(-1, -10, -2)", &[]);
 }
 
 fn test_get(file: &mut impl Write) {
@@ -119,7 +126,7 @@ fn test_slice(file: &mut impl Write) {
     run_ast(file, "slice([0, 1, 2, 3], 1, 5)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 0, 2)", &[]);
     run_ast(file, "slice(['a', 'b', 'c', 'd'], 1, 4)", &[]);
-    run_ast(file, "slice(['a', 'b', 'c', 'd'], 2, 6)", &[]);
+    run_ast(file, "slice(['a', 'b', 'c', 'd'], -3, -1)", &[]);
     run_ast(file, "slice([a, b, c], 1, 2)", &[
         ("a", Int16Type::from_data(vec![0i16, 1, 2])),
         ("b", Int16Type::from_data(vec![3i16, 4, 5])),
@@ -441,6 +448,11 @@ fn test_array_count(file: &mut impl Write) {
             UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
         ),
     ]);
+
+    // Test with variant type
+    run_ast(file, "array_count(parse_json('[1, 2, 3, 4, 5]'))", &[]);
+    run_ast(file, "array_count(parse_json('[1, 2, null, 4, 5]'))", &[]);
+    run_ast(file, "array_count(parse_json('[1.2, 3.4, 5.6, 7.8]'))", &[]);
 }
 
 fn test_array_max(file: &mut impl Write) {
@@ -477,6 +489,15 @@ fn test_array_max(file: &mut impl Write) {
             UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
         ),
     ]);
+
+    // Test with variant type
+    run_ast(file, "array_max(parse_json('[1, 2, 3, 4, 5]'))", &[]);
+    run_ast(file, "array_max(parse_json('[1, 2, null, 4, 5]'))", &[]);
+    run_ast(
+        file,
+        "array_max(parse_json('[\"a\", \"b\", \"c\", \"d\"]'))",
+        &[],
+    );
 }
 
 fn test_array_min(file: &mut impl Write) {
@@ -513,6 +534,15 @@ fn test_array_min(file: &mut impl Write) {
             UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
         ),
     ]);
+
+    // Test with variant type
+    run_ast(file, "array_min(parse_json('[1, 2, 3, 4, 5]'))", &[]);
+    run_ast(file, "array_min(parse_json('[1, 2, null, 4, 5]'))", &[]);
+    run_ast(
+        file,
+        "array_min(parse_json('[\"a\", \"b\", \"c\", \"d\"]'))",
+        &[],
+    );
 }
 
 fn test_array_any(file: &mut impl Write) {
@@ -547,6 +577,11 @@ fn test_array_any(file: &mut impl Write) {
             UInt64Type::from_data_with_validity(vec![4u64, 6, 5, 0], vec![true, true, true, false]),
         ),
     ]);
+
+    // Test with variant type
+    run_ast(file, "array_any(parse_json('[1, 2, 3]'))", &[]);
+    run_ast(file, "array_any(parse_json('[null, 2, 3]'))", &[]);
+    run_ast(file, "array_any(parse_json('[\"a\", \"b\", \"c\"]'))", &[]);
 }
 
 fn test_array_stddev_samp(file: &mut impl Write) {
@@ -744,4 +779,163 @@ fn test_arrays_zip(file: &mut impl Write) {
     run_ast(file, "arrays_zip(1, 2, 'a')", &[]);
     run_ast(file, "arrays_zip([1,2,3], ['a','b','c'], 10)", &[]);
     run_ast(file, "arrays_zip([1,2,3], ['a','b'], 10)", &[]);
+}
+
+fn test_array_compact(file: &mut impl Write) {
+    // Test with arrays containing nulls
+    run_ast(file, "array_compact([])", &[]);
+    run_ast(file, "array_compact([1, NULL, 2, NULL, 3])", &[]);
+    run_ast(file, "array_compact([NULL, NULL, NULL])", &[]);
+
+    // Test with array without nulls
+    run_ast(file, "array_compact([1, 2, 3])", &[]);
+
+    // Test with column data
+    run_ast(file, "array_compact([a, b, c])", &[
+        (
+            "a",
+            Int16Type::from_data_with_validity(vec![1i16, 2, 3], vec![true, false, true]),
+        ),
+        (
+            "b",
+            Int16Type::from_data_with_validity(vec![4i16, 5, 6], vec![false, true, false]),
+        ),
+        (
+            "c",
+            Int16Type::from_data_with_validity(vec![7i16, 8, 9], vec![true, true, true]),
+        ),
+    ]);
+
+    // Test with variant type
+    run_ast(
+        file,
+        "array_compact(parse_json('[1, null, 2, null, 3]'))",
+        &[],
+    );
+    run_ast(file, "array_compact(parse_json('[null, null]'))", &[]);
+    run_ast(file, "array_compact(parse_json('[1, 2, 3]'))", &[]);
+}
+
+fn test_array_except(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_except([], [])", &[]);
+    run_ast(file, "array_except([1, 2, 3], [2, 3, 4])", &[]);
+    run_ast(file, "array_except([1, 2, 3], [4, 5, 6])", &[]);
+    run_ast(file, "array_except([1, 2, 3], [1, 2, 3])", &[]);
+
+    // Test with nulls
+    run_ast(file, "array_except([1, NULL, 2, 3], [2, 3])", &[]);
+    run_ast(file, "array_except([1, 2, 3], [NULL, 2, 3])", &[]);
+    run_ast(file, "array_except([NULL, NULL], [NULL])", &[]);
+
+    // Test with column data
+    run_ast(file, "array_except([a, b], [c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 2, 3])),
+        ("b", Int16Type::from_data(vec![4i16, 5, 6])),
+        ("c", Int16Type::from_data(vec![4i16, 5, 7])),
+        ("d", Int16Type::from_data(vec![8i16, 9, 10])),
+    ]);
+
+    // Test with variant type
+    run_ast(
+        file,
+        "array_except(parse_json('[1, 2, 3]'), parse_json('[2, 3, 4]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_except(parse_json('[1, 2, 3]'), parse_json('[4, 5, 6]'))",
+        &[],
+    );
+}
+
+fn test_array_overlap(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_overlap([], [])", &[]);
+    run_ast(file, "array_overlap([1, 2, 3], [2, 3, 4])", &[]);
+    run_ast(file, "array_overlap([1, 2, 3], [4, 5, 6])", &[]);
+    run_ast(file, "array_overlap([1, 2, 3], [1, 2, 3])", &[]);
+
+    // Test with nulls
+    run_ast(file, "array_overlap([1, NULL, 2, 3], [2, 3])", &[]);
+    run_ast(file, "array_overlap([1, 2, 3], [NULL, 2, 3])", &[]);
+    run_ast(file, "array_overlap([NULL, NULL], [NULL])", &[]);
+
+    // Test with column data
+    run_ast(file, "array_overlap([a, b], [c, d])", &[
+        ("a", Int16Type::from_data(vec![1i16, 2, 3])),
+        ("b", Int16Type::from_data(vec![4i16, 5, 6])),
+        ("c", Int16Type::from_data(vec![4i16, 5, 7])),
+        ("d", Int16Type::from_data(vec![8i16, 9, 10])),
+    ]);
+
+    // Test with variant type
+    run_ast(
+        file,
+        "array_overlap(parse_json('[1, 2, 3]'), parse_json('[2, 3, 4]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_overlap(parse_json('[1, 2, 3]'), parse_json('[4, 5, 6]'))",
+        &[],
+    );
+}
+
+fn test_array_remove(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_remove([], 1)", &[]);
+    run_ast(file, "array_remove([1, 2, 3, 2], 2)", &[]);
+    run_ast(file, "array_remove([1, 2, 3], 4)", &[]);
+
+    // Test with strings
+    run_ast(file, "array_remove(['a', 'b', 'c', 'b'], 'b')", &[]);
+
+    // Test with nulls
+    run_ast(file, "array_remove([1, NULL, 2, 3], NULL)", &[]);
+    run_ast(file, "array_remove([1, NULL, 2, 3], 2)", &[]);
+
+    // Test with column data
+    run_ast(file, "array_remove([a, b, c], d)", &[
+        ("a", Int16Type::from_data(vec![1i16, 2, 3])),
+        ("b", Int16Type::from_data(vec![4i16, 5, 6])),
+        ("c", Int16Type::from_data(vec![7i16, 8, 9])),
+        ("d", Int16Type::from_data(vec![4i16, 5, 7])),
+    ]);
+
+    // Test with variant type
+    run_ast(file, "array_remove(parse_json('[1, 2, 3, 2]'), 2)", &[]);
+    run_ast(
+        file,
+        "array_remove(parse_json('[\"a\", \"b\", \"c\", \"b\"]'), 'b')",
+        &[],
+    );
+}
+
+fn test_array_reverse(file: &mut impl Write) {
+    // Test with simple arrays
+    run_ast(file, "array_reverse([])", &[]);
+    run_ast(file, "array_reverse([1, 2, 3])", &[]);
+    run_ast(file, "array_reverse([1])", &[]);
+
+    // Test with strings
+    run_ast(file, "array_reverse(['a', 'b', 'c'])", &[]);
+
+    // Test with nulls
+    run_ast(file, "array_reverse([1, NULL, 2, 3])", &[]);
+
+    // Test with column data
+    run_ast(file, "array_reverse([a, b, c])", &[
+        ("a", Int16Type::from_data(vec![1i16, 2, 3])),
+        ("b", Int16Type::from_data(vec![4i16, 5, 6])),
+        ("c", Int16Type::from_data(vec![7i16, 8, 9])),
+    ]);
+
+    // Test with variant type
+    run_ast(file, "array_reverse(parse_json('[1, 2, 3]'))", &[]);
+    run_ast(
+        file,
+        "array_reverse(parse_json('[\"a\", \"b\", \"c\"]'))",
+        &[],
+    );
 }
