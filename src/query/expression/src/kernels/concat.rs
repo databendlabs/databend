@@ -36,8 +36,6 @@ use crate::types::ArgType;
 use crate::types::ArrayType;
 use crate::types::DataType;
 use crate::types::DateType;
-use crate::types::DecimalColumnBuilder;
-use crate::types::DecimalDataType;
 use crate::types::DecimalType;
 use crate::types::IntervalType;
 use crate::types::MapType;
@@ -89,37 +87,7 @@ impl DataBlock {
             return Ok(entry0.value());
         }
 
-        // (null as decimal(10, 2)).to_column returns decimal128, fix it
-        let decimal_type = if entry0
-            .data_type()
-            .as_nullable()
-            .is_some_and(|inner| inner.is_decimal())
-        {
-            let has_null = entries
-                .iter()
-                .any(|entry| entry.as_scalar().is_some_and(|s| s.is_null()));
-            has_null.then(|| {
-                let (decimal_type, _) = entries
-                    .iter()
-                    .find_map(|entry| DecimalDataType::from_value(&entry.value()))
-                    .unwrap();
-                decimal_type
-            })
-        } else {
-            None
-        };
-
-        let columns_iter = entries.iter().map(|entry| {
-            if let Some(decimal_type) = decimal_type
-                && entry.as_scalar().is_some_and(|s| s.is_null())
-            {
-                let column =
-                    DecimalColumnBuilder::repeat_default(&decimal_type, entry.num_rows()).build();
-                Column::Decimal(column)
-            } else {
-                entry.to_column()
-            }
-        });
+        let columns_iter = entries.iter().map(|entry| entry.to_column());
         Ok(Value::Column(Column::concat_columns(columns_iter)?))
     }
 }

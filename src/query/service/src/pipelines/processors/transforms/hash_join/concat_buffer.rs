@@ -51,13 +51,19 @@ impl ConcatBuffer {
     }
 
     fn concat(&mut self) -> Result<DataBlock> {
-        let data_block = DataBlock::concat(&self.buffer)?;
-        self.reset();
-        Ok(strict_decimal_data_type(data_block, true)?)
-    }
-
-    fn reset(&mut self) {
-        self.buffer.clear();
+        // (null as decimal(10, 2)).to_column returns decimal128, fix it
+        let buffer = self
+            .buffer
+            .drain(..)
+            .map(|block| {
+                Ok(strict_decimal_data_type(
+                    block.consume_convert_to_full(),
+                    true,
+                )?)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let data_block = DataBlock::concat(&buffer)?;
         self.num_rows = 0;
+        Ok(data_block)
     }
 }

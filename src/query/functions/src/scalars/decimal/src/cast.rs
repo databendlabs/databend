@@ -1131,8 +1131,6 @@ fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Val
 }
 
 pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock, String> {
-    use DecimalDataType::*;
-
     let num_rows = data.num_rows();
     let entries = data
         .take_columns()
@@ -1142,55 +1140,69 @@ pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock
             if value.is_scalar_null() {
                 return Ok(entry);
             }
-            let Some((from_type, nullable)) = DecimalDataType::from_value(&value) else {
-                return Ok(entry);
-            };
 
-            let mut ctx = EvalContext {
-                generics: &[],
-                num_rows,
-                func_ctx: &FunctionContext::default(),
-                validity: None,
-                errors: None,
-                suppress_error: false,
-                strict_eval: true,
-            };
-
-            let size = from_type.size();
-            let to_kind = if best {
-                size.best_type().data_kind()
-            } else {
-                size.data_kind()
-            };
-
-            if from_type.data_kind() == to_kind {
-                return Ok(entry);
-            }
-
-            let value = with_decimal_type!(|DECIMAL| match to_kind {
-                DecimalDataKind::DECIMAL => {
-                    if nullable {
-                        let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
-                        let value = nullable_value.value().unwrap();
-                        let new_value =
-                            decimal_to_decimal(&value, &mut ctx, from_type, DECIMAL(size));
-
-                        new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
-                    } else {
-                        decimal_to_decimal(&value, &mut ctx, from_type, DECIMAL(size))
-                    }
-                }
-            });
-
-            if let Some((_, msg)) = ctx.errors.take() {
-                Err(msg)
-            } else {
-                Ok(BlockEntry::new(value, || (entry.data_type(), num_rows)))
-            }
+            let value = strict_decimal_data_type_value(value, best)?;
+            Ok(BlockEntry::new(value, || {
+                (entry.data_type(), entry.num_rows())
+            }))
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, String>>()?;
 
     Ok(DataBlock::new(entries, num_rows))
+}
+
+fn strict_decimal_data_type_value(
+    value: Value<AnyType>,
+    best: bool,
+) -> Result<Value<AnyType>, String> {
+    use DecimalDataType::*;
+    // todo array map
+    // if let Some(array) = value.try_downcast::<ArrayType<AnyType>>() { }
+
+    let Some((from_type, nullable)) = DecimalDataType::from_value(&value) else {
+        return Ok(value);
+    };
+
+    let mut ctx = EvalContext {
+        generics: &[],
+        num_rows: value.len(),
+        func_ctx: &FunctionContext::default(),
+        validity: None,
+        errors: None,
+        suppress_error: false,
+        strict_eval: true,
+    };
+
+    let size = from_type.size();
+    let to_kind = if best {
+        size.best_type().data_kind()
+    } else {
+        size.data_kind()
+    };
+
+    if from_type.data_kind() == to_kind {
+        return Ok(value);
+    }
+
+    let value = with_decimal_type!(|DECIMAL| match to_kind {
+        DecimalDataKind::DECIMAL => {
+            if nullable {
+                let nullable_value = value.try_downcast::<NullableType<AnyType>>().unwrap();
+                let value = nullable_value.value().unwrap();
+                let new_value = decimal_to_decimal(&value, &mut ctx, from_type, DECIMAL(size));
+
+                new_value.wrap_nullable(Some(nullable_value.validity(ctx.num_rows)))
+            } else {
+                decimal_to_decimal(&value, &mut ctx, from_type, DECIMAL(size))
+            }
+        }
+    });
+
+    if let Some((_, msg)) = ctx.errors.take() {
+        Err(msg)
+    } else {
+        Ok(value)
+    }
 }
 
 fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
