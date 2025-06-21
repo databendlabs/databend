@@ -690,6 +690,7 @@ pub mod network_metrics {
     use std::time::Duration;
 
     use databend_common_meta_types::protobuf::WatchResponse;
+    use log::error;
     use prometheus_client::metrics::counter::Counter;
     use prometheus_client::metrics::gauge::Gauge;
     use prometheus_client::metrics::histogram::Histogram;
@@ -717,6 +718,15 @@ pub mod network_metrics {
 
         /// Number of items sent when data changes in a watch stream.
         watch_change_item_sent: Counter,
+
+        /// Number of items sent in a stream get response.
+        stream_get_item_sent: Counter,
+
+        /// Number of items sent in a stream mget response.
+        stream_mget_item_sent: Counter,
+
+        /// Number of items sent in a stream list response.
+        stream_list_item_sent: Counter,
     }
 
     impl NetworkMetrics {
@@ -743,6 +753,10 @@ pub mod network_metrics {
 
                 watch_initialization_item_sent: Counter::default(),
                 watch_change_item_sent: Counter::default(),
+
+                stream_get_item_sent: Counter::default(),
+                stream_mget_item_sent: Counter::default(),
+                stream_list_item_sent: Counter::default(),
             };
 
             let mut registry = load_global_registry();
@@ -779,6 +793,22 @@ pub mod network_metrics {
                 key!("watch_change"),
                 "Number of items sent when data changes in a watch stream",
                 metrics.watch_change_item_sent.clone(),
+            );
+
+            registry.register(
+                key!("stream_get_item_sent"),
+                "Number of items sent in a stream get response",
+                metrics.stream_get_item_sent.clone(),
+            );
+            registry.register(
+                key!("stream_mget_item_sent"),
+                "Number of items sent in a stream mget response",
+                metrics.stream_mget_item_sent.clone(),
+            );
+            registry.register(
+                key!("stream_list_item_sent"),
+                "Number of items sent in a stream list response",
+                metrics.stream_list_item_sent.clone(),
             );
 
             metrics
@@ -829,6 +859,23 @@ pub mod network_metrics {
 
     pub fn incr_watch_sent_change_item() {
         NETWORK_METRICS.watch_change_item_sent.inc();
+    }
+
+    pub fn incr_stream_sent_item(typ: &'static str) {
+        match typ {
+            "get" => {
+                NETWORK_METRICS.stream_get_item_sent.inc();
+            }
+            "mget" => {
+                NETWORK_METRICS.stream_mget_item_sent.inc();
+            }
+            "list" => {
+                NETWORK_METRICS.stream_list_item_sent.inc();
+            }
+            _ => {
+                error!("Unknown stream item type: {}", typ);
+            }
+        }
     }
 }
 

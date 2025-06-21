@@ -152,6 +152,14 @@ impl MetaGrpcReadReq {
 
         Ok(raft_request)
     }
+
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            MetaGrpcReadReq::GetKV(_) => "get",
+            MetaGrpcReadReq::MGetKV(_) => "mget",
+            MetaGrpcReadReq::ListKV(_) => "list",
+        }
+    }
 }
 
 impl RequestFor for GetKVReq {
