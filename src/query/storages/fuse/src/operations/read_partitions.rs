@@ -378,7 +378,7 @@ impl FuseTable {
         let pruning_stats = pruner.pruning_stats();
 
         info!(
-            "prune snapshot block end, final block numbers:{}, cost:{:?}",
+            "[FUSE-PARTITIONS] prune snapshot block end, final block numbers:{}, cost:{:?}",
             block_metas.len(),
             start.elapsed()
         );

@@ -288,7 +288,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
             // Vacuum in a best-effort manner, errors are ignored
             warn!("Vacuum table {} failed : {}", tbl.table_info.name, e);
         } else {
-            info!("vacuum table {} done", tbl.table_info.name);
+            info!(
+                "[SINK-COMMIT] Vacuum completed for table {}",
+                tbl.table_info.name
+            );
         }
     }
 
@@ -307,7 +310,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
         if let Some(vacuum_handler) = &self.vacuum_handler {
             self.exec_auto_vacuum2(tbl, vacuum_handler.as_ref()).await;
         } else {
-            info!("no vacuum handler found for auto vacuuming, please re-check your license");
+            info!("[SINK-COMMIT] No vacuum handler available for auto vacuuming, please verify your license");
         }
 
         Ok(())
@@ -530,7 +533,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                         {
                             let elapsed_time = self.start_time.elapsed();
                             let status = format!(
-                                "commit mutation success after {} retries, which took {:?}",
+                                "[SINK-COMMIT] Mutation committed successfully after {} retries in {:?}",
                                 self.retries, elapsed_time
                             );
                             metrics_inc_commit_milliseconds(elapsed_time.as_millis());
@@ -554,7 +557,10 @@ where F: SnapshotGenerator + Send + Sync + 'static
                                 .collect::<Vec<_>>();
                             (tbl, stream_descriptions)
                         };
-                        info!("commit mutation success, targets {:?}", target_descriptions);
+                        info!(
+                            "[SINK-COMMIT] Mutation committed successfully, targets: {:?}",
+                            target_descriptions
+                        );
                         self.state = State::Finish;
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
@@ -563,7 +569,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             Some(d) => {
                                 let name = table_info.name.clone();
                                 debug!(
-                                    "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                    "[SINK-COMMIT] TableVersionMismatched error detected, transaction will retry in {} ms. Table: {}, ID: {}",
                                     d.as_millis(),
                                     name.as_str(),
                                     table_info.ident
