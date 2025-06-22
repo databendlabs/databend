@@ -22,18 +22,24 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::TableContext;
+use futures::future::try_join_all;
 use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_or_filter;
+
+const POINT_GET_TABLE_LIMIT: usize = 20;
 
 pub struct IndexesTable {
     table_info: TableInfo,
@@ -50,19 +56,69 @@ impl AsyncSystemTable for IndexesTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
+        let mut filtered_db_names = None;
+        let mut filtered_table_names = None;
+        let mut invalid_optimize = false;
+
+        if let Some(filters) = push_downs.and_then(|info| info.filters) {
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+
+            let mut databases: Vec<String> = Vec::new();
+            let mut tables: Vec<String> = Vec::new();
+
+            invalid_optimize = find_eq_or_filter(
+                &expr,
+                &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(database) = scalar {
+                            if !databases.contains(database) {
+                                databases.push(database.clone());
+                            }
+                        }
+                    } else if col_name == "table" {
+                        if let Scalar::String(table) = scalar {
+                            if !tables.contains(table) {
+                                tables.push(table.clone());
+                            }
+                        }
+                    }
+                    Ok(())
+                },
+                invalid_optimize,
+            );
+            if !databases.is_empty() {
+                filtered_db_names = Some(databases);
+            }
+            if !tables.is_empty() {
+                filtered_table_names = Some(tables);
+            }
+        }
+        if invalid_optimize {
+            filtered_db_names = None;
+            filtered_table_names = None;
+        }
+
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
         let indexes = catalog
             .list_indexes(ListIndexesReq::new(&tenant, None))
             .await?;
 
-        let table_index_tables = self.list_table_index_tables(ctx.clone()).await?;
+        let table_index_tables = self
+            .list_table_index_tables(
+                ctx.clone(),
+                filtered_db_names.as_deref(),
+                filtered_table_names.as_deref(),
+            )
+            .await?;
 
         let len = indexes.len() + table_index_tables.len();
         let mut names = Vec::with_capacity(len);
         let mut types = Vec::with_capacity(len);
+        let mut databases = Vec::with_capacity(len);
+        let mut tables = Vec::with_capacity(len);
         let mut originals = Vec::with_capacity(len);
         let mut defs = Vec::with_capacity(len);
         let mut created_on = Vec::with_capacity(len);
@@ -71,6 +127,8 @@ impl AsyncSystemTable for IndexesTable {
         for (_, name, index) in indexes {
             names.push(name.clone());
             types.push(index.index_type.to_string());
+            databases.push(ctx.get_current_database());
+            tables.push(catalog.get_table_name_by_id(index.table_id).await?);
             originals.push(index.original_query.clone());
             defs.push(index.query.clone());
             created_on.push(index.created_on.timestamp_micros());
@@ -81,6 +139,8 @@ impl AsyncSystemTable for IndexesTable {
             for (name, index) in &table.meta.indexes {
                 names.push(name.clone());
                 types.push(index.index_type.to_string());
+                databases.push(table.database_name()?.to_string());
+                tables.push(Some(table.name.to_string()));
                 originals.push("".to_string());
 
                 let schema = table.schema();
@@ -111,6 +171,8 @@ impl AsyncSystemTable for IndexesTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(types),
+            StringType::from_data(databases),
+            StringType::from_opt_data(tables),
             StringType::from_data(originals),
             StringType::from_data(defs),
             TimestampType::from_data(created_on),
@@ -124,6 +186,11 @@ impl IndexesTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("type", TableDataType::String),
+            TableField::new("database", TableDataType::String),
+            TableField::new(
+                "table",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
+            ),
             TableField::new("original", TableDataType::String),
             TableField::new("definition", TableDataType::String),
             TableField::new("created_on", TableDataType::Timestamp),
@@ -149,7 +216,12 @@ impl IndexesTable {
         AsyncOneBlockSystemTable::create(Self { table_info })
     }
 
-    async fn list_table_index_tables(&self, ctx: Arc<dyn TableContext>) -> Result<Vec<TableInfo>> {
+    async fn list_table_index_tables(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        database_names: Option<&[String]>,
+        table_names: Option<&[String]>,
+    ) -> Result<Vec<TableInfo>> {
         let tenant = ctx.get_tenant();
         let visibility_checker = ctx.get_visibility_checker(false).await?;
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;
@@ -180,19 +252,55 @@ impl IndexesTable {
             let db_id = db.get_db_info().database_id.db_id;
             let db_name = db.name();
 
-            let tables = match catalog.list_tables(&tenant, db_name).await {
-                Ok(tables) => tables,
-                Err(err) => {
-                    let msg = format!("Failed to list tables in database: {}, {}", db_name, err);
-                    warn!("{}", msg);
-                    ctx.push_warning(msg);
+            if let Some(database_names) = database_names {
+                if !database_names.iter().any(|name| name == db_name) {
                     continue;
                 }
+            }
+            let tables = match (
+                table_names,
+                table_names.iter().len() <= POINT_GET_TABLE_LIMIT,
+            ) {
+                (Some(table_names), true) => {
+                    match try_join_all(table_names.iter().map(|table_name| async {
+                        db.get_table(table_name)
+                            .await
+                            .map_err(|err| (table_name.to_string(), err))
+                    }))
+                    .await
+                    {
+                        Ok(tables) => tables,
+                        Err((table_name, err)) => {
+                            let msg = format!(
+                                "Failed to get table: {} in database: {}, {}",
+                                table_name, db_name, err
+                            );
+                            warn!("{}", msg);
+                            ctx.push_warning(msg);
+                            continue;
+                        }
+                    }
+                }
+                _ => match catalog.list_tables(&tenant, db_name).await {
+                    Ok(tables) => tables,
+                    Err(err) => {
+                        let msg =
+                            format!("Failed to list tables in database: {}, {}", db_name, err);
+                        warn!("{}", msg);
+                        ctx.push_warning(msg);
+                        continue;
+                    }
+                },
             };
             for table in tables {
                 let table_info = table.get_table_info();
                 if table_info.meta.indexes.is_empty() {
                     continue;
+                }
+                if let Some(table_names) = table_names {
+                    if !table_names.contains(&table_info.name) {
+                        continue;
+                    }
                 }
                 if visibility_checker.check_table_visibility(
                     &ctl_name,
