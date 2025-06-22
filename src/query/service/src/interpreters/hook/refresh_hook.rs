@@ -63,13 +63,13 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("execute pipeline finished successfully, starting run refresh job.");
+            info!("[REFRESH-HOOK] Pipeline execution completed successfully, starting refresh job");
             match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
                 Ok(_) => {
-                    info!("execute refresh job successfully.");
+                    info!("[REFRESH-HOOK] Refresh job completed successfully");
                 }
                 Err(e) => {
-                    info!("execute refresh job failed. {:?}", e);
+                    info!("[REFRESH-HOOK] Refresh job failed: {:?}", e);
                 }
             }
         }

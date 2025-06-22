@@ -108,7 +108,10 @@ impl Settings {
                 .insert(name.clone(), match default_settings.settings.get(&name) {
                     None => {
                         // the settings may be deprecated
-                        warn!("Ignore deprecated global setting {} = {}", name, val);
+                        warn!(
+                            "[SETTINGS] Ignoring deprecated global setting: {} = {}",
+                            name, val
+                        );
                         continue;
                     }
                     Some(default_setting_value) => {
@@ -116,7 +119,10 @@ impl Settings {
                             .is_err()
                         {
                             // the settings is session only, ignore the global setting
-                            warn!("Ignore session only global setting {} = {}", name, val);
+                            warn!(
+                                "[SETTINGS] Ignoring session-only setting at global scope: {} = {}",
+                                name, val
+                            );
                             continue;
                         }
                         match &default_setting_value.value {

@@ -807,7 +807,7 @@ impl HttpQuery {
                         warnings: query_context.pop_warnings(),
                     };
 
-                    info!(
+                    error!(
                         "[HTTP-QUERY] Query state changed to Stopped, failed to start: {:?}",
                         e
                     );

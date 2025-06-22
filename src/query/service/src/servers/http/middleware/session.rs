@@ -617,7 +617,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     } else {
                         let msg =
                             format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
-                        warn!("{}", msg);
+                        warn!("[HTTP-SESSION] {}", msg);
                         Err(Error::from(HttpErrorCode::bad_request(
                             ErrorCode::BadArguments(msg),
                         )))
@@ -650,7 +650,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         }
                         Ok(None) => {
                             let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
-                            warn!("{}", msg);
+                            warn!("[HTTP-SESSION] {}", msg);
                             return Err(Error::from(HttpErrorCode::bad_request(
                                 ErrorCode::UnknownWarehouse(msg),
                             )));
@@ -671,7 +671,9 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     }
                 }
 
-                log::warn!("Ignore header ({HEADER_WAREHOUSE}: {warehouse:?})");
+                log::warn!(
+                    "[HTTP-SESSION] Ignoring warehouse header: {HEADER_WAREHOUSE}={warehouse:?}"
+                );
             }
         };
 
@@ -706,13 +708,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     let err = HttpErrorCode::error_code(err);
                     if err.status() == StatusCode::UNAUTHORIZED {
                         warn!(
-                            "http auth failure: {method} {uri}, headers={:?}, error={}",
+                            "[HTTP-SESSION] Authentication failure: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );
                     } else {
                         error!(
-                            "http request err: {method} {uri}, headers={:?}, error={}",
+                            "[HTTP-SESSION] Request error: {method} {uri}, headers={:?}, error={}",
                             sanitize_request_headers(&headers),
                             err
                         );

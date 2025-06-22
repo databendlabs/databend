@@ -307,7 +307,7 @@ impl Catalog for MutableCatalog {
         // Create database.
         let res = self.ctx.meta.create_database(req.clone()).await?;
         info!(
-            "db name: {}, engine: {}",
+            "[CATALOG] Creating database: name={}, engine={}",
             req.name_ident.database_name(),
             &req.meta.engine
         );
@@ -698,13 +698,13 @@ impl Catalog for MutableCatalog {
         }
 
         info!(
-            "updating multi table meta. number of tables: {}",
+            "[CATALOG] Updating multiple table metadata: table_count={}",
             req.update_table_metas.len()
         );
         let begin = Instant::now();
         let res = self.ctx.meta.update_multi_table_meta(req).await;
         info!(
-            "update multi table meta done. time used {:?}",
+            "[CATALOG] Multiple table metadata update completed: elapsed_time={:?}",
             begin.elapsed()
         );
         Ok(res?)
