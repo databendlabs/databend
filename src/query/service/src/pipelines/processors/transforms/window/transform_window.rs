@@ -23,8 +23,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::NumberType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -1179,17 +1181,13 @@ macro_rules! impl_advance_frame_bound_method {
                     } = self.order_by[0];
                     let preceding = asc == is_preceding;
                     let ref_col = self
-                        .column_at(&self.current_row, offset)
-                        .as_number()
-                        .unwrap();
-                    let ref_col = T::try_downcast_column(ref_col).unwrap();
+                        .column_at(&self.current_row, offset);
+                    let ref_col = NumberType::<T>::try_downcast_column(ref_col).unwrap();
                     let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
                     while self.[<frame_ $bound>] < self.partition_end {
                         let cmp_col = self
-                            .column_at(&self.[<frame_ $bound>], offset)
-                            .as_number()
-                            .unwrap();
-                        let cmp_col = T::try_downcast_column(cmp_col).unwrap();
+                            .column_at(&self.[<frame_ $bound>], offset);
+                        let cmp_col = NumberType::<T>::try_downcast_column(cmp_col).unwrap();
                         let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
                         let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
                         if !asc {
@@ -1221,7 +1219,7 @@ macro_rules! impl_advance_frame_bound_method {
                         .as_nullable()
                         .unwrap()
                         .column;
-                    let ref_col = T::try_downcast_column(ref_col.as_number().unwrap()).unwrap();
+                    let ref_col = NumberType::<T>::try_downcast_column(ref_col).unwrap();
                     let ref_v = unsafe { ref_col.get_unchecked(self.current_row.row) };
                     while self.[<frame_ $bound>] < self.partition_end {
                         let col = self
@@ -1241,7 +1239,7 @@ macro_rules! impl_advance_frame_bound_method {
                                 return;
                             }
                         }
-                        let cmp_col = T::try_downcast_column(col.column.as_number().unwrap()).unwrap();
+                        let cmp_col = NumberType::<T>::try_downcast_column(&col.column).unwrap();
                         let cmp_v = unsafe { cmp_col.get_unchecked(self.[<frame_ $bound>].row) };
                         let mut ordering = Self::compare_value_with_offset(*cmp_v, *ref_v, n, preceding);
                         if !asc {

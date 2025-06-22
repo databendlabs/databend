@@ -117,7 +117,7 @@ impl TransformFinalAggregate {
                     let mut cols = self.flush_state.take_aggregate_results();
                     cols.extend_from_slice(&self.flush_state.take_group_columns());
 
-                    let block = strict_decimal_data_type(DataBlock::new_from_columns(cols))
+                    let block = strict_decimal_data_type(DataBlock::new_from_columns(cols), false)
                         .map_err(ErrorCode::Internal)?;
 
                     blocks.push(block);

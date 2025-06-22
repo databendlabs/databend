@@ -34,7 +34,6 @@ use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
-use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
 use crate::types::DecimalType;
@@ -59,7 +58,6 @@ impl DataBlock {
         if blocks.is_empty() {
             return Err(ErrorCode::EmptyData("Can't concat empty blocks"));
         }
-        let block_refs = blocks.iter().collect::<Vec<_>>();
 
         if blocks.len() == 1 {
             return Ok(blocks[0].clone());
@@ -69,33 +67,27 @@ impl DataBlock {
         let num_columns = blocks[0].num_columns();
         let mut concat_columns = Vec::with_capacity(num_columns);
         for i in 0..num_columns {
-            concat_columns.push(BlockEntry::new(
-                Self::concat_columns(&block_refs, i)?,
-                || (blocks[0].data_type(i), num_rows),
-            ))
+            let entries = blocks
+                .iter()
+                .map(|b| b.get_by_offset(i))
+                .collect::<Vec<_>>();
+            concat_columns.push(BlockEntry::new(Self::concat_entries(&entries)?, || {
+                (blocks[0].data_type(i), num_rows)
+            }))
         }
 
         Ok(DataBlock::new(concat_columns, num_rows))
     }
 
-    pub fn concat_columns(blocks: &[&DataBlock], column_index: usize) -> Result<Value<AnyType>> {
-        debug_assert!(blocks
-            .iter()
-            .map(|block| block.data_type(column_index))
-            .all_equal());
+    fn concat_entries(entries: &[&BlockEntry]) -> Result<Value<AnyType>> {
+        debug_assert!(entries.iter().map(|entry| entry.data_type()).all_equal());
 
-        let entry0 = blocks[0].get_by_offset(column_index);
-        if entry0.as_scalar().is_some()
-            && blocks
-                .iter()
-                .all(|b| b.get_by_offset(column_index) == entry0)
-        {
+        let entry0 = entries[0];
+        if entry0.as_scalar().is_some() && entries.iter().all_equal() {
             return Ok(entry0.value());
         }
 
-        let columns_iter = blocks
-            .iter()
-            .map(|block| block.get_by_offset(column_index).to_column());
+        let columns_iter = entries.iter().map(|entry| entry.to_column());
         Ok(Value::Column(Column::concat_columns(columns_iter)?))
     }
 }
@@ -111,7 +103,7 @@ impl Column {
         }
     }
 
-    pub fn concat_columns_impl<I: Iterator<Item = Column> + TrustedLen + Clone>(
+    fn concat_columns_impl<I: Iterator<Item = Column> + TrustedLen + Clone>(
         columns: I,
     ) -> Result<Column> {
         let mut columns_iter_clone = columns.clone();
@@ -197,16 +189,11 @@ impl Column {
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns, &data_type)
             }
             Column::Nullable(_) => {
-                let column: Vec<Column> = columns
-                    .clone()
-                    .map(|col| col.into_nullable().unwrap().column)
-                    .collect();
-                let column = Self::concat_columns_impl(column.into_iter())?;
-                let validity = Column::Boolean(Self::concat_boolean_types(
-                    columns.map(|col| col.into_nullable().unwrap().validity),
-                    capacity,
-                ));
-                let validity = BooleanType::try_downcast_column(&validity).unwrap();
+                let (inner, validity): (Vec<_>, Vec<_>) = columns
+                    .map(|col| col.into_nullable().unwrap().destructure())
+                    .unzip(); // break the recursion type
+                let column = Self::concat_columns_impl(inner.into_iter())?;
+                let validity = Self::concat_boolean_types(validity.into_iter(), capacity);
                 NullableColumn::new_column(column, validity)
             }
             Column::Tuple(fields) => {

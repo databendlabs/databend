@@ -114,7 +114,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         for block in data_blocks.iter() {
             let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
             let column = evaluator
-                .run(build_key)?
+                .run_fast(build_key)?
                 .convert_to_full_column(build_key.data_type(), block.num_rows());
             columns.push(column);
         }

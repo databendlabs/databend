@@ -112,7 +112,7 @@ impl<Num: Number> SimpleType for CoreNumber<Num> {
     }
 
     fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
-        Num::try_downcast_column(col.as_number()?)
+        Num::try_downcast_column(col.as_number()?).cloned()
     }
 
     fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
@@ -861,7 +861,7 @@ pub trait Number:
 
     fn data_type() -> NumberDataType;
     fn try_downcast_scalar(scalar: &NumberScalar) -> Option<Self>;
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>>;
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>>;
     fn try_downcast_builder(col: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>>;
 
     fn try_downcast_owned_builder(col: NumberColumnBuilder) -> Option<Vec<Self>>;
@@ -892,8 +892,8 @@ impl Number for u8 {
         scalar.as_u_int8().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_u_int8().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_u_int8()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -943,8 +943,8 @@ impl Number for u16 {
         scalar.as_u_int16().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_u_int16().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_u_int16()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -995,8 +995,8 @@ impl Number for u32 {
         scalar.as_u_int32().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_u_int32().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_u_int32()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1047,8 +1047,8 @@ impl Number for u64 {
         scalar.as_u_int64().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_u_int64().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_u_int64()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1099,8 +1099,8 @@ impl Number for i8 {
         scalar.as_int8().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_int8().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_int8()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1151,8 +1151,8 @@ impl Number for i16 {
         scalar.as_int16().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_int16().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_int16()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1203,8 +1203,8 @@ impl Number for i32 {
         scalar.as_int32().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_int32().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_int32()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1255,8 +1255,8 @@ impl Number for i64 {
         scalar.as_int64().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_int64().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_int64()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1307,8 +1307,8 @@ impl Number for F32 {
         scalar.as_float32().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_float32().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_float32()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {
@@ -1365,8 +1365,8 @@ impl Number for F64 {
         scalar.as_float64().cloned()
     }
 
-    fn try_downcast_column(col: &NumberColumn) -> Option<Buffer<Self>> {
-        col.as_float64().cloned()
+    fn try_downcast_column(col: &NumberColumn) -> Option<&Buffer<Self>> {
+        col.as_float64()
     }
 
     fn try_downcast_builder(builder: &mut NumberColumnBuilder) -> Option<&mut Vec<Self>> {

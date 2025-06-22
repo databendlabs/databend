@@ -14,12 +14,13 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_functions::scalars::strict_decimal_data_type;
 
 /// Buffer for concatenating input data blocks, to improve cache locality.
 pub struct ConcatBuffer {
-    pub buffer: Vec<DataBlock>,
-    pub num_rows: usize,
-    pub concat_threshold: usize,
+    buffer: Vec<DataBlock>,
+    num_rows: usize,
+    concat_threshold: usize,
 }
 
 impl ConcatBuffer {
@@ -50,13 +51,19 @@ impl ConcatBuffer {
     }
 
     fn concat(&mut self) -> Result<DataBlock> {
-        let data_block = DataBlock::concat(&self.buffer)?;
-        self.reset();
-        Ok(data_block)
-    }
-
-    fn reset(&mut self) {
-        self.buffer.clear();
+        // (null as decimal(10, 2)).to_column returns decimal128, fix it
+        let buffer = self
+            .buffer
+            .drain(..)
+            .map(|block| {
+                Ok(strict_decimal_data_type(
+                    block.consume_convert_to_full(),
+                    true,
+                )?)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let data_block = DataBlock::concat(&buffer)?;
         self.num_rows = 0;
+        Ok(data_block)
     }
 }

@@ -63,7 +63,7 @@ fn test_group_by_hash() -> Result<()> {
 
 #[test]
 fn test_group_by_hash_decimal() -> Result<()> {
-    let size_128 = DecimalSize::new_unchecked(10, 2);
+    let size_128 = DecimalSize::new_unchecked(20, 2);
     let size_256 = DecimalSize::new_unchecked(40, 2);
 
     let decimal_128_values = [123456789_i128, 987654_i128, 123456789_i128];

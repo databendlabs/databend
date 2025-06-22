@@ -347,6 +347,10 @@ impl<T: AccessType> NullableColumn<T> {
     pub fn memory_size(&self) -> usize {
         T::column_memory_size(&self.column) + self.validity.as_slice().0.len()
     }
+
+    pub fn destructure(self) -> (T::Column, Bitmap) {
+        (self.column, self.validity)
+    }
 }
 
 impl<T: ReturnType> NullableColumn<T> {
