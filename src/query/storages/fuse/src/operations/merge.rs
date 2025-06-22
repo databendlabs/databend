@@ -28,6 +28,7 @@ use super::merge_into::MatchedAggregator;
 use super::mutation::SegmentIndex;
 use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
+use crate::io::VectorIndexBuilder;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -97,6 +98,8 @@ impl FuseTable {
             &self.table_info.meta.schema,
         )?;
         let inverted_index_builders = create_inverted_index_builders(&self.table_info.meta);
+        let vector_index_builder =
+            VectorIndexBuilder::try_create(ctx.clone(), &self.table_info.meta, new_schema.clone());
 
         let block_builder = BlockBuilder {
             ctx: ctx.clone(),
@@ -109,6 +112,7 @@ impl FuseTable {
             inverted_index_builders,
             // todo
             virtual_column_builder: None,
+            vector_index_builder,
             table_meta_timestamps,
         };
         let aggregator = MatchedAggregator::create(
