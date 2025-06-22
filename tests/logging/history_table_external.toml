@@ -1,0 +1,24 @@
+[log.history]
+on = true
+
+[log.history.storage]
+type = "s3"
+
+[log.history.storage.s3]
+bucket = "testbucket"
+root = "history_table_test"
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+
+[[log.history.tables]]
+table_name = "query_history"
+
+[[log.history.tables]]
+table_name = "profile_history"
+
+[[log.history.tables]]
+table_name = "login_history"
+
+[[log.history.tables]]
+table_name = "access_history"

@@ -292,7 +292,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         println!("    structlog: {}", conf.log.structlog);
     }
     if conf.log.history.on && !conf.log.history.log_only {
-        GlobalHistoryLog::instance().initialized();
+        if let Err(e) = GlobalHistoryLog::instance().initialized().await {
+            if e.code() == ErrorCode::INVALID_CONFIG {
+                Err(e).with_context(make_error)?;
+            }
+        }
         println!("    system history tables: {}", conf.log.history);
     }
 

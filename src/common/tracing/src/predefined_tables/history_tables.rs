@@ -125,3 +125,13 @@ pub fn table_to_target() -> HashMap<String, String> {
     }
     table_to_target
 }
+
+pub fn get_all_history_table_names() -> Vec<String> {
+    let predefined_tables: PredefinedTables =
+        toml::from_str(TABLES_TOML).expect("Failed to parse toml");
+    predefined_tables
+        .tables
+        .into_iter()
+        .map(|t| t.name)
+        .collect()
+}
