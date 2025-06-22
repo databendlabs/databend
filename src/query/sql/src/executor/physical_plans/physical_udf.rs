@@ -55,7 +55,7 @@ impl Udf {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UdfFunctionDesc {
     pub name: String,
     pub func_name: String,

@@ -126,6 +126,7 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
+use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::ExprContext;
@@ -4671,6 +4672,8 @@ impl<'a> TypeChecker<'a> {
             arg_types,
             return_type,
             runtime_version,
+            imports,
+            packages,
         } = udf_definition;
 
         let language = language.parse()?;
@@ -4687,11 +4690,23 @@ impl<'a> TypeChecker<'a> {
 
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script(UDFScriptCode {
+
+        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &imports
+                .iter()
+                .map(|s| s.trim_start_matches('@').to_string())
+                .collect::<Vec<String>>(),
+        ))?;
+
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
-        });
+            imports_stage_info,
+            imports,
+            packages,
+        }));
 
         let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
@@ -4729,15 +4744,28 @@ impl<'a> TypeChecker<'a> {
             state_fields,
             return_type,
             runtime_version,
+            imports,
+            packages,
         } = udf_definition;
         let language = language.parse()?;
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script(UDFScriptCode {
+        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &imports
+                .iter()
+                .map(|s| s.trim_start_matches('@').to_string())
+                .collect::<Vec<String>>(),
+        ))?;
+
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
-        });
+            imports,
+            imports_stage_info,
+            packages,
+        }));
 
         let arguments = args
             .iter()

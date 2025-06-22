@@ -613,6 +613,9 @@ def finish(state):
             language: UDFLanguage::Python,
             code: code.into(),
             runtime_version: "3.12".to_string(),
+            imports: vec![],
+            imports_stage_info: vec![],
+            packages: vec![],
         };
         let name = "test".to_string();
         let display_name = "test".to_string();

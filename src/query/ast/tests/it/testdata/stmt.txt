@@ -25190,7 +25190,7 @@ def addone_py(i):
 return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python IMPORTS = () PACKAGES = () HANDLER = 'addone_py' AS $$
 def addone_py(i):
 return i+1
 $$
@@ -25213,6 +25213,8 @@ CreateUDF(
             ],
             return_type: Int32,
             code: "def addone_py(i):\nreturn i+1",
+            imports: [],
+            packages: [],
             handler: "addone_py",
             language: "python",
             runtime_version: "",
@@ -25225,10 +25227,12 @@ CreateUDF(
 create or replace function addone(int)
 returns int
 language python
+imports = ('@ss/abc')
+packages = ('numpy', 'pandas')
 handler = 'addone_py'
 as '@data/abc/a.py';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python IMPORTS = ('@ss/abc') PACKAGES = ('numpy','pandas') HANDLER = 'addone_py' AS $$
 @data/abc/a.py
 $$
 ---------- AST ------------
@@ -25250,6 +25254,13 @@ CreateUDF(
             ],
             return_type: Int32,
             code: "@data/abc/a.py",
+            imports: [
+                "@ss/abc",
+            ],
+            packages: [
+                "numpy",
+                "pandas",
+            ],
             handler: "addone_py",
             language: "python",
             runtime_version: "",
@@ -25340,7 +25351,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript IMPORTS = () PACKAGES = () AS $$
 some code
 $$
 ---------- AST ------------
@@ -25387,6 +25398,8 @@ CreateUDF(
                 },
             ],
             return_type: Boolean,
+            imports: [],
+            packages: [],
             code: "some code",
             language: "javascript",
             runtime_version: "",
@@ -25398,7 +25411,7 @@ CreateUDF(
 ---------- Input ----------
 ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
+ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript IMPORTS = () PACKAGES = () AS $$
 some code
 $$
 ---------- AST ------------
@@ -25431,6 +25444,8 @@ AlterUDF(
                 },
             ],
             return_type: Boolean,
+            imports: [],
+            packages: [],
             code: "some code",
             language: "javascript",
             runtime_version: "",
