@@ -552,7 +552,7 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
 }
 
 struct ReplaceRecluster {
-    pub tasks: Vec<ReclusterTask>,
+    tasks: Vec<ReclusterTask>,
 }
 
 impl PhysicalPlanReplacer for ReplaceRecluster {
@@ -565,7 +565,7 @@ impl PhysicalPlanReplacer for ReplaceRecluster {
 }
 
 struct ReplaceMutationSource {
-    pub partitions: Partitions,
+    partitions: Partitions,
 }
 
 impl PhysicalPlanReplacer for ReplaceMutationSource {
@@ -578,7 +578,7 @@ impl PhysicalPlanReplacer for ReplaceMutationSource {
 }
 
 struct ReplaceCompactBlock {
-    pub partitions: Partitions,
+    partitions: Partitions,
 }
 
 impl PhysicalPlanReplacer for ReplaceCompactBlock {
@@ -591,10 +591,10 @@ impl PhysicalPlanReplacer for ReplaceCompactBlock {
 }
 
 struct ReplaceReplaceInto {
-    pub partitions: Vec<(usize, Location)>,
+    partitions: Vec<(usize, Location)>,
     // for standalone mode, slot is None
-    pub slot: Option<BlockSlotDescription>,
-    pub need_insert: bool,
+    slot: Option<BlockSlotDescription>,
+    need_insert: bool,
 }
 
 impl PhysicalPlanReplacer for ReplaceReplaceInto {

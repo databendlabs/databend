@@ -320,24 +320,15 @@ impl ReclusterTableInterpreter {
         let total_rows = recluster_info.removed_statistics.row_count as usize;
         let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
 
-        // Determine rows per block based on data size and compression ratio
-        let rows_per_block =
-            block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
-
+        // Determine rows per block based on data size and compression ratio,
         // Calculate initial partition count based on data volume and block size
-        let mut total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
-
-        // Adjust number of partitions according to the block size thresholds
-        if total_partitions < block_thresholds.block_per_segment
-            && block_thresholds.check_perfect_segment(
-                block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
-                total_rows,
-                total_bytes,
-                total_compressed,
-            )
-        {
-            total_partitions = block_thresholds.block_per_segment;
-        }
+        let total_partitions = block_thresholds.calc_partitions_for_recluster(
+            total_rows,
+            total_bytes,
+            total_compressed,
+        );
+        let bytes_per_block = (total_bytes / total_partitions).max(1);
+        let rows_per_block = (total_rows / total_partitions).max(1);
 
         warn!(
             "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
@@ -473,6 +464,7 @@ impl ReclusterTableInterpreter {
             table_info: table_info.clone(),
             num_partitions: total_partitions,
             table_meta_timestamps,
+            bytes_per_block,
             rows_per_block,
         }));
 
@@ -613,7 +605,7 @@ impl ReclusterTableInterpreter {
         let database = &self.plan.database;
         let table = &self.plan.table;
         let settings = self.ctx.get_settings();
-        let sample_size = settings.get_hilbert_sample_size_per_block()?;
+        let sample_size = settings.get_recluster_sample_size_per_block()?;
 
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
@@ -634,7 +626,7 @@ impl ReclusterTableInterpreter {
                 "range_bound(1000, {sample_size})({cluster_key_str})"
             ));
 
-            hilbert_keys.push(format!("{table}.{cluster_key_str}, []"));
+            hilbert_keys.push(format!("{cluster_key_str}, []"));
         }
         let hilbert_keys_str = hilbert_keys.join(", ");
 

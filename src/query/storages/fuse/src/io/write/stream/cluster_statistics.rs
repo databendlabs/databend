@@ -20,9 +20,9 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
@@ -35,12 +35,13 @@ use crate::FuseTable;
 
 #[derive(Default, Clone)]
 pub struct ClusterStatisticsBuilder {
+    out_fields: Vec<DataField>,
+    level: i32,
     cluster_key_id: u32,
     cluster_key_index: Vec<usize>,
 
     extra_key_num: usize,
     operators: Vec<BlockOperator>,
-    func_ctx: FunctionContext,
 }
 
 impl ClusterStatisticsBuilder {
@@ -48,6 +49,7 @@ impl ClusterStatisticsBuilder {
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         source_schema: &TableSchemaRef,
+        level: Option<i32>,
     ) -> Result<Arc<Self>> {
         let cluster_type = table.cluster_type();
         if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
@@ -55,9 +57,9 @@ impl ClusterStatisticsBuilder {
         }
 
         let input_schema: Arc<DataSchema> = DataSchema::from(source_schema).into();
-        let input_filed_len = input_schema.fields.len();
+        let mut out_fields = input_schema.fields().clone();
 
-        let cluster_keys = table.linear_cluster_keys(ctx.clone());
+        let cluster_keys = table.linear_cluster_keys(ctx);
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
 
@@ -69,8 +71,11 @@ impl ClusterStatisticsBuilder {
             let index = match &expr {
                 Expr::ColumnRef(ColumnRef { id, .. }) => *id,
                 _ => {
+                    let cname = format!("{}", expr);
+                    out_fields.push(DataField::new(cname.as_str(), expr.data_type().clone()));
                     exprs.push(expr);
-                    let offset = input_filed_len + extra_key_num;
+
+                    let offset = out_fields.len() - 1;
                     extra_key_num += 1;
                     offset
                 }
@@ -90,14 +95,26 @@ impl ClusterStatisticsBuilder {
             cluster_key_id: table.cluster_key_meta.as_ref().unwrap().0,
             cluster_key_index,
             extra_key_num,
-            func_ctx: ctx.get_function_context()?,
             operators,
+            out_fields,
+            level: level.unwrap_or(0),
         }))
+    }
+
+    pub fn operators(&self) -> Vec<BlockOperator> {
+        self.operators.clone()
+    }
+
+    pub fn out_fields(&self) -> Vec<DataField> {
+        self.out_fields.clone()
+    }
+
+    pub fn cluster_key_index(&self) -> &Vec<usize> {
+        &self.cluster_key_index
     }
 }
 
 pub struct ClusterStatisticsState {
-    level: i32,
     mins: Vec<Scalar>,
     maxs: Vec<Scalar>,
 
@@ -107,29 +124,23 @@ pub struct ClusterStatisticsState {
 impl ClusterStatisticsState {
     pub fn new(builder: Arc<ClusterStatisticsBuilder>) -> Self {
         Self {
-            level: 0,
             mins: vec![],
             maxs: vec![],
             builder,
         }
     }
 
-    pub fn add_block(&mut self, input: DataBlock) -> Result<DataBlock> {
+    pub fn add_block(&mut self, mut input: DataBlock) -> Result<DataBlock> {
         if self.builder.cluster_key_index.is_empty() {
             return Ok(input);
         }
 
         let num_rows = input.num_rows();
-        let mut block = self
-            .builder
-            .operators
-            .iter()
-            .try_fold(input, |input, op| op.execute(&self.builder.func_ctx, input))?;
         let cols = self
             .builder
             .cluster_key_index
             .iter()
-            .map(|&i| block.get_by_offset(i).to_column())
+            .map(|&i| input.get_by_offset(i).to_column())
             .collect();
         let tuple = Column::Tuple(cols);
         let (min, _) = eval_aggr("min", vec![], &[tuple.clone()], num_rows, vec![])?;
@@ -138,8 +149,8 @@ impl ClusterStatisticsState {
         assert_eq!(max.len(), 1);
         self.mins.push(min.index(0).unwrap().to_owned());
         self.maxs.push(max.index(0).unwrap().to_owned());
-        block.pop_columns(self.builder.extra_key_num);
-        Ok(block)
+        input.pop_columns(self.builder.extra_key_num);
+        Ok(input)
     }
 
     pub fn finalize(self, perfect: bool) -> Result<Option<ClusterStatistics>> {
@@ -167,7 +178,7 @@ impl ClusterStatisticsState {
         let level = if min == max && perfect {
             -1
         } else {
-            self.level
+            self.builder.level
         };
 
         Ok(Some(ClusterStatistics {

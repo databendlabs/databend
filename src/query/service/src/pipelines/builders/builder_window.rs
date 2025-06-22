@@ -30,11 +30,11 @@ use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::FrameBound;
-use crate::pipelines::processors::transforms::SortStrategy;
+use crate::pipelines::processors::transforms::TransformPartitionCollect;
 use crate::pipelines::processors::transforms::TransformWindow;
-use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
+use crate::pipelines::processors::transforms::WindowPartitionStrategy;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
 use crate::pipelines::processors::transforms::WindowSortDesc;
 use crate::pipelines::PipelineBuilder;
@@ -203,14 +203,14 @@ impl PipelineBuilder {
 
         let processor_id = AtomicUsize::new(0);
         self.main_pipeline.add_transform(|input, output| {
-            let strategy = SortStrategy::try_create(
+            let strategy = WindowPartitionStrategy::try_create(
                 &settings,
                 sort_desc.clone(),
                 plan_schema.clone(),
                 have_order_col,
             )?;
             Ok(ProcessorPtr::create(Box::new(
-                TransformWindowPartitionCollect::new(
+                TransformPartitionCollect::new(
                     self.ctx.clone(),
                     input,
                     output,
