@@ -29,6 +29,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
+use crate::plans::CTEConsumer;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::DummyTableScan;
@@ -38,6 +39,7 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
+use crate::plans::MaterializedCTE;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::ProjectSet;
@@ -119,6 +121,8 @@ pub enum RelOp {
     MergeInto,
     CompactBlock,
     MutationSource,
+    MaterializedCTE,
+    CTEConsumer,
 
     // Pattern
     Pattern,
@@ -155,6 +159,8 @@ pub enum RelOperator {
     Mutation(Mutation),
     CompactBlock(OptimizeCompactBlock),
     MutationSource(MutationSource),
+    MaterializedCTE(MaterializedCTE),
+    CTEConsumer(CTEConsumer),
 }
 
 impl RelOperator {
@@ -172,6 +178,8 @@ impl RelOperator {
             | RelOperator::AsyncFunction(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
+            | RelOperator::MaterializedCTE(_)
+            | RelOperator::CTEConsumer(_)
             | RelOperator::CompactBlock(_) => false,
             RelOperator::Join(op) => op.has_subquery(),
             RelOperator::EvalScalar(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
@@ -219,6 +227,8 @@ impl RelOperator {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::CompactBlock(_)
+            | RelOperator::MaterializedCTE(_)
+            | RelOperator::CTEConsumer(_)
             | RelOperator::MutationSource(_) => (),
             RelOperator::Join(op) => {
                 for condition in &op.equi_conditions {
@@ -299,6 +309,8 @@ impl Operator for RelOperator {
             RelOperator::Mutation(rel_op) => rel_op.rel_op(),
             RelOperator::CompactBlock(rel_op) => rel_op.rel_op(),
             RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
+            RelOperator::MaterializedCTE(rel_op) => rel_op.rel_op(),
+            RelOperator::CTEConsumer(rel_op) => rel_op.rel_op(),
         }
     }
 
@@ -325,6 +337,8 @@ impl Operator for RelOperator {
             RelOperator::Mutation(rel_op) => rel_op.arity(),
             RelOperator::CompactBlock(rel_op) => rel_op.arity(),
             RelOperator::MutationSource(rel_op) => rel_op.arity(),
+            RelOperator::MaterializedCTE(rel_op) => rel_op.arity(),
+            RelOperator::CTEConsumer(rel_op) => rel_op.arity(),
         }
     }
 
@@ -351,6 +365,8 @@ impl Operator for RelOperator {
             RelOperator::Mutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::MaterializedCTE(rel_op) => rel_op.derive_relational_prop(rel_expr),
+            RelOperator::CTEConsumer(rel_op) => rel_op.derive_relational_prop(rel_expr),
         }
     }
 
@@ -377,6 +393,8 @@ impl Operator for RelOperator {
             RelOperator::Mutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_physical_prop(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::MaterializedCTE(rel_op) => rel_op.derive_physical_prop(rel_expr),
+            RelOperator::CTEConsumer(rel_op) => rel_op.derive_physical_prop(rel_expr),
         }
     }
 
@@ -403,6 +421,8 @@ impl Operator for RelOperator {
             RelOperator::Mutation(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::CompactBlock(rel_op) => rel_op.derive_stats(rel_expr),
             RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::MaterializedCTE(rel_op) => rel_op.derive_stats(rel_expr),
+            RelOperator::CTEConsumer(rel_op) => rel_op.derive_stats(rel_expr),
         }
     }
 
@@ -477,6 +497,12 @@ impl Operator for RelOperator {
             RelOperator::MutationSource(rel_op) => {
                 rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
             }
+            RelOperator::MaterializedCTE(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
+            RelOperator::CTEConsumer(rel_op) => {
+                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
+            }
         }
     }
 
@@ -548,6 +574,12 @@ impl Operator for RelOperator {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
             RelOperator::MutationSource(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::MaterializedCTE(rel_op) => {
+                rel_op.compute_required_prop_children(ctx, rel_expr, required)
+            }
+            RelOperator::CTEConsumer(rel_op) => {
                 rel_op.compute_required_prop_children(ctx, rel_expr, required)
             }
         }

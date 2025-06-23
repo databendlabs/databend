@@ -17,6 +17,8 @@ use databend_common_expression::DataSchemaRef;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::SExpr;
 
 /// This is a binary operator that executes its children in order (left to right), and returns the results of the right child
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -33,5 +35,24 @@ pub struct MaterializedCTE {
 impl MaterializedCTE {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.right.output_schema()
+    }
+}
+
+impl PhysicalPlanBuilder {
+    pub(crate) async fn build_materialized_cte(
+        &mut self,
+        s_expr: &SExpr,
+        materialized_cte: &crate::plans::MaterializedCTE,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let left_side = Box::new(self.build(s_expr.child(0)?, Default::default()).await?);
+        let right_side = Box::new(self.build(s_expr.child(1)?, Default::default()).await?);
+        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            plan_id: 0,
+            stat_info: Some(stat_info),
+            left: left_side,
+            right: right_side,
+            cte_name: materialized_cte.cte_name.clone(),
+        })))
     }
 }

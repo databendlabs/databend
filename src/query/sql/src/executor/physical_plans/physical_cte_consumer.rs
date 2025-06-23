@@ -16,6 +16,8 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanBuilder;
 
 /// This is a leaf operator that consumes the result of a materialized CTE.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -31,5 +33,20 @@ pub struct CTEConsumer {
 impl CTEConsumer {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.cte_schema.clone())
+    }
+}
+
+impl PhysicalPlanBuilder {
+    pub(crate) async fn build_cte_consumer(
+        &mut self,
+        cte_consumer: &crate::plans::CTEConsumer,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CTEConsumer(Box::new(CTEConsumer {
+            plan_id: 0,
+            stat_info: Some(stat_info),
+            cte_name: cte_consumer.cte_name.clone(),
+            cte_schema: Default::default(),
+        })))
     }
 }

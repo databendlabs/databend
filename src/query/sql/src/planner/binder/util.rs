@@ -53,6 +53,11 @@ impl Binder {
                 self.count_r_cte_scan(expr.child(1)?, cte_scan_names, cte_types)?;
             }
 
+            RelOperator::MaterializedCTE(_) => {
+                self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
+                self.count_r_cte_scan(expr.child(1)?, cte_scan_names, cte_types)?;
+            }
+
             RelOperator::ProjectSet(_)
             | RelOperator::AsyncFunction(_)
             | RelOperator::Udf(_)
@@ -72,6 +77,7 @@ impl Binder {
             | RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
+            | RelOperator::CTEConsumer(_)
             | RelOperator::CacheScan(_) => {}
             // Each recursive step in a recursive query generates new rows, and these rows are used for the next recursion.
             // Each step depends on the results of the previous step, so it's essential to ensure that the result set is built incrementally.

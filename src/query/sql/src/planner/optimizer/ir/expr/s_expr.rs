@@ -374,6 +374,8 @@ impl SExpr {
             | RelOperator::CacheScan(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
+            | RelOperator::MaterializedCTE(_)
+            | RelOperator::CTEConsumer(_)
             | RelOperator::CompactBlock(_) => {}
         };
         for child in &self.children {

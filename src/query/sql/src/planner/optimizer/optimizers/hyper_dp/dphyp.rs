@@ -270,6 +270,18 @@ impl DPhpyOptimizer {
         Ok((new_s_expr, left_res.1 && right_res.1))
     }
 
+    async fn process_materialized_cte_node(
+        &mut self,
+        s_expr: &SExpr,
+    ) -> Result<(Arc<SExpr>, bool)> {
+        let new_s_expr = self.new_children(s_expr).await?;
+        Ok((Arc::new(new_s_expr), true))
+    }
+
+    async fn process_cte_consumer_node(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
+        Ok((Arc::new(s_expr.clone()), true))
+    }
+
     /// Process a unary operator node
     async fn process_unary_node(
         &mut self,
@@ -331,6 +343,9 @@ impl DPhpyOptimizer {
             RelOperator::Scan(_) => self.process_scan_node(s_expr, join_relation),
 
             RelOperator::Join(_) => self.process_join_node(s_expr, join_conditions).await,
+
+            RelOperator::MaterializedCTE(_) => self.process_materialized_cte_node(s_expr).await,
+            RelOperator::CTEConsumer(_) => self.process_cte_consumer_node(s_expr).await,
 
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
