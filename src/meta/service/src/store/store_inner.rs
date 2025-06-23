@@ -48,12 +48,16 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaStartupError;
+use databend_common_metrics::count::Count;
 use futures::TryStreamExt;
 use log::debug;
 use log::error;
 use log::info;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 use tokio::time::sleep;
+
+use crate::metrics::raft_metrics;
+use crate::metrics::SnapshotBuilding;
 
 /// This is the inner store that implements the raft log storage API.
 pub struct RaftStoreInner {
@@ -187,6 +191,8 @@ impl RaftStoreInner {
 
         info!(id = self.id; "do_build_snapshot start");
 
+        let _guard = SnapshotBuilding::guard();
+
         let mut compactor = {
             let mut w = self.state_machine.write().await;
             w.freeze_writable();
@@ -238,6 +244,8 @@ impl RaftStoreInner {
                 tx.send(WriteEntry::Data(ent))
                     .await
                     .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
+
+                raft_metrics::storage::incr_snapshot_written_entries();
             }
 
             tx.send(WriteEntry::Finish(sys_data))

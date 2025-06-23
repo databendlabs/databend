@@ -19,11 +19,15 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
+use crate::plans::BoundColumnRef;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::ColumnBinding;
+use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::Visibility;
 
 /// Evaluate scalar expression
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -36,6 +40,31 @@ pub struct ScalarItem {
     pub scalar: ScalarExpr,
     // The index of the derived column in metadata
     pub index: IndexType,
+}
+
+impl ScalarItem {
+    pub fn column_binding(&self, name: String) -> Result<ColumnBinding> {
+        Ok(ColumnBindingBuilder::new(
+            name,
+            self.index,
+            Box::new(self.scalar.data_type()?),
+            Visibility::Visible,
+        )
+        .build())
+    }
+
+    pub fn bound_column_expr(&self, name: String) -> Result<ScalarExpr> {
+        if let ScalarExpr::BoundColumnRef(_) = &self.scalar {
+            return Ok(self.scalar.clone());
+        }
+
+        let column_binding = self.column_binding(name)?;
+        Ok(BoundColumnRef {
+            span: None,
+            column: column_binding,
+        }
+        .into())
+    }
 }
 
 impl EvalScalar {

@@ -19,6 +19,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
 
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
@@ -559,9 +560,17 @@ impl Settings {
         self.try_get_u64("acquire_lock_timeout")
     }
 
-    /// # Safety
-    pub unsafe fn get_enterprise_license(&self) -> Result<String> {
-        self.unchecked_try_get_string("enterprise_license")
+    pub fn get_enterprise_license(&self) -> String {
+        let license = unsafe {
+            self.unchecked_try_get_string("enterprise_license")
+                .unwrap_or_default()
+        };
+        if license.is_empty() {
+            // Try load license from embedded env if failed to load from settings.
+            DATABEND_ENTERPRISE_LICENSE_EMBEDDED.to_string()
+        } else {
+            license
+        }
     }
 
     /// # Safety
@@ -995,5 +1004,9 @@ impl Settings {
 
     pub fn get_max_aggregate_restore_worker(&self) -> Result<u64> {
         self.try_get_u64("max_aggregate_restore_worker")
+    }
+
+    pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
     }
 }

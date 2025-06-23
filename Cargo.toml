@@ -336,6 +336,7 @@ http = "1"
 humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
+lru = "0.12"
 
 ## in branch dev
 iceberg = { version = "0.4.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "d5cca1c15f240f3cb04e57569bce648933b1c79b", features = [
@@ -534,7 +535,7 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
-watcher = { version = "0.4.1" }
+watcher = { version = "0.4.2" }
 wiremock = "0.6"
 wkt = "0.11.1"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -642,7 +643,7 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "92eeb3b" }
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
@@ -660,5 +661,5 @@ sub-cache = { git = "https://github.com/databendlabs/sub-cache", tag = "v0.2.1" 
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
-watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.1" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.4.2" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

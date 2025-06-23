@@ -28,6 +28,12 @@ statement ok
 DROP TABLE IF EXISTS t2
 
 statement ok
+DROP DATABASE IF EXISTS test_show_indexes_0
+
+statement ok
+DROP DATABASE IF EXISTS test_show_indexes_1
+
+statement ok
 DROP AGGREGATING INDEX IF EXISTS idx1
 
 statement ok
@@ -81,3 +87,64 @@ USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_index_db
+
+statement ok
+CREATE DATABASE test_show_indexes_0
+
+statement ok
+USE test_show_indexes_0
+
+statement ok
+CREATE TABLE t1 (id int, title string, content string)
+
+statement ok
+CREATE INVERTED INDEX idx1 ON t1(content)
+
+statement ok
+CREATE NGRAM INDEX idx2 on t1(title)
+
+statement ok
+CREATE DATABASE test_show_indexes_1
+
+statement ok
+USE test_show_indexes_1
+
+statement ok
+CREATE TABLE t1 (id int, title string, content string)
+
+statement ok
+CREATE INVERTED INDEX idx1 ON t1(content)
+
+statement ok
+CREATE NGRAM INDEX idx2 on t1(title)
+
+query TTTT
+select name, type, database, table from system.indexes where database = 'test_show_indexes_0' or database = 'test_show_indexes_1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+idx1 INVERTED test_show_indexes_1 t1
+idx2 NGRAM test_show_indexes_1 t1
+
+
+query TTTT
+select name, type, database, table from system.indexes where table = 't1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+idx1 INVERTED test_show_indexes_1 t1
+idx2 NGRAM test_show_indexes_1 t1
+
+query TTTT
+select name, type, database, table from system.indexes where database = 'test_show_indexes_0' and table = 't1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+
+query TTTT
+select name, type, database, table from system.indexes where database = 'test_show_indexes_0' or table = 't1';
+----
+idx1 INVERTED test_show_indexes_0 t1
+idx2 NGRAM test_show_indexes_0 t1
+idx1 INVERTED test_show_indexes_1 t1
+idx2 NGRAM test_show_indexes_1 t1

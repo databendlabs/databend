@@ -59,6 +59,7 @@ use opendal::Operator;
 
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
+use crate::operator_cache::get_operator_cache;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 use crate::StorageHttpClient;
@@ -68,6 +69,15 @@ static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, S
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
+    let cache = get_operator_cache();
+    cache
+        .get_or_create(cfg)
+        .map_err(|e| Error::other(anyhow!("Failed to get or create operator: {}", e)))
+}
+
+/// init_operator_uncached will init an opendal operator without caching.
+/// This function creates a new operator every time it's called.
+pub(crate) fn init_operator_uncached(cfg: &StorageParams) -> Result<Operator> {
     let op = match &cfg {
         StorageParams::Azblob(cfg) => {
             build_operator(init_azblob_operator(cfg)?, cfg.network_config.as_ref())?

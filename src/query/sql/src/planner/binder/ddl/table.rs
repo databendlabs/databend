@@ -1050,6 +1050,22 @@ impl Binder {
                         }
                         ModifyColumnActionInPlan::SetDataType(field_and_comment)
                     }
+                    ModifyColumnAction::Comment(column_comments) => {
+                        let mut field_and_comment = Vec::with_capacity(column_comments.len());
+                        let schema = self
+                            .ctx
+                            .get_table(&catalog, &database, &table)
+                            .await?
+                            .schema();
+
+                        for column_comment in column_comments {
+                            let column = self.normalize_object_identifier(&column_comment.name);
+                            let field = schema.field_with_name(&column)?.clone();
+                            let comment = column_comment.comment.to_string();
+                            field_and_comment.push((field, comment));
+                        }
+                        ModifyColumnActionInPlan::Comment(field_and_comment)
+                    }
                 };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,

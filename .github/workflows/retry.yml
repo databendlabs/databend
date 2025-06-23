@@ -1,0 +1,43 @@
+name: Retry Failed Workflow
+
+on:
+  workflow_run:
+    workflows:
+      - Dev
+    types:
+      - completed
+
+permissions:
+  pull-requests: write
+  issues: write
+  actions: write
+  contents: read
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' || github.event.workflow_run.conclusion == 'cancelled' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Retry failed jobs
+        uses: actions/github-script@v7
+        env:
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const script = require('./.github/scripts/retry_failed_jobs.js');
+            await script({ github, context, core });
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        env:
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_URL: ${{ github.event.workflow_run.url }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const script = require('./.github/scripts/comment_retry_on_pr.js');
+            await script({ github, context, core });

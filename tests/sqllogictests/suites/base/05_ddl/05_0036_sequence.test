@@ -135,6 +135,9 @@ select uniq(nextval(seq)) from numbers(10000000);
 10000000
 
 statement ok
+select nextval(seq) % 3 as c from numbers(1000000) group by c order by c;
+
+statement ok
 DESC SEQUENCE SEQ
 
 statement ok

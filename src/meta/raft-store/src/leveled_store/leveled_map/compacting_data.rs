@@ -33,6 +33,7 @@ use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
+use crate::utils::add_cooperative_yielding;
 
 /// The data to compact.
 ///
@@ -140,6 +141,8 @@ impl<'a> CompactingData<'a> {
 
         // Filter out tombstone
         let normal_strm = coalesce.try_filter(|(_k, v)| future::ready(v.is_normal()));
+
+        let normal_strm = add_cooperative_yielding(normal_strm, "compact");
 
         Ok((sys_data, normal_strm.boxed()))
     }

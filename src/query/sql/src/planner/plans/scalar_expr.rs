@@ -35,6 +35,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
@@ -1101,17 +1102,22 @@ impl Display for UDFLanguage {
     }
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Educe, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[educe(Hash(bound = false))]
 pub struct UDFScriptCode {
     pub language: UDFLanguage,
     pub runtime_version: String,
+    #[educe(Hash(ignore))]
+    pub imports_stage_info: Vec<(StageInfo, String)>,
+    pub imports: Vec<String>,
+    pub packages: Vec<String>,
     pub code: Arc<Box<[u8]>>,
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, EnumAsInner)]
 pub enum UDFType {
     Server(String), // server_addr
-    Script(UDFScriptCode),
+    Script(Box<UDFScriptCode>),
 }
 
 impl UDFType {

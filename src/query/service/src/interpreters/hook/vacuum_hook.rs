@@ -61,7 +61,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
         }
 
         log::info!(
-            "Vacuum temporary files by hook, node files: {:?}",
+            "[VACUUM-HOOK] Cleaning temporary files from nodes: {:?}",
             node_files
         );
 
@@ -77,7 +77,7 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
                 .await;
 
             if let Err(cause) = &removed_files {
-                log::warn!("Vacuum temporary files has error: {:?}", cause);
+                log::warn!("[VACUUM-HOOK] Failed to clean temporary files: {:?}", cause);
             }
 
             Ok(())
@@ -96,7 +96,10 @@ pub fn hook_disk_temp_dir(query_ctx: &Arc<QueryContext>) -> Result<()> {
             .get_spilling_to_disk_vacuum_unknown_temp_dirs_limit()?;
         let deleted = mgr.drop_disk_spill_dir_unknown(limit)?;
         if !deleted.is_empty() {
-            warn!("Deleted residual temporary directories: {:?}", deleted)
+            warn!(
+                "[VACUUM-HOOK] Removed residual temporary directories: {:?}",
+                deleted
+            )
         }
     }
 

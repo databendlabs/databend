@@ -45,6 +45,8 @@ pub use operator::init_operator;
 pub use operator::DataOperator;
 pub use operator::OperatorRegistry;
 
+mod operator_cache;
+
 pub mod metrics;
 pub use crate::metrics::StorageMetrics;
 pub use crate::metrics::StorageMetricsLayer;

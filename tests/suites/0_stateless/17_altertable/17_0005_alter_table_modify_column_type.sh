@@ -53,7 +53,8 @@ echo "begin test not NULL column"
 echo "CREATE table test_modify_column_type.f(a int not null, b int not null)"  | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO test_modify_column_type.f values(1,1)"  | $BENDSQL_CLIENT_CONNECT
 echo "SELECT a,b from test_modify_column_type.f order by b"  | $BENDSQL_CLIENT_CONNECT
-echo "alter table test_modify_column_type.f modify column a VARCHAR(10) NOT NULL COMMENT 'new column'"  | $BENDSQL_CLIENT_CONNECT
+echo "alter table test_modify_column_type.f modify column a VARCHAR(10) NOT NULL" | $BENDSQL_CLIENT_CONNECT
+echo "alter table test_modify_column_type.f modify column a COMMENT 'new column'"  | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO test_modify_column_type.f (b) values(2)"  | $BENDSQL_CLIENT_CONNECT
 echo "INSERT INTO test_modify_column_type.f (a,b) values('',2)"  | $BENDSQL_CLIENT_CONNECT
 echo "SELECT a,b from test_modify_column_type.f order by b"  | $BENDSQL_CLIENT_CONNECT

@@ -105,6 +105,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'database'                        | 'system'             | 'clustering_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'dictionaries'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'database'                        | 'system'             | 'indexes'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'processes'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'streams'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'streams_terse'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -360,6 +361,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'syntax'                          | 'system'             | 'functions'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table'                           | 'system'             | 'clustering_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table'                           | 'system'             | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table'                           | 'system'             | 'indexes'                | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'table'                           | 'system'             | 'virtual_columns'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                   | 'information_schema' | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                   | 'information_schema' | 'key_column_usage'       | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |

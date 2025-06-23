@@ -1347,6 +1347,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_parallel_union_all", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable parallel UNION ALL, default is 0, 1 for enable",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
