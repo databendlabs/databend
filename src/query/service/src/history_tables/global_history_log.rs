@@ -85,12 +85,6 @@ impl GlobalHistoryLog {
         } else {
             None
         };
-        if cfg.log.history.log_only {
-            info!(
-                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
-            );
-            return Ok(());
-        }
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
@@ -115,6 +109,12 @@ impl GlobalHistoryLog {
             _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
+        if cfg.log.history.log_only {
+            info!(
+                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
+            );
+            return Ok(());
+        }
         runtime.spawn(async move {
             if let Err(e) = GlobalHistoryLog::instance().work().await {
                 error!("System history tables exit with {}", e);
@@ -131,9 +131,15 @@ impl GlobalHistoryLog {
     ///
     /// GlobalHistoryLog rely on other services, so we need to wait
     /// for all services to be initialized before starting the work.
-    pub async fn initialized(&self) -> Result<()> {
+    pub async fn initialized(&self, log_only: bool) -> Result<()> {
         let _ = should_reset(self.create_context().await?, &self.connection).await?;
         self.initialized.store(true, Ordering::SeqCst);
+        // if log_only is true, this node will not have reset operation,
+        // so we can set up operator here.
+        if log_only {
+            self.update_operator(true).await?;
+            return Ok(());
+        }
         Ok(())
     }
 
