@@ -44,7 +44,7 @@ async function analyzeJob(github, context, core, job) {
 
         core.info(`  Found ${failureAnnotations.length} failure-related annotations:`);
         failureAnnotations.forEach(annotation => {
-            core.info(`  [${annotation.annotation_level}] ${annotation.message}`);
+            core.info(`  > [${annotation.annotation_level}] ${annotation.message}`);
         });
 
         const allFailureAnnotationMessages = failureAnnotations.map(annotation => annotation.message).join('');
@@ -195,8 +195,6 @@ async function findRelatedPR(github, context, core, workflowRun) {
     } catch (error) {
         core.warning(`Failed to find PR by commit SHA ${workflowRun.head_sha}: ${error.message}`);
     }
-
-    core.info('No related PR found for this workflow run');
     return null;
 }
 
