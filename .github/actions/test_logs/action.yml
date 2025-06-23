@@ -5,6 +5,10 @@ runs:
   steps:
     - uses: ./.github/actions/setup_test
 
+    - name: Install lsof
+      shell: bash
+      run: sudo apt-get install -y lsof
+
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
       run: |
