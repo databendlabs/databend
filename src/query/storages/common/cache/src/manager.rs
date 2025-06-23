@@ -52,6 +52,16 @@ use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
+// Minimum threshold for table data disk cache size (in bytes).
+// Any configuration value less than this threshold will be ignored,
+// and table data disk cache will not be enabled.
+// This threshold exists to accommodate the current cloud platform logic:
+// When attempting to disable table data cache in compute node configurations, setting the disk
+// cache size to zero prevents the physical volume from being loaded, so this threshold provides
+// a better approach.
+// Eventually, we should refactor the compute node configurations instead, to make those options more sensible.
+const TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD: usize = 1024;
+
 #[derive(Default)]
 struct CacheSlot<T> {
     cache: RwLock<Option<T>>,
@@ -153,6 +163,11 @@ impl CacheManager {
                     .get() as u32,
             ) * 5
         };
+
+        info!(
+            "[CacheManager] On-disk cache population queue size: {}",
+            on_disk_cache_queue_size
+        );
 
         // setup table data cache
         let column_data_cache = {
@@ -648,7 +663,10 @@ impl CacheManager {
         sync_data: bool,
         ee_mode: bool,
     ) -> Result<Option<DiskCacheAccessor>> {
-        if disk_cache_bytes_size == 0 || !ee_mode {
+        if disk_cache_bytes_size <= TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD || !ee_mode {
+            info!(
+                "[CacheManager] On-disk cache {cache_name} disabled, size {disk_cache_bytes_size}, threshold {TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD}, ee mode {ee_mode}"
+            );
             Ok(None)
         } else {
             let cache_holder = DiskCacheBuilder::try_build_disk_cache(
