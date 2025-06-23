@@ -117,7 +117,7 @@ module.exports = async ({ github, context, core }) => {
     try {
         core.info(`Retrying all failed jobs in workflow run: ${runID}`);
 
-        await github.rest.actions.reRunWorkflow({
+        await github.rest.actions.reRunWorkflowFailedJobs({
             owner: context.repo.owner,
             repo: context.repo.repo,
             run_id: runID
