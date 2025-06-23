@@ -90,11 +90,10 @@ pub async fn get_alter_table_sql(
 ///
 /// Reset Condition:
 /// 1. Internal -> External: If the internal table exist, and config a new connection, reset the table.
-/// 2. External -> Internal: If the external table exist and new config connection is None, means we convert it back to internal table, need manually drop the table and stage first.
+/// 2. External -> Internal: If the external table exist and new config connection is None, means old config node restarted, do not reset the table.
 /// 3. External1 -> External2: If the external table exist and new config connection is different from the current one, need manually drop the table and stage first.
 ///
-/// Note: We only support converting from internal to external. For other cases, we will return a config error.
-/// It is used to prevent cyclic conversion.
+/// Note: We only support converting from internal to external.
 pub async fn should_reset(
     context: Arc<QueryContext>,
     connection: &Option<ExternalStorageConnection>,
@@ -121,13 +120,12 @@ pub async fn should_reset(
     }
 
     // External -> Internal
-    // return error to prevent cyclic conversion
     if current_storage_params.is_some() && connection.is_none() {
         info!(
             "[HISTORY-TABLES] Converting external table to internal table, resetting: current {:?} vs new None",
             current_storage_params
         );
-        return Err(ErrorCode::InvalidConfig("[HISTORY-TABLES] Cannot convert external history table to internal table, please drop the tables and stage first."));
+        return Ok(false);
     }
 
     if let Some(c) = connection {
