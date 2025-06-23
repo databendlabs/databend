@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -159,7 +159,7 @@ where
                 init,
             ))
         }
-        TableDataType::Decimal(t) if t.precision() > MAX_DECIMAL128_PRECISION => {
+        TableDataType::Decimal(t) if t.precision() > i128::MAX_PRECISION => {
             init.push(InitNested::Primitive(is_nullable));
             DynIter::new(DecimalNestedIter::<
                 _,

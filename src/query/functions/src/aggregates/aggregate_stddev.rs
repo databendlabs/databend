@@ -20,16 +20,18 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal;
-use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::types::decimal::Decimal256Type;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumnBuilderMut;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataKind;
+use databend_common_expression::types::DecimalType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
@@ -214,27 +216,20 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 NullableType<Float64Type>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let func = AggregateUnaryFunction::<
-                DecimalNumberAggregateStddevState<TYPE>,
-                Decimal128Type,
-                NullableType<Float64Type>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
-            Ok(Arc::new(func))
-        }
         DataType::Decimal(s) => {
-            let func = AggregateUnaryFunction::<
-                DecimalNumberAggregateStddevState<TYPE>,
-                Decimal256Type,
-                NullableType<Float64Type>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
-            Ok(Arc::new(func))
+            with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let func = AggregateUnaryFunction::<
+                        DecimalNumberAggregateStddevState<TYPE>,
+                        DecimalType<DECIMAL>,
+                        NullableType<Float64Type>,
+                    >::try_create(
+                        display_name, return_type, params, arguments[0].clone()
+                    )
+                    .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
+                    Ok(Arc::new(func))
+                }
+            })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",

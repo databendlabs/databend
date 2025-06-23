@@ -239,7 +239,7 @@ impl Payload {
                 NumberDataType::NUM_TYPE =>
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
-            DataType::Decimal(size) => match size.best_type().data_kind() {
+            DataType::Decimal(size) => match size.data_kind() {
                 DecimalDataKind::Decimal64 => {
                     self.flush_decimal_column::<i64>(col_offset, state, size)
                 }

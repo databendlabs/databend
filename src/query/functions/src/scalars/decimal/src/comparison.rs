@@ -106,7 +106,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                                 ctx,
                                 d[0].clone(),
                                 DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-                                    MAX_DECIMAL256_PRECISION,
+                                    i256::MAX_PRECISION,
                                     s1,
                                 )),
                             )
@@ -129,7 +129,7 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                                 ctx,
                                 d[1].clone(),
                                 DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-                                    MAX_DECIMAL256_PRECISION,
+                                    i256::MAX_PRECISION,
                                     s2,
                                 )),
                             )
@@ -172,7 +172,7 @@ fn op_decimal<Op: CmpOp>(
     let (b_type, _) = DecimalDataType::from_value(b).unwrap();
     let size_calc = calc_size(&a_type.size(), &b_type.size());
 
-    with_decimal_mapped_type!(|T| match size_calc.best_type() {
+    with_decimal_mapped_type!(|T| match DecimalDataType::from(size_calc) {
         DecimalDataType::T(_) => {
             with_decimal_mapped_type!(|A| match a_type {
                 DecimalDataType::A(_) => {
@@ -202,12 +202,12 @@ fn calc_size(a: &DecimalSize, b: &DecimalSize) -> DecimalSize {
     let precision = a.leading_digits().max(b.leading_digits()) + scale;
 
     // if the args both are Decimal128, we need to clamp the precision to 38
-    let precision =
-        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
-            precision.min(MAX_DECIMAL128_PRECISION)
-        } else {
-            precision.min(MAX_DECIMAL256_PRECISION)
-        };
+    let precision = if a.precision() <= i128::MAX_PRECISION && b.precision() <= i128::MAX_PRECISION
+    {
+        precision.min(i128::MAX_PRECISION)
+    } else {
+        precision.min(i256::MAX_PRECISION)
+    };
 
     DecimalSize::new(precision, scale).unwrap()
 }

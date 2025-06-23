@@ -18,8 +18,6 @@ use apache_avro::types::Value;
 use apache_avro::Schema;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::Decimal;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
-use databend_common_expression::types::MAX_DECIMAL256_PRECISION;
 use num_bigint::BigInt;
 
 pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::Value<'a>, String> {
@@ -120,8 +118,8 @@ fn convert_decimal(
     scale: usize,
     big_int: BigInt,
 ) -> Result<jsonb::Number, String> {
-    let max_128 = MAX_DECIMAL128_PRECISION as usize;
-    let max_256 = MAX_DECIMAL256_PRECISION as usize;
+    let max_128 = i128::MAX_PRECISION as usize;
+    let max_256 = i256::MAX_PRECISION as usize;
     if precision <= max_128 {
         Ok(jsonb::Number::Decimal128(jsonb::Decimal128 {
             precision: precision as u8,

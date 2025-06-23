@@ -107,7 +107,7 @@ impl RowConverter {
                         lengths.iter_mut().for_each(|x| *x += NUM_TYPE::ENCODED_LEN)
                     }
                 }),
-                DataType::Decimal(size) => match size.best_type().data_kind() {
+                DataType::Decimal(size) => match size.data_kind() {
                     DecimalDataKind::Decimal64 => {
                         lengths.iter_mut().for_each(|x| *x += i64::ENCODED_LEN)
                     }
@@ -252,7 +252,7 @@ fn encode_column(out: &mut BinaryColumnBuilder, column: &Column, asc: bool, null
         Column::Decimal(col) => {
             with_decimal_mapped_type!(|F| match col {
                 DecimalColumn::F(buffer, size) => {
-                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
                         DecimalDataKind::T => {
                             let iter = DecimalView::<F, T>::iter_column(&buffer);
                             fixed::encode(out, iter, validity, asc, nulls_first)

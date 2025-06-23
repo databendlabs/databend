@@ -267,9 +267,10 @@ impl DecimalSize {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.precision < 1 || self.precision > MAX_DECIMAL256_PRECISION {
+        if self.precision < 1 || self.precision > i256::MAX_PRECISION {
             return Err(ErrorCode::Overflow(format!(
-                "Decimal precision must be between 1 and {MAX_DECIMAL256_PRECISION}",
+                "Decimal precision must be between 1 and {}",
+                i256::MAX_PRECISION
             )));
         }
 
@@ -300,25 +301,15 @@ impl DecimalSize {
     }
 
     pub fn can_carried_by_64(&self) -> bool {
-        self.precision <= MAX_DECIMAL64_PRECISION
+        self.precision <= i64::MAX_PRECISION
     }
 
     pub fn can_carried_by_128(&self) -> bool {
-        self.precision <= MAX_DECIMAL128_PRECISION
+        self.precision <= i128::MAX_PRECISION
     }
 
     pub fn data_kind(&self) -> DecimalDataKind {
         (*self).into()
-    }
-
-    pub fn best_type(&self) -> DecimalDataType {
-        if self.can_carried_by_64() {
-            DecimalDataType::Decimal64(*self)
-        } else if self.can_carried_by_128() {
-            DecimalDataType::Decimal128(*self)
-        } else {
-            DecimalDataType::Decimal256(*self)
-        }
     }
 }
 
@@ -385,6 +376,7 @@ pub trait Decimal:
         }
     }
 
+    const MAX_PRECISION: u8;
     fn default_decimal_size() -> DecimalSize;
 
     fn from_float(value: f64) -> Self;
@@ -465,7 +457,7 @@ impl Decimal for i64 {
     }
 
     fn e(n: u8) -> Self {
-        const L: usize = MAX_DECIMAL64_PRECISION as usize + 1;
+        const L: usize = i64::MAX_PRECISION as usize + 1;
         const TAB: [i64; L] = {
             const fn gen() -> [i64; L] {
                 let mut arr = [0; L];
@@ -562,9 +554,10 @@ impl Decimal for i64 {
         Self::e(precision) - 1
     }
 
+    const MAX_PRECISION: u8 = 18;
     fn default_decimal_size() -> DecimalSize {
         DecimalSize {
-            precision: 18,
+            precision: Self::MAX_PRECISION,
             scale: 0,
         }
     }
@@ -724,7 +717,7 @@ impl Decimal for i128 {
     }
 
     fn e(n: u8) -> Self {
-        const L: usize = MAX_DECIMAL128_PRECISION as usize + 1;
+        const L: usize = i128::MAX_PRECISION as usize + 1;
         const TAB: [i128; L] = {
             const fn gen() -> [i128; L] {
                 let mut arr = [0; L];
@@ -857,9 +850,10 @@ impl Decimal for i128 {
         MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
+    const MAX_PRECISION: u8 = 38;
     fn default_decimal_size() -> DecimalSize {
         DecimalSize {
-            precision: MAX_DECIMAL128_PRECISION,
+            precision: Self::MAX_PRECISION,
             scale: 0,
         }
     }
@@ -1051,7 +1045,7 @@ impl Decimal for i256 {
     fn e(n: u8) -> Self {
         match n {
             0 => i256::ONE,
-            1..=MAX_DECIMAL256_PRECISION => {
+            1..=i256::MAX_PRECISION => {
                 MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[n as usize - 1] + i256::ONE
             }
             _ => i256::from(10).pow(n as u32),
@@ -1133,7 +1127,7 @@ impl Decimal for i256 {
             }
         };
 
-        if mul_scale >= MAX_DECIMAL256_PRECISION as _ {
+        if mul_scale >= i256::MAX_PRECISION as _ {
             return fallback();
         }
 
@@ -1157,9 +1151,10 @@ impl Decimal for i256 {
         MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
+    const MAX_PRECISION: u8 = 76;
     fn default_decimal_size() -> DecimalSize {
         DecimalSize {
-            precision: MAX_DECIMAL256_PRECISION,
+            precision: i256::MAX_PRECISION,
             scale: 0,
         }
     }
@@ -1312,10 +1307,6 @@ impl Decimal for i256 {
     }
 }
 
-pub const MAX_DECIMAL64_PRECISION: u8 = 18;
-pub const MAX_DECIMAL128_PRECISION: u8 = 38;
-pub const MAX_DECIMAL256_PRECISION: u8 = 76;
-
 #[derive(
     Debug,
     Clone,
@@ -1393,9 +1384,9 @@ impl DecimalDataType {
 
     pub fn max_precision(&self) -> u8 {
         match self {
-            DecimalDataType::Decimal64(_) => MAX_DECIMAL64_PRECISION,
-            DecimalDataType::Decimal128(_) => MAX_DECIMAL128_PRECISION,
-            DecimalDataType::Decimal256(_) => MAX_DECIMAL256_PRECISION,
+            DecimalDataType::Decimal64(_) => i64::MAX_PRECISION,
+            DecimalDataType::Decimal128(_) => i128::MAX_PRECISION,
+            DecimalDataType::Decimal256(_) => i256::MAX_PRECISION,
         }
     }
 
@@ -1436,11 +1427,13 @@ pub enum DecimalDataKind {
 
 impl From<DecimalSize> for DecimalDataKind {
     fn from(size: DecimalSize) -> Self {
-        if size.can_carried_by_128() {
-            DecimalDataKind::Decimal128
-        } else {
-            DecimalDataKind::Decimal256
+        if size.can_carried_by_64() {
+            return DecimalDataKind::Decimal64;
         }
+        if size.can_carried_by_128() {
+            return DecimalDataKind::Decimal128;
+        }
+        DecimalDataKind::Decimal256
     }
 }
 
@@ -1571,7 +1564,7 @@ impl DecimalColumn {
                     precision: *p,
                     scale: *s as u8,
                 };
-                Ok(Self::Decimal128(buffer.into(), decimal_size))
+                Ok(Self::Decimal128(buffer.into(), decimal_size).strict_decimal_data_type())
             }
             arrow_schema::DataType::Decimal256(p, s) => {
                 let decimal_size = DecimalSize {
@@ -1599,39 +1592,36 @@ impl DecimalColumn {
     }
 
     pub fn strict_decimal_data_type(self) -> Self {
-        match &self {
-            DecimalColumn::Decimal64(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
-                    let builder = Decimal64As128Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
-                }
-                DecimalDataKind::Decimal256 => {
-                    let builder = Decimal64As256Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
-                }
-            },
-            DecimalColumn::Decimal128(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => self,
-                DecimalDataKind::Decimal256 => {
-                    let builder = Decimal128As256Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal256(Decimal256Type::build_column(builder), *size)
-                }
-            },
-            DecimalColumn::Decimal256(buffer, size) => match size.data_kind() {
-                DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
-                    let builder = Decimal256As128Type::iter_column(buffer).collect::<Vec<_>>();
-                    DecimalColumn::Decimal128(Decimal128Type::build_column(builder), *size)
-                }
-                DecimalDataKind::Decimal256 => self,
-            },
+        if self.is_strict_decimal_data_type() {
+            return self;
         }
+
+        with_decimal_type!(|FROM| match self {
+            DecimalColumn::FROM(buffer, size) => {
+                with_decimal_type!(|TO| match size.data_kind() {
+                    DecimalDataKind::TO => {
+                        let builder = DecimalView::iter_column(&buffer).collect::<Vec<_>>();
+                        DecimalColumn::TO(DecimalType::build_column(builder), size)
+                    }
+                })
+            }
+        })
     }
 
     pub fn is_strict_decimal_data_type(&self) -> bool {
         match self {
+            DecimalColumn::Decimal64(_, size) if size.can_carried_by_64() => true,
             DecimalColumn::Decimal128(_, size) if size.can_carried_by_128() => true,
             DecimalColumn::Decimal256(_, size) if !size.can_carried_by_128() => true,
             _ => false,
+        }
+    }
+
+    pub fn data_kind(&self) -> DecimalDataKind {
+        match self {
+            DecimalColumn::Decimal64(_, _) => DecimalDataKind::Decimal64,
+            DecimalColumn::Decimal128(_, _) => DecimalDataKind::Decimal128,
+            DecimalColumn::Decimal256(_, _) => DecimalDataKind::Decimal256,
         }
     }
 }

@@ -103,13 +103,12 @@ impl ArithmeticOp {
         };
 
         // if the args both are Decimal128, we need to clamp the precision to 38
-        let precision = if a.precision() <= MAX_DECIMAL128_PRECISION
-            && b.precision() <= MAX_DECIMAL128_PRECISION
-        {
-            precision.min(MAX_DECIMAL128_PRECISION)
-        } else {
-            precision.min(MAX_DECIMAL256_PRECISION)
-        };
+        let precision =
+            if a.precision() <= i128::MAX_PRECISION && b.precision() <= i128::MAX_PRECISION {
+                precision.min(i128::MAX_PRECISION)
+            } else {
+                precision.min(i256::MAX_PRECISION)
+            };
 
         let result_type = DecimalSize::new(precision, scale).ok()?;
         match self {
@@ -145,7 +144,7 @@ fn convert_to_decimal(
         let (value_decimal, value_type) = decimal_to_decimal_fast(value, ctx, size);
         ((value_decimal, size), value_type)
     } else {
-        let value_type = size.best_type();
+        let value_type = DecimalDataType::from(size);
         let value_decimal = other_to_decimal(value, None, ctx, data_type, value_type);
         ((value_decimal, size), value_type)
     }
@@ -161,7 +160,7 @@ fn op_decimal(
     let (a, a_type) = convert_to_decimal(a.0, a.1, a.2, ctx);
     let (b, b_type) = convert_to_decimal(b.0, b.1, b.2, ctx);
 
-    with_decimal_mapped_type!(|T| match result_type.size().best_type() {
+    with_decimal_mapped_type!(|T| match DecimalDataType::from(result_type.size()) {
         DecimalDataType::T(_) => {
             with_decimal_mapped_type!(|A| match a_type {
                 DecimalDataType::A(_) => {
@@ -200,7 +199,7 @@ where
     L: for<'a> AccessType<ScalarRef<'a> = T>,
     R: for<'a> AccessType<ScalarRef<'a> = T>,
 {
-    let overflow = return_size.precision() == T::default_decimal_size().precision();
+    let overflow = return_size.precision() == T::MAX_PRECISION;
 
     let a = a.try_downcast().unwrap();
     let b = b.try_downcast().unwrap();

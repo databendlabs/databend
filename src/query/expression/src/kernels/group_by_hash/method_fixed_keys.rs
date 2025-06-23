@@ -483,7 +483,7 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
             }
         },
         Column::Decimal(decimal) => {
-            with_decimal_mapped_type!(|TO| match decimal.size().best_type().data_kind() {
+            with_decimal_mapped_type!(|TO| match decimal.size().data_kind() {
                 DecimalDataKind::TO => {
                     with_decimal_mapped_type!(|FROM| match decimal {
                         DecimalColumn::FROM(buffer, _) => {

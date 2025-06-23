@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -72,7 +72,7 @@ pub fn read_nested_column<R: NativeReadBuf>(
             )?
         }
         ),
-        Decimal(decimal) if decimal.precision() > MAX_DECIMAL128_PRECISION => {
+        Decimal(decimal) if decimal.precision() > i128::MAX_PRECISION => {
             init.push(InitNested::Primitive(is_nullable));
             read_nested_decimal::<
                 databend_common_column::types::i256,

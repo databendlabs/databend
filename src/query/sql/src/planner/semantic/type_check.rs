@@ -70,11 +70,10 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
-use databend_common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
-use databend_common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::vector::VectorDataType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
@@ -1960,11 +1959,11 @@ impl<'a> TypeChecker<'a> {
                 }
             }
             DataType::Decimal(s) if s.can_carried_by_128() => {
-                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
+                let decimal_size = DecimalSize::new_unchecked(i128::MAX_PRECISION, s.scale());
                 DataType::Decimal(decimal_size)
             }
             DataType::Decimal(s) => {
-                let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
+                let decimal_size = DecimalSize::new_unchecked(i256::MAX_PRECISION, s.scale());
                 DataType::Decimal(decimal_size)
             }
             DataType::Null => DataType::Null,
@@ -2997,7 +2996,7 @@ impl<'a> TypeChecker<'a> {
                         params[0]
                     )));
                 };
-                if precision < 0 || precision > MAX_DECIMAL256_PRECISION as i64 {
+                if precision < 0 || precision > i256::MAX_PRECISION as i64 {
                     return Err(ErrorCode::SemanticError(format!(
                         "Invalid value `{precision}` for `{func_name}` precision parameter"
                     )));

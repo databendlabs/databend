@@ -14,8 +14,8 @@
 
 use std::io::BufRead;
 
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 
@@ -131,7 +131,7 @@ fn stat_freq_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBo
             }))
         }
         TableDataType::Decimal(decimal_size) => {
-            let top_value_size = if decimal_size.precision() > MAX_DECIMAL128_PRECISION {
+            let top_value_size = if decimal_size.precision() > i128::MAX_PRECISION {
                 32
             } else {
                 16

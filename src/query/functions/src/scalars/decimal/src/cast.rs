@@ -190,7 +190,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         let precision = if !params.is_empty() {
             params[0].get_i64()? as u8
         } else {
-            MAX_DECIMAL128_PRECISION
+            i128::MAX_PRECISION
         };
         let scale = if params.len() > 1 {
             params[1].get_i64()? as u8
@@ -1035,7 +1035,7 @@ pub fn decimal_to_decimal_fast(
 ) -> (Value<AnyType>, DecimalDataType) {
     let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
     let dest_type = if from_type.scale() != size.scale() {
-        size.best_type()
+        size.into()
     } else {
         from_type.data_kind().with_size(size)
     };
@@ -1153,7 +1153,7 @@ pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock
 
 fn strict_decimal_data_type_value(
     value: Value<AnyType>,
-    best: bool,
+    _best: bool,
 ) -> Result<Value<AnyType>, String> {
     use DecimalDataType::*;
     // todo array map
@@ -1174,11 +1174,7 @@ fn strict_decimal_data_type_value(
     };
 
     let size = from_type.size();
-    let to_kind = if best {
-        size.best_type().data_kind()
-    } else {
-        size.data_kind()
-    };
+    let to_kind = size.data_kind();
 
     if from_type.data_kind() == to_kind {
         return Ok(value);
