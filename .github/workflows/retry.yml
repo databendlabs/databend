@@ -26,7 +26,6 @@ jobs:
         env:
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
           WORKFLOW_RUN_URL: ${{ github.event.workflow_run.html_url }}
-          PULL_REQUESTS: ${{ github.event.workflow_run.pull_requests }}
         with:
           github-token: ${{ github.token }}
           script: |
