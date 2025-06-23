@@ -66,6 +66,8 @@ echo "Running test queries to test inner history tables"
 
 response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select * from system_history.log_history where query_id = '${drop_query_id}'\"}")
 
+# **Internal -> External**: should reset
+
 echo "Add a node with external history table enabled"
 
 CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-3.toml"
@@ -79,6 +81,7 @@ echo "Waiting on node-3..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9093
 
 sleep 15
+
 
 echo "Running test queries to test external history tables"
 ./tests/logging/check_logs_table.sh
@@ -108,4 +111,39 @@ else
     echo "✓ response2 data field is empty as expected"
 fi
 
-echo "All validation checks passed!"
+# **External -> Internal**: should not reset
+
+echo "Kill databend-query-1"
+PORT=9091
+
+# Find the PID listening on the specified port
+PID=$(lsof -t -i :$PORT)
+
+# Check if a PID was found
+if [ -z "$PID" ]; then
+  echo "No process found listening on port $PORT."
+else
+  echo "Found process with PID $PID listening on port $PORT. Killing it..."
+  kill -9 "$PID"
+  echo "Process $PID killed."
+fi
+
+echo 'Restart databend-query node-1'
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+
+echo "Waiting on node-1..."
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
+
+response3=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"select count(*) from system_history.query_history;\"}")
+response3_data=$(echo "$response3" | jq -r '.data')
+
+if [ "$response3_data" = "[]" ] || [ "$response3_data" = "null" ] || [ "$response3_data" = "0" ]; then
+    echo "ERROR: response3 data field is empty or 0 but should contain data"
+    echo "response3: $response3"
+    exit 1
+else
+    echo "✓ response3 data field contains data as expected"
+fi
+
+echo "Running test queries to test external history tables"
+./tests/logging/check_logs_table.sh
