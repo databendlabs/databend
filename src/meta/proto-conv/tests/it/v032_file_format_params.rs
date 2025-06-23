@@ -141,6 +141,7 @@ fn test_decode_v32_parquet_file_format_params() -> anyhow::Result<()> {
             compression: StageFileCompression::Zstd,
             missing_field_as: Default::default(),
             null_if: vec![],
+            use_logic_type: true,
         })
     };
     common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;

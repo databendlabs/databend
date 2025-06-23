@@ -160,6 +160,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (128, "2025-05-22: Add: Storage Network config"),
     (129, "2025-05-30: Add: New DataType Vector"),
     (130, "2025-06-19: Add: New UDF imports and packages in udf definition"),
+    (131, "2025-06-24: Add: add use_logic_type in ParquetFileFormatParam and AvroFileFormatParam"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

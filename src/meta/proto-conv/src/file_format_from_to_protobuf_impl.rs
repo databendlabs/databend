@@ -348,6 +348,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
             compression,
             p.missing_field_as.as_deref(),
             p.null_if,
+            p.use_logic_type,
         )
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
@@ -361,6 +362,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
+            use_logic_type: Some(self.use_logic_type),
         })
     }
 }
@@ -603,6 +605,7 @@ impl FromToProto for mt::principal::AvroFileFormatParams {
             compression,
             p.missing_field_as.as_deref(),
             p.null_if,
+            p.use_logic_type,
         )
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
@@ -616,6 +619,7 @@ impl FromToProto for mt::principal::AvroFileFormatParams {
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
+            use_logic_type: Some(self.use_logic_type),
         })
     }
 }
