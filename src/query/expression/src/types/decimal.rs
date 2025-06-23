@@ -1609,12 +1609,7 @@ impl DecimalColumn {
     }
 
     pub fn is_strict_decimal_data_type(&self) -> bool {
-        match self {
-            DecimalColumn::Decimal64(_, size) if size.can_carried_by_64() => true,
-            DecimalColumn::Decimal128(_, size) if size.can_carried_by_128() => true,
-            DecimalColumn::Decimal256(_, size) if !size.can_carried_by_128() => true,
-            _ => false,
-        }
+        self.data_kind() == self.size().data_kind()
     }
 
     pub fn data_kind(&self) -> DecimalDataKind {
