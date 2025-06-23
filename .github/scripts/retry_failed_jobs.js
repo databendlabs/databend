@@ -175,6 +175,7 @@ async function getWorkflowInfo(github, context, core, runID) {
 
 async function findRelatedPR(github, context, core, workflowRun) {
     // Try to find PR by commit SHA
+    core.info(`Finding related PR for commit SHA: ${workflowRun.head_sha}`);
     try {
         const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
             owner: context.repo.owner,
