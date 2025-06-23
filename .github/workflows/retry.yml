@@ -25,19 +25,9 @@ jobs:
         uses: actions/github-script@v7
         env:
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const script = require('./.github/scripts/retry_failed_jobs.js');
-            await script({ github, context, core });
-
-      - name: Comment on PR
-        uses: actions/github-script@v7
-        env:
-          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
           WORKFLOW_RUN_URL: ${{ github.event.workflow_run.url }}
         with:
           github-token: ${{ github.token }}
           script: |
-            const script = require('./.github/scripts/comment_retry_on_pr.js');
+            const script = require('./.github/scripts/retry_failed_jobs.js');
             await script({ github, context, core });
