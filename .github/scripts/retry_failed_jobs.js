@@ -174,31 +174,26 @@ async function getWorkflowInfo(github, context, core, runID) {
 }
 
 async function findRelatedPR(github, context, core, workflowRun) {
-    // Try to find PR from context first (most reliable)
-    if (context.payload.pull_request) {
-        core.info(`Found PR from context: #${context.payload.pull_request.number}`);
-        return context.payload.pull_request;
-    }
+    // Try to find PR by commit SHA
+    core.info(`Finding related PR for commit SHA: ${workflowRun.head_sha}`);
+    try {
+        const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: workflowRun.head_sha
+        });
 
-    // If not a PR event, try to find PR by branch
-    if (workflowRun.head_branch) {
-        try {
-            const { data: pulls } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head: `${context.repo.owner}:${workflowRun.head_branch}`,
-                state: 'open',
-                sort: 'updated',
-                direction: 'desc'
-            });
-
-            if (pulls.length > 0) {
-                core.info(`Found PR from branch ${workflowRun.head_branch}: #${pulls[0].number}`);
-                return pulls[0];
+        if (pulls.length > 0) {
+            // Filter for open PRs and get the most recently updated one
+            const openPulls = pulls.filter(pr => pr.state === 'open');
+            if (openPulls.length > 0) {
+                const latestPR = openPulls.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+                core.info(`Found PR by commit SHA ${workflowRun.head_sha}: #${latestPR.number}`);
+                return latestPR;
             }
-        } catch (error) {
-            core.warning(`Failed to find PR by branch ${workflowRun.head_branch}: ${error.message}`);
         }
+    } catch (error) {
+        core.warning(`Failed to find PR by commit SHA ${workflowRun.head_sha}: ${error.message}`);
     }
 
     core.info('No related PR found for this workflow run');
