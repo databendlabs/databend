@@ -109,7 +109,7 @@ module.exports = async ({ github, context, core }) => {
         return;
     }
 
-    core.info(`Found ${jobsToRetry.length} jobs with retryable errors. Retrying all failed jobs:`);
+    core.info(`Found ${jobsToRetry.length} jobs with retryable errors:`);
     jobsToRetry.forEach(job => {
         core.info(`- ${job.name} (ID: ${job.id})`);
     });
