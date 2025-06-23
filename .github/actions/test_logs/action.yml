@@ -7,7 +7,7 @@ runs:
 
     - name: Install lsof
       shell: bash
-      run: sudo apt-get install -y lsof
+      run: sudo apt-get update -yq && sudo apt-get install -yq lsof
 
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
