@@ -19,8 +19,11 @@ module.exports = async ({ github, context, core }) => {
     });
 
     core.info(`Found ${jobs.jobs.length} jobs in the workflow run`);
+    for (const job of jobs.jobs) {
+        core.info(`Job ${job.name} (ID: ${job.id}) status: ${job.status}, conclusion: ${job.conclusion}`);
+    }
 
-    const failedJobs = jobs.jobs.filter(job => job.conclusion === 'failure');
+    const failedJobs = jobs.jobs.filter(job => job.conclusion === 'failure' || job.conclusion === 'cancelled');
 
     if (failedJobs.length === 0) {
         core.info('No failed jobs found to retry');
