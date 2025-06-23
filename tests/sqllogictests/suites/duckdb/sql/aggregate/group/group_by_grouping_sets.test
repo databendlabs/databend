@@ -32,6 +32,11 @@ NULL 0
 NULL 1
 NULL 2
 
+query T
+select * from (select number % 3 a, number % 4 b, count() from range(1, 1000)t(number) group by cube(a,b))  where a is null and b is null;
+----
+NULL NULL 999
+
 query TT
 select number % 2 as a, number % 3 as b from numbers(24) group by grouping sets ((1,2), (1), (2)) order by a,b;
 ----
