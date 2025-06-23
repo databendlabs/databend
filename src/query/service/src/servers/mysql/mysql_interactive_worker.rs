@@ -52,6 +52,7 @@ use rand::RngCore;
 use uuid::Uuid;
 
 use crate::auth::CredentialType;
+use crate::clusters::ClusterDiscovery;
 use crate::interpreters::interpreter_plan_sql;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -224,9 +225,14 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             SpanContext::new(TraceId(query_id.as_u128()), SpanId::default()).sampled(sampled);
         let root = Span::root(func_path!(), span_context)
             .with_properties(|| self.base.session.to_fastrace_properties());
-
+        let warehouse_id = ClusterDiscovery::instance()
+            .get_current_warehouse_id()
+            .await
+            .ok()
+            .flatten();
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id_str.clone());
+        tracking_payload.warehouse_id = warehouse_id;
         tracking_payload.mem_stat = Some(MemStat::create(query_id_str.to_string()));
         let _guard = ThreadTracker::tracking(tracking_payload);
 
@@ -492,9 +498,14 @@ impl InteractiveWorkerBase {
 
         let query_id = Uuid::new_v4().to_string();
         let init_query = format!("USE `{}`;", database_name);
-
+        let warehouse_id = ClusterDiscovery::instance()
+            .get_current_warehouse_id()
+            .await
+            .ok()
+            .flatten();
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.warehouse_id = warehouse_id;
         tracking_payload.mem_stat = Some(MemStat::create(query_id.clone()));
         let _guard = ThreadTracker::tracking(tracking_payload);
 

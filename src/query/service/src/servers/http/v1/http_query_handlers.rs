@@ -418,11 +418,17 @@ async fn query_page_handler(
         let _t = SlowRequestLogTracker::new(ctx);
         query_page_handle.in_span(root)
     };
+    let warehouse_id = ClusterDiscovery::instance()
+        .get_current_warehouse_id()
+        .await
+        .ok()
+        .flatten();
 
     let query_page_handle = {
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.mem_stat = query_mem_stat;
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.warehouse_id = warehouse_id;
         let _tracking_guard = ThreadTracker::tracking(tracking_payload);
         ThreadTracker::tracking_future(query_page_handle)
     };
@@ -534,11 +540,16 @@ pub(crate) async fn query_handler(
             parent_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
             tracking_workload_group = Some(workload_group);
         }
-
+        let warehouse_id = ClusterDiscovery::instance()
+            .get_current_warehouse_id()
+            .await
+            .ok()
+            .flatten();
         let name = Some(ctx.query_id.clone());
         let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(ctx.query_id.clone());
+        tracking_payload.warehouse_id = warehouse_id;
         tracking_payload.mem_stat = Some(query_mem_stat.clone());
         tracking_payload.workload_group_resource = tracking_workload_group;
         let _tracking_guard = ThreadTracker::tracking(tracking_payload);

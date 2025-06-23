@@ -23,6 +23,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_management::WorkloadGroupResourceManager;
 
+use crate::clusters::ClusterDiscovery;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryEnv;
 
@@ -44,9 +45,15 @@ pub async fn init_query_env(mut env: QueryEnv) -> Result<()> {
 
     let name = Some(env.query_id.clone());
     let query_mem_stat = MemStat::create_child(name, 0, parent_mem_stat);
+    let warehouse_id = ClusterDiscovery::instance()
+        .get_current_warehouse_id()
+        .await
+        .ok()
+        .flatten();
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(env.query_id.clone());
+    tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     tracking_payload.workload_group_resource = tracking_workload_group;
     let _guard = ThreadTracker::tracking(tracking_payload);

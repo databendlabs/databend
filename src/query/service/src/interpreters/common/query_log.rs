@@ -17,6 +17,7 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -162,6 +163,9 @@ impl InterpreterQueryLog {
         let txn_state = format!("{:?}", guard.state());
         let txn_id = guard.txn_id().to_string();
         drop(guard);
+
+        let warehouse_id = ThreadTracker::warehouse_id().cloned().unwrap_or_default();
+
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
@@ -228,6 +232,7 @@ impl InterpreterQueryLog {
             peek_memory_usage: HashMap::new(),
 
             session_id,
+            warehouse_id,
         })
     }
 
@@ -342,6 +347,8 @@ impl InterpreterQueryLog {
 
         let peek_memory_usage = ctx.get_node_peek_memory_usage();
 
+        let warehouse_id = ThreadTracker::warehouse_id().cloned().unwrap_or_default();
+
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
@@ -407,6 +414,7 @@ impl InterpreterQueryLog {
             txn_id,
             peek_memory_usage,
             session_id,
+            warehouse_id,
         })
     }
 }

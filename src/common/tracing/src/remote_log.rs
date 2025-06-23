@@ -58,7 +58,6 @@ use crate::GlobalLogger;
 pub struct RemoteLog {
     cluster_id: String,
     node_id: String,
-    warehouse_id: Option<String>,
     buffer: Arc<LogBuffer>,
 }
 
@@ -113,13 +112,9 @@ impl RemoteLog {
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
         let rt = Runtime::with_worker_threads(2, Some("remote-log-writer".to_string()))?;
         let (tx, rx) = bounded(1);
-        // warehouse_id need to be specified after `create warehouse`
-        // TODO: inject warehouse_id like query_id
-        let warehouse_id = None;
         let remote_log = RemoteLog {
             cluster_id: labels.get("cluster_id").cloned().unwrap_or_default(),
             node_id: node_id.clone(),
-            warehouse_id,
             buffer: Arc::new(LogBuffer::new(tx.clone(), interval as u64)),
         };
         rt.spawn(async move { RemoteLog::work(rx, &stage_name).await });
@@ -208,6 +203,7 @@ impl RemoteLog {
 
     pub fn prepare_log_element(&self, record: &Record) -> RemoteLogElement {
         let query_id = ThreadTracker::query_id().cloned();
+        let warehouse_id = ThreadTracker::warehouse_id().cloned();
         let mut fields = Map::new();
         let target = record.target().to_string();
         let message = record.args().to_string();
@@ -235,7 +231,7 @@ impl RemoteLog {
             target,
             cluster_id: self.cluster_id.clone(),
             node_id: self.node_id.clone(),
-            warehouse_id: self.warehouse_id.clone(),
+            warehouse_id,
             query_id,
             log_level,
             message,

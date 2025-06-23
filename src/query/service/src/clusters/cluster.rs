@@ -583,6 +583,21 @@ impl ClusterDiscovery {
         heartbeat.start(node_info, seq);
         Ok(())
     }
+
+    pub async fn get_current_warehouse_id(&self) -> Result<Option<String>> {
+        let config = GlobalConfig::instance();
+        let cluster = self.discover(&config).await?;
+        for node in cluster.nodes.iter() {
+            if node.id == cluster.local_id {
+                if node.warehouse_id.is_empty() {
+                    break;
+                } else {
+                    return Ok(Some(node.warehouse_id.clone()));
+                }
+            }
+        }
+        Ok(None)
+    }
 }
 
 struct ClusterHeartbeat {

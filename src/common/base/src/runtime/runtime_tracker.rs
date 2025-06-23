@@ -134,6 +134,7 @@ impl CaptureLogSettings {
 #[derive(Clone)]
 pub struct TrackingPayload {
     pub query_id: Option<String>,
+    pub warehouse_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
@@ -216,6 +217,7 @@ impl ThreadTracker {
                 time_series_profile: None,
                 local_time_series_profile: None,
                 workload_group_resource: None,
+                warehouse_id: None,
             }),
         }
     }
@@ -310,6 +312,19 @@ impl ThreadTracker {
                     .query_id
                     .as_ref()
                     .map(|query_id| unsafe { &*(query_id as *const String) })
+            })
+            .unwrap_or(None)
+    }
+
+    pub fn warehouse_id() -> Option<&'static String> {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .warehouse_id
+                    .as_ref()
+                    .map(|warehouse_id| unsafe { &*(warehouse_id as *const String) })
             })
             .unwrap_or(None)
     }

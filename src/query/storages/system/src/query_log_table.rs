@@ -168,4 +168,6 @@ pub struct QueryLogElement {
     pub peek_memory_usage: HashMap<String, usize>,
 
     pub session_id: String,
+
+    pub warehouse_id: String,
 }
