@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Typos Check
+name: Typos
 
 on:
   push:
@@ -27,8 +27,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  typos-check:
-    name: typos check
+  check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
