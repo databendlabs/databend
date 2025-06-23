@@ -299,6 +299,12 @@ impl FuseTable {
         let bloom_index_cols = self.bloom_index_cols();
         let ngram_args =
             Self::create_ngram_index_args(&self.table_info.meta, &self.table_info.meta.schema)?;
+
+        info!(
+            "[FUSE-CHANGE-TRACKING] prune snapshot block start, at node {}",
+            ctx.get_cluster().local_id,
+        );
+
         let mut pruner = FusePruner::create_with_pages(
             &ctx,
             self.get_operator(),
@@ -315,9 +321,10 @@ impl FuseTable {
         let pruning_stats = pruner.pruning_stats();
 
         info!(
-            "prune snapshot block end, final block numbers:{}, cost:{:?}",
+            "[FUSE-CHANGE-TRACKING] prune snapshot block end, final block numbers:{}, cost:{:?}, at node {}",
             block_metas.len(),
-            start.elapsed()
+            start.elapsed(),
+            ctx.get_cluster().local_id,
         );
 
         let block_metas = block_metas

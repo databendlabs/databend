@@ -345,10 +345,12 @@ impl FuseTable {
         segments_location: Vec<SegmentLocation>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
+        let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
         info!(
-            "segment numbers" = segments_location.len();
-            "prune snapshot block start"
+            "[FUSE-PARTITIONS] prune snapshot block start, {} segment to be processed, at node {}",
+            num_segments_to_prune,
+            ctx.get_cluster().local_id,
         );
 
         let dal = self.operator.clone();
@@ -378,9 +380,11 @@ impl FuseTable {
         let pruning_stats = pruner.pruning_stats();
 
         info!(
-            "[FUSE-PARTITIONS] prune snapshot block end, final block numbers:{}, cost:{:?}",
+            "[FUSE-PARTITIONS] prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
             block_metas.len(),
-            start.elapsed()
+            num_segments_to_prune,
+            start.elapsed(),
+            ctx.get_cluster().local_id,
         );
 
         let block_metas = block_metas
