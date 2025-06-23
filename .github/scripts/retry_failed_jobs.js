@@ -1,173 +1,3 @@
-module.exports = async ({ github, context, core }) => {
-    const runID = process.env.WORKFLOW_RUN_ID;
-    const runURL = process.env.WORKFLOW_RUN_URL;
-
-    core.info(`Checking failed workflow run: ${runID}`);
-
-    const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        run_id: runID
-    });
-
-    core.info(`Workflow run status: ${workflowRun.status}`);
-    core.info(`Workflow run conclusion: ${workflowRun.conclusion}`);
-
-    const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        run_id: runID
-    });
-
-    core.info(`Found ${jobs.jobs.length} jobs in the workflow run`);
-    for (const job of jobs.jobs) {
-        core.info(`  Job ${job.name} (ID: ${job.id}) status: ${job.status}, conclusion: ${job.conclusion}`);
-    }
-
-    const failedJobs = jobs.jobs.filter(job => job.conclusion === 'failure' || job.conclusion === 'cancelled');
-
-    if (failedJobs.length === 0) {
-        core.info('No failed jobs found to retry');
-        return;
-    }
-
-    core.info(`Found ${failedJobs.length} failed jobs to analyze:`);
-
-    function isRetryableError(errorMessage) {
-        if (!errorMessage) return false;
-        return errorMessage.includes('The self-hosted runner lost communication with the server.') ||
-            errorMessage.includes('The operation was canceled.');
-    }
-
-    function isPriorityCancelled(errorMessage) {
-        if (!errorMessage) return false;
-        return errorMessage.includes('Canceling since a higher priority waiting request for');
-    }
-
-    const jobsToRetry = [];
-    let priorityCancelled = false;
-    let analyzedJobs = [];
-
-    for (const job of failedJobs) {
-        core.info(`Analyzing job: ${job.name} (ID: ${job.id})`);
-
-        try {
-            const { data: jobDetails } = await github.rest.actions.getJobForWorkflowRun({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                job_id: job.id
-            });
-
-            core.info(`  Job status: ${jobDetails.status}, conclusion: ${jobDetails.conclusion}`);
-
-            const { data: annotations } = await github.rest.checks.listAnnotations({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                check_run_id: jobDetails.check_run_url.split('/').pop()
-            });
-
-            if (annotations.length === 0) {
-                core.info(`  No annotations found for job: ${job.name}`);
-                analyzedJobs.push({
-                    name: job.name,
-                    retryable: false,
-                    annotationCount: 0,
-                    reason: 'No annotations found'
-                });
-                continue;
-            }
-
-            core.info(`  Found ${annotations.length} annotations for job: ${job.name}`);
-
-            const failureAnnotations = annotations.filter(annotation => annotation.annotation_level === 'failure');
-
-            core.info(`  Found ${failureAnnotations.length} failure-related annotations:`);
-            failureAnnotations.forEach(annotation => {
-                core.info(`  [${annotation.annotation_level}] ${annotation.message}`);
-            });
-            const allFailureAnnotationMessages = failureAnnotations.map(annotation => annotation.message).join('');
-
-            const isPriorityCancelledJob = isPriorityCancelled(allFailureAnnotationMessages);
-            if (isPriorityCancelledJob) {
-                core.info(`  ⛔️ Job "${job.name}" is NOT retryable - cancelled by a higher priority request`);
-                analyzedJobs.push({
-                    name: job.name,
-                    retryable: false,
-                    annotationCount: annotations.length,
-                    reason: 'Cancelled by higher priority request'
-                });
-                priorityCancelled = true;
-                break;
-            }
-
-            const isRetryable = isRetryableError(allFailureAnnotationMessages);
-            if (isRetryable) {
-                core.info(`  ✅ Job "${job.name}" is retryable - infrastructure issue detected in annotations`);
-                jobsToRetry.push(job);
-                analyzedJobs.push({
-                    name: job.name,
-                    retryable: true,
-                    annotationCount: annotations.length,
-                    reason: 'Infrastructure issue detected'
-                });
-            } else {
-                core.info(`  ⛔️ Job "${job.name}" is NOT retryable - likely a code/test issue based on annotations`);
-                analyzedJobs.push({
-                    name: job.name,
-                    retryable: false,
-                    annotationCount: annotations.length,
-                    reason: 'Code/test issue detected'
-                });
-            }
-
-        } catch (error) {
-            core.error(`  Failed to analyze job ${job.name}:`, error.message);
-            analyzedJobs.push({
-                name: job.name,
-                retryable: false,
-                annotationCount: 0,
-                reason: `Analysis failed: ${error.message}`
-            });
-        }
-    }
-
-    if (priorityCancelled) {
-        core.info('Cancelling retry since a higher priority request was made');
-        await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, 0, true);
-        return;
-    }
-
-    if (jobsToRetry.length === 0) {
-        core.info('No jobs found with retryable errors. Skipping retry.');
-        await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, 0, false);
-        return;
-    }
-
-    core.info(`Found ${jobsToRetry.length} jobs with retryable errors:`);
-    jobsToRetry.forEach(job => {
-        core.info(`- ${job.name} (ID: ${job.id})`);
-    });
-
-    try {
-        core.info(`Retrying all failed jobs in workflow run: ${runID}`);
-
-        await github.rest.actions.reRunWorkflowFailedJobs({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            run_id: runID
-        });
-
-        core.info(`✅ Successfully initiated retry for all failed jobs in workflow run: ${runID}`);
-    } catch (error) {
-        core.error(`❌ Failed to retry all failed jobs:`, error.message);
-    }
-
-    // Add comment to PR
-    await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, jobsToRetry.length, false);
-
-    core.info('Retry process completed');
-};
-
 async function addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, retryableJobsCount, priorityCancelled) {
     try {
         // Get workflow run to find the branch
@@ -244,4 +74,216 @@ ${analyzedJobs.map(job => {
     } catch (error) {
         core.error(`Failed to add comment to PR:`, error.message);
     }
-} 
+}
+
+function isRetryableError(errorMessage) {
+    if (!errorMessage) return false;
+    return errorMessage.includes('The self-hosted runner lost communication with the server.') ||
+        errorMessage.includes('The operation was canceled.');
+}
+
+function isPriorityCancelled(errorMessage) {
+    if (!errorMessage) return false;
+    return errorMessage.includes('Canceling since a higher priority waiting request for');
+}
+
+async function analyzeJob(github, context, core, job) {
+    core.info(`Analyzing job: ${job.name} (ID: ${job.id})`);
+
+    try {
+        const { data: jobDetails } = await github.rest.actions.getJobForWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            job_id: job.id
+        });
+
+        core.info(`  Job status: ${jobDetails.status}, conclusion: ${jobDetails.conclusion}`);
+
+        const { data: annotations } = await github.rest.checks.listAnnotations({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            check_run_id: jobDetails.check_run_url.split('/').pop()
+        });
+
+        if (annotations.length === 0) {
+            core.info(`  No annotations found for job: ${job.name}`);
+            return {
+                job,
+                retryable: false,
+                annotationCount: 0,
+                reason: 'No annotations found',
+                priorityCancelled: false
+            };
+        }
+
+        core.info(`  Found ${annotations.length} annotations for job: ${job.name}`);
+
+        const failureAnnotations = annotations.filter(annotation => annotation.annotation_level === 'failure');
+
+        core.info(`  Found ${failureAnnotations.length} failure-related annotations:`);
+        failureAnnotations.forEach(annotation => {
+            core.info(`  [${annotation.annotation_level}] ${annotation.message}`);
+        });
+
+        const allFailureAnnotationMessages = failureAnnotations.map(annotation => annotation.message).join('');
+
+        const priorityCancelled = isPriorityCancelled(allFailureAnnotationMessages);
+        if (priorityCancelled) {
+            core.info(`  ⛔️ Job "${job.name}" is NOT retryable - cancelled by a higher priority request`);
+            return {
+                job,
+                retryable: false,
+                annotationCount: annotations.length,
+                reason: 'Cancelled by higher priority request',
+                priorityCancelled: true
+            };
+        }
+
+        const isRetryable = isRetryableError(allFailureAnnotationMessages);
+        if (isRetryable) {
+            core.info(`  ✅ Job "${job.name}" is retryable - infrastructure issue detected in annotations`);
+        } else {
+            core.info(`  ⛔️ Job "${job.name}" is NOT retryable - likely a code/test issue based on annotations`);
+        }
+
+        return {
+            job,
+            retryable: isRetryable,
+            annotationCount: annotations.length,
+            reason: isRetryable ? 'Infrastructure issue detected' : 'Code/test issue detected',
+            priorityCancelled: false
+        };
+
+    } catch (error) {
+        core.error(`  Failed to analyze job ${job.name}:`, error.message);
+        return {
+            job,
+            retryable: false,
+            annotationCount: 0,
+            reason: `Analysis failed: ${error.message}`,
+            priorityCancelled: false
+        };
+    }
+}
+
+async function analyzeAllJobs(github, context, core, failedJobs) {
+    const jobsToRetry = [];
+    const analyzedJobs = [];
+    let priorityCancelled = false;
+
+    for (const job of failedJobs) {
+        const analysis = await analyzeJob(github, context, core, job);
+
+        analyzedJobs.push({
+            name: job.name,
+            retryable: analysis.retryable,
+            annotationCount: analysis.annotationCount,
+            reason: analysis.reason
+        });
+
+        if (analysis.priorityCancelled) {
+            priorityCancelled = true;
+            break;
+        }
+
+        if (analysis.retryable) {
+            jobsToRetry.push(job);
+        }
+    }
+
+    return { jobsToRetry, analyzedJobs, priorityCancelled };
+}
+
+async function retryFailedJobs(github, context, core, runID, jobsToRetry) {
+    core.info(`Found ${jobsToRetry.length} jobs with retryable errors:`);
+    jobsToRetry.forEach(job => {
+        core.info(`- ${job.name} (ID: ${job.id})`);
+    });
+
+    try {
+        core.info(`Retrying all failed jobs in workflow run: ${runID}`);
+
+        await github.rest.actions.reRunWorkflowFailedJobs({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: runID
+        });
+
+        core.info(`✅ Successfully initiated retry for all failed jobs in workflow run: ${runID}`);
+        return true;
+    } catch (error) {
+        core.error(`❌ Failed to retry all failed jobs:`, error.message);
+        return false;
+    }
+}
+
+async function getWorkflowInfo(github, context, core, runID) {
+    core.info(`Checking failed workflow run: ${runID}`);
+
+    const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        run_id: runID
+    });
+
+    core.info(`Workflow run status: ${workflowRun.status}`);
+    core.info(`Workflow run conclusion: ${workflowRun.conclusion}`);
+
+    const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        run_id: runID
+    });
+
+    core.info(`Found ${jobs.jobs.length} jobs in the workflow run`);
+    for (const job of jobs.jobs) {
+        core.info(`  Job ${job.name} (ID: ${job.id}) status: ${job.status}, conclusion: ${job.conclusion}`);
+    }
+
+    const failedJobs = jobs.jobs.filter(job => job.conclusion === 'failure' || job.conclusion === 'cancelled');
+
+    if (failedJobs.length === 0) {
+        core.info('No failed jobs found to retry');
+        return { failedJobs: [], workflowRun };
+    }
+
+    core.info(`Found ${failedJobs.length} failed jobs to analyze:`);
+    return { failedJobs, workflowRun };
+}
+
+module.exports = async ({ github, context, core }) => {
+    const runID = process.env.WORKFLOW_RUN_ID;
+    const runURL = process.env.WORKFLOW_RUN_URL;
+
+    // Get workflow information and failed jobs
+    const { failedJobs, workflowRun } = await getWorkflowInfo(github, context, core, runID);
+
+    if (failedJobs.length === 0) {
+        return;
+    }
+
+    // Analyze all failed jobs
+    const { jobsToRetry, analyzedJobs, priorityCancelled } = await analyzeAllJobs(github, context, core, failedJobs);
+
+    // Handle priority cancellation
+    if (priorityCancelled) {
+        core.info('Cancelling retry since a higher priority request was made');
+        await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, 0, true);
+        return;
+    }
+
+    // Handle no retryable jobs
+    if (jobsToRetry.length === 0) {
+        core.info('No jobs found with retryable errors. Skipping retry.');
+        await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, 0, false);
+        return;
+    }
+
+    // Retry failed jobs
+    await retryFailedJobs(github, context, core, runID, jobsToRetry);
+
+    // Add comment to PR
+    await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, jobsToRetry.length, false);
+
+    core.info('Retry process completed');
+};
