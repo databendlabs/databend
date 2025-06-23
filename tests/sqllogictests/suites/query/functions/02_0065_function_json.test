@@ -1550,3 +1550,149 @@ SELECT id, data:address, data:address:zip, STRIP_NULL_VALUE(data:address), STRIP
 statement ok
 DROP TABLE IF EXISTS t6
 
+query T
+SELECT array_append(parse_json('[1,2,3]'), 4)
+----
+[1,2,3,4]
+
+query T
+SELECT array_append(parse_json('[1, "a", true]'), null)
+----
+[1,"a",true,null]
+
+query T
+SELECT array_append(parse_json('true'), 1)
+----
+[true,1]
+
+query T
+SELECT array_compact(parse_json('[1, null, 2, null, 3]'))
+----
+[1,2,3]
+
+query T
+SELECT array_compact(parse_json('[null, null, null]'))
+----
+[]
+
+statement error 1006
+SELECT array_compact(parse_json('11'))
+
+query B
+SELECT array_contains(parse_json('[1,2,3]'), 2)
+----
+1
+
+query B
+SELECT array_contains(parse_json('[1,2,3]'), 4)
+----
+0
+
+query BB
+SELECT array_contains(parse_json('1'), 1), array_contains(parse_json('1'), 4)
+----
+1 0
+
+query T
+SELECT array_flatten(parse_json('[[1,2],[3,4]]'))
+----
+[1,2,3,4]
+
+query T
+SELECT array_flatten(parse_json('[[1,[2,3]],[4]]'))
+----
+[1,[2,3],4]
+
+statement error 1006
+SELECT array_flatten(parse_json('[1, 2, 3]'))
+
+query I
+SELECT array_indexof(parse_json('[1,2,3]'), 2)
+----
+1
+
+query I
+SELECT array_indexof(parse_json('[1,2,3]'), 4)
+----
+NULL
+
+query I
+SELECT array_indexof(parse_json('[1,2,2,3]'), 2)
+----
+1
+
+query T
+SELECT array_prepend(0, parse_json('[1,2,3]'))
+----
+[0,1,2,3]
+
+query T
+SELECT array_prepend('a', parse_json('[]'))
+----
+["a"]
+
+query T
+SELECT array_remove(parse_json('[1,2,3,2]'), 2)
+----
+[1,3]
+
+query T
+SELECT array_remove(parse_json('[1,2,3]'), 4)
+----
+[1,2,3]
+
+query TT
+SELECT array_remove(parse_json('"a"'), 'a'), array_remove(parse_json('"a"'), 'b')
+----
+[] ["a"]
+
+query T
+SELECT array_remove_first(parse_json('[1,2,3,2]'))
+----
+[2,3,2]
+
+query T
+SELECT array_remove_first(parse_json('1'))
+----
+[]
+
+query T
+SELECT array_remove_last(parse_json('[1,2,3,2]'))
+----
+[1,2,3]
+
+query T
+SELECT array_remove_last(parse_json('1'))
+----
+[]
+
+query T
+SELECT array_reverse(parse_json('[1,2,3]'))
+----
+[3,2,1]
+
+query T
+SELECT array_reverse(parse_json('"a"'))
+----
+["a"]
+
+query T
+SELECT array_slice(parse_json('[1,2,3,4,5]'), 1, 3)
+----
+[2,3]
+
+query T
+SELECT array_slice(parse_json('[1,2,3,4,5]'), -2, -1)
+----
+[4]
+
+query I
+SELECT array_unique(parse_json('[1,2,2,3,1]'))
+----
+3
+
+query I
+SELECT array_unique(parse_json('["a", "b", "a", null, "c"]'))
+----
+4
+

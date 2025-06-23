@@ -6096,3 +6096,839 @@ evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : array_append(parse_json('[1, 2, 3]'), 4)
+raw expr       : array_append(parse_json('[1, 2, 3]'), 4)
+checked expr   : array_append<T0=UInt8><Variant NULL, T0>(CAST<Variant>(CAST<String>("[1, 2, 3]" AS Variant) AS Variant NULL), 4_u8)
+optimized expr : 0x80000004200000022000000220000002200000025001500250035004
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3,4]'
+
+
+ast            : array_append(parse_json('[]'), 1)
+raw expr       : array_append(parse_json('[]'), 1)
+checked expr   : array_append<T0=UInt8><Variant NULL, T0>(CAST<Variant>(CAST<String>("[]" AS Variant) AS Variant NULL), 1_u8)
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : array_append(null, 1)
+raw expr       : array_append(NULL, 1)
+checked expr   : array_append<T0=UInt8><Variant NULL, T0>(CAST<NULL>(NULL AS Variant NULL), 1_u8)
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : array_append(parse_json('[1, 2, 3]'), null)
+raw expr       : array_append(parse_json('[1, 2, 3]'), NULL)
+checked expr   : array_append<T0=NULL><Variant NULL, T0>(CAST<Variant>(CAST<String>("[1, 2, 3]" AS Variant) AS Variant NULL), NULL)
+optimized expr : 0x8000000420000002200000022000000200000000500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3,null]'
+
+
+ast            : array_append(parse_json('[1, 2]'), 'string')
+raw expr       : array_append(parse_json('[1, 2]'), 'string')
+checked expr   : array_append<T0=String><Variant NULL, T0>(CAST<Variant>(CAST<String>("[1, 2]" AS Variant) AS Variant NULL), "string")
+optimized expr : 0x8000000320000002200000021000000650015002737472696e67
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,"string"]'
+
+
+ast            : array_append(parse_json('[1, 2]'), true)
+raw expr       : array_append(parse_json('[1, 2]'), true)
+checked expr   : array_append<T0=Boolean><Variant NULL, T0>(CAST<Variant>(CAST<String>("[1, 2]" AS Variant) AS Variant NULL), true)
+optimized expr : 0x8000000320000002200000024000000050015002
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,true]'
+
+
+ast            : array_append(parse_json('[1, 2]'), parse_json('{"a": 1}'))
+raw expr       : array_append(parse_json('[1, 2]'), parse_json('{"a": 1}'))
+checked expr   : array_append<T0=Variant><Variant NULL, T0>(CAST<Variant>(CAST<String>("[1, 2]" AS Variant) AS Variant NULL), CAST<String>("{\"a\": 1}" AS Variant))
+optimized expr : 0x8000000320000002200000025000000f50015002400000011000000120000002615001
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,{"a":1}]'
+
+
+ast            : array_append(parse_json(c1), c2)
+raw expr       : array_append(parse_json(c1::String), c2::String)
+checked expr   : array_append<T0=String><Variant NULL, T0>(CAST<Variant>(CAST<String>(c1 AS Variant) AS Variant NULL), c2)
+evaluation:
++--------+------------------------+-------------+---------------+
+|        | c1                     | c2          | Output        |
++--------+------------------------+-------------+---------------+
+| Type   | String                 | String      | Variant       |
+| Domain | {"[1, 2, 3]"..="null"} | {"a"..="c"} | Unknown       |
+| Row 0  | '[1, 2, 3]'            | 'a'         | '[1,2,3,"a"]' |
+| Row 1  | '[]'                   | 'b'         | '["b"]'       |
+| Row 2  | 'null'                 | 'c'         | '[null,"c"]'  |
++--------+------------------------+-------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                    |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], [], null]                                                                                       |
+| c2     | StringColumn[a, b, c]                                                                                                   |
+| Output | Variant([0x800000042000000220000002200000021000000150015002500361, 0x800000011000000162, 0x80000002000000001000000163]) |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_prepend(4, parse_json('[1, 2, 3]'))
+raw expr       : array_prepend(4, parse_json('[1, 2, 3]'))
+checked expr   : array_prepend<T0=UInt8><T0, Variant NULL>(4_u8, CAST<Variant>(CAST<String>("[1, 2, 3]" AS Variant) AS Variant NULL))
+optimized expr : 0x80000004200000022000000220000002200000025004500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[4,1,2,3]'
+
+
+ast            : array_prepend(1, parse_json('[]'))
+raw expr       : array_prepend(1, parse_json('[]'))
+checked expr   : array_prepend<T0=UInt8><T0, Variant NULL>(1_u8, CAST<Variant>(CAST<String>("[]" AS Variant) AS Variant NULL))
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : array_prepend(1, null)
+raw expr       : array_prepend(1, NULL)
+checked expr   : array_prepend<T0=UInt8><T0, Variant NULL>(1_u8, CAST<NULL>(NULL AS Variant NULL))
+optimized expr : 0x80000001200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[1]'
+
+
+ast            : array_prepend(null, parse_json('[1, 2, 3]'))
+raw expr       : array_prepend(NULL, parse_json('[1, 2, 3]'))
+checked expr   : array_prepend<T0=NULL><T0, Variant NULL>(NULL, CAST<Variant>(CAST<String>("[1, 2, 3]" AS Variant) AS Variant NULL))
+optimized expr : 0x8000000400000000200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[null,1,2,3]'
+
+
+ast            : array_prepend('string', parse_json('[1, 2]'))
+raw expr       : array_prepend('string', parse_json('[1, 2]'))
+checked expr   : array_prepend<T0=String><T0, Variant NULL>("string", CAST<Variant>(CAST<String>("[1, 2]" AS Variant) AS Variant NULL))
+optimized expr : 0x80000003100000062000000220000002737472696e6750015002
+output type    : Variant
+output domain  : Undefined
+output         : '["string",1,2]'
+
+
+ast            : array_prepend(true, parse_json('[1, 2]'))
+raw expr       : array_prepend(true, parse_json('[1, 2]'))
+checked expr   : array_prepend<T0=Boolean><T0, Variant NULL>(true, CAST<Variant>(CAST<String>("[1, 2]" AS Variant) AS Variant NULL))
+optimized expr : 0x8000000340000000200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[true,1,2]'
+
+
+ast            : array_prepend(parse_json('{"a": 1}'), parse_json('[1, 2]'))
+raw expr       : array_prepend(parse_json('{"a": 1}'), parse_json('[1, 2]'))
+checked expr   : array_prepend<T0=Variant><T0, Variant NULL>(CAST<String>("{\"a\": 1}" AS Variant), CAST<Variant>(CAST<String>("[1, 2]" AS Variant) AS Variant NULL))
+optimized expr : 0x800000035000000f200000022000000240000001100000012000000261500150015002
+output type    : Variant
+output domain  : Undefined
+output         : '[{"a":1},1,2]'
+
+
+ast            : array_prepend(c2, parse_json(c1))
+raw expr       : array_prepend(c2::String, parse_json(c1::String))
+checked expr   : array_prepend<T0=String><T0, Variant NULL>(c2, CAST<Variant>(CAST<String>(c1 AS Variant) AS Variant NULL))
+evaluation:
++--------+------------------------+-------------+---------------+
+|        | c1                     | c2          | Output        |
++--------+------------------------+-------------+---------------+
+| Type   | String                 | String      | Variant       |
+| Domain | {"[1, 2, 3]"..="null"} | {"a"..="c"} | Unknown       |
+| Row 0  | '[1, 2, 3]'            | 'a'         | '["a",1,2,3]' |
+| Row 1  | '[]'                   | 'b'         | '["b"]'       |
+| Row 2  | 'null'                 | 'c'         | '["c",null]'  |
++--------+------------------------+-------------+---------------+
+evaluation (internal):
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                    |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], [], null]                                                                                       |
+| c2     | StringColumn[a, b, c]                                                                                                   |
+| Output | Variant([0x800000041000000120000002200000022000000261500150025003, 0x800000011000000162, 0x80000002100000010000000063]) |
++--------+-------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_compact(parse_json('[1, null, 3, null]'))
+raw expr       : array_compact(parse_json('[1, null, 3, null]'))
+checked expr   : array_compact<Variant>(CAST<String>("[1, null, 3, null]" AS Variant))
+optimized expr : 0x80000002200000022000000250015003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,3]'
+
+
+ast            : array_compact(parse_json('[null, null]'))
+raw expr       : array_compact(parse_json('[null, null]'))
+checked expr   : array_compact<Variant>(CAST<String>("[null, null]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_compact(parse_json('[1, 2, 3]'))
+raw expr       : array_compact(parse_json('[1, 2, 3]'))
+checked expr   : array_compact<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : array_compact(null)
+raw expr       : array_compact(NULL)
+checked expr   : array_compact<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | array_compact(parse_json('"not an array"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Input argument ARRAY_COMPACT is not an array while evaluating function `array_compact('"not an array"')` in expr `array_compact(CAST('"not an array"' AS Variant))`
+
+
+
+ast            : array_compact(parse_json(c1))
+raw expr       : array_compact(parse_json(c1::String))
+checked expr   : array_compact<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+-------------------------------------------+--------------+
+|        | c1                                        | Output       |
++--------+-------------------------------------------+--------------+
+| Type   | String                                    | Variant      |
+| Domain | {"[1, 2, 3]"..="[null, [1, true], null]"} | Unknown      |
+| Row 0  | '[1, null, 3, null, "a"]'                 | '[1,3,"a"]'  |
+| Row 1  | '[null, [1, true], null]'                 | '[[1,true]]' |
+| Row 2  | '[1, 2, 3]'                               | '[1,2,3]'    |
++--------+-------------------------------------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, null, 3, null, "a"], [null, [1, true], null], [1, 2, 3]]                                                                               |
+| Output | Variant([0x800000032000000220000002100000015001500361, 0x800000015000000e8000000220000002400000005001, 0x80000003200000022000000220000002500150025003]) |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_flatten(parse_json('[[1, 2], [3, 4]]'))
+raw expr       : array_flatten(parse_json('[[1, 2], [3, 4]]'))
+checked expr   : array_flatten<Variant>(CAST<String>("[[1, 2], [3, 4]]" AS Variant))
+optimized expr : 0x80000004200000022000000220000002200000025001500250035004
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3,4]'
+
+
+ast            : array_flatten(parse_json('[[], [1, 2]]'))
+raw expr       : array_flatten(parse_json('[[], [1, 2]]'))
+checked expr   : array_flatten<Variant>(CAST<String>("[[], [1, 2]]" AS Variant))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2]'
+
+
+ast            : array_flatten(parse_json('[]'))
+raw expr       : array_flatten(parse_json('[]'))
+checked expr   : array_flatten<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_flatten(null)
+raw expr       : array_flatten(NULL)
+checked expr   : array_flatten<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | array_flatten(parse_json('"not an array"'))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Input argument ARRAY_FLATTEN is not an array of arrays while evaluating function `array_flatten('"not an array"')` in expr `array_flatten(CAST('"not an array"' AS Variant))`
+
+
+
+ast            : array_flatten(parse_json(c1))
+raw expr       : array_flatten(parse_json(c1::String))
+checked expr   : array_flatten<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+------------------------------------+----------------+
+|        | c1                                 | Output         |
++--------+------------------------------------+----------------+
+| Type   | String                             | Variant        |
+| Domain | {"[[1, 2], [3, \"aa\"]]"..="[[]]"} | Unknown        |
+| Row 0  | '[[1, 2], [3, "aa"]]'              | '[1,2,3,"aa"]' |
+| Row 1  | '[[], [1, 2]]'                     | '[1,2]'        |
+| Row 2  | '[[]]'                             | '[]'           |
++--------+------------------------------------+----------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                  |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[[1, 2], [3, "aa"]], [[], [1, 2]], [[]]]                                                                 |
+| Output | Variant([0x80000004200000022000000220000002100000025001500250036161, 0x80000002200000022000000250015002, 0x80000000]) |
++--------+-----------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_indexof(parse_json('["a", "b", "c"]'), 'b')
+raw expr       : array_indexof(parse_json('["a", "b", "c"]'), 'b')
+checked expr   : array_indexof<T0=String><Variant, T0>(CAST<String>("[\"a\", \"b\", \"c\"]" AS Variant), "b")
+optimized expr : 1_u64
+output type    : UInt64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_indexof(parse_json('[1, 2, 3]'), 2)
+raw expr       : array_indexof(parse_json('[1, 2, 3]'), 2)
+checked expr   : array_indexof<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), 2_u8)
+optimized expr : 1_u64
+output type    : UInt64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_indexof(parse_json('[1, 2, 3]'), 4)
+raw expr       : array_indexof(parse_json('[1, 2, 3]'), 4)
+checked expr   : array_indexof<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), 4_u8)
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_indexof(parse_json('[]'), 'a')
+raw expr       : array_indexof(parse_json('[]'), 'a')
+checked expr   : array_indexof<T0=String><Variant, T0>(CAST<String>("[]" AS Variant), "a")
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_indexof(null, 'a')
+raw expr       : array_indexof(NULL, 'a')
+checked expr   : array_indexof<T0=String><NULL, T0>(NULL, "a")
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_indexof(parse_json(c1), c2)
+raw expr       : array_indexof(parse_json(c1::String), c2::String)
+checked expr   : array_indexof<T0=String><Variant, T0>(CAST<String>(c1 AS Variant), c2)
+evaluation:
++--------+-----------------------------+-------------+-------------+
+|        | c1                          | c2          | Output      |
++--------+-----------------------------+-------------+-------------+
+| Type   | String                      | String      | UInt64 NULL |
+| Domain | {"[\"a\", \"b\"]"..="null"} | {"a"..="c"} | Unknown     |
+| Row 0  | '[1, 2, 3]'                 | 'a'         | NULL        |
+| Row 1  | '["a", "b"]'                | 'b'         | 1           |
+| Row 2  | 'null'                      | 'c'         | NULL        |
++--------+-----------------------------+-------------+-------------+
+evaluation (internal):
++--------+----------------------------------------------------------------------+
+| Column | Data                                                                 |
++--------+----------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], ["a", "b"], null]                            |
+| c2     | StringColumn[a, b, c]                                                |
+| Output | NullableColumn { column: UInt64([0, 1, 0]), validity: [0b_____010] } |
++--------+----------------------------------------------------------------------+
+
+
+ast            : array_remove(parse_json('["a", "b", "c", "b"]'), 'b')
+raw expr       : array_remove(parse_json('["a", "b", "c", "b"]'), 'b')
+checked expr   : array_remove<T0=String><Variant, T0>(CAST<String>("[\"a\", \"b\", \"c\", \"b\"]" AS Variant), "b")
+optimized expr : 0x8000000210000001100000016163
+output type    : Variant
+output domain  : Undefined
+output         : '["a","c"]'
+
+
+ast            : array_remove(parse_json('[1, 2, 3, 2]'), 2)
+raw expr       : array_remove(parse_json('[1, 2, 3, 2]'), 2)
+checked expr   : array_remove<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3, 2]" AS Variant), 2_u8)
+optimized expr : 0x80000002200000022000000250015003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,3]'
+
+
+ast            : array_remove(parse_json('[1, 2, 3]'), 4)
+raw expr       : array_remove(parse_json('[1, 2, 3]'), 4)
+checked expr   : array_remove<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), 4_u8)
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : array_remove(parse_json('[]'), 'a')
+raw expr       : array_remove(parse_json('[]'), 'a')
+checked expr   : array_remove<T0=String><Variant, T0>(CAST<String>("[]" AS Variant), "a")
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_remove(null, 'a')
+raw expr       : array_remove(NULL, 'a')
+checked expr   : array_remove<T0=String><Variant NULL, T0 NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<String>("a" AS String NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_remove(parse_json(c1), c2)
+raw expr       : array_remove(parse_json(c1::String), c2::String)
+checked expr   : array_remove<T0=String><Variant, T0>(CAST<String>(c1 AS Variant), c2)
+evaluation:
++--------+-----------------------------+-------------+-----------+
+|        | c1                          | c2          | Output    |
++--------+-----------------------------+-------------+-----------+
+| Type   | String                      | String      | Variant   |
+| Domain | {"[\"a\", \"b\"]"..="null"} | {"a"..="c"} | Unknown   |
+| Row 0  | '[1, 2, 3]'                 | 'a'         | '[1,2,3]' |
+| Row 1  | '["a", "b"]'                | 'b'         | '["a"]'   |
+| Row 2  | 'null'                      | 'c'         | '[null]'  |
++--------+-----------------------------+-------------+-----------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                |
++--------+-----------------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], ["a", "b"], null]                                                           |
+| c2     | StringColumn[a, b, c]                                                                               |
+| Output | Variant([0x80000003200000022000000220000002500150025003, 0x800000011000000161, 0x8000000100000000]) |
++--------+-----------------------------------------------------------------------------------------------------+
+
+
+ast            : array_remove_first(parse_json('[1, 2, 3]'))
+raw expr       : array_remove_first(parse_json('[1, 2, 3]'))
+checked expr   : array_remove_first<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant
+output domain  : Undefined
+output         : '[2,3]'
+
+
+ast            : array_remove_first(parse_json('[1]'))
+raw expr       : array_remove_first(parse_json('[1]'))
+checked expr   : array_remove_first<Variant>(CAST<String>("[1]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_remove_first(parse_json('[]'))
+raw expr       : array_remove_first(parse_json('[]'))
+checked expr   : array_remove_first<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_remove_first(null)
+raw expr       : array_remove_first(NULL)
+checked expr   : array_remove_first<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_remove_first(parse_json(c1))
+raw expr       : array_remove_first(parse_json(c1::String))
+checked expr   : array_remove_first<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+-----------------------------+---------+
+|        | c1                          | Output  |
++--------+-----------------------------+---------+
+| Type   | String                      | Variant |
+| Domain | {"[\"a\", \"b\"]"..="null"} | Unknown |
+| Row 0  | '[1, 2, 3]'                 | '[2,3]' |
+| Row 1  | '["a", "b"]'                | '["b"]' |
+| Row 2  | 'null'                      | '[]'    |
++--------+-----------------------------+---------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------+
+| Column | Data                                                                            |
++--------+---------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], ["a", "b"], null]                                       |
+| Output | Variant([0x80000002200000022000000250025003, 0x800000011000000162, 0x80000000]) |
++--------+---------------------------------------------------------------------------------+
+
+
+ast            : array_remove_last(parse_json('[1, 2, 3]'))
+raw expr       : array_remove_last(parse_json('[1, 2, 3]'))
+checked expr   : array_remove_last<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
+optimized expr : 0x80000002200000022000000250015002
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2]'
+
+
+ast            : array_remove_last(parse_json('[1]'))
+raw expr       : array_remove_last(parse_json('[1]'))
+checked expr   : array_remove_last<Variant>(CAST<String>("[1]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_remove_last(parse_json('[]'))
+raw expr       : array_remove_last(parse_json('[]'))
+checked expr   : array_remove_last<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_remove_last(null)
+raw expr       : array_remove_last(NULL)
+checked expr   : array_remove_last<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_remove_last(parse_json(c1))
+raw expr       : array_remove_last(parse_json(c1::String))
+checked expr   : array_remove_last<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+-----------------------------+---------+
+|        | c1                          | Output  |
++--------+-----------------------------+---------+
+| Type   | String                      | Variant |
+| Domain | {"[\"a\", \"b\"]"..="null"} | Unknown |
+| Row 0  | '[1, 2, 3]'                 | '[1,2]' |
+| Row 1  | '["a", "b"]'                | '["a"]' |
+| Row 2  | 'null'                      | '[]'    |
++--------+-----------------------------+---------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------+
+| Column | Data                                                                            |
++--------+---------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], ["a", "b"], null]                                       |
+| Output | Variant([0x80000002200000022000000250015002, 0x800000011000000161, 0x80000000]) |
++--------+---------------------------------------------------------------------------------+
+
+
+ast            : array_reverse(parse_json('[1, 2, 3]'))
+raw expr       : array_reverse(parse_json('[1, 2, 3]'))
+checked expr   : array_reverse<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
+optimized expr : 0x80000003200000022000000220000002500350025001
+output type    : Variant
+output domain  : Undefined
+output         : '[3,2,1]'
+
+
+ast            : array_reverse(parse_json('["a", "b", "c"]'))
+raw expr       : array_reverse(parse_json('["a", "b", "c"]'))
+checked expr   : array_reverse<Variant>(CAST<String>("[\"a\", \"b\", \"c\"]" AS Variant))
+optimized expr : 0x80000003100000011000000110000001636261
+output type    : Variant
+output domain  : Undefined
+output         : '["c","b","a"]'
+
+
+ast            : array_reverse(parse_json('[]'))
+raw expr       : array_reverse(parse_json('[]'))
+checked expr   : array_reverse<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : array_reverse(null)
+raw expr       : array_reverse(NULL)
+checked expr   : array_reverse<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_reverse(parse_json(c1))
+raw expr       : array_reverse(parse_json(c1::String))
+checked expr   : array_reverse<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+-----------------------------+-------------+
+|        | c1                          | Output      |
++--------+-----------------------------+-------------+
+| Type   | String                      | Variant     |
+| Domain | {"[\"a\", \"b\"]"..="null"} | Unknown     |
+| Row 0  | '[1, 2, 3]'                 | '[3,2,1]'   |
+| Row 1  | '["a", "b"]'                | '["b","a"]' |
+| Row 2  | 'null'                      | '[null]'    |
++--------+-----------------------------+-------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                          |
++--------+---------------------------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, 3], ["a", "b"], null]                                                                     |
+| Output | Variant([0x80000003200000022000000220000002500350025001, 0x8000000210000001100000016261, 0x8000000100000000]) |
++--------+---------------------------------------------------------------------------------------------------------------+
+
+
+ast            : array_unique(parse_json('[1, 2, 2, 3, 3]'))
+raw expr       : array_unique(parse_json('[1, 2, 2, 3, 3]'))
+checked expr   : array_unique<Variant>(CAST<String>("[1, 2, 2, 3, 3]" AS Variant))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_unique(parse_json('["a", "b", "b", "c"]'))
+raw expr       : array_unique(parse_json('["a", "b", "b", "c"]'))
+checked expr   : array_unique<Variant>(CAST<String>("[\"a\", \"b\", \"b\", \"c\"]" AS Variant))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_unique(parse_json('[1, 2, 3]'))
+raw expr       : array_unique(parse_json('[1, 2, 3]'))
+checked expr   : array_unique<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_unique(parse_json('[]'))
+raw expr       : array_unique(parse_json('[]'))
+checked expr   : array_unique<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : array_unique(null)
+raw expr       : array_unique(NULL)
+checked expr   : array_unique<Variant NULL>(CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_unique(parse_json(c1))
+raw expr       : array_unique(parse_json(c1::String))
+checked expr   : array_unique<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+------------------------------------+---------+
+|        | c1                                 | Output  |
++--------+------------------------------------+---------+
+| Type   | String                             | UInt64  |
+| Domain | {"[\"a\", \"b\", \"a\"]"..="null"} | Unknown |
+| Row 0  | '[1, 1, 2, 3]'                     | 3       |
+| Row 1  | '["a", "b", "a"]'                  | 2       |
+| Row 2  | 'null'                             | 1       |
++--------+------------------------------------+---------+
+evaluation (internal):
++--------+---------------------------------------------------+
+| Column | Data                                              |
++--------+---------------------------------------------------+
+| c1     | StringColumn[[1, 1, 2, 3], ["a", "b", "a"], null] |
+| Output | UInt64([3, 2, 1])                                 |
++--------+---------------------------------------------------+
+
+
+ast            : contains(parse_json('[1, 2, 3]'), 3)
+raw expr       : contains(parse_json('[1, 2, 3]'), 3)
+checked expr   : contains<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : contains(parse_json('[]'), 1)
+raw expr       : contains(parse_json('[]'), 1)
+checked expr   : contains<T0=UInt8><Variant, T0>(CAST<String>("[]" AS Variant), 1_u8)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : contains(parse_json('[1, 2, 3]'), null)
+raw expr       : contains(parse_json('[1, 2, 3]'), NULL)
+checked expr   : contains<T0=NULL><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), NULL)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : contains(parse_json('[1, 2]'), 'string')
+raw expr       : contains(parse_json('[1, 2]'), 'string')
+checked expr   : contains<T0=String><Variant, T0>(CAST<String>("[1, 2]" AS Variant), "string")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : contains(parse_json('[1, 2, true]'), true)
+raw expr       : contains(parse_json('[1, 2, true]'), true)
+checked expr   : contains<T0=Boolean><Variant, T0>(CAST<String>("[1, 2, true]" AS Variant), true)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : contains(parse_json('[1, 2, 3]'), parse_json('{"a": 1}'))
+raw expr       : contains(parse_json('[1, 2, 3]'), parse_json('{"a": 1}'))
+checked expr   : contains<T0=Variant><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), CAST<String>("{\"a\": 1}" AS Variant))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : contains(parse_json(c1), c2)
+raw expr       : contains(parse_json(c1::String), c2::String)
+checked expr   : contains<T0=String><Variant, T0>(CAST<String>(c1 AS Variant), c2)
+evaluation:
++--------+----------------------------+-------------+---------+
+|        | c1                         | c2          | Output  |
++--------+----------------------------+-------------+---------+
+| Type   | String                     | String      | Boolean |
+| Domain | {"[1, 2, \"a\"]"..="null"} | {"a"..="c"} | Unknown |
+| Row 0  | '[1, 2, "a"]'              | 'a'         | true    |
+| Row 1  | '[]'                       | 'b'         | false   |
+| Row 2  | 'null'                     | 'c'         | false   |
++--------+----------------------------+-------------+---------+
+evaluation (internal):
++--------+-------------------------------------+
+| Column | Data                                |
++--------+-------------------------------------+
+| c1     | StringColumn[[1, 2, "a"], [], null] |
+| c2     | StringColumn[a, b, c]               |
+| Output | Boolean([0b_____001])               |
++--------+-------------------------------------+
+
+
+ast            : slice(parse_json('[]'), 1)
+raw expr       : slice(parse_json('[]'), 1)
+checked expr   : slice<Variant, Int64>(CAST<String>("[]" AS Variant), CAST<UInt8>(1_u8 AS Int64))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : slice(parse_json('[0, 1, 2, 3]'), 2)
+raw expr       : slice(parse_json('[0, 1, 2, 3]'), 2)
+checked expr   : slice<Variant, Int64>(CAST<String>("[0, 1, 2, 3]" AS Variant), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : 0x80000002200000022000000250025003
+output type    : Variant
+output domain  : Undefined
+output         : '[2,3]'
+
+
+ast            : slice(parse_json('[1]'), 1, 2)
+raw expr       : slice(parse_json('[1]'), 1, 2)
+checked expr   : slice<Variant, Int64, Int64>(CAST<String>("[1]" AS Variant), CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : slice(parse_json('true'), 1, 2)
+raw expr       : slice(parse_json('true'), 1, 2)
+checked expr   : slice<Variant, Int64, Int64>(CAST<String>("true" AS Variant), CAST<UInt8>(1_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : '[]'
+
+
+ast            : slice(parse_json('[null, 1, 2, 3]'), 0, 2)
+raw expr       : slice(parse_json('[null, 1, 2, 3]'), 0, 2)
+checked expr   : slice<Variant, Int64, Int64>(CAST<String>("[null, 1, 2, 3]" AS Variant), CAST<UInt8>(0_u8 AS Int64), CAST<UInt8>(2_u8 AS Int64))
+optimized expr : 0x8000000200000000200000025001
+output type    : Variant
+output domain  : Undefined
+output         : '[null,1]'
+
+
+ast            : slice(parse_json('["a", "b", "c", "d"]'), -3, -1)
+raw expr       : slice(parse_json('["a", "b", "c", "d"]'), minus(3), minus(1))
+checked expr   : slice<Variant, Int64, Int64>(CAST<String>("[\"a\", \"b\", \"c\", \"d\"]" AS Variant), CAST<Int16>(minus<UInt8>(3_u8) AS Int64), CAST<Int16>(minus<UInt8>(1_u8) AS Int64))
+optimized expr : 0x8000000210000001100000016263
+output type    : Variant
+output domain  : Undefined
+output         : '["b","c"]'
+
+
+ast            : slice(parse_json(c1), c2, c3)
+raw expr       : slice(parse_json(c1::String), c2::Int64, c3::Int64)
+checked expr   : slice<Variant, Int64, Int64>(CAST<String>(c1 AS Variant), c2, c3)
+evaluation:
++--------+----------------------------+----------+----------+-----------+
+|        | c1                         | c2       | c3       | Output    |
++--------+----------------------------+----------+----------+-----------+
+| Type   | String                     | Int64    | Int64    | Variant   |
+| Domain | {"[1, 2, \"a\"]"..="null"} | {-3..=3} | {-1..=4} | Unknown   |
+| Row 0  | '[1, 2, "a"]'              | 1        | 4        | '[2,"a"]' |
+| Row 1  | '[4, 5, 6, 7, 8]'          | -3       | -1       | '[6,7]'   |
+| Row 2  | 'null'                     | 3        | 3        | '[]'      |
++--------+----------------------------+----------+----------+-----------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------+
+| Column | Data                                                                                        |
++--------+---------------------------------------------------------------------------------------------+
+| c1     | StringColumn[[1, 2, "a"], [4, 5, 6, 7, 8], null]                                            |
+| c2     | Int64([1, -3, 3])                                                                           |
+| c3     | Int64([4, -1, 3])                                                                           |
+| Output | Variant([0x800000022000000210000001500261, 0x80000002200000022000000250065007, 0x80000000]) |
++--------+---------------------------------------------------------------------------------------------+
+
+
