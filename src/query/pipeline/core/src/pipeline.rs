@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -25,7 +24,11 @@ use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::info;
+use petgraph::graph::EdgeIndex;
 use petgraph::matrix_graph::Zero;
+use petgraph::prelude::StableGraph;
+use petgraph::stable_graph::NodeIndex;
+use petgraph::Direction;
 
 use crate::finished_chain::Callback;
 use crate::finished_chain::ExecutionInfo;
@@ -39,14 +42,44 @@ use crate::processors::MergePartitionProcessor;
 use crate::processors::OutputPort;
 use crate::processors::PartitionProcessor;
 use crate::processors::PlanScope;
-use crate::processors::PlanScopeGuard;
 use crate::processors::ProcessorPtr;
 use crate::processors::ResizeProcessor;
-use crate::processors::ShuffleProcessor;
+use crate::processors::SequenceGroupProcessor;
 use crate::LockGuard;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
 use crate::TransformPipeBuilder;
+
+#[derive(Clone)]
+pub struct Node {
+    pub proc: ProcessorPtr,
+    pub inputs: Vec<Arc<InputPort>>,
+    pub outputs: Vec<Arc<OutputPort>>,
+    pub scope: Option<Arc<PlanScope>>,
+}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", unsafe { self.proc.name() })
+    }
+}
+
+#[derive(Clone)]
+pub struct Edge {
+    pub input_index: usize,
+    pub output_index: usize,
+    pub single_input_and_single_output: bool,
+}
+
+impl Debug for Edge {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if !self.single_input_and_single_output {
+            write!(f, "from: {}, to: {}", self.output_index, self.input_index)?;
+        }
+
+        Ok(())
+    }
+}
 
 /// The struct of new pipeline
 ///                                                                              +----------+
@@ -68,20 +101,12 @@ use crate::TransformPipeBuilder;
 ///                                                                              +---------+
 pub struct Pipeline {
     max_threads: usize,
-    pub pipes: Vec<Pipe>,
+    sinks: VecDeque<(NodeIndex, usize)>,
+    pub graph: StableGraph<Node, Edge>,
     on_init: Option<InitCallback>,
     lock_guards: Vec<Arc<LockGuard>>,
 
     on_finished_chain: FinishedCallbackChain,
-
-    plans_scope: Vec<PlanScope>,
-    scope_size: Arc<AtomicUsize>,
-}
-
-impl Debug for Pipeline {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", &self.pipes)
-    }
 }
 
 pub type InitCallback = Box<dyn FnOnce() -> Result<()> + Send + Sync + 'static>;
@@ -92,121 +117,122 @@ impl Pipeline {
     pub fn create() -> Pipeline {
         Pipeline {
             max_threads: 0,
-            pipes: Vec::new(),
-            on_init: None,
-            lock_guards: vec![],
-            plans_scope: vec![],
-            on_finished_chain: FinishedCallbackChain::create(),
-            scope_size: Arc::new(AtomicUsize::new(0)),
-        }
-    }
-
-    pub fn with_scopes(scope: Vec<PlanScope>) -> Pipeline {
-        let scope_size = Arc::new(AtomicUsize::new(scope.len()));
-        Pipeline {
-            scope_size,
-            max_threads: 0,
-            pipes: Vec::new(),
+            sinks: VecDeque::new(),
+            graph: Default::default(),
             on_init: None,
             lock_guards: vec![],
             on_finished_chain: FinishedCallbackChain::create(),
-            plans_scope: scope,
         }
-    }
-
-    pub fn reset_scopes(&mut self, other: &Self) {
-        self.scope_size = other.scope_size.clone();
-        self.plans_scope = other.plans_scope.clone();
     }
 
     pub fn is_empty(&self) -> bool {
-        self.pipes.is_empty()
-    }
-
-    // We need to push data to executor
-    pub fn is_pushing_pipeline(&self) -> Result<bool> {
-        match self.pipes.first() {
-            Some(pipe) => Ok(pipe.input_length != 0),
-            None => Err(ErrorCode::Internal(
-                "Logical error: Attempted to call 'is_pushing_pipeline' on an empty pipeline.",
-            )),
-        }
+        self.graph.node_count() == 0
     }
 
     // We need to pull data from executor
     pub fn is_pulling_pipeline(&self) -> Result<bool> {
-        match self.pipes.last() {
-            Some(pipe) => Ok(pipe.output_length != 0),
-            None => Err(ErrorCode::Internal(
-                "Logical error: 'is_pulling_pipeline' called on an empty pipeline.",
-            )),
-        }
+        Ok(!self.sinks.is_empty())
     }
 
     // We just need to execute it.
     pub fn is_complete_pipeline(&self) -> Result<bool> {
-        Ok(
-            !self.pipes.is_empty()
-                && !self.is_pushing_pipeline()?
-                && !self.is_pulling_pipeline()?,
-        )
+        Ok(!self.is_empty() && !self.is_pulling_pipeline()?)
     }
 
-    pub fn finalize(mut self) -> Pipeline {
-        for pipe in &mut self.pipes {
-            if let Some(uninitialized_scope) = &mut pipe.scope {
-                if uninitialized_scope.parent_id.is_none() {
-                    for (index, scope) in self.plans_scope.iter().enumerate() {
-                        if scope.id == uninitialized_scope.id && index != 0 {
-                            if let Some(parent_scope) = self.plans_scope.get(index - 1) {
-                                uninitialized_scope.parent_id = Some(parent_scope.id);
-                            }
-                        }
-                    }
+    pub fn finalize(mut self, root_scope: Option<Arc<PlanScope>>) -> Pipeline {
+        if root_scope.is_none() {
+            return self;
+        }
+
+        for node in self.graph.node_weights_mut() {
+            let Some(scope) = node.scope.as_mut() else {
+                node.scope = root_scope.clone();
+                continue;
+            };
+
+            if scope.parent_id.is_none() {
+                unsafe {
+                    let scope = Arc::get_mut_unchecked(scope);
+                    scope.parent_id = root_scope.as_ref().map(|x| x.id);
                 }
             }
         }
-
         self
     }
 
-    pub fn get_scopes(&self) -> Vec<PlanScope> {
-        let scope_size = self.scope_size.load(Ordering::SeqCst);
-        self.plans_scope[..scope_size].to_vec()
+    // groups: (group_count, ignore_output)
+    // outputs: new_output_size
+    pub fn sequence_group(&mut self, groups: Vec<(usize, bool)>, outputs: usize) -> Result<()> {
+        if self.sinks.is_empty() {
+            return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+        }
+
+        let input_size = groups.iter().map(|x| x.0).sum::<usize>();
+
+        if self.sinks.len() != input_size {
+            return Err(ErrorCode::Internal(
+                "Sequence group sum must be eq sink length",
+            ));
+        }
+
+        if groups.is_empty() {
+            return Err(ErrorCode::Internal("Cannot sequence empty groups"));
+        }
+
+        if groups.len() == 1 && !groups[0].1 {
+            return self.resize(outputs, false);
+        }
+
+        let processor = SequenceGroupProcessor::create(groups, outputs)?;
+        let inputs_port = processor.get_inputs();
+        let outputs_port = processor.get_outputs();
+        self.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+            PipeItem::create(
+                ProcessorPtr::create(Box::new(processor)),
+                inputs_port,
+                outputs_port,
+            ),
+        ]));
+
+        Ok(())
     }
 
-    pub fn add_pipe(&mut self, mut pipe: Pipe) {
-        let (scope_idx, _) = self.scope_size.load(Ordering::SeqCst).overflowing_sub(1);
+    pub fn add_pipe(&mut self, pipe: Pipe) {
+        let plan_scope = PlanScope::get_plan_scope();
+        let mut new_sinks = VecDeque::with_capacity(pipe.output_length);
+        for item in &pipe.items {
+            let index = self.graph.add_node(Node {
+                proc: item.processor.clone(),
+                inputs: item.inputs_port.clone(),
+                outputs: item.outputs_port.clone(),
+                scope: plan_scope.clone(),
+            });
 
-        if let Some(scope) = self.plans_scope.get_mut(scope_idx) {
-            // stack, new plan is always the parent node of previous node.
-            // set the parent node in 'add_pipe' helps skip empty plans(no pipeline).
-            for pipe in &mut self.pipes {
-                if let Some(children) = &mut pipe.scope {
-                    if children.parent_id.is_none() && children.id != scope.id {
-                        children.parent_id = Some(scope.id);
-                    }
-                }
+            for (input_port_index, _) in item.inputs_port.iter().enumerate() {
+                let Some((out_index, output_port_index)) = self.sinks.pop_front() else {
+                    unreachable!();
+                };
+
+                let single_input = item.inputs_port.len() == 1;
+                let single_output = self.graph[out_index].outputs.len() == 1;
+
+                self.graph.add_edge(out_index, index, Edge {
+                    input_index: input_port_index,
+                    output_index: output_port_index,
+                    single_input_and_single_output: single_input && single_output,
+                });
             }
 
-            pipe.scope = Some(scope.clone());
+            for idx in 0..item.outputs_port.len() {
+                new_sinks.push_back((index, idx));
+            }
         }
 
-        self.pipes.push(pipe);
-    }
-
-    pub fn input_len(&self) -> usize {
-        match self.pipes.first() {
-            None => 0,
-            Some(pipe) => pipe.input_length,
-        }
+        self.sinks = new_sinks;
     }
 
     pub fn output_len(&self) -> usize {
-        match self.pipes.last() {
-            None => 0,
-            Some(pipe) => pipe.output_length,
-        }
+        self.sinks.len()
     }
 
     pub fn add_lock_guard(&mut self, guard: Option<Arc<LockGuard>>) {
@@ -221,10 +247,11 @@ impl Pipeline {
 
     pub fn set_max_threads(&mut self, max_threads: usize) {
         let mut max_pipe_size = 0;
-        for pipe in &self.pipes {
-            max_pipe_size = std::cmp::max(max_pipe_size, pipe.items.len());
-        }
+        let sinks = self.graph.externals(Direction::Outgoing).count();
+        let sources = self.graph.externals(Direction::Incoming).count();
 
+        max_pipe_size = std::cmp::max(max_pipe_size, sinks);
+        max_pipe_size = std::cmp::max(max_pipe_size, sources);
         self.max_threads = std::cmp::min(max_pipe_size, max_threads);
     }
 
@@ -322,26 +349,25 @@ impl Pipeline {
     }
 
     pub fn resize(&mut self, new_size: usize, force: bool) -> Result<()> {
-        match self.pipes.last() {
-            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
-            Some(pipe) if pipe.output_length == 0 => {
-                Err(ErrorCode::Internal("Cannot resize empty pipe."))
-            }
-            Some(pipe) if !force && pipe.output_length == new_size => Ok(()),
-            Some(pipe) => {
-                let processor = ResizeProcessor::create(pipe.output_length, new_size);
-                let inputs_port = processor.get_inputs();
-                let outputs_port = processor.get_outputs();
-                self.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
-                    PipeItem::create(
-                        ProcessorPtr::create(Box::new(processor)),
-                        inputs_port,
-                        outputs_port,
-                    ),
-                ]));
-                Ok(())
-            }
+        if self.sinks.is_empty() {
+            return Err(ErrorCode::Internal("Cannot resize empty pipe."));
         }
+
+        if !force && self.sinks.len() == new_size {
+            return Ok(());
+        }
+
+        let processor = ResizeProcessor::create(self.sinks.len(), new_size);
+        let inputs_port = processor.get_inputs();
+        let outputs_port = processor.get_outputs();
+        self.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+            PipeItem::create(
+                ProcessorPtr::create(Box::new(processor)),
+                inputs_port,
+                outputs_port,
+            ),
+        ]));
+        Ok(())
     }
 
     /// resize_partial will merge pipe_item into one reference to each range of ranges
@@ -356,67 +382,55 @@ impl Pipeline {
     }
 
     pub fn resize_partial_one_with_width(&mut self, widths: Vec<usize>) -> Result<()> {
-        match self.pipes.last() {
-            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
-            Some(pipe) if pipe.output_length == 0 => {
-                Err(ErrorCode::Internal("Cannot resize empty pipe."))
-            }
-            Some(_) => {
-                let mut input_len = 0;
-                let mut output_len = 0;
-                let mut pipe_items = Vec::new();
-                for width in widths {
-                    if width.is_zero() {
-                        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
-                    }
-                    output_len += 1;
-                    input_len += width;
-
-                    let processor = ResizeProcessor::create(width, 1);
-                    let inputs_port = processor.get_inputs().to_vec();
-                    let outputs_port = processor.get_outputs().to_vec();
-                    pipe_items.push(PipeItem::create(
-                        ProcessorPtr::create(Box::new(processor)),
-                        inputs_port,
-                        outputs_port,
-                    ));
-                }
-                self.add_pipe(Pipe::create(input_len, output_len, pipe_items));
-                Ok(())
-            }
+        if self.sinks.is_empty() {
+            return Err(ErrorCode::Internal("Cannot resize empty pipe."));
         }
+
+        let mut input_len = 0;
+        let mut output_len = 0;
+        let mut pipe_items = Vec::new();
+        for width in widths {
+            if width.is_zero() {
+                return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+            }
+            output_len += 1;
+            input_len += width;
+
+            let processor = ResizeProcessor::create(width, 1);
+            let inputs_port = processor.get_inputs().to_vec();
+            let outputs_port = processor.get_outputs().to_vec();
+            pipe_items.push(PipeItem::create(
+                ProcessorPtr::create(Box::new(processor)),
+                inputs_port,
+                outputs_port,
+            ));
+        }
+        self.add_pipe(Pipe::create(input_len, output_len, pipe_items));
+        Ok(())
     }
 
     /// Duplicate a pipe input to `n` outputs.
     ///
     /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
     pub fn duplicate(&mut self, force_finish_together: bool, n: usize) -> Result<()> {
-        match self.pipes.last() {
-            Some(pipe) if pipe.output_length > 0 => {
-                let mut items = Vec::with_capacity(pipe.output_length);
-                for _ in 0..pipe.output_length {
-                    let input = InputPort::create();
-                    let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
-                    let processor = DuplicateProcessor::create(
-                        input.clone(),
-                        outputs.clone(),
-                        force_finish_together,
-                    );
-                    items.push(PipeItem::create(
-                        ProcessorPtr::create(Box::new(processor)),
-                        vec![input],
-                        outputs,
-                    ));
-                }
-                self.add_pipe(Pipe::create(
-                    pipe.output_length,
-                    pipe.output_length * n,
-                    items,
-                ));
-                Ok(())
-            }
-            _ => Err(ErrorCode::Internal("Cannot duplicate empty pipe.")),
+        if self.sinks.is_empty() {
+            return Err(ErrorCode::Internal("Cannot duplicate empty pipe."));
         }
+
+        let mut items = Vec::with_capacity(self.sinks.len());
+        for _ in 0..self.sinks.len() {
+            let input = InputPort::create();
+            let outputs = (0..n).map(|_| OutputPort::create()).collect::<Vec<_>>();
+            let processor =
+                DuplicateProcessor::create(input.clone(), outputs.clone(), force_finish_together);
+            items.push(PipeItem::create(
+                ProcessorPtr::create(Box::new(processor)),
+                vec![input],
+                outputs,
+            ));
+        }
+        self.add_pipe(Pipe::create(self.sinks.len(), self.sinks.len() * n, items));
+        Ok(())
     }
 
     /// Used to re-order the input data according to the rule.
@@ -429,71 +443,62 @@ impl Pipeline {
     /// - input 1 -> output 2
     /// - input 2 -> output 0
     pub fn reorder_inputs(&mut self, rule: Vec<usize>) {
-        match self.pipes.last() {
-            Some(pipe) if pipe.output_length > 1 => {
-                debug_assert!(rule.len() == pipe.output_length);
-                let mut inputs = Vec::with_capacity(pipe.output_length);
-                let mut outputs = Vec::with_capacity(pipe.output_length);
-                for _ in 0..pipe.output_length {
-                    inputs.push(InputPort::create());
-                    outputs.push(OutputPort::create());
-                }
-                let processor = ShuffleProcessor::create(inputs.clone(), outputs.clone(), rule);
-                self.add_pipe(Pipe::create(inputs.len(), outputs.len(), vec![
-                    PipeItem::create(ProcessorPtr::create(Box::new(processor)), inputs, outputs),
-                ]));
-            }
-            _ => {}
+        let idx_mapping = rule
+            .iter()
+            .enumerate()
+            .map(|(before_idx, after_idx)| (*after_idx, before_idx))
+            .collect::<HashMap<_, _>>();
+
+        let mut new_sinks = VecDeque::with_capacity(self.sinks.len());
+
+        for index in 0..self.sinks.len() {
+            new_sinks.push_back(self.sinks[idx_mapping[&index]]);
         }
+
+        self.sinks = new_sinks;
     }
 
     pub fn exchange<T: Exchange>(&mut self, n: usize, exchange: Arc<T>) {
-        if let Some(pipe) = self.pipes.last() {
-            if pipe.output_length < 1 {
-                return;
-            }
-
-            let input_len = pipe.output_length;
-            let mut items = Vec::with_capacity(input_len);
-
-            for _index in 0..input_len {
-                let input = InputPort::create();
-                let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
-                items.push(PipeItem::create(
-                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
-                    vec![input],
-                    outputs,
-                ));
-            }
-
-            // partition data block
-            self.add_pipe(Pipe::create(input_len, input_len * n, items));
-
-            let mut reorder_edges = Vec::with_capacity(input_len * n);
-            for index in 0..input_len * n {
-                reorder_edges.push((index % n) * input_len + (index / n));
-            }
-
-            self.reorder_inputs(reorder_edges);
-
-            let mut items = Vec::with_capacity(input_len);
-            for _index in 0..n {
-                let output = OutputPort::create();
-                let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
-                items.push(PipeItem::create(
-                    MergePartitionProcessor::create(
-                        inputs.clone(),
-                        output.clone(),
-                        exchange.clone(),
-                    ),
-                    inputs,
-                    vec![output],
-                ));
-            }
-
-            // merge partition
-            self.add_pipe(Pipe::create(input_len * n, n, items))
+        if self.sinks.is_empty() {
+            return;
         }
+
+        let input_len = self.sinks.len();
+        let mut items = Vec::with_capacity(input_len);
+
+        for _index in 0..input_len {
+            let input = InputPort::create();
+            let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
+            items.push(PipeItem::create(
+                PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+                vec![input],
+                outputs,
+            ));
+        }
+
+        // partition data block
+        self.add_pipe(Pipe::create(input_len, input_len * n, items));
+
+        let mut reorder_edges = Vec::with_capacity(input_len * n);
+        for index in 0..input_len * n {
+            reorder_edges.push((index % n) * input_len + (index / n));
+        }
+
+        self.reorder_inputs(reorder_edges);
+
+        let mut items = Vec::with_capacity(input_len);
+        for _index in 0..n {
+            let output = OutputPort::create();
+            let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
+            items.push(PipeItem::create(
+                MergePartitionProcessor::create(inputs.clone(), output.clone(), exchange.clone()),
+                inputs,
+                vec![output],
+            ));
+        }
+
+        // merge partition
+        self.add_pipe(Pipe::create(input_len * n, n, items))
     }
 
     #[track_caller]
@@ -550,18 +555,47 @@ impl Pipeline {
         chain
     }
 
-    pub fn add_plan_scope(&mut self, scope: PlanScope) -> PlanScopeGuard {
-        let scope_idx = self.scope_size.fetch_add(1, Ordering::SeqCst);
+    pub fn take_sinks(&mut self) -> VecDeque<(NodeIndex, usize)> {
+        std::mem::take(&mut self.sinks)
+    }
 
-        if self.plans_scope.len() > scope_idx {
-            self.plans_scope[scope_idx] = scope;
-            self.plans_scope.truncate(scope_idx + 1);
-            return PlanScopeGuard::create(self.scope_size.clone(), scope_idx);
+    pub fn extend_sinks(&mut self, sinks: impl IntoIterator<Item = (NodeIndex, usize)>) {
+        self.sinks.extend(sinks)
+    }
+
+    pub fn merge(&mut self, mut other: Self) -> Result<VecDeque<(NodeIndex, usize)>> {
+        self.max_threads = std::cmp::max(self.max_threads, other.max_threads);
+        let offset = self.graph.node_count();
+
+        let mut other_sinks = VecDeque::with_capacity(other.output_len());
+        for (index, v) in other.take_sinks() {
+            other_sinks.push_back((NodeIndex::new(offset + index.index()), v));
         }
 
-        assert_eq!(self.plans_scope.len(), scope_idx);
-        self.plans_scope.push(scope);
-        PlanScopeGuard::create(self.scope_size.clone(), scope_idx)
+        for node in other.graph.node_weights() {
+            self.graph.add_node(node.clone());
+        }
+
+        for edge in other.graph.edge_indices() {
+            let index = EdgeIndex::new(edge.index());
+            if let Some((source, target)) = other.graph.edge_endpoints(index) {
+                let source = NodeIndex::new(offset + source.index());
+                let target = NodeIndex::new(offset + target.index());
+                let edge_weight = other.graph.edge_weight(index).unwrap();
+                self.graph.add_edge(source, target, edge_weight.clone());
+            }
+        }
+
+        self.lock_guards.extend(other.take_lock_guards());
+        self.on_finished_chain.extend(other.take_on_finished());
+
+        let self_on_init = self.take_on_init();
+        let other_on_init = other.take_on_init();
+        self.on_init = Some(Box::new(move || {
+            self_on_init().and_then(move |_| other_on_init())
+        }));
+
+        Ok(other_sinks)
     }
 }
 

@@ -21,8 +21,13 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::infer_schema_type;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -45,7 +50,6 @@ use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::pipelines::processors::transforms::transform_merge_block::project_block;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::stream::PullingExecutorStream;
@@ -360,4 +364,87 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::BroadcastSink(_) => {}
     }
     Ok(())
+}
+
+fn project_block(
+    func_ctx: &FunctionContext,
+    block: DataBlock,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+    left_outputs: &[(IndexType, Option<Expr>)],
+    right_outputs: &[(IndexType, Option<Expr>)],
+    is_left: bool,
+) -> Result<DataBlock> {
+    let num_rows = block.num_rows();
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+    let columns = left_outputs
+        .iter()
+        .zip(right_outputs.iter())
+        .map(|(left, right)| {
+            if is_left {
+                if let Some(expr) = &left.1 {
+                    let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                        (expr.data_type().clone(), num_rows)
+                    });
+                    Ok(entry)
+                } else {
+                    Ok(block
+                        .get_by_offset(left_schema.index_of(&left.0.to_string())?)
+                        .clone())
+                }
+            } else if let Some(expr) = &right.1 {
+                let entry = BlockEntry::new(evaluator.run(expr)?, || {
+                    (expr.data_type().clone(), num_rows)
+                });
+                Ok(entry)
+            } else if left.1.is_some() {
+                Ok(block
+                    .get_by_offset(right_schema.index_of(&right.0.to_string())?)
+                    .clone())
+            } else {
+                check_type(
+                    &left.0.to_string(),
+                    &right.0.to_string(),
+                    &block,
+                    left_schema,
+                    right_schema,
+                )
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(DataBlock::new(columns, num_rows))
+}
+
+fn check_type(
+    left_name: &str,
+    right_name: &str,
+    block: &DataBlock,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+) -> Result<BlockEntry> {
+    let left_field = left_schema.field_with_name(left_name)?;
+    let left_data_type = left_field.data_type();
+
+    let right_field = right_schema.field_with_name(right_name)?;
+    let right_data_type = right_field.data_type();
+
+    let index = right_schema.index_of(right_name)?;
+
+    if left_data_type == right_data_type {
+        return Ok(block.get_by_offset(index).clone());
+    }
+
+    if left_data_type.remove_nullable() == right_data_type.remove_nullable() {
+        let origin = block.get_by_offset(index).clone();
+        let mut builder = ColumnBuilder::with_capacity(left_data_type, block.num_rows());
+        for idx in 0..block.num_rows() {
+            let scalar = origin.index(idx).unwrap();
+            builder.push(scalar);
+        }
+        Ok(builder.build().into())
+    } else {
+        Err(ErrorCode::IllegalDataType(
+            "The data type on both sides of the union does not match",
+        ))
+    }
 }

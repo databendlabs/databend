@@ -146,7 +146,7 @@ fn convert_to_decimal(
         ((value_decimal, size), value_type)
     } else {
         let value_type = size.best_type();
-        let value_decimal = other_to_decimal(value, ctx, data_type, value_type);
+        let value_decimal = other_to_decimal(value, None, ctx, data_type, value_type);
         ((value_decimal, size), value_type)
     }
 }

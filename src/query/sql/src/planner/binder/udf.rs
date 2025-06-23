@@ -146,6 +146,8 @@ impl Binder {
                 handler,
                 language,
                 runtime_version,
+                imports,
+                packages,
             } => {
                 UDFValidator::is_udf_script_allowed(&language.parse()?)?;
                 let definition = create_udf_definition_script(
@@ -153,6 +155,8 @@ impl Binder {
                     None,
                     return_type,
                     runtime_version,
+                    imports,
+                    packages,
                     handler,
                     language,
                     code,
@@ -171,12 +175,16 @@ impl Binder {
                 code,
                 language,
                 runtime_version,
+                imports,
+                packages,
             } => {
                 let definition = create_udf_definition_script(
                     arg_types,
                     Some(state_fields),
                     return_type,
                     runtime_version,
+                    imports,
+                    packages,
                     "",
                     language,
                     code,
@@ -255,6 +263,8 @@ fn create_udf_definition_script(
     state_fields: Option<&[UDAFStateField]>,
     return_type: &TypeName,
     runtime_version: &str,
+    imports: &[String],
+    packages: &[String],
     handler: &str,
     language: &str,
     code: &str,
@@ -302,6 +312,8 @@ fn create_udf_definition_script(
             Ok(PlanUDFDefinition::UDAFScript(UDAFScript {
                 code: code.to_string(),
                 arg_types,
+                imports: imports.to_vec(),
+                packages: packages.to_vec(),
                 state_fields,
                 return_type,
                 language: language.to_string(),
@@ -312,6 +324,8 @@ fn create_udf_definition_script(
             code: code.to_string(),
             arg_types,
             return_type,
+            imports: imports.to_vec(),
+            packages: packages.to_vec(),
             handler: handler.to_string(),
             language: language.to_string(),
             runtime_version,

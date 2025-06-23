@@ -30,6 +30,7 @@ mod sync_crash_me;
 mod system;
 mod table_function;
 mod table_function_factory;
+mod temporary_tables_table;
 
 pub use numbers::generate_numbers_parts;
 pub use numbers::NumbersPartInfo;
@@ -42,3 +43,4 @@ pub use system::get_fuse_table_statistics;
 pub use system::TableStatisticsFunc;
 pub use table_function::TableFunction;
 pub use table_function_factory::TableFunctionFactory;
+pub use temporary_tables_table::TemporaryTablesTable;

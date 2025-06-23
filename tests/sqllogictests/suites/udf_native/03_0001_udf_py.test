@@ -1,7 +1,19 @@
 ## enable it when compiled with ee feature
 ## statement ok
 ## CREATE OR REPLACE FUNCTION gcd_py (INT, INT) RETURNS BIGINT LANGUAGE python HANDLER = 'gcd' AS $$
+## # /// script
+## # requires-python = ">=3.12"
+## # dependencies = ["numpy", "pandas"]
+## # ///
+## import numpy as np
+## import pandas as pd
+##
 ## def gcd(a: int, b: int) -> int:
+##     x = int(pd.DataFrame(np.random.rand(3, 3)).sum().sum())
+##     a += x
+##     b -= x
+##     a -= x
+##     b += x
 ##     while b:
 ##         a, b = b, a % b
 ##     return a

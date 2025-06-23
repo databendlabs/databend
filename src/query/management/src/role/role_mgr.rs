@@ -66,7 +66,7 @@ static BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     tenant: Tenant,
-    ownership_cache: Arc<Mutex<Cache>>,
+    ownership_cache: Option<Arc<Mutex<Cache>>>,
     upgrade_to_pb: bool,
 }
 
@@ -75,7 +75,7 @@ impl RoleMgr {
         kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
         tenant: &Tenant,
         upgrade_to_pb: bool,
-        ownership_cache: Arc<Mutex<Cache>>,
+        ownership_cache: Option<Arc<Mutex<Cache>>>,
     ) -> Self {
         RoleMgr {
             kv_api,
@@ -246,24 +246,28 @@ impl RoleApi for RoleMgr {
         let object_owner_prefix = self.ownership_object_prefix();
 
         let cached = {
-            let mut cache = self.ownership_cache.lock().await;
-            let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
+            if let Some(ownership_cache) = &self.ownership_cache {
+                let mut cache = ownership_cache.lock().await;
+                let kvs = cache.try_list_dir(object_owner_prefix.as_str()).await;
 
-            match &kvs {
-                Ok(kvs) => {
-                    info!(
+                match &kvs {
+                    Ok(kvs) => {
+                        info!(
                         "RoleMgr::list_ownerships() returned from cache: {} keys; first key: {:?}; last key: {:?}",
                         kvs.len(),
                         kvs.first().map(|(k, _)| k),
                         kvs.last().map(|(k, _)| k),
                     );
+                    }
+                    Err(err) => {
+                        warn!("list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records", err);
+                    }
                 }
-                Err(err) => {
-                    warn!("list ownerships from cache failed. err: {}; It is not a functional issue but may be a performance issue with more than 100_000 ownership records", err);
-                }
-            }
 
-            kvs.ok()
+                kvs.ok()
+            } else {
+                None
+            }
         };
 
         let values = if let Some(kvs) = cached {

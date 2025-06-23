@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::ops::Div;
 use std::ops::Mul;
@@ -50,7 +51,7 @@ use crate::cast_from_jsonb::variant_to_decimal;
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
     let factory = |params: &[Scalar], args_type: &[DataType]| {
-        if args_type.len() != 1 || params.len() != 2 {
+        if args_type.is_empty() || args_type.len() > 4 || params.len() != 2 {
             return None;
         }
 
@@ -66,6 +67,44 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         ) {
             return None;
         }
+        let (args_type, has_format) = match (
+            args_type.len(),
+            matches!(from_type, DataType::String),
+            args_type.len() > 1 && args_type[1].remove_nullable().is_string(),
+        ) {
+            (1, _, _) => (vec![from_type.clone()], false),
+            (2, true, true) => (vec![DataType::String, DataType::String], true),
+            (2, true, false) => (
+                vec![DataType::String, DataType::Number(NumberDataType::Int64)],
+                false,
+            ),
+            (3, true, true) => (
+                vec![
+                    DataType::String,
+                    DataType::String,
+                    DataType::Number(NumberDataType::Int64),
+                ],
+                true,
+            ),
+            (3, true, false) => (
+                vec![
+                    DataType::String,
+                    DataType::Number(NumberDataType::Int64),
+                    DataType::Number(NumberDataType::Int64),
+                ],
+                false,
+            ),
+            (4, true, true) => (
+                vec![
+                    DataType::String,
+                    DataType::String,
+                    DataType::Number(NumberDataType::Int64),
+                    DataType::Number(NumberDataType::Int64),
+                ],
+                true,
+            ),
+            _ => return None,
+        };
 
         let decimal_size =
             DecimalSize::new(params[0].get_i64()? as _, params[1].get_i64()? as _).ok()?;
@@ -78,11 +117,14 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
         Some(Function {
             signature: FunctionSignature {
                 name: "to_decimal".to_string(),
-                args_type: vec![from_type.clone()],
+                args_type,
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |ctx, d| {
+                    if d.len() > 1 {
+                        return FunctionDomain::MayThrow;
+                    }
                     let decimal_type = DecimalDataType::from(decimal_size);
                     convert_to_decimal_domain(ctx, d[0].clone(), decimal_type)
                         .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
@@ -94,7 +136,13 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                     } else {
                         DecimalDataType::from(decimal_size)
                     };
-                    convert_to_decimal(&args[0], ctx, &from_type, desc_type)
+                    convert_to_decimal(
+                        &args[0],
+                        has_format.then(|| &args[1]),
+                        ctx,
+                        &from_type,
+                        desc_type,
+                    )
                 }),
             },
         })
@@ -113,6 +161,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
             Some(Arc::new(f.passthrough_nullable()))
         })),
     );
+    registry.register_aliases("to_decimal", &["to_numeric", "to_number"]);
     registry.register_function_factory(
         "try_to_decimal",
         FunctionFactory::Closure(Box::new(move |params, args_type| {
@@ -129,6 +178,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
             Some(Arc::new(f.error_to_null().passthrough_nullable()))
         })),
     );
+    registry.register_aliases("try_to_decimal", &["try_to_numeric", "try_to_number"]);
 
     let as_decimal = FunctionFactory::Closure(Box::new(|params, args_type: &[DataType]| {
         if args_type.len() != 1 {
@@ -402,31 +452,33 @@ fn decimal_to_string<T: Decimal>(
 }
 
 pub fn convert_to_decimal(
-    arg: &Value<AnyType>,
+    input: &Value<AnyType>,
+    format: Option<&Value<AnyType>>,
     ctx: &mut EvalContext,
     from_type: &DataType,
     dest_type: DecimalDataType,
 ) -> Value<AnyType> {
     if from_type.is_decimal() {
-        let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
-        decimal_to_decimal(arg, ctx, from_type, dest_type)
+        let (from_type, _) = DecimalDataType::from_value(input).unwrap();
+        decimal_to_decimal(input, ctx, from_type, dest_type)
     } else {
-        other_to_decimal(arg, ctx, from_type, dest_type)
+        other_to_decimal(input, format, ctx, from_type, dest_type)
     }
 }
 
 pub fn other_to_decimal(
-    arg: &Value<AnyType>,
+    input: &Value<AnyType>,
+    format: Option<&Value<AnyType>>,
     ctx: &mut EvalContext,
     from_type: &DataType,
     dest_type: DecimalDataType,
 ) -> Value<AnyType> {
     if let Some(v) = try {
         let size = dest_type.as_decimal64()?;
-        if size.scale() != 0 || size.precision() < 19 {
+        if format.is_some() && size.scale() != 0 || size.precision() < 19 {
             None?
         }
-        let buffer = arg.as_column()?.as_number()?.as_int64()?;
+        let buffer = input.as_column()?.as_number()?.as_int64()?;
         Value::<Decimal64Type>::Column(buffer.clone()).upcast_with_type(&DataType::Decimal(*size))
     } {
         return v;
@@ -434,13 +486,14 @@ pub fn other_to_decimal(
 
     with_decimal_mapped_type!(|DECIMAL_TYPE| match dest_type {
         DecimalDataType::DECIMAL_TYPE(_) => {
-            other_to_decimal_type::<DECIMAL_TYPE>(arg, ctx, from_type, dest_type)
+            other_to_decimal_type::<DECIMAL_TYPE>(input, format, ctx, from_type, dest_type)
         }
     })
 }
 
 fn other_to_decimal_type<T>(
-    arg: &Value<AnyType>,
+    input: &Value<AnyType>,
+    format: Option<&Value<AnyType>>,
     ctx: &mut EvalContext,
     from_type: &DataType,
     dest_type: DecimalDataType,
@@ -451,25 +504,25 @@ where
     let size = dest_type.size();
     match from_type {
         DataType::Boolean => {
-            let arg = arg.try_downcast().unwrap();
+            let input = input.try_downcast().unwrap();
             vectorize_1_arg::<BooleanType, DecimalType<T>>(|a: bool, _| {
                 if a {
                     T::e(size.scale())
                 } else {
                     T::zero()
                 }
-            })(arg, ctx)
+            })(input, ctx)
         }
 
         DataType::Number(ty) => {
             if ty.is_float() {
                 match ty {
                     NumberDataType::Float32 => {
-                        let arg = arg.try_downcast().unwrap();
+                        let arg = input.try_downcast().unwrap();
                         float_to_decimal::<T, NumberType<F32>>(arg, ctx, size)
                     }
                     NumberDataType::Float64 => {
-                        let arg = arg.try_downcast().unwrap();
+                        let arg = input.try_downcast().unwrap();
                         float_to_decimal::<T, NumberType<F64>>(arg, ctx, size)
                     }
                     _ => unreachable!(),
@@ -477,7 +530,7 @@ where
             } else {
                 with_integer_mapped_type!(|NUM_TYPE| match ty {
                     NumberDataType::NUM_TYPE => {
-                        let arg = arg.try_downcast().unwrap();
+                        let arg = input.try_downcast().unwrap();
                         integer_to_decimal::<T, NumberType<NUM_TYPE>>(arg, ctx, size)
                     }
                     _ => unreachable!(),
@@ -485,11 +538,12 @@ where
             }
         }
         DataType::String => {
-            let arg = arg.try_downcast().unwrap();
-            string_to_decimal::<T>(arg, ctx, size)
+            let source_arg = input.try_downcast::<StringType>().unwrap();
+            let format_arg = format.map(|format| format.try_downcast::<StringType>().unwrap());
+            string_to_decimal::<T>(source_arg, format_arg, ctx, size)
         }
         DataType::Variant => {
-            let arg = arg.try_downcast().unwrap();
+            let arg = input.try_downcast().unwrap();
             let result = variant_to_decimal::<T>(arg, ctx, dest_type, false);
             return result.upcast_with_type(&DataType::Decimal(size).wrap_nullable());
         }
@@ -566,7 +620,7 @@ pub fn convert_to_decimal_domain(
         strict_eval: true,
     };
     let dest_size = dest_type.size();
-    let res = convert_to_decimal(&value, &mut ctx, &from_type, dest_type);
+    let res = convert_to_decimal(&value, None, &mut ctx, &from_type, dest_type);
 
     if ctx.errors.is_some() {
         return None;
@@ -586,27 +640,54 @@ pub fn convert_to_decimal_domain(
 
 fn string_to_decimal<T>(
     from: Value<StringType>,
+    format: Option<Value<StringType>>,
     ctx: &mut EvalContext,
-    size: DecimalSize,
+    decimal_size: DecimalSize,
 ) -> Value<DecimalType<T>>
 where
     T: Decimal + Mul<Output = T>,
 {
-    let f = |x: &str, builder: &mut Vec<T>, ctx: &mut EvalContext| {
-        let value =
-            match read_decimal_with_size::<T>(x.as_bytes(), size, true, ctx.func_ctx.rounding_mode)
-            {
-                Ok((d, _)) => d,
-                Err(e) => {
-                    ctx.set_error(builder.len(), e);
-                    T::zero()
+    let is_scalar = from.is_scalar();
+    let len = if is_scalar { 1 } else { ctx.num_rows };
+    let mut builder = DecimalType::<T>::create_builder(len, &[]);
+
+    for idx in 0..len {
+        let source = unsafe { from.index_unchecked(idx).trim() };
+        let format = format
+            .as_ref()
+            .map(|format_arg| unsafe { format_arg.index_unchecked(idx) });
+
+        let value = match format {
+            None => Cow::Borrowed(source),
+            Some(format) => match decimal_format(source, format) {
+                Ok(value) => Cow::Owned(value),
+                Err(err) => {
+                    ctx.set_error(idx, err);
+                    builder.push(T::zero());
+                    continue;
                 }
-            };
-
-        builder.push(value);
-    };
-
-    vectorize_with_builder_1_arg::<StringType, DecimalType<T>>(f)(from, ctx)
+            },
+        };
+        let result = match read_decimal_with_size::<T>(
+            value.as_bytes(),
+            decimal_size,
+            true,
+            ctx.func_ctx.rounding_mode,
+        ) {
+            Ok((d, _)) => d,
+            Err(e) => {
+                ctx.set_error(builder.len(), e);
+                builder.push(T::zero());
+                continue;
+            }
+        };
+        builder.push(result);
+    }
+    if is_scalar {
+        Value::Scalar(builder.remove(0))
+    } else {
+        Value::Column(DecimalType::<T>::build_column(builder))
+    }
 }
 
 fn integer_to_decimal<T, S>(
@@ -1115,4 +1196,63 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(DataBlock::new(entries, num_rows))
+}
+
+fn decimal_format(input: &str, format: &str) -> Result<String, &'static str> {
+    let mut result = String::new();
+
+    let mut input_chars = input.chars().peekable();
+    let mut is_negative = false;
+
+    for fmt_char in format.chars() {
+        match fmt_char {
+            '0' | '9' => match input_chars.next() {
+                Some(c) if c.is_ascii_digit() => result.push(c),
+                Some(_) => return Err("Expected digit"),
+                None => return Err("Unexpected end of input"),
+            },
+            'G' => match input_chars.next() {
+                Some(',') => {}
+                Some(_) => return Err("Expected group separator ','"),
+                None => return Err("Unexpected end of input"),
+            },
+            'D' => match input_chars.next() {
+                Some('.') | Some(',') => result.push('.'),
+                Some(_) => return Err("Expected decimal point"),
+                None => return Err("Unexpected end of input"),
+            },
+            'S' => match input_chars.peek() {
+                Some('+') => {
+                    input_chars.next();
+                }
+                Some('-') => {
+                    input_chars.next();
+                    is_negative = true;
+                }
+                Some(_) => return Err("Expected '+' or '-' for sign"),
+                None => return Err("Unexpected end of input"),
+            },
+            expected => match input_chars.next() {
+                Some(c) if c == expected => {}
+                Some(_) => return Err("Unexpected character"),
+                None => return Err("Unexpected end of input"),
+            },
+        }
+    }
+
+    if input_chars.next().is_some() {
+        return Err("Input is longer than expected");
+    }
+    let trimmed_result = result.trim_start_matches('0');
+    let final_result = if trimmed_result.is_empty() {
+        "0".to_string()
+    } else {
+        trimmed_result.to_string()
+    };
+
+    if is_negative {
+        Ok(format!("-{}", final_result))
+    } else {
+        Ok(final_result)
+    }
 }

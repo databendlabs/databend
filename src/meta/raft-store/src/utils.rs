@@ -12,6 +12,44 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
+use futures::Stream;
+use futures_util::StreamExt;
+use log::info;
+
+/// Add cooperative yielding to a stream to prevent task starvation.
+///
+/// This yields control back to the async runtime every 100 items to prevent
+/// blocking other concurrent tasks when processing large streams.
+pub(crate) fn add_cooperative_yielding<S, T>(
+    stream: S,
+    stream_name: impl fmt::Display + Send,
+) -> impl Stream<Item = T>
+where
+    S: Stream<Item = T>,
+    T: Send + 'static,
+{
+    stream.enumerate().then(move |(index, item)| {
+        // Yield control every 100 items to prevent blocking other tasks
+        let to_yield = if index % 100 == 0 {
+            if index % 5000 == 0 {
+                info!("{stream_name} yield control to allow other tasks to run: index={index}");
+            }
+            true
+        } else {
+            false
+        };
+
+        async move {
+            if to_yield {
+                tokio::task::yield_now().await;
+            }
+            item
+        }
+    })
+}
+
 /// Return the right bound of the prefix, so that `p..right` will cover all strings with prefix `p`.
 ///
 /// If the right bound can not be built, return None.

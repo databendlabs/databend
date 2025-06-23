@@ -74,7 +74,13 @@ pub const FACTOR_MINUTE: i64 = 60;
 pub const FACTOR_SECOND: i64 = 1;
 const LAST_DAY_LUT: [i8; 13] = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-fn eval_years_base(year: i16, month: i8, day: i8, delta: i64) -> std::result::Result<Date, String> {
+fn eval_years_base(
+    year: i16,
+    month: i8,
+    day: i8,
+    delta: i64,
+    _add_months: bool,
+) -> std::result::Result<Date, String> {
     let new_year = year as i64 + delta;
     let mut new_day = day;
     if std::intrinsics::unlikely(month == 2 && day == 29) {
@@ -91,6 +97,7 @@ fn eval_months_base(
     month: i8,
     day: i8,
     delta: i64,
+    add_months: bool,
 ) -> std::result::Result<Date, String> {
     let total_months = (month as i64 + delta - 1) as i16;
     let mut new_year = year + (total_months / 12);
@@ -101,12 +108,17 @@ fn eval_months_base(
     }
 
     // Handle month last day overflow, "2020-2-29" + "1 year" should be "2021-2-28", or "1990-1-31" + "3 month" should be "1990-4-30".
-    let new_day = std::cmp::min::<u32>(
-        day as u32,
-        last_day_of_year_month(new_year, (new_month0 + 1) as i8) as u32,
-    );
+    // For ADD_MONTHS only, if the original day is the last day of the month, the result day of month will be the last day of the result month.
+    let new_month = (new_month0 + 1) as i8;
+    // Determine the correct day
+    let max_day = last_day_of_year_month(new_year, new_month);
+    let new_day = if add_months && day == last_day_of_year_month(year, month) {
+        max_day
+    } else {
+        day.min(max_day)
+    };
 
-    match Date::new(new_year, (new_month0 + 1) as i8, new_day as i8) {
+    match Date::new(new_year, (new_month0 + 1) as i8, new_day) {
         Ok(d) => Ok(d),
         Err(e) => Err(format!("Invalid date: {}", e)),
     }
@@ -131,9 +143,16 @@ macro_rules! impl_interval_year_month {
                 date: i32,
                 tz: TimeZone,
                 delta: impl AsPrimitive<i64>,
+                add_months: bool,
             ) -> std::result::Result<i32, String> {
                 let date = date.to_date(tz);
-                let new_date = $op(date.year(), date.month(), date.day(), delta.as_())?;
+                let new_date = $op(
+                    date.year(),
+                    date.month(),
+                    date.day(),
+                    delta.as_(),
+                    add_months,
+                )?;
 
                 Ok(clamp_date(
                     new_date
@@ -147,9 +166,10 @@ macro_rules! impl_interval_year_month {
                 us: i64,
                 tz: TimeZone,
                 delta: impl AsPrimitive<i64>,
+                add_months: bool,
             ) -> std::result::Result<i64, String> {
                 let ts = us.to_timestamp(tz.clone());
-                let new_date = $op(ts.year(), ts.month(), ts.day(), delta.as_())?;
+                let new_date = $op(ts.year(), ts.month(), ts.day(), delta.as_(), add_months)?;
 
                 let mut ts = new_date
                     .at(ts.hour(), ts.minute(), ts.second(), ts.subsec_nanosecond())

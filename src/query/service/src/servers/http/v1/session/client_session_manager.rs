@@ -438,6 +438,21 @@ impl ClientSessionManager {
         }
         Ok(false)
     }
+
+    /// Get all temporary tables from all sessions
+    pub fn get_all_temp_tables(
+        &self,
+    ) -> Result<Vec<(String, databend_common_meta_app::schema::TableInfo)>> {
+        let mut all_temp_tables = Vec::new();
+        let session_states = self.session_state.lock();
+        for (session_key, session_state) in session_states.iter() {
+            let temp_tables = session_state.temp_tbl_mgr.lock().list_tables()?;
+            for table in temp_tables {
+                all_temp_tables.push((session_key.clone(), table));
+            }
+        }
+        Ok(all_temp_tables)
+    }
 }
 
 pub async fn drop_all_temp_tables_with_logging(

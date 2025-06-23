@@ -38,12 +38,8 @@ impl PipelineBuilder {
     // Create a new pipeline builder with the same context as the current builder
     fn create_sub_pipeline_builder(&self) -> PipelineBuilder {
         let sub_context = QueryContext::create_from(self.ctx.as_ref());
-        let mut sub_builder = PipelineBuilder::create(
-            self.func_ctx.clone(),
-            self.settings.clone(),
-            sub_context,
-            self.main_pipeline.get_scopes(),
-        );
+        let mut sub_builder =
+            PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), sub_context);
         sub_builder.hash_join_states = self.hash_join_states.clone();
         sub_builder
     }
@@ -123,7 +119,7 @@ impl PipelineBuilder {
         }
         build_res.main_pipeline.add_sink(create_sink_processor)?;
 
-        self.pipelines.push(build_res.main_pipeline.finalize());
+        self.pipelines.push(build_res.main_pipeline.finalize(None));
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }
@@ -221,7 +217,7 @@ impl PipelineBuilder {
                 ),
             ))
         })?;
-        self.pipelines.push(right_res.main_pipeline.finalize());
+        self.pipelines.push(right_res.main_pipeline.finalize(None));
         self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }

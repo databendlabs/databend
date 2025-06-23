@@ -41,7 +41,7 @@ impl StorageEncryptionHandler for RealStorageEncryptionHandler {
 
         // check for valid license
         LicenseManagerSwitch::instance().check_enterprise_enabled(
-            unsafe { settings.get_enterprise_license().unwrap_or_default() },
+            settings.get_enterprise_license(),
             Feature::StorageEncryption,
         )
     }

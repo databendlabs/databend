@@ -5,7 +5,7 @@ statement ok
 DROP FUNCTION IF EXISTS notnull
 
 statement ok
-DROP FUNCTION IF EXISTS array_except
+DROP FUNCTION IF EXISTS array_except_fn
 
 statement ok
 CREATE FUNCTION cal AS (a,b,c,d,e) -> a + c * (e / b) - d
@@ -14,7 +14,7 @@ statement ok
 CREATE FUNCTION notnull AS (p) -> not(is_null(p))
 
 statement ok
-CREATE FUNCTION array_except AS (x, y) -> array_filter(x, el -> not contains(y, el))
+CREATE FUNCTION array_except_fn AS (x, y) -> array_filter(x, el -> not contains(y, el))
 
 query B
 SELECT notnull(null)
@@ -32,7 +32,7 @@ SELECT cal(1, 2, 3, 4, 6)
 6.0
 
 query T
-SELECT array_except([1,2], [2,3])
+SELECT array_except_fn([1,2], [2,3])
 ----
 [1]
 
@@ -43,7 +43,7 @@ statement ok
 DROP FUNCTION notnull
 
 statement ok
-DROP FUNCTION array_except
+DROP FUNCTION array_except_fn
 
 ## test js udf
 statement ok
@@ -65,6 +65,9 @@ select number, gcd(number * 3, number * 6), gcd(3, gcd(number * 3, number * 6)) 
 2	6	3
 3	9	3
 4	12	3
+
+statement ok
+select gcd(number * 3, number) as c, uniq( gcd(number * 3, number * 2) ) from numbers(100) group by c;
 
 statement ok
 DROP FUNCTION gcd

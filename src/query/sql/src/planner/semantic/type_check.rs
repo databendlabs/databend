@@ -79,6 +79,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
 use databend_common_expression::ColumnIndex;
+use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -125,6 +126,7 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use crate::binder::bind_values;
 use crate::binder::resolve_file_location;
+use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::binder::Binder;
 use crate::binder::ExprContext;
@@ -179,6 +181,9 @@ use crate::ColumnEntry;
 use crate::DefaultExprBinder;
 use crate::IndexType;
 use crate::MetadataRef;
+
+const DEFAULT_DECIMAL_PRECISION: i64 = 38;
+const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
 /// A helper for type checking.
 ///
@@ -3012,6 +3017,61 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
             }
+        } else if (func_name.eq_ignore_ascii_case("to_number")
+            || func_name.eq_ignore_ascii_case("to_numeric")
+            || func_name.eq_ignore_ascii_case("to_decimal")
+            || func_name.eq_ignore_ascii_case("try_to_number")
+            || func_name.eq_ignore_ascii_case("try_to_numeric")
+            || func_name.eq_ignore_ascii_case("try_to_decimal"))
+            && params.is_empty()
+        {
+            if args.is_empty() || args.len() > 4 {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Invalid arguments for `{func_name}`, get {} params and {} arguments",
+                    params.len(),
+                    arguments.len()
+                )));
+            }
+            let func_ctx = self.ctx.get_function_context()?;
+            let arg_fn = |args: &[ScalarExpr],
+                          index: usize,
+                          arg_name: &str,
+                          default: i64|
+             -> Result<i64> {
+                Ok(args.get(index).map(|arg| {
+                    match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+                        databend_common_expression::Expr::Constant(Constant {
+                                                                       scalar,
+                                                                       ..
+                                                                   }) => Ok(scalar.get_i64()),
+                        _ => Err(ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"))),
+                    }
+                }).transpose()?.flatten().unwrap_or(default))
+            };
+
+            let (precision_index, scale_index) =
+                if args.len() > 1 && args[1].data_type()?.remove_nullable().is_string() {
+                    (2, 3)
+                } else {
+                    (1, 2)
+                };
+            let precision = arg_fn(
+                &args,
+                precision_index,
+                "precision",
+                DEFAULT_DECIMAL_PRECISION,
+            )?;
+            let scale = arg_fn(&args, scale_index, "scale", DEFAULT_DECIMAL_SCALE)?;
+
+            if let Err(err) = DecimalSize::new(precision as u8, scale as u8) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Invalid arguments for `{func_name}`, {}",
+                    err,
+                )));
+            }
+
+            params.push(Scalar::Number(NumberScalar::Int64(precision as _)));
+            params.push(Scalar::Number(NumberScalar::Int64(scale as _)));
         }
 
         let raw_expr = RawExpr::FunctionCall {
@@ -3283,7 +3343,12 @@ impl<'a> TypeChecker<'a> {
         let func_name = match is_diff {
             Expr::DateDiff { .. } => format!("diff_{}s", interval_kind.to_string().to_lowercase()),
             Expr::DateSub { .. } | Expr::DateAdd { .. } => {
-                format!("add_{}s", interval_kind.to_string().to_lowercase())
+                let interval_kind = interval_kind.to_string().to_lowercase();
+                if interval_kind == "month" {
+                    format!("date_add_{}s", interval_kind.to_string().to_lowercase())
+                } else {
+                    format!("add_{}s", interval_kind.to_string().to_lowercase())
+                }
             }
             Expr::DateBetween { .. } => {
                 format!("between_{}s", interval_kind.to_string().to_lowercase())
@@ -4148,7 +4213,6 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("array_sort_desc_null_last"),
             Ascii::new("array_remove_first"),
             Ascii::new("array_remove_last"),
-            Ascii::new("array_distinct"),
         ];
         ARRAY_FUNCTIONS
     }
@@ -4608,6 +4672,8 @@ impl<'a> TypeChecker<'a> {
             arg_types,
             return_type,
             runtime_version,
+            imports,
+            packages,
         } = udf_definition;
 
         let language = language.parse()?;
@@ -4624,11 +4690,23 @@ impl<'a> TypeChecker<'a> {
 
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script(UDFScriptCode {
+
+        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &imports
+                .iter()
+                .map(|s| s.trim_start_matches('@').to_string())
+                .collect::<Vec<String>>(),
+        ))?;
+
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
-        });
+            imports_stage_info,
+            imports,
+            packages,
+        }));
 
         let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
@@ -4666,15 +4744,28 @@ impl<'a> TypeChecker<'a> {
             state_fields,
             return_type,
             runtime_version,
+            imports,
+            packages,
         } = udf_definition;
         let language = language.parse()?;
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
-        let udf_type = UDFType::Script(UDFScriptCode {
+        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+            self.ctx.as_ref(),
+            &imports
+                .iter()
+                .map(|s| s.trim_start_matches('@').to_string())
+                .collect::<Vec<String>>(),
+        ))?;
+
+        let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
             runtime_version,
             code: code_blob.into(),
-        });
+            imports,
+            imports_stage_info,
+            packages,
+        }));
 
         let arguments = args
             .iter()

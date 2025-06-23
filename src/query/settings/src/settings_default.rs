@@ -150,6 +150,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("sequence_step_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(65536),
+                    desc: "Sets the sequence step size for nextval function.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("week_start", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Specifies the first day of the week.(Used by week-related date functions)",
@@ -1336,6 +1343,13 @@ impl DefaultSettings {
                 ("enable_auto_materialize_cte", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables auto materialize CTE, 0 for disable, 1 for enable",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_parallel_union_all", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable parallel UNION ALL, default is 0, 1 for enable",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

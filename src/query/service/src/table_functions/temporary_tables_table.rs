@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -28,9 +29,10 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_storages_system::SyncOneBlockSystemTable;
+use databend_common_storages_system::SyncSystemTable;
 
-use crate::SyncOneBlockSystemTable;
-use crate::SyncSystemTable;
+use crate::servers::http::v1::ClientSessionManager;
 
 pub struct TemporaryTablesTable {
     table_info: TableInfo,
@@ -44,13 +46,22 @@ impl SyncSystemTable for TemporaryTablesTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let catalog = ctx.get_default_catalog()?;
-        let tables = catalog.list_temporary_tables()?;
-        let mut dbs = Vec::with_capacity(tables.len());
-        let mut names = Vec::with_capacity(tables.len());
-        let mut table_ids = Vec::with_capacity(tables.len());
-        let mut engines = Vec::with_capacity(tables.len());
-        for table in tables {
+        let mut dbs = Vec::new();
+        let mut names = Vec::new();
+        let mut table_ids = Vec::new();
+        let mut engines = Vec::new();
+        let mut users = Vec::new();
+        let mut session_ids = Vec::new();
+        let mut is_current_sessions = Vec::new();
+
+        let client_session_manager = ClientSessionManager::instance();
+        let all_temp_tables = client_session_manager.get_all_temp_tables()?;
+
+        let current_session_id = ctx.get_current_client_session_id();
+        log::info!("current_session_id: {:?}", current_session_id);
+
+        for (session_key, table) in all_temp_tables {
+            log::info!("session_key: {:?}", session_key);
             let desc = table.desc;
             let db_name = desc
                 .split('.')
@@ -63,16 +74,30 @@ impl SyncSystemTable for TemporaryTablesTable {
                     }
                 })
                 .ok_or_else(|| format!("Invalid table desc: {}", desc))?;
+
+            let user = session_key.split('/').next().unwrap().to_string();
+            let session_id = session_key.split('/').nth(1).unwrap().to_string();
+            let is_current_session = current_session_id
+                .as_ref()
+                .map(|id| id == &session_id)
+                .unwrap_or(false);
             dbs.push(db_name.to_string());
             names.push(table.name);
             table_ids.push(table.ident.table_id);
-            engines.push(table.meta.engine.clone());
+            engines.push(table.meta.engine);
+            users.push(user);
+            session_ids.push(session_id);
+            is_current_sessions.push(is_current_session);
         }
+
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(dbs),
             StringType::from_data(names),
             UInt64Type::from_data(table_ids),
             StringType::from_data(engines),
+            StringType::from_data(users),
+            StringType::from_data(session_ids),
+            BooleanType::from_data(is_current_sessions),
         ]))
     }
 }
@@ -84,6 +109,9 @@ impl TemporaryTablesTable {
             TableField::new("name", TableDataType::String),
             TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("engine", TableDataType::String),
+            TableField::new("user", TableDataType::String),
+            TableField::new("session_id", TableDataType::String),
+            TableField::new("is_current_session", TableDataType::Boolean),
         ]);
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),

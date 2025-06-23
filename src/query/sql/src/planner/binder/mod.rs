@@ -73,6 +73,7 @@ pub use column_binding::ColumnBindingBuilder;
 pub use column_binding::DummyColumnType;
 pub use copy_into_table::resolve_file_location;
 pub use copy_into_table::resolve_stage_location;
+pub use copy_into_table::resolve_stage_locations;
 pub use default_expr::DefaultExprBinder;
 pub use explain::ExplainConfig;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;

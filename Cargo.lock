@@ -561,7 +561,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=92eeb3b#92eeb3b8ecf10a894b8bd861a8c118215426fa93"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=a442343#a44234332e9c182c247a510c3721b655572f323c"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -4000,7 +4000,6 @@ name = "databend-common-pipeline-sinks"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-channel 1.9.0",
  "async-trait",
  "databend-common-base",
  "databend-common-exception",
@@ -4107,6 +4106,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-users",
+ "databend-common-version",
  "itertools 0.13.0",
  "log",
  "num_cpus",
@@ -4207,6 +4207,7 @@ dependencies = [
  "http 1.3.1",
  "iceberg",
  "log",
+ "lru",
  "opendal",
  "parquet",
  "prometheus-client 0.22.3",
@@ -16526,8 +16527,8 @@ dependencies = [
 
 [[package]]
 name = "watcher"
-version = "0.4.1"
-source = "git+https://github.com/databendlabs/watcher?tag=v0.4.1#70d512a0beeccc7d7e1ce588a6e90b8ad6b875db"
+version = "0.4.2"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.4.2#38e5109dd07a0fd496a48646dddd7de43242d75d"
 dependencies = [
  "futures",
  "log",

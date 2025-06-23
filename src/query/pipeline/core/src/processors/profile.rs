@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::metrics::MetricSample;
 use databend_common_base::runtime::metrics::ScopedRegistry;
@@ -29,25 +28,18 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::StackTrace;
 
 pub struct PlanScopeGuard {
-    idx: usize,
-    scope_size: Arc<AtomicUsize>,
+    save: Option<Arc<PlanScope>>,
 }
 
 impl PlanScopeGuard {
-    pub fn create(scope_size: Arc<AtomicUsize>, idx: usize) -> PlanScopeGuard {
-        PlanScopeGuard { idx, scope_size }
+    pub fn new(save: Option<Arc<PlanScope>>) -> PlanScopeGuard {
+        PlanScopeGuard { save }
     }
 }
 
 impl Drop for PlanScopeGuard {
     fn drop(&mut self) {
-        drop_guard(move || {
-            if self.scope_size.fetch_sub(1, Ordering::SeqCst) != self.idx + 1
-                && !std::thread::panicking()
-            {
-                panic!("Broken pipeline scope stack.");
-            }
-        })
+        PLAN_SCOPE.replace(self.save.take());
     }
 }
 
@@ -186,20 +178,34 @@ pub struct PlanScope {
     pub metrics_registry: Arc<ScopedRegistry>,
 }
 
+thread_local! {
+    static PLAN_SCOPE: RefCell<Option<Arc<PlanScope>>> = const { RefCell::new(None) };
+}
+
 impl PlanScope {
     pub fn create(
         id: u32,
         name: String,
         title: Arc<String>,
         labels: Arc<Vec<ProfileLabel>>,
-    ) -> PlanScope {
-        PlanScope {
+    ) -> Arc<PlanScope> {
+        let parent_id = PlanScope::get_plan_scope().map(|x| x.id);
+        Arc::new(PlanScope {
             id,
             labels,
             title,
-            parent_id: None,
+            parent_id,
             name,
             metrics_registry: ScopedRegistry::create(None),
-        }
+        })
+    }
+
+    pub fn enter_scope_guard(self: Arc<Self>) -> PlanScopeGuard {
+        let old = PLAN_SCOPE.replace(Some(self));
+        PlanScopeGuard::new(old)
+    }
+
+    pub fn get_plan_scope() -> Option<Arc<PlanScope>> {
+        PLAN_SCOPE.with(|x| x.borrow().clone())
     }
 }

@@ -12,89 +12,84 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use async_channel::Receiver;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
+use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::UnionReceiveSink;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::IndexType;
 
-use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     pub fn build_union_all(&mut self, union_all: &UnionAll) -> Result<()> {
         if !union_all.cte_scan_names.is_empty() {
             return self.build_recursive_cte_source(union_all);
         }
-        self.build_pipeline(&union_all.left)?;
-        let union_all_receiver = self.expand_union_all(&union_all.right)?;
-        self.main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                let left_outputs = union_all
-                    .left_outputs
-                    .iter()
-                    .map(|(idx, remote_expr)| {
-                        if let Some(remote_expr) = remote_expr {
-                            (*idx, Some(remote_expr.as_expr(&BUILTIN_FUNCTIONS)))
-                        } else {
-                            (*idx, None)
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                let right_outputs = union_all
-                    .right_outputs
-                    .iter()
-                    .map(|(idx, remote_expr)| {
-                        if let Some(remote_expr) = remote_expr {
-                            (*idx, Some(remote_expr.as_expr(&BUILTIN_FUNCTIONS)))
-                        } else {
-                            (*idx, None)
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                Ok(ProcessorPtr::create(TransformMergeBlock::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    union_all.left.output_schema()?,
-                    union_all.right.output_schema()?,
-                    left_outputs,
-                    right_outputs,
-                    union_all_receiver.clone(),
-                )?))
-            })?;
-        Ok(())
+
+        self.build_union_all_children(&union_all.left, &union_all.left_outputs)?;
+        let left_sinks = self.main_pipeline.take_sinks();
+        self.build_union_all_children(&union_all.right, &union_all.right_outputs)?;
+        let right_sinks = self.main_pipeline.take_sinks();
+
+        let outputs = std::cmp::max(left_sinks.len(), right_sinks.len());
+        let sequence_groups = vec![(left_sinks.len(), false), (right_sinks.len(), false)];
+
+        self.main_pipeline.extend_sinks(left_sinks);
+        self.main_pipeline.extend_sinks(right_sinks);
+
+        match self.ctx.get_settings().get_enable_parallel_union_all()? {
+            true => self.main_pipeline.resize(outputs, false),
+            false => self.main_pipeline.sequence_group(sequence_groups, outputs),
+        }
     }
 
-    fn expand_union_all(&mut self, input: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
-        let union_ctx = QueryContext::create_from(self.ctx.as_ref());
-        let mut pipeline_builder = PipelineBuilder::create(
-            self.func_ctx.clone(),
-            self.settings.clone(),
-            union_ctx,
-            self.main_pipeline.get_scopes(),
-        );
-        pipeline_builder.hash_join_states = self.hash_join_states.clone();
+    fn build_union_all_children(
+        &mut self,
+        input: &PhysicalPlan,
+        projection: &[(IndexType, Option<RemoteExpr>)],
+    ) -> Result<()> {
+        self.build_pipeline(input)?;
+        let output_schema = input.output_schema()?;
 
-        let mut build_res = pipeline_builder.finalize(input)?;
+        let mut expr_offset = output_schema.num_fields();
+        let mut new_projection = Vec::with_capacity(projection.len());
+        let mut exprs = Vec::with_capacity(projection.len());
+        for (idx, expr) in projection {
+            let Some(expr) = expr else {
+                new_projection.push(output_schema.index_of(&idx.to_string())?);
+                continue;
+            };
 
-        assert!(build_res.main_pipeline.is_pulling_pipeline()?);
+            exprs.push(expr.as_expr(&BUILTIN_FUNCTIONS));
+            new_projection.push(expr_offset);
+            expr_offset += 1;
+        }
 
-        let (tx, rx) = async_channel::bounded(2);
+        let mut operators = Vec::with_capacity(2);
+        if !exprs.is_empty() {
+            operators.push(BlockOperator::Map {
+                exprs,
+                projections: None,
+            });
+        }
 
-        build_res.main_pipeline.add_sink(|input_port| {
-            Ok(ProcessorPtr::create(UnionReceiveSink::create(
-                Some(tx.clone()),
-                input_port,
+        operators.push(BlockOperator::Project {
+            projection: new_projection,
+        });
+
+        self.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                input,
+                output,
+                output_schema.num_fields(),
+                self.func_ctx.clone(),
+                operators.clone(),
             )))
-        })?;
-
-        self.pipelines.push(build_res.main_pipeline.finalize());
-        self.pipelines.extend(build_res.sources_pipelines);
-        Ok(rx)
+        })
     }
 }

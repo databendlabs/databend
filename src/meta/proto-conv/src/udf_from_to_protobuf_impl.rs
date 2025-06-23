@@ -137,6 +137,8 @@ impl FromToProto for mt::UDFScript {
             handler: p.handler,
             language: p.language,
             runtime_version: p.runtime_version,
+            imports: p.imports,
+            packages: p.packages,
         })
     }
 
@@ -171,6 +173,8 @@ impl FromToProto for mt::UDFScript {
             arg_types,
             return_type: Some(return_type),
             runtime_version: self.runtime_version.clone(),
+            imports: self.imports.clone(),
+            packages: self.packages.clone(),
         })
     }
 }
@@ -206,6 +210,8 @@ impl FromToProto for mt::UDAFScript {
             return_type,
             language: p.language,
             runtime_version: p.runtime_version,
+            imports: p.imports,
+            packages: p.packages,
             state_fields,
         })
     }
@@ -259,6 +265,8 @@ impl FromToProto for mt::UDAFScript {
             arg_types,
             state_fields,
             return_type: Some(return_type),
+            imports: self.imports.clone(),
+            packages: self.packages.clone(),
         })
     }
 }

@@ -102,7 +102,7 @@ pub struct PipelinePullingExecutor {
 
 impl PipelinePullingExecutor {
     fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
-        if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
+        if !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));

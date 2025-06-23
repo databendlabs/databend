@@ -105,6 +105,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'database'                        | 'system'             | 'clustering_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'dictionaries'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'database'                        | 'system'             | 'indexes'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'processes'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'streams'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'database'                        | 'system'             | 'streams_terse'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -201,6 +202,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'is_attach'                       | 'system'             | 'tables'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_attach'                       | 'system'             | 'tables_with_history'    | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_configured'                   | 'system'             | 'users'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'is_current_session'              | 'system'             | 'temporary_tables'       | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_external'                     | 'system'             | 'tables'                 | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_external'                     | 'system'             | 'tables_with_history'    | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_insertable_into'              | 'information_schema' | 'views'                  | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
@@ -331,6 +333,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'schema_name'                     | 'information_schema' | 'schemata'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'schema_owner'                    | 'information_schema' | 'schemata'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'seq_in_index'                    | 'information_schema' | 'statistics'             | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'session_id'                      | 'system'             | 'temporary_tables'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'session_parameters'              | 'system'             | 'task_history'           | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'session_parameters'              | 'system'             | 'tasks'                  | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       |
 | 'size'                            | 'system'             | 'caches'                 | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -358,6 +361,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'syntax'                          | 'system'             | 'functions'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table'                           | 'system'             | 'clustering_history'     | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table'                           | 'system'             | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table'                           | 'system'             | 'indexes'                | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'table'                           | 'system'             | 'virtual_columns'        | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                   | 'information_schema' | 'columns'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                   | 'information_schema' | 'key_column_usage'       | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -415,6 +419,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'updated_on'                      | 'system'             | 'views_with_history'     | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'user'                            | 'system'             | 'locks'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'user'                            | 'system'             | 'processes'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'user'                            | 'system'             | 'temporary_tables'       | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'value'                           | 'system'             | 'configs'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'value'                           | 'system'             | 'malloc_stats_totals'    | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'value'                           | 'system'             | 'metrics'                | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
