@@ -160,6 +160,7 @@ pub struct CteContext {
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
     pub cte_map: Box<IndexMap<String, CteInfo>>,
+    pub is_binding_materialized_cte: bool,
 }
 
 impl CteContext {

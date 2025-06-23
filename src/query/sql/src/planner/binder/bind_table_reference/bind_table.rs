@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -33,6 +35,8 @@ use databend_storages_common_table_meta::table::get_change_type;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::SExpr;
+use crate::plans::CTEConsumer;
+use crate::plans::RelOperator;
 use crate::BindContext;
 
 impl Binder {
@@ -69,12 +73,13 @@ impl Binder {
             (false, None, String::new())
         };
 
-        // Check and bind common table expression
-        let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
+                let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
+                    cte_name: table_name,
+                })));
+                return Ok((s_expr, bind_context.clone()));
             } else {
                 if self
                     .metadata
@@ -104,11 +109,6 @@ impl Binder {
 
         // Resolve table with catalog
         let table_meta = {
-            let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
-                format!("{}${}", &table_name, cte_suffix_name)
-            } else {
-                table_name.clone()
-            };
             match self.resolve_data_source(
                 catalog.as_str(),
                 database.as_str(),
@@ -161,7 +161,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    None,
                     false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -247,7 +246,6 @@ impl Binder {
                         false,
                         false,
                         false,
-                        None,
                         bind_context.allow_virtual_column,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -280,7 +278,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    cte_suffix_name,
                     bind_context.allow_virtual_column,
                 );
 

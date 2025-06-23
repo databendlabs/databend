@@ -970,3 +970,23 @@ impl TryFrom<RelOperator> for MutationSource {
         }
     }
 }
+
+impl From<MaterializedCTE> for RelOperator {
+    fn from(v: MaterializedCTE) -> Self {
+        Self::MaterializedCTE(v)
+    }
+}
+
+impl TryFrom<RelOperator> for MaterializedCTE {
+    type Error = ErrorCode;
+    fn try_from(value: RelOperator) -> Result<Self> {
+        if let RelOperator::MaterializedCTE(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(format!(
+                "Cannot downcast {:?} to MaterializedCTE",
+                value.rel_op()
+            )))
+        }
+    }
+}

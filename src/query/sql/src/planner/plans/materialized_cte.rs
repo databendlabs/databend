@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use std::hash::Hash;
-use std::hash::Hasher;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
 }
@@ -26,12 +25,6 @@ pub struct MaterializedCTE {
 impl MaterializedCTE {
     pub fn new(cte_name: String) -> Self {
         Self { cte_name }
-    }
-}
-
-impl Hash for MaterializedCTE {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.cte_name.hash(state);
     }
 }
 

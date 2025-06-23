@@ -13,41 +13,24 @@
 // limitations under the License.
 
 use std::hash::Hash;
-use std::hash::Hasher;
-
-use databend_common_expression::DataField;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CTEConsumer {
     pub cte_name: String,
-    pub fields: Vec<DataField>,
 }
 
-impl CTEConsumer {
-    pub fn new(cte_name: String, fields: Vec<DataField>) -> Self {
-        Self { cte_name, fields }
-    }
-
-    // pub fn used_columns(&self) -> Result<ColumnSet> {
-    //     let mut used_columns = ColumnSet::new();
-    //     for field in self.fields.iter() {
-    //         used_columns.insert(field.name().parse()?);
-    //     }
-    //     Ok(used_columns)
-    // }
-}
-
-impl Hash for CTEConsumer {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.cte_name.hash(state);
-        for field in self.fields.iter() {
-            field.name().hash(state);
-        }
-    }
-}
+// impl CTEConsumer {
+//     // pub fn used_columns(&self) -> Result<ColumnSet> {
+//     //     let mut used_columns = ColumnSet::new();
+//     //     for field in self.fields.iter() {
+//     //         used_columns.insert(field.name().parse()?);
+//     //     }
+//     //     Ok(used_columns)
+//     // }
+// }
 
 impl Operator for CTEConsumer {
     fn rel_op(&self) -> RelOp {

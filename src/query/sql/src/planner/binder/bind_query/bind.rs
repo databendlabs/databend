@@ -31,7 +31,9 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::binder::CteContext;
 use crate::plans::BoundColumnRef;
+use crate::plans::MaterializedCTE;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
@@ -84,6 +86,10 @@ impl Binder {
 
         // Bind limit.
         s_expr = self.bind_query_limit(query, s_expr, limit, offset);
+
+        if let Some(with) = &with {
+            s_expr = self.bind_materialized_cte(with, s_expr, bind_context.cte_context.clone())?;
+        }
 
         Ok((s_expr, bind_context))
     }
@@ -225,5 +231,41 @@ impl Binder {
             Arc::new(sort_plan.into()),
             Arc::new(child),
         ))
+    }
+
+    fn bind_materialized_cte(
+        &mut self,
+        with: &With,
+        main_query_expr: SExpr,
+        mut cte_context: CteContext,
+    ) -> Result<SExpr> {
+        let mut current_expr = main_query_expr;
+        cte_context.is_binding_materialized_cte = true;
+
+        for cte in with.ctes.iter().rev() {
+            if cte.materialized {
+                let cte_name = self.normalize_identifier(&cte.alias.name).name;
+
+                // Create a new bind context for the CTE definition
+                let mut cte_bind_context = BindContext {
+                    cte_context: cte_context.clone(),
+                    ..Default::default()
+                };
+
+                // Bind the CTE definition
+                let (cte_definition_expr, _) =
+                    self.bind_query(&mut cte_bind_context, &cte.query)?;
+
+                // Create the MaterializedCTE operator
+                let materialized_cte = MaterializedCTE::new(cte_name);
+                current_expr = SExpr::create_binary(
+                    Arc::new(materialized_cte.into()),
+                    Arc::new(cte_definition_expr),
+                    Arc::new(current_expr),
+                );
+            }
+        }
+
+        Ok(current_expr)
     }
 }
