@@ -114,7 +114,6 @@ module.exports = async ({ github, context, core }) => {
         core.info(`- ${job.name} (ID: ${job.id})`);
     });
 
-    // Retry all failed jobs at once
     try {
         core.info(`Retrying all failed jobs in workflow run: ${runID}`);
 
