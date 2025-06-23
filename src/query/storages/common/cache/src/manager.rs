@@ -1122,4 +1122,70 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_disk_cache_size_threshold() -> Result<()> {
+        use tempfile::TempDir;
+
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Test parameters
+        let cache_name = "test_threshold_cache".to_string();
+        let population_queue_size = 5;
+        let ee_mode = true; // Always use EE mode for this test
+        let sync_data = false;
+        let key_reload_policy = DiskCacheKeyReloadPolicy::Fuzzy;
+
+        // Case 1: Size below threshold (should disable cache)
+        let below_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD - 1;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            below_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_none(),
+            "Disk cache should be disabled when size is below threshold"
+        );
+
+        // Case 2: Size exactly at threshold (should disable cache)
+        let at_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            at_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_none(),
+            "Disk cache should be disabled when size equals threshold"
+        );
+
+        // Case 3: Size above threshold (should enable cache)
+        let above_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD + 1024;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            above_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_some(),
+            "Disk cache should be enabled when size is above threshold"
+        );
+
+        Ok(())
+    }
 }
