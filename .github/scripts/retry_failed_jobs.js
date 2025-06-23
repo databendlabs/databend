@@ -174,12 +174,6 @@ async function getWorkflowInfo(github, context, core, runID) {
 }
 
 async function findRelatedPR(github, context, core, workflowRun) {
-    // Try to find PR from context first (most reliable)
-    if (context.payload.pull_request) {
-        core.info(`Found PR from context: #${context.payload.pull_request.number}`);
-        return context.payload.pull_request;
-    }
-
     // Try to find PR by commit SHA
     try {
         const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
@@ -199,27 +193,6 @@ async function findRelatedPR(github, context, core, workflowRun) {
         }
     } catch (error) {
         core.warning(`Failed to find PR by commit SHA ${workflowRun.head_sha}: ${error.message}`);
-    }
-
-    // Fallback: try to find PR by branch
-    if (workflowRun.head_branch) {
-        try {
-            const { data: pulls } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                head: `${context.repo.owner}:${workflowRun.head_branch}`,
-                state: 'open',
-                sort: 'updated',
-                direction: 'desc'
-            });
-
-            if (pulls.length > 0) {
-                core.info(`Found PR from branch ${workflowRun.head_branch}: #${pulls[0].number}`);
-                return pulls[0];
-            }
-        } catch (error) {
-            core.warning(`Failed to find PR by branch ${workflowRun.head_branch}: ${error.message}`);
-        }
     }
 
     core.info('No related PR found for this workflow run');
