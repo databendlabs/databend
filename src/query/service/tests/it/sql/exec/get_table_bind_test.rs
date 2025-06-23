@@ -995,14 +995,6 @@ impl TableContext for CtxDelegation {
         false
     }
 
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
-    }
-
     fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()
     }

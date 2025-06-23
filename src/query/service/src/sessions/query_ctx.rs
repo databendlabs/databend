@@ -89,7 +89,6 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::COPY_MAX_FILES_COMMIT_MSG;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::schema::CatalogType;
-use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
@@ -122,13 +121,11 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
-use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
 use log::debug;
@@ -168,9 +165,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Temp table for materialized CTE, first string is the database_name, second string is the table_name
-    // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
-    m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
 }
 
 impl QueryContext {
@@ -196,7 +190,6 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
-            m_cte_temp_table: Default::default(),
         })
     }
 
@@ -1825,44 +1818,6 @@ impl TableContext for QueryContext {
                 .temp_tbl_mgr()
                 .lock()
                 .is_temp_table(database_name, table_name)
-    }
-
-    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
-        self.m_cte_temp_table
-            .write()
-            .push((database_name.to_string(), table_name.to_string()));
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        let temp_tbl_mgr = self.shared.session.session_ctx.temp_tbl_mgr();
-        let m_cte_temp_table = self.m_cte_temp_table.read().clone();
-        let tenant = self.get_tenant();
-        for (db_name, table_name) in m_cte_temp_table.iter() {
-            let table = self.get_table(CATALOG_DEFAULT, db_name, table_name).await?;
-            let db = self
-                .get_catalog(CATALOG_DEFAULT)
-                .await?
-                .get_database(&tenant, db_name)
-                .await?;
-            let drop_table_req = DropTableByIdReq {
-                if_exists: true,
-                tenant: tenant.clone(),
-                tb_id: table.get_table_info().ident.table_id,
-                table_name: table_name.to_string(),
-                db_id: db.get_db_info().database_id.db_id,
-                db_name: db.name().to_string(),
-                engine: table.engine().to_string(),
-                temp_prefix: table
-                    .options()
-                    .get(OPT_KEY_TEMP_PREFIX)
-                    .cloned()
-                    .unwrap_or_default(),
-            };
-            drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req).await?;
-        }
-        let mut m_cte_temp_table = self.m_cte_temp_table.write();
-        m_cte_temp_table.clear();
-        Ok(())
     }
 
     fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
