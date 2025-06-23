@@ -180,7 +180,28 @@ async function findRelatedPR(github, context, core, workflowRun) {
         return context.payload.pull_request;
     }
 
-    // If not a PR event, try to find PR by branch
+    // Try to find PR by commit SHA
+    try {
+        const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: workflowRun.head_sha
+        });
+
+        if (pulls.length > 0) {
+            // Filter for open PRs and get the most recently updated one
+            const openPulls = pulls.filter(pr => pr.state === 'open');
+            if (openPulls.length > 0) {
+                const latestPR = openPulls.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0];
+                core.info(`Found PR by commit SHA ${workflowRun.head_sha}: #${latestPR.number}`);
+                return latestPR;
+            }
+        }
+    } catch (error) {
+        core.warning(`Failed to find PR by commit SHA ${workflowRun.head_sha}: ${error.message}`);
+    }
+
+    // Fallback: try to find PR by branch
     if (workflowRun.head_branch) {
         try {
             const { data: pulls } = await github.rest.pulls.list({
