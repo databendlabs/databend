@@ -120,8 +120,6 @@ use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_COMMIT_VERSION;
-use databend_common_version::DATABEND_ENTERPRISE_LICENSE_EMBEDDED;
-use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;

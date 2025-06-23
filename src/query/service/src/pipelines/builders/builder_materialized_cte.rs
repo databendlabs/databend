@@ -25,12 +25,8 @@ impl PipelineBuilder {
     pub(crate) fn build_materialized_cte(&mut self, cte: &MaterializedCTE) -> Result<()> {
         // init builder for cte pipeline
         let sub_context = QueryContext::create_from(self.ctx.as_ref());
-        let sub_builder = PipelineBuilder::create(
-            self.func_ctx.clone(),
-            self.settings.clone(),
-            sub_context,
-            self.main_pipeline.get_scopes(),
-        );
+        let sub_builder =
+            PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), sub_context);
 
         // build cte pipeline
         let mut build_res = sub_builder.finalize(&cte.left)?;
