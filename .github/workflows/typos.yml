@@ -34,4 +34,4 @@ jobs:
       - name: Check spelling
         env:
           CLICOLOR: 1
-        uses: crate-ci/typos@master
+        uses: crate-ci/typos@v1.33.1
