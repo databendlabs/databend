@@ -34,18 +34,8 @@ jobs:
     name: typos check
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      FORCE_COLOR: 1
     steps:
-      - uses: actions/checkout@v4
-        with:
-          clean: "true"
-
-      - uses: baptiste0928/cargo-install@v1
-        with:
-          crate: typos-cli
-          args: --locked
-          cache-key: typos-check
-
-      - name: do typos check with typos-cli
-        run: typos
+      - name: Check spelling
+        env:
+          CLICOLOR: 1
+        uses: crate-ci/typos@master
