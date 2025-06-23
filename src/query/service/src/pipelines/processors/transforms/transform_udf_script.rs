@@ -255,31 +255,32 @@ import os
 import sys
 from pathlib import Path
 
-ALLOWED_BASE = Path("/tmp")
-
-_original_open = open
-_original_os_open = os.open if hasattr(os, 'open') else None
-
-def safe_open(file, mode='r', **kwargs):
-    file_path = Path(file).resolve()
-
-    try:
-        file_path.relative_to(ALLOWED_BASE)
-    except ValueError:
-        raise PermissionError(f"Access denied: {file} is outside allowed directory")
-
-    return _original_open(file, mode, **kwargs)
-
-def safe_os_open(path, flags, mode=0o777):
-    file_path = Path(path).resolve()
-    try:
-        file_path.relative_to(ALLOWED_BASE)
-    except ValueError:
-        raise PermissionError(f"Access denied: {path} is outside allowed directory")
-    return _original_os_open(path, flags, mode)
-
 import builtins, sys
 if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
+    sys._xoptions['DATABEND_RESTRICTED_PYTHON'] = '1'
+
+    ALLOWED_BASE = Path("/tmp")
+    _original_open = open
+    _original_os_open = os.open if hasattr(os, 'open') else None
+
+    def safe_open(file, mode='r', **kwargs):
+        file_path = Path(file).resolve()
+
+        try:
+            file_path.relative_to(ALLOWED_BASE)
+        except ValueError:
+            raise PermissionError(f"Access denied: {file} is outside allowed directory")
+
+        return _original_open(file, mode, **kwargs)
+
+    def safe_os_open(path, flags, mode=0o777):
+        file_path = Path(path).resolve()
+        try:
+            file_path.relative_to(ALLOWED_BASE)
+        except ValueError:
+            raise PermissionError(f"Access denied: {path} is outside allowed directory")
+        return _original_os_open(path, flags, mode)
+
     builtins.open = safe_open
     if _original_os_open:
         os.open = safe_os_open
@@ -288,7 +289,6 @@ if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
     for module in dangerous_modules:
         if module in sys.modules:
             del sys.modules[module]
-    sys._xoptions['DATABEND_RESTRICTED_PYTHON'] = '1'
 "#;
 
     impl RuntimeBuilder<arrow_udf_runtime::python::Runtime> for PyRuntimeBuilder {
