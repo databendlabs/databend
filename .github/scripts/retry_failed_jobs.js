@@ -162,7 +162,7 @@ async function getWorkflowInfo(github, context, core, runID) {
         core.info(`  Job ${job.name} (ID: ${job.id}) status: ${job.status}, conclusion: ${job.conclusion}`);
     }
 
-    const failedJobs = jobs.jobs.filter(job => job.conclusion === 'failure' || job.conclusion === 'cancelled');
+    const failedJobs = jobs.jobs.filter(job => (job.conclusion === 'failure' || job.conclusion === 'cancelled') && job.name !== 'ready');
 
     if (failedJobs.length === 0) {
         core.info('No failed jobs found to retry');
@@ -268,46 +268,96 @@ async function addCommentToPR(github, context, core, runID, runURL, failedJobs, 
             return;
         }
 
-        let comment = `🤖 **Smart Auto-retry Analysis (Annotations-based)**
-  
-The workflow run [${runID}](${runURL}) failed and has been analyzed for retryable errors using job annotations.
+        let comment = `## 🤖 Smart Auto-retry Analysis
 
-**Analysis Results:**
-- Total failed/cancelled jobs: ${failedJobs.length}
-- Jobs with retryable errors: ${retryableJobsCount}
-- Jobs with code/test issues: ${failedJobs.length - retryableJobsCount}`;
+> **Workflow Run:** [\`${runID}\`](${runURL})
+
+The workflow run has been analyzed for retryable errors using job annotations.
+
+---
+
+### 📊 Analysis Summary
+
+| Metric | Count |
+|--------|-------|
+| **Total Failed/Cancelled Jobs** | \`${failedJobs.length}\` |
+| **Jobs with Retryable Errors** | \`${retryableJobsCount}\` |
+| **Jobs with Code/Test Issues** | \`${failedJobs.length - retryableJobsCount}\` |`;
 
         if (priorityCancelled) {
             comment += `
-- ⛔️ **Retry cancelled** due to higher priority request`;
+
+### ⛔️ Retry Status: **CANCELLED**
+
+> **Reason:** Higher priority request detected - retry has been cancelled to avoid resource conflicts.`;
         } else if (retryableJobsCount > 0) {
             comment += `
-- ✅ **${retryableJobsCount} job(s) have been automatically retried** due to infrastructure issues detected in annotations (runner communication, network timeouts, resource exhaustion, etc.)
 
-You can monitor the retry progress in the [Actions tab](${runURL}).`;
+### ✅ Retry Status: **AUTOMATIC RETRY INITIATED**
+
+> **${retryableJobsCount} job(s)** have been automatically retried due to infrastructure issues detected in annotations:
+> - Runner communication failures
+> - Network timeouts
+> - Resource exhaustion
+> - Other transient infrastructure problems
+
+**📈 Monitor Progress:** [View in Actions](${runURL})`;
         } else {
             comment += `
-- ❌ **No jobs were retried** because all failures appear to be code or test related issues that require manual fixes.`;
+
+### ❌ Retry Status: **NO RETRY NEEDED**
+
+> All failures appear to be **code or test related issues** that require manual fixes rather than automatic retries.`;
         }
 
         comment += `
 
-**Job Analysis (based on annotations):**
+---
+
+### 🔍 Detailed Job Analysis
+
 ${analyzedJobs.map(job => {
             if (job.reason.includes('Analysis failed')) {
-                return `- ${job.name}: ❓ ${job.reason}`;
+                return `#### ❓ **${job.name}**
+> **Status:** Analysis failed  
+> **Reason:** ${job.reason}`;
             }
             if (job.reason.includes('Cancelled by higher priority')) {
-                return `- ${job.name}: ⛔️ ${job.reason}`;
+                return `#### ⛔️ **${job.name}**
+> **Status:** Cancelled by higher priority request  
+> **Reason:** ${job.reason}`;
             }
             if (job.reason.includes('No annotations found')) {
-                return `- ${job.name}: ❓ ${job.reason}`;
+                return `#### ❓ **${job.name}**
+> **Status:** No annotations available  
+> **Reason:** ${job.reason}`;
             }
-            return `- ${job.name}: ${job.retryable ? '🔄 Retryable (infrastructure)' : '❌ Not retryable (code/test)'} - ${job.reason} (${job.annotationCount} annotations)`;
-        }).join('\n')}
+            if (job.retryable) {
+                return `#### 🔄 **${job.name}**
+> **Status:** ✅ **Retryable** (Infrastructure Issue)  
+> **Reason:** ${job.reason}  
+> **Annotations:** ${job.annotationCount} found`;
+            } else {
+                return `#### ❌ **${job.name}**
+> **Status:** Not retryable (Code/Test Issue)  
+> **Reason:** ${job.reason}  
+> **Annotations:** ${job.annotationCount} found`;
+            }
+        }).join('\n\n')}
 
 ---
-*This is an automated analysis and retry triggered by the smart retry workflow using job annotations.*`;
+
+<details>
+<summary>🤖 About This Analysis</summary>
+
+This is an **automated analysis and retry** triggered by the smart retry workflow using job annotations. The system analyzes failure patterns to distinguish between:
+
+- **🔄 Infrastructure Issues:** Runner failures, network timeouts, resource exhaustion
+- **❌ Code/Test Issues:** Compilation errors, test failures, logic problems
+
+Only infrastructure issues are automatically retried to avoid wasting resources on code problems that need manual fixes.
+
+</details>`;
 
         await github.rest.issues.createComment({
             owner: context.repo.owner,
