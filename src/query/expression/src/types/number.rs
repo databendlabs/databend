@@ -598,6 +598,9 @@ impl NumberColumn {
             arrow_schema::DataType::Int16 => Ok(NumberColumn::Int16(buffer.into())),
             arrow_schema::DataType::Int32 => Ok(NumberColumn::Int32(buffer.into())),
             arrow_schema::DataType::Int64 => Ok(NumberColumn::Int64(buffer.into())),
+            arrow_schema::DataType::Timestamp(_, _) => Ok(NumberColumn::Int64(buffer.into())),
+            arrow_schema::DataType::Date32 => Ok(NumberColumn::Int32(buffer.into())),
+            arrow_schema::DataType::Date64 => Ok(NumberColumn::Int64(buffer.into())),
             arrow_schema::DataType::Float32 => {
                 let buffer = buffer.into();
                 let buffer = unsafe { std::mem::transmute::<Buffer<f32>, Buffer<F32>>(buffer) };

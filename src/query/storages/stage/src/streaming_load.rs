@@ -135,6 +135,7 @@ fn build_parquet(
 ) -> Result<()> {
     let data_schema = Arc::new(DataSchema::from(&load_ctx.schema));
     let func_ctx = Arc::new(load_ctx.table_context.get_function_context()?);
+    let use_logic_type = file_format_params.use_logic_type;
     pipeline.add_transform(|input_port, output_port| {
         let reader = ParquetStreamingLoadReader {
             ctx: load_ctx.table_context.clone(),
@@ -144,6 +145,7 @@ fn build_parquet(
             case_sensitive: false,
             data_schema: data_schema.clone(),
             func_ctx: func_ctx.clone(),
+            use_logic_type,
         };
         let proc = GeneratingTransformer::create(input_port, output_port, reader);
         Ok(ProcessorPtr::create(Box::new(proc)))
@@ -177,6 +179,7 @@ struct ParquetStreamingLoadReader {
     missing_as: NullAs,
     case_sensitive: bool,
     func_ctx: Arc<FunctionContext>,
+    use_logic_type: bool,
 }
 
 impl DataBlockIteratorBuilder for ParquetStreamingLoadReader {
@@ -195,6 +198,7 @@ impl DataBlockIteratorBuilder for ParquetStreamingLoadReader {
             self.case_sensitive,
             self.func_ctx.clone(),
             self.data_schema.clone(),
+            self.use_logic_type,
         )
     }
 }

@@ -22,6 +22,7 @@ use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storage::init_stage_operator;
 
@@ -77,6 +78,16 @@ impl ParquetVariantTable {
 
         let operator = Arc::new(init_stage_operator(&stage_table_info.stage_info)?);
 
+        let use_logic_type = if let FileFormatParams::Parquet(parquet) =
+            &stage_table_info.stage_info.file_format_params
+        {
+            parquet.use_logic_type
+        } else {
+            return Err(ErrorCode::Internal(
+                "bug: ParquetVariantTable::read_data must be called with FileFormatParams",
+            ));
+        };
+
         ctx.set_partitions(plan.parts.clone())?;
 
         pipeline.add_source(
@@ -86,6 +97,7 @@ impl ParquetVariantTable {
                     output,
                     internal_columns.clone(),
                     operator.clone(),
+                    use_logic_type,
                 )
             },
             max_threads,
