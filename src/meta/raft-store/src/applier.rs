@@ -158,6 +158,8 @@ where SM: StateMachineApi + 'static
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node(node_id),
 
+            Cmd::SetFeature { feature, enable } => self.apply_set_feature(feature, *enable),
+
             Cmd::UpsertKV(ref upsert_kv) => self.apply_upsert_kv(upsert_kv).await?,
 
             Cmd::Transaction(txn) => self.apply_txn(txn).await?,
@@ -218,6 +220,26 @@ where SM: StateMachineApi + 'static
 
         let st = Change::new(prev, result).into();
         Ok(st)
+    }
+
+    /// Toggle a state machine functional feature.
+    #[fastrace::trace]
+    fn apply_set_feature(&mut self, feature: &str, enable: bool) -> AppliedState {
+        let sys_data = self.sm.sys_data_mut();
+        let prev = sys_data.feature_enabled(feature);
+
+        if enable {
+            sys_data.features_mut().insert(feature.to_string());
+        } else {
+            sys_data.features_mut().remove(feature);
+        }
+
+        info!(
+            "apply_set_feature done: {} from {} to {}",
+            feature, prev, enable
+        );
+
+        AppliedState::None
     }
 
     /// Update or insert a kv entry.

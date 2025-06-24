@@ -137,6 +137,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
         match log_entry.cmd {
             Cmd::AddNode { .. } => Ok(None),
             Cmd::RemoveNode { .. } => Ok(None),
+            Cmd::SetFeature { .. } => Ok(None),
             Cmd::UpsertKV(ups) => {
                 let x = LogEntry {
                     txid: log_entry.txid,

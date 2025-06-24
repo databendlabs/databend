@@ -32,3 +32,7 @@ pub mod state_machine;
 pub mod state_machine_api;
 pub mod state_machine_api_ext;
 pub mod utils;
+
+mod state_machine_features;
+
+pub use state_machine_features::StateMachineFeature;

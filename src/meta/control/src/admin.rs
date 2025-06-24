@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_meta::api::http::v1::features::FeatureResponse;
 use reqwest::Client;
 use serde::Deserialize;
 
@@ -70,6 +71,47 @@ impl MetaAdminClient {
         let status = resp.status();
         if status.is_success() {
             let result = resp.json::<AdminTransferLeaderResponse>().await?;
+            Ok(result)
+        } else {
+            let data = resp.bytes().await?;
+            let msg = String::from_utf8_lossy(&data);
+            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+        }
+    }
+
+    pub async fn set_feature(
+        &self,
+        feature: &str,
+        enable: bool,
+    ) -> anyhow::Result<FeatureResponse> {
+        let resp = self
+            .client
+            .get(format!(
+                "{}/v1/features/set?feature={}&enable={}",
+                self.endpoint, feature, enable
+            ))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            let result = resp.json::<FeatureResponse>().await?;
+            Ok(result)
+        } else {
+            let data = resp.bytes().await?;
+            let msg = String::from_utf8_lossy(&data);
+            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+        }
+    }
+
+    pub async fn list_features(&self) -> anyhow::Result<FeatureResponse> {
+        let resp = self
+            .client
+            .get(format!("{}/v1/features/list", self.endpoint))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            let result = resp.json::<FeatureResponse>().await?;
             Ok(result)
         } else {
             let data = resp.bytes().await?;
