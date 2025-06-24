@@ -324,53 +324,65 @@ async function addCommentToPR(github, context, core, runID, runURL, failedJobs, 
         // Build title with retry count
         const titleSuffix = newRetryCount > 0 ? ` (Retry #${newRetryCount})` : '';
 
-        let comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+        // Calculate code issues count (exclude priority cancelled)
+        const codeIssuesCount = priorityCancelled ? 0 : (failedJobs.length - retryableJobsCount);
+
+        let comment;
+
+        if (priorityCancelled) {
+            // Simplified comment for priority cancelled workflow
+            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+
+> **Workflow:** [\`${runID}\`](${runURL})
+
+### ⛔️ **CANCELLED**
+Higher priority request detected - retry cancelled to avoid conflicts.
+
+[View Workflow](${runURL})`;
+        } else {
+            // Full comment for normal analysis
+            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
 
 > **Workflow:** [\`${runID}\`](${runURL})
 
 ### 📊 Summary
 - **Failed Jobs:** ${failedJobs.length}
 - **Retryable:** ${retryableJobsCount}
-- **Code Issues:** ${failedJobs.length - retryableJobsCount}`;
+- **Code Issues:** ${codeIssuesCount}`;
 
-        if (priorityCancelled) {
-            comment += `
-
-### ⛔️ **CANCELLED**
-Higher priority request detected - retry cancelled to avoid conflicts.`;
-        } else if (retryableJobsCount > 0) {
-            comment += `
+            if (retryableJobsCount > 0) {
+                comment += `
 
 ### ✅ **AUTO-RETRY INITIATED**
 **${retryableJobsCount} job(s)** retried due to infrastructure issues (runner failures, timeouts, etc.)
 
 [View Progress](${runURL})`;
-        } else {
-            comment += `
+            } else {
+                comment += `
 
 ### ❌ **NO RETRY NEEDED**
 All failures appear to be code/test issues requiring manual fixes.`;
-        }
+            }
 
-        comment += `
+            comment += `
 
 ### 🔍 Job Details
 ${analyzedJobs.map(job => {
-            if (job.reason.includes('Analysis failed')) {
-                return `- ❓ **${job.name}**: Analysis failed`;
-            }
-            if (job.reason.includes('Cancelled by higher priority')) {
-                return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
-            }
-            if (job.reason.includes('No annotations found')) {
-                return `- ❓ **${job.name}**: No annotations available`;
-            }
-            if (job.retryable) {
-                return `- 🔄 **${job.name}**: ✅ Retryable (Infrastructure)`;
-            } else {
-                return `- ❌ **${job.name}**: Not retryable (Code/Test)`;
-            }
-        }).join('\n')}
+                if (job.reason.includes('Analysis failed')) {
+                    return `- ❓ **${job.name}**: Analysis failed`;
+                }
+                if (job.reason.includes('Cancelled by higher priority')) {
+                    return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
+                }
+                if (job.reason.includes('No annotations found')) {
+                    return `- ❓ **${job.name}**: No annotations available`;
+                }
+                if (job.retryable) {
+                    return `- 🔄 **${job.name}**: ✅ Retryable (Infrastructure)`;
+                } else {
+                    return `- ❌ **${job.name}**: Not retryable (Code/Test)`;
+                }
+            }).join('\n')}
 
 ---
 
@@ -379,6 +391,7 @@ ${analyzedJobs.map(job => {
 
 Automated analysis using job annotations to distinguish infrastructure issues (auto-retried) from code/test issues (manual fixes needed).
 </details>`;
+        }
 
         if (existingComment) {
             // Update existing comment
@@ -404,9 +417,53 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
     }
 }
 
+async function deleteRetryComment(github, context, core, runID) {
+    try {
+        // Get workflow run to find the branch
+        const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: runID
+        });
+
+        // Find related PR
+        const pr = await findRelatedPR(github, context, core, workflowRun);
+
+        if (!pr) {
+            core.info('No related PR found, skipping comment deletion');
+            return;
+        }
+
+        // Try to find existing retry comment
+        const existingComment = await findExistingRetryComment(github, context, core, pr);
+
+        if (existingComment) {
+            // Delete existing comment
+            await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id
+            });
+            core.info(`Deleted smart retry analysis comment from PR #${pr.number}`);
+        } else {
+            core.info('No existing retry analysis comment found to delete');
+        }
+    } catch (error) {
+        core.error(`Failed to delete comment from PR:`, error.message);
+    }
+}
+
 module.exports = async ({ github, context, core }) => {
     const runID = process.env.WORKFLOW_RUN_ID;
     const runURL = process.env.WORKFLOW_RUN_URL;
+    const conclusion = process.env.CONCLUSION;
+
+    // Check if workflow succeeded - if so, delete any existing retry comments and exit
+    if (conclusion === 'success') {
+        core.info('Workflow succeeded - deleting any existing retry analysis comments');
+        await deleteRetryComment(github, context, core, runID);
+        return;
+    }
 
     // Get workflow information and failed jobs
     const { failedJobs, workflowRun } = await getWorkflowInfo(github, context, core, runID);
