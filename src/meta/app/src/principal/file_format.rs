@@ -49,6 +49,7 @@ const NULL_FIELD_AS: &str = "null_field_as";
 const NULL_IF: &str = "null_if";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 const OPT_BINARY_FORMAT: &str = "binary_format";
+const OPT_USE_LOGIC_TYPE: &str = "use_logic_type";
 
 /// File format parameters after checking and parsing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -188,21 +189,25 @@ impl FileFormatParams {
             StageFileFormatType::Avro => {
                 let compression = reader.take_compression_default_none()?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let use_logic_type = reader.take_bool(OPT_USE_LOGIC_TYPE, true)?;
                 let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::Avro(AvroFileFormatParams::try_create(
                     compression,
                     missing_field_as.as_deref(),
                     null_if,
+                    Some(use_logic_type),
                 )?)
             }
             StageFileFormatType::Parquet => {
                 let compression = reader.take_compression(StageFileCompression::Zstd)?;
                 let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let use_logic_type = reader.take_bool(OPT_USE_LOGIC_TYPE, true)?;
                 let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
                 FileFormatParams::Parquet(ParquetFileFormatParams::try_create(
                     compression,
                     missing_field_as.as_deref(),
                     null_if,
+                    Some(use_logic_type),
                 )?)
             }
             StageFileFormatType::Orc => {
@@ -344,6 +349,7 @@ impl Default for FileFormatParams {
             compression: StageFileCompression::Zstd,
             missing_field_as: NullAs::Error,
             null_if: vec![],
+            use_logic_type: true,
         })
     }
 }
@@ -727,6 +733,7 @@ pub struct AvroFileFormatParams {
     pub compression: StageFileCompression,
     pub missing_field_as: NullAs,
     pub null_if: Vec<String>,
+    pub use_logic_type: bool,
 }
 
 impl AvroFileFormatParams {
@@ -734,6 +741,7 @@ impl AvroFileFormatParams {
         compression: StageFileCompression,
         missing_field_as: Option<&str>,
         null_if: Vec<String>,
+        use_logic_type: Option<bool>,
     ) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
         if matches!(missing_field_as, NullAs::Null) {
@@ -745,6 +753,7 @@ impl AvroFileFormatParams {
             compression,
             missing_field_as,
             null_if,
+            use_logic_type: use_logic_type.unwrap_or(true),
         })
     }
 }
@@ -755,6 +764,7 @@ impl Default for crate::principal::AvroFileFormatParams {
             compression: StageFileCompression::None,
             missing_field_as: NullAs::Error,
             null_if: vec![],
+            use_logic_type: true,
         }
     }
 }
@@ -774,6 +784,7 @@ pub struct ParquetFileFormatParams {
     pub compression: StageFileCompression,
     pub missing_field_as: NullAs,
     pub null_if: Vec<String>,
+    pub use_logic_type: bool,
 }
 
 impl Default for ParquetFileFormatParams {
@@ -782,6 +793,7 @@ impl Default for ParquetFileFormatParams {
             compression: StageFileCompression::Zstd,
             missing_field_as: Default::default(),
             null_if: Default::default(),
+            use_logic_type: true,
         }
     }
 }
@@ -791,12 +803,14 @@ impl ParquetFileFormatParams {
         compression: StageFileCompression,
         missing_field_as: Option<&str>,
         null_if: Vec<String>,
+        use_logic_type: Option<bool>,
     ) -> Result<Self> {
         let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
         Ok(Self {
             compression,
             missing_field_as,
             null_if,
+            use_logic_type: use_logic_type.unwrap_or(true),
         })
     }
 }

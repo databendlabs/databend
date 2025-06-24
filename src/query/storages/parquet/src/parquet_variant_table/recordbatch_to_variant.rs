@@ -26,8 +26,8 @@ pub fn read_record_batch(
     builder: &mut BinaryColumnBuilder,
     tz: &TimeZone,
     typ: &TableDataType,
+    schema: &DataSchema,
 ) -> databend_common_exception::Result<()> {
-    let schema = DataSchema::try_from(record_batch.schema().as_ref())?;
     let mut columns = Vec::with_capacity(record_batch.columns().len());
     for (array, field) in record_batch.columns().iter().zip(schema.fields()) {
         columns.push(Column::from_arrow_rs(array.clone(), field.data_type())?)
@@ -44,12 +44,13 @@ pub fn record_batch_to_block(
     record_batch: RecordBatch,
     tz: &TimeZone,
     typ: &TableDataType,
+    schema: &DataSchema,
 ) -> databend_common_exception::Result<DataBlock> {
     let mut builder = BinaryColumnBuilder::with_capacity(
         record_batch.num_rows(),
         record_batch.get_array_memory_size(),
     );
-    read_record_batch(record_batch, &mut builder, tz, typ)?;
+    read_record_batch(record_batch, &mut builder, tz, typ, schema)?;
     let column = builder.build();
     let num_rows = column.len();
     Ok(DataBlock::new(

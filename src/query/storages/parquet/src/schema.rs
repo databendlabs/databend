@@ -20,6 +20,7 @@ use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_storages_common_stage::schema_date_time_to_int;
 
 pub(crate) fn lower_field_name(field: &ArrowField) -> ArrowField {
     let name = field.name().to_lowercase();
@@ -46,6 +47,7 @@ pub(crate) fn lower_field_name(field: &ArrowField) -> ArrowField {
 pub(crate) fn arrow_to_table_schema(
     schema: &ArrowSchema,
     case_sensitive: bool,
+    use_logic_type: bool,
 ) -> Result<TableSchema> {
     let fields = schema
         .fields
@@ -59,5 +61,9 @@ pub(crate) fn arrow_to_table_schema(
         })
         .collect::<Vec<_>>();
     let schema = ArrowSchema::new_with_metadata(fields, schema.metadata().clone());
-    TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
+    let mut schema = TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)?;
+    if !use_logic_type {
+        schema_date_time_to_int(&mut schema);
+    }
+    Ok(schema)
 }

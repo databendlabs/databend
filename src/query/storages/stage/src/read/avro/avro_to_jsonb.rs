@@ -69,6 +69,16 @@ pub(super) fn to_jsonb<'a>(value: &'a Value, schema: &Schema) -> Result<jsonb::V
                 value: (*v) / 1_000,
             })
         }
+        (
+            Value::TimestampMicros(v)
+            | Value::LocalTimestampMicros(v)
+            | Value::TimestampMillis(v)
+            | Value::LocalTimestampMillis(v)
+            | Value::TimestampNanos(v)
+            | Value::LocalTimestampNanos(v),
+            Schema::Long,
+        ) => jsonb::Value::Number(jsonb::Number::Int64(*v)),
+        (Value::Date(v), Schema::Int) => jsonb::Value::Number(jsonb::Number::Int64((*v).into())),
         (Value::Duration(d), Schema::Duration) => {
             let months: u32 = d.months().into();
             let days: u32 = d.days().into();

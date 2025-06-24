@@ -56,6 +56,7 @@ files = [
         "timestamp",
         [
             {
+                "date": dt,
                 "micros": ts,
                 "micros_local": ts,
                 "millis": ts,

@@ -150,7 +150,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
 
     let bool_options = map(
         rule! {
-            (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER) ~ ^"=" ~ ^#literal_bool
+            (ERROR_ON_COLUMN_COUNT_MISMATCH | OUTPUT_HEADER | USE_LOGIC_TYPE) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), FileFormatValue::Bool(v)),
     );

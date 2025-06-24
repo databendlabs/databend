@@ -1,0 +1,34 @@
+statement ok
+create or replace file format avro_raw type = avro use_logic_type=false
+
+query 
+SELECT $1 FROM '@data/avro/timestamp.avro' (  FILE_FORMAT => 'avro')
+----
+{"date":"2025-05-20","micros":"2025-05-19 17:02:03.123450","micros_local":"2025-05-20 01:02:03.123450","millis":"2025-05-19 17:02:03.123000","millis_local":"2025-05-20 01:02:03.123000"}
+
+query 
+SELECT $1 FROM '@data/avro/timestamp.avro' (  FILE_FORMAT => 'avro_raw')
+----
+{"date":20228,"micros":1747674123123450,"micros_local":1747702923123450,"millis":1747674123123,"millis_local":1747702923123}
+
+statement ok
+create or replace table t1 (date date, micros timestamp, micros_local timestamp, millis timestamp, millis_local timestamp)
+
+statement ok
+create or replace table t2 (date int32, micros int64, micros_local int64, millis int64, millis_local int64)
+
+statement ok
+copy into t1 from @data/avro/timestamp.avro file_format=(format_name='avro')
+
+statement ok
+copy into t2 from @data/avro/timestamp.avro file_format=(format_name='avro_raw')
+
+query ??
+select * from t1
+----
+2025-05-20 9999-12-30 22:00:00.000000 9999-12-30 22:00:00.000000 9999-12-30 22:00:00.000000 9999-12-30 22:00:00.000000
+
+query ??
+select * from t2
+----
+20228 1747674123123450 1747702923123450 1747674123123 1747702923123
