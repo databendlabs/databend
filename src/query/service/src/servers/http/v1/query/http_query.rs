@@ -460,6 +460,7 @@ impl HttpQuery {
                 session.set_current_catalog(catalog.clone());
             }
             if let Some(db) = &session_conf.database {
+                log::info!("[HTTP-QUERY] set_current_database: {db}");
                 session.set_current_database(db.clone());
             }
             if let Some(role) = &session_conf.role {
