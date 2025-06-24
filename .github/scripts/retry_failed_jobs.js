@@ -301,7 +301,7 @@ function getRetryCount(existingComment) {
     if (!existingComment) return 0;
 
     // Try to extract retry count from the title
-    const titleMatch = existingComment.body.match(/## 🤖 Smart Auto-retry Analysis\s*(?:\(Retry #(\d+)\))?/);
+    const titleMatch = existingComment.body.match(/## 🤖 Smart Auto-retry Analysis\s*(?:\(Retry (\d+)\))?/);
     if (titleMatch && titleMatch[1]) {
         return parseInt(titleMatch[1], 10);
     }
@@ -339,7 +339,7 @@ async function addCommentToPR(github, context, core, runID, runURL, jobData, pri
         const newRetryCount = jobData.retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
 
         // Build title with retry count
-        const titleSuffix = newRetryCount > 0 ? ` (Retry #${newRetryCount})` : '';
+        const titleSuffix = newRetryCount > 0 ? ` (Retry ${newRetryCount})` : '';
 
         // Calculate code issues count (exclude priority cancelled)
         const codeIssuesCount = priorityCancelled ? 0 : (jobData.failedJobs.length - jobData.retryableJobsCount);
@@ -419,7 +419,7 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
                 comment_id: existingComment.id,
                 body: comment
             });
-            core.info(`Updated existing smart retry analysis comment on PR #${pr.number} (Retry #${newRetryCount})`);
+            core.info(`Updated existing smart retry analysis comment on PR #${pr.number} (Retry ${newRetryCount})`);
         } else {
             // Create new comment
             await github.rest.issues.createComment({
