@@ -417,9 +417,53 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
     }
 }
 
+async function deleteRetryComment(github, context, core, runID) {
+    try {
+        // Get workflow run to find the branch
+        const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: runID
+        });
+
+        // Find related PR
+        const pr = await findRelatedPR(github, context, core, workflowRun);
+
+        if (!pr) {
+            core.info('No related PR found, skipping comment deletion');
+            return;
+        }
+
+        // Try to find existing retry comment
+        const existingComment = await findExistingRetryComment(github, context, core, pr);
+
+        if (existingComment) {
+            // Delete existing comment
+            await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id
+            });
+            core.info(`Deleted smart retry analysis comment from PR #${pr.number}`);
+        } else {
+            core.info('No existing retry analysis comment found to delete');
+        }
+    } catch (error) {
+        core.error(`Failed to delete comment from PR:`, error.message);
+    }
+}
+
 module.exports = async ({ github, context, core }) => {
     const runID = process.env.WORKFLOW_RUN_ID;
     const runURL = process.env.WORKFLOW_RUN_URL;
+    const conclusion = process.env.CONCLUSION;
+
+    // Check if workflow succeeded - if so, delete any existing retry comments and exit
+    if (conclusion === 'success') {
+        core.info('Workflow succeeded - deleting any existing retry analysis comments');
+        await deleteRetryComment(github, context, core, runID);
+        return;
+    }
 
     // Get workflow information and failed jobs
     const { failedJobs, workflowRun } = await getWorkflowInfo(github, context, core, runID);
