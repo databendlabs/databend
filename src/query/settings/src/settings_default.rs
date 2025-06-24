@@ -451,7 +451,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables bloom runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
