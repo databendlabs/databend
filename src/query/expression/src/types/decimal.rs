@@ -1564,7 +1564,7 @@ impl DecimalColumn {
                     precision: *p,
                     scale: *s as u8,
                 };
-                Ok(Self::Decimal128(buffer.into(), decimal_size).strict_decimal_data_type())
+                Ok(Self::Decimal128(buffer.into(), decimal_size).strict_decimal())
             }
             arrow_schema::DataType::Decimal256(p, s) => {
                 let decimal_size = DecimalSize {
@@ -1591,8 +1591,8 @@ impl DecimalColumn {
         }
     }
 
-    pub fn strict_decimal_data_type(self) -> Self {
-        if self.is_strict_decimal_data_type() {
+    pub fn strict_decimal(self) -> Self {
+        if self.is_strict_decimal() {
             return self;
         }
 
@@ -1608,7 +1608,7 @@ impl DecimalColumn {
         })
     }
 
-    pub fn is_strict_decimal_data_type(&self) -> bool {
+    pub fn is_strict_decimal(&self) -> bool {
         self.data_kind() == self.size().data_kind()
     }
 

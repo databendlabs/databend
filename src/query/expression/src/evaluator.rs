@@ -152,14 +152,6 @@ impl<'a> Evaluator<'a> {
             .map_err(|err| Self::map_err(err, expr))
     }
 
-    pub fn run_fast(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.partial_run(expr, None, &mut EvaluateOptions {
-            strict_eval: false,
-            ..Default::default()
-        })
-        .map_err(|err| Self::map_err(err, expr))
-    }
-
     fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
         let expr_str = format!("`{}`", expr.sql_display());
         if err.message().contains(expr_str.as_str()) {

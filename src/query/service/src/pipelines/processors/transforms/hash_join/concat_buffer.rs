@@ -14,7 +14,6 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_functions::scalars::strict_decimal_data_type;
 
 /// Buffer for concatenating input data blocks, to improve cache locality.
 pub struct ConcatBuffer {
@@ -51,17 +50,7 @@ impl ConcatBuffer {
     }
 
     fn concat(&mut self) -> Result<DataBlock> {
-        // (null as decimal(10, 2)).to_column returns decimal128, fix it
-        let buffer = self
-            .buffer
-            .drain(..)
-            .map(|block| {
-                Ok(strict_decimal_data_type(
-                    block.consume_convert_to_full(),
-                    true,
-                )?)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let buffer = std::mem::take(&mut self.buffer);
         let data_block = DataBlock::concat(&buffer)?;
         self.num_rows = 0;
         Ok(data_block)

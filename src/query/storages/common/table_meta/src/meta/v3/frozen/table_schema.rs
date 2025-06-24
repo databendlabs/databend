@@ -178,8 +178,8 @@ mod converters {
     impl From<DecimalDataType> for databend_common_expression::types::DecimalDataType {
         fn from(value: DecimalDataType) -> Self {
             match value {
-                DecimalDataType::Decimal128(value) => Self::Decimal128(value.into()),
-                DecimalDataType::Decimal256(value) => Self::Decimal256(value.into()),
+                DecimalDataType::Decimal128(size) => Self::Decimal128(size.into()),
+                DecimalDataType::Decimal256(size) => Self::Decimal256(size.into()),
             }
         }
     }

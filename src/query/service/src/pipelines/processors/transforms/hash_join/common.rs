@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::AccessType;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::BlockEntry;
@@ -29,7 +28,6 @@ use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::desc::MARKER_KIND_FALSE;
@@ -130,9 +128,9 @@ impl HashJoinProbeState {
         func_ctx: &FunctionContext,
     ) -> Result<NullableColumn<BooleanType>> {
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let filter_vector: Value<AnyType> = evaluator.run_fast(filter)?;
-        let filter_vector =
-            filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
+        let filter_vector = evaluator
+            .run(filter)?
+            .convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
         match filter_vector {
             Column::Nullable(_) => {

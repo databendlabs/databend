@@ -549,7 +549,7 @@ impl HashJoinBuildState {
             .iter()
             .map(|expr| {
                 Ok(evaluator
-                    .run_fast(expr)?
+                    .run(expr)?
                     .convert_to_full_column(expr.data_type(), chunk.num_rows()))
             })
             .collect::<Result<Vec<_>>>()?;

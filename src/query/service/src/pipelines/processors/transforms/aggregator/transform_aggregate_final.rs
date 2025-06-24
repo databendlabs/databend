@@ -15,13 +15,11 @@
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
 use databend_common_expression::PayloadFlushState;
-use databend_common_functions::scalars::strict_decimal_data_type;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -117,8 +115,7 @@ impl TransformFinalAggregate {
                     let mut cols = self.flush_state.take_aggregate_results();
                     cols.extend_from_slice(&self.flush_state.take_group_columns());
 
-                    let block = strict_decimal_data_type(DataBlock::new_from_columns(cols), false)
-                        .map_err(ErrorCode::Internal)?;
+                    let block = DataBlock::new_from_columns(cols);
 
                     blocks.push(block);
                 } else {

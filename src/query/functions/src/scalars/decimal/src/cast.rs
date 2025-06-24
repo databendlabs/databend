@@ -1126,7 +1126,7 @@ fn decimal_to_int<T: Number>(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Val
     .upcast_with_type(&DataType::Number(T::data_type()))
 }
 
-pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock, String> {
+pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
     let num_rows = data.num_rows();
     let entries = data
         .take_columns()
@@ -1137,7 +1137,7 @@ pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock
                 return Ok(entry);
             }
 
-            let value = strict_decimal_data_type_value(value, best)?;
+            let value = strict_decimal_data_type_value(value)?;
             Ok(BlockEntry::new(value, || {
                 (entry.data_type(), entry.num_rows())
             }))
@@ -1147,10 +1147,7 @@ pub fn strict_decimal_data_type(data: DataBlock, best: bool) -> Result<DataBlock
     Ok(DataBlock::new(entries, num_rows))
 }
 
-fn strict_decimal_data_type_value(
-    value: Value<AnyType>,
-    _best: bool,
-) -> Result<Value<AnyType>, String> {
+fn strict_decimal_data_type_value(value: Value<AnyType>) -> Result<Value<AnyType>, String> {
     use DecimalDataType::*;
     // todo array map
     // if let Some(array) = value.try_downcast::<ArrayType<AnyType>>() { }
