@@ -38,7 +38,7 @@ use super::convert_to_decimal_domain;
 use crate::decimal_to_decimal_fast;
 use crate::other_to_decimal;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ArithmeticOp {
     Plus,
     Minus,
@@ -405,18 +405,10 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |ctx, d| {
-                    let (left, right) =
-                        if left_size.can_carried_by_128() && right_size.can_carried_by_128() {
-                            (
-                                DecimalDataType::Decimal128(left_size),
-                                DecimalDataType::Decimal128(right_size),
-                            )
-                        } else {
-                            (
-                                DecimalDataType::Decimal256(left_size),
-                                DecimalDataType::Decimal256(right_size),
-                            )
-                        };
+                    let (left, right) = (
+                        DecimalDataType::Decimal256(left_size),
+                        DecimalDataType::Decimal256(right_size),
+                    );
                     let lhs = convert_to_decimal_domain(ctx, d[0].clone(), left);
                     let rhs = convert_to_decimal_domain(ctx, d[1].clone(), right);
 
@@ -427,7 +419,7 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
 
                     let size = return_size;
 
-                    let default_domain = if matches!(arithmetic_op, ArithmeticOp::Divide) {
+                    let default_domain = if arithmetic_op == ArithmeticOp::Divide {
                         FunctionDomain::MayThrow
                     } else {
                         FunctionDomain::Full
@@ -435,17 +427,29 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
                     {
                         match (lhs, rhs) {
                             (
-                                DecimalDomain::Decimal128(d1, _),
-                                DecimalDomain::Decimal128(d2, _),
-                            ) => arithmetic_op
-                                .calc_domain(&d1, &d2, size.precision())
-                                .map(|d| DecimalDomain::Decimal128(d, size)),
-                            (
                                 DecimalDomain::Decimal256(d1, _),
                                 DecimalDomain::Decimal256(d2, _),
                             ) => arithmetic_op
                                 .calc_domain(&d1, &d2, size.precision())
-                                .map(|d| DecimalDomain::Decimal256(d, size)),
+                                .map(|d| match size.data_kind() {
+                                    DecimalDataKind::Decimal64 => DecimalDomain::Decimal64(
+                                        SimpleDomain {
+                                            min: d.min.as_i64(),
+                                            max: d.max.as_i64(),
+                                        },
+                                        size,
+                                    ),
+                                    DecimalDataKind::Decimal128 => DecimalDomain::Decimal128(
+                                        SimpleDomain {
+                                            min: d.min.as_i128(),
+                                            max: d.max.as_i128(),
+                                        },
+                                        size,
+                                    ),
+                                    DecimalDataKind::Decimal256 => {
+                                        DecimalDomain::Decimal256(d, size)
+                                    }
+                                }),
                             _ => {
                                 unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs)
                             }
@@ -455,12 +459,7 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
                     .unwrap_or(default_domain)
                 }),
                 eval: Box::new(move |args, ctx| {
-                    let return_decimal_type = if !ctx.strict_eval && return_size.can_carried_by_64()
-                    {
-                        DecimalDataType::Decimal64(return_size)
-                    } else {
-                        DecimalDataType::from(return_size)
-                    };
+                    let return_decimal_type = DecimalDataType::from(return_size);
 
                     op_decimal(
                         (&args[0], &args_type[0], left_size),

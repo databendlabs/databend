@@ -230,7 +230,7 @@ output         : '-1'
 
 ast            : CAST(1.1 AS VARIANT)
 raw expr       : CAST(1.1 AS Variant)
-checked expr   : CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Variant)
+checked expr   : CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant)
 optimized expr : 0x2000000020000013700000000000000000000000000000000b0201
 output type    : Variant
 output domain  : Undefined
@@ -1115,7 +1115,7 @@ output         : 1
 
 ast            : CAST(0.0 AS BOOLEAN)
 raw expr       : CAST(0.0 AS Boolean)
-checked expr   : CAST<Decimal(1, 1)>(0.0_d128(1,1) AS Boolean)
+checked expr   : CAST<Decimal(1, 1)>(0.0_d64(1,1) AS Boolean)
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -1124,7 +1124,7 @@ output         : false
 
 ast            : CAST(1.0 AS BOOLEAN)
 raw expr       : CAST(1.0 AS Boolean)
-checked expr   : CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Boolean)
+checked expr   : CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Boolean)
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -2408,7 +2408,7 @@ output         : '-1'
 
 ast            : TRY_CAST(1.1 AS VARIANT)
 raw expr       : TRY_CAST(1.1 AS Variant)
-checked expr   : TRY_CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Variant NULL)
+checked expr   : TRY_CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant NULL)
 optimized expr : 0x2000000020000013700000000000000000000000000000000b0201
 output type    : Variant NULL
 output domain  : Undefined
@@ -3333,7 +3333,7 @@ output         : 1
 
 ast            : TRY_CAST(0.0 AS BOOLEAN)
 raw expr       : TRY_CAST(0.0 AS Boolean)
-checked expr   : TRY_CAST<Decimal(1, 1)>(0.0_d128(1,1) AS Boolean NULL)
+checked expr   : TRY_CAST<Decimal(1, 1)>(0.0_d64(1,1) AS Boolean NULL)
 optimized expr : false
 output type    : Boolean NULL
 output domain  : {FALSE}
@@ -3342,7 +3342,7 @@ output         : false
 
 ast            : TRY_CAST(1.0 AS BOOLEAN)
 raw expr       : TRY_CAST(1.0 AS Boolean)
-checked expr   : TRY_CAST<Decimal(2, 1)>(1.0_d128(2,1) AS Boolean NULL)
+checked expr   : TRY_CAST<Decimal(2, 1)>(1.0_d64(2,1) AS Boolean NULL)
 optimized expr : true
 output type    : Boolean NULL
 output domain  : {TRUE}

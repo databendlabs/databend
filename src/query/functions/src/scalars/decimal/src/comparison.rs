@@ -34,8 +34,6 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
 
-use super::convert_to_decimal_domain;
-
 #[inline]
 fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u8, u8) {
     (
@@ -71,84 +69,43 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|ctx, d| {
+                calc_domain: Box::new(|_, d| {
                     let d1 = d[0].as_decimal().unwrap();
                     let d2 = d[1].as_decimal().unwrap();
 
                     let (s1, s2) = (d1.decimal_size().scale(), d2.decimal_size().scale());
                     let (m1, m2) = compare_multiplier(s1, s2);
-                    let new_domain = match (d1, d2) {
-                        (DecimalDomain::Decimal128(d1, _), DecimalDomain::Decimal128(d2, _)) => {
-                            let d1 = SimpleDomain {
-                                min: d1.min.checked_mul(i128::e(m1)).unwrap_or(i128::DECIMAL_MIN),
-                                max: d1.max.checked_mul(i128::e(m1)).unwrap_or(i128::DECIMAL_MAX),
-                            };
-                            let d2 = SimpleDomain {
-                                min: d2.min.checked_mul(i128::e(m2)).unwrap_or(i128::DECIMAL_MIN),
-                                max: d2.max.checked_mul(i128::e(m2)).unwrap_or(i128::DECIMAL_MAX),
-                            };
-                            Op::domain_op(&d1, &d2)
+
+                    let (min1, max1) = match d1 {
+                        DecimalDomain::Decimal64(domain, _) => {
+                            (domain.min.into(), domain.max.into())
                         }
-                        (DecimalDomain::Decimal256(d1, _), DecimalDomain::Decimal256(d2, _)) => {
-                            let d1 = SimpleDomain {
-                                min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
-                                max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
-                            };
-
-                            let d2 = SimpleDomain {
-                                min: d2.min.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
-                                max: d2.max.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
-                            };
-                            Op::domain_op(&d1, &d2)
+                        DecimalDomain::Decimal128(domain, _) => {
+                            (domain.min.into(), domain.max.into())
                         }
-                        (DecimalDomain::Decimal128(_, _), DecimalDomain::Decimal256(d2, _)) => {
-                            let d1 = convert_to_decimal_domain(
-                                ctx,
-                                d[0].clone(),
-                                DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-                                    i256::MAX_PRECISION,
-                                    s1,
-                                )),
-                            )
-                            .unwrap();
-
-                            let d1 = d1.as_decimal256().unwrap().0;
-                            let d1 = SimpleDomain {
-                                min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
-                                max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
-                            };
-
-                            let d2 = SimpleDomain {
-                                min: d2.min.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
-                                max: d2.max.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
-                            };
-                            Op::domain_op(&d1, &d2)
-                        }
-                        (DecimalDomain::Decimal256(d1, _), DecimalDomain::Decimal128(_, _)) => {
-                            let d2 = convert_to_decimal_domain(
-                                ctx,
-                                d[1].clone(),
-                                DecimalDataType::Decimal256(DecimalSize::new_unchecked(
-                                    i256::MAX_PRECISION,
-                                    s2,
-                                )),
-                            )
-                            .unwrap();
-                            let d2 = d2.as_decimal256().unwrap().0;
-
-                            let d1 = SimpleDomain {
-                                min: d1.min.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
-                                max: d1.max.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
-                            };
-
-                            let d2 = SimpleDomain {
-                                min: d2.min.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
-                                max: d2.max.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
-                            };
-                            Op::domain_op(&d1, &d2)
-                        }
-                        _ => unimplemented!(),
+                        DecimalDomain::Decimal256(domain, _) => (domain.min, domain.max),
                     };
+
+                    let (min2, max2) = match d2 {
+                        DecimalDomain::Decimal64(domain, _) => {
+                            (domain.min.into(), domain.max.into())
+                        }
+                        DecimalDomain::Decimal128(domain, _) => {
+                            (domain.min.into(), domain.max.into())
+                        }
+                        DecimalDomain::Decimal256(domain, _) => (domain.min, domain.max),
+                    };
+
+                    let d1 = SimpleDomain {
+                        min: min1.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MIN),
+                        max: max1.checked_mul(i256::e(m1)).unwrap_or(i256::DECIMAL_MAX),
+                    };
+
+                    let d2 = SimpleDomain {
+                        min: min2.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MIN),
+                        max: max2.checked_mul(i256::e(m2)).unwrap_or(i256::DECIMAL_MAX),
+                    };
+                    let new_domain = Op::domain_op(&d1, &d2);
                     new_domain.map(Domain::Boolean)
                 }),
                 eval: Box::new(move |args, ctx| op_decimal::<Op>(&args[0], &args[1], ctx)),

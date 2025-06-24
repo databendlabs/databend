@@ -933,7 +933,11 @@ impl<'a> Evaluator<'a> {
 
         if options.strict_eval {
             let mut check = CheckStrictValue;
-            assert!(check.visit_value(result.clone()).is_ok())
+            assert!(
+                check.visit_value(result.clone()).is_ok(),
+                "strict check fail on expr: {}, result: {result}",
+                expr_display()
+            )
         }
 
         Ok(result)

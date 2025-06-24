@@ -131,11 +131,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
                         .unwrap_or(FunctionDomain::MayThrow)
                 }),
                 eval: Box::new(move |args, ctx| {
-                    let desc_type = if decimal_size.can_carried_by_64() && !ctx.strict_eval {
-                        DecimalDataType::Decimal64(decimal_size)
-                    } else {
-                        DecimalDataType::from(decimal_size)
-                    };
+                    let desc_type = DecimalDataType::from(decimal_size);
                     convert_to_decimal(
                         &args[0],
                         has_format.then(|| &args[1]),
@@ -582,9 +578,7 @@ pub fn convert_to_decimal_domain(
         Domain::Number(number_domain) => {
             with_number_mapped_type!(|NUM_TYPE| match number_domain {
                 NumberDomain::NUM_TYPE(d) => {
-                    let min = d.min;
-                    let max = d.max;
-                    NumberType::<NUM_TYPE>::from_data(vec![min, max])
+                    NumberType::<NUM_TYPE>::from_data(vec![d.min, d.max])
                 }
             })
         }
@@ -596,9 +590,7 @@ pub fn convert_to_decimal_domain(
         Domain::Decimal(d) => {
             with_decimal_mapped_type!(|DECIMAL| match d {
                 DecimalDomain::DECIMAL(d, size) => {
-                    let min = d.min;
-                    let max = d.max;
-                    DecimalType::from_data_with_size(vec![min, max], Some(size))
+                    DecimalType::from_data_with_size(vec![d.min, d.max], Some(size))
                 }
             })
         }
@@ -621,7 +613,7 @@ pub fn convert_to_decimal_domain(
         validity: None,
         errors: None,
         suppress_error: false,
-        strict_eval: true,
+        strict_eval: false,
     };
     let dest_size = dest_type.size();
     let res = convert_to_decimal(&value, None, &mut ctx, &from_type, dest_type);

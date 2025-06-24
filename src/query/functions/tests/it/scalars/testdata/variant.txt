@@ -1810,7 +1810,7 @@ output         : 'abc'
 
 ast            : to_decimal(3, 2)(to_variant(1.23))
 raw expr       : to_decimal(3, 2)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(3, 2)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+checked expr   : to_decimal<Variant>(3, 2)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
 optimized expr : 1.23_d64(3,2)
 output type    : Decimal(3, 2) NULL
 output domain  : {1.23..=1.23}
@@ -1819,7 +1819,7 @@ output         : 1.23
 
 ast            : to_decimal(2, 1)(to_variant(1.23))
 raw expr       : to_decimal(2, 1)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(2, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+checked expr   : to_decimal<Variant>(2, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
 optimized expr : 1.2_d64(2,1)
 output type    : Decimal(2, 1) NULL
 output domain  : {1.2..=1.2}
@@ -1836,7 +1836,7 @@ error:
 
 ast            : to_decimal(76, 1)(to_variant(1.23))
 raw expr       : to_decimal(76, 1)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(76, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+checked expr   : to_decimal<Variant>(76, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
 optimized expr : 1.2_d256(76,1)
 output type    : Decimal(76, 1) NULL
 output domain  : {1.2..=1.2}
@@ -1845,7 +1845,7 @@ output         : 1.2
 
 ast            : to_decimal(4, 3)(to_variant(1.23))
 raw expr       : to_decimal(4, 3)(to_variant(1.23))
-checked expr   : to_decimal<Variant>(4, 3)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+checked expr   : to_decimal<Variant>(4, 3)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d64(3,2)))
 optimized expr : 1.230_d64(4,3)
 output type    : Decimal(4, 3) NULL
 output domain  : {1.230..=1.230}

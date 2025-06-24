@@ -192,7 +192,10 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
 
     let size = DecimalSize::new(precision, size.scale()).unwrap();
     match size.data_kind() {
-        DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+        DecimalDataKind::Decimal64 => {
+            Scalar::Decimal(DecimalScalar::Decimal64(decimal.as_i64(), size))
+        }
+        DecimalDataKind::Decimal128 => {
             Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
         }
         DecimalDataKind::Decimal256 => Scalar::Decimal(DecimalScalar::Decimal256(decimal, size)),

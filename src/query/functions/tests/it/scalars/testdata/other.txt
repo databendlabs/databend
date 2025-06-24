@@ -9,7 +9,7 @@ output         : 0
 
 ast            : running_difference(0.2)
 raw expr       : running_difference(0.2)
-checked expr   : running_difference<Float64>(CAST<Decimal(1, 1)>(0.2_d128(1,1) AS Float64))
+checked expr   : running_difference<Float64>(CAST<Decimal(1, 1)>(0.2_d64(1,1) AS Float64))
 optimized expr : 0_f64
 output type    : Float64
 output domain  : {0..=0}
@@ -89,7 +89,7 @@ output         : '100.00 B'
 
 ast            : humanize_size(1024.33)
 raw expr       : humanize_size(1024.33)
-checked expr   : humanize_size<Float64>(CAST<Decimal(6, 2)>(1024.33_d128(6,2) AS Float64))
+checked expr   : humanize_size<Float64>(CAST<Decimal(6, 2)>(1024.33_d64(6,2) AS Float64))
 optimized expr : "1.00 KiB"
 output type    : String
 output domain  : {"1.00 KiB"..="1.00 KiB"}
@@ -107,7 +107,7 @@ output         : '100'
 
 ast            : humanize_number(1024.33)
 raw expr       : humanize_number(1024.33)
-checked expr   : humanize_number<Float64>(CAST<Decimal(6, 2)>(1024.33_d128(6,2) AS Float64))
+checked expr   : humanize_number<Float64>(CAST<Decimal(6, 2)>(1024.33_d64(6,2) AS Float64))
 optimized expr : "1.02 thousand"
 output type    : String
 output domain  : {"1.02 thousand"..="1.02 thousand"}

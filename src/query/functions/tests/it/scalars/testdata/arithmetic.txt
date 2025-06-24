@@ -69,7 +69,7 @@ evaluation (internal):
 
 ast            : c + 0.5
 raw expr       : plus(c::UInt32, 0.5)
-checked expr   : plus<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
+checked expr   : plus<UInt32, Decimal(1, 1)>(c, 0.5_d64(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -321,7 +321,7 @@ evaluation (internal):
 
 ast            : c - 0.5
 raw expr       : minus(c::UInt32, 0.5)
-checked expr   : minus<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
+checked expr   : minus<UInt32, Decimal(1, 1)>(c, 0.5_d64(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -757,7 +757,7 @@ evaluation (internal):
 
 ast            : c * 0.5
 raw expr       : multiply(c::UInt32, 0.5)
-checked expr   : multiply<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
+checked expr   : multiply<UInt32, Decimal(1, 1)>(c, 0.5_d64(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -984,7 +984,7 @@ evaluation (internal):
 
 ast            : e * 0.5
 raw expr       : multiply(e::Decimal(10, 1), 0.5)
-checked expr   : multiply<Decimal(10, 1), Decimal(1, 1)>(e, 0.5_d128(1,1))
+checked expr   : multiply<Decimal(10, 1), Decimal(1, 1)>(e, 0.5_d64(1,1))
 evaluation:
 +--------+----------------+----------------+
 |        | e              | Output         |
@@ -1075,7 +1075,7 @@ evaluation (internal):
 
 ast            : c / 0.5
 raw expr       : divide(c::UInt32, 0.5)
-checked expr   : divide<UInt32, Decimal(1, 1)>(c, 0.5_d128(1,1))
+checked expr   : divide<UInt32, Decimal(1, 1)>(c, 0.5_d64(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -1358,7 +1358,7 @@ evaluation (internal):
 
 ast            : c div 0.5
 raw expr       : div(c::UInt32, 0.5)
-checked expr   : div<UInt32, Float64>(c, CAST<Decimal(1, 1)>(0.5_d128(1,1) AS Float64))
+checked expr   : div<UInt32, Float64>(c, CAST<Decimal(1, 1)>(0.5_d64(1,1) AS Float64))
 optimized expr : div<UInt32, Float64>(c, 0.5_f64)
 evaluation:
 +--------+-----------+---------+
