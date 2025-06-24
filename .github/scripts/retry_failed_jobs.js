@@ -151,18 +151,35 @@ async function getWorkflowInfo(github, context, core, runID) {
     core.info(`Workflow run status: ${workflowRun.status}`);
     core.info(`Workflow run conclusion: ${workflowRun.conclusion}`);
 
-    const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        run_id: runID
-    });
+    // Get all jobs with pagination
+    let allJobs = [];
+    let page = 1;
+    const perPage = 100; // Use maximum page size
 
-    core.info(`Found ${jobs.jobs.length} jobs in the workflow run`);
-    for (const job of jobs.jobs) {
+    while (true) {
+        const { data: jobsResponse } = await github.rest.actions.listJobsForWorkflowRun({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: runID,
+            per_page: perPage,
+            page: page
+        });
+
+        allJobs = allJobs.concat(jobsResponse.jobs);
+
+        if (jobsResponse.jobs.length < perPage) {
+            break;
+        }
+
+        page++;
+    }
+
+    core.info(`Found ${allJobs.length} jobs in the workflow run`);
+    for (const job of allJobs) {
         core.info(`  Job ${job.name} (ID: ${job.id}) status: ${job.status}, conclusion: ${job.conclusion}`);
     }
 
-    const failedJobs = jobs.jobs.filter(job => (job.conclusion === 'failure' || job.conclusion === 'cancelled') && job.name !== 'ready');
+    const failedJobs = allJobs.filter(job => (job.conclusion === 'failure' || job.conclusion === 'cancelled') && job.name !== 'ready');
 
     if (failedJobs.length === 0) {
         core.info('No failed jobs found to retry');
