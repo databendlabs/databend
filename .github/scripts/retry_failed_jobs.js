@@ -251,6 +251,35 @@ async function findRelatedPR(github, context, core, workflowRun) {
     return null;
 }
 
+async function findExistingRetryComment(github, context, core, pr) {
+    try {
+        // Get comments for the PR
+        const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: pr.number,
+            per_page: 100
+        });
+
+        // Look for our smart retry analysis comment
+        const retryComment = comments.find(comment =>
+            comment.user.type === 'Bot' &&
+            comment.body.includes('## 🤖 Smart Auto-retry Analysis')
+        );
+
+        if (retryComment) {
+            core.info(`Found existing retry analysis comment: ${retryComment.id}`);
+            return retryComment;
+        }
+
+        core.info('No existing retry analysis comment found');
+        return null;
+    } catch (error) {
+        core.warning(`Failed to find existing retry comment: ${error.message}`);
+        return null;
+    }
+}
+
 async function addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, retryableJobsCount, priorityCancelled) {
     try {
         // Get workflow run to find the branch
@@ -359,16 +388,30 @@ Only infrastructure issues are automatically retried to avoid wasting resources 
 
 </details>`;
 
-        await github.rest.issues.createComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: pr.number,
-            body: comment
-        });
+        // Try to find existing retry comment
+        const existingComment = await findExistingRetryComment(github, context, core, pr);
 
-        core.info(`Added smart retry analysis comment to PR #${pr.number}`);
+        if (existingComment) {
+            // Update existing comment
+            await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: comment
+            });
+            core.info(`Updated existing smart retry analysis comment on PR #${pr.number}`);
+        } else {
+            // Create new comment
+            await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment
+            });
+            core.info(`Added new smart retry analysis comment to PR #${pr.number}`);
+        }
     } catch (error) {
-        core.error(`Failed to add comment to PR:`, error.message);
+        core.error(`Failed to add/update comment to PR:`, error.message);
     }
 }
 
