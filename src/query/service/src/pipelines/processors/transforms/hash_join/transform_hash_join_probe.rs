@@ -535,8 +535,7 @@ impl TransformHashJoinProbe {
 
     fn output_data_block(&mut self) -> Option<DataBlock> {
         if let Some(data_block) = self.output_data_blocks.pop_front() {
-            let output = data_block.project(&self.projections);
-            Some(output)
+            Some(data_block.project(&self.projections))
         } else {
             None
         }
