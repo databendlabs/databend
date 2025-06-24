@@ -251,7 +251,13 @@ impl Binder {
             Engine::Memory
         };
         let query_id = self.ctx.get_id();
-        let database = self.ctx.get_current_database();
+        let current_database = self.ctx.get_current_database();
+        let database = if current_database.is_empty() {
+            log::info!("[CTE]current_database is empty");
+            "default".to_string()
+        } else {
+            current_database
+        };
         let mut table_identifier = cte.alias.name.clone();
         table_identifier.name = format!("{}${}", table_identifier.name, query_id.replace("-", ""));
         let table_name = normalize_identifier(&table_identifier, &self.name_resolution_ctx).name;
@@ -328,6 +334,12 @@ impl Binder {
             table_type: TableType::Temporary,
         };
 
+        log::info!(
+            "[CTE]catalog:{:?},database:{:?},table:{:?}",
+            create_table_stmt.catalog,
+            create_table_stmt.database,
+            create_table_stmt.table,
+        );
         let create_table_sql = create_table_stmt.to_string();
         log::info!("[CTE]create_table_sql: {create_table_sql}");
         if let Some(subquery_executor) = &self.subquery_executor {
