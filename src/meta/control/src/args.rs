@@ -201,6 +201,24 @@ pub struct TransferLeaderArgs {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
+pub struct SetFeature {
+    #[clap(long)]
+    pub feature: String,
+
+    #[clap(long, action = clap::ArgAction::Set)]
+    pub enable: bool,
+
+    #[clap(long, default_value = "127.0.0.1:28002")]
+    pub admin_api_address: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct ListFeatures {
+    #[clap(long, default_value = "127.0.0.1:28002")]
+    pub admin_api_address: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
 pub struct BenchArgs {
     #[clap(long, default_value = "127.0.0.1:9191")]
     pub grpc_api_address: String,

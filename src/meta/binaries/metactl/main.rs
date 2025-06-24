@@ -30,6 +30,8 @@ use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::ExportArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
+use databend_common_meta_control::args::ListFeatures;
+use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
 use databend_common_meta_control::args::UpsertArgs;
@@ -224,6 +226,8 @@ enum CtlCommand {
     Export(ExportArgs),
     Import(ImportArgs),
     TransferLeader(TransferLeaderArgs),
+    SetFeature(SetFeature),
+    ListFeatures(ListFeatures),
     BenchClientNumConn(BenchArgs),
     Watch(WatchArgs),
     Upsert(UpsertArgs),
@@ -266,6 +270,19 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::TransferLeader(args) => {
                 app.transfer_leader(args).await?;
+            }
+            CtlCommand::SetFeature(args) => {
+                let client = MetaAdminClient::new(args.admin_api_address.as_str());
+                let res = client.set_feature(&args.feature, args.enable).await?;
+                println!(
+                    "set-feature: Done; features:\n{}",
+                    serde_json::to_string_pretty(&res)?
+                );
+            }
+            CtlCommand::ListFeatures(args) => {
+                let client = MetaAdminClient::new(args.admin_api_address.as_str());
+                let res = client.list_features().await?;
+                println!("{}", serde_json::to_string_pretty(&res)?);
             }
             CtlCommand::Export(args) => {
                 app.export(args).await?;
