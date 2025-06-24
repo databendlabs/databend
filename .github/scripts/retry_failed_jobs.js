@@ -299,93 +299,58 @@ async function addCommentToPR(github, context, core, runID, runURL, failedJobs, 
 
         let comment = `## 🤖 Smart Auto-retry Analysis
 
-> **Workflow Run:** [\`${runID}\`](${runURL})
+> **Workflow:** [\`${runID}\`](${runURL})
 
-The workflow run has been analyzed for retryable errors using job annotations.
-
----
-
-### 📊 Analysis Summary
-
-| Metric | Count |
-|--------|-------|
-| **Total Failed/Cancelled Jobs** | \`${failedJobs.length}\` |
-| **Jobs with Retryable Errors** | \`${retryableJobsCount}\` |
-| **Jobs with Code/Test Issues** | \`${failedJobs.length - retryableJobsCount}\` |`;
+### 📊 Summary
+- **Failed Jobs:** ${failedJobs.length}
+- **Retryable:** ${retryableJobsCount}
+- **Code Issues:** ${failedJobs.length - retryableJobsCount}`;
 
         if (priorityCancelled) {
             comment += `
 
-### ⛔️ Retry Status: **CANCELLED**
-
-> **Reason:** Higher priority request detected - retry has been cancelled to avoid resource conflicts.`;
+### ⛔️ **CANCELLED**
+Higher priority request detected - retry cancelled to avoid conflicts.`;
         } else if (retryableJobsCount > 0) {
             comment += `
 
-### ✅ Retry Status: **AUTOMATIC RETRY INITIATED**
+### ✅ **AUTO-RETRY INITIATED**
+**${retryableJobsCount} job(s)** retried due to infrastructure issues (runner failures, timeouts, etc.)
 
-> **${retryableJobsCount} job(s)** have been automatically retried due to infrastructure issues detected in annotations:
-> - Runner communication failures
-> - Network timeouts
-> - Resource exhaustion
-> - Other transient infrastructure problems
-
-**📈 Monitor Progress:** [View in Actions](${runURL})`;
+[View Progress](${runURL})`;
         } else {
             comment += `
 
-### ❌ Retry Status: **NO RETRY NEEDED**
-
-> All failures appear to be **code or test related issues** that require manual fixes rather than automatic retries.`;
+### ❌ **NO RETRY NEEDED**
+All failures appear to be code/test issues requiring manual fixes.`;
         }
 
         comment += `
 
----
-
-### 🔍 Detailed Job Analysis
-
+### 🔍 Job Details
 ${analyzedJobs.map(job => {
             if (job.reason.includes('Analysis failed')) {
-                return `#### ❓ **${job.name}**
-> **Status:** Analysis failed  
-> **Reason:** ${job.reason}`;
+                return `- ❓ **${job.name}**: Analysis failed`;
             }
             if (job.reason.includes('Cancelled by higher priority')) {
-                return `#### ⛔️ **${job.name}**
-> **Status:** Cancelled by higher priority request  
-> **Reason:** ${job.reason}`;
+                return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
             }
             if (job.reason.includes('No annotations found')) {
-                return `#### ❓ **${job.name}**
-> **Status:** No annotations available  
-> **Reason:** ${job.reason}`;
+                return `- ❓ **${job.name}**: No annotations available`;
             }
             if (job.retryable) {
-                return `#### 🔄 **${job.name}**
-> **Status:** ✅ **Retryable** (Infrastructure Issue)  
-> **Reason:** ${job.reason}  
-> **Annotations:** ${job.annotationCount} found`;
+                return `- 🔄 **${job.name}**: ✅ Retryable (Infrastructure)`;
             } else {
-                return `#### ❌ **${job.name}**
-> **Status:** Not retryable (Code/Test Issue)  
-> **Reason:** ${job.reason}  
-> **Annotations:** ${job.annotationCount} found`;
+                return `- ❌ **${job.name}**: Not retryable (Code/Test)`;
             }
-        }).join('\n\n')}
+        }).join('\n')}
 
 ---
 
 <details>
-<summary>🤖 About This Analysis</summary>
+<summary>🤖 About</summary>
 
-This is an **automated analysis and retry** triggered by the smart retry workflow using job annotations. The system analyzes failure patterns to distinguish between:
-
-- **🔄 Infrastructure Issues:** Runner failures, network timeouts, resource exhaustion
-- **❌ Code/Test Issues:** Compilation errors, test failures, logic problems
-
-Only infrastructure issues are automatically retried to avoid wasting resources on code problems that need manual fixes.
-
+Automated analysis using job annotations to distinguish infrastructure issues (auto-retried) from code/test issues (manual fixes needed).
 </details>`;
 
         // Try to find existing retry comment
