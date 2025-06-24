@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - Dev
+      - Main
     types:
       - completed
 
