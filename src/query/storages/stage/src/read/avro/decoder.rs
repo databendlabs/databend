@@ -97,7 +97,7 @@ fn date_time_to_int(schema: &mut Schema) {
         Schema::Union(u) => {
             *u = {
                 let mut variants = u.variants().to_owned();
-                variants.iter_mut().for_each(|s| date_time_to_int(s));
+                variants.iter_mut().for_each(date_time_to_int);
                 UnionSchema::new(variants).expect("should never fail")
             }
         }

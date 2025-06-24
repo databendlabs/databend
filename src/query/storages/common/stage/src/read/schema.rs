@@ -29,9 +29,7 @@ fn date_time_to_int(typ: &mut TableDataType) {
         TableDataType::Array(t) => date_time_to_int(t),
         TableDataType::Map(t) => date_time_to_int(t),
         TableDataType::Tuple { fields_type, .. } => {
-            fields_type
-                .iter_mut()
-                .for_each(|field| date_time_to_int(field));
+            fields_type.iter_mut().for_each(date_time_to_int);
         }
         TableDataType::Timestamp => *typ = TableDataType::Number(NumberDataType::Int64),
         TableDataType::Date => *typ = TableDataType::Number(NumberDataType::Int32),
