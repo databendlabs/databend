@@ -52,6 +52,16 @@ use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
 
+// Minimum threshold for table data disk cache size (in bytes).
+// Any configuration value less than this threshold will be ignored,
+// and table data disk cache will not be enabled.
+// This threshold exists to accommodate the current cloud platform logic:
+// When attempting to disable table data cache in compute node configurations, setting the disk
+// cache size to zero prevents the physical volume from being loaded, so this threshold provides
+// a better approach.
+// Eventually, we should refactor the compute node configurations instead, to make those options more sensible.
+const TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD: usize = 1024;
+
 #[derive(Default)]
 struct CacheSlot<T> {
     cache: RwLock<Option<T>>,
@@ -153,6 +163,11 @@ impl CacheManager {
                     .get() as u32,
             ) * 5
         };
+
+        info!(
+            "[CacheManager] On-disk cache population queue size: {}",
+            on_disk_cache_queue_size
+        );
 
         // setup table data cache
         let column_data_cache = {
@@ -648,7 +663,10 @@ impl CacheManager {
         sync_data: bool,
         ee_mode: bool,
     ) -> Result<Option<DiskCacheAccessor>> {
-        if disk_cache_bytes_size == 0 || !ee_mode {
+        if disk_cache_bytes_size <= TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD || !ee_mode {
+            info!(
+                "[CacheManager] On-disk cache {cache_name} disabled, size {disk_cache_bytes_size}, threshold {TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD}, ee mode {ee_mode}"
+            );
             Ok(None)
         } else {
             let cache_holder = DiskCacheBuilder::try_build_disk_cache(
@@ -1100,6 +1118,72 @@ mod tests {
                 .unwrap()
                 .items_capacity(),
             20
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_disk_cache_size_threshold() -> Result<()> {
+        use tempfile::TempDir;
+
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let cache_path = temp_dir.path().to_path_buf();
+
+        // Test parameters
+        let cache_name = "test_threshold_cache".to_string();
+        let population_queue_size = 5;
+        let ee_mode = true; // Always use EE mode for this test
+        let sync_data = false;
+        let key_reload_policy = DiskCacheKeyReloadPolicy::Fuzzy;
+
+        // Case 1: Size below threshold (should disable cache)
+        let below_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD - 1;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            below_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_none(),
+            "Disk cache should be disabled when size is below threshold"
+        );
+
+        // Case 2: Size exactly at threshold (should disable cache)
+        let at_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            at_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_none(),
+            "Disk cache should be disabled when size equals threshold"
+        );
+
+        // Case 3: Size above threshold (should enable cache)
+        let above_threshold_size = TABLE_DATA_DISK_CACHE_SIZE_THRESHOLD + 1024;
+        let result = CacheManager::new_on_disk_cache(
+            cache_name.clone(),
+            &cache_path,
+            population_queue_size,
+            above_threshold_size,
+            key_reload_policy.clone(),
+            sync_data,
+            ee_mode,
+        )?;
+        assert!(
+            result.is_some(),
+            "Disk cache should be enabled when size is above threshold"
         );
 
         Ok(())
