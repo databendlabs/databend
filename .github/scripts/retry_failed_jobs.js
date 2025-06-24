@@ -324,53 +324,65 @@ async function addCommentToPR(github, context, core, runID, runURL, failedJobs, 
         // Build title with retry count
         const titleSuffix = newRetryCount > 0 ? ` (Retry #${newRetryCount})` : '';
 
-        let comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+        // Calculate code issues count (exclude priority cancelled)
+        const codeIssuesCount = priorityCancelled ? 0 : (failedJobs.length - retryableJobsCount);
+
+        let comment;
+
+        if (priorityCancelled) {
+            // Simplified comment for priority cancelled workflow
+            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
+
+> **Workflow:** [\`${runID}\`](${runURL})
+
+### ⛔️ **CANCELLED**
+Higher priority request detected - retry cancelled to avoid conflicts.
+
+[View Workflow](${runURL})`;
+        } else {
+            // Full comment for normal analysis
+            comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
 
 > **Workflow:** [\`${runID}\`](${runURL})
 
 ### 📊 Summary
 - **Failed Jobs:** ${failedJobs.length}
 - **Retryable:** ${retryableJobsCount}
-- **Code Issues:** ${failedJobs.length - retryableJobsCount}`;
+- **Code Issues:** ${codeIssuesCount}`;
 
-        if (priorityCancelled) {
-            comment += `
-
-### ⛔️ **CANCELLED**
-Higher priority request detected - retry cancelled to avoid conflicts.`;
-        } else if (retryableJobsCount > 0) {
-            comment += `
+            if (retryableJobsCount > 0) {
+                comment += `
 
 ### ✅ **AUTO-RETRY INITIATED**
 **${retryableJobsCount} job(s)** retried due to infrastructure issues (runner failures, timeouts, etc.)
 
 [View Progress](${runURL})`;
-        } else {
-            comment += `
+            } else {
+                comment += `
 
 ### ❌ **NO RETRY NEEDED**
 All failures appear to be code/test issues requiring manual fixes.`;
-        }
+            }
 
-        comment += `
+            comment += `
 
 ### 🔍 Job Details
 ${analyzedJobs.map(job => {
-            if (job.reason.includes('Analysis failed')) {
-                return `- ❓ **${job.name}**: Analysis failed`;
-            }
-            if (job.reason.includes('Cancelled by higher priority')) {
-                return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
-            }
-            if (job.reason.includes('No annotations found')) {
-                return `- ❓ **${job.name}**: No annotations available`;
-            }
-            if (job.retryable) {
-                return `- 🔄 **${job.name}**: ✅ Retryable (Infrastructure)`;
-            } else {
-                return `- ❌ **${job.name}**: Not retryable (Code/Test)`;
-            }
-        }).join('\n')}
+                if (job.reason.includes('Analysis failed')) {
+                    return `- ❓ **${job.name}**: Analysis failed`;
+                }
+                if (job.reason.includes('Cancelled by higher priority')) {
+                    return `- ⛔️ **${job.name}**: Cancelled by higher priority`;
+                }
+                if (job.reason.includes('No annotations found')) {
+                    return `- ❓ **${job.name}**: No annotations available`;
+                }
+                if (job.retryable) {
+                    return `- 🔄 **${job.name}**: ✅ Retryable (Infrastructure)`;
+                } else {
+                    return `- ❌ **${job.name}**: Not retryable (Code/Test)`;
+                }
+            }).join('\n')}
 
 ---
 
@@ -379,6 +391,7 @@ ${analyzedJobs.map(job => {
 
 Automated analysis using job annotations to distinguish infrastructure issues (auto-retried) from code/test issues (manual fixes needed).
 </details>`;
+        }
 
         if (existingComment) {
             // Update existing comment
