@@ -37,6 +37,38 @@ message TxnGetResponse {
   optional SeqV value = 2;
 }
 
+// Return the value by key, then add the delta to the key.
+//
+// This operation assume the value bytes is a json encoded `uint64`,
+// e.g. `1025` in bytes is `b"1025"`.
+// If the result is negative, it will be set to zero.
+message FetchAddU64 {
+
+  // The key to fetch and add the delta.
+  string key = 1;
+
+  // The delta to add to the value.
+  int64 delta = 2;
+}
+
+// Response for FetchAddU64, contains the value before and after `add`
+message FetchAddU64Response {
+
+  string key = 1;
+
+  // The seq number of the record before update. `0` if the key does not exist.
+  uint64 before_seq = 2;
+
+  // The value before update.
+  uint64 before = 3;
+
+  // The seq number of the record after update. It should always be greater than `before_seq`.
+  uint64 after_seq = 4;
+
+  // The value after update.
+  uint64 after = 5;
+}
+
 // Put request and response
 message TxnPutRequest {
   string key = 1;
