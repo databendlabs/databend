@@ -183,11 +183,11 @@ async function getWorkflowInfo(github, context, core, runID) {
 
     if (failedJobs.length === 0) {
         core.info('No failed jobs found to retry');
-        return { failedJobs: [], workflowRun };
+        return { failedJobs: [], workflowRun, totalJobs: allJobs.length };
     }
 
     core.info(`Found ${failedJobs.length} failed jobs to analyze:`);
-    return { failedJobs, workflowRun };
+    return { failedJobs, workflowRun, totalJobs: allJobs.length };
 }
 
 async function findRelatedPR(github, context, core, workflowRun) {
@@ -314,7 +314,7 @@ function getRetryCount(existingComment) {
     return 0;
 }
 
-async function addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, retryableJobsCount, priorityCancelled) {
+async function addCommentToPR(github, context, core, runID, runURL, jobData, priorityCancelled) {
     try {
         // Get workflow run to find the branch
         const { data: workflowRun } = await github.rest.actions.getWorkflowRun({
@@ -336,13 +336,13 @@ async function addCommentToPR(github, context, core, runID, runURL, failedJobs, 
 
         // Get current retry count
         const currentRetryCount = getRetryCount(existingComment);
-        const newRetryCount = retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
+        const newRetryCount = jobData.retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
 
         // Build title with retry count
         const titleSuffix = newRetryCount > 0 ? ` (Retry #${newRetryCount})` : '';
 
         // Calculate code issues count (exclude priority cancelled)
-        const codeIssuesCount = priorityCancelled ? 0 : (failedJobs.length - retryableJobsCount);
+        const codeIssuesCount = priorityCancelled ? 0 : (jobData.failedJobs.length - jobData.retryableJobsCount);
 
         let comment;
 
@@ -363,15 +363,16 @@ Higher priority request detected - retry cancelled to avoid conflicts.
 > **Workflow:** [\`${runID}\`](${runURL})
 
 ### 📊 Summary
-- **Failed Jobs:** ${failedJobs.length}
-- **Retryable:** ${retryableJobsCount}
+- **Total Jobs:** ${jobData.totalJobs}
+- **Failed Jobs:** ${jobData.failedJobs.length}
+- **Retryable:** ${jobData.retryableJobsCount}
 - **Code Issues:** ${codeIssuesCount}`;
 
-            if (retryableJobsCount > 0) {
+            if (jobData.retryableJobsCount > 0) {
                 comment += `
 
 ### ✅ **AUTO-RETRY INITIATED**
-**${retryableJobsCount} job(s)** retried due to infrastructure issues (runner failures, timeouts, etc.)
+**${jobData.retryableJobsCount} job(s)** retried due to infrastructure issues (runner failures, timeouts, etc.)
 
 [View Progress](${runURL})`;
             } else {
@@ -384,7 +385,7 @@ All failures appear to be code/test issues requiring manual fixes.`;
             comment += `
 
 ### 🔍 Job Details
-${analyzedJobs.map(job => {
+${jobData.analyzedJobs.map(job => {
                 if (job.reason.includes('Analysis failed')) {
                     return `- ❓ **${job.name}**: Analysis failed`;
                 }
@@ -483,7 +484,7 @@ module.exports = async ({ github, context, core }) => {
     }
 
     // Get workflow information and failed jobs
-    const { failedJobs, workflowRun } = await getWorkflowInfo(github, context, core, runID);
+    const { failedJobs, workflowRun, totalJobs } = await getWorkflowInfo(github, context, core, runID);
 
     if (failedJobs.length === 0) {
         return;
@@ -495,14 +496,14 @@ module.exports = async ({ github, context, core }) => {
     // Handle priority cancellation
     if (priorityCancelled) {
         core.info('Cancelling retry since a higher priority request was made');
-        await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, 0, true);
+        await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, true);
         return;
     }
 
     // Handle no retryable jobs
     if (jobsToRetry.length === 0) {
         core.info('No jobs found with retryable errors. Skipping retry.');
-        await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, 0, false);
+        await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: 0 }, false);
         return;
     }
 
@@ -510,7 +511,7 @@ module.exports = async ({ github, context, core }) => {
     await retryFailedJobs(github, context, core, runID, jobsToRetry);
 
     // Add comment to PR
-    await addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, jobsToRetry.length, false);
+    await addCommentToPR(github, context, core, runID, runURL, { failedJobs, analyzedJobs, totalJobs, retryableJobsCount: jobsToRetry.length }, false);
 
     core.info('Retry process completed');
 };
