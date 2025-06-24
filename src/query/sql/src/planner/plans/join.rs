@@ -450,8 +450,12 @@ impl Join {
         )?;
         let cardinality = match self.join_type {
             JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left | JoinType::Asof | JoinType::LeftAsof => f64::max(left_cardinality, inner_join_cardinality),
-            JoinType::Right | JoinType::RightAsof => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Left | JoinType::Asof | JoinType::LeftAsof => {
+                f64::max(left_cardinality, inner_join_cardinality)
+            }
+            JoinType::Right | JoinType::RightAsof => {
+                f64::max(right_cardinality, inner_join_cardinality)
+            }
             JoinType::Full => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)

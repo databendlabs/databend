@@ -20,13 +20,12 @@ use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -44,7 +43,6 @@ use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
-use crate::pipelines::processors::transforms::wrap_true_validity;
 
 pub struct IEJoinState {
     _l1_data_type: DataType,
@@ -180,9 +178,9 @@ impl RangeJoinState {
             blocks
         } else {
             if !self.left_match.read().is_empty() {
-                return Ok(vec![self.fill_left_outer(task_id)?]);
+                return Ok(vec![self.fill_outer(task_id, true)?]);
             } else if !self.right_match.read().is_empty() {
-                return Ok(vec![self.fill_right_outer(task_id)?]);
+                return Ok(vec![self.fill_outer(task_id, false)?]);
             }
             Ok(vec![DataBlock::empty()])
         }
@@ -393,12 +391,19 @@ impl RangeJoinState {
             &indices,
             indices.len(),
         );
+        println!("Left: {:#?}", left_result_block);
+        println!("Right: {:#?}", right_result_block);
         // Merge left_result_block and right_result_block
         left_result_block.merge_block(right_result_block);
         if !left_match.is_empty() || !right_match.is_empty() {
-            left_result_block.add_column(BlockEntry::new(
-                DataType::Number(NumberDataType::UInt64),
+            left_result_block.add_entry(BlockEntry::new(
                 Value::Column(Column::Number(column_builder.build())),
+                || {
+                    (
+                        DataType::Number(NumberDataType::UInt64),
+                        left_result_block.num_rows(),
+                    )
+                },
             ));
         }
         for filter in self.other_conditions.iter() {
@@ -409,7 +414,7 @@ impl RangeJoinState {
                 .columns()
                 .last()
                 .unwrap()
-                .value
+                .value()
                 .try_downcast::<UInt64Type>()
                 .unwrap();
             if let Value::Column(col) = column {
@@ -425,5 +430,86 @@ impl RangeJoinState {
             left_result_block.pop_columns(1);
         }
         Ok(left_result_block)
+    }
+
+    pub fn fill_outer(&self, task_id: usize, is_left: bool) -> Result<DataBlock> {
+        let partition_count = self.partition_count.load(Ordering::SeqCst) as usize;
+        let mut completed = self.completed_pair.load(Ordering::SeqCst) as usize;
+        while completed < partition_count {
+            std::thread::sleep(Duration::from_millis(10));
+            completed = self.completed_pair.load(Ordering::SeqCst) as usize;
+        }
+
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let tasks = self.tasks.read();
+        let (left_idx, right_idx) = tasks[task_id];
+        let row_offset = self.row_offset.read();
+        let (left_offset, right_offset) = row_offset[task_id];
+
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
+        let left_match = self.left_match.read();
+        let right_match = self.right_match.read();
+
+        let (outer_idx, inner_idx, outer_offset, outer_table, outer_match, inner_table) = if is_left
+        {
+            (
+                left_idx,
+                right_idx,
+                left_offset,
+                &left_table,
+                &*left_match,
+                &right_table,
+            )
+        } else {
+            (
+                right_idx,
+                left_idx,
+                right_offset,
+                &right_table,
+                &*right_match,
+                &left_table,
+            )
+        };
+
+        let mut indices = Vec::with_capacity(block_size);
+        for (i, state) in outer_match
+            .iter()
+            .enumerate()
+            .skip(outer_offset)
+            .take(outer_table[outer_idx].num_rows())
+        {
+            if !state {
+                indices.push((0u32, (i - outer_offset) as u32, 1usize));
+            }
+        }
+
+        if indices.is_empty() {
+            return Ok(DataBlock::empty());
+        }
+
+        let mut outer_result_block = DataBlock::take_blocks(
+            &outer_table[outer_idx..outer_idx + 1],
+            &indices,
+            indices.len(),
+        );
+
+        let null_columns = inner_table[inner_idx]
+            .columns()
+            .iter()
+            .map(|c| {
+                BlockEntry::new(Value::Scalar(Scalar::Null), || {
+                    (c.data_type().wrap_nullable(), indices.len())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let inner_null_block = DataBlock::new(null_columns, indices.len());
+
+        for col in inner_null_block.columns() {
+            outer_result_block.add_entry(col.clone());
+        }
+
+        Ok(outer_result_block)
     }
 }

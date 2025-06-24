@@ -29,9 +29,8 @@ use crate::binder::WindowOrderByInfo;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::RelExpr;
-use crate::optimizer::SExpr;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
@@ -48,6 +47,7 @@ use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 use crate::ColumnEntry;
+use crate::ColumnSet;
 use crate::DerivedColumn;
 use crate::Visibility;
 
@@ -119,6 +119,7 @@ impl PhysicalPlanBuilder {
             .collect();
         self.build_range_join(
             &ss_expr,
+            join_type,
             left_required,
             right_required,
             range_conditions,

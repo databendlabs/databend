@@ -2,6 +2,12 @@
 # description: Test As-Of joins for greater than and less thans
 # group: [asof]
 
+statement ok
+drop table if exists events0
+
+statement ok
+drop table if exists probe0
+
 # Join on a timestamp range
 
 statement ok

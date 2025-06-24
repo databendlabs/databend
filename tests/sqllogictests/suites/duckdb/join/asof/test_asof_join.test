@@ -2,6 +2,16 @@
 # description: Test As-Of join useage
 # group: [asof]
 # Use doubles for readable infinities
+
+statement ok
+drop table if exists events0
+
+statement ok
+drop table if exists prices
+
+statement ok
+drop table if exists trades
+
 statement ok
 CREATE TABLE events0 (begin DOUBLE, value INTEGER);
 

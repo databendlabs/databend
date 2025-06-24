@@ -2,6 +2,12 @@
 # description: Test As-Of joins for floating point
 # group: [asof]
 
+statement ok
+drop table if exists events
+
+statement ok
+drop table if exists probes
+
 #
 # Inequality only
 #
