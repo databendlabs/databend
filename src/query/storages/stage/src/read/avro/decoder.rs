@@ -679,6 +679,7 @@ mod test {
         assert_eq!(expected, row);
         Ok(())
     }
+
     #[test]
     fn test_decimal() -> Result<(), String> {
         let avro_schema = json!(
@@ -695,8 +696,7 @@ mod test {
         let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field,
             avro_schema.clone(),
@@ -728,8 +728,7 @@ mod test {
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
 
         let value = make_value("12345");
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),

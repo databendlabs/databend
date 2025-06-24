@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::types::DateType;
-use databend_common_expression::types::Decimal;
+use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::Column;
@@ -72,31 +72,42 @@ pub fn read_nested_column<R: NativeReadBuf>(
             )?
         }
         ),
-        Decimal(decimal) if decimal.precision() > i128::MAX_PRECISION => {
-            init.push(InitNested::Primitive(is_nullable));
-            read_nested_decimal::<
-                databend_common_column::types::i256,
-                databend_common_expression::types::i256,
-                _,
-            >(
-                &mut readers.pop().unwrap(),
-                data_type.clone(),
-                decimal.size(),
-                init,
-                page_metas.pop().unwrap(),
-            )?
-        }
-        Decimal(decimal) => {
-            init.push(InitNested::Primitive(is_nullable));
-
-            read_nested_decimal::<i128, i128, _>(
-                &mut readers.pop().unwrap(),
-                data_type.clone(),
-                decimal.size(),
-                init,
-                page_metas.pop().unwrap(),
-            )?
-        }
+        Decimal(decimal) => match decimal {
+            DecimalDataType::Decimal64(decimal_size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                read_nested_decimal::<i64, i64, _>(
+                    &mut readers.pop().unwrap(),
+                    data_type.clone(),
+                    decimal_size,
+                    init,
+                    page_metas.pop().unwrap(),
+                )?
+            }
+            DecimalDataType::Decimal128(decimal_size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                read_nested_decimal::<i128, i128, _>(
+                    &mut readers.pop().unwrap(),
+                    data_type.clone(),
+                    decimal_size,
+                    init,
+                    page_metas.pop().unwrap(),
+                )?
+            }
+            DecimalDataType::Decimal256(decimal_size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                read_nested_decimal::<
+                    databend_common_column::types::i256,
+                    databend_common_expression::types::i256,
+                    _,
+                >(
+                    &mut readers.pop().unwrap(),
+                    data_type.clone(),
+                    decimal_size,
+                    init,
+                    page_metas.pop().unwrap(),
+                )?
+            }
+        },
         Interval => {
             init.push(InitNested::Primitive(is_nullable));
 

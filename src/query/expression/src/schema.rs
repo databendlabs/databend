@@ -27,6 +27,7 @@ use serde::Serialize;
 use crate::display::display_tuple_field_name;
 use crate::types::decimal::DecimalDataType;
 use crate::types::DataType;
+use crate::types::DecimalDataKind;
 use crate::types::NumberDataType;
 use crate::types::VectorDataType;
 use crate::BlockMetaInfo;
@@ -1577,13 +1578,17 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::String => Ok(TableDataType::String),
         DataType::Number(number_type) => Ok(TableDataType::Number(*number_type)),
         DataType::Timestamp => Ok(TableDataType::Timestamp),
-        DataType::Decimal(size) => {
-            if size.can_carried_by_128() {
+        DataType::Decimal(size) => match size.data_kind() {
+            DecimalDataKind::Decimal64 => {
+                Ok(TableDataType::Decimal(DecimalDataType::Decimal64(*size)))
+            }
+            DecimalDataKind::Decimal128 => {
                 Ok(TableDataType::Decimal(DecimalDataType::Decimal128(*size)))
-            } else {
+            }
+            DecimalDataKind::Decimal256 => {
                 Ok(TableDataType::Decimal(DecimalDataType::Decimal256(*size)))
             }
-        }
+        },
         DataType::Date => Ok(TableDataType::Date),
         DataType::Interval => Ok(TableDataType::Interval),
         DataType::Nullable(inner_type) => Ok(TableDataType::Nullable(Box::new(infer_schema_type(
