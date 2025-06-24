@@ -146,7 +146,11 @@ impl SessionContext {
     }
 
     // Set current database.
-    pub fn set_current_database(&self, db: String) {
+    pub fn set_current_database(&self, mut db: String) {
+        if db.is_empty() {
+            log::info!("[HTTP-QUERY] set_current_database, db is empty");
+            db = "default".to_string();
+        }
         let mut lock = self.current_database.write();
         *lock = db
     }
