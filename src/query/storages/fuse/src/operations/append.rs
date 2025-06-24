@@ -79,19 +79,6 @@ impl FuseTable {
                         )
                     });
                 }
-
-                let sort_desc: Vec<SortColumnDescription> = cluster_key_index
-                    .iter()
-                    .map(|index| SortColumnDescription {
-                        offset: *index,
-                        asc: true,
-                        nulls_first: false,
-                    })
-                    .collect();
-                let sort_desc: Arc<[_]> = sort_desc.into();
-                pipeline.add_transformer(|| {
-                    TransformSortPartial::new(LimitType::None, sort_desc.clone())
-                });
             }
 
             pipeline.add_transform(|input, output| {

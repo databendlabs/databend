@@ -13,13 +13,18 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::marker::PhantomData;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::sampler::AlgoL;
 use databend_common_expression::types::boolean::TrueIdxIter;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::BinaryColumn;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal;
@@ -30,7 +35,8 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::{with_number_mapped_type, BlockRowIndex};
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -39,16 +45,18 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
-use databend_storages_common_table_meta::meta::ColumnDistinctHLL;
+use databend_storages_common_table_meta::meta::{ColumnDistinctHLL, Location};
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
-
+use rand::rngs::SmallRng;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use crate::statistics::traverse_values_dfs;
 use crate::statistics::Trim;
 
 pub struct ColumnStatisticsState {
     col_stats: HashMap<ColumnId, Box<dyn ColumnMinMaxState>>,
     distinct_columns: HashMap<ColumnId, Box<dyn ColumnNDVEstimator>>,
+    // cluster_key: Option<u32>,
 }
 
 impl ColumnStatisticsState {
@@ -117,6 +125,94 @@ impl ColumnStatisticsState {
             statistics.insert(id, col_stats);
         }
         Ok(statistics)
+    }
+}
+
+#[derive(Debug)]
+pub struct BlockStatisticsState {
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: u64,
+    pub(crate) location: Location,
+}
+
+pub struct ClusterStateSampler {
+    k: usize,
+    origins: Vec<BinaryColumn>,
+    indices: Vec<BlockRowIndex>,
+    core: AlgoL<SmallRng>,
+
+    s: usize,
+}
+
+impl ClusterStateSampler {
+    pub fn new(k: usize, rng: SmallRng) -> Self {
+        let core = AlgoL::new(k.try_into().unwrap(), rng);
+        Self {
+            origins: Vec::new(),
+            indices: Vec::with_capacity(k),
+            k,
+            core,
+            s: usize::MAX,
+        }
+    }
+
+    pub fn add_column(&mut self, data: BinaryColumn) {
+        let rows = data.len();
+        assert!(rows > 0);
+        let block_idx = self.origins.len() as u32;
+        let change = self.add_indices(rows, block_idx);
+        if change {
+            self.origins.push(data);
+        }
+    }
+
+    fn add_indices(&mut self, rows: usize, block_idx: u32) -> bool {
+        let mut change = false;
+        let mut cur = 0;
+
+        // Fill initial reservoir
+        if self.indices.len() < self.k {
+            let remain = self.k - self.indices.len();
+
+            if rows <= remain {
+                self.indices.extend((0..rows).map(|i| (block_idx, i as u32, 1)));
+                if self.indices.len() == self.k {
+                    self.s = self.core.search();
+                }
+                return true;
+            }
+
+            self.indices.extend((0..remain).map(|i| (block_idx, i as u32, 1)));
+            cur += remain;
+            self.s = self.core.search();
+            change = true;
+        }
+
+        // Apply AlgoL
+        while rows - cur > self.s {
+            cur += self.s;
+            let pos = self.core.pos();
+            self.indices[pos] = (block_idx, cur as u32, 1);
+            self.core.update_w();
+            self.s = self.core.search();
+            change = true;
+        }
+
+        self.s -= rows - cur;
+        change
+    }
+
+    pub fn finalize(self) -> BlockEntry {
+        let columns = self.origins;
+        let mut builder = BinaryColumnBuilder::with_capacity(self.k, 0);
+        for (block_index, row, times) in self.indices {
+            let val = 
+                unsafe { BinaryType::index_column_unchecked(&columns[block_index as usize], row as usize) };
+            for _ in 0..times {
+                BinaryType::push_item(&mut builder, val.clone())
+            }
+        }
+        BlockEntry::new_const_column_arg::<ArrayType<BinaryType>>(builder.build(), 1)
     }
 }
 

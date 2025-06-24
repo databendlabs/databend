@@ -37,7 +37,7 @@ use crate::FuseTable;
 pub struct ClusterStatisticsBuilder {
     out_fields: Vec<DataField>,
     level: i32,
-    cluster_key_id: u32,
+    cluster_key_id: Option<u32>,
     cluster_key_index: Vec<usize>,
 
     extra_key_num: usize,
@@ -92,7 +92,7 @@ impl ClusterStatisticsBuilder {
             }]
         };
         Ok(Arc::new(Self {
-            cluster_key_id: table.cluster_key_meta.as_ref().unwrap().0,
+            cluster_key_id: table.cluster_key_id(),
             cluster_key_index,
             extra_key_num,
             operators,
@@ -185,7 +185,7 @@ impl ClusterStatisticsState {
             max,
             min,
             level,
-            cluster_key_id: self.builder.cluster_key_id,
+            cluster_key_id: self.builder.cluster_key_id.unwrap(),
             pages: None,
         }))
     }

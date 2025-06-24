@@ -184,12 +184,9 @@ impl PipelineBuilder {
                         task.total_compressed,
                     );
                     let state = SampleState::new(num_processors, partitions);
-                    let recluster_pipeline_builder = ReclusterPipelineBuilder::create(
-                        schema.clone(),
-                        sort_desc.clone(),
-                        sample_size,
-                    )
-                    .with_state(state);
+                    let recluster_pipeline_builder =
+                        ReclusterPipelineBuilder::create(schema, sort_desc.clone(), sample_size)
+                            .with_state(state);
                     recluster_pipeline_builder
                         .build_recluster_sample_pipeline(&mut self.main_pipeline)?;
 
