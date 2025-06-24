@@ -391,8 +391,6 @@ impl RangeJoinState {
             &indices,
             indices.len(),
         );
-        println!("Left: {:#?}", left_result_block);
-        println!("Right: {:#?}", right_result_block);
         // Merge left_result_block and right_result_block
         left_result_block.merge_block(right_result_block);
         if !left_match.is_empty() || !right_match.is_empty() {

@@ -17,6 +17,7 @@ use databend_common_expression::types::*;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 
 #[test]
