@@ -31,6 +31,7 @@ use crate::ast::Identifier;
 use crate::ast::IdentifierType;
 use crate::ast::SetType;
 use crate::ast::TableRef;
+use crate::ast::TableReference;
 use crate::parser::input::Input;
 use crate::parser::input::WithSpan;
 use crate::parser::query::with_options;
@@ -258,6 +259,51 @@ pub fn set_type(i: Input) -> IResult<SetType> {
     )(i)
 }
 
+pub fn table_reference_only(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #dot_separated_idents_1_to_3
+        }),
+        |(span, (catalog, database, table))| TableReference::Table {
+            span: transform_span(span.tokens),
+            catalog,
+            database,
+            table,
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+    )(i)
+}
+
+pub fn column_reference_only(i: Input) -> IResult<(TableReference, Identifier)> {
+    map(
+        consumed(rule! {
+            #dot_separated_idents_2_to_4
+        }),
+        |(span, (catalog, database, table, column))| {
+            (
+                TableReference::Table {
+                    span: transform_span(span.tokens),
+                    catalog,
+                    database,
+                    table,
+                    alias: None,
+                    temporal: None,
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+                column,
+            )
+        },
+    )(i)
+}
+
 pub fn column_id(i: Input) -> IResult<ColumnID> {
     alt((
         map_res(rule! { ColumnPosition }, |token| {
@@ -302,6 +348,7 @@ pub fn dot_separated_idents_1_to_2(i: Input) -> IResult<(Option<Identifier>, Ide
 /// Parse one to three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
+///          `catalog.db.table`
 pub fn dot_separated_idents_1_to_3(
     i: Input,
 ) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
@@ -313,6 +360,31 @@ pub fn dot_separated_idents_1_to_3(
             (ident2, None) => (None, None, ident2),
             (ident1, Some((_, ident2, None))) => (None, Some(ident1), ident2),
             (ident0, Some((_, ident1, Some((_, ident2))))) => (Some(ident0), Some(ident1), ident2),
+        },
+    )(i)
+}
+
+/// Parse two to four idents separated by a dot, fulfilling from the right.
+///
+/// Example: `catalog.db.table.column`
+pub fn dot_separated_idents_2_to_4(
+    i: Input,
+) -> IResult<(
+    Option<Identifier>,
+    Option<Identifier>,
+    Identifier,
+    Identifier,
+)> {
+    map(
+        rule! {
+            #ident ~ "." ~ #ident ~ ( "." ~ #ident ~ ( "." ~ #ident )? )?
+        },
+        |res| match res {
+            (ident2, _, ident3, None) => (None, None, ident2, ident3),
+            (ident1, _, ident2, Some((_, ident3, None))) => (None, Some(ident1), ident2, ident3),
+            (ident0, _, ident1, Some((_, ident2, Some((_, ident3))))) => {
+                (Some(ident0), Some(ident1), ident2, ident3)
+            }
         },
     )(i)
 }

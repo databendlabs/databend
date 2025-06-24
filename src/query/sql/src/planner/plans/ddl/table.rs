@@ -234,6 +234,7 @@ impl RenameTablePlan {
 /// Modify table comment.
 #[derive(Clone, Debug)]
 pub struct ModifyTableCommentPlan {
+    pub if_exists: bool,
     pub new_comment: String,
     pub catalog: String,
     pub database: String,

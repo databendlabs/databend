@@ -32,7 +32,7 @@ mod lock;
 mod merge_into;
 mod network_policy;
 mod notification;
-mod password_policy;
+pub(crate) mod password_policy;
 mod pipe;
 mod presign;
 mod principal;
