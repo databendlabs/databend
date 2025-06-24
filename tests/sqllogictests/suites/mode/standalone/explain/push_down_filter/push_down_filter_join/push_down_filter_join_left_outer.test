@@ -1,4 +1,7 @@
 statement ok
+set enable_bloom_runtime_filter = 1
+
+statement ok
 set enable_auto_materialize_cte = 0;
 
 # push down filter left outer join

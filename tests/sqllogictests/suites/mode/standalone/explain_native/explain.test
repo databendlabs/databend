@@ -24,6 +24,9 @@ TableScan
 ├── push downs: [filters: [t1.a (#0) > 0], limit: NONE]
 └── estimated rows: 0.00
 
+statement ok
+set enable_bloom_runtime_filter = 1;
+
 query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
@@ -40,6 +43,48 @@ Filter
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:bloom,inlist,min_max
+    ├── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── output columns: [a (#0), b (#1)]
+    │   ├── read rows: 0
+    │   ├── read size: 0
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 0
+    │   ├── pruning stats: [segments: <range pruning: 1 to 0>]
+    │   ├── push downs: [filters: [(t1.a (#0) > 3 OR t1.a (#0) > 1)], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── TableScan(Probe)
+        ├── table: default.default.t2
+        ├── output columns: [a (#2), b (#3)]
+        ├── read rows: 5
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+        ├── push downs: [filters: [(t2.a (#2) > 3 OR t2.a (#2) > 1)], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 3.40
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+query T
+explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
+----
+Filter
+├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
+├── filters: [(t1.a (#0) > 3 OR (t2.a (#2) > 5 AND t1.a (#0) > 1))]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
+    ├── join type: INNER
+    ├── build keys: [t1.a (#0)]
+    ├── probe keys: [t2.a (#2)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t1

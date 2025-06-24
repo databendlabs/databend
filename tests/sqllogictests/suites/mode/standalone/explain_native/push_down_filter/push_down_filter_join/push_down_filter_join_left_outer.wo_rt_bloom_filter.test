@@ -1,5 +1,5 @@
 statement ok
-set enable_bloom_runtime_filter = 1;
+set enable_bloom_runtime_filter = 0;
 
 statement ok
 set enable_auto_materialize_cte = 0;
@@ -277,7 +277,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t2.a (#0), probe key:t1.a (#2), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t2.a (#0), probe key:t1.a (#2), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── EvalScalar(Build)
 │   ├── output columns: [t.a (#0), action (#1)]

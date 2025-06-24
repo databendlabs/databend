@@ -1,5 +1,5 @@
 statement ok
-set enable_bloom_runtime_filter = 1
+set enable_bloom_runtime_filter = 0
 
 statement ok
 drop table if exists t
@@ -183,7 +183,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t1.number (#1), probe key:t2.number (#2), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t1.number (#1), probe key:t2.number (#2), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
 │   ├── output columns: [t1.number (#1), t.number (#0)]
@@ -485,7 +485,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -526,7 +526,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -563,8 +563,8 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   ├── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
-│   └── filter id:1, build key:t2.b (#3), probe key:t1.b (#1), filter type:bloom,inlist,min_max
+│   ├── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t2.b (#3), probe key:t1.b (#1), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -605,8 +605,8 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   ├── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
-│   └── filter id:1, build key:t2.b (#3), probe key:t1.b (#1), filter type:bloom,inlist,min_max
+│   ├── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t2.b (#3), probe key:t1.b (#1), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -647,8 +647,8 @@ HashJoin
 ├── keys is null equal: [false, false]
 ├── filters: []
 ├── build join filters:
-│   ├── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
-│   └── filter id:1, build key:t2.b (#3), probe key:t1.b (#1), filter type:bloom,inlist,min_max
+│   ├── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
+│   └── filter id:1, build key:t2.b (#3), probe key:t1.b (#1), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
@@ -690,7 +690,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: [t1.b (#1) > t2.b (#3)]
 ├── build join filters:
-│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -1196,7 +1196,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: []
 ├── build join filters:
-│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:t2.a (#2), probe key:t1.a (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]

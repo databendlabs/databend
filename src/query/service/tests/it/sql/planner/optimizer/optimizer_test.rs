@@ -416,8 +416,9 @@ async fn optimize_plan(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
     optimize(opt_ctx, plan).await
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn test_optimizer() -> Result<()> {
+async fn test_optimizer_with_runtime_bloom_filter_opt(
+    enable_runtime_bloom_filter_opt: bool,
+) -> Result<()> {
     let base_path =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
     let subdir = std::env::var("TEST_SUBDIR").ok();
@@ -427,6 +428,11 @@ async fn test_optimizer() -> Result<()> {
     let ctx = fixture.new_query_ctx().await?;
     ctx.get_settings().set_enable_auto_materialize_cte(0)?;
 
+    if enable_runtime_bloom_filter_opt {
+        ctx.get_settings()
+            .set_setting("enable_bloom_runtime_filter".to_string(), "1".to_string())?;
+    }
+
     suite.setup_tables(&ctx).await?;
 
     let cases = suite.load_cases()?;
@@ -434,7 +440,12 @@ async fn test_optimizer() -> Result<()> {
         return Ok(());
     }
 
-    let results_dir = base_path.join("results");
+    let results_dir = if enable_runtime_bloom_filter_opt {
+        base_path.join("results")
+    } else {
+        base_path.join("results_wo_runtime_bloom_filter")
+    };
+
     let mut root_mint = Mint::new(&results_dir);
     let mut subdir_mints: HashMap<String, Mint> = HashMap::new();
 
@@ -446,6 +457,15 @@ async fn test_optimizer() -> Result<()> {
         println!("✅ {} test passed!", case.name);
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn test_optimizer() -> Result<()> {
+    println!("[test_optimizer] testing with runtime bloom filter ENABLED");
+    test_optimizer_with_runtime_bloom_filter_opt(true).await?;
+    println!("[test_optimizer] testing with runtime bloom filter DISABLED");
+    test_optimizer_with_runtime_bloom_filter_opt(false).await?;
     Ok(())
 }
 

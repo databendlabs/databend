@@ -1,5 +1,5 @@
 statement ok
-set enable_bloom_runtime_filter = 1
+set enable_bloom_runtime_filter = 0
 
 statement ok
 drop table if exists t1 all
@@ -58,7 +58,7 @@ Filter
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:bloom,inlist,min_max
+    │   └── filter id:0, build key:t1.a (#0), probe key:t2.a (#2), filter type:inlist,min_max
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t1.a (#0), t1.b (#1)]
@@ -1375,7 +1375,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── build join filters:
-│   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Sort(Build)
 │   ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
@@ -1425,7 +1425,7 @@ HashJoin
 ├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── build join filters:
-│   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:bloom,inlist,min_max
+│   └── filter id:0, build key:a (#3), probe key:a (#0), filter type:inlist,min_max
 ├── estimated rows: 0.00
 ├── Sort(Build)
 │   ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]

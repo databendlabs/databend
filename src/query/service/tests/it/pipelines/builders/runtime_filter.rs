@@ -108,6 +108,11 @@ async fn join_build_state(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_generate_runtime_filter() -> Result<()> {
     let fixture = TestFixture::setup().await?;
+
+    fixture
+        .default_session()
+        .get_settings()
+        .set_setting("enable_bloom_runtime_filter".to_string(), "1".to_string())?;
     // Create table
     let _ = execute_sql(
         fixture.new_query_ctx().await?,
