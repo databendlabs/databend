@@ -280,6 +280,23 @@ async function findExistingRetryComment(github, context, core, pr) {
     }
 }
 
+function getRetryCount(existingComment) {
+    if (!existingComment) return 0;
+
+    // Try to extract retry count from the title
+    const titleMatch = existingComment.body.match(/## 🤖 Smart Auto-retry Analysis\s*(?:\(Retry #(\d+)\))?/);
+    if (titleMatch && titleMatch[1]) {
+        return parseInt(titleMatch[1], 10);
+    }
+
+    // If no retry count in title, check if it's a retry by looking for retry indicators
+    if (existingComment.body.includes('### ✅ **AUTO-RETRY INITIATED**')) {
+        return 1; // This is likely the first retry
+    }
+
+    return 0;
+}
+
 async function addCommentToPR(github, context, core, runID, runURL, failedJobs, analyzedJobs, retryableJobsCount, priorityCancelled) {
     try {
         // Get workflow run to find the branch
@@ -297,7 +314,17 @@ async function addCommentToPR(github, context, core, runID, runURL, failedJobs, 
             return;
         }
 
-        let comment = `## 🤖 Smart Auto-retry Analysis
+        // Try to find existing retry comment
+        const existingComment = await findExistingRetryComment(github, context, core, pr);
+
+        // Get current retry count
+        const currentRetryCount = getRetryCount(existingComment);
+        const newRetryCount = retryableJobsCount > 0 ? currentRetryCount + 1 : currentRetryCount;
+
+        // Build title with retry count
+        const titleSuffix = newRetryCount > 0 ? ` (Retry #${newRetryCount})` : '';
+
+        let comment = `## 🤖 Smart Auto-retry Analysis${titleSuffix}
 
 > **Workflow:** [\`${runID}\`](${runURL})
 
@@ -353,9 +380,6 @@ ${analyzedJobs.map(job => {
 Automated analysis using job annotations to distinguish infrastructure issues (auto-retried) from code/test issues (manual fixes needed).
 </details>`;
 
-        // Try to find existing retry comment
-        const existingComment = await findExistingRetryComment(github, context, core, pr);
-
         if (existingComment) {
             // Update existing comment
             await github.rest.issues.updateComment({
@@ -364,7 +388,7 @@ Automated analysis using job annotations to distinguish infrastructure issues (a
                 comment_id: existingComment.id,
                 body: comment
             });
-            core.info(`Updated existing smart retry analysis comment on PR #${pr.number}`);
+            core.info(`Updated existing smart retry analysis comment on PR #${pr.number} (Retry #${newRetryCount})`);
         } else {
             // Create new comment
             await github.rest.issues.createComment({
