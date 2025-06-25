@@ -61,6 +61,7 @@ use crate::runtime::time_series::QueryTimeSeriesProfile;
 use crate::runtime::workload_group::WorkloadGroupResource;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
+use crate::runtime::QueryPerf;
 use crate::runtime::TimeSeriesProfiles;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
@@ -172,13 +173,19 @@ impl Drop for TrackingGuard {
 pub struct TrackingFuture<T: Future> {
     inner: Pin<Box<T>>,
     tracking_payload: Arc<TrackingPayload>,
+    profile_flag: bool,
 }
 
 impl<T: Future> TrackingFuture<T> {
-    pub fn create(inner: T, tracking_payload: Arc<TrackingPayload>) -> TrackingFuture<T> {
+    pub fn create(
+        inner: T,
+        tracking_payload: Arc<TrackingPayload>,
+        profile_flag: bool,
+    ) -> TrackingFuture<T> {
         TrackingFuture {
             inner: Box::pin(inner),
             tracking_payload,
+            profile_flag,
         }
     }
 }
@@ -188,6 +195,7 @@ impl<T: Future> Future for TrackingFuture<T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let _guard = ThreadTracker::tracking_inner(self.tracking_payload.clone());
+        let _flag_guard = QueryPerf::tracking_inner(self.profile_flag);
         self.inner.as_mut().poll(cx)
     }
 }
@@ -225,7 +233,8 @@ impl ThreadTracker {
     pub fn init() {
         TRACKER.with(|x| {
             let _ = x.borrow_mut();
-        })
+        });
+        QueryPerf::init();
     }
 
     pub(crate) fn with<F, R>(f: F) -> R
@@ -255,15 +264,19 @@ impl ThreadTracker {
     }
 
     pub fn tracking_future<T: Future>(future: T) -> TrackingFuture<T> {
-        TRACKER.with(move |x| TrackingFuture::create(future, x.borrow().payload.clone()))
+        let profile_flag = QueryPerf::flag();
+        TRACKER
+            .with(move |x| TrackingFuture::create(future, x.borrow().payload.clone(), profile_flag))
     }
 
     pub fn tracking_function<F, T>(f: F) -> impl FnOnce() -> T
     where F: FnOnce() -> T {
+        let profile_flag = QueryPerf::flag();
         TRACKER.with(move |x| {
             let payload = x.borrow().payload.clone();
             move || {
                 let _guard = ThreadTracker::tracking_inner(payload);
+                let _flag_guard = QueryPerf::tracking_inner(profile_flag);
                 f()
             }
         })

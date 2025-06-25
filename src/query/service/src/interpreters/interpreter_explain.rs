@@ -21,8 +21,12 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::QueryPerfGuard;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -75,6 +79,7 @@ pub struct ExplainInterpreter {
     kind: ExplainKind,
     partial: bool,
     graphical: bool,
+    perf: bool,
     plan: Plan,
 }
 
@@ -298,6 +303,7 @@ impl ExplainInterpreter {
         config: ExplainConfig,
         partial: bool,
         graphical: bool,
+        perf: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
             ctx,
@@ -306,6 +312,7 @@ impl ExplainInterpreter {
             config,
             partial,
             graphical,
+            perf,
         })
     }
 
@@ -463,15 +470,25 @@ impl ExplainInterpreter {
         mutation_build_info: Option<MutationBuildInfo>,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
-        if let Some(build_info) = mutation_build_info {
-            builder.set_mutation_build_info(build_info);
-        }
-        let mut plan = builder.build(s_expr, required).await?;
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        let perf_guard = self.perf.then(|| QueryPerf::start(99)).transpose()?;
+        let (mut plan, query_profiles) =
+            ThreadTracker::tracking_future(self.build_and_execute_plan(
+                s_expr,
+                metadata,
+                required,
+                mutation_build_info,
+                ignore_result,
+            ))
+            .await?;
 
-        // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        if let Some(QueryPerfGuard::Both(_flag_guard, profiler_guard)) = perf_guard {
+            let dumped = QueryPerf::dump(&profiler_guard)?;
+            let node_id = GlobalConfig::instance().query.node_id.clone();
+            let other_nodes = self.ctx.get_nodes_perf().lock().clone();
+            let html = QueryPerf::pretty_display(node_id, dumped, other_nodes.into_iter());
+            let html = StringType::from_data(vec![html]);
+            return Ok(vec![DataBlock::new_from_columns(vec![html])]);
+        }
 
         let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
         if !pruned_partitions_stats.is_empty() {
@@ -499,6 +516,29 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    async fn build_and_execute_plan(
+        &self,
+        s_expr: &SExpr,
+        metadata: &MetadataRef,
+        required: ColumnSet,
+        mutation_build_info: Option<MutationBuildInfo>,
+        ignore_result: bool,
+    ) -> Result<(PhysicalPlan, HashMap<u32, PlanProfile>)> {
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
+        if let Some(build_info) = mutation_build_info {
+            builder.set_mutation_build_info(build_info);
+        }
+        dbg!(&QueryPerf::flag());
+        let plan = builder.build(s_expr, required).await?;
+        dbg!(&QueryPerf::flag());
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        dbg!(&QueryPerf::flag());
+        // Drain the data
+        let query_profiles = self.execute_and_get_profiles(build_res)?;
+        dbg!(&QueryPerf::flag());
+        Ok((plan, query_profiles))
+    }
+
     fn execute_and_get_profiles(
         &self,
         mut build_res: PipelineBuildResult,
@@ -507,6 +547,7 @@ impl ExplainInterpreter {
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let ctx = self.ctx.clone();
+        dbg!(QueryPerf::flag());
         build_res
             .main_pipeline
             .set_on_finished(always_callback(move |info: &ExecutionInfo| {

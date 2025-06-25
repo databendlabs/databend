@@ -101,23 +101,28 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement
+            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL|PERF)? ~ #statement
         },
-        |(_, _, opt_partial_or_graphical, statement)| {
-            let (partial, graphical) = match opt_partial_or_graphical {
+        |(_, _, analyze_kind, statement)| {
+            let (partial, graphical, perf) = match analyze_kind {
                 Some(Token {
                     kind: TokenKind::PARTIAL,
                     ..
-                }) => (true, false),
+                }) => (true, false, false),
                 Some(Token {
                     kind: TokenKind::GRAPHICAL,
                     ..
-                }) => (false, true),
-                _ => (false, false),
+                }) => (false, true, false),
+                Some(Token {
+                    kind: TokenKind::PERF,
+                    ..
+                }) => (false, false, true),
+                _ => (false, false, false),
             };
             Statement::ExplainAnalyze {
                 partial,
                 graphical,
+                perf,
                 query: Box::new(statement.stmt),
             }
         },

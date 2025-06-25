@@ -1919,6 +1919,22 @@ impl TableContext for QueryContext {
     fn get_session_type(&self) -> SessionType {
         self.shared.session.get_type()
     }
+
+    fn get_perf_flag(&self) -> bool {
+        self.shared.get_perf_flag()
+    }
+
+    fn set_perf_flag(&self, flag: bool) {
+        self.shared.set_perf_flag(flag);
+    }
+
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.shared.get_nodes_perf()
+    }
+
+    fn set_nodes_perf(&self, node: String, perf: String) {
+        self.shared.set_nodes_perf(node, perf);
+    }
 }
 
 impl TrySpawn for QueryContext {

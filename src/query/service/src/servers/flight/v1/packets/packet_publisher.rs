@@ -138,6 +138,7 @@ pub struct QueryEnv {
     pub request_server_id: String,
     pub workload_group: Option<String>,
     pub create_rpc_clint_with_current_rt: bool,
+    pub perf_flag: bool,
 }
 
 impl QueryEnv {

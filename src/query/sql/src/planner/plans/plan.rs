@@ -203,6 +203,7 @@ pub enum Plan {
     ExplainAnalyze {
         partial: bool,
         graphical: bool,
+        perf: bool,
         plan: Box<Plan>,
     },
     ReportIssue(String),
