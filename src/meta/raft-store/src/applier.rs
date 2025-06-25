@@ -20,13 +20,14 @@ use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
 use databend_common_meta_types::protobuf::BooleanExpression;
+use databend_common_meta_types::protobuf::FetchAddU64;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition::Target;
-use databend_common_meta_types::txn_op;
+use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
@@ -450,21 +451,29 @@ where SM: StateMachineApi + 'static
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
         debug!(op :% =(op); "txn execute TxnOp");
-        match &op.request {
-            Some(txn_op::Request::Get(get)) => {
+
+        let Some(request) = &op.request else {
+            warn!("txn_execute_operation: no request in TxnOp: {}", op);
+            return Ok(());
+        };
+
+        match request {
+            Request::Get(get) => {
                 self.txn_execute_get(get, resp).await?;
             }
-            Some(txn_op::Request::Put(put)) => {
+            Request::Put(put) => {
                 self.txn_execute_put(put, resp).await?;
             }
-            Some(txn_op::Request::Delete(delete)) => {
+            Request::Delete(delete) => {
                 self.txn_execute_delete(delete, resp).await?;
             }
-            Some(txn_op::Request::DeleteByPrefix(delete_by_prefix)) => {
+            Request::DeleteByPrefix(delete_by_prefix) => {
                 self.txn_execute_delete_by_prefix(delete_by_prefix, resp)
                     .await?;
             }
-            None => {}
+            Request::FetchAddU64(fetch_add_u64) => {
+                self.txn_execute_fetch_add_u64(fetch_add_u64, resp).await?;
+            }
         }
         Ok(())
     }
@@ -558,6 +567,51 @@ where SM: StateMachineApi + 'static
         resp.responses.push(TxnOpResponse {
             response: Some(txn_op_response::Response::DeleteByPrefix(del_resp)),
         });
+        Ok(())
+    }
+
+    async fn txn_execute_fetch_add_u64(
+        &mut self,
+        req: &FetchAddU64,
+        resp: &mut TxnReply,
+    ) -> Result<(), io::Error> {
+        let before_seqv = self.sm.get_maybe_expired_kv(&req.key).await?;
+
+        let before = if let Some(seqv) = &before_seqv {
+            let bytes = &seqv.data;
+            let u64_res: Result<u64, _> = serde_json::from_slice(bytes.as_slice());
+            match u64_res {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                        "fetch_add_u64: failed to deserialize u64 value: {:?}, error: {}",
+                        bytes, e
+                    );
+                    0
+                }
+            }
+        } else {
+            0
+        };
+
+        let after = before.saturating_add_signed(req.delta);
+
+        let (_prev, result) = {
+            let after_value = serde_json::to_vec(&after).expect("serialize u64 to json");
+            let upsert = UpsertKV::update(&req.key, &after_value);
+            self.upsert_kv(&upsert).await?
+        };
+
+        let fetch_add_resp = TxnOpResponse::fetch_add_u64(
+            req.key.clone(),
+            before_seqv.seq(),
+            before,
+            result.seq(),
+            after,
+        );
+
+        resp.responses.push(fetch_add_resp);
+
         Ok(())
     }
 

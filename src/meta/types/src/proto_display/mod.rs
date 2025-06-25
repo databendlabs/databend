@@ -27,6 +27,8 @@ use num_traits::FromPrimitive;
 use crate::protobuf::boolean_expression::CombiningOperator;
 use crate::protobuf::BooleanExpression;
 use crate::protobuf::ConditionalOperation;
+use crate::protobuf::FetchAddU64;
+use crate::protobuf::FetchAddU64Response;
 use crate::txn_condition::Target;
 use crate::txn_op;
 use crate::txn_op::Request;
@@ -165,6 +167,9 @@ impl Display for txn_op::Request {
             Request::DeleteByPrefix(r) => {
                 write!(f, "DeleteByPrefix({})", r)
             }
+            Request::FetchAddU64(r) => {
+                write!(f, "FetchAddU64({})", r)
+            }
         }
     }
 }
@@ -251,6 +256,9 @@ impl Display for Response {
             }
             Response::DeleteByPrefix(r) => {
                 write!(f, "DeleteByPrefix: {}", r)
+            }
+            Response::FetchAddU64(r) => {
+                write!(f, "FetchAddU64: {}", r)
             }
         }
     }
@@ -339,9 +347,27 @@ impl Display for ConditionalOperation {
     }
 }
 
+impl Display for FetchAddU64 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FetchAddU64 key={} delta={}", self.key, self.delta)
+    }
+}
+
+impl Display for FetchAddU64Response {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "FetchAddU64Response key={} before=(seq={} {}), after=(seq={} {})",
+            self.key, self.before_seq, self.before, self.after_seq, self.after
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::protobuf::BooleanExpression;
+    use crate::protobuf::FetchAddU64;
+    use crate::protobuf::FetchAddU64Response;
     use crate::protobuf::TxnCondition;
     use crate::TxnOp;
 
@@ -433,6 +459,30 @@ mod tests {
         assert_eq!(
             format!("{}", req),
            "TxnRequest{{ if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)] }, if:[k1 == seq(1),k2 == seq(2)] then:[Put(Put key=k1),Put(Put key=k2)] else:[Put(Put key=k3)]}",
+        );
+    }
+
+    #[test]
+    fn test_display_fetch_add_u64() {
+        let req = FetchAddU64 {
+            key: "k1".to_string(),
+            delta: 1,
+        };
+        assert_eq!(req.to_string(), "FetchAddU64 key=k1 delta=1");
+    }
+
+    #[test]
+    fn test_display_fetch_add_u64_response() {
+        let resp = FetchAddU64Response {
+            key: "k1".to_string(),
+            before_seq: 1,
+            before: 3,
+            after_seq: 2,
+            after: 4,
+        };
+        assert_eq!(
+            resp.to_string(),
+            "FetchAddU64Response key=k1 before=(seq=1 3), after=(seq=2 4)"
         );
     }
 }
