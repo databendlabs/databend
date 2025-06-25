@@ -18,9 +18,11 @@ use std::sync::atomic::Ordering;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -369,12 +371,11 @@ impl RangeJoinState {
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
         let mut indices = Vec::with_capacity(left_buffer.len());
-        let mut column_builder =
-            NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, left_buffer.len());
+        let mut buffer = Vec::with_capacity(left_buffer.len());
         for res in left_buffer.iter() {
             indices.push((0u32, *res as u32, 1usize));
             if !left_match.is_empty() {
-                column_builder.push(NumberScalar::UInt64((*res + left_offset) as u64));
+                buffer.push((*res + left_offset) as u64);
             }
         }
         let mut left_result_block =
@@ -383,7 +384,7 @@ impl RangeJoinState {
         for res in right_buffer.iter() {
             indices.push((0u32, *res as u32, 1usize));
             if !right_match.is_empty() {
-                column_builder.push(NumberScalar::UInt64((*res + right_offset) as u64));
+                buffer.push((*res + right_offset) as u64);
             }
         }
         let right_result_block = DataBlock::take_blocks(
@@ -395,7 +396,7 @@ impl RangeJoinState {
         left_result_block.merge_block(right_result_block);
         if !left_match.is_empty() || !right_match.is_empty() {
             left_result_block.add_entry(BlockEntry::new(
-                Value::Column(Column::Number(column_builder.build())),
+                Value::Column(Column::Number(NumberColumn::UInt64(Buffer::from(buffer)))),
                 || {
                     (
                         DataType::Number(NumberDataType::UInt64),
