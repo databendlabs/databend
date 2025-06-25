@@ -449,8 +449,8 @@ impl Join {
             &mut right_statistics,
         )?;
         let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left | JoinType::Asof | JoinType::LeftAsof => {
+            JoinType::Inner | JoinType::Asof | JoinType::Cross => inner_join_cardinality,
+            JoinType::Left | JoinType::LeftAsof => {
                 f64::max(left_cardinality, inner_join_cardinality)
             }
             JoinType::Right | JoinType::RightAsof => {
@@ -581,7 +581,7 @@ impl Operator for Join {
             });
         }
 
-        if !matches!(self.join_type, JoinType::Inner) {
+        if !matches!(self.join_type, JoinType::Inner | JoinType::Asof) {
             return Ok(PhysicalProperty {
                 distribution: Distribution::Random,
             });
@@ -645,6 +645,9 @@ impl Operator for Join {
                 | JoinType::RightAnti
                 | JoinType::RightSemi
                 | JoinType::LeftMark
+                | JoinType::Asof
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
         ) {
             let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
@@ -763,6 +766,9 @@ impl Operator for Join {
                 | JoinType::RightSemi
                 | JoinType::LeftMark
                 | JoinType::RightSingle
+                | JoinType::Asof
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
         ) && !settings.get_enforce_shuffle_join()?
         {
             // (Any, Broadcast)
