@@ -26,32 +26,32 @@ NULL
 query T
 SELECT json_typeof(parse_json('null'))
 ----
-null
+NULL_VALUE
 
 query T
 SELECT json_typeof(parse_json('true'))
 ----
-boolean
+BOOLEAN
 
 query T
 SELECT json_typeof(parse_json('"test"'))
 ----
-string
+STRING
 
-query T
-SELECT json_typeof(parse_json('-1.12'))
+query TTT
+SELECT json_typeof(parse_json('112')), json_typeof(parse_json('-1.12')), json_typeof(parse_json('1.12e10'))
 ----
-number
+INTEGER DECIMAL DOUBLE
 
 query T
 SELECT json_typeof(parse_json('[1,2,3]'))
 ----
-array
+ARRAY
 
 query T
 SELECT json_typeof(parse_json('{"a":1,"b":2}'))
 ----
-object
+OBJECT
 
 query T
 SELECT array_construct()

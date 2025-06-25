@@ -121,6 +121,14 @@ fn test_parse_json(file: &mut impl Write) {
             true, true, false, true,
         ]),
     )]);
+
+    // json extension syntax
+    run_ast(file, "parse_json('+10')", &[]);
+    run_ast(file, "parse_json('001')", &[]);
+    run_ast(file, "parse_json('.12')", &[]);
+    run_ast(file, "parse_json('12.')", &[]);
+    run_ast(file, "parse_json('99999999999999999999999999999999999999')", &[]);
+    run_ast(file, "parse_json('[1,2,,4]')", &[]);
 }
 
 fn test_try_parse_json(file: &mut impl Write) {
@@ -566,6 +574,8 @@ fn test_is_type(file: &mut impl Write) {
     run_ast(file, "is_integer(parse_json('123'))", &[]);
     run_ast(file, "is_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_float(parse_json('12.34'))", &[]);
+    run_ast(file, "is_decimal(parse_json('99999999999999999999999999999999999999'))", &[]);
+    run_ast(file, "is_decimal(parse_json('99999999999999999999999999999999999999999999999999999999999999999999999999991'))", &[]);
     run_ast(file, "is_string(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_string(parse_json('12.34'))", &[]);
     run_ast(file, "is_array(parse_json('[1,2,3]'))", &[]);
@@ -1084,7 +1094,9 @@ fn test_json_typeof(file: &mut impl Write) {
     run_ast(file, r#"json_typeof(parse_json('null'))"#, &[]);
     run_ast(file, r#"json_typeof(parse_json('true'))"#, &[]);
     run_ast(file, r#"json_typeof(parse_json('"test"'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('123'))"#, &[]);
     run_ast(file, r#"json_typeof(parse_json('-1.12'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('1.12e10'))"#, &[]);
     run_ast(file, r#"json_typeof(parse_json('[1,2,3]'))"#, &[]);
     run_ast(file, r#"json_typeof(parse_json('{"a":1,"b":2}'))"#, &[]);
 }

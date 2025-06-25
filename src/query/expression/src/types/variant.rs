@@ -245,16 +245,14 @@ pub fn cast_scalar_to_variant(
         },
         ScalarRef::Decimal(x) => match x {
             DecimalScalar::Decimal64(value, size) => {
-                let dec = jsonb::Decimal128 {
-                    precision: size.precision(),
+                let dec = jsonb::Decimal64 {
                     scale: size.scale(),
-                    value: value as i128,
+                    value,
                 };
-                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+                jsonb::Value::Number(jsonb::Number::Decimal64(dec))
             }
             DecimalScalar::Decimal128(value, size) => {
                 let dec = jsonb::Decimal128 {
-                    precision: size.precision(),
                     scale: size.scale(),
                     value,
                 };
@@ -262,7 +260,6 @@ pub fn cast_scalar_to_variant(
             }
             DecimalScalar::Decimal256(value, size) => {
                 let dec = jsonb::Decimal256 {
-                    precision: size.precision(),
                     scale: size.scale(),
                     value: value.0,
                 };

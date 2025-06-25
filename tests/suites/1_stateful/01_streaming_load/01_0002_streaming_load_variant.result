@@ -1,5 +1,5 @@
-{"id":"csv/json_sample1.csv","stats":{"rows":20,"bytes":645}}
-{"id":"csv/json_sample2.csv","stats":{"rows":22,"bytes":719}}
+{"id":"csv/json_sample1.csv","stats":{"rows":20,"bytes":647}}
+{"id":"csv/json_sample2.csv","stats":{"rows":22,"bytes":721}}
 1	null
 2	true
 3	false
