@@ -152,14 +152,6 @@ impl<'a> Evaluator<'a> {
             .map_err(|err| Self::map_err(err, expr))
     }
 
-    pub fn run_fast(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        self.partial_run(expr, None, &mut EvaluateOptions {
-            strict_eval: false,
-            ..Default::default()
-        })
-        .map_err(|err| Self::map_err(err, expr))
-    }
-
     fn map_err(err: ErrorCode, expr: &Expr) -> ErrorCode {
         let expr_str = format!("`{}`", expr.sql_display());
         if err.message().contains(expr_str.as_str()) {
@@ -933,7 +925,11 @@ impl<'a> Evaluator<'a> {
 
         if options.strict_eval {
             let mut check = CheckStrictValue;
-            assert!(check.visit_value(result.clone()).is_ok())
+            assert!(
+                check.visit_value(result.clone()).is_ok(),
+                "strict check fail on expr: {}, result: {result}",
+                expr_display()
+            )
         }
 
         Ok(result)

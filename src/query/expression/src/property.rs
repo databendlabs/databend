@@ -16,10 +16,10 @@ use databend_common_column::types::months_days_micros;
 use enum_as_inner::EnumAsInner;
 
 use crate::types::boolean::BooleanDomain;
-use crate::types::decimal::Decimal128Type;
-use crate::types::decimal::Decimal256Type;
+use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
+use crate::types::i256;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
@@ -33,11 +33,14 @@ use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::DecimalDataType;
+use crate::types::DecimalType;
 use crate::types::IntervalType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::TimestampType;
+use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::ColumnBuilder;
@@ -196,17 +199,10 @@ impl Domain {
                 Domain::Number(NumberDomain::Float64(NumberType::<F64>::full_domain()))
             }
             DataType::Decimal(size) => {
-                if size.can_carried_by_128() {
-                    Domain::Decimal(DecimalDomain::Decimal128(
-                        Decimal128Type::full_domain(size),
-                        *size,
-                    ))
-                } else {
-                    Domain::Decimal(DecimalDomain::Decimal256(
-                        Decimal256Type::full_domain(size),
-                        *size,
-                    ))
-                }
+                with_decimal_mapped_type!(|DECIMAL| match DecimalDataType::from(*size) {
+                    DecimalDataType::DECIMAL(size) =>
+                        DECIMAL::upcast_domain(DecimalType::<DECIMAL>::full_domain(&size), size),
+                })
             }
             DataType::Timestamp => Domain::Timestamp(TimestampType::full_domain()),
             DataType::Date => Domain::Date(DateType::full_domain()),

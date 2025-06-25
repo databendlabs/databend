@@ -17,9 +17,9 @@ use databend_common_expression::DataBlock;
 
 /// Buffer for concatenating input data blocks, to improve cache locality.
 pub struct ConcatBuffer {
-    pub buffer: Vec<DataBlock>,
-    pub num_rows: usize,
-    pub concat_threshold: usize,
+    buffer: Vec<DataBlock>,
+    num_rows: usize,
+    concat_threshold: usize,
 }
 
 impl ConcatBuffer {
@@ -50,13 +50,9 @@ impl ConcatBuffer {
     }
 
     fn concat(&mut self) -> Result<DataBlock> {
-        let data_block = DataBlock::concat(&self.buffer)?;
-        self.reset();
-        Ok(data_block)
-    }
-
-    fn reset(&mut self) {
-        self.buffer.clear();
+        let buffer = std::mem::take(&mut self.buffer);
+        let data_block = DataBlock::concat(&buffer)?;
         self.num_rows = 0;
+        Ok(data_block)
     }
 }

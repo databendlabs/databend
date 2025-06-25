@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
@@ -314,25 +315,19 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         }
                     })
                 }
-                DataType::Decimal(size) if size.can_carried_by_128() => {
-                    let return_type = DataType::Decimal(size);
-                    AggregateUnaryFunction::<
-                        MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
-                        DecimalType<i128>,
-                        DecimalType<i128>,
-                    >::try_create_unary(
-                        display_name, return_type, params, data_type
-                    )
-                }
                 DataType::Decimal(size) => {
-                    let return_type = DataType::Decimal(size);
-                    AggregateUnaryFunction::<
-                        MinMaxAnyDecimalState<DecimalType<i256>, CMP>,
-                        DecimalType<i256>,
-                        DecimalType<i256>,
-                    >::try_create_unary(
-                        display_name, return_type, params, data_type
-                    )
+                    with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                        DecimalDataKind::DECIMAL => {
+                            let return_type = DataType::Decimal(size);
+                            AggregateUnaryFunction::<
+                                MinMaxAnyDecimalState<DecimalType<DECIMAL>, CMP>,
+                                DecimalType<DECIMAL>,
+                                DecimalType<DECIMAL>,
+                            >::try_create_unary(
+                                display_name, return_type, params, data_type
+                            )
+                        }
+                    })
                 }
                 _ => {
                     let return_type = data_type.clone();

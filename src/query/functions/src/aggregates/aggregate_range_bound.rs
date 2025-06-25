@@ -24,6 +24,7 @@ use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::Scalar;
@@ -274,29 +275,21 @@ pub fn try_create_aggregate_range_bound_function(
                 }
             })
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let func = AggregateUnaryFunction::<
-                RangeBoundState<DecimalType<i128>>,
-                DecimalType<i128>,
-                ArrayType<DecimalType<i128>>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_function_data(Box::new(function_data))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        DataType::Decimal(_) => {
-            let func = AggregateUnaryFunction::<
-                RangeBoundState<DecimalType<i256>>,
-                DecimalType<i256>,
-                ArrayType<DecimalType<i256>>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
-            .with_function_data(Box::new(function_data))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+        DataType::Decimal(size) => {
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let func = AggregateUnaryFunction::<
+                        RangeBoundState<DecimalType<DECIMAL>>,
+                        DecimalType<DECIMAL>,
+                        ArrayType<DecimalType<DECIMAL>>,
+                    >::try_create(
+                        display_name, return_type, params, arguments[0].clone()
+                    )
+                    .with_function_data(Box::new(function_data))
+                    .with_need_drop(true);
+                    Ok(Arc::new(func))
+                }
+            })
         }
         DataType::Binary => {
             let func = AggregateUnaryFunction::<

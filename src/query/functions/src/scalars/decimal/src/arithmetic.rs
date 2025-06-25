@@ -38,7 +38,7 @@ use super::convert_to_decimal_domain;
 use crate::decimal_to_decimal_fast;
 use crate::other_to_decimal;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ArithmeticOp {
     Plus,
     Minus,
@@ -103,13 +103,12 @@ impl ArithmeticOp {
         };
 
         // if the args both are Decimal128, we need to clamp the precision to 38
-        let precision = if a.precision() <= MAX_DECIMAL128_PRECISION
-            && b.precision() <= MAX_DECIMAL128_PRECISION
-        {
-            precision.min(MAX_DECIMAL128_PRECISION)
-        } else {
-            precision.min(MAX_DECIMAL256_PRECISION)
-        };
+        let precision =
+            if a.precision() <= i128::MAX_PRECISION && b.precision() <= i128::MAX_PRECISION {
+                precision.min(i128::MAX_PRECISION)
+            } else {
+                precision.min(i256::MAX_PRECISION)
+            };
 
         let result_type = DecimalSize::new(precision, scale).ok()?;
         match self {
@@ -145,7 +144,7 @@ fn convert_to_decimal(
         let (value_decimal, value_type) = decimal_to_decimal_fast(value, ctx, size);
         ((value_decimal, size), value_type)
     } else {
-        let value_type = size.best_type();
+        let value_type = DecimalDataType::from(size);
         let value_decimal = other_to_decimal(value, None, ctx, data_type, value_type);
         ((value_decimal, size), value_type)
     }
@@ -161,7 +160,7 @@ fn op_decimal(
     let (a, a_type) = convert_to_decimal(a.0, a.1, a.2, ctx);
     let (b, b_type) = convert_to_decimal(b.0, b.1, b.2, ctx);
 
-    with_decimal_mapped_type!(|T| match result_type.size().best_type() {
+    with_decimal_mapped_type!(|T| match DecimalDataType::from(result_type.size()) {
         DecimalDataType::T(_) => {
             with_decimal_mapped_type!(|A| match a_type {
                 DecimalDataType::A(_) => {
@@ -200,7 +199,7 @@ where
     L: for<'a> AccessType<ScalarRef<'a> = T>,
     R: for<'a> AccessType<ScalarRef<'a> = T>,
 {
-    let overflow = return_size.precision() == T::default_decimal_size().precision();
+    let overflow = return_size.precision() == T::MAX_PRECISION;
 
     let a = a.try_downcast().unwrap();
     let b = b.try_downcast().unwrap();
@@ -406,18 +405,10 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |ctx, d| {
-                    let (left, right) =
-                        if left_size.can_carried_by_128() && right_size.can_carried_by_128() {
-                            (
-                                DecimalDataType::Decimal128(left_size),
-                                DecimalDataType::Decimal128(right_size),
-                            )
-                        } else {
-                            (
-                                DecimalDataType::Decimal256(left_size),
-                                DecimalDataType::Decimal256(right_size),
-                            )
-                        };
+                    let (left, right) = (
+                        DecimalDataType::Decimal256(left_size),
+                        DecimalDataType::Decimal256(right_size),
+                    );
                     let lhs = convert_to_decimal_domain(ctx, d[0].clone(), left);
                     let rhs = convert_to_decimal_domain(ctx, d[1].clone(), right);
 
@@ -428,7 +419,7 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
 
                     let size = return_size;
 
-                    let default_domain = if matches!(arithmetic_op, ArithmeticOp::Divide) {
+                    let default_domain = if arithmetic_op == ArithmeticOp::Divide {
                         FunctionDomain::MayThrow
                     } else {
                         FunctionDomain::Full
@@ -436,17 +427,29 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
                     {
                         match (lhs, rhs) {
                             (
-                                DecimalDomain::Decimal128(d1, _),
-                                DecimalDomain::Decimal128(d2, _),
-                            ) => arithmetic_op
-                                .calc_domain(&d1, &d2, size.precision())
-                                .map(|d| DecimalDomain::Decimal128(d, size)),
-                            (
                                 DecimalDomain::Decimal256(d1, _),
                                 DecimalDomain::Decimal256(d2, _),
                             ) => arithmetic_op
                                 .calc_domain(&d1, &d2, size.precision())
-                                .map(|d| DecimalDomain::Decimal256(d, size)),
+                                .map(|d| match size.data_kind() {
+                                    DecimalDataKind::Decimal64 => DecimalDomain::Decimal64(
+                                        SimpleDomain {
+                                            min: d.min.as_i64(),
+                                            max: d.max.as_i64(),
+                                        },
+                                        size,
+                                    ),
+                                    DecimalDataKind::Decimal128 => DecimalDomain::Decimal128(
+                                        SimpleDomain {
+                                            min: d.min.as_i128(),
+                                            max: d.max.as_i128(),
+                                        },
+                                        size,
+                                    ),
+                                    DecimalDataKind::Decimal256 => {
+                                        DecimalDomain::Decimal256(d, size)
+                                    }
+                                }),
                             _ => {
                                 unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs)
                             }
@@ -456,12 +459,7 @@ fn register_decimal_binary_op(registry: &mut FunctionRegistry, arithmetic_op: Ar
                     .unwrap_or(default_domain)
                 }),
                 eval: Box::new(move |args, ctx| {
-                    let return_decimal_type = if !ctx.strict_eval && return_size.can_carried_by_64()
-                    {
-                        DecimalDataType::Decimal64(return_size)
-                    } else {
-                        DecimalDataType::from(return_size)
-                    };
+                    let return_decimal_type = DecimalDataType::from(return_size);
 
                     op_decimal(
                         (&args[0], &args_type[0], left_size),
@@ -549,16 +547,9 @@ fn unary_minus_decimal(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<
     let (decimal, _) = DecimalDataType::from_value(arg).unwrap();
     match decimal {
         DecimalDataType::Decimal64(size) => {
-            if ctx.strict_eval {
-                let arg = arg.try_downcast().unwrap();
-                vectorize_1_arg::<Decimal64As128Type, Decimal128Type>(|t, _| -t)(arg, ctx)
-                    .upcast_with_type(&DataType::Decimal(size))
-            } else {
-                let arg = arg.try_downcast().unwrap();
-                type T = DecimalType<i64>;
-                vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx)
-                    .upcast_with_type(&DataType::Decimal(size))
-            }
+            let arg = arg.try_downcast().unwrap();
+            type T = DecimalType<i64>;
+            vectorize_1_arg::<T, T>(|t, _| -t)(arg, ctx).upcast_with_type(&DataType::Decimal(size))
         }
         DecimalDataType::Decimal128(size) => {
             let arg = arg.try_downcast().unwrap();

@@ -70,11 +70,7 @@ pub fn register_decimal_math(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_ctx, _d| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
-                    let dest_type = if !ctx.strict_eval && return_size.can_carried_by_64() {
-                        DecimalDataType::Decimal64(return_size)
-                    } else {
-                        DecimalDataType::from(return_size)
-                    };
+                    let dest_type = DecimalDataType::from(return_size);
 
                     decimal_rounds(
                         &args[0],
@@ -384,11 +380,7 @@ where
 fn decimal_abs(arg: &Value<AnyType>, ctx: &mut EvalContext) -> Value<AnyType> {
     let (from_type, _) = DecimalDataType::from_value(arg).unwrap();
 
-    let dest_type = if !ctx.strict_eval && from_type.size().can_carried_by_64() {
-        from_type
-    } else {
-        DecimalDataType::from(from_type.size())
-    };
+    let dest_type = DecimalDataType::from(from_type.size());
 
     with_decimal_mapped_type!(|IN| match from_type {
         DecimalDataType::IN(size) => {

@@ -129,14 +129,17 @@ fn convert_page_index_int32(
                     (Scalar::from(max as u32), Scalar::from(min as u32))
                 }
                 TableDataType::Date => (Scalar::Date(max), Scalar::Date(min)),
-                TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
-                ),
-                TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
-                    Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
-                ),
+                TableDataType::Decimal(decimal) => match decimal {
+                    DecimalDataType::Decimal128(size) => (
+                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
+                    ),
+                    DecimalDataType::Decimal256(size) => (
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
+                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
+                    ),
+                    _ => unreachable!(),
+                },
                 _ => unreachable!(),
             };
             Some(ColumnStatistics::new(min, max, null_count as u64, 0, None))

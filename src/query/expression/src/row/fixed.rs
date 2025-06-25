@@ -117,32 +117,17 @@ pub fn encode<T, I>(
     T: FixedLengthEncoding,
     I: IntoIterator<Item = T>,
 {
-    if let Some(validity) = validity {
-        for ((offset, val), v) in out.offsets.iter_mut().skip(1).zip(iter).zip(validity) {
-            let start = *offset as usize;
-            let end = start + T::ENCODED_LEN;
-            if v {
-                let to_write = &mut out.data[start..end];
-                to_write[0] = 1;
-                let mut encoded = val.encode();
-                if !asc {
-                    // Flip bits to reverse order
-                    encoded.as_mut().iter_mut().for_each(|v| *v = !*v)
-                }
-                to_write[1..].copy_from_slice(encoded.as_ref());
-            } else {
-                out.data[start] = null_sentinel(nulls_first);
-            }
-            *offset = end as u64;
-        }
-    } else if all_null {
+    if all_null {
         for offset in out.offsets.iter_mut().skip(1) {
             let start = *offset as usize;
             let end = start + T::ENCODED_LEN;
             out.data[start] = null_sentinel(nulls_first);
             *offset = end as u64;
         }
-    } else {
+        return;
+    }
+
+    let Some(validity) = validity else {
         for (offset, val) in out.offsets.iter_mut().skip(1).zip(iter) {
             let start = *offset as usize;
             let end = start + T::ENCODED_LEN;
@@ -156,5 +141,24 @@ pub fn encode<T, I>(
             to_write[1..].copy_from_slice(encoded.as_ref());
             *offset = end as u64;
         }
+        return;
+    };
+
+    for ((offset, val), v) in out.offsets.iter_mut().skip(1).zip(iter).zip(validity) {
+        let start = *offset as usize;
+        let end = start + T::ENCODED_LEN;
+        if v {
+            let to_write = &mut out.data[start..end];
+            to_write[0] = 1;
+            let mut encoded = val.encode();
+            if !asc {
+                // Flip bits to reverse order
+                encoded.as_mut().iter_mut().for_each(|v| *v = !*v)
+            }
+            to_write[1..].copy_from_slice(encoded.as_ref());
+        } else {
+            out.data[start] = null_sentinel(nulls_first);
+        }
+        *offset = end as u64;
     }
 }

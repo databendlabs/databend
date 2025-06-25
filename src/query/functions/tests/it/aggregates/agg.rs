@@ -15,12 +15,12 @@
 use std::io::Write;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -47,7 +47,7 @@ fn eval_aggr(
 }
 
 #[test]
-fn test_agg() {
+fn test_aggr_funtions() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg.txt").unwrap();
 
@@ -94,7 +94,7 @@ fn test_agg() {
 }
 
 #[test]
-fn test_agg_group_by() {
+fn test_aggr_functions_group_by() {
     let mut mint = Mint::new("tests/it/aggregates/testdata");
     let file = &mut mint.new_goldenfile("agg_group_by.txt").unwrap();
 
@@ -203,7 +203,7 @@ fn get_example() -> Vec<(&'static str, Column)> {
         ("bm", gen_bitmap_data()),
         (
             "dec",
-            Decimal128Type::from_opt_data_with_size(
+            Decimal64Type::from_opt_data_with_size(
                 vec![Some(110), Some(220), None, Some(330)],
                 Some(DecimalSize::new_unchecked(15, 2)),
             ),

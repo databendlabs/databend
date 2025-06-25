@@ -52,14 +52,17 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> Option<
                         (Scalar::from(max as u32), Scalar::from(min as u32))
                     }
                     TableDataType::Date => (Scalar::Date(max), Scalar::Date(min)),
-                    TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
-                    ),
-                    TableDataType::Decimal(DecimalDataType::Decimal256(size)) => (
-                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
-                        Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
-                    ),
+                    TableDataType::Decimal(decimal) => match decimal {
+                        DecimalDataType::Decimal128(size) => (
+                            Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
+                            Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
+                        ),
+                        DecimalDataType::Decimal256(size) => (
+                            Scalar::Decimal(DecimalScalar::Decimal256(i256::from(max), *size)),
+                            Scalar::Decimal(DecimalScalar::Decimal256(i256::from(min), *size)),
+                        ),
+                        _ => unreachable!(),
+                    },
                     _ => return None,
                 }
             }

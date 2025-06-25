@@ -155,7 +155,7 @@ impl HashJoinBuildState {
         }))
     }
 
-    pub fn build(&self, input: DataBlock) -> Result<()> {
+    pub(super) fn build(&self, input: DataBlock) -> Result<()> {
         if let Some(data_block) = self.concat_buffer.lock().add_block(input)? {
             self.add_build_block(data_block)?;
         }

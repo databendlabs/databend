@@ -22,6 +22,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::Scalar;
@@ -129,27 +130,20 @@ pub fn try_create_aggregate_mode_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let func = AggregateUnaryFunction::<
-                ModeState<Decimal128Type>,
-                Decimal128Type,
-                Decimal128Type,
-            >::try_create(
-                display_name, data_type.clone(), params, data_type.clone()
-            )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        DataType::Decimal(_) => {
-            let func = AggregateUnaryFunction::<
-                ModeState<Decimal256Type>,
-                Decimal256Type,
-                Decimal256Type,
-            >::try_create(
-                display_name, data_type.clone(), params, data_type.clone()
-            )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+        DataType::Decimal(size) => {
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let func = AggregateUnaryFunction::<
+                        ModeState<DecimalType<DECIMAL>>,
+                        DecimalType<DECIMAL>,
+                        DecimalType<DECIMAL>,
+                    >::try_create(
+                        display_name, data_type.clone(), params, data_type.clone()
+                    )
+                    .with_need_drop(true);
+                    Ok(Arc::new(func))
+                }
+            })
         }
         _ => {
             let func = AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::try_create(

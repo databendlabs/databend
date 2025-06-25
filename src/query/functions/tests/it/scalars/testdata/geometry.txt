@@ -1,6 +1,6 @@
 ast            : haversine(40.7127, -74.0059, 34.0500, -118.2500)
 raw expr       : haversine(40.7127, minus(74.0059), 34.0500, minus(118.2500))
-checked expr   : haversine<Float64, Float64, Float64, Float64>(CAST<Decimal(6, 4)>(40.7127_d128(6,4) AS Float64), CAST<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d128(6,4)) AS Float64), CAST<Decimal(6, 4)>(34.0500_d128(6,4) AS Float64), CAST<Decimal(7, 4)>(minus<Decimal(7, 4)>(118.2500_d128(7,4)) AS Float64))
+checked expr   : haversine<Float64, Float64, Float64, Float64>(CAST<Decimal(6, 4)>(40.7127_d64(6,4) AS Float64), CAST<Decimal(6, 4)>(minus<Decimal(6, 4)>(74.0059_d64(6,4)) AS Float64), CAST<Decimal(6, 4)>(34.0500_d64(6,4) AS Float64), CAST<Decimal(7, 4)>(minus<Decimal(7, 4)>(118.2500_d64(7,4)) AS Float64))
 optimized expr : 3936.390533556_f64
 output type    : Float64
 output domain  : {3936.390533556..=3936.390533556}
@@ -333,7 +333,7 @@ output         : 'LINESTRING(1 2,10.1 5.5,3.5 4.5,6.1 7.9)'
 
 ast            : st_makegeompoint(7.0, 8.0)
 raw expr       : st_makegeompoint(7.0, 8.0)
-checked expr   : st_makegeompoint<Float64, Float64>(CAST<Decimal(2, 1)>(7.0_d128(2,1) AS Float64), CAST<Decimal(2, 1)>(8.0_d128(2,1) AS Float64))
+checked expr   : st_makegeompoint<Float64, Float64>(CAST<Decimal(2, 1)>(7.0_d64(2,1) AS Float64), CAST<Decimal(2, 1)>(8.0_d64(2,1) AS Float64))
 optimized expr : "POINT(7 8)"
 output type    : Geometry
 output domain  : Undefined
@@ -342,7 +342,7 @@ output         : 'POINT(7 8)'
 
 ast            : st_makegeompoint(7.0, -8.0)
 raw expr       : st_makegeompoint(7.0, minus(8.0))
-checked expr   : st_makegeompoint<Float64, Float64>(CAST<Decimal(2, 1)>(7.0_d128(2,1) AS Float64), CAST<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1)) AS Float64))
+checked expr   : st_makegeompoint<Float64, Float64>(CAST<Decimal(2, 1)>(7.0_d64(2,1) AS Float64), CAST<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d64(2,1)) AS Float64))
 optimized expr : "POINT(7 -8)"
 output type    : Geometry
 output domain  : Undefined
@@ -512,7 +512,7 @@ output         : 1234
 
 ast            : st_srid(st_makegeompoint(37.5, 45.5))
 raw expr       : st_srid(st_makegeompoint(37.5, 45.5))
-checked expr   : st_srid<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d128(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d128(3,1) AS Float64)))
+checked expr   : st_srid<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d64(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d64(3,1) AS Float64)))
 optimized expr : 4326_i32
 output type    : Int32
 output domain  : {4326..=4326}
@@ -548,7 +548,7 @@ output         : 'POINT(1 1)'
 
 ast            : st_x(st_makegeompoint(37.5, 45.5))
 raw expr       : st_x(st_makegeompoint(37.5, 45.5))
-checked expr   : st_x<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d128(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d128(3,1) AS Float64)))
+checked expr   : st_x<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d64(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d64(3,1) AS Float64)))
 optimized expr : 37.5_f64
 output type    : Float64
 output domain  : {37.5..=37.5}
@@ -575,7 +575,7 @@ output         : NULL
 
 ast            : st_y(st_makegeompoint(37.5, 45.5))
 raw expr       : st_y(st_makegeompoint(37.5, 45.5))
-checked expr   : st_y<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d128(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d128(3,1) AS Float64)))
+checked expr   : st_y<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(3, 1)>(37.5_d64(3,1) AS Float64), CAST<Decimal(3, 1)>(45.5_d64(3,1) AS Float64)))
 optimized expr : 45.5_f64
 output type    : Float64
 output domain  : {45.5..=45.5}
@@ -683,7 +683,7 @@ output         : 'SRID=4326;LINESTRING(389866 5819003,390000 5830000)'
 
 ast            : to_string(st_makegeompoint(7.0, -8.0))
 raw expr       : to_string(st_makegeompoint(7.0, minus(8.0)))
-checked expr   : CAST<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(2, 1)>(7.0_d128(2,1) AS Float64), CAST<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d128(2,1)) AS Float64)) AS String)
+checked expr   : CAST<Geometry>(st_makegeompoint<Float64, Float64>(CAST<Decimal(2, 1)>(7.0_d64(2,1) AS Float64), CAST<Decimal(2, 1)>(minus<Decimal(2, 1)>(8.0_d64(2,1)) AS Float64)) AS String)
 optimized expr : "POINT(7 -8)"
 output type    : String
 output domain  : {"POINT(7 -8)"..="POINT(7 -8)"}
