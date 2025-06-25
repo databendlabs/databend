@@ -43,7 +43,7 @@ impl TryFrom<&[u8]> for RecordDelimiter {
     fn try_from(s: &[u8]) -> Result<Self> {
         match s.len() {
             1 => {
-                if s.eq(b"\r") || s.eq(b"\n") {
+                if s.eq(b"\n") {
                     Ok(RecordDelimiter::Crlf)
                 } else {
                     Ok(RecordDelimiter::Any(s[0]))
