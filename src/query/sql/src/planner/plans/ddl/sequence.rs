@@ -42,8 +42,6 @@ impl DescSequencePlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             DataField::new("name", DataType::String),
-            DataField::new("start", DataType::Number(NumberDataType::UInt64)),
-            DataField::new("interval", DataType::Number(NumberDataType::Int64)),
             DataField::new("current", DataType::Number(NumberDataType::UInt64)),
             DataField::new("created_on", DataType::Timestamp),
             DataField::new("updated_on", DataType::Timestamp),

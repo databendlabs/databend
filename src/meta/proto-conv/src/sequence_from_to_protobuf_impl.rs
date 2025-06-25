@@ -38,9 +38,7 @@ impl FromToProto for SequenceMeta {
             comment: p.comment.clone(),
             create_on: DateTime::<Utc>::from_pb(p.create_on)?,
             update_on: DateTime::<Utc>::from_pb(p.update_on)?,
-            start: p.start,
             current: p.current,
-            step: p.step,
         };
         Ok(v)
     }
@@ -52,9 +50,7 @@ impl FromToProto for SequenceMeta {
             comment: self.comment.clone(),
             create_on: self.create_on.to_pb()?,
             update_on: self.update_on.to_pb()?,
-            start: self.start,
             current: self.current,
-            step: self.step,
         };
         Ok(p)
     }

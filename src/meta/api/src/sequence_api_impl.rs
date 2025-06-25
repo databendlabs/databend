@@ -172,7 +172,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
             if succ {
                 return Ok(GetSequenceNextValueReply {
                     start,
-                    step: sequence_meta.step,
                     end: sequence_meta.current - 1,
                 });
             }

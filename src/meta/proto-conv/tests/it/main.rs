@@ -123,3 +123,4 @@ mod v128_storage_network_config;
 mod v129_vector_datatype;
 mod v130_udf_imports_packages;
 mod v131_avro_and_parquet_file_format_params;
+mod v132_remove_sequence_meta_step_start;

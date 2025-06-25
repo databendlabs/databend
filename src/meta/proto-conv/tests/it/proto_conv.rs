@@ -82,8 +82,6 @@ fn new_sequence_meta() -> mt::SequenceMeta {
         create_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         update_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         comment: Some("seq".to_string()),
-        start: 1,
-        step: 1,
         current: 10,
     }
 }

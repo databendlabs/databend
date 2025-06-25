@@ -28,8 +28,6 @@ pub struct SequenceMeta {
     pub create_on: DateTime<Utc>,
     pub update_on: DateTime<Utc>,
     pub comment: Option<String>,
-    pub start: u64,
-    pub step: i64,
     pub current: u64,
 }
 
@@ -39,8 +37,6 @@ impl From<CreateSequenceReq> for SequenceMeta {
             comment: p.comment.clone(),
             create_on: p.create_on,
             update_on: p.create_on,
-            start: 1,
-            step: 1,
             current: 1,
         }
     }
@@ -66,8 +62,6 @@ pub struct GetSequenceNextValueReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReply {
     pub start: u64,
-    // step has no use until now
-    pub step: i64,
     pub end: u64,
 }
 

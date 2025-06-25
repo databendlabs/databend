@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
@@ -59,16 +58,12 @@ impl Interpreter for DescSequenceInterpreter {
         let reply = catalog.get_sequence(req).await?;
 
         let name = vec![self.plan.ident.name().to_string()];
-        let start = vec![reply.meta.start];
-        let interval = vec![reply.meta.step];
         let current = vec![reply.meta.current];
         let created_on = vec![reply.meta.create_on.timestamp_micros()];
         let updated_on = vec![reply.meta.update_on.timestamp_micros()];
         let comment = vec![reply.meta.comment];
         let blocks = vec![DataBlock::new_from_columns(vec![
             StringType::from_data(name),
-            UInt64Type::from_data(start),
-            Int64Type::from_data(interval),
             UInt64Type::from_data(current),
             TimestampType::from_data(created_on),
             TimestampType::from_data(updated_on),

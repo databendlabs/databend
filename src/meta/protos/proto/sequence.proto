@@ -23,7 +23,14 @@ message SequenceMeta {
   string create_on = 1;
   string update_on = 2;
   optional string comment = 3;
-  uint64 start = 4;
-  int64 step = 5;
+
+  // reserved: start is not used and is removed.
+  //  uint64 start = 4;
+  reserved 4;
+
+  // reserved: step is not used and is removed.
+  //  int64 step = 5;
+  reserved 5;
+
   uint64 current = 6;
 }
