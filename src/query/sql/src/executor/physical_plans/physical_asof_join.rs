@@ -18,15 +18,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 
 use crate::binder::bind_window_function_info;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::WindowFunctionInfo;
 use crate::binder::WindowOrderByInfo;
-use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
@@ -36,7 +33,6 @@ use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
-use crate::plans::JoinType;
 use crate::plans::LagLeadFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -50,28 +46,6 @@ use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::DerivedColumn;
 use crate::Visibility;
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct AsofJoin {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    pub left: Box<PhysicalPlan>,
-    pub right: Box<PhysicalPlan>,
-    pub non_equi_conditions: Vec<RemoteExpr>,
-    // Now only support inner join, will support left/right join later
-    pub join_type: JoinType,
-
-    pub output_schema: DataSchemaRef,
-
-    // Only used for explain
-    pub stat_info: Option<PlanStatsInfo>,
-}
-
-impl AsofJoin {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.output_schema.clone())
-    }
-}
 
 impl PhysicalPlanBuilder {
     pub async fn build_asof_join(
@@ -103,12 +77,6 @@ impl PhysicalPlanBuilder {
         let mut ss_expr = s_expr.clone();
         ss_expr.children[0] = Arc::new(window_plan);
         ss_expr.children[1] = Arc::new(s_expr.child(0)?.clone());
-        let join_type = match join.join_type {
-            JoinType::Asof => Ok(JoinType::Inner),
-            JoinType::LeftAsof => Ok(JoinType::Left),
-            JoinType::RightAsof => Ok(JoinType::Right),
-            _ => Err(ErrorCode::Internal("unsupported join type!")),
-        }?;
         let left_prop = RelExpr::with_s_expr(ss_expr.child(0)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(ss_expr.child(1)?).derive_relational_prop()?;
         let left_required = required.0.union(&left_prop.used_columns).cloned().collect();
@@ -118,8 +86,8 @@ impl PhysicalPlanBuilder {
             .cloned()
             .collect();
         self.build_range_join(
+            join,
             &ss_expr,
-            join_type,
             left_required,
             right_required,
             range_conditions,

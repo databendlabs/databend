@@ -486,7 +486,7 @@ impl RangeJoinState {
             return Ok(DataBlock::empty());
         }
 
-        let mut outer_result_block = DataBlock::take_blocks(
+        let outer_result_block = DataBlock::take_blocks(
             &outer_table[outer_idx..outer_idx + 1],
             &indices,
             indices.len(),
@@ -502,12 +502,20 @@ impl RangeJoinState {
             })
             .collect::<Vec<_>>();
 
-        let inner_null_block = DataBlock::new(null_columns, indices.len());
-
-        for col in inner_null_block.columns() {
-            outer_result_block.add_entry(col.clone());
+        let (mut outer_block, inner_block) = if is_left {
+            (
+                outer_result_block,
+                DataBlock::new(null_columns, indices.len()),
+            )
+        } else {
+            (
+                DataBlock::new(null_columns, indices.len()),
+                outer_result_block,
+            )
+        };
+        for col in inner_block.columns() {
+            outer_block.add_entry(col.clone());
         }
-
-        Ok(outer_result_block)
+        Ok(outer_block)
     }
 }

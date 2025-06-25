@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
@@ -28,6 +31,7 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnSet;
 use crate::ScalarExpr;
@@ -47,6 +51,7 @@ pub struct RangeJoin {
     // Now only support inner join, will support left/right join later
     pub join_type: JoinType,
     pub range_join_type: RangeJoinType,
+    pub output_schema: DataSchemaRef,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -54,9 +59,7 @@ pub struct RangeJoin {
 
 impl RangeJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.left.output_schema()?.fields().clone();
-        fields.extend(self.right.output_schema()?.fields().clone());
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(self.output_schema.clone())
     }
 }
 
@@ -77,8 +80,8 @@ pub struct RangeJoinCondition {
 impl PhysicalPlanBuilder {
     pub async fn build_range_join(
         &mut self,
+        join: &Join,
         s_expr: &SExpr,
-        join_type: JoinType,
         left_required: ColumnSet,
         right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
@@ -100,26 +103,29 @@ impl PhysicalPlanBuilder {
         };
 
         // Construct IEJoin
-        let left_side = self.build(s_expr.child(1)?, left_required).await?;
-        let right_side = self.build(s_expr.child(0)?, right_required).await?;
+        let (right_side, left_side) = self
+            .build_join_sides(s_expr, left_required, right_required)
+            .await?;
 
-        let left_schema = left_side.output_schema()?;
-        let right_schema = right_side.output_schema()?;
+        let left_schema = self.prepare_probe_schema(&join.join_type, &left_side)?;
+        let right_schema = self.prepare_build_schema(&join.join_type, &right_side)?;
+
+        let mut output_schema = Vec::clone(left_schema.fields());
+        output_schema.extend_from_slice(right_schema.fields());
 
         let merged_schema = DataSchemaRefExt::create(
-            left_side
-                .output_schema()?
+            left_schema
                 .fields()
                 .iter()
-                .chain(right_side.output_schema()?.fields())
+                .chain(right_schema.fields())
                 .cloned()
                 .collect::<Vec<_>>(),
         );
 
         Ok(PhysicalPlan::RangeJoin(RangeJoin {
             plan_id: 0,
-            left: Box::new(left_side),
-            right: Box::new(right_side),
+            left: left_side,
+            right: right_side,
             conditions: range_conditions
                 .iter()
                 .map(|scalar| {
@@ -136,8 +142,9 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| resolve_scalar(scalar, &merged_schema))
                 .collect::<Result<_>>()?,
-            join_type,
+            join_type: join.join_type.clone(),
             range_join_type,
+            output_schema: Arc::new(DataSchema::new(output_schema)),
             stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))
     }

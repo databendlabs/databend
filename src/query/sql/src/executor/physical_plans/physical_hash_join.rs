@@ -117,7 +117,7 @@ impl HashJoin {
 
 impl PhysicalPlanBuilder {
     /// Builds the physical plans for both sides of the join
-    async fn build_join_sides(
+    pub(crate) async fn build_join_sides(
         &mut self,
         s_expr: &SExpr,
         left_required: ColumnSet,
@@ -153,13 +153,13 @@ impl PhysicalPlanBuilder {
     ///
     /// # Returns
     /// * `Result<DataSchemaRef>` - The prepared schema for the build side
-    fn prepare_build_schema(
+    pub(crate) fn prepare_build_schema(
         &self,
         join_type: &JoinType,
         build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
+            JoinType::Left | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side
                 let build_schema = DataSchemaRefExt::create(
@@ -189,13 +189,13 @@ impl PhysicalPlanBuilder {
     ///
     /// # Returns
     /// * `Result<DataSchemaRef>` - The prepared schema for the probe side
-    fn prepare_probe_schema(
+    pub(crate) fn prepare_probe_schema(
         &self,
         join_type: &JoinType,
         probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
+            JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
                 let probe_schema = probe_side.output_schema()?;
                 // Wrap nullable type for columns in probe side
                 let probe_schema = DataSchemaRefExt::create(
