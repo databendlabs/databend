@@ -28,7 +28,6 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;
-use super::FragmentKind;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
@@ -785,6 +784,7 @@ impl PhysicalPlanBuilder {
     #[allow(clippy::too_many_arguments)]
     fn create_hash_join(
         &self,
+        s_expr: &SExpr,
         join: &Join,
         probe_side: Box<PhysicalPlan>,
         build_side: Box<PhysicalPlan>,
@@ -801,10 +801,10 @@ impl PhysicalPlanBuilder {
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let broadcast_id = if let PhysicalPlan::Exchange(Exchange {
-            kind: FragmentKind::Normal,
-            ..
-        }) = build_side.as_ref()
+        let build_side_data_distribution = s_expr.left_child().get_data_distribution()?;
+        let broadcast_id = if build_side_data_distribution
+            .as_ref()
+            .is_some_and(|e| matches!(e, crate::plans::Exchange::Hash(_)))
         {
             Some(self.ctx.get_next_broadcast_id())
         } else {
@@ -913,12 +913,12 @@ impl PhysicalPlanBuilder {
                 s_expr,
                 &right_join_conditions,
                 left_join_conditions_rt,
-                &build_side,
             )
             .await?;
 
         // Step 12: Create and return the HashJoin
         self.create_hash_join(
+            s_expr,
             join,
             probe_side,
             build_side,
@@ -943,7 +943,6 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
-        build_side: &PhysicalPlan,
     ) -> Result<PhysicalRuntimeFilters> {
         JoinRuntimeFilter::build_runtime_filter(
             self.ctx.clone(),
@@ -952,7 +951,6 @@ impl PhysicalPlanBuilder {
             s_expr,
             build_keys,
             probe_keys,
-            build_side,
         )
         .await
     }

@@ -22,10 +22,9 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::get_change_type;
 
-use super::FragmentKind;
-use crate::executor::PhysicalPlan;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::IndexType;
@@ -145,7 +144,6 @@ impl JoinRuntimeFilter {
         s_expr: &SExpr,
         build_keys: &[RemoteExpr],
         probe_keys: Vec<Option<(RemoteExpr<String>, usize, usize)>>,
-        build_side: &PhysicalPlan,
     ) -> Result<PhysicalRuntimeFilters> {
         if !ctx.get_settings().get_enable_join_runtime_filter()? {
             return Ok(Default::default());
@@ -156,6 +154,8 @@ impl JoinRuntimeFilter {
         }
 
         let mut filters = Vec::new();
+
+        let build_side_data_distribution = s_expr.left_child().get_data_distribution()?;
 
         // Process each probe key that has runtime filter information
         for (build_key, probe_key, scan_id, table_index) in build_keys
@@ -176,9 +176,9 @@ impl JoinRuntimeFilter {
 
             // Determine which filter types to enable based on data type and statistics
             let enable_bloom_runtime_filter = {
-                let enable_in_cluster = build_side
-                    .as_exchange()
-                    .is_none_or(|e| matches!(e.kind, FragmentKind::Expansive));
+                let enable_in_cluster = build_side_data_distribution
+                    .as_ref()
+                    .is_none_or(|e| matches!(e, Exchange::Broadcast));
                 let is_supported_type = Self::is_type_supported_for_bloom_filter(&data_type);
                 let enable_bloom_runtime_filter_based_on_stats = Self::adjust_bloom_runtime_filter(
                     ctx.clone(),
@@ -190,15 +190,14 @@ impl JoinRuntimeFilter {
                 enable_in_cluster && is_supported_type && enable_bloom_runtime_filter_based_on_stats
             };
 
-            let enable_min_max_runtime_filter = build_side.as_exchange().is_none_or(|e| {
-                matches!(e.kind, FragmentKind::Expansive) || matches!(e.kind, FragmentKind::Normal)
-            }) && Self::is_type_supported_for_min_max_filter(
-                &data_type,
-            );
+            let enable_min_max_runtime_filter = build_side_data_distribution
+                .as_ref()
+                .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)))
+                && Self::is_type_supported_for_min_max_filter(&data_type);
 
-            let enable_inlist_runtime_filter = build_side.as_exchange().is_none_or(|e| {
-                matches!(e.kind, FragmentKind::Expansive) || matches!(e.kind, FragmentKind::Normal)
-            });
+            let enable_inlist_runtime_filter = build_side_data_distribution
+                .as_ref()
+                .is_none_or(|e| matches!(e, Exchange::Broadcast | Exchange::Hash(_)));
 
             // Create and add the runtime filter
             let runtime_filter = PhysicalRuntimeFilter {
