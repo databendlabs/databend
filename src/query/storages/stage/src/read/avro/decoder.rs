@@ -406,9 +406,9 @@ impl AvroDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, value: Value) -> ReadFieldResult {
         let v = match value {
-            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000000,
-            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v * 1000,
-            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v,
+            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000,
+            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v,
+            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v / 1000,
             _ => return Err(Error::default()),
         };
         column.push(v);
