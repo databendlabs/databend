@@ -32,9 +32,13 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_semaphore::acquirer::Permit;
 use databend_common_sql::Planner;
+use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
+use databend_common_tracing::get_all_history_table_names;
 use databend_common_tracing::init_history_tables;
 use databend_common_tracing::GlobalLogger;
 use databend_common_tracing::HistoryTable;
@@ -42,11 +46,17 @@ use futures_util::future::join_all;
 use futures_util::TryStreamExt;
 use log::error;
 use log::info;
+use opendal::raw::normalize_root;
+use parking_lot::Mutex;
 use rand::random;
 use tokio::time::sleep;
 use uuid::Uuid;
 
 use crate::history_tables::alter_table::get_alter_table_sql;
+use crate::history_tables::alter_table::get_log_table;
+use crate::history_tables::alter_table::should_reset;
+use crate::history_tables::external::get_external_storage_connection;
+use crate::history_tables::external::ExternalStorageConnection;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
@@ -62,18 +72,19 @@ pub struct GlobalHistoryLog {
     initialized: AtomicBool,
     retention_interval: usize,
     tables: Vec<Arc<HistoryTable>>,
+    connection: Option<ExternalStorageConnection>,
+    current_params: Mutex<Option<StorageParams>>,
     _runtime: Arc<Runtime>,
 }
 
 impl GlobalHistoryLog {
     pub async fn init(cfg: &InnerConfig) -> Result<()> {
-        setup_operator().await?;
-        if cfg.log.history.log_only {
-            info!(
-                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
-            );
-            return Ok(());
-        }
+        let connection = if let Some(params) = &cfg.log.history.storage_params {
+            let connection = get_external_storage_connection(params);
+            Some(connection)
+        } else {
+            None
+        };
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for SystemHistory"))?;
         let meta_handle = HistoryMetaHandle::new(meta_client, cfg.query.node_id.clone());
@@ -93,9 +104,17 @@ impl GlobalHistoryLog {
             initialized: AtomicBool::new(false),
             retention_interval: cfg.log.history.retention_interval,
             tables: init_history_tables(&cfg.log.history)?,
+            connection,
+            current_params: Mutex::new(None),
             _runtime: runtime.clone(),
         });
         GlobalInstance::set(instance);
+        if cfg.log.history.log_only {
+            info!(
+                "[HISTORY-TABLES] History tables transform is disabled, only logging is enabled."
+            );
+            return Ok(());
+        }
         runtime.spawn(async move {
             if let Err(e) = GlobalHistoryLog::instance().work().await {
                 error!("System history tables exit with {}", e);
@@ -112,8 +131,16 @@ impl GlobalHistoryLog {
     ///
     /// GlobalHistoryLog rely on other services, so we need to wait
     /// for all services to be initialized before starting the work.
-    pub fn initialized(&self) {
+    pub async fn initialized(&self, log_only: bool) -> Result<()> {
+        let _ = should_reset(self.create_context().await?, &self.connection).await?;
         self.initialized.store(true, Ordering::SeqCst);
+        // if log_only is true, this node will not have reset operation,
+        // so we can set up operator here.
+        if log_only {
+            self.update_operator(true).await?;
+            return Ok(());
+        }
+        Ok(())
     }
 
     pub async fn work(&self) -> Result<()> {
@@ -126,6 +153,7 @@ impl GlobalHistoryLog {
             }
         }
         self.prepare().await?;
+        self.update_operator(true).await?;
         info!("[HISTORY-TABLES] System history prepared successfully");
         // add a random sleep time (from 0.5*interval to 1.5*interval) to avoid always one node doing the work
         let sleep_time =
@@ -213,16 +241,40 @@ impl GlobalHistoryLog {
 
     /// Create the stage, database and table if not exists
     pub async fn prepare(&self) -> Result<()> {
-        let stage_name = self.stage_name.clone();
-        let create_stage = format!("CREATE STAGE IF NOT EXISTS {}", stage_name);
+        let transform_keys = self
+            .tables
+            .iter()
+            .map(|t| format!("{}/history_log_transform/{}/lock", self.tenant_id, t.name))
+            .collect::<Vec<_>>();
+        let prepare_key = format!("{}/history_log_prepare/lock", self.tenant_id);
+        let _guard: Vec<Permit> = self
+            .meta_handle
+            .acquire_all(&prepare_key, &transform_keys)
+            .await?;
+
+        if should_reset(self.create_context().await?, &self.connection).await? {
+            self.reset().await?;
+        }
+
+        let create_stage = if let Some(connection) = &self.connection {
+            connection.to_create_stage_sql(&self.stage_name)
+        } else {
+            format!("CREATE STAGE IF NOT EXISTS {}", &self.stage_name)
+        };
         self.execute_sql(&create_stage).await?;
+
         let create_db = "CREATE DATABASE IF NOT EXISTS system_history";
         self.execute_sql(create_db).await?;
+
         for table in self.tables.iter() {
-            let create_table = &table.create;
-            self.execute_sql(create_table).await?;
+            let mut create_table = table.create.clone();
+            if let Some(connection) = &self.connection {
+                create_table = connection.to_create_table_sql(&create_table, &table.name)
+            };
+            self.execute_sql(&create_table).await?;
+
             let get_alter_sql =
-                get_alter_table_sql(self.create_context().await?, create_table, &table.name)
+                get_alter_table_sql(self.create_context().await?, &create_table, &table.name)
                     .await?;
             for alter_sql in get_alter_sql {
                 info!("[HISTORY-TABLES] executing alter table: {}", alter_sql);
@@ -232,11 +284,34 @@ impl GlobalHistoryLog {
         Ok(())
     }
 
+    pub async fn reset(&self) -> Result<()> {
+        info!("[HISTORY-TABLES] Resetting system history tables");
+        let drop_stage = format!("DROP STAGE IF EXISTS {}", self.stage_name);
+        self.execute_sql(&drop_stage).await?;
+
+        // drop all pre-defined history tables to keep the system_history's tables consistency
+        let drop_tables = get_all_history_table_names()
+            .iter()
+            .map(|name| format!("DROP TABLE IF EXISTS system_history.{}", name))
+            .collect::<Vec<_>>();
+        for sql in drop_tables {
+            self.execute_sql(&sql).await?;
+        }
+        Ok(())
+    }
+
     pub async fn transform(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
         let may_permit = self
             .meta_handle
             .acquire_with_guard(&format!("{}/{}/lock", meta_key, table.name), self.interval)
             .await?;
+
+        // stage operator need to update when the params changed
+        // this will happen when another node has updated the configuration
+        if table.name == "log_history" {
+            self.update_operator(false).await?;
+        }
+
         if let Some(_guard) = may_permit {
             let mut batch_number_end = 0;
             let batch_number_begin = self
@@ -277,6 +352,26 @@ impl GlobalHistoryLog {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    pub async fn update_operator(&self, force: bool) -> Result<()> {
+        let log_history_table = get_log_table(self.create_context().await?).await?;
+        if let Some(t) = log_history_table {
+            let params_from_meta = t.get_table_info().meta.storage_params.clone();
+            {
+                let mut params = self.current_params.lock();
+                if params.as_ref() != params_from_meta.as_ref() || force {
+                    info!(
+                            "[HISTORY-TABLES] log_history table storage params changed, update log operator"
+                        );
+                    *params = params_from_meta.clone();
+                } else {
+                    return Ok(());
+                }
+            }
+            setup_operator(&params_from_meta).await?;
+        }
+        Ok(())
     }
 
     pub async fn clean(&self, table: &HistoryTable, meta_key: &str) -> Result<bool> {
@@ -322,8 +417,21 @@ impl GlobalHistoryLog {
 
 /// GlobalLogger initialization before the operator
 /// This is a workaround for the current architecture.
-pub async fn setup_operator() -> Result<()> {
-    let op = DataOperator::instance().operator();
+pub async fn setup_operator(params: &Option<StorageParams>) -> Result<()> {
+    // If it has specified storage_params, use it to initialize the operator.
+    // Otherwise, use the default operator from global DataOperator.
+    let op = match params {
+        None => DataOperator::instance().operator(),
+        Some(p) => {
+            let new_p = p.clone();
+            let new_p = new_p.map_root(|root| {
+                // replace `log_history` with empty string
+                let new_root = root.replace("log_history/", "");
+                normalize_root(new_root.as_str())
+            });
+            init_operator(&new_p)?
+        }
+    };
     GlobalLogger::instance().set_operator(op).await;
     Ok(())
 }
