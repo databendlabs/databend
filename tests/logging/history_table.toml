@@ -1,0 +1,14 @@
+[log.history]
+on = true
+
+[[log.history.tables]]
+table_name = "query_history"
+
+[[log.history.tables]]
+table_name = "profile_history"
+
+[[log.history.tables]]
+table_name = "login_history"
+
+[[log.history.tables]]
+table_name = "access_history"

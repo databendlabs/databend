@@ -154,6 +154,14 @@ fn build_proto() {
             "TxnRequest.operations",
             r#"#[serde(skip_serializing_if = "Vec::is_empty")] #[serde(default)]"#,
         )
+        .type_attribute(
+            "FetchAddU64",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
+        .type_attribute(
+            "FetchAddU64Response",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize, deepsize::DeepSizeOf)]",
+        )
         .compile_protos_with_config(config, &protos, &[&proto_dir])
         .unwrap();
 }
