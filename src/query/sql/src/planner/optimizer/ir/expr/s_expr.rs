@@ -477,7 +477,8 @@ impl SExpr {
             | crate::plans::RelOp::CacheScan
             | crate::plans::RelOp::RecursiveCteScan => Ok(None),
 
-            crate::plans::RelOp::Join => self.right_child().get_data_distribution(),
+            // probe side
+            crate::plans::RelOp::Join => self.left_child().get_data_distribution(),
 
             crate::plans::RelOp::Exchange => {
                 Ok(Some(self.plan.as_ref().clone().try_into().unwrap()))
