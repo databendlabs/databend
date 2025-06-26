@@ -81,7 +81,6 @@ impl ShowSequences {
     fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
-            TableField::new("start", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("interval", TableDataType::Number(NumberDataType::Int64)),
             TableField::new("current", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("created_on", TableDataType::Timestamp),
@@ -172,7 +171,6 @@ async fn show_sequences(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>>
         .info;
 
     let names = seqs.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
-    let start = seqs.iter().map(|x| x.1.start).collect::<Vec<_>>();
     let interval = seqs.iter().map(|x| x.1.step).collect::<Vec<_>>();
     let current = seqs.iter().map(|x| x.1.current).collect::<Vec<_>>();
     let create_on = seqs
@@ -187,7 +185,6 @@ async fn show_sequences(ctx: Arc<dyn TableContext>) -> Result<Option<DataBlock>>
 
     Ok(Some(DataBlock::new_from_columns(vec![
         StringType::from_data(names),
-        UInt64Type::from_data(start),
         Int64Type::from_data(interval),
         UInt64Type::from_data(current),
         TimestampType::from_data(create_on),
