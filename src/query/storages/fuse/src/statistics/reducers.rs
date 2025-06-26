@@ -56,6 +56,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> ColumnStatistics {
     let mut min_stats = Vec::with_capacity(stats.len());
     let mut max_stats = Vec::with_capacity(stats.len());
+    let mut ndvs = Vec::with_capacity(stats.len());
     let mut null_count = 0;
     let mut in_memory_size = 0;
 
@@ -63,7 +64,7 @@ pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> Col
         let col_stats = col_stats.borrow();
         min_stats.push(col_stats.min().clone());
         max_stats.push(col_stats.max().clone());
-
+        ndvs.push(col_stats.distinct_of_values);
         null_count += col_stats.null_count;
         in_memory_size += col_stats.in_memory_size;
     }
@@ -79,7 +80,10 @@ pub fn reduce_column_statistics<T: Borrow<ColumnStatistics>>(stats: &[T]) -> Col
         .filter(|s| !s.is_null())
         .max_by(|x, y| x.cmp(y))
         .unwrap_or(Scalar::Null);
-    ColumnStatistics::new(min, max, null_count, in_memory_size, None)
+    let distinct_of_values = ndvs
+        .into_iter()
+        .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
+    ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values)
 }
 
 pub fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
@@ -198,6 +202,11 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
             // so we skip deduct the MinMax statistics here.
             col_stats.null_count -= r_col_stats.null_count;
             col_stats.in_memory_size -= r_col_stats.in_memory_size;
+            col_stats.distinct_of_values =
+                match (col_stats.distinct_of_values, r_col_stats.distinct_of_values) {
+                    (Some(l), Some(r)) => l.checked_sub(r),
+                    _ => None,
+                };
         }
     }
     let virtual_block_count =

@@ -342,6 +342,11 @@ impl FuseTable {
             )?;
 
             let schema = self.schema();
+            if schema != latest_table_info.schema() {
+                return Err(ErrorCode::StorageOther(
+                    "The schema of the table has changed",
+                ));
+            }
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
                 ctx.clone(),
                 self.operator.clone(),

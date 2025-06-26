@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_table_meta::meta::Location;
@@ -124,7 +123,7 @@ impl SegmentCompactMutator {
     }
 
     #[async_backtrace::framed]
-    pub async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
+    pub async fn try_commit(&self, table: &FuseTable) -> Result<()> {
         if !self.has_compaction() {
             // defensive checking
             return Ok(());
@@ -132,9 +131,8 @@ impl SegmentCompactMutator {
 
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        fuse_table
+        table
             .commit_mutation(
                 &self.ctx,
                 self.compact_params.base_snapshot.clone(),

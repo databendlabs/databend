@@ -724,6 +724,7 @@ pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub full: bool,
 }
 
 impl Display for AnalyzeTableStmt {
@@ -736,6 +737,9 @@ impl Display for AnalyzeTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+        if self.full {
+            write!(f, " FULL")?;
+        }
 
         Ok(())
     }
