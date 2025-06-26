@@ -24,6 +24,7 @@ use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnSta
 /// A column statistics provider for fuse table.
 #[derive(Default)]
 pub struct FuseTableColumnStatisticsProvider {
+    row_count: u64,
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     histograms: HashMap<ColumnId, Histogram>,
 }
@@ -53,6 +54,7 @@ impl FuseTableColumnStatisticsProvider {
         Self {
             column_stats,
             histograms,
+            row_count,
         }
     }
 }
@@ -63,7 +65,7 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     }
 
     fn num_rows(&self) -> Option<u64> {
-        None
+        Some(self.row_count)
     }
 
     fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {

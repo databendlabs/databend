@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
@@ -226,66 +227,40 @@ pub fn try_create_aggregate_avg_function(
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let decimal_size =
-                DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale().max(4));
-
-            // DecimalWidth<int64_t> = 18
-            let overflow = s.precision() > 18;
-            let scale_add = decimal_size.scale() - s.scale();
-            let return_type = DataType::Decimal(decimal_size);
-
-            if overflow {
-                let func = AggregateUnaryFunction::<
-                    DecimalAvgState<true, Decimal128Type>,
-                    Decimal128Type,
-                    Decimal128Type,
-                >::try_create(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(DecimalAvgData { scale_add }));
-                Ok(Arc::new(func))
-            } else {
-                let func = AggregateUnaryFunction::<
-                    DecimalAvgState<false, Decimal128Type>,
-                    Decimal128Type,
-                    Decimal128Type,
-                >::try_create(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(DecimalAvgData { scale_add }));
-                Ok(Arc::new(func))
-            }
-        }
         DataType::Decimal(s) => {
-            let decimal_size =
-                DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale().max(4));
+            with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let decimal_size =
+                        DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, s.scale().max(4));
 
-            let overflow = s.precision() > 18;
-            let scale_add = decimal_size.scale() - s.scale();
-            let return_type = DataType::Decimal(decimal_size);
+                    let overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
+                        && s.precision() > i64::MAX_PRECISION;
+                    let scale_add = decimal_size.scale() - s.scale();
+                    let return_type = DataType::Decimal(decimal_size);
 
-            if overflow {
-                let func = AggregateUnaryFunction::<
-                    DecimalAvgState<true, Decimal256Type>,
-                    Decimal256Type,
-                    Decimal256Type,
-                >::try_create(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(DecimalAvgData { scale_add }));
-                Ok(Arc::new(func))
-            } else {
-                let func = AggregateUnaryFunction::<
-                    DecimalAvgState<false, Decimal256Type>,
-                    Decimal256Type,
-                    Decimal256Type,
-                >::try_create(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(DecimalAvgData { scale_add }));
-                Ok(Arc::new(func))
-            }
+                    if overflow {
+                        let func = AggregateUnaryFunction::<
+                            DecimalAvgState<true, DecimalType<DECIMAL>>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >::try_create(
+                            display_name, return_type, params, arguments[0].clone()
+                        )
+                        .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                        Ok(Arc::new(func))
+                    } else {
+                        let func = AggregateUnaryFunction::<
+                            DecimalAvgState<false, DecimalType<DECIMAL>>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >::try_create(
+                            display_name, return_type, params, arguments[0].clone()
+                        )
+                        .with_function_data(Box::new(DecimalAvgData { scale_add }));
+                        Ok(Arc::new(func))
+                    }
+                }
+            })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",

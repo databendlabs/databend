@@ -116,3 +116,8 @@ query T
 select to_uint64(1024954.98046875::double) a, a::numeric as a_numeric, a::real as a_real
 ----
 1024955 1024955.000 1024955.0
+
+query T
+SELECT concat('value:', to_string(number::decimal(5) * 1.00)) FROM numbers(1);
+----
+value:0.00

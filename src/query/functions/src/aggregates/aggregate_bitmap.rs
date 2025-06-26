@@ -29,6 +29,7 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -585,17 +586,19 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(decimal) if decimal.can_carried_by_128() => {
-            AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
-                display_name,
-                extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
-            )
-        }
-        DataType::Decimal(_) => {
-            AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
-                display_name,
-                extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
-            )
+        DataType::Decimal(size) => {
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    AggregateBitmapIntersectCountFunction::<DecimalType<DECIMAL>>::try_create(
+                        display_name,
+                        extract_params::<DecimalType<DECIMAL>>(
+                            display_name,
+                            filter_column_type,
+                            params,
+                        )?,
+                    )
+                }
+            })
         }
         _ => {
             AggregateBitmapIntersectCountFunction::<AnyType>::try_create(

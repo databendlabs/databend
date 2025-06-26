@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilderMut;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 
@@ -200,63 +201,38 @@ pub fn try_create_aggregate_quantile_disc_function(
                 }
             })
         }
-        DataType::Decimal(size) if size.can_carried_by_128() => {
-            let data_type = DataType::Decimal(size);
-            if params.len() > 1 {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i128>>,
-                    DecimalType<i128>,
-                    ArrayType<DecimalType<i128>>,
-                >::try_create(
-                    display_name,
-                    DataType::Array(Box::new(data_type)),
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            } else {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i128>>,
-                    DecimalType<i128>,
-                    DecimalType<i128>,
-                >::try_create(
-                    display_name, data_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            }
-        }
         DataType::Decimal(size) => {
-            let data_type = DataType::Decimal(size);
-            if params.len() > 1 {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i256>>,
-                    DecimalType<i256>,
-                    ArrayType<DecimalType<i256>>,
-                >::try_create(
-                    display_name,
-                    DataType::Array(Box::new(data_type)),
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            } else {
-                let func = AggregateUnaryFunction::<
-                    QuantileState<DecimalType<i256>>,
-                    DecimalType<i256>,
-                    DecimalType<i256>,
-                >::try_create(
-                    display_name, data_type, params, arguments[0].clone()
-                )
-                .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-                Ok(Arc::new(func))
-            }
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let data_type = DataType::Decimal(size);
+                    if params.len() > 1 {
+                        let func = AggregateUnaryFunction::<
+                            QuantileState<DecimalType<DECIMAL>>,
+                            DecimalType<DECIMAL>,
+                            ArrayType<DecimalType<DECIMAL>>,
+                        >::try_create(
+                            display_name,
+                            DataType::Array(Box::new(data_type)),
+                            params,
+                            arguments[0].clone(),
+                        )
+                        .with_function_data(Box::new(QuantileData { levels }))
+                        .with_need_drop(true);
+                        Ok(Arc::new(func))
+                    } else {
+                        let func = AggregateUnaryFunction::<
+                            QuantileState<DecimalType<DECIMAL>>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >::try_create(
+                            display_name, data_type, params, arguments[0].clone()
+                        )
+                        .with_function_data(Box::new(QuantileData { levels }))
+                        .with_need_drop(true);
+                        Ok(Arc::new(func))
+                    }
+                }
+            })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
@@ -264,6 +240,7 @@ pub fn try_create_aggregate_quantile_disc_function(
         ))),
     })
 }
+
 pub fn aggregate_quantile_disc_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(try_create_aggregate_quantile_disc_function))
 }

@@ -406,9 +406,9 @@ impl AvroDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, value: Value) -> ReadFieldResult {
         let v = match value {
-            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000000,
-            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v * 1000,
-            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v,
+            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000,
+            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v,
+            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v / 1000,
             _ => return Err(Error::default()),
         };
         column.push(v);
@@ -717,6 +717,7 @@ mod test {
         assert_eq!(expected, row);
         Ok(())
     }
+
     #[test]
     fn test_decimal() -> Result<(), String> {
         let avro_schema = json!(
@@ -733,8 +734,7 @@ mod test {
         let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field,
             avro_schema.clone(),
@@ -766,8 +766,7 @@ mod test {
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
 
         let value = make_value("12345");
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),

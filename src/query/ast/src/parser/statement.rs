@@ -26,6 +26,7 @@ use nom_rule::rule;
 
 use super::sequence::sequence;
 use crate::ast::*;
+use crate::parser::comment::comment;
 use crate::parser::common::*;
 use crate::parser::copy::copy_into;
 use crate::parser::copy::copy_into_table;
@@ -2712,6 +2713,7 @@ AS
             | #describe_procedure : "`DESC PROCEDURE <procedure_name>()`"
             | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
+        rule!(#comment),
     ))(i)
 }
 
@@ -4715,26 +4717,6 @@ pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
                 name: v,
                 columns: vec![],
             }),
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        },
-    )(i)
-}
-
-pub fn table_reference_only(i: Input) -> IResult<TableReference> {
-    map(
-        consumed(rule! {
-            #dot_separated_idents_1_to_3
-        }),
-        |(span, (catalog, database, table))| TableReference::Table {
-            span: transform_span(span.tokens),
-            catalog,
-            database,
-            table,
-            alias: None,
             temporal: None,
             with_options: None,
             pivot: None,

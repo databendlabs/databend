@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -104,7 +104,7 @@ fn deserialize_nested<'a, I>(
 where
     I: Iterator<Item = Result<(u64, Vec<u8>)>> + PageIterator + Send + Sync + 'a,
 {
-    let is_nullable = matches!(data_type, TableDataType::Nullable(_));
+    let is_nullable = data_type.is_nullable();
     Ok(match data_type.remove_nullable() {
         TableDataType::Null | TableDataType::EmptyArray | TableDataType::EmptyMap => {
             unimplemented!("Can't store pure nulls")
@@ -159,25 +159,28 @@ where
                 init,
             ))
         }
-        TableDataType::Decimal(t) if t.precision() > MAX_DECIMAL128_PRECISION => {
-            init.push(InitNested::Primitive(is_nullable));
-            DynIter::new(DecimalNestedIter::<
-                _,
-                databend_common_column::types::i256,
-                databend_common_expression::types::i256,
-            >::new(
-                readers.pop().unwrap(), data_type.clone(), t.size(), init
-            ))
-        }
-        TableDataType::Decimal(t) => {
-            init.push(InitNested::Primitive(is_nullable));
-            DynIter::new(DecimalNestedIter::<_, i128, i128>::new(
-                readers.pop().unwrap(),
-                data_type.clone(),
-                t.size(),
-                init,
-            ))
-        }
+        TableDataType::Decimal(decimal) => match decimal {
+            DecimalDataType::Decimal128(size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                DynIter::new(DecimalNestedIter::<_, i128, i128>::new(
+                    readers.pop().unwrap(),
+                    data_type.clone(),
+                    size,
+                    init,
+                ))
+            }
+            DecimalDataType::Decimal256(size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                DynIter::new(DecimalNestedIter::<
+                    _,
+                    databend_common_column::types::i256,
+                    databend_common_expression::types::i256,
+                >::new(
+                    readers.pop().unwrap(), data_type.clone(), size, init
+                ))
+            }
+            _ => unreachable!(),
+        },
         t if t.is_physical_binary() => {
             init.push(InitNested::Primitive(is_nullable));
             DynIter::new(BinaryNestedIter::<_>::new(

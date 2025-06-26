@@ -39,6 +39,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -649,11 +650,11 @@ fn try_create_aggregate_array_agg_function(
             })
         }
         DataType::Decimal(size) => {
-            if size.can_carried_by_128() {
-                simple::<CoreDecimal<i128>>(display_name, return_type, is_nullable)
-            } else {
-                simple::<CoreDecimal<i256>>(display_name, return_type, is_nullable)
-            }
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    simple::<CoreDecimal<DECIMAL>>(display_name, return_type, is_nullable)
+                }
+            })
         }
         DataType::Date => simple::<CoreDate>(display_name, return_type, is_nullable),
         DataType::Timestamp => simple::<CoreTimestamp>(display_name, return_type, is_nullable),

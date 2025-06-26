@@ -188,7 +188,7 @@ output         : 10246934130793054423
 
 ast            : city64withseed('Abc',256.3)
 raw expr       : city64withseed('Abc', 256.3)
-checked expr   : city64withseed<String, Float64>("Abc", CAST<Decimal(4, 1)>(256.3_d128(4,1) AS Float64))
+checked expr   : city64withseed<String, Float64>("Abc", CAST<Decimal(4, 1)>(256.3_d64(4,1) AS Float64))
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
 output domain  : {10246934130793054423..=10246934130793054423}
@@ -215,7 +215,7 @@ output         : 2939704650099116301
 
 ast            : city64withseed(1.1, 12)
 raw expr       : city64withseed(1.1, 12)
-checked expr   : city64withseed<Decimal(2, 1), UInt8>(1.1_d128(2,1), 12_u8)
+checked expr   : city64withseed<Decimal(2, 1), UInt8>(1.1_d64(2,1), 12_u8)
 optimized expr : 9036782473571630478_u64
 output type    : UInt64
 output domain  : {9036782473571630478..=9036782473571630478}
@@ -224,7 +224,7 @@ output         : 9036782473571630478
 
 ast            : city64withseed(1.1::decimal(10,1),12)
 raw expr       : city64withseed(CAST(1.1 AS Decimal(10, 1)), 12)
-checked expr   : city64withseed<Decimal(10, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(10, 1)), 12_u8)
+checked expr   : city64withseed<Decimal(10, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(10, 1)), 12_u8)
 optimized expr : 9036782473571630478_u64
 output type    : UInt64
 output domain  : {9036782473571630478..=9036782473571630478}
@@ -233,7 +233,7 @@ output         : 9036782473571630478
 
 ast            : city64withseed(1.1::decimal(40,1),12)
 raw expr       : city64withseed(CAST(1.1 AS Decimal(40, 1)), 12)
-checked expr   : city64withseed<Decimal(40, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(40, 1)), 12_u8)
+checked expr   : city64withseed<Decimal(40, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(40, 1)), 12_u8)
 optimized expr : 8239090264861021549_u64
 output type    : UInt64
 output domain  : {8239090264861021549..=8239090264861021549}
@@ -242,7 +242,7 @@ output         : 8239090264861021549
 
 ast            : city64withseed(1.1::decimal(41,1),12)
 raw expr       : city64withseed(CAST(1.1 AS Decimal(41, 1)), 12)
-checked expr   : city64withseed<Decimal(41, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(41, 1)), 12_u8)
+checked expr   : city64withseed<Decimal(41, 1), UInt8>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(41, 1)), 12_u8)
 optimized expr : 8239090264861021549_u64
 output type    : UInt64
 output domain  : {8239090264861021549..=8239090264861021549}
@@ -251,7 +251,7 @@ output         : 8239090264861021549
 
 ast            : city64withseed('1234567890', 12.12)
 raw expr       : city64withseed('1234567890', 12.12)
-checked expr   : city64withseed<String, Float64>("1234567890", CAST<Decimal(4, 2)>(12.12_d128(4,2) AS Float64))
+checked expr   : city64withseed<String, Float64>("1234567890", CAST<Decimal(4, 2)>(12.12_d64(4,2) AS Float64))
 optimized expr : 10660895976650300430_u64
 output type    : UInt64
 output domain  : {10660895976650300430..=10660895976650300430}
@@ -260,7 +260,7 @@ output         : 10660895976650300430
 
 ast            : city64withseed(1234567890, 12.12)
 raw expr       : city64withseed(1234567890, 12.12)
-checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, CAST<Decimal(4, 2)>(12.12_d128(4,2) AS Float64))
+checked expr   : city64withseed<UInt32, Float64>(1234567890_u32, CAST<Decimal(4, 2)>(12.12_d64(4,2) AS Float64))
 optimized expr : 2939704650099116301_u64
 output type    : UInt64
 output domain  : {2939704650099116301..=2939704650099116301}
@@ -419,7 +419,7 @@ output         : 15130871412783076140
 
 ast            : siphash64(1.1)
 raw expr       : siphash64(1.1)
-checked expr   : siphash64<Decimal(2, 1)>(1.1_d128(2,1))
+checked expr   : siphash64<Decimal(2, 1)>(1.1_d64(2,1))
 optimized expr : 10271360460354063574_u64
 output type    : UInt64
 output domain  : {10271360460354063574..=10271360460354063574}
@@ -512,7 +512,7 @@ output         : 14922725725041217620
 
 ast            : xxhash64(1.1)
 raw expr       : xxhash64(1.1)
-checked expr   : xxhash64<Decimal(2, 1)>(1.1_d128(2,1))
+checked expr   : xxhash64<Decimal(2, 1)>(1.1_d64(2,1))
 optimized expr : 16412388371308701297_u64
 output type    : UInt64
 output domain  : {16412388371308701297..=16412388371308701297}
@@ -521,7 +521,7 @@ output         : 16412388371308701297
 
 ast            : xxhash64(1.1::decimal(10,1))
 raw expr       : xxhash64(CAST(1.1 AS Decimal(10, 1)))
-checked expr   : xxhash64<Decimal(10, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(10, 1)))
+checked expr   : xxhash64<Decimal(10, 1)>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(10, 1)))
 optimized expr : 16412388371308701297_u64
 output type    : UInt64
 output domain  : {16412388371308701297..=16412388371308701297}
@@ -530,7 +530,7 @@ output         : 16412388371308701297
 
 ast            : xxhash64(1.1::decimal(40,1))
 raw expr       : xxhash64(CAST(1.1 AS Decimal(40, 1)))
-checked expr   : xxhash64<Decimal(40, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(40, 1)))
+checked expr   : xxhash64<Decimal(40, 1)>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(40, 1)))
 optimized expr : 1889002562955497527_u64
 output type    : UInt64
 output domain  : {1889002562955497527..=1889002562955497527}
@@ -539,7 +539,7 @@ output         : 1889002562955497527
 
 ast            : xxhash64(1.1::decimal(41,1))
 raw expr       : xxhash64(CAST(1.1 AS Decimal(41, 1)))
-checked expr   : xxhash64<Decimal(41, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(41, 1)))
+checked expr   : xxhash64<Decimal(41, 1)>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(41, 1)))
 optimized expr : 1889002562955497527_u64
 output type    : UInt64
 output domain  : {1889002562955497527..=1889002562955497527}
@@ -696,7 +696,7 @@ output         : 2833116583
 
 ast            : xxhash32(1.1)
 raw expr       : xxhash32(1.1)
-checked expr   : xxhash32<Decimal(2, 1)>(1.1_d128(2,1))
+checked expr   : xxhash32<Decimal(2, 1)>(1.1_d64(2,1))
 optimized expr : 2039219311_u32
 output type    : UInt32
 output domain  : {2039219311..=2039219311}
@@ -705,7 +705,7 @@ output         : 2039219311
 
 ast            : xxhash32(1.1::decimal(10,1))
 raw expr       : xxhash32(CAST(1.1 AS Decimal(10, 1)))
-checked expr   : xxhash32<Decimal(10, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(10, 1)))
+checked expr   : xxhash32<Decimal(10, 1)>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(10, 1)))
 optimized expr : 2039219311_u32
 output type    : UInt32
 output domain  : {2039219311..=2039219311}
@@ -714,7 +714,7 @@ output         : 2039219311
 
 ast            : xxhash32(1.1::decimal(40,1))
 raw expr       : xxhash32(CAST(1.1 AS Decimal(40, 1)))
-checked expr   : xxhash32<Decimal(40, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(40, 1)))
+checked expr   : xxhash32<Decimal(40, 1)>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(40, 1)))
 optimized expr : 547584765_u32
 output type    : UInt32
 output domain  : {547584765..=547584765}
@@ -723,7 +723,7 @@ output         : 547584765
 
 ast            : xxhash32(1.1::decimal(41,1))
 raw expr       : xxhash32(CAST(1.1 AS Decimal(41, 1)))
-checked expr   : xxhash32<Decimal(41, 1)>(CAST<Decimal(2, 1)>(1.1_d128(2,1) AS Decimal(41, 1)))
+checked expr   : xxhash32<Decimal(41, 1)>(CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Decimal(41, 1)))
 optimized expr : 547584765_u32
 output type    : UInt32
 output domain  : {547584765..=547584765}

@@ -110,7 +110,7 @@ impl<const IS_FIRST: bool> ValueVisitor for HashVisitor<'_, IS_FIRST> {
     fn visit_any_decimal(&mut self, decimal_column: DecimalColumn) -> Result<()> {
         with_decimal_mapped_type!(|F| match decimal_column {
             DecimalColumn::F(buffer, size) => {
-                with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                with_decimal_mapped_type!(|T| match size.data_kind() {
                     DecimalDataKind::T => {
                         self.combine_group_hash_type_column::<DecimalView<F, T>>(&buffer);
                     }
@@ -329,7 +329,7 @@ where I: Index
     fn visit_any_decimal(&mut self, column: DecimalColumn) -> Result<()> {
         with_decimal_mapped_type!(|F| match &column {
             DecimalColumn::F(_, size) => {
-                with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                with_decimal_mapped_type!(|T| match size.data_kind() {
                     DecimalDataKind::T => {
                         type D = DecimalView<F, T>;
                         let buffer = D::try_downcast_column(&Column::Decimal(column)).unwrap();

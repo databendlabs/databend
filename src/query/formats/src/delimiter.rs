@@ -42,7 +42,13 @@ impl TryFrom<&[u8]> for RecordDelimiter {
     type Error = ErrorCode;
     fn try_from(s: &[u8]) -> Result<Self> {
         match s.len() {
-            1 => Ok(RecordDelimiter::Any(s[0])),
+            1 => {
+                if s.eq(b"\n") {
+                    Ok(RecordDelimiter::Crlf)
+                } else {
+                    Ok(RecordDelimiter::Any(s[0]))
+                }
+            }
             2 if s.eq(b"\r\n") => Ok(RecordDelimiter::Crlf),
             _ => Err(ErrorCode::InvalidArgument(format!(
                 "bad RecordDelimiter: '{:?}'",

@@ -15,7 +15,6 @@
 use std::io::BufRead;
 
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 
@@ -130,11 +129,11 @@ fn stat_freq_body(mut buffer: &[u8], data_type: &TableDataType) -> Result<PageBo
                 exceptions_bitmap_size,
             }))
         }
-        TableDataType::Decimal(decimal_size) => {
-            let top_value_size = if decimal_size.precision() > MAX_DECIMAL128_PRECISION {
-                32
-            } else {
+        TableDataType::Decimal(decimal_type) => {
+            let top_value_size = if decimal_type.size().can_carried_by_128() {
                 16
+            } else {
+                32
             };
             buffer = &buffer[top_value_size..];
             let exceptions_bitmap_size = u32::from_le_bytes(buffer[0..4].try_into().unwrap());

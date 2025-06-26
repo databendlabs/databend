@@ -138,8 +138,8 @@ impl UserApi for UserMgr {
         }
     }
 
-    //#[async_backtrace::framed]
-    //#[fastrace::trace]
+    #[async_backtrace::framed]
+    #[fastrace::trace]
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
         let values = self.get_raw_users().await?;
         let mut r = vec![];

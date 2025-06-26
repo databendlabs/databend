@@ -25,6 +25,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::Scalar;
@@ -167,35 +168,24 @@ pub fn try_create_aggregate_histogram_function(
             .with_need_drop(true);
             Ok(Arc::new(func))
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<Decimal128Type>,
-                Decimal128Type,
-                StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
-            )
-            .with_function_data(Box::new(HistogramData {
-                max_num_buckets,
-                data_type,
-            }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
-        }
-        DataType::Decimal(_) => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<Decimal256Type>,
-                Decimal256Type,
-                StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
-            )
-            .with_function_data(Box::new(HistogramData {
-                max_num_buckets,
-                data_type,
-            }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+        DataType::Decimal(size) => {
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let func = AggregateUnaryFunction::<
+                        HistogramState<DecimalType<DECIMAL>>,
+                        DecimalType<DECIMAL>,
+                        StringType,
+                    >::try_create(
+                        display_name, DataType::String, params, data_type.clone()
+                    )
+                    .with_function_data(Box::new(HistogramData {
+                        max_num_buckets,
+                        data_type,
+                    }))
+                    .with_need_drop(true);
+                    Ok(Arc::new(func))
+                }
+            })
         }
         DataType::String => {
             let func = AggregateUnaryFunction::<

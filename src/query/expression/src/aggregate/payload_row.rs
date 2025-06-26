@@ -94,7 +94,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
         Column::Decimal(decimal_column) => {
             with_decimal_mapped_type!(|F| match decimal_column {
                 DecimalColumn::F(buffer, size) => {
-                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
                         DecimalDataKind::T => {
                             serialize_fixed_size_column_to_rowformat::<DecimalView<F, T>>(
                                 buffer,
@@ -272,7 +272,7 @@ unsafe fn row_match_column(
         Column::Decimal(decimal_column) => {
             with_decimal_mapped_type!(|F| match decimal_column {
                 DecimalColumn::F(_, size) => {
-                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
                         DecimalDataKind::T => {
                             row_match_column_type::<DecimalView<F, T>>(
                                 col,

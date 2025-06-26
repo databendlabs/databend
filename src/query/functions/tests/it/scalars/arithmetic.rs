@@ -47,7 +47,7 @@ fn test_arithmetic() {
         ),
         (
             "e",
-            Column::Decimal(DecimalColumn::Decimal128(
+            Column::Decimal(DecimalColumn::Decimal64(
                 vec![31, 335, 1888].into(),
                 DecimalSize::new_unchecked(10, 1),
             )),

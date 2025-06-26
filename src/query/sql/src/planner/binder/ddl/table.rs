@@ -945,6 +945,7 @@ impl Binder {
             }
             AlterTableAction::ModifyTableComment { new_comment } => {
                 Ok(Plan::ModifyTableComment(Box::new(ModifyTableCommentPlan {
+                    if_exists: *if_exists,
                     new_comment: new_comment.to_string(),
                     catalog,
                     database,
