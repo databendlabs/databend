@@ -6,4 +6,4 @@ sql: |
 
 
 # Reference to external statistics file
-statistics_file: obfuscated/02_distributed_runtime_filter_stats.yaml 
+statistics_file: obfuscated/02_distributed_runtime_filter_stats.yaml

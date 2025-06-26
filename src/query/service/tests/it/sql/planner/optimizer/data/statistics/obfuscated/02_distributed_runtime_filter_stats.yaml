@@ -1,6 +1,5 @@
 name: "Distributed Runtime Filter Statistics"
 description: "Statistics for obfuscated tables used in distributed runtime filter tests"
-
 table_statistics:
   a00c:
     num_rows: 196839034
@@ -9,7 +8,6 @@ table_statistics:
     index_size: 362096237
     number_of_blocks: 960
     number_of_segments: 1
-
 column_statistics:
   # a00c table columns
   a00c.a0f:
@@ -84,4 +82,3 @@ column_statistics:
   a00c.a0i:
     ndv: 231363
     null_count: 0
-
