@@ -24,7 +24,7 @@ Exchange
                     ├── probe keys: [a.a0m (#9)]
                     ├── keys is null equal: [false]
                     ├── filters: []
-                    ├── build join filters(distributed):
+                    ├── build join filters:
                     │   └── filter id:3, build key:c.a0m (#149), probe key:a.a0m (#9), filter type:inlist,min_max
                     ├── estimated rows: 376949189626631488.00
                     ├── Exchange(Build)
