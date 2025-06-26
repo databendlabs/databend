@@ -54,47 +54,49 @@ impl Interpreter for ModifyTableCommentInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)
-            .await?
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        match catalog
             .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
             .await
-            .ok();
+        {
+            Ok(table) => {
+                // check mutability
+                table.check_mutable()?;
 
-        if let Some(table) = &tbl {
-            // check mutability
-            table.check_mutable()?;
+                let table_info = table.get_table_info();
+                let engine = table.engine();
+                if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "{}.{} engine is {} that doesn't support alter",
+                        &self.plan.database, &self.plan.table, engine
+                    )));
+                }
+                if table_info.db_type != DatabaseType::NormalDB {
+                    return Err(ErrorCode::TableEngineNotSupported(format!(
+                        "{}.{} doesn't support alter",
+                        &self.plan.database, &self.plan.table
+                    )));
+                }
 
-            let table_info = table.get_table_info();
-            let engine = table.engine();
-            if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} engine is {} that doesn't support alter",
-                    &self.plan.database, &self.plan.table, engine
-                )));
+                let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
+                let mut new_table_meta = table_info.meta.clone();
+                new_table_meta.comment = self.plan.new_comment.clone();
+
+                commit_table_meta(
+                    &self.ctx,
+                    table.as_ref(),
+                    table_info,
+                    new_table_meta,
+                    catalog,
+                )
+                .await?
             }
-            if table_info.db_type != DatabaseType::NormalDB {
-                return Err(ErrorCode::TableEngineNotSupported(format!(
-                    "{}.{} doesn't support alter",
-                    &self.plan.database, &self.plan.table
-                )));
+            Err(e) => {
+                if !(e.code() == ErrorCode::UNKNOWN_TABLE && self.plan.if_exists) {
+                    return Err(e);
+                }
             }
-
-            let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-            let mut new_table_meta = table_info.meta.clone();
-            new_table_meta.comment = self.plan.new_comment.clone();
-
-            commit_table_meta(
-                &self.ctx,
-                table.as_ref(),
-                table_info,
-                new_table_meta,
-                catalog,
-            )
-            .await?;
-        };
-
+        }
         Ok(PipelineBuildResult::create())
     }
 }
