@@ -1,0 +1,42 @@
+EvalScalar
+├── scalars: [t1.a0f (#2) AS (#2), t2.cjny (#50) AS (#50)]
+└── Join(Left)
+    ├── build keys: [t2.a0f (#27)]
+    ├── probe keys: [t1.a0f (#2)]
+    ├── other filters: []
+    ├── EvalScalar
+    │   ├── scalars: [a00c.a0f (#2) AS (#2)]
+    │   └── Filter
+    │       ├── filters: [eq(row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#24), 1)]
+    │       └── Window
+    │           ├── aggregate function: row_number
+    │           ├── partition items: [a00c.a0f (#2) AS (#2)]
+    │           ├── order by items: [a00c.a0t (#16) AS (#16) DESC NULLS LAST]
+    │           ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │           └── Sort
+    │               ├── sort keys: [default.a00c.a0f (#2) ASC NULLS LAST, default.a00c.a0t (#16) DESC NULLS LAST]
+    │               ├── limit: [NONE]
+    │               ├── window top: NONE
+    │               ├── window function: RowNumber
+    │               └── EvalScalar
+    │                   ├── scalars: [a00c.a0f (#2) AS (#2), a00c.a0t (#16) AS (#16)]
+    │                   └── Scan
+    │                       ├── table: default.a00c (#0)
+    │                       ├── filters: []
+    │                       ├── order by: []
+    │                       └── limit: NONE
+    └── EvalScalar
+        ├── scalars: [a00c.a0f (#27) AS (#27), min(to_yyyymm(a0t)) (#50) AS (#50)]
+        └── Aggregate(Initial)
+            ├── group items: [a00c.a0f (#27) AS (#27)]
+            ├── aggregate functions: [min(to_yyyymm(a0t)) AS (#50)]
+            └── EvalScalar
+                ├── scalars: [a00c.a0f (#27) AS (#27), to_yyyymm(a00c.a0t (#41)) AS (#49)]
+                └── Filter
+                    ├── filters: [eq(a00c.a0w (#44), '汇缴')]
+                    └── Scan
+                        ├── table: default.a00c (#1)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+

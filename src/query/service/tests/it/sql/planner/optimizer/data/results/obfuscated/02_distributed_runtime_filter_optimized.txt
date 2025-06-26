@@ -1,0 +1,45 @@
+Exchange(Merge)
+└── EvalScalar
+    ├── scalars: [t1.a0f (#2) AS (#2), t2.cjny (#50) AS (#50), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#51) AS (#53)]
+    └── Join(Left)
+        ├── build keys: [t2.a0f (#27)]
+        ├── probe keys: [t1.a0f (#2)]
+        ├── other filters: []
+        ├── EvalScalar
+        │   ├── scalars: [a00c.a0f (#2) AS (#2), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#24) AS (#51)]
+        │   └── Filter
+        │       ├── filters: [eq(row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#24), 1)]
+        │       └── Window
+        │           ├── aggregate function: row_number
+        │           ├── partition items: [a00c.a0f (#2) AS (#2)]
+        │           ├── order by items: [a00c.a0t (#16) AS (#16) DESC NULLS LAST]
+        │           ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        │           └── Sort
+        │               ├── sort keys: [default.a00c.a0f (#2) ASC NULLS LAST, default.a00c.a0t (#16) DESC NULLS LAST]
+        │               ├── limit: [NONE]
+        │               ├── window top: 1
+        │               ├── window function: RowNumber
+        │               └── Exchange(Hash)
+        │                   ├── Exchange(Hash): keys: [a00c.a0f (#2)]
+        │                   └── Scan
+        │                       ├── table: default.a00c (#0)
+        │                       ├── filters: []
+        │                       ├── order by: [default.a00c.a0f (#2) ASC, default.a00c.a0t (#16) DESC]
+        │                       └── limit: NONE
+        └── Exchange(Broadcast)
+            └── Aggregate(Final)
+                ├── group items: [a00c.a0f (#27) AS (#27)]
+                ├── aggregate functions: [min(to_yyyymm(a0t)) AS (#50)]
+                └── Aggregate(Partial)
+                    ├── group items: [a00c.a0f (#27) AS (#27)]
+                    ├── aggregate functions: [min(to_yyyymm(a0t)) AS (#50)]
+                    └── Exchange(Hash)
+                        ├── Exchange(Hash): keys: [a00c.a0f (#27)]
+                        └── EvalScalar
+                            ├── scalars: [a00c.a0f (#27) AS (#27), to_yyyymm(a00c.a0t (#41)) AS (#49), a00c.a0w (#44) AS (#52)]
+                            └── Scan
+                                ├── table: default.a00c (#1)
+                                ├── filters: [eq(a00c.a0w (#44), '汇缴')]
+                                ├── order by: []
+                                └── limit: NONE
+
