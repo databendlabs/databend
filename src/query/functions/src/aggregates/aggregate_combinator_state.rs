@@ -20,7 +20,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 
 use super::AggregateFunctionFactory;
@@ -84,7 +84,7 @@ impl AggregateFunction for AggregateStateCombinator {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -95,14 +95,14 @@ impl AggregateFunction for AggregateStateCombinator {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         input_rows: usize,
     ) -> Result<()> {
         self.nested
             .accumulate_keys(places, loc, columns, input_rows)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         self.nested.accumulate_row(place, columns, row)
     }
 

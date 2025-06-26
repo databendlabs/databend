@@ -20,8 +20,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::*;
 use ethnum::u256;
 
-use crate::common::new_block;
-
 #[test]
 fn test_group_by_hash() -> Result<()> {
     let schema = TableSchemaRefExt::create(vec![
@@ -31,7 +29,7 @@ fn test_group_by_hash() -> Result<()> {
         TableField::new("x", TableDataType::String),
     ]);
 
-    let block = new_block(&vec![
+    let block = DataBlock::new_from_columns(vec![
         Int8Type::from_data(vec![1i8, 1, 2, 1, 2, 3]),
         Int8Type::from_data(vec![1i8, 1, 2, 1, 2, 3]),
         Int8Type::from_data(vec![1i8, 1, 2, 1, 2, 3]),
@@ -49,7 +47,7 @@ fn test_group_by_hash() -> Result<()> {
         .into_iter()
         .map(|col| schema.index_of(col).unwrap())
         .collect::<Vec<_>>();
-    let group_columns = InputColumns::new_block_proxy(&args, &block);
+    let group_columns = ProjectedBlock::project(&args, &block);
 
     let hash = HashMethodKeysU32::default();
     let state = hash.build_keys_state(group_columns, block.num_rows())?;
@@ -73,7 +71,7 @@ fn test_group_by_hash_decimal() -> Result<()> {
         i256::from(123456789),
     ];
 
-    let block = new_block(&vec![
+    let block = DataBlock::new_from_columns(vec![
         Decimal128Type::from_data_with_size(decimal_128_values, Some(size_128)),
         Decimal256Type::from_data_with_size(decimal_256_values, Some(size_128)),
         Decimal128Type::from_data_with_size(decimal_128_values, Some(size_256)),
@@ -91,7 +89,7 @@ fn test_group_by_hash_decimal() -> Result<()> {
 
     for i in [0, 1] {
         let args = &[i];
-        let group_columns = InputColumns::new_block_proxy(args, &block);
+        let group_columns = ProjectedBlock::project(args, &block);
         let hash = HashMethodKeysU128::default();
         let state = hash.build_keys_state(group_columns, block.num_rows())?;
         let keys_iter = hash.build_keys_iter(&state)?;
@@ -103,7 +101,7 @@ fn test_group_by_hash_decimal() -> Result<()> {
 
     for i in [2, 3] {
         let args = &[i];
-        let group_columns = InputColumns::new_block_proxy(args, &block);
+        let group_columns = ProjectedBlock::project(args, &block);
         let hash = HashMethodKeysU256::default();
         let state = hash.build_keys_state(group_columns, block.num_rows())?;
         let keys_iter = hash.build_keys_iter(&state)?;

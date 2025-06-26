@@ -28,7 +28,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -225,13 +225,13 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state: &mut State = place.get();
-        let arg_col = A::try_downcast_column(&columns[0]).unwrap();
-        let val_col = V::try_downcast_column(&columns[1]).unwrap();
+        let arg_col = A::try_downcast_column(&columns[0].to_column()).unwrap();
+        let val_col = V::try_downcast_column(&columns[1].to_column()).unwrap();
         state.add_batch(&arg_col, &val_col, validity)
     }
 
@@ -239,11 +239,11 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let arg_col = A::try_downcast_column(&columns[0]).unwrap();
-        let val_col = V::try_downcast_column(&columns[1]).unwrap();
+        let arg_col = A::try_downcast_column(&columns[0].to_column()).unwrap();
+        let val_col = V::try_downcast_column(&columns[1].to_column()).unwrap();
         let val_col_iter = V::iter_column(&val_col);
 
         val_col_iter
@@ -258,9 +258,9 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let arg_col = A::try_downcast_column(&columns[0]).unwrap();
-        let val_col = V::try_downcast_column(&columns[1]).unwrap();
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let arg_col = A::try_downcast_column(&columns[0].to_column()).unwrap();
+        let val_col = V::try_downcast_column(&columns[1].to_column()).unwrap();
         let state = place.get::<State>();
 
         let val = unsafe { V::index_column_unchecked(&val_col, row) };

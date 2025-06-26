@@ -39,9 +39,10 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use num_traits::AsPrimitive;
@@ -70,7 +71,8 @@ where
     T: Number + AsPrimitive<TSum> + BorshSerialize + BorshDeserialize,
     TSum: Number + AsPrimitive<f64> + std::ops::AddAssign + std::ops::SubAssign,
 {
-    fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
+    fn accumulate_row(&mut self, entry: &BlockEntry, row: usize) -> Result<()> {
+        let column = &entry.to_column();
         let buffer = match column {
             Column::Null { .. } => {
                 self.values.push(T::default());
@@ -85,42 +87,47 @@ where
         Ok(())
     }
 
-    fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()> {
-        let buffer = match column {
-            Column::Null { len } => {
-                for _ in 0..*len {
+    fn accumulate(&mut self, entry: &BlockEntry, validity: Option<&Bitmap>) -> Result<()> {
+        let column = match entry.data_type() {
+            DataType::Null => {
+                for _ in 0..entry.len() {
                     self.values.push(T::default());
                 }
                 return Ok(());
             }
-            Column::Nullable(box nullable_column) => {
-                NumberType::<T>::try_downcast_column(&nullable_column.column).unwrap()
-            }
-            _ => NumberType::<T>::try_downcast_column(column).unwrap(),
+            _ => entry
+                .clone()
+                .remove_nullable()
+                .downcast::<NumberType<T>>()
+                .unwrap(),
         };
         if let Some(validity) = validity {
-            buffer.iter().zip(validity.iter()).for_each(|(v, b)| {
+            column.iter().zip(validity.iter()).for_each(|(v, b)| {
                 if b {
-                    self.values.push(*v);
+                    self.values.push(v);
                 } else {
                     self.values.push(T::default());
                 }
             });
         } else {
-            buffer.iter().for_each(|v| {
-                self.values.push(*v);
+            column.iter().for_each(|v| {
+                self.values.push(v);
             });
         }
         Ok(())
     }
 
-    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()> {
-        let buffer = match columns {
-            Column::Null { len } => Buffer::from(vec![T::default(); *len]),
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        entry: &BlockEntry,
+    ) -> Result<()> {
+        let buffer = match entry.to_column() {
+            Column::Null { len } => Buffer::from(vec![T::default(); len]),
             Column::Nullable(box nullable_column) => {
                 NumberType::<T>::try_downcast_column(&nullable_column.column).unwrap()
             }
-            _ => NumberType::<T>::try_downcast_column(columns).unwrap(),
+            column => NumberType::<T>::try_downcast_column(&column).unwrap(),
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
             let state = AggrState::new(*place, loc).get::<Self>();
@@ -233,7 +240,8 @@ where T: Decimal
         + std::fmt::Debug
         + std::cmp::PartialOrd
 {
-    fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
+    fn accumulate_row(&mut self, entry: &BlockEntry, row: usize) -> Result<()> {
+        let column = &entry.to_column();
         let buffer = match column {
             Column::Null { .. } => {
                 self.values.push(T::default());
@@ -248,7 +256,8 @@ where T: Decimal
         Ok(())
     }
 
-    fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()> {
+    fn accumulate(&mut self, entry: &BlockEntry, validity: Option<&Bitmap>) -> Result<()> {
+        let column = &entry.to_column();
         let buffer = match column {
             Column::Null { len } => {
                 for _ in 0..*len {
@@ -280,13 +289,17 @@ where T: Decimal
         Ok(())
     }
 
-    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()> {
-        let buffer = match columns {
-            Column::Null { len } => Buffer::from(vec![T::default(); *len]),
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        entry: &BlockEntry,
+    ) -> Result<()> {
+        let buffer = match entry.to_column() {
+            Column::Null { len } => Buffer::from(vec![T::default(); len]),
             Column::Nullable(box nullable_column) => {
                 T::try_downcast_column(&nullable_column.column).unwrap().0
             }
-            _ => T::try_downcast_column(columns).unwrap().0,
+            column => T::try_downcast_column(&column).unwrap().0,
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
             let state = AggrState::new(*place, loc).get::<Self>();
@@ -411,7 +424,7 @@ where State: SumState
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -423,13 +436,13 @@ where State: SumState
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         State::accumulate_keys(places, loc, &columns[0])
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
     }
@@ -580,7 +593,7 @@ where State: SumState
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -592,13 +605,13 @@ where State: SumState
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         State::accumulate_keys(places, loc, &columns[0])
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
     }

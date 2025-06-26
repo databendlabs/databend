@@ -29,7 +29,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
@@ -191,18 +191,18 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
         let state: &mut S = place.get::<S>();
 
         state.add_batch(column, validity, self.function_data.as_deref())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0]).unwrap();
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
         let value = T::index_column(&column, row);
 
         let state: &mut S = place.get::<S>();
@@ -214,10 +214,10 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0]).unwrap();
+        let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
 
         for (i, place) in places.iter().enumerate() {
             let state: &mut S = AggrState::new(*place, loc).get::<S>();

@@ -523,8 +523,9 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval(
         );
         let block = DataBlock::new_from_columns(vec![data_col.clone()]);
 
-        let min_col = eval_aggr("min", vec![], &[data_col.clone()], rows, vec![])?;
-        let max_col = eval_aggr("max", vec![], &[data_col], rows, vec![])?;
+        let entries = [data_col.into()];
+        let min_col = eval_aggr("min", vec![], &entries, rows, vec![])?;
+        let max_col = eval_aggr("max", vec![], &entries, rows, vec![])?;
 
         let min_expr = min_col.0.index(0).unwrap();
         let max_expr = max_col.0.index(0).unwrap();

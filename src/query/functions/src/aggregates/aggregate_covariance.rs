@@ -33,7 +33,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
@@ -172,13 +172,13 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+        let left = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
 
         match validity {
             Some(bitmap) => {
@@ -205,11 +205,11 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+        let left = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
@@ -220,9 +220,9 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let left = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let right = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
 
         let left_val = unsafe { left.get_unchecked(row) };
         let right_val = unsafe { right.get_unchecked(row) };

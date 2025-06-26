@@ -24,6 +24,7 @@ use databend_common_expression::types::Decimal64Type;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_functions::aggregates::eval_aggr_for_test;
@@ -43,7 +44,8 @@ fn eval_aggr(
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_for_test(name, params, columns, rows, true, sort_descs)
+    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
+    eval_aggr_for_test(name, params, &block_entries, rows, true, sort_descs)
 }
 
 #[test]
@@ -75,7 +77,8 @@ fn test_aggr_funtions() {
     test_agg_quantile_tdigest(file, eval_aggr);
     // FIXME
     test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows, _sort_descs| {
-        eval_aggr_for_test(name, params, columns, rows, false, vec![])
+        let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
+        eval_aggr_for_test(name, params, &block_entries, rows, false, vec![])
     });
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);

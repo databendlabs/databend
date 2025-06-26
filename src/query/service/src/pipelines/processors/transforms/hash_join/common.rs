@@ -27,7 +27,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::desc::MARKER_KIND_FALSE;
@@ -147,14 +147,14 @@ impl HashJoinProbeState {
 
 impl HashJoinState {
     /// if all cols in the same row are all null, we mark this row as null.
-    pub(crate) fn init_markers(&self, cols: InputColumns, num_rows: usize, markers: &mut [u8]) {
+    pub(crate) fn init_markers(&self, cols: ProjectedBlock, num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()
-            .any(|c| matches!(c, Column::Null { .. } | Column::Nullable(_)))
+            .any(|entry| entry.data_type().is_nullable_or_null())
         {
             let mut valids = None;
-            for col in cols.iter() {
-                match col {
+            for entry in cols.iter() {
+                match entry.to_column() {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
                         if bitmap.null_count() == 0 {
@@ -165,7 +165,7 @@ impl HashJoinState {
                         }
                     }
                     Column::Null { .. } => {}
-                    _c => {
+                    _ => {
                         valids = Some(Bitmap::new_constant(true, num_rows));
                         break;
                     }

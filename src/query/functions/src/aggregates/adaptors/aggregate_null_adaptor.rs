@@ -21,7 +21,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
 
@@ -142,13 +142,13 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let col = &columns[0];
-        let validity = column_merge_validity(col, validity.cloned());
-        let not_null_column = &[col.remove_nullable()];
+        let entry = &columns[0];
+        let validity = column_merge_validity(entry, validity.cloned());
+        let not_null_column = &[entry.clone().remove_nullable()];
         let not_null_column = not_null_column.into();
         let validity = Bitmap::map_all_sets_to_none(validity);
 
@@ -161,22 +161,22 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         &self,
         addrs: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         input_rows: usize,
     ) -> Result<()> {
-        let col = &columns[0];
-        let validity = column_merge_validity(col, None);
-        let not_null_columns = &[col.remove_nullable()];
+        let entry = &columns[0];
+        let validity = column_merge_validity(entry, None);
+        let not_null_columns = &[entry.clone().remove_nullable()];
         let not_null_columns = not_null_columns.into();
 
         self.0
             .accumulate_keys(addrs, loc, not_null_columns, validity, input_rows)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let col = &columns[0];
-        let validity = column_merge_validity(col, None);
-        let not_null_columns = &[col.remove_nullable()];
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let entry = &columns[0];
+        let validity = column_merge_validity(entry, None);
+        let not_null_columns = &[entry.clone().remove_nullable()];
         let not_null_columns = not_null_columns.into();
 
         self.0
@@ -211,7 +211,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.nested.convert_const_to_full()
     }
 
-    fn get_if_condition(&self, columns: InputColumns) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
         self.0.nested.get_if_condition(columns)
     }
 }
@@ -260,15 +260,15 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
         let mut validity = validity.cloned();
-        for col in columns.iter() {
-            validity = column_merge_validity(col, validity);
-            not_null_columns.push(col.remove_nullable());
+        for entry in columns.iter() {
+            validity = column_merge_validity(&entry.clone(), validity);
+            not_null_columns.push(entry.clone().remove_nullable());
         }
         let not_null_columns = (&not_null_columns).into();
 
@@ -280,14 +280,14 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         &self,
         addrs: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         input_rows: usize,
     ) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
         let mut validity = None;
-        for col in columns.iter() {
-            validity = column_merge_validity(col, validity);
-            not_null_columns.push(col.remove_nullable());
+        for entry in columns.iter() {
+            validity = column_merge_validity(&entry.clone(), validity);
+            not_null_columns.push(entry.clone().remove_nullable());
         }
         let not_null_columns = (&not_null_columns).into();
 
@@ -295,12 +295,12 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             .accumulate_keys(addrs, loc, not_null_columns, validity, input_rows)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let mut not_null_columns = Vec::with_capacity(columns.len());
         let mut validity = None;
-        for col in columns.iter() {
-            validity = column_merge_validity(col, validity);
-            not_null_columns.push(col.remove_nullable());
+        for entry in columns.iter() {
+            validity = column_merge_validity(&entry.clone(), validity);
+            not_null_columns.push(entry.clone().remove_nullable());
         }
         let not_null_columns = (&not_null_columns).into();
 
@@ -336,7 +336,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.0.nested.convert_const_to_full()
     }
 
-    fn get_if_condition(&self, columns: InputColumns) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
         self.0.nested.get_if_condition(columns)
     }
 }
@@ -388,7 +388,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
     fn accumulate(
         &self,
         place: AggrState,
-        not_null_column: InputColumns,
+        not_null_column: ProjectedBlock,
         validity: Option<Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -417,7 +417,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         &self,
         addrs: &[StateAddr],
         loc: &[AggrStateLoc],
-        not_null_columns: InputColumns,
+        not_null_columns: ProjectedBlock,
         validity: Option<Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -468,7 +468,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
     fn accumulate_row(
         &self,
         place: AggrState,
-        not_null_columns: InputColumns,
+        not_null_columns: ProjectedBlock,
         validity: Option<Bitmap>,
         row: usize,
     ) -> Result<()> {

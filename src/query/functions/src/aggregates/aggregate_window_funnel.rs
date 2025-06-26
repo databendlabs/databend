@@ -39,7 +39,7 @@ use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
@@ -192,18 +192,18 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let mut dcolumns = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
+            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1].to_column()).unwrap();
 
             dcolumns.push(dcolumn);
         }
 
-        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+        let tcolumn = T::try_downcast_column(&columns[0].to_column()).unwrap();
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
 
         match validity {
@@ -240,16 +240,16 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         let mut dcolumns = Vec::with_capacity(self.event_size);
         for i in 0..self.event_size {
-            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
+            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1].to_column()).unwrap();
             dcolumns.push(dcolumn);
         }
 
-        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+        let tcolumn = T::try_downcast_column(&columns[0].to_column()).unwrap();
 
         for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
             let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
@@ -263,14 +263,15 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let tcolumn = T::try_downcast_column(&columns[0].to_column()).unwrap();
         let timestamp = unsafe { T::index_column_unchecked(&tcolumn, row) };
         let timestamp = T::to_owned_scalar(timestamp);
 
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         for i in 0..self.event_size {
-            let dcolumn = BooleanType::try_downcast_column(&columns[i + 1]).unwrap();
+            let dcolumn =
+                BooleanType::try_downcast_column(columns[i + 1].as_column().unwrap()).unwrap();
             if dcolumn.get_bit(row) {
                 state.add(timestamp, (i + 1) as u8);
             }

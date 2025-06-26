@@ -24,7 +24,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 
 use super::aggregate_function::AggregateFunction;
 use super::StateAddr;
@@ -60,7 +60,7 @@ impl AggregateFunction for AggregateNullResultFunction {
     fn accumulate(
         &self,
         _place: AggrState,
-        _columns: InputColumns,
+        _columns: ProjectedBlock,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -71,13 +71,18 @@ impl AggregateFunction for AggregateNullResultFunction {
         &self,
         _places: &[StateAddr],
         _loc: &[AggrStateLoc],
-        _columns: InputColumns,
+        _columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row(&self, _place: AggrState, _columns: InputColumns, _row: usize) -> Result<()> {
+    fn accumulate_row(
+        &self,
+        _place: AggrState,
+        _columns: ProjectedBlock,
+        _row: usize,
+    ) -> Result<()> {
         Ok(())
     }
 
