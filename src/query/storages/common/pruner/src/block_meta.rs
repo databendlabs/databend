@@ -43,6 +43,8 @@ pub struct BlockMetaIndex {
     pub snapshot_location: Option<String>,
     // The search matched rows and optional scores in the block.
     pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    // The vector topn rows and scores in the block.
+    pub vector_scores: Option<Vec<(usize, F32)>>,
     // The optional meta of virtual columns.
     pub virtual_block_meta: Option<VirtualBlockMetaIndex>,
 }

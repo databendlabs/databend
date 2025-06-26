@@ -26,13 +26,13 @@ use crate::BlockMetaIndex;
 /// TopN pruner.
 /// Pruning for order by x limit N.
 #[derive(Clone)]
-pub struct TopNPrunner {
+pub struct TopNPruner {
     schema: TableSchemaRef,
     sort: Vec<(RemoteExpr<String>, bool, bool)>,
     limit: usize,
 }
 
-impl TopNPrunner {
+impl TopNPruner {
     pub fn create(
         schema: TableSchemaRef,
         sort: Vec<(RemoteExpr<String>, bool, bool)>,
@@ -46,7 +46,7 @@ impl TopNPrunner {
     }
 }
 
-impl TopNPrunner {
+impl TopNPruner {
     pub fn prune(
         &self,
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,

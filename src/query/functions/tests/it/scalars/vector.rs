@@ -14,8 +14,6 @@
 
 use std::io::Write;
 
-use databend_common_expression::types::*;
-use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -26,11 +24,62 @@ fn test_vector() {
     let file = &mut mint.new_goldenfile("vector.txt").unwrap();
 
     test_vector_cosine_distance(file);
+    test_vector_l1_distance(file);
+    test_vector_l2_distance(file);
 }
 
 fn test_vector_cosine_distance(file: &mut impl Write) {
-    run_ast(file, "cosine_distance([a], [b])", &[
-        ("a", Float32Type::from_data(vec![0f32, 1.0, 2.0])),
-        ("b", Float32Type::from_data(vec![3f32, 4.0, 5.0])),
-    ]);
+    run_ast(file, "cosine_distance([1,0,0], [1,0,0])", &[]);
+    run_ast(file, "cosine_distance([1,0,0], [-1,0,0])", &[]);
+    run_ast(file, "cosine_distance([1,2,3], [4,5,6])", &[]);
+    run_ast(file, "cosine_distance([0,0,0], [1,2,3])", &[]);
+    run_ast(
+        file,
+        "cosine_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))",
+        &[],
+    );
+    run_ast(
+        file,
+        "cosine_distance([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))",
+        &[],
+    );
+    run_ast(
+        file,
+        "cosine_distance([1,0]::vector(2), [0,1]::vector(2))",
+        &[],
+    );
+}
+
+fn test_vector_l1_distance(file: &mut impl Write) {
+    run_ast(file, "l1_distance([1,2,3], [1,2,3])", &[]);
+    run_ast(file, "l1_distance([1,2,3], [4,5,6])", &[]);
+    run_ast(file, "l1_distance([0,0,0], [1,2,3])", &[]);
+    run_ast(
+        file,
+        "l1_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))",
+        &[],
+    );
+    run_ast(
+        file,
+        "l1_distance([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))",
+        &[],
+    );
+    run_ast(file, "l1_distance([1,2]::vector(2), [3,4]::vector(2))", &[]);
+}
+
+fn test_vector_l2_distance(file: &mut impl Write) {
+    run_ast(file, "l2_distance([1,2,3], [1,2,3])", &[]);
+    run_ast(file, "l2_distance([1,2,3], [4,5,6])", &[]);
+    run_ast(file, "l2_distance([0,0,0], [1,2,3])", &[]);
+    run_ast(
+        file,
+        "l2_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))",
+        &[],
+    );
+    run_ast(
+        file,
+        "l2_distance([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))",
+        &[],
+    );
+    run_ast(file, "l2_distance([1,2]::vector(2), [3,4]::vector(2))", &[]);
 }

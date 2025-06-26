@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -104,6 +105,7 @@ pub struct Scan {
     // Whether to update stream columns.
     pub update_stream_columns: bool,
     pub inverted_index: Option<InvertedIndexInfo>,
+    pub vector_index: Option<VectorIndexInfo>,
     // Lazy row fetch.
     pub is_lazy_table: bool,
     pub sample: Option<SampleConfig>,
@@ -146,6 +148,7 @@ impl Scan {
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
+            vector_index: self.vector_index.clone(),
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
             scan_id: self.scan_id,
