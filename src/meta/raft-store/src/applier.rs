@@ -577,6 +577,8 @@ where SM: StateMachineApi + 'static
     ) -> Result<(), io::Error> {
         let before_seqv = self.sm.get_maybe_expired_kv(&req.key).await?;
 
+        let before_seq = before_seqv.seq();
+
         let before = if let Some(seqv) = &before_seqv {
             let bytes = &seqv.data;
             let u64_res: Result<u64, _> = serde_json::from_slice(bytes.as_slice());
@@ -594,6 +596,14 @@ where SM: StateMachineApi + 'static
             0
         };
 
+        if let Some(match_seq) = req.match_seq {
+            if match_seq != before_seq {
+                let r = TxnOpResponse::unchanged_fetch_add_u64(&req.key, before_seq, before);
+                resp.responses.push(r);
+                return Ok(());
+            }
+        }
+
         let after = before.saturating_add_signed(req.delta);
 
         let (_prev, result) = {
@@ -602,13 +612,8 @@ where SM: StateMachineApi + 'static
             self.upsert_kv(&upsert).await?
         };
 
-        let fetch_add_resp = TxnOpResponse::fetch_add_u64(
-            req.key.clone(),
-            before_seqv.seq(),
-            before,
-            result.seq(),
-            after,
-        );
+        let fetch_add_resp =
+            TxnOpResponse::fetch_add_u64(req.key.clone(), before_seq, before, result.seq(), after);
 
         resp.responses.push(fetch_add_resp);
 

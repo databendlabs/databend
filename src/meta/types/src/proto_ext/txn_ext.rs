@@ -317,9 +317,30 @@ impl pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::FetchAddU64(pb::FetchAddU64 {
                 key: key.to_string(),
+                match_seq: None,
                 delta,
             })),
         }
+    }
+
+    /// Add a match-sequence-number condition to the operation.
+    ///
+    /// If the sequence number does not match, the operation won't be take place.
+    pub fn match_seq(mut self, seq: Option<u64>) -> Self {
+        let req = self
+            .request
+            .as_mut()
+            .expect("TxnOp must have a non-None request field");
+
+        match req {
+            pb::txn_op::Request::Delete(p) => p.match_seq = seq,
+            pb::txn_op::Request::FetchAddU64(d) => d.match_seq = seq,
+            _ => {
+                unreachable!("Not support match_seq for: {}", req)
+            }
+        }
+
+        self
     }
 }
 
@@ -350,6 +371,10 @@ impl pb::TxnOpResponse {
                 current,
             })),
         }
+    }
+
+    pub fn unchanged_fetch_add_u64(key: impl ToString, seq: u64, value: u64) -> Self {
+        Self::fetch_add_u64(key, seq, value, seq, value)
     }
 
     pub fn fetch_add_u64(
