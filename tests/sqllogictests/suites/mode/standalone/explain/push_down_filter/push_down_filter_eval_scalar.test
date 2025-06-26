@@ -79,7 +79,6 @@ AggregateFinal
         │           ├── probe keys: [t.id (#0)]
         │           ├── keys is null equal: [false]
         │           ├── filters: []
-        │           ├── build join filters:
         │           ├── estimated rows: 0.00
         │           ├── AggregateFinal(Build)
         │           │   ├── output columns: [t2.sid (#1)]

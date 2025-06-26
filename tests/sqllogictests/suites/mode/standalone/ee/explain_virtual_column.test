@@ -233,7 +233,6 @@ EvalScalar
     ├── probe keys: [CAST(t2.v['b']['c'] (#5) AS Int32 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 1.00
     ├── TableScan(Build)
     │   ├── table: default.test_virtual_db.t1
@@ -307,7 +306,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.v (#3)]
@@ -345,7 +343,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.20
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.v (#3)]
@@ -392,7 +389,6 @@ AggregateFinal
         ├── probe keys: [CAST(t2.v['b']['c'] (#5) AS Int32 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 1.00
         ├── TableScan(Build)
         │   ├── table: default.test_virtual_db.t1

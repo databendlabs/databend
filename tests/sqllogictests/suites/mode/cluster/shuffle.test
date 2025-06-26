@@ -37,7 +37,7 @@ Sort
             ├── probe keys: [t1.number (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
+            ├── build join filters(distributed):
             │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
             ├── estimated rows: 0.01
             ├── Filter(Build)
