@@ -1,68 +1,70 @@
 Exchange
-├── output columns: [a00c.a0f (#2), min(to_yyyymm(a0t)) (#50)]
+├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [a00c.a0f (#2), min(to_yyyymm(a0t)) (#50)]
-    ├── join type: LEFT OUTER
-    ├── build keys: [t2.a0f (#27)]
-    ├── probe keys: [t1.a0f (#2)]
+    ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#28)]
+    ├── join type: RIGHT OUTER
+    ├── build keys: [t1.a0f (#28)]
+    ├── probe keys: [t2.a0f (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    ├── estimated rows: 6199296848.97
-    ├── Exchange(Build)
-    │   ├── output columns: [min(to_yyyymm(a0t)) (#50), a00c.a0f (#27)]
-    │   ├── exchange type: Broadcast
-    │   └── AggregateFinal
-    │       ├── output columns: [min(to_yyyymm(a0t)) (#50), a00c.a0f (#27)]
-    │       ├── group by: [a0f]
-    │       ├── aggregate functions: [min(min_arg_0)]
-    │       ├── estimated rows: 78735.61
-    │       └── Exchange
-    │           ├── output columns: [min(to_yyyymm(a0t)) (#50), a00c.a0f (#27)]
-    │           ├── exchange type: Hash(0)
-    │           └── AggregatePartial
-    │               ├── group by: [a0f]
-    │               ├── aggregate functions: [min(min_arg_0)]
-    │               ├── estimated rows: 78735.61
-    │               └── EvalScalar
-    │                   ├── output columns: [a00c.a0f (#27), min_arg_0 (#49)]
-    │                   ├── expressions: [to_yyyymm(CAST(a00c.a0t (#41) AS Date NULL))]
-    │                   ├── estimated rows: 78735.61
-    │                   └── TableScan
-    │                       ├── table: default.default.a00c
-    │                       ├── output columns: [a0f (#27), a0t (#41)]
-    │                       ├── read rows: 0
-    │                       ├── read size: 0
-    │                       ├── partitions total: 0
-    │                       ├── partitions scanned: 0
-    │                       ├── push downs: [filters: [is_true(a00c.a0w (#44) = '汇缴')], limit: NONE]
-    │                       └── estimated rows: 78735.61
-    └── Filter(Probe)
-        ├── output columns: [a00c.a0f (#2)]
-        ├── filters: [row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#24) = 1]
-        ├── estimated rows: 78735.61
-        └── Window
-            ├── output columns: [a00c.a0f (#2), a00c.a0t (#16), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#24)]
-            ├── aggregate function: [row_number]
-            ├── partition by: [a0f]
-            ├── order by: [a0t]
-            ├── frame: [Range: Preceding(None) ~ CurrentRow]
-            └── WindowPartition
-                ├── output columns: [a00c.a0f (#2), a00c.a0t (#16)]
-                ├── hash keys: [a0f]
-                ├── top: 1
-                ├── estimated rows: 196839034.00
-                └── Exchange
-                    ├── output columns: [a00c.a0f (#2), a00c.a0t (#16)]
-                    ├── exchange type: Hash(a00c.a0f (#2))
-                    └── TableScan
-                        ├── table: default.default.a00c
-                        ├── output columns: [a0f (#2), a0t (#16)]
-                        ├── read rows: 0
-                        ├── read size: 0
-                        ├── partitions total: 0
-                        ├── partitions scanned: 0
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 196839034.00
+    │   └── filter id:0, build key:t1.a0f (#28), probe key:t2.a0f (#2), filter type:inlist,min_max
+    ├── estimated rows: 230972812150.33
+    ├── Filter(Build)
+    │   ├── output columns: [a00c.a0f (#28)]
+    │   ├── filters: [row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50) = 1]
+    │   ├── estimated rows: 78735.61
+    │   └── Window
+    │       ├── output columns: [a00c.a0f (#28), a00c.a0t (#42), row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) (#50)]
+    │       ├── aggregate function: [row_number]
+    │       ├── partition by: [a0f]
+    │       ├── order by: [a0t]
+    │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    │       └── WindowPartition
+    │           ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
+    │           ├── hash keys: [a0f]
+    │           ├── top: 1
+    │           ├── estimated rows: 196839034.00
+    │           └── Exchange
+    │               ├── output columns: [a00c.a0f (#28), a00c.a0t (#42)]
+    │               ├── exchange type: Hash(a00c.a0f (#28))
+    │               └── TableScan
+    │                   ├── table: default.default.a00c
+    │                   ├── output columns: [a0f (#28), a0t (#42)]
+    │                   ├── read rows: 0
+    │                   ├── read size: 0
+    │                   ├── partitions total: 0
+    │                   ├── partitions scanned: 0
+    │                   ├── push downs: [filters: [], limit: NONE]
+    │                   └── estimated rows: 196839034.00
+    └── Exchange(Probe)
+        ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+        ├── exchange type: Hash(t2.a0f (#2))
+        └── AggregateFinal
+            ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+            ├── group by: [a0f]
+            ├── aggregate functions: [min(min_arg_0)]
+            ├── estimated rows: 2933524.00
+            └── Exchange
+                ├── output columns: [min(to_yyyymm(a0t)) (#25), a00c.a0f (#2)]
+                ├── exchange type: Hash(0)
+                └── AggregatePartial
+                    ├── group by: [a0f]
+                    ├── aggregate functions: [min(min_arg_0)]
+                    ├── estimated rows: 2933524.00
+                    └── EvalScalar
+                        ├── output columns: [a00c.a0f (#2), min_arg_0 (#24)]
+                        ├── expressions: [to_yyyymm(CAST(a00c.a0t (#16) AS Date NULL))]
+                        ├── estimated rows: 98419517.00
+                        └── TableScan
+                            ├── table: default.default.a00c
+                            ├── output columns: [a0f (#2), a0t (#16)]
+                            ├── read rows: 0
+                            ├── read size: 0
+                            ├── partitions total: 0
+                            ├── partitions scanned: 0
+                            ├── push downs: [filters: [is_true(a00c.a0w (#19) = '汇缴')], limit: NONE]
+                            ├── apply join filters: [#0]
+                            └── estimated rows: 98419517.00
 
