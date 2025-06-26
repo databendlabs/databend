@@ -354,7 +354,6 @@ AggregateFinal
             ├── probe keys: [x.a (#2)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 50.00
             ├── Exchange(Build)
             │   ├── output columns: [numbers.number (#1)]
