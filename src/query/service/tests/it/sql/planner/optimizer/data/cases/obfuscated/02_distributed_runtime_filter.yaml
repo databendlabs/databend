@@ -2,7 +2,8 @@ name: "02_distributed_runtime_filter"
 description: "Test for distributed runtime filter"
 
 sql: |
- SELECT t1.a0f, t2.cjny FROM (SELECT a0f FROM a00c QUALIFY row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) = 1) AS t1 LEFT JOIN (SELECT a0f, min(to_yyyymm(a0t)) AS cjny FROM a00c WHERE a0w = '汇缴' GROUP BY a0f) AS t2 ON t1.a0f = t2.a0f;
+ SELECT t1.a0f, t2.cjny FROM (SELECT a0f FROM a00c QUALIFY row_number() OVER (PARTITION BY a0f ORDER BY a0t DESC NULLS LAST) = 1) AS t1 LEFT OUTER JOIN (SELECT a0f, min(to_yyyymm(a0t)) AS cjny FROM a00c WHERE a0w = '汇缴' GROUP BY a0f) AS t2 ON t1.a0f = t2.a0f;
+
 
 
 

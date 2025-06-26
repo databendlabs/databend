@@ -3,311 +3,85 @@ description: "Statistics for obfuscated tables used in distributed runtime filte
 
 table_statistics:
   a00c:
-    num_rows: 195893206
-    data_size: 101514084048
-    data_size_compressed: 7978029615
-    index_size: 360623653
-    number_of_blocks: 955
-    number_of_segments: 1
-
-  a1b:
-    num_rows: 13724061
-    data_size: 32219362653
-    data_size_compressed: 6433487553
-    index_size: 310103462
-    number_of_blocks: 258
-    number_of_segments: 1
-
-  a3r:
-    num_rows: 23514
-    data_size: 2167946
-    data_size_compressed: 762331
-    index_size: 58516
-    number_of_blocks: 1
+    num_rows: 196839034
+    data_size: 102014695653
+    data_size_compressed: 8005832994
+    index_size: 362096237
+    number_of_blocks: 960
     number_of_segments: 1
 
 column_statistics:
   # a00c table columns
-  a00c.a0e:
-    ndv: 17
+  a00c.a0f:
+    ndv: 5867047
     null_count: 0
   a00c.a0k:
     ndv: 26
     null_count: 0
   a00c.a0o:
     ndv: 149
-    null_count: 223321
-  a00c.a0j:
-    ndv: 14
-    null_count: 40023
-  a00c.a0n:
-    ndv: 6
-    null_count: 0
-  a00c.a0t:
-    ndv: 310
-    null_count: 470228
+    null_count: 223252
   a00c.a0q:
     ndv: 3034710
     null_count: 0
-  a00c.a0r:
-    ndv: 968501
-    null_count: 18063007
-  a00c.a1a:
-    ndv: 195893206
-    null_count: 0
-  a00c.a0x:
-    ndv: 195893206
+  a00c.a0s:
+    ndv: 723704
+    null_count: 17410979
+  a00c.a0u:
+    ndv: 1544
     null_count: 0
   a00c.a0v:
     ndv: 120835
     null_count: 0
-  a00c.a0f:
-    ndv: 5867047
+  a00c.a0x:
+    ndv: 196839034
     null_count: 0
-  a00c.a0d:
-    ndv: 2587865
+  a00c.a0z:
+    ndv: 196839034
     null_count: 0
-  a00c.a0h:
-    ndv: 6
-    null_count: 0
-  a00c.a0i:
-    ndv: 231363
-    null_count: 0
-  a00c.a0m:
-    ndv: 9917
+  a00c.a1a:
+    ndv: 196839034
     null_count: 0
   a00c.a0p:
     ndv: 195724
     null_count: 0
-  a00c.a0l:
-    ndv: 26
+  a00c.a0m:
+    ndv: 9917
+    null_count: 0
+  a00c.a0e:
+    ndv: 17
+    null_count: 0
+  a00c.a0t:
+    ndv: 310
+    null_count: 470226
+  a00c.a0j:
+    ndv: 14
+    null_count: 29787
+  a00c.a0w:
+    ndv: 2
+    null_count: 0
+  a00c.a0d:
+    ndv: 2587865
+    null_count: 0
+  a00c.a0r:
+    ndv: 968501
+    null_count: 17410979
+  a00c.a0y:
+    ndv: 196839034
     null_count: 0
   a00c.a0g:
     ndv: 229699
     null_count: 0
-  a00c.a0s:
-    ndv: 723704
-    null_count: 18063007
-  a00c.a0u:
-    ndv: 1544
+  a00c.a0h:
+    ndv: 6
     null_count: 0
-  a00c.a0w:
-    ndv: 2
+  a00c.a0n:
+    ndv: 6
     null_count: 0
-  a00c.a0y:
-    ndv: 195893206
+  a00c.a0l:
+    ndv: 26
     null_count: 0
-  a00c.a0z:
-    ndv: 195893206
+  a00c.a0i:
+    ndv: 231363
     null_count: 0
 
-  # a1b table columns
-  a1b.a1h:
-    ndv: 159
-    null_count: 13666149
-  a1b.a1y:
-    ndv: 114
-    null_count: 170222
-  a1b.a2f:
-    ndv: 96
-    null_count: 154737
-  a1b.a1t:
-    ndv: 3929238
-    null_count: 8268669
-  a1b.a1q:
-    ndv: 10894541
-    null_count: 94493
-  a1b.a3j:
-    ndv: 12
-    null_count: 0
-  a1b.a1d:
-    ndv: 12650019
-    null_count: 882781
-  a1b.a2r:
-    ndv: 21
-    null_count: 102168
-  a1b.a3o:
-    ndv: 1480
-    null_count: 135791
-  a1b.a3e:
-    ndv: 2
-    null_count: 215
-  a1b.a1e:
-    ndv: 13072579
-    null_count: 137596
-  a1b.a1i:
-    ndv: 1
-    null_count: 38230
-  a1b.a2s:
-    ndv: 15
-    null_count: 169438
-  a1b.a1m:
-    ndv: 85
-    null_count: 391936
-  a1b.a3q:
-    ndv: 13688310
-    null_count: 135791
-  a1b.a2x:
-    ndv: 7393776
-    null_count: 0
-  a1b.a2y:
-    ndv: 739801
-    null_count: 12689769
-  a1b.a1u:
-    ndv: 28146
-    null_count: 119794
-  a1b.a2b:
-    ndv: 19
-    null_count: 13576448
-  a1b.a2v:
-    ndv: 21
-    null_count: 444346
-  a1b.a2i:
-    ndv: 460
-    null_count: 154737
-  a1b.a3i:
-    ndv: 1
-    null_count: 0
-  a1b.a1l:
-    ndv: 11
-    null_count: 80492
-  a1b.a1n:
-    ndv: 85
-    null_count: 391936
-  a1b.a2h:
-    ndv: 461
-    null_count: 154737
-  a1b.a2o:
-    ndv: 14334
-    null_count: 116116
-  a1b.a2k:
-    ndv: 1342
-    null_count: 154737
-  a1b.a3n:
-    ndv: 13473833
-    null_count: 11521
-  a1b.a1z:
-    ndv: 4
-    null_count: 10335778
-  a1b.a2g:
-    ndv: 95
-    null_count: 154737
-  a1b.a1r:
-    ndv: 5429494
-    null_count: 5978398
-  a1b.a2q:
-    ndv: 1315
-    null_count: 1645
-  a1b.a3g:
-    ndv: 13607662
-    null_count: 11521
-  a1b.a2z:
-    ndv: 6853326
-    null_count: 1203577
-  a1b.a1v:
-    ndv: 13
-    null_count: 11168575
-  a1b.a1c:
-    ndv: 12650019
-    null_count: 882781
-  a1b.a2c:
-    ndv: 3
-    null_count: 154737
-  a1b.a2e:
-    ndv: 19
-    null_count: 154737
-  a1b.a2l:
-    ndv: 5813556
-    null_count: 66153
-  a1b.a3c:
-    ndv: 1118821
-    null_count: 11804968
-  a1b.a1f:
-    ndv: 13479002
-    null_count: 9
-  a1b.a2n:
-    ndv: 9666
-    null_count: 114448
-  a1b.a3d:
-    ndv: 1375
-    null_count: 13701375
-  a1b.a3p:
-    ndv: 1135268
-    null_count: 135791
-  a1b.a1o:
-    ndv: 24066
-    null_count: 5205824
-  a1b.a1g:
-    ndv: 161
-    null_count: 13658475
-  a1b.a2u:
-    ndv: 22
-    null_count: 365693
-  a1b.a3a:
-    ndv: 62054
-    null_count: 13642474
-  a1b.a3h:
-    ndv: 13473833
-    null_count: 11521
-  a1b.a2t:
-    ndv: 3332718
-    null_count: 21873
-  a1b.a3f:
-    ndv: 15
-    null_count: 0
-  a1b.a1p:
-    ndv: 1183
-    null_count: 5205824
-  a1b.a1s:
-    ndv: 8164655
-    null_count: 3644469
-  a1b.a2j:
-    ndv: 1372
-    null_count: 154376
-  a1b.a3k:
-    ndv: 1444392
-    null_count: 0
-  a1b.a3l:
-    ndv: 1211540
-    null_count: 0
-  a1b.a2m:
-    ndv: 15237
-    null_count: 1235
-  a1b.a3b:
-    ndv: 20619
-    null_count: 2481845
-  a1b.a2d:
-    ndv: 20
-    null_count: 154737
-  a1b.a1x:
-    ndv: 128
-    null_count: 257379
-  a1b.a1k:
-    ndv: 11
-    null_count: 80492
-  a1b.a1j:
-    ndv: 1
-    null_count: 38230
-  a1b.a1w:
-    ndv: 13
-    null_count: 11168575
-  a1b.a3m:
-    ndv: 3
-    null_count: 0
-  a1b.a2a:
-    ndv: 19
-    null_count: 13576448
-  a1b.a2w:
-    ndv: 7969773
-    null_count: 335815
-  a1b.a2p:
-    ndv: 31339
-    null_count: 9828917
-
-  # a3r table columns
-  a3r.a1d:
-    ndv: 23514
-    null_count: 0
-  a3r.a1f:
-    ndv: 23514
-    null_count: 0
