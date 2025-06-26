@@ -42,6 +42,7 @@ enum StageFileCompression {
   // Please change this value to 0 instead in next version bump.
   None = 9;
   Xz = 10;
+  Zip = 11;
 }
 
 message UserDefinedFileFormat {
