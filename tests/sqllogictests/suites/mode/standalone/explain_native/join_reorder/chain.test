@@ -371,7 +371,6 @@ HashJoin
 ├── probe keys: [t1.a (#2)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
@@ -408,7 +407,6 @@ HashJoin
 ├── probe keys: [CAST(t1.a (#1) AS UInt64 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── EvalScalar(Build)
 │   ├── output columns: [a (#2)]
@@ -480,7 +478,6 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 1.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
@@ -548,7 +545,6 @@ HashJoin
 ├── probe keys: [t1.a (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 10.00
 ├── TableScan(Build)
 │   ├── table: default.join_reorder.t
