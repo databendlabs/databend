@@ -1386,7 +1386,7 @@ impl Binder {
             catalog,
             database,
             table,
-            full,
+            no_scan,
         } = stmt;
 
         let (catalog, database, table) =
@@ -1396,7 +1396,7 @@ impl Binder {
             catalog,
             database,
             table,
-            full: *full,
+            no_scan: *no_scan,
         })))
     }
 

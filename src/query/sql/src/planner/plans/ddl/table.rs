@@ -205,7 +205,7 @@ pub struct AnalyzeTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub full: bool,
+    pub no_scan: bool,
 }
 
 impl AnalyzeTablePlan {

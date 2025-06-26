@@ -724,7 +724,7 @@ pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub full: bool,
+    pub no_scan: bool,
 }
 
 impl Display for AnalyzeTableStmt {
@@ -737,8 +737,8 @@ impl Display for AnalyzeTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if self.full {
-            write!(f, " FULL")?;
+        if self.no_scan {
+            write!(f, " NOSCAN")?;
         }
 
         Ok(())

@@ -1177,7 +1177,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 catalog,
                 database,
                 table,
-                full: no_scan.is_none(),
+                no_scan: no_scan.is_some(),
             })
         },
     );

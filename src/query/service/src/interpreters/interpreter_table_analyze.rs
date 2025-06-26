@@ -114,7 +114,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         };
 
-        if !self.plan.full {
+        if self.plan.no_scan {
             let operator = table.get_operator();
             let cluster_key_id = table.cluster_key_id();
             let mut mutator =
