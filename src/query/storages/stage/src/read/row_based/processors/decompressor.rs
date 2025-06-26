@@ -54,6 +54,9 @@ impl Decompressor {
         self.path = Some(path);
 
         if let Some(algo) = algo {
+            if matches!(algo, CompressAlgorithm::Zip) {
+                return;
+            }
             let decompressor = DecompressDecoder::new(algo);
             self.decompressor = Some((decompressor, 0));
         } else {
@@ -78,7 +81,17 @@ impl AccumulatingTransform for Decompressor {
                 }
             }
         }
+        if matches!(self.algo, Some(CompressAlgorithm::Zip)) {
+            let bytes = DecompressDecoder::decompress_all_zip(&batch.data)?;
 
+            let new_batch = Box::new(BytesBatch {
+                data: bytes,
+                path: batch.path.clone(),
+                offset: batch.data.len(),
+                is_eof: batch.is_eof,
+            });
+            return Ok(vec![DataBlock::empty_with_meta(new_batch)]);
+        }
         if let Some((de, offset)) = &mut self.decompressor {
             let mut data = de.decompress_batch(&batch.data).map_err(|e| {
                 if let Some(p) = &self.path {
@@ -114,9 +127,8 @@ impl AccumulatingTransform for Decompressor {
             if batch.is_eof {
                 self.decompressor = None;
             }
-            Ok(vec![DataBlock::empty_with_meta(new_batch)])
-        } else {
-            Ok(vec![DataBlock::empty_with_meta(Box::new(batch))])
+            return Ok(vec![DataBlock::empty_with_meta(new_batch)]);
         }
+        Ok(vec![DataBlock::empty_with_meta(Box::new(batch))])
     }
 }

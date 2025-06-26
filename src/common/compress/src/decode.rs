@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+use std::io::Read;
 use std::io::Result;
 use std::pin::Pin;
 use std::task::Context;
@@ -36,6 +38,7 @@ use futures::AsyncBufRead;
 use futures::AsyncRead;
 use log::trace;
 use pin_project::pin_project;
+use zip::ZipArchive;
 
 use crate::CompressAlgorithm;
 
@@ -73,6 +76,9 @@ impl From<CompressAlgorithm> for DecompressCodec {
             CompressAlgorithm::Xz => DecompressCodec::Xz(XzDecoder::new()),
             CompressAlgorithm::Zlib => DecompressCodec::Zlib(ZlibDecoder::new()),
             CompressAlgorithm::Zstd => DecompressCodec::Zstd(ZstdDecoder::new()),
+            CompressAlgorithm::Zip => {
+                unreachable!("Zip type requires additional judgment and use `decompress_all_zip`")
+            }
         }
     }
 }
@@ -350,6 +356,25 @@ impl DecompressDecoder {
         main.extend_from_slice(&tail);
         Ok(main)
     }
+
+    pub fn decompress_all_zip(compressed: &[u8]) -> databend_common_exception::Result<Vec<u8>> {
+        let mut zip = ZipArchive::new(Cursor::new(compressed)).map_err(|e| {
+            ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
+        })?;
+        if zip.len() > 1 {
+            return Err(ErrorCode::InvalidCompressionData(
+                "Zip only supports single file",
+            ));
+        }
+        let mut file = zip.by_index(0).map_err(|e| {
+            ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
+        })?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes)?;
+
+        Ok(bytes)
+    }
+
     // need to finish the decoding by adding a empty input
     pub fn decompress_batch(
         &mut self,
@@ -571,6 +596,22 @@ mod tests {
 
         let mut result = vec![];
         cr.read_to_end(&mut result).await?;
+
+        assert_eq!(result, content);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_decompress_reader_zip() -> databend_common_exception::Result<()> {
+        let _ = env_logger::try_init();
+
+        let mut rng = ThreadRng::default();
+        let mut content = vec![0; 16 * 1024 * 1024];
+        rng.fill_bytes(&mut content);
+
+        let compressed_content = CompressCodec::compress_all_zip(&content)?;
+        let result = DecompressDecoder::decompress_all_zip(&compressed_content)?;
 
         assert_eq!(result, content);
 
