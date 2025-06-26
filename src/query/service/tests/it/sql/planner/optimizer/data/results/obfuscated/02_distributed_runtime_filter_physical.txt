@@ -8,7 +8,7 @@ Exchange
     ├── probe keys: [t2.a0f (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
+    ├── build join filters(distributed):
     │   └── filter id:0, build key:t1.a0f (#28), probe key:t2.a0f (#2), filter type:inlist,min_max
     ├── estimated rows: 230972812150.33
     ├── Filter(Build)

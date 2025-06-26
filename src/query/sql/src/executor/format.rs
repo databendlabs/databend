@@ -1587,8 +1587,15 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
         FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
-        FormatTreeNode::with_children(format!("build join filters:"), build_runtime_filters),
     ];
+
+    if !build_runtime_filters.is_empty() {
+        if plan.broadcast_id.is_some() {
+            children.push(FormatTreeNode::with_children(format!("build join filters(distributed):"), build_runtime_filters));
+        } else {
+            children.push(FormatTreeNode::with_children(format!("build join filters:"), build_runtime_filters));
+        }
+    }
 
     if let Some((cache_index, column_map)) = &plan.build_side_cache_info {
         let mut column_indexes = column_map.keys().collect::<Vec<_>>();
