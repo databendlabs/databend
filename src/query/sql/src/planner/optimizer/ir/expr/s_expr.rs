@@ -145,6 +145,16 @@ impl SExpr {
         &self.children[1]
     }
 
+    pub fn build_side_child(&self) -> &SExpr {
+        assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        &self.children[1]
+    }
+
+    pub fn probe_side_child(&self) -> &SExpr {
+        assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        &self.children[0]
+    }
+
     pub fn arity(&self) -> usize {
         self.children.len()
     }
@@ -477,8 +487,7 @@ impl SExpr {
             | crate::plans::RelOp::CacheScan
             | crate::plans::RelOp::RecursiveCteScan => Ok(None),
 
-            // probe side
-            crate::plans::RelOp::Join => self.left_child().get_data_distribution(),
+            crate::plans::RelOp::Join => self.probe_side_child().get_data_distribution(),
 
             crate::plans::RelOp::Exchange => {
                 Ok(Some(self.plan.as_ref().clone().try_into().unwrap()))

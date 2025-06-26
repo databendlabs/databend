@@ -155,7 +155,7 @@ impl JoinRuntimeFilter {
 
         let mut filters = Vec::new();
 
-        let build_side_data_distribution = s_expr.left_child().get_data_distribution()?;
+        let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
 
         // Process each probe key that has runtime filter information
         for (build_key, probe_key, scan_id, table_index) in build_keys

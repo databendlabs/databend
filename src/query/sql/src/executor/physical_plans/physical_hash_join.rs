@@ -801,7 +801,7 @@ impl PhysicalPlanBuilder {
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let build_side_data_distribution = s_expr.left_child().get_data_distribution()?;
+        let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
         let broadcast_id = if build_side_data_distribution
             .as_ref()
             .is_some_and(|e| matches!(e, crate::plans::Exchange::Hash(_)))
