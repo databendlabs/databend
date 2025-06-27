@@ -12791,9 +12791,9 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 
 [[package]]
 name = "reqsign"
-version = "0.16.3"
+version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9323c0afb30e54f793f4705b10c890395bccc87c6e6ea62c4e7e82d09a380dc6"
+checksum = "0e81996ab38ccfb2e295ecd3250c0fb7717e29ab8814d4bc0fd6097338d87518"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12818,6 +12818,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "tokio",
 ]
 
 [[package]]
