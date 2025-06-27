@@ -504,8 +504,8 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn remove_column(&mut self, index: usize) {
-        self.entries.remove(index);
+    pub fn remove_column(&mut self, index: usize) -> BlockEntry {
+        self.entries.remove(index)
     }
 
     #[inline]

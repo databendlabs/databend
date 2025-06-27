@@ -34,4 +34,5 @@ pub struct HilbertPartition {
     pub num_partitions: usize,
     pub table_meta_timestamps: TableMetaTimestamps,
     pub rows_per_block: usize,
+    pub bytes_per_block: usize,
 }

@@ -162,7 +162,7 @@ fn compact_indices(indices: &mut Vec<BlockRowIndex>, blocks: &mut Vec<DataBlock>
         .collect();
 }
 
-mod reservoir_sampling {
+pub mod reservoir_sampling {
     use std::num::NonZeroUsize;
 
     use rand::Rng;
