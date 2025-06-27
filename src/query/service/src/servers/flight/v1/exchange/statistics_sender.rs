@@ -48,7 +48,7 @@ impl StatisticsSender {
         ctx: Arc<QueryContext>,
         exchange: FlightExchange,
         executor: Arc<PipelineExecutor>,
-        perf_guard: Arc<Option<QueryPerfGuard>>,
+        perf_guard: Option<QueryPerfGuard>,
     ) -> Self {
         let spawner = ctx.clone();
         let tx = exchange.convert_to_sender();

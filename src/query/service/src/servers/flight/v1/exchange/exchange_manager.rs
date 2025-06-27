@@ -150,7 +150,9 @@ impl DataExchangeManager {
         }
 
         if env.perf_flag {
-            ctx.as_ref().map(|ctx| ctx.set_perf_flag(env.perf_flag));
+            if let Some(ctx) = ctx.as_ref() {
+                ctx.set_perf_flag(env.perf_flag)
+            }
         }
 
         let config = GlobalConfig::instance();
@@ -852,9 +854,9 @@ impl QueryCoordinator {
         let info = self.info.as_mut().expect("Query info is None");
 
         let perf_guard = if info.query_ctx.get_perf_flag() {
-            Arc::new(Some(QueryPerf::start(99)?))
+            Some(QueryPerf::start(99)?)
         } else {
-            Arc::new(None)
+            None
         };
 
         if !info.started.swap(true, Ordering::SeqCst) {
@@ -938,7 +940,7 @@ impl QueryCoordinator {
             ctx,
             request_server_exchange,
             executor.get_inner(),
-            perf_guard.clone(),
+            perf_guard,
         );
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {

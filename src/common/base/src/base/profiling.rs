@@ -32,7 +32,10 @@ impl Profiling {
     }
 
     pub async fn report(&self) -> Result<pprof::Report> {
-        let guard = pprof::ProfilerGuard::new(self.frequency)
+        let guard = pprof::ProfilerGuardBuilder::default()
+            .frequency(self.frequency)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
+            .build()
             .map_err(|e| ErrorCode::UnknownException(e.to_string()))?;
         tokio::time::sleep(self.duration).await;
         guard

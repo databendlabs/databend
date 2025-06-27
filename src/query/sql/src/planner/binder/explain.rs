@@ -156,6 +156,9 @@ impl Binder {
                     plan: Box::new(self.bind_statement(bind_context, inner).await?),
                 })
             }
+            ExplainKind::Perf => Ok(Plan::ExplainPerf {
+                sql: inner.to_string(),
+            }),
             _ => Ok(Plan::Explain {
                 kind: kind.clone(),
                 config,

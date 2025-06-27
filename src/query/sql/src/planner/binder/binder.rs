@@ -202,7 +202,6 @@ impl<'a> Binder {
             Statement::ExplainAnalyze {
                 partial,
                 graphical,
-                perf,
                 query,
             } => {
                 if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref()
@@ -215,7 +214,6 @@ impl<'a> Binder {
                 Plan::ExplainAnalyze {
                     partial: *partial,
                     graphical: *graphical,
-                    perf: *perf,
                     plan: Box::new(plan),
                 }
             }

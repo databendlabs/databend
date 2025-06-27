@@ -203,8 +203,10 @@ pub enum Plan {
     ExplainAnalyze {
         partial: bool,
         graphical: bool,
-        perf: bool,
         plan: Box<Plan>,
+    },
+    ExplainPerf {
+        sql: String,
     },
     ReportIssue(String),
 
@@ -506,7 +508,8 @@ impl Plan {
             Plan::Explain { .. }
             | Plan::ExplainAst { .. }
             | Plan::ExplainSyntax { .. }
-            | Plan::ExplainAnalyze { .. } => {
+            | Plan::ExplainAnalyze { .. }
+            | Plan::ExplainPerf { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::DataMutation { schema, .. } => schema.clone(),

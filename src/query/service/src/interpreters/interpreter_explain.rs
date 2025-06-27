@@ -21,12 +21,8 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::QueryPerf;
-use databend_common_base::runtime::QueryPerfGuard;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -79,7 +75,6 @@ pub struct ExplainInterpreter {
     kind: ExplainKind,
     partial: bool,
     graphical: bool,
-    perf: bool,
     plan: Plan,
 }
 
@@ -286,7 +281,10 @@ impl Interpreter for ExplainInterpreter {
                 vec![DataBlock::new_from_columns(vec![column])]
             }
 
-            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
+            ExplainKind::Raw
+            | ExplainKind::Optimized
+            | ExplainKind::Decorrelated
+            | ExplainKind::Perf => {
                 unreachable!()
             }
         };
@@ -303,7 +301,6 @@ impl ExplainInterpreter {
         config: ExplainConfig,
         partial: bool,
         graphical: bool,
-        perf: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
             ctx,
@@ -312,7 +309,6 @@ impl ExplainInterpreter {
             config,
             partial,
             graphical,
-            perf,
         })
     }
 
@@ -460,7 +456,6 @@ impl ExplainInterpreter {
             statistics_desc: get_statistics_desc(),
         })
     }
-
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
@@ -470,31 +465,20 @@ impl ExplainInterpreter {
         mutation_build_info: Option<MutationBuildInfo>,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let perf_guard = self.perf.then(|| QueryPerf::start(99)).transpose()?;
-        let (mut plan, query_profiles) =
-            ThreadTracker::tracking_future(self.build_and_execute_plan(
-                s_expr,
-                metadata,
-                required,
-                mutation_build_info,
-                ignore_result,
-            ))
-            .await?;
-
-        if let Some(QueryPerfGuard::Both(_flag_guard, profiler_guard)) = perf_guard {
-            let dumped = QueryPerf::dump(&profiler_guard)?;
-            let node_id = GlobalConfig::instance().query.node_id.clone();
-            let other_nodes = self.ctx.get_nodes_perf().lock().clone();
-            let html = QueryPerf::pretty_display(node_id, dumped, other_nodes.into_iter());
-            let html = StringType::from_data(vec![html]);
-            return Ok(vec![DataBlock::new_from_columns(vec![html])]);
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
+        if let Some(build_info) = mutation_build_info {
+            builder.set_mutation_build_info(build_info);
         }
+        let mut plan = builder.build(s_expr, required).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+
+        // Drain the data
+        let query_profiles = self.execute_and_get_profiles(build_res)?;
 
         let mut pruned_partitions_stats = self.ctx.get_pruned_partitions_stats();
         if !pruned_partitions_stats.is_empty() {
             plan.set_pruning_stats(&mut pruned_partitions_stats);
         }
-
         let result = if self.partial {
             format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
         } else {
@@ -503,7 +487,6 @@ impl ExplainInterpreter {
         };
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
-
         if self.graphical {
             let profiles = GraphicalProfiles {
                 query_id: self.ctx.clone().get_id(),
@@ -512,31 +495,7 @@ impl ExplainInterpreter {
             };
             return Ok(Self::graphical_profiles_to_datablocks(profiles));
         }
-
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
-    }
-
-    async fn build_and_execute_plan(
-        &self,
-        s_expr: &SExpr,
-        metadata: &MetadataRef,
-        required: ColumnSet,
-        mutation_build_info: Option<MutationBuildInfo>,
-        ignore_result: bool,
-    ) -> Result<(PhysicalPlan, HashMap<u32, PlanProfile>)> {
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
-        if let Some(build_info) = mutation_build_info {
-            builder.set_mutation_build_info(build_info);
-        }
-        dbg!(&QueryPerf::flag());
-        let plan = builder.build(s_expr, required).await?;
-        dbg!(&QueryPerf::flag());
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
-        dbg!(&QueryPerf::flag());
-        // Drain the data
-        let query_profiles = self.execute_and_get_profiles(build_res)?;
-        dbg!(&QueryPerf::flag());
-        Ok((plan, query_profiles))
     }
 
     fn execute_and_get_profiles(
@@ -547,7 +506,6 @@ impl ExplainInterpreter {
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
         let ctx = self.ctx.clone();
-        dbg!(QueryPerf::flag());
         build_res
             .main_pipeline
             .set_on_finished(always_callback(move |info: &ExecutionInfo| {

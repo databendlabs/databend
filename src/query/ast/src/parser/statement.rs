@@ -59,7 +59,7 @@ pub enum CreateDatabaseOption {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED)? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -77,6 +77,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
+                    Some(TokenKind::PERF) => ExplainKind::Perf,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -101,28 +102,23 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let explain_analyze = map(
         rule! {
-            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL|PERF)? ~ #statement
+            EXPLAIN ~ ANALYZE ~ (PARTIAL|GRAPHICAL)? ~ #statement
         },
-        |(_, _, analyze_kind, statement)| {
-            let (partial, graphical, perf) = match analyze_kind {
+        |(_, _, opt_partial_or_graphical, statement)| {
+            let (partial, graphical) = match opt_partial_or_graphical {
                 Some(Token {
                     kind: TokenKind::PARTIAL,
                     ..
-                }) => (true, false, false),
+                }) => (true, false),
                 Some(Token {
                     kind: TokenKind::GRAPHICAL,
                     ..
-                }) => (false, true, false),
-                Some(Token {
-                    kind: TokenKind::PERF,
-                    ..
-                }) => (false, false, true),
-                _ => (false, false, false),
+                }) => (false, true),
+                _ => (false, false),
             };
             Statement::ExplainAnalyze {
                 partial,
                 graphical,
-                perf,
                 query: Box::new(statement.stmt),
             }
         },

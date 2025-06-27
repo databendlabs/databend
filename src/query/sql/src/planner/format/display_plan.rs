@@ -53,6 +53,7 @@ impl Plan {
             Plan::ExplainAst { .. } => Ok("ExplainAst".to_string()),
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
+            Plan::ExplainPerf { .. } => Ok("ExplainPerf".to_string()),
 
             Plan::ReportIssue { .. } => Ok("ReportOptimize".to_string()),
 

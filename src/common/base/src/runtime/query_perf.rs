@@ -14,6 +14,7 @@
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use log::debug;
 use pprof::ProfilerGuard;
 use pprof::ProfilerGuardBuilder;
 
@@ -63,9 +64,11 @@ impl QueryPerf {
         let filter_closure = || !QueryPerf::flag();
         let profiler_guard = ProfilerGuardBuilder::default()
             .frequency(frequency)
+            .blocklist(&["libc", "libgcc", "pthread", "vdso"])
             .set_filter_func(filter_closure)
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to create profiler"))?;
+        debug!("starting perf with frequency: {}", frequency);
         let flag_guard = QueryPerf::tracking_inner(true);
         Ok(QueryPerfGuard::Both(flag_guard, profiler_guard))
     }
@@ -75,6 +78,7 @@ impl QueryPerf {
             .report()
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to report profiler data"))?;
+        debug!("perf stop, begin to dump flamegraph");
         let mut svg = Vec::new();
         reporter
             .flamegraph(&mut svg)

@@ -139,11 +139,9 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
             plan,
             partial,
             graphical,
-            perf,
         } => Ok(Plan::ExplainAnalyze {
             partial,
             graphical,
-            perf,
             plan: Box::new(Box::pin(optimize(opt_ctx, *plan)).await?),
         }),
         Plan::CopyIntoLocation(CopyIntoLocationPlan { info, from }) => {
