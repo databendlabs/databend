@@ -223,7 +223,7 @@ fn test_find_leveled_eq_filters() {
         let func_ctx = FunctionContext::default();
         let scalars = FilterHelpers::find_leveled_eq_filters(
             &expr,
-            &vec!["catalog", "database", "table"],
+            &["catalog", "database", "table"],
             &func_ctx,
             &BUILTIN_FUNCTIONS,
         )

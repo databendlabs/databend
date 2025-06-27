@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_exception::Result;
 use databend_common_expression::expr::*;
-use databend_common_expression::ConstantFolder;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
