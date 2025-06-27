@@ -101,8 +101,8 @@ impl FilterHelpers {
                     let mut results_all_used = true;
                     // let's check or function that
                     // for the equality columns set,let's call `ecs`
-                    // `ecs` of the left child must be subset of  `ecs` of the right child
-                    // if not, it's invalid
+                    // if both side of `or` of the name columns are all in `ecs`, it's valid
+                    // otherwise, it's invalid
 
                     expr.visit_func("or", &mut |call| {
                         let mut left_ecs = HashSet::new();
