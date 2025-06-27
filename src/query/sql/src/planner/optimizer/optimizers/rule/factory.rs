@@ -52,6 +52,7 @@ use crate::optimizer::optimizers::rule::RulePushDownPrewhere;
 use crate::optimizer::optimizers::rule::RulePushDownRankLimitAggregate;
 use crate::optimizer::optimizers::rule::RulePushDownSortEvalScalar;
 use crate::optimizer::optimizers::rule::RulePushDownSortScan;
+use crate::optimizer::optimizers::rule::RuleRewriteLike;
 use crate::optimizer::optimizers::rule::RuleSemiToInnerJoin;
 use crate::optimizer::optimizers::rule::RuleSplitAggregate;
 use crate::optimizer::optimizers::rule::RuleTryApplyAggIndex;
@@ -111,6 +112,7 @@ impl RuleFactory {
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),
+            RuleID::RewriteLike => Ok(Box::new(RuleRewriteLike::new())),
             RuleID::MergeFilterIntoMutation => {
                 Ok(Box::new(RuleMergeFilterIntoMutation::new(metadata)))
             }

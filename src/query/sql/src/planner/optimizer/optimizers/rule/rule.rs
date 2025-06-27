@@ -29,6 +29,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::EliminateSort,
         RuleID::EliminateUnion,
         RuleID::MergeEvalScalar,
+        RuleID::RewriteLike,
         // Filter
         RuleID::FilterNulls,
         RuleID::EliminateFilter,
@@ -125,6 +126,7 @@ pub enum RuleID {
 
     // Mutation rules
     MergeFilterIntoMutation,
+    RewriteLike,
 }
 
 impl Display for RuleID {
@@ -169,6 +171,7 @@ impl Display for RuleID {
             RuleID::EliminateUnion => write!(f, "EliminateUnion"),
 
             RuleID::MergeFilterIntoMutation => write!(f, "MergeFilterIntoMutation"),
+            RuleID::RewriteLike => write!(f, "RewriteLike"),
         }
     }
 }
