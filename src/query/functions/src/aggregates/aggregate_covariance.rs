@@ -23,7 +23,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::F64;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -177,8 +176,8 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let left = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
+        let left = columns[0].downcast::<NumberType<T0>>().unwrap();
+        let right = columns[1].downcast::<NumberType<T1>>().unwrap();
 
         match validity {
             Some(bitmap) => {
@@ -208,8 +207,8 @@ where
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let left = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
+        let left = columns[0].downcast::<NumberType<T0>>().unwrap();
+        let right = columns[1].downcast::<NumberType<T1>>().unwrap();
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
@@ -221,11 +220,11 @@ where
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let left = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
-        let right = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
+        let left = columns[0].downcast::<NumberType<T0>>().unwrap();
+        let right = columns[1].downcast::<NumberType<T1>>().unwrap();
 
-        let left_val = unsafe { left.get_unchecked(row) };
-        let right_val = unsafe { right.get_unchecked(row) };
+        let left_val = unsafe { left.index_unchecked(row) };
+        let right_val = unsafe { right.index_unchecked(row) };
 
         let state = place.get::<AggregateCovarianceState>();
         state.add(left_val.as_(), right_val.as_());

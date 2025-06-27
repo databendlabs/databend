@@ -28,6 +28,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 
@@ -61,8 +62,8 @@ pub trait AggregateArgMinMaxState<A: ValueType, V: ValueType>:
     fn update(&mut self, other: V::ScalarRef<'_>, arg: A::ScalarRef<'_>);
     fn add_batch(
         &mut self,
-        data_column: &A::Column,
-        column: &V::Column,
+        data_column: &ColumnView<A>,
+        column: &ColumnView<V>,
         validity: Option<&Bitmap>,
     ) -> Result<()>;
 
@@ -112,11 +113,11 @@ where
 
     fn add_batch(
         &mut self,
-        arg_col: &A::Column,
-        val_col: &V::Column,
+        arg_col: &ColumnView<A>,
+        val_col: &ColumnView<V>,
         validity: Option<&Bitmap>,
     ) -> Result<()> {
-        let column_len = V::column_len(val_col);
+        let column_len = val_col.len();
         if column_len == 0 {
             return Ok(());
         }
@@ -125,7 +126,8 @@ where
                 return Ok(());
             }
 
-            V::iter_column(val_col)
+            val_col
+                .iter()
                 .enumerate()
                 .zip(bit.iter())
                 .filter_map(|(item, valid)| if valid { Some(item) } else { None })
@@ -137,20 +139,18 @@ where
                     }
                 })
         } else {
-            V::iter_column(val_col)
-                .enumerate()
-                .reduce(|acc, (row, val)| {
-                    if C::change_if(&acc.1, &val) {
-                        (row, val)
-                    } else {
-                        acc
-                    }
-                })
+            val_col.iter().enumerate().reduce(|acc, (row, val)| {
+                if C::change_if(&acc.1, &val) {
+                    (row, val)
+                } else {
+                    acc
+                }
+            })
         };
 
         if let Some((row, val)) = acc {
             if self.change(&val) {
-                self.update(val, A::index_column(arg_col, row).unwrap())
+                self.update(val, arg_col.index(row).unwrap())
             }
         }
         Ok(())
@@ -230,8 +230,8 @@ where
         _input_rows: usize,
     ) -> Result<()> {
         let state: &mut State = place.get();
-        let arg_col = A::try_downcast_column(&columns[0].to_column()).unwrap();
-        let val_col = V::try_downcast_column(&columns[1].to_column()).unwrap();
+        let arg_col = columns[0].downcast::<A>().unwrap();
+        let val_col = columns[1].downcast::<V>().unwrap();
         state.add_batch(&arg_col, &val_col, validity)
     }
 
@@ -242,30 +242,30 @@ where
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let arg_col = A::try_downcast_column(&columns[0].to_column()).unwrap();
-        let val_col = V::try_downcast_column(&columns[1].to_column()).unwrap();
-        let val_col_iter = V::iter_column(&val_col);
+        let arg_col = columns[0].downcast::<A>().unwrap();
+        let val_col = &columns[1].downcast::<V>().unwrap();
 
-        val_col_iter
+        val_col
+            .iter()
             .enumerate()
             .zip(places.iter().cloned())
             .for_each(|((row, val), addr)| {
                 let state = AggrState::new(addr, loc).get::<State>();
                 if state.change(&val) {
-                    state.update(val, A::index_column(&arg_col, row).unwrap())
+                    state.update(val, arg_col.index(row).unwrap())
                 }
             });
         Ok(())
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let arg_col = A::try_downcast_column(&columns[0].to_column()).unwrap();
-        let val_col = V::try_downcast_column(&columns[1].to_column()).unwrap();
+        let arg_col = columns[0].downcast::<A>().unwrap();
+        let val_col = &columns[1].downcast::<V>().unwrap();
         let state = place.get::<State>();
 
-        let val = unsafe { V::index_column_unchecked(&val_col, row) };
+        let val = unsafe { val_col.index_unchecked(row) };
         if state.change(&val) {
-            state.update(val, A::index_column(&arg_col, row).unwrap())
+            state.update(val, arg_col.index(row).unwrap())
         }
         Ok(())
     }

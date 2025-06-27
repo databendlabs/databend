@@ -20,7 +20,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
@@ -130,9 +129,8 @@ impl AggregateFunction for AggregateStringAggFunction {
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0].to_column()).unwrap();
-        let column_iter = StringType::iter_column(&column);
-        column_iter.zip(places.iter()).for_each(|(v, place)| {
+        let view = columns[0].downcast::<StringType>().unwrap();
+        view.iter().zip(places.iter()).for_each(|(v, place)| {
             let state = AggrState::new(*place, loc).get::<StringAggState>();
             state.values.push_str(v);
             state.values.push_str(&self.delimiter);
@@ -141,13 +139,11 @@ impl AggregateFunction for AggregateStringAggFunction {
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0].to_column()).unwrap();
-        let v = StringType::index_column(&column, row);
-        if let Some(v) = v {
-            let state = place.get::<StringAggState>();
-            state.values.push_str(v);
-            state.values.push_str(&self.delimiter);
-        }
+        let view = columns[0].downcast::<StringType>().unwrap();
+        let v = view.index(row).unwrap();
+        let state = place.get::<StringAggState>();
+        state.values.push_str(v);
+        state.values.push_str(&self.delimiter);
         Ok(())
     }
 

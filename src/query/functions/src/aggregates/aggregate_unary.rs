@@ -202,11 +202,11 @@ where
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
-        let value = T::index_column(&column, row);
+        let view = columns[0].downcast::<T>().unwrap();
+        let value = view.index(row).unwrap();
 
         let state: &mut S = place.get::<S>();
-        state.add(value.unwrap(), self.function_data.as_deref())?;
+        state.add(value, self.function_data.as_deref())?;
         Ok(())
     }
 
@@ -217,14 +217,11 @@ where
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = T::try_downcast_column(&columns[0].to_column()).unwrap();
+        let view = columns[0].downcast::<T>().unwrap();
 
-        for (i, place) in places.iter().enumerate() {
+        for (v, place) in view.iter().zip(places.iter()) {
             let state: &mut S = AggrState::new(*place, loc).get::<S>();
-            state.add(
-                T::index_column(&column, i).unwrap(),
-                self.function_data.as_deref(),
-            )?;
+            state.add(v, self.function_data.as_deref())?;
         }
 
         Ok(())

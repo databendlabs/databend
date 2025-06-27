@@ -20,7 +20,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -92,13 +91,13 @@ impl AggregateFunction for AggregateRetentionFunction {
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let new_columns = columns
+        let views = columns
             .iter()
-            .map(|entry| BooleanType::try_downcast_column(&entry.to_column()).unwrap())
+            .map(|entry| entry.downcast::<BooleanType>().unwrap())
             .collect::<Vec<_>>();
         for i in 0..input_rows {
             for j in 0..self.events_size {
-                if new_columns[j as usize].get_bit(i) {
+                if views[j as usize].index(i).unwrap() {
                     state.add(j);
                 }
             }

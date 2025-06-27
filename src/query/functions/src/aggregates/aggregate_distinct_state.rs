@@ -285,9 +285,9 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
     }
 
     fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let col = NumberType::<T>::try_downcast_column(&columns[0].to_column()).unwrap();
-        let v = unsafe { col.get_unchecked(row) };
-        let _ = self.set.set_insert(*v).is_ok();
+        let view = columns[0].downcast::<NumberType<T>>().unwrap();
+        let v = unsafe { view.index_unchecked(row) };
+        let _ = self.set.set_insert(v).is_ok();
         Ok(())
     }
 
@@ -297,19 +297,19 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let col = NumberType::<T>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let view = columns[0].downcast::<NumberType<T>>().unwrap();
         match validity {
             Some(bitmap) => {
-                for (t, v) in col.iter().zip(bitmap.iter()) {
+                for (t, v) in view.iter().zip(bitmap.iter()) {
                     if v {
-                        let _ = self.set.set_insert(*t).is_ok();
+                        let _ = self.set.set_insert(t).is_ok();
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
-                    let v = unsafe { col.get_unchecked(row) };
-                    let _ = self.set.set_insert(*v).is_ok();
+                    let v = unsafe { view.index_unchecked(row) };
+                    let _ = self.set.set_insert(v).is_ok();
                 }
             }
         }
@@ -366,11 +366,10 @@ impl DistinctStateFunc for AggregateUniqStringState {
     }
 
     fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let binding = columns[0].to_column();
-        let column = binding.as_string().unwrap();
-        let data = unsafe { column.index_unchecked(row) };
+        let view = columns[0].downcast::<StringType>().unwrap();
+        let data = unsafe { view.index_unchecked(row) }.as_bytes();
         let mut hasher = SipHasher24::new();
-        hasher.write(data.as_bytes());
+        hasher.write(data);
         let hash128 = hasher.finish128();
         let _ = self.set.set_insert(hash128.into()).is_ok();
         Ok(())
@@ -382,11 +381,10 @@ impl DistinctStateFunc for AggregateUniqStringState {
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let binding = columns[0].to_column();
-        let column = binding.as_string().unwrap();
+        let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
             Some(v) => {
-                for (t, v) in column.iter().zip(v.iter()) {
+                for (t, v) in view.iter().zip(v.iter()) {
                     if v {
                         let mut hasher = SipHasher24::new();
                         hasher.write(t.as_bytes());
@@ -397,7 +395,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
             }
             _ => {
                 for row in 0..input_rows {
-                    let data = unsafe { column.index_unchecked(row) };
+                    let data = unsafe { view.index_unchecked(row) };
                     let mut hasher = SipHasher24::new();
                     hasher.write(data.as_bytes());
                     let hash128 = hasher.finish128();
