@@ -107,10 +107,17 @@ pub fn cast_scalar(
     Ok(evaluator.run(&expr)?.into_scalar().unwrap())
 }
 
-pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
-    match column {
-        Column::Nullable(c) => match bitmap {
-            None => Some(c.validity.clone()),
+pub fn column_merge_validity(entry: &BlockEntry, bitmap: Option<Bitmap>) -> Option<Bitmap> {
+    match entry {
+        BlockEntry::Const(scalar, data_type, n) => {
+            if scalar.is_null() && data_type.is_nullable() {
+                Some(Bitmap::new_zeroed(*n))
+            } else {
+                bitmap
+            }
+        }
+        BlockEntry::Column(Column::Nullable(c)) => match bitmap {
+            None => Some(c.validity().clone()),
             Some(v) => Some(&c.validity & (&v)),
         },
         _ => bitmap,

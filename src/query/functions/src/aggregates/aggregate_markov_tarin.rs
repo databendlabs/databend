@@ -24,7 +24,6 @@ use databend_common_base::obfuscator::CodePoint;
 use databend_common_base::obfuscator::NGramHash;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -36,8 +35,11 @@ use databend_common_expression::types::F64;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
+use databend_common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::assert_unary_arguments;
@@ -75,12 +77,12 @@ impl AggregateFunction for MarkovTarin {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let model: &mut MarkovModel = place.get();
-        let col = StringType::try_downcast_column(&columns[0]).unwrap();
+        let col = columns[0].downcast::<StringType>().unwrap();
 
         let mut code_points = Vec::new();
         if let Some(validity) = validity {
@@ -99,15 +101,15 @@ impl AggregateFunction for MarkovTarin {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let model = place.get::<MarkovModel>();
-        let col = StringType::try_downcast_column(&columns[0]).unwrap();
         let mut code_points = Vec::new();
-        model.consume(
-            self.params.order,
-            col.index(row).unwrap().as_bytes(),
-            &mut code_points,
-        );
+        let data = match &columns[0] {
+            BlockEntry::Const(Scalar::String(s), _, _) => s.as_bytes(),
+            BlockEntry::Column(Column::String(col)) => col.index(row).unwrap().as_bytes(),
+            _ => unreachable!(),
+        };
+        model.consume(self.params.order, data, &mut code_points);
         Ok(())
     }
 

@@ -22,11 +22,12 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
-use crate::types::BinaryColumn;
+use crate::types::BinaryType;
 use crate::types::DataType;
-use crate::Column;
+use crate::BlockEntry;
 use crate::ColumnBuilder;
-use crate::InputColumns;
+use crate::ColumnView;
+use crate::ProjectedBlock;
 use crate::Scalar;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
@@ -46,7 +47,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()>;
@@ -56,7 +57,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         addrs: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         for (row, addr) in addrs.iter().enumerate() {
@@ -66,7 +67,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     // Used in aggregate_null_adaptor
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()>;
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
 
@@ -81,7 +82,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        state: &BinaryColumn,
+        state: &ColumnView<BinaryType>,
     ) -> Result<()> {
         for (place, mut data) in places.iter().zip(state.iter()) {
             self.merge(AggrState::new(*place, loc), &mut data)?;
@@ -90,9 +91,9 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(())
     }
 
-    fn batch_merge_single(&self, place: AggrState, state: &Column) -> Result<()> {
-        let c = state.as_binary().unwrap();
-        for mut data in c.iter() {
+    fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
+        let view = state.downcast::<BinaryType>().unwrap();
+        for mut data in view.iter() {
             self.merge(place, &mut data)?;
         }
         Ok(())
@@ -145,7 +146,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(None)
     }
 
-    fn get_if_condition(&self, _columns: InputColumns) -> Option<Bitmap> {
+    fn get_if_condition(&self, _columns: ProjectedBlock) -> Option<Bitmap> {
         None
     }
 

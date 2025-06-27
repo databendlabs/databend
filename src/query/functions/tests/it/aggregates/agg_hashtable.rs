@@ -48,6 +48,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::F64;
 use databend_common_expression::AggregateHashTable;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -93,7 +94,10 @@ fn test_agg_hashtable() {
                 .unwrap(),
         ];
 
-        let params: Vec<Vec<Column>> = aggrs.iter().map(|_| vec![columns[1].clone()]).collect();
+        let params: Vec<Vec<BlockEntry>> = aggrs
+            .iter()
+            .map(|_| vec![columns[1].clone().into()])
+            .collect();
         let params = params.iter().map(|v| v.into()).collect_vec();
 
         let config = HashTableConfig::default();
@@ -105,10 +109,12 @@ fn test_agg_hashtable() {
         );
 
         let mut state = ProbeState::default();
+        let group_block_entries: Vec<BlockEntry> =
+            group_columns.iter().map(|c| c.clone().into()).collect();
         let _ = hashtable
             .add_groups(
                 &mut state,
-                (&group_columns).into(),
+                (&group_block_entries).into(),
                 &params,
                 (&[]).into(),
                 n,
@@ -123,10 +129,12 @@ fn test_agg_hashtable() {
         );
 
         let mut state2 = ProbeState::default();
+        let group_block_entries2: Vec<BlockEntry> =
+            group_columns.iter().map(|c| c.clone().into()).collect();
         let _ = hashtable2
             .add_groups(
                 &mut state2,
-                (&group_columns).into(),
+                (&group_block_entries2).into(),
                 &params,
                 (&[]).into(),
                 n,
@@ -142,11 +150,12 @@ fn test_agg_hashtable() {
         loop {
             match hashtable.merge_result(&mut merge_state) {
                 Ok(true) => {
-                    let mut columns = merge_state.take_group_columns();
-                    columns.extend_from_slice(&merge_state.take_aggregate_results());
+                    let mut entries = merge_state.take_group_columns();
+                    let agg_results = merge_state.take_aggregate_results();
+                    entries.extend(agg_results.into_iter());
 
-                    let block = DataBlock::new_from_columns(columns);
-                    blocks.push(block);
+                    let num_rows = entries[0].len();
+                    blocks.push(DataBlock::new(entries, num_rows));
                 }
                 Ok(false) => break,
                 Err(err) => panic!("{}", err),

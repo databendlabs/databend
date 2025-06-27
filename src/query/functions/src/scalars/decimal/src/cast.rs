@@ -1138,9 +1138,7 @@ pub fn strict_decimal_data_type(data: DataBlock) -> Result<DataBlock, String> {
             }
 
             let value = strict_decimal_data_type_value(value)?;
-            Ok(BlockEntry::new(value, || {
-                (entry.data_type(), entry.num_rows())
-            }))
+            Ok(BlockEntry::new(value, || (entry.data_type(), entry.len())))
         })
         .collect::<Result<Vec<_>, String>>()?;
 

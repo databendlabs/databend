@@ -33,7 +33,7 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use jiff::tz::TimeZone;
@@ -230,7 +230,7 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -245,7 +245,7 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         let (key_column, val_column, validity) = self.downcast_columns(columns)?;
@@ -273,7 +273,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
         let (key_column, val_column, validity) = self.downcast_columns(columns)?;
 
@@ -349,25 +349,25 @@ where
 
     fn downcast_columns(
         &self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
     ) -> Result<(StringColumn, V::Column, Option<Bitmap>)> {
-        let (key_column, key_validity) = match &columns[0] {
+        let (key_column, key_validity) = match &columns[0].to_column() {
             Column::Nullable(box nullable_column) => {
                 let column = StringType::try_downcast_column(&nullable_column.column).unwrap();
                 (column, Some(nullable_column.validity.clone()))
             }
             _ => {
-                let column = StringType::try_downcast_column(&columns[0]).unwrap();
+                let column = StringType::try_downcast_column(&columns[0].to_column()).unwrap();
                 (column, None)
             }
         };
-        let (val_column, val_validity) = match &columns[1] {
+        let (val_column, val_validity) = match &columns[1].to_column() {
             Column::Nullable(box nullable_column) => {
                 let column = V::try_downcast_column(&nullable_column.column).unwrap();
                 (column, Some(nullable_column.validity.clone()))
             }
             _ => {
-                let column = V::try_downcast_column(&columns[1]).unwrap();
+                let column = V::try_downcast_column(&columns[1].to_column()).unwrap();
                 (column, None)
             }
         };

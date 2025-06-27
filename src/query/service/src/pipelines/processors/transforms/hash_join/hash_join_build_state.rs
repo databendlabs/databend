@@ -29,6 +29,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
@@ -545,14 +546,15 @@ impl HashJoinBuildState {
             Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS)
         };
         let build_keys = &self.hash_join_state.hash_join_desc.build_keys;
-        let mut keys_columns = build_keys
+        let mut keys_entries: Vec<BlockEntry> = build_keys
             .iter()
             .map(|expr| {
                 Ok(evaluator
                     .run(expr)?
-                    .convert_to_full_column(expr.data_type(), chunk.num_rows()))
+                    .convert_to_full_column(expr.data_type(), chunk.num_rows())
+                    .into())
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<_>>()?;
 
         let column_nums = chunk.num_columns();
         let mut block_entries = Vec::with_capacity(self.build_projections.len());
@@ -575,11 +577,11 @@ impl HashJoinBuildState {
         let valids = if !may_null {
             None
         } else {
-            let valids = keys_columns
+            let valids = keys_entries
                 .iter()
                 .zip(is_null_equal.iter().copied())
                 .filter(|(_, is_null_equal)| !is_null_equal)
-                .map(|(col, _)| col.validity())
+                .map(|(entry, _)| entry.as_column().unwrap().validity())
                 .try_fold(None, |valids, (is_all_null, tmp_valids)| {
                     if is_all_null {
                         ControlFlow::Break(Some(Bitmap::new_constant(false, chunk.num_rows())))
@@ -606,14 +608,14 @@ impl HashJoinBuildState {
             JoinType::LeftMark => {
                 let markers = &mut build_state.mark_scan_map[chunk_index];
                 self.hash_join_state.init_markers(
-                    (&keys_columns).into(),
+                    (&keys_entries).into(),
                     chunk.num_rows(),
                     markers,
                 );
             }
             JoinType::RightMark => {
-                if !_has_null && !keys_columns.is_empty() {
-                    if let Some(validity) = keys_columns[0].validity().1 {
+                if !_has_null && !keys_entries.is_empty() {
+                    if let Some(validity) = keys_entries[0].as_column().unwrap().validity().1 {
                         if validity.null_count() > 0 {
                             _has_null = true;
                             let mut has_null_ref = self
@@ -630,12 +632,12 @@ impl HashJoinBuildState {
             _ => {}
         };
 
-        keys_columns
+        keys_entries
             .iter_mut()
             .zip(is_null_equal.iter().copied())
-            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
-            .for_each(|(col, _)| *col = col.remove_nullable());
-        let build_keys = (&keys_columns).into();
+            .filter(|(entry, is_null_equal)| !is_null_equal && entry.data_type().is_nullable())
+            .for_each(|(entry, _)| *entry = entry.clone().remove_nullable());
+        let build_keys = (&keys_entries).into();
 
         match hashtable {
             HashJoinHashTable::Serializer(table) => insert_binary_key! {

@@ -38,7 +38,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
@@ -73,7 +73,7 @@ impl AggregateFunction for AggregateUdfScript {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
@@ -87,7 +87,7 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let input_batch = self.create_input_batch_row(columns, row)?;
         let state = place.get::<UdfAggState>();
         let state = self
@@ -160,7 +160,7 @@ impl fmt::Display for AggregateUdfScript {
 
 impl AggregateUdfScript {
     #[cfg(debug_assertions)]
-    fn check_columns(&self, columns: InputColumns) {
+    fn check_columns(&self, columns: ProjectedBlock) {
         let fields = self.argument_schema.fields();
         assert_eq!(columns.len(), fields.len());
         for (i, (col, field)) in columns.iter().zip(fields).enumerate() {
@@ -170,18 +170,19 @@ impl AggregateUdfScript {
 
     fn create_input_batch(
         &self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
     ) -> Result<RecordBatch> {
         #[cfg(debug_assertions)]
         self.check_columns(columns);
 
         let num_columns = columns.len();
+        let num_rows = if num_columns > 0 { columns[0].len() } else { 0 };
 
         let columns = columns.iter().cloned().collect();
         match validity {
-            Some(bitmap) => DataBlock::new_from_columns(columns).filter_with_bitmap(bitmap)?,
-            None => DataBlock::new_from_columns(columns),
+            Some(bitmap) => DataBlock::new(columns, num_rows).filter_with_bitmap(bitmap)?,
+            None => DataBlock::new(columns, num_rows),
         }
         .to_record_batch_with_dataschema(&self.argument_schema)
         .map_err(|err| {
@@ -192,14 +193,15 @@ impl AggregateUdfScript {
         })
     }
 
-    fn create_input_batch_row(&self, columns: InputColumns, row: usize) -> Result<RecordBatch> {
+    fn create_input_batch_row(&self, columns: ProjectedBlock, row: usize) -> Result<RecordBatch> {
         #[cfg(debug_assertions)]
         self.check_columns(columns);
 
         let num_columns = columns.len();
+        let num_rows = if num_columns > 0 { columns[0].len() } else { 0 };
 
-        let columns = columns.iter().cloned().collect();
-        DataBlock::new_from_columns(columns)
+        let entries = columns.iter().cloned().collect();
+        DataBlock::new(entries, num_rows)
             .slice(row..row + 1)
             .to_record_batch_with_dataschema(&self.argument_schema)
             .map_err(|err| {
