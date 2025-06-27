@@ -944,6 +944,8 @@ pub enum TokenKind {
     PASSWORD_HISTORY,
     #[token("PATTERN", ignore(ascii_case))]
     PATTERN,
+    #[token("PERF", ignore(ascii_case))]
+    PERF,
     #[token("PIPELINE", ignore(ascii_case))]
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]

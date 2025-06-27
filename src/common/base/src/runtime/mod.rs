@@ -19,6 +19,7 @@ pub mod error_info;
 mod global_runtime;
 mod memory;
 pub mod metrics;
+mod perf;
 pub mod profile;
 #[allow(clippy::module_inception)]
 mod runtime;
@@ -44,6 +45,8 @@ pub use memory::OutOfLimit;
 pub use memory::ParentMemStat;
 pub use memory::GLOBAL_MEM_STAT;
 pub use memory::GLOBAL_QUERIES_MANAGER;
+pub use perf::QueryPerf;
+pub use perf::QueryPerfGuard;
 pub use runtime::block_on;
 pub use runtime::execute_futures_in_parallel;
 pub use runtime::spawn;

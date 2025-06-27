@@ -863,6 +863,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExplainAnalyze { plan, .. } | Plan::Explain { plan, .. } => {
                 self.check(ctx, plan).await?
             }
+            Plan::ExplainPerf {..} => {}
 
             Plan::ReportIssue(_) => {}
 

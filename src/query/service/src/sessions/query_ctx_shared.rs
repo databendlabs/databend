@@ -177,6 +177,10 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) next_broadcast_id: AtomicU32,
     pub(in crate::sessions) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
+
+    // QueryPerf used to draw flamegraph
+    pub(in crate::sessions) perf_flag: AtomicBool,
+    pub(in crate::sessions) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
 }
 
 #[derive(Default)]
@@ -253,6 +257,8 @@ impl QueryContextShared {
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             next_broadcast_id: AtomicU32::new(0),
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
+            perf_flag: AtomicBool::new(false),
+            nodes_perf: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
@@ -853,6 +859,23 @@ impl QueryContextShared {
             .write()
             .entry(plan_id)
             .or_insert(stats);
+    }
+
+    pub fn set_perf_flag(&self, flag: bool) {
+        self.perf_flag.store(flag, Ordering::SeqCst);
+    }
+
+    pub fn get_perf_flag(&self) -> bool {
+        self.perf_flag.load(Ordering::SeqCst)
+    }
+
+    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.nodes_perf.clone()
+    }
+
+    pub fn set_nodes_perf(&self, node: String, perf: String) {
+        let mut nodes_perf = self.nodes_perf.lock();
+        nodes_perf.insert(node, perf);
     }
 }
 

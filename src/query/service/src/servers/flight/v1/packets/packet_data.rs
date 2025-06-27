@@ -63,6 +63,7 @@ pub enum DataPacket {
     CopyStatus(CopyStatus),
     MutationStatus(MutationStatus),
     DataCacheMetrics(DataCacheMetricValues),
+    QueryPerf(String),
 }
 
 fn calc_size(flight_data: &FlightData) -> usize {
@@ -80,6 +81,7 @@ impl DataPacket {
             DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
             DataPacket::QueryProfiles(_) => 0,
             DataPacket::DataCacheMetrics(_) => 0,
+            DataPacket::QueryPerf(_) => 0,
         }
     }
 }
@@ -137,6 +139,12 @@ impl TryFrom<DataPacket> for FlightData {
             DataPacket::DataCacheMetrics(metrics) => FlightData {
                 app_metadata: vec![0x08].into(),
                 data_body: serde_json::to_vec(&metrics)?.into(),
+                data_header: Default::default(),
+                flight_descriptor: None,
+            },
+            DataPacket::QueryPerf(query_perf) => FlightData {
+                app_metadata: vec![0x09].into(),
+                data_body: query_perf.into_bytes().into(),
                 data_header: Default::default(),
                 flight_descriptor: None,
             },
@@ -200,6 +208,11 @@ impl TryFrom<FlightData> for DataPacket {
                 let status =
                     serde_json::from_slice::<DataCacheMetricValues>(&flight_data.data_body)?;
                 Ok(DataPacket::DataCacheMetrics(status))
+            }
+            0x09 => {
+                let query_perf = String::from_utf8(flight_data.data_body.to_vec())
+                    .map_err(|_| ErrorCode::BadBytes("Invalid UTF-8 in query performance data."))?;
+                Ok(DataPacket::QueryPerf(query_perf))
             }
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),
         }
