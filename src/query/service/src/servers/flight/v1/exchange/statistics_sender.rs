@@ -234,7 +234,7 @@ impl StatisticsSender {
         perf_guard: &Option<QueryPerfGuard>,
         flight_sender: &FlightSender,
     ) -> Result<()> {
-        if let Some(QueryPerfGuard::Both(_flag_guard, profiler_guard)) = perf_guard {
+        if let Some((_flag_guard, profiler_guard)) = perf_guard {
             let dumped = QueryPerf::dump(profiler_guard)?;
             let data_packet = DataPacket::QueryPerf(dumped);
             flight_sender.send(data_packet).await?;

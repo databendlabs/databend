@@ -142,6 +142,7 @@ pub struct TrackingPayload {
     pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
+    pub perf_enabled: bool,
 }
 
 pub struct TrackingGuard {
@@ -166,6 +167,9 @@ impl Drop for TrackingGuard {
         TRACKER.with(|x| {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
+
+            // Sync perf flag when restoring the previous payload
+            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
         });
     }
 }
@@ -173,19 +177,13 @@ impl Drop for TrackingGuard {
 pub struct TrackingFuture<T: Future> {
     inner: Pin<Box<T>>,
     tracking_payload: Arc<TrackingPayload>,
-    profile_flag: bool,
 }
 
 impl<T: Future> TrackingFuture<T> {
-    pub fn create(
-        inner: T,
-        tracking_payload: Arc<TrackingPayload>,
-        profile_flag: bool,
-    ) -> TrackingFuture<T> {
+    pub fn create(inner: T, tracking_payload: Arc<TrackingPayload>) -> TrackingFuture<T> {
         TrackingFuture {
             inner: Box::pin(inner),
             tracking_payload,
-            profile_flag,
         }
     }
 }
@@ -195,7 +193,6 @@ impl<T: Future> Future for TrackingFuture<T> {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let _guard = ThreadTracker::tracking_inner(self.tracking_payload.clone());
-        let _flag_guard = QueryPerf::tracking_inner(self.profile_flag);
         self.inner.as_mut().poll(cx)
     }
 }
@@ -224,6 +221,7 @@ impl ThreadTracker {
                 time_series_profile: None,
                 local_time_series_profile: None,
                 workload_group_resource: None,
+                perf_enabled: false,
             }),
         }
     }
@@ -234,7 +232,6 @@ impl ThreadTracker {
         TRACKER.with(|x| {
             let _ = x.borrow_mut();
         });
-        QueryPerf::init();
     }
 
     pub(crate) fn with<F, R>(f: F) -> R
@@ -255,6 +252,9 @@ impl ThreadTracker {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
 
+            // Sync perf flag from the new payload to thread_local PERF_FLAG
+            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
+
             guard
         })
     }
@@ -264,19 +264,15 @@ impl ThreadTracker {
     }
 
     pub fn tracking_future<T: Future>(future: T) -> TrackingFuture<T> {
-        let profile_flag = QueryPerf::flag();
-        TRACKER
-            .with(move |x| TrackingFuture::create(future, x.borrow().payload.clone(), profile_flag))
+        TRACKER.with(move |x| TrackingFuture::create(future, x.borrow().payload.clone()))
     }
 
     pub fn tracking_function<F, T>(f: F) -> impl FnOnce() -> T
     where F: FnOnce() -> T {
-        let profile_flag = QueryPerf::flag();
         TRACKER.with(move |x| {
             let payload = x.borrow().payload.clone();
             move || {
                 let _guard = ThreadTracker::tracking_inner(payload);
-                let _flag_guard = QueryPerf::tracking_inner(profile_flag);
                 f()
             }
         })

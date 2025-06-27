@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::runtime::QueryPerf;
-use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
@@ -58,9 +57,7 @@ impl ExplainPerfInterpreter {
         ThreadTracker::tracking_future(self.simulate_execute()).await?;
 
         // collect the profiling data from the profiler guard and other nodes report
-        let QueryPerfGuard::Both(_flag_guard, profiler_guard) = perf_guard else {
-            unreachable!();
-        };
+        let (_flag_guard, profiler_guard) = perf_guard;
 
         let node_id = GlobalConfig::instance().query.node_id.clone();
         let dumped = QueryPerf::dump(&profiler_guard)?;

@@ -18,45 +18,32 @@ use log::debug;
 use pprof::ProfilerGuard;
 use pprof::ProfilerGuardBuilder;
 
-// This flag need to be accessed in signal handler,
-// so we use #[thread_local] and put it separately from ThreadTracker
-// try to make sure it is async signal safe
+use crate::runtime::ThreadTracker;
+use crate::runtime::TrackingGuard;
+
+/// This flag need to be accessed in signal handler,
+/// so we use #[thread_local] and put it separately from ThreadTracker
+/// try to make sure it is async signal safe
+///
+/// TrackingPayload.perf_enabled will control PERF_FLAG state
 #[thread_local]
 static mut PERF_FLAG: bool = false;
 
+pub type QueryPerfGuard = (TrackingGuard, ProfilerGuard<'static>);
+
 /// Dummy struct only used to provide all operations related to PERF_FLAG
 pub struct QueryPerf;
-
-/// RAII structure used to restore the previous value of PERF_FLAG when it goes out of scope.
-pub struct QueryPerfFlagGuard {
-    previous: bool,
-}
-
-pub enum QueryPerfGuard {
-    Both(QueryPerfFlagGuard, ProfilerGuard<'static>),
-    Flag(QueryPerfFlagGuard),
-}
 
 impl QueryPerf {
     pub fn flag() -> bool {
         unsafe { PERF_FLAG }
     }
 
-    pub fn tracking_inner(new_value: bool) -> QueryPerfFlagGuard {
+    /// Sync the thread local PERF_FLAG with the given value from TrackingPayload
+    /// This allows TrackingPayload to manage perf state while keeping thread_local flag
+    pub fn sync_from_payload(perf_enabled: bool) {
         unsafe {
-            let previous = PERF_FLAG;
-            PERF_FLAG = new_value;
-            QueryPerfFlagGuard { previous }
-        }
-    }
-
-    pub fn tracking(new_value: bool) -> QueryPerfGuard {
-        QueryPerfGuard::Flag(QueryPerf::tracking_inner(new_value))
-    }
-
-    pub fn init() {
-        unsafe {
-            let _ = PERF_FLAG;
+            PERF_FLAG = perf_enabled;
         }
     }
 
@@ -69,8 +56,10 @@ impl QueryPerf {
             .build()
             .map_err(|_e| ErrorCode::Internal("Failed to create profiler"))?;
         debug!("starting perf with frequency: {}", frequency);
-        let flag_guard = QueryPerf::tracking_inner(true);
-        Ok(QueryPerfGuard::Both(flag_guard, profiler_guard))
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.perf_enabled = true;
+        let flag_guard = ThreadTracker::tracking(payload);
+        Ok((flag_guard, profiler_guard))
     }
 
     pub fn dump(profiler_guard: &ProfilerGuard<'static>) -> Result<String> {
@@ -137,10 +126,121 @@ impl QueryPerf {
     }
 }
 
-impl Drop for QueryPerfFlagGuard {
-    fn drop(&mut self) {
-        unsafe {
-            PERF_FLAG = self.previous;
+#[cfg(test)]
+mod tests {
+    use crate::runtime::QueryPerf;
+    use crate::runtime::ThreadTracker;
+
+    #[test]
+    fn test_tracking_payload_perf_sync() {
+        // Initialize thread tracker
+        ThreadTracker::init();
+
+        // Test initial state - should be false
+        assert!(!QueryPerf::flag(), "Initial perf flag should be false");
+
+        // Create a payload with perf enabled
+        let mut payload_with_perf = ThreadTracker::new_tracking_payload();
+        payload_with_perf.perf_enabled = true;
+
+        // Apply tracking with perf enabled
+        {
+            let _guard = ThreadTracker::tracking(payload_with_perf);
+            // Perf flag should now be true
+            assert!(
+                QueryPerf::flag(),
+                "Perf flag should be true when payload.perf_enabled is true"
+            );
+        }
+
+        // After guard drops, should restore previous state (false)
+        assert!(
+            !QueryPerf::flag(),
+            "Perf flag should be restored to false after tracking guard drops"
+        );
+
+        // Test with perf disabled
+        let payload_without_perf = ThreadTracker::new_tracking_payload();
+
+        {
+            let _guard = ThreadTracker::tracking(payload_without_perf);
+            // Perf flag should remain false
+            assert!(
+                !QueryPerf::flag(),
+                "Perf flag should be false when payload.perf_enabled is false"
+            );
+        }
+
+        // Should still be false after guard drops
+        assert!(
+            !QueryPerf::flag(),
+            "Perf flag should remain false after tracking guard drops"
+        );
+    }
+
+    #[test]
+    fn test_tracking_function_perf_inheritance() {
+        ThreadTracker::init();
+
+        // Create payload with perf enabled
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.perf_enabled = true;
+
+        {
+            let _guard = ThreadTracker::tracking(payload);
+            assert!(QueryPerf::flag(), "Perf should be enabled in outer scope");
+
+            // Create a tracking function that should inherit the perf state
+            let tracked_fn = ThreadTracker::tracking_function(|| {
+                // The function should see the current perf state from TrackingPayload
+                QueryPerf::flag()
+            });
+
+            let result = tracked_fn();
+            assert!(
+                result,
+                "Tracking function should inherit perf enabled state"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_tracking_future_perf_inheritance() {
+        ThreadTracker::init();
+
+        // Create payload with perf enabled
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.perf_enabled = true;
+
+        {
+            let _guard = ThreadTracker::tracking(payload);
+            assert!(QueryPerf::flag(), "Perf should be enabled in outer scope");
+
+            // Create a tracking future that should inherit the perf state
+            let tracked_future = ThreadTracker::tracking_future(async {
+                // The future should see the perf state from TrackingPayload
+                QueryPerf::flag()
+            });
+
+            let result = tracked_future.await;
+            assert!(result, "Tracking future should inherit perf enabled state");
+        }
+
+        // Test with perf disabled
+        let mut payload_disabled = ThreadTracker::new_tracking_payload();
+        payload_disabled.perf_enabled = false;
+
+        {
+            let _guard = ThreadTracker::tracking(payload_disabled);
+            assert!(!QueryPerf::flag(), "Perf should be disabled in outer scope");
+
+            let tracked_future = ThreadTracker::tracking_future(async { QueryPerf::flag() });
+
+            let result = tracked_future.await;
+            assert!(
+                !result,
+                "Tracking future should inherit perf disabled state"
+            );
         }
     }
 }
