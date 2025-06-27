@@ -12,10 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+
 use databend_common_column::bitmap::MutableBitmap;
 
 use crate::arrow::bitmap_into_mut;
 use crate::types::BooleanType;
+use crate::ColumnIndex;
+use crate::Constant;
+use crate::ConstantFolder;
+use crate::Expr;
+use crate::FunctionContext;
+use crate::FunctionRegistry;
+use crate::Scalar;
 use crate::Value;
 
 pub struct FilterHelpers;
@@ -35,5 +44,98 @@ impl FilterHelpers {
             Value::Scalar(false) => MutableBitmap::from_len_zeroed(rows),
             Value::Column(bitmap) => bitmap_into_mut(bitmap),
         }
+    }
+
+    pub fn find_leveled_eq_filters<I: ColumnIndex>(
+        expr: &Expr<I>,
+        level_names: &[&str],
+        func_ctx: &FunctionContext,
+        fn_registry: &FunctionRegistry,
+    ) -> databend_common_exception::Result<Vec<Vec<Scalar>>> {
+        let mut scalars = vec![];
+        for name in level_names {
+            let mut values = Vec::new();
+            expr.find_function_literals("eq", &mut |col_name, scalar, _| {
+                if col_name.name() == *name {
+                    values.push(scalar.clone());
+                }
+            });
+            values.dedup();
+
+            let mut results = Vec::with_capacity(values.len());
+
+            if !values.is_empty() {
+                for value in values.iter() {
+                    // replace eq with false
+                    let expr =
+                        expr.replace_function_literals("eq", &mut |col_name, scalar, func| {
+                            if col_name.name() == *name {
+                                if scalar == value {
+                                    let data_type = func.function.signature.return_type.clone();
+                                    Some(Expr::Constant(Constant {
+                                        span: None,
+                                        scalar: Scalar::Boolean(false),
+                                        data_type,
+                                    }))
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        });
+
+                    let (folded_expr, _) = ConstantFolder::fold(&expr, func_ctx, fn_registry);
+
+                    if let Expr::Constant(Constant {
+                        scalar: Scalar::Boolean(false),
+                        ..
+                    }) = folded_expr
+                    {
+                        results.push(value.clone());
+                    }
+                }
+
+                // let's check if it contains or for other columns
+                if results.is_empty() && !values.is_empty() {
+                    let mut results_all_used = true;
+                    // let's check or function that
+                    // for the equality columns set,let's call `ecs`
+                    // `ecs` of the left child must be subset of  `ecs` of the right child
+                    // if not, it's invalid
+
+                    expr.visit_func("or", &mut |call| {
+                        let mut left_ecs = HashSet::new();
+                        let mut right_ecs = HashSet::new();
+
+                        if call.args.len() != 2 {
+                            results_all_used = false;
+                            return;
+                        }
+
+                        for (i, arg) in call.args.iter().enumerate() {
+                            arg.find_function_literals("eq", &mut |col_name, _scalar, _| {
+                                if i == 0 {
+                                    left_ecs.insert(col_name.name());
+                                } else {
+                                    right_ecs.insert(col_name.name());
+                                }
+                            });
+                        }
+
+                        if !left_ecs.contains(*name) || !right_ecs.contains(*name) {
+                            results_all_used = false;
+                        }
+                    });
+                    if results_all_used {
+                        results = values;
+                    }
+                }
+                scalars.push(results);
+            } else {
+                scalars.push(vec![]);
+            }
+        }
+        Ok(scalars)
     }
 }

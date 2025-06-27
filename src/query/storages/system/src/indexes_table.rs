@@ -18,11 +18,14 @@ use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check::check_string;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FromData;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -37,7 +40,6 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_or_filter;
 
 const POINT_GET_TABLE_LIMIT: usize = 20;
 
@@ -58,47 +60,49 @@ impl AsyncSystemTable for IndexesTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let mut filtered_db_names = None;
-        let mut filtered_table_names = None;
-        let mut invalid_optimize = false;
+        let mut filtered_db_names = vec![];
+        let mut filtered_table_names = vec![];
+        let func_ctx = ctx.get_function_context()?;
 
         if let Some(filters) = push_downs.and_then(|info| info.filters) {
             let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
 
-            let mut databases: Vec<String> = Vec::new();
-            let mut tables: Vec<String> = Vec::new();
-
-            invalid_optimize = find_eq_or_filter(
+            let leveld_results = FilterHelpers::find_leveled_eq_filters(
                 &expr,
-                &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(database) = scalar {
-                            if !databases.contains(database) {
-                                databases.push(database.clone());
-                            }
-                        }
-                    } else if col_name == "table" {
-                        if let Scalar::String(table) = scalar {
-                            if !tables.contains(table) {
-                                tables.push(table.clone());
-                            }
-                        }
+                &["database", "table"],
+                &func_ctx,
+                &BUILTIN_FUNCTIONS,
+            )?;
+
+            for (i, scalars) in leveld_results.iter().enumerate() {
+                for r in scalars.iter() {
+                    let e = Expr::Constant(Constant {
+                        span: None,
+                        scalar: r.clone(),
+                        data_type: r.as_ref().infer_data_type(),
+                    });
+
+                    let s = check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)?;
+                    match i {
+                        0 => filtered_db_names.push(s),
+                        1 => filtered_table_names.push(s),
+                        _ => unreachable!(),
                     }
-                    Ok(())
-                },
-                invalid_optimize,
-            );
-            if !databases.is_empty() {
-                filtered_db_names = Some(databases);
-            }
-            if !tables.is_empty() {
-                filtered_table_names = Some(tables);
+                }
             }
         }
-        if invalid_optimize {
-            filtered_db_names = None;
-            filtered_table_names = None;
-        }
+
+        let filtered_db_names = if filtered_db_names.is_empty() {
+            None
+        } else {
+            Some(filtered_db_names)
+        };
+
+        let filtered_table_names = if filtered_table_names.is_empty() {
+            None
+        } else {
+            Some(filtered_table_names)
+        };
 
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT).await?;

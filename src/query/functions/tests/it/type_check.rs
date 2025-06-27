@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check;
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
+use databend_common_functions::test_utils;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use goldenfile::Mint;
 use jsonb::OwnedJsonb;
 
@@ -153,5 +159,80 @@ fn test_type_check() {
             run_ast(file, format!("1::uint64 = {ty}"), &columns);
             run_ast(file, format!("{ty} = true"), &columns);
         }
+    }
+}
+
+#[test]
+fn test_find_leveled_eq_filters() {
+    let cases = vec![
+        (
+            "database = 'a' or database = 'b'",
+            vec![],
+            vec![
+                Scalar::String("a".to_string()),
+                Scalar::String("b".to_string()),
+            ],
+            vec![],
+        ),
+
+         (
+            "database = 'a' or c like 'xxb'",
+            vec![],
+            vec![],
+            vec![],
+        ),
+        (
+            "catalog = 'x' and database = 'a' and table = 'b' and c like '%xxxx%'",
+            vec![Scalar::String("x".to_string())],
+            vec![Scalar::String("a".to_string())],
+            vec![Scalar::String("b".to_string())],
+        ),
+        (
+            "catalog = 'x' and (database = 'a' or database = 'b') and table = 'b' and c like '%xxxx%'",
+            vec![Scalar::String("x".to_string())],
+            vec![
+                Scalar::String("a".to_string()),
+                Scalar::String("b".to_string()),
+            ],
+            vec![Scalar::String("b".to_string())],
+        ),
+
+        (
+            "catalog = 'x' and (database = 'a' or database = 'b' or table = 'b') and c like '%xxxx%'",
+            vec![Scalar::String("x".to_string())],
+            vec![
+            ],
+            vec![],
+        ),
+    ];
+
+    let cols = vec![
+        ("catalog", DataType::String),
+        ("database", DataType::String),
+        ("table", DataType::String),
+        ("c", DataType::String),
+    ];
+
+    for (text, expected_catalog, expected_database, expected_table) in cases {
+        let raw_expr = test_utils::parse_raw_expr(text, &cols);
+
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+        let expr = type_check::rewrite_function_to_cast(expr);
+        let expr = expr.project_column_ref(|i| cols[*i].0.to_string());
+
+        let func_ctx = FunctionContext::default();
+        let scalars = FilterHelpers::find_leveled_eq_filters(
+            &expr,
+            &vec!["catalog", "database", "table"],
+            &func_ctx,
+            &BUILTIN_FUNCTIONS,
+        )
+        .unwrap();
+
+        assert_eq!(scalars, vec![
+            expected_catalog,
+            expected_database,
+            expected_table
+        ]);
     }
 }
