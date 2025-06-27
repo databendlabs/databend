@@ -18,13 +18,9 @@ use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_expression::filter_helper::FilterHelpers;
-use databend_common_expression::type_check::check_string;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -40,6 +36,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_database_table_filters;
 
 const POINT_GET_TABLE_LIMIT: usize = 20;
 
@@ -66,30 +63,8 @@ impl AsyncSystemTable for IndexesTable {
 
         if let Some(filters) = push_downs.and_then(|info| info.filters) {
             let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
-
-            let leveld_results = FilterHelpers::find_leveled_eq_filters(
-                &expr,
-                &["database", "table"],
-                &func_ctx,
-                &BUILTIN_FUNCTIONS,
-            )?;
-
-            for (i, scalars) in leveld_results.iter().enumerate() {
-                for r in scalars.iter() {
-                    let e = Expr::Constant(Constant {
-                        span: None,
-                        scalar: r.clone(),
-                        data_type: r.as_ref().infer_data_type(),
-                    });
-
-                    let s = check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)?;
-                    match i {
-                        0 => filtered_db_names.push(s),
-                        1 => filtered_table_names.push(s),
-                        _ => unreachable!(),
-                    }
-                }
-            }
+            (filtered_db_names, filtered_table_names) =
+                find_database_table_filters(&expr, &func_ctx)?;
         }
 
         let filtered_db_names = if filtered_db_names.is_empty() {

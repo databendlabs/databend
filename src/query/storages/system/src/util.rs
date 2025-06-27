@@ -15,7 +15,11 @@
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_exception::Result;
 use databend_common_expression::expr::*;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check::check_string;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
@@ -135,4 +139,37 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
             }
         }
     }
+}
+
+pub fn find_database_table_filters(
+    expr: &Expr<String>,
+    func_ctx: &FunctionContext,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let mut filtered_db_names = vec![];
+    let mut filtered_table_names = vec![];
+    let leveld_results = FilterHelpers::find_leveled_eq_filters(
+        expr,
+        &["database", "table"],
+        func_ctx,
+        &BUILTIN_FUNCTIONS,
+    )?;
+
+    for (i, scalars) in leveld_results.iter().enumerate() {
+        for r in scalars.iter() {
+            let e = Expr::Constant(Constant {
+                span: None,
+                scalar: r.clone(),
+                data_type: r.as_ref().infer_data_type(),
+            });
+
+            if let Ok(s) = check_string::<usize>(None, func_ctx, &e, &BUILTIN_FUNCTIONS) {
+                match i {
+                    0 => filtered_db_names.push(s),
+                    1 => filtered_table_names.push(s),
+                    _ => unreachable!(),
+                }
+            }
+        }
+    }
+    Ok((filtered_db_names, filtered_table_names))
 }

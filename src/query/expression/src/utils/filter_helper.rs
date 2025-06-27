@@ -78,9 +78,11 @@ impl FilterHelpers {
                                         data_type,
                                     }))
                                 } else {
+                                    // for other values, we just ignore it
                                     None
                                 }
                             } else {
+                                // for other columns, we just ignore it
                                 None
                             }
                         });
@@ -101,30 +103,18 @@ impl FilterHelpers {
                     let mut results_all_used = true;
                     // let's check or function that
                     // for the equality columns set,let's call `ecs`
-                    // if both side of `or` of the name columns are all in `ecs`, it's valid
+                    // if any side of `or` of the name columns is not in `ecs`, it's valid
                     // otherwise, it's invalid
-
                     expr.visit_func("or", &mut |call| {
-                        let mut left_ecs = HashSet::new();
-                        let mut right_ecs = HashSet::new();
-
-                        if call.args.len() != 2 {
-                            results_all_used = false;
-                            return;
-                        }
-
-                        for (i, arg) in call.args.iter().enumerate() {
+                        for arg in call.args.iter() {
+                            let mut ecs = HashSet::new();
                             arg.find_function_literals("eq", &mut |col_name, _scalar, _| {
-                                if i == 0 {
-                                    left_ecs.insert(col_name.name());
-                                } else {
-                                    right_ecs.insert(col_name.name());
-                                }
+                                ecs.insert(col_name.name());
                             });
-                        }
 
-                        if !left_ecs.contains(*name) || !right_ecs.contains(*name) {
-                            results_all_used = false;
+                            if !ecs.contains(*name) {
+                                results_all_used = false;
+                            }
                         }
                     });
                     if results_all_used {

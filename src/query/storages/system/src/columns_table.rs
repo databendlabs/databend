@@ -22,16 +22,12 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::type_check::check_string;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
-use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Expr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -53,6 +49,7 @@ use log::warn;
 use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_database_table_filters;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -328,30 +325,8 @@ pub(crate) async fn dump_tables(
     if let Some(push_downs) = push_downs {
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-
-            let leveld_results = FilterHelpers::find_leveled_eq_filters(
-                &expr,
-                &["database", "table"],
-                &func_ctx,
-                &BUILTIN_FUNCTIONS,
-            )?;
-
-            for (i, scalars) in leveld_results.iter().enumerate() {
-                for r in scalars.iter() {
-                    let e = Expr::Constant(Constant {
-                        span: None,
-                        scalar: r.clone(),
-                        data_type: r.as_ref().infer_data_type(),
-                    });
-
-                    let s = check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)?;
-                    match i {
-                        0 => filtered_db_names.push(s),
-                        1 => filtered_table_names.push(s),
-                        _ => unreachable!(),
-                    }
-                }
-            }
+            (filtered_db_names, filtered_table_names) =
+                find_database_table_filters(&expr, &func_ctx)?;
         }
     }
 

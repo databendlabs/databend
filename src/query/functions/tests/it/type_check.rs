@@ -204,6 +204,22 @@ fn test_find_leveled_eq_filters() {
             ],
             vec![],
         ),
+
+        (
+            "catalog = 'x' and (database = 'a' or database = 'b' or table = 'b') and c like '%xxxx%'",
+            vec![Scalar::String("x".to_string())],
+            vec![
+            ],
+            vec![],
+        ),
+         (
+            "catalog = 'x' and (database = 'a' or database = 'b') and database = 'c' and c like '%xxxx%'",
+            vec![Scalar::String("x".to_string())],
+            vec![
+             Scalar::String("c".to_string())
+            ],
+            vec![],
+        ),
     ];
 
     let cols = vec![
