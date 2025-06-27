@@ -396,9 +396,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
                             let s = check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)?;
                             match i {
-                                1 => catalog_name.push(s),
-                                2 => db_name.push(s),
-                                3 => {
+                                0 => catalog_name.push(s),
+                                1 => db_name.push(s),
+                                2 => {
                                     let _ = tables_names.insert(s);
                                 }
                                 _ => unreachable!(),
