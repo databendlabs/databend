@@ -127,7 +127,11 @@ fn test_parse_json(file: &mut impl Write) {
     run_ast(file, "parse_json('001')", &[]);
     run_ast(file, "parse_json('.12')", &[]);
     run_ast(file, "parse_json('12.')", &[]);
-    run_ast(file, "parse_json('99999999999999999999999999999999999999')", &[]);
+    run_ast(
+        file,
+        "parse_json('99999999999999999999999999999999999999')",
+        &[],
+    );
     run_ast(file, "parse_json('[1,2,,4]')", &[]);
 }
 
@@ -574,7 +578,11 @@ fn test_is_type(file: &mut impl Write) {
     run_ast(file, "is_integer(parse_json('123'))", &[]);
     run_ast(file, "is_float(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_float(parse_json('12.34'))", &[]);
-    run_ast(file, "is_decimal(parse_json('99999999999999999999999999999999999999'))", &[]);
+    run_ast(
+        file,
+        "is_decimal(parse_json('99999999999999999999999999999999999999'))",
+        &[],
+    );
     run_ast(file, "is_decimal(parse_json('99999999999999999999999999999999999999999999999999999999999999999999999999991'))", &[]);
     run_ast(file, "is_string(parse_json('\"ab\"'))", &[]);
     run_ast(file, "is_string(parse_json('12.34'))", &[]);
