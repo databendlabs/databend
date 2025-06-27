@@ -378,13 +378,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 data_type: r.as_ref().infer_data_type(),
                             });
 
-                            let s = check_number::<u64, usize>(
-                                None,
-                                &func_ctx,
-                                &e,
-                                &BUILTIN_FUNCTIONS,
-                            )?;
-                            tables_ids.push(s);
+                            if let Ok(s) =
+                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                            {
+                                tables_ids.push(s);
+                            }
                         }
                     } else {
                         for r in scalars.iter() {
@@ -394,14 +392,17 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                                 data_type: r.as_ref().infer_data_type(),
                             });
 
-                            let s = check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)?;
-                            match i {
-                                0 => catalog_name.push(s),
-                                1 => db_name.push(s),
-                                2 => {
-                                    let _ = tables_names.insert(s);
+                            if let Ok(s) =
+                                check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                            {
+                                match i {
+                                    0 => catalog_name.push(s),
+                                    1 => db_name.push(s),
+                                    2 => {
+                                        let _ = tables_names.insert(s);
+                                    }
+                                    _ => unreachable!(),
                                 }
-                                _ => unreachable!(),
                             }
                         }
                     }

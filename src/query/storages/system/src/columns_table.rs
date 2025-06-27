@@ -352,9 +352,6 @@ pub(crate) async fn dump_tables(
                     }
                 }
             }
-
-            dbg!(&leveld_results);
-            dbg!(&filtered_db_names, &filtered_table_names);
         }
     }
 
