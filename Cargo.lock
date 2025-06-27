@@ -11638,7 +11638,7 @@ checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
 [[package]]
 name = "pprof"
 version = "0.15.0"
-source = "git+https://github.com/dqhl76/pprof-rs.git?branch=patch#62c3f562867701a9b9ed9f2bab702a7ce947a927"
+source = "git+https://github.com/datafuse-extras/pprof-rs?rev=fe22b23#fe22b23cfa294122547a1add1377918aca0493b6"
 dependencies = [
  "aligned-vec",
  "backtrace",
