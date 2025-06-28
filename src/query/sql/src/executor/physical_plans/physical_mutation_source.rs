@@ -27,7 +27,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationType;
-use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan};
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
@@ -48,6 +48,10 @@ pub struct MutationSource {
 
     pub partitions: Partitions,
     pub statistics: PartStatistics,
+}
+
+impl IPhysicalPlan for MutationSource {
+
 }
 
 impl MutationSource {

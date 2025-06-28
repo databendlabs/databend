@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-
+use std::fmt::Debug;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -78,6 +78,117 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowPartition;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PhysicalPlanMeta {
+    plan_id: u32,
+    name: String,
+    // for profile
+    desc: String,
+    // for profile
+    labels: HashMap<String, Vec<String>>,
+}
+
+impl PhysicalPlanMeta {
+    pub fn new(name: String) -> PhysicalPlanMeta {
+        PhysicalPlanMeta {
+            plan_id: 0,
+            name,
+            desc: String::new(),
+            labels: HashMap::new(),
+        }
+    }
+
+    pub fn with_desc(name: String, desc: String, labels: HashMap<String, Vec<String>>) -> PhysicalPlanMeta {
+        PhysicalPlanMeta {
+            plan_id: 0,
+            name,
+            desc,
+            labels,
+        }
+    }
+}
+
+pub trait IPhysicalPlan: serde::Serialize + serde::Deserialize + Clone + Debug {
+    fn get_meta(&self) -> &PhysicalPlanMeta;
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta;
+
+    // For methods with default implementations, the default implementation is usually sufficient.
+
+    fn get_id(&self) -> u32 {
+        self.get_meta().plan_id
+    }
+
+    fn get_name(&self) -> String {
+        self.get_meta().name.clone()
+    }
+
+    #[recursive::recursive]
+    fn adjust_plan_id(&mut self, next_id: &mut u32) {
+        self.get_meta_mut().plan_id = *next_id;
+        *next_id += 1;
+
+        for child in self.children_mut() {
+            child.adjust_plan_id(next_id);
+        }
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        match self.children().next() {
+            None => Ok(DataSchemaRef::default()),
+            Some(child) => child.output_schema()
+        }
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::empty())
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::empty())
+    }
+
+    #[recursive::recursive]
+    fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        for child in self.children() {
+            if let Some(plan) = child.try_find_mutation_source() {
+                return Some(plan);
+            }
+        }
+
+        None
+    }
+
+    #[recursive::recursive]
+    fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        for child in self.children() {
+            child.get_all_data_source(sources);
+        }
+    }
+
+    #[recursive::recursive]
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        for child in self.children_mut() {
+            child.set_pruning_stats(stats)
+        }
+    }
+
+    #[recursive::recursive]
+    fn is_distributed_plan(&self) -> bool {
+        self.children().any(|child| child.is_distributed_plan())
+        // || matches!(
+        //     self,
+        //     Self::ExchangeSource(_) | Self::ExchangeSink(_) | Self::Exchange(_)
+        // )
+    }
+
+    #[recursive::recursive]
+    fn is_warehouse_distributed_plan(&self) -> bool {
+        self.children()
+            .any(|child| child.is_warehouse_distributed_plan())
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Educe, EnumAsInner)]
 #[educe(
@@ -167,321 +278,321 @@ impl PhysicalPlan {
     /// Adjust the plan_id of the physical plan.
     /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
     /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
-    #[recursive::recursive]
-    pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
-        match self {
-            PhysicalPlan::AsyncFunction(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::TableScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::Filter(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::EvalScalar(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ProjectSet(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::AggregateExpand(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::AggregatePartial(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::AggregateFinal(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Window(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::WindowPartition(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Sort(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Limit(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::RowFetch(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::HashJoin(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.probe.adjust_plan_id(next_id);
-                plan.build.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::RangeJoin(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.left.adjust_plan_id(next_id);
-                plan.right.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Exchange(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::UnionAll(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.left.adjust_plan_id(next_id);
-                plan.right.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::RecursiveCteScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::ConstantTableScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::ExpressionScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::CacheScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::Udf(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::DistributedInsertSelect(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ExchangeSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::ExchangeSink(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::CopyIntoTable(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                match &mut plan.source {
-                    CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
-                    CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
-                };
-            }
-            PhysicalPlan::CopyIntoLocation(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ReplaceInto(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::MutationSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::ColumnMutation(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Mutation(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::MutationSplit(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::MutationManipulate(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::MutationOrganize(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::AddStreamColumn(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::CommitSink(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ReplaceAsyncSourcer(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::ReplaceDeduplicate(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::CompactSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::Recluster(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::HilbertPartition(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::Duplicate(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::Shuffle(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkFilter(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkEvalScalar(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkCastSchema(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkFillAndReorder(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkAppendData(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkMerge(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::ChunkCommitInsert(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-            PhysicalPlan::BroadcastSource(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::BroadcastSink(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-                plan.input.adjust_plan_id(next_id);
-            }
-        }
-    }
+    // #[recursive::recursive]
+    // pub fn adjust_plan_id(&mut self, next_id: &mut u32) {
+    //     match self {
+    //         PhysicalPlan::AsyncFunction(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::TableScan(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::Filter(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::EvalScalar(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ProjectSet(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::AggregateExpand(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::AggregatePartial(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::AggregateFinal(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::Window(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::WindowPartition(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::Sort(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::Limit(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::RowFetch(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::HashJoin(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.probe.adjust_plan_id(next_id);
+    //             plan.build.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::RangeJoin(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.left.adjust_plan_id(next_id);
+    //             plan.right.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::Exchange(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::UnionAll(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.left.adjust_plan_id(next_id);
+    //             plan.right.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::RecursiveCteScan(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::ConstantTableScan(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::ExpressionScan(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::CacheScan(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::Udf(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::DistributedInsertSelect(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ExchangeSource(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::ExchangeSink(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::CopyIntoTable(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             match &mut plan.source {
+    //                 CopyIntoTableSource::Query(input) => input.adjust_plan_id(next_id),
+    //                 CopyIntoTableSource::Stage(input) => input.adjust_plan_id(next_id),
+    //             };
+    //         }
+    //         PhysicalPlan::CopyIntoLocation(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ReplaceInto(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::MutationSource(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::ColumnMutation(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::Mutation(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::MutationSplit(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::MutationManipulate(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::MutationOrganize(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::AddStreamColumn(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::CommitSink(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ReplaceAsyncSourcer(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::ReplaceDeduplicate(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::CompactSource(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::Recluster(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::HilbertPartition(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::Duplicate(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::Shuffle(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkFilter(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkEvalScalar(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkCastSchema(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkFillAndReorder(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkAppendData(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkMerge(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::ChunkCommitInsert(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //         PhysicalPlan::BroadcastSource(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //         }
+    //         PhysicalPlan::BroadcastSink(plan) => {
+    //             plan.plan_id = *next_id;
+    //             *next_id += 1;
+    //             plan.input.adjust_plan_id(next_id);
+    //         }
+    //     }
+    // }
 
     /// Get the id of the plan node
-    pub fn get_id(&self) -> u32 {
-        match self {
-            PhysicalPlan::AsyncFunction(v) => v.plan_id,
-            PhysicalPlan::TableScan(v) => v.plan_id,
-            PhysicalPlan::Filter(v) => v.plan_id,
-            PhysicalPlan::EvalScalar(v) => v.plan_id,
-            PhysicalPlan::ProjectSet(v) => v.plan_id,
-            PhysicalPlan::AggregateExpand(v) => v.plan_id,
-            PhysicalPlan::AggregatePartial(v) => v.plan_id,
-            PhysicalPlan::AggregateFinal(v) => v.plan_id,
-            PhysicalPlan::Window(v) => v.plan_id,
-            PhysicalPlan::WindowPartition(v) => v.plan_id,
-            PhysicalPlan::Sort(v) => v.plan_id,
-            PhysicalPlan::Limit(v) => v.plan_id,
-            PhysicalPlan::RowFetch(v) => v.plan_id,
-            PhysicalPlan::HashJoin(v) => v.plan_id,
-            PhysicalPlan::RangeJoin(v) => v.plan_id,
-            PhysicalPlan::Exchange(v) => v.plan_id,
-            PhysicalPlan::UnionAll(v) => v.plan_id,
-            PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
-            PhysicalPlan::ExchangeSource(v) => v.plan_id,
-            PhysicalPlan::ExchangeSink(v) => v.plan_id,
-            PhysicalPlan::ConstantTableScan(v) => v.plan_id,
-            PhysicalPlan::ExpressionScan(v) => v.plan_id,
-            PhysicalPlan::CacheScan(v) => v.plan_id,
-            PhysicalPlan::Udf(v) => v.plan_id,
-            PhysicalPlan::MutationSource(v) => v.plan_id,
-            PhysicalPlan::ColumnMutation(v) => v.plan_id,
-            PhysicalPlan::Mutation(v) => v.plan_id,
-            PhysicalPlan::MutationSplit(v) => v.plan_id,
-            PhysicalPlan::MutationManipulate(v) => v.plan_id,
-            PhysicalPlan::MutationOrganize(v) => v.plan_id,
-            PhysicalPlan::AddStreamColumn(v) => v.plan_id,
-            PhysicalPlan::CommitSink(v) => v.plan_id,
-            PhysicalPlan::CopyIntoTable(v) => v.plan_id,
-            PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
-            PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
-            PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
-            PhysicalPlan::ReplaceInto(v) => v.plan_id,
-            PhysicalPlan::CompactSource(v) => v.plan_id,
-            PhysicalPlan::Recluster(v) => v.plan_id,
-            PhysicalPlan::HilbertPartition(v) => v.plan_id,
-            PhysicalPlan::Duplicate(v) => v.plan_id,
-            PhysicalPlan::Shuffle(v) => v.plan_id,
-            PhysicalPlan::ChunkFilter(v) => v.plan_id,
-            PhysicalPlan::ChunkEvalScalar(v) => v.plan_id,
-            PhysicalPlan::ChunkCastSchema(v) => v.plan_id,
-            PhysicalPlan::ChunkFillAndReorder(v) => v.plan_id,
-            PhysicalPlan::ChunkAppendData(v) => v.plan_id,
-            PhysicalPlan::ChunkMerge(v) => v.plan_id,
-            PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
-            PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
-            PhysicalPlan::BroadcastSource(v) => v.plan_id,
-            PhysicalPlan::BroadcastSink(v) => v.plan_id,
-        }
-    }
+    // pub fn get_id(&self) -> u32 {
+    //     match self {
+    //         PhysicalPlan::AsyncFunction(v) => v.plan_id,
+    //         PhysicalPlan::TableScan(v) => v.plan_id,
+    //         PhysicalPlan::Filter(v) => v.plan_id,
+    //         PhysicalPlan::EvalScalar(v) => v.plan_id,
+    //         PhysicalPlan::ProjectSet(v) => v.plan_id,
+    //         PhysicalPlan::AggregateExpand(v) => v.plan_id,
+    //         PhysicalPlan::AggregatePartial(v) => v.plan_id,
+    //         PhysicalPlan::AggregateFinal(v) => v.plan_id,
+    //         PhysicalPlan::Window(v) => v.plan_id,
+    //         PhysicalPlan::WindowPartition(v) => v.plan_id,
+    //         PhysicalPlan::Sort(v) => v.plan_id,
+    //         PhysicalPlan::Limit(v) => v.plan_id,
+    //         PhysicalPlan::RowFetch(v) => v.plan_id,
+    //         PhysicalPlan::HashJoin(v) => v.plan_id,
+    //         PhysicalPlan::RangeJoin(v) => v.plan_id,
+    //         PhysicalPlan::Exchange(v) => v.plan_id,
+    //         PhysicalPlan::UnionAll(v) => v.plan_id,
+    //         PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
+    //         PhysicalPlan::ExchangeSource(v) => v.plan_id,
+    //         PhysicalPlan::ExchangeSink(v) => v.plan_id,
+    //         PhysicalPlan::ConstantTableScan(v) => v.plan_id,
+    //         PhysicalPlan::ExpressionScan(v) => v.plan_id,
+    //         PhysicalPlan::CacheScan(v) => v.plan_id,
+    //         PhysicalPlan::Udf(v) => v.plan_id,
+    //         PhysicalPlan::MutationSource(v) => v.plan_id,
+    //         PhysicalPlan::ColumnMutation(v) => v.plan_id,
+    //         PhysicalPlan::Mutation(v) => v.plan_id,
+    //         PhysicalPlan::MutationSplit(v) => v.plan_id,
+    //         PhysicalPlan::MutationManipulate(v) => v.plan_id,
+    //         PhysicalPlan::MutationOrganize(v) => v.plan_id,
+    //         PhysicalPlan::AddStreamColumn(v) => v.plan_id,
+    //         PhysicalPlan::CommitSink(v) => v.plan_id,
+    //         PhysicalPlan::CopyIntoTable(v) => v.plan_id,
+    //         PhysicalPlan::CopyIntoLocation(v) => v.plan_id,
+    //         PhysicalPlan::ReplaceAsyncSourcer(v) => v.plan_id,
+    //         PhysicalPlan::ReplaceDeduplicate(v) => v.plan_id,
+    //         PhysicalPlan::ReplaceInto(v) => v.plan_id,
+    //         PhysicalPlan::CompactSource(v) => v.plan_id,
+    //         PhysicalPlan::Recluster(v) => v.plan_id,
+    //         PhysicalPlan::HilbertPartition(v) => v.plan_id,
+    //         PhysicalPlan::Duplicate(v) => v.plan_id,
+    //         PhysicalPlan::Shuffle(v) => v.plan_id,
+    //         PhysicalPlan::ChunkFilter(v) => v.plan_id,
+    //         PhysicalPlan::ChunkEvalScalar(v) => v.plan_id,
+    //         PhysicalPlan::ChunkCastSchema(v) => v.plan_id,
+    //         PhysicalPlan::ChunkFillAndReorder(v) => v.plan_id,
+    //         PhysicalPlan::ChunkAppendData(v) => v.plan_id,
+    //         PhysicalPlan::ChunkMerge(v) => v.plan_id,
+    //         PhysicalPlan::ChunkCommitInsert(v) => v.plan_id,
+    //         PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
+    //         PhysicalPlan::BroadcastSource(v) => v.plan_id,
+    //         PhysicalPlan::BroadcastSink(v) => v.plan_id,
+    //     }
+    // }
 
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         match self {
@@ -603,7 +714,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+    pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_)
             | PhysicalPlan::ConstantTableScan(_)
@@ -677,7 +788,7 @@ impl PhysicalPlan {
         }
     }
 
-    pub fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
+    pub fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_)
             | PhysicalPlan::ConstantTableScan(_)
@@ -752,6 +863,7 @@ impl PhysicalPlan {
     }
 
     /// Used to find data source info in a non-aggregation and single-table query plan.
+    #[recursive::recursive]
     pub fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         match self {
             PhysicalPlan::TableScan(scan) => Some(&scan.source),
@@ -818,12 +930,12 @@ impl PhysicalPlan {
             )
     }
 
-    #[recursive::recursive]
-    pub fn is_warehouse_distributed_plan(&self) -> bool {
-        self.children()
-            .any(|child| child.is_warehouse_distributed_plan())
-            || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse)
-    }
+    // #[recursive::recursive]
+    // pub fn is_warehouse_distributed_plan(&self) -> bool {
+    //     self.children()
+    //         .any(|child| child.is_warehouse_distributed_plan())
+    //         || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse)
+    // }
 
     pub fn get_desc(&self) -> Result<String> {
         Ok(match self {
@@ -1108,32 +1220,32 @@ impl PhysicalPlan {
         }
     }
 
-    #[recursive::recursive]
-    pub fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
-        match self {
-            PhysicalPlan::TableScan(table_scan) => {
-                sources.push((table_scan.plan_id, table_scan.source.clone()));
-            }
-            _ => {
-                for child in self.children() {
-                    child.get_all_data_source(sources);
-                }
-            }
-        }
-    }
-
-    pub fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
-        match self {
-            PhysicalPlan::TableScan(table_scan) => {
-                if let Some(stat) = stats.remove(&table_scan.plan_id) {
-                    table_scan.source.statistics = stat;
-                }
-            }
-            _ => {
-                for child in self.children_mut() {
-                    child.set_pruning_stats(stats)
-                }
-            }
-        }
-    }
+    // #[recursive::recursive]
+    // pub fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+    //     match self {
+    //         PhysicalPlan::TableScan(table_scan) => {
+    //             sources.push((table_scan.plan_id, table_scan.source.clone()));
+    //         }
+    //         _ => {
+    //             for child in self.children() {
+    //                 child.get_all_data_source(sources);
+    //             }
+    //         }
+    //     }
+    // }
+    //
+    // pub fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+    //     match self {
+    //         PhysicalPlan::TableScan(table_scan) => {
+    //             if let Some(stat) = stats.remove(&table_scan.plan_id) {
+    //                 table_scan.source.statistics = stat;
+    //             }
+    //         }
+    //         _ => {
+    //             for child in self.children_mut() {
+    //                 child.set_pruning_stats(stats)
+    //             }
+    //         }
+    //     }
+    // }
 }

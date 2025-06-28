@@ -17,7 +17,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 
 use crate::executor::physical_plans::common::FragmentKind;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
@@ -36,6 +36,10 @@ pub struct ExchangeSink {
     pub query_id: String,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
+}
+
+impl IPhysicalPlan for ExchangeSink {
+
 }
 
 impl ExchangeSink {

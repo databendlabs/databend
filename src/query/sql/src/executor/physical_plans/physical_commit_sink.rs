@@ -21,7 +21,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::plans::TruncateMode;
 
 // serde is required by `PhysicalPlan`
@@ -39,6 +39,10 @@ pub struct CommitSink {
 
     // Used for recluster.
     pub recluster_info: Option<ReclusterInfoSideCar>,
+}
+
+impl IPhysicalPlan for CommitSink {
+
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

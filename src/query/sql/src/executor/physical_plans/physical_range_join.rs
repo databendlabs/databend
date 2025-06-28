@@ -26,7 +26,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -55,6 +55,10 @@ pub struct RangeJoin {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for RangeJoin {
+
 }
 
 impl RangeJoin {

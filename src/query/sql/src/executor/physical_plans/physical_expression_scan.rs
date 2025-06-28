@@ -18,7 +18,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -31,6 +31,10 @@ pub struct ExpressionScan {
     pub values: Vec<Vec<RemoteExpr>>,
     pub input: Box<PhysicalPlan>,
     pub output_schema: DataSchemaRef,
+}
+
+impl IPhysicalPlan for ExpressionScan {
+
 }
 
 impl ExpressionScan {

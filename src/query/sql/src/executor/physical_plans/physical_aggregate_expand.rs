@@ -20,7 +20,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::plans::GroupingSets;
 use crate::IndexType;
 
@@ -29,12 +29,58 @@ use crate::IndexType;
 pub struct AggregateExpand {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub group_bys: Vec<IndexType>,
     pub grouping_sets: GroupingSets,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for AggregateExpand {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut output_fields = input_schema.fields().clone();
+        // Add virtual columns to group by.
+        output_fields.reserve(self.group_bys.len() + 1);
+
+        for (group_by, (actual, ty)) in self
+            .group_bys
+            .iter()
+            .zip(self.grouping_sets.dup_group_items.iter())
+        {
+            // All group by columns will wrap nullable.
+            let i = input_schema.index_of(&group_by.to_string())?;
+            let f = &mut output_fields[i];
+            debug_assert!(f.data_type() == ty || f.data_type().wrap_nullable() == *ty);
+            *f = DataField::new(f.name(), f.data_type().wrap_nullable());
+            let new_field = DataField::new(&actual.to_string(), ty.clone());
+            output_fields.push(new_field);
+        }
+
+        output_fields.push(DataField::new(
+            &self.grouping_sets.grouping_id_index.to_string(),
+            DataType::Number(NumberDataType::UInt32),
+        ));
+        Ok(DataSchemaRefExt::create(output_fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl AggregateExpand {

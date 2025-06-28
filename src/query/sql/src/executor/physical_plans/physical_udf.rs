@@ -23,7 +23,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::UDFType;
@@ -40,6 +40,10 @@ pub struct Udf {
     pub script_udf: bool,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for Udf {
+
 }
 
 impl Udf {

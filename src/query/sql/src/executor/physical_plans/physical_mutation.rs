@@ -57,7 +57,7 @@ use crate::executor::physical_plans::MutationManipulate;
 use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::PhysicalPlanBuilder;
+use crate::executor::{IPhysicalPlan, PhysicalPlanBuilder};
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -93,6 +93,10 @@ pub struct Mutation {
     pub distributed: bool,
     pub target_build_optimization: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+impl IPhysicalPlan for Mutation {
+
 }
 
 impl PhysicalPlanBuilder {

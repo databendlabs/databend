@@ -23,7 +23,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::ColumnSet;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {
@@ -32,12 +32,16 @@ pub struct Duplicate {
     pub n: usize,
 }
 
+impl IPhysicalPlan for Duplicate {}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Shuffle {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub strategy: ShuffleStrategy,
 }
+
+impl IPhysicalPlan for Shuffle {}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ShuffleStrategy {
@@ -73,12 +77,16 @@ pub struct ChunkFilter {
     pub predicates: Vec<Option<RemoteExpr>>,
 }
 
+impl IPhysicalPlan for ChunkFilter {}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ChunkEvalScalar {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub eval_scalars: Vec<Option<MultiInsertEvalScalar>>,
 }
+
+impl IPhysicalPlan for ChunkEvalScalar {}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MultiInsertEvalScalar {
@@ -93,6 +101,8 @@ pub struct ChunkCastSchema {
     pub cast_schemas: Vec<Option<CastSchema>>,
 }
 
+impl IPhysicalPlan for ChunkCastSchema {}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CastSchema {
     pub source_schema: DataSchemaRef,
@@ -106,6 +116,8 @@ pub struct ChunkFillAndReorder {
     pub fill_and_reorders: Vec<Option<FillAndReorder>>,
 }
 
+impl IPhysicalPlan for ChunkFillAndReorder {}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct FillAndReorder {
     pub source_schema: DataSchemaRef,
@@ -118,6 +130,8 @@ pub struct ChunkAppendData {
     pub input: Box<PhysicalPlan>,
     pub target_tables: Vec<SerializableTable>,
 }
+
+impl IPhysicalPlan for ChunkAppendData {}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SerializableTable {
@@ -133,6 +147,8 @@ pub struct ChunkMerge {
     pub group_ids: Vec<u64>,
 }
 
+impl IPhysicalPlan for ChunkMerge {}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ChunkCommitInsert {
     pub plan_id: u32,
@@ -141,4 +157,8 @@ pub struct ChunkCommitInsert {
     pub overwrite: bool,
     pub deduplicated_label: Option<String>,
     pub targets: Vec<SerializableTable>,
+}
+
+impl IPhysicalPlan for ChunkCommitInsert {
+
 }

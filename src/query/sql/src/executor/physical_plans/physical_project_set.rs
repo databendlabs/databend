@@ -21,7 +21,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -32,12 +32,48 @@ use crate::TypeCheck;
 pub struct ProjectSet {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub projections: ColumnSet,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for ProjectSet {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
+        fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
+            DataField::new(
+                &index.to_string(),
+                srf.as_expr(&BUILTIN_FUNCTIONS).data_type().clone(),
+            )
+        }));
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl ProjectSet {

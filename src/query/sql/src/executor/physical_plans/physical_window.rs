@@ -35,7 +35,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::physical_plans::common::AggregateFunctionSignature;
 use crate::executor::physical_plans::common::SortDesc;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncFrame;
@@ -50,13 +50,43 @@ use crate::TypeCheck;
 pub struct Window {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub index: IndexType,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub func: WindowFunction,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
     pub window_frame: WindowFuncFrame,
     pub limit: Option<usize>,
+}
+
+impl IPhysicalPlan for Window {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
+        fields.extend_from_slice(input_schema.fields());
+        fields.push(DataField::new(
+            &self.index.to_string(),
+            self.func.data_type()?,
+        ));
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl Window {

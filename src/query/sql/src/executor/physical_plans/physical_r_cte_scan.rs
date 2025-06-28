@@ -19,7 +19,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -29,6 +29,10 @@ pub struct RecursiveCteScan {
     pub output_schema: DataSchemaRef,
     pub table_name: String,
     pub stat: PlanStatsInfo,
+}
+
+impl IPhysicalPlan for RecursiveCteScan  {
+
 }
 
 impl RecursiveCteScan {

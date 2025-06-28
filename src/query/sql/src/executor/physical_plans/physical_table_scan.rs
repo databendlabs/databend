@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::{DataSourcePlan, PartStatistics, PartitionsShuffleKind};
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::PrewhereInfo;
@@ -51,7 +51,7 @@ use rand::distributions::Distribution;
 use rand::thread_rng;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
-use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanMeta};
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
@@ -73,6 +73,7 @@ use crate::DUMMY_TABLE_INDEX;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
+    meta: PhysicalPlanMeta,
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub scan_id: usize,
@@ -82,6 +83,30 @@ pub struct TableScan {
 
     pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for TableScan {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        sources.push((self.get_id(), self.source.clone()));
+    }
+
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        if let Some(stat) = stats.remove(&self.get_id()) {
+            self.source.statistics = stat;
+        }
+    }
+
+    fn is_warehouse_distributed_plan(&self) -> bool {
+        self.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse
+    }
 }
 
 impl TableScan {
@@ -187,8 +212,8 @@ impl PhysicalPlanBuilder {
                     }
                 }
                 ColumnEntry::InternalColumn(TableInternalColumn {
-                    internal_column, ..
-                }) => {
+                                                internal_column, ..
+                                            }) => {
                     project_internal_columns.insert(*index, internal_column.to_owned());
                 }
                 ColumnEntry::VirtualColumn(virtual_column) => {
@@ -510,14 +535,14 @@ impl PhysicalPlanBuilder {
                     let column = metadata.column(item.index);
                     let (name, data_type) = match column {
                         ColumnEntry::BaseTableColumn(BaseTableColumn {
-                            column_name,
-                            data_type,
-                            ..
-                        }) => (column_name.clone(), DataType::from(data_type)),
+                                                         column_name,
+                                                         data_type,
+                                                         ..
+                                                     }) => (column_name.clone(), DataType::from(data_type)),
                         ColumnEntry::InternalColumn(TableInternalColumn {
-                            internal_column,
-                            ..
-                        }) => (
+                                                        internal_column,
+                                                        ..
+                                                    }) => (
                             internal_column.column_name().to_owned(),
                             internal_column.data_type(),
                         ),
@@ -689,7 +714,7 @@ impl PhysicalPlanBuilder {
                     cast_expr_to_non_null_boolean(pred.as_expr()?.project_column_ref(|col| {
                         output_schema.index_of(&col.index.to_string()).unwrap()
                     }))?
-                    .as_remote_expr(),
+                        .as_remote_expr(),
                 )
             })
             .transpose()?;
@@ -727,7 +752,7 @@ impl PhysicalPlanBuilder {
     pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
-        columns: impl Iterator<Item = &'a IndexType>,
+        columns: impl Iterator<Item=&'a IndexType>,
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
@@ -746,16 +771,16 @@ impl PhysicalPlanBuilder {
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                     ColumnEntry::InternalColumn(TableInternalColumn {
-                        internal_column, ..
-                    }) => {
+                                                    internal_column, ..
+                                                }) => {
                         if ignore_internal_column {
                             continue;
                         }
                         internal_column.column_name()
                     }
                     ColumnEntry::VirtualColumn(VirtualColumn {
-                        source_column_name, ..
-                    }) => {
+                                                   source_column_name, ..
+                                               }) => {
                         if add_virtual_source_column {
                             virtual_col_indices
                                 .insert(schema.index_of(source_column_name).unwrap());
@@ -783,10 +808,10 @@ impl PhysicalPlanBuilder {
                 let column = metadata.column(*index);
                 match column {
                     ColumnEntry::BaseTableColumn(BaseTableColumn {
-                        column_name,
-                        path_indices,
-                        ..
-                    }) => match path_indices {
+                                                     column_name,
+                                                     path_indices,
+                                                     ..
+                                                 }) => match path_indices {
                         Some(path_indices) => {
                             col_indices.insert(column.index(), path_indices.to_vec());
                         }
@@ -805,8 +830,8 @@ impl PhysicalPlanBuilder {
                         }
                     }
                     ColumnEntry::VirtualColumn(VirtualColumn {
-                        source_column_name, ..
-                    }) => {
+                                                   source_column_name, ..
+                                               }) => {
                         if add_virtual_source_column {
                             let idx = schema.index_of(source_column_name).unwrap();
                             col_indices.insert(idx, vec![idx]);

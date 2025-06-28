@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use crate::binder::MutationStrategy;
+use crate::executor::IPhysicalPlan;
 use crate::executor::physical_plan::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -23,6 +24,10 @@ pub struct MutationOrganize {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub strategy: MutationStrategy,
+}
+
+impl IPhysicalPlan for MutationOrganize {
+
 }
 
 impl MutationOrganize {

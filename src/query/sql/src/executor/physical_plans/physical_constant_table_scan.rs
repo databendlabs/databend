@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -28,6 +28,10 @@ pub struct ConstantTableScan {
     pub values: Vec<Column>,
     pub num_rows: usize,
     pub output_schema: DataSchemaRef,
+}
+
+impl IPhysicalPlan for ConstantTableScan {
+
 }
 
 impl ConstantTableScan {

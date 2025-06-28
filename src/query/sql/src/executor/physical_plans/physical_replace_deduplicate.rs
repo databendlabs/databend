@@ -23,7 +23,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::executor::physical_plans::common::OnConflictField;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -39,6 +39,10 @@ pub struct ReplaceDeduplicate {
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
     pub need_insert: bool,
     pub delete_when: Option<(RemoteExpr, String)>,
+}
+
+impl IPhysicalPlan for ReplaceDeduplicate {
+
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

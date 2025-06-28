@@ -20,7 +20,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::common::OnConflictField;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceInto {
@@ -36,4 +36,8 @@ pub struct ReplaceInto {
     pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+impl IPhysicalPlan for ReplaceInto {
+
 }

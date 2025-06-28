@@ -14,7 +14,7 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-
+use crate::executor::IPhysicalPlan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::IndexType;
 
@@ -23,6 +23,10 @@ pub struct MutationSplit {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub split_index: IndexType,
+}
+
+impl IPhysicalPlan for MutationSplit {
+
 }
 
 impl MutationSplit {

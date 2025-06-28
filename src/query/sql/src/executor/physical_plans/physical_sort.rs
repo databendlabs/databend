@@ -25,7 +25,7 @@ use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::physical_plans::WindowPartition;
 use crate::executor::physical_plans::WindowPartitionTopN;
 use crate::executor::physical_plans::WindowPartitionTopNFunc;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncType;
@@ -36,7 +36,8 @@ use crate::IndexType;
 pub struct Sort {
     /// A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub order_by: Vec<SortDesc>,
     /// limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
@@ -47,6 +48,62 @@ pub struct Sort {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for Sort {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        if matches!(self.after_exchange, Some(true)) {
+            // If the plan is after exchange plan in cluster mode,
+            // the order column is at the last of the input schema.
+            debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
+            debug_assert_eq!(
+                fields.last().unwrap().data_type(),
+                &self.order_col_type(&input_schema)?
+            );
+            fields.pop();
+        } else {
+            if let Some(proj) = &self.pre_projection {
+                let fileted_fields = proj
+                    .iter()
+                    .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if fileted_fields.len() < fields.len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    fields = fileted_fields
+                }
+            }
+
+            if matches!(self.after_exchange, Some(false)) {
+                // If the plan is before exchange plan in cluster mode,
+                // the order column should be added to the output schema.
+                fields.push(DataField::new(
+                    ORDER_COL_NAME,
+                    self.order_col_type(&input_schema)?,
+                ));
+            }
+        }
+
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl Sort {

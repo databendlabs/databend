@@ -20,7 +20,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -41,6 +41,10 @@ pub struct UnionAll {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for UnionAll {
+
 }
 
 impl UnionAll {

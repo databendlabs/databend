@@ -21,7 +21,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -32,6 +32,10 @@ pub struct CopyIntoLocation {
     pub input_data_schema: DataSchemaRef,
     pub input_table_schema: TableSchemaRef,
     pub info: CopyIntoLocationInfo,
+}
+
+impl IPhysicalPlan for CopyIntoLocation {
+
 }
 
 impl CopyIntoLocation {

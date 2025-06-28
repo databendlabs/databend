@@ -19,7 +19,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::physical_plans::common::FragmentKind;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -35,6 +35,10 @@ pub struct Exchange {
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
     pub allow_adjust_parallelism: bool,
+}
+
+impl IPhysicalPlan for Exchange {
+
 }
 
 impl Exchange {

@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-
+use crate::executor::IPhysicalPlan;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::MutationKind;
 
@@ -33,4 +33,8 @@ pub struct ColumnMutation {
     pub input_num_columns: usize,
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+impl IPhysicalPlan for ColumnMutation {
+    
 }

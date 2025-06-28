@@ -28,7 +28,7 @@ use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregateFunctionSignature;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::Exchange;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AggregateMode;
@@ -39,9 +39,10 @@ use crate::ScalarExpr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
+    meta: PhysicalPlanMeta,
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
@@ -49,6 +50,41 @@ pub struct AggregateFinal {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for AggregateFinal {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        for agg in self.agg_funcs.iter() {
+            let data_type = agg.sig.return_type.clone();
+            fields.push(DataField::new(&agg.output_column.to_string(), data_type));
+        }
+        for id in self.group_by.iter() {
+            let data_type = self
+                .before_group_by_schema
+                .field_with_name(&id.to_string())?
+                .data_type()
+                .clone();
+            fields.push(DataField::new(&id.to_string(), data_type));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl AggregateFinal {

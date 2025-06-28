@@ -31,7 +31,7 @@ use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::Exchange;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
@@ -68,6 +68,7 @@ type MergedFieldsResult = (
 pub struct HashJoin {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     // After building the probe key and build key, we apply probe_projections to probe_datablock
     // and build_projections to build_datablock, which can help us reduce memory usage and calls
     // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
@@ -106,6 +107,24 @@ pub struct HashJoin {
 
     pub runtime_filter: PhysicalRuntimeFilters,
     pub broadcast_id: Option<u32>,
+}
+
+impl IPhysicalPlan for HashJoin {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        todo!()
+    }
 }
 
 impl HashJoin {
@@ -225,11 +244,11 @@ impl PhysicalPlanBuilder {
         // Unify the data types of the left and right exchange keys
         if let (
             PhysicalPlan::Exchange(Exchange {
-                keys: probe_keys, ..
-            }),
+                                       keys: probe_keys, ..
+                                   }),
             PhysicalPlan::Exchange(Exchange {
-                keys: build_keys, ..
-            }),
+                                       keys: build_keys, ..
+                                   }),
         ) = (probe_side.as_mut(), build_side.as_mut())
         {
             let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
@@ -241,12 +260,12 @@ impl PhysicalPlanBuilder {
                     build_expr.data_type().clone(),
                     cast_rules,
                 )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for probe key {:?} and build key {:?}",
-                        &probe_expr, &build_expr
-                    ))
-                })?;
+                    .ok_or_else(|| {
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for probe key {:?} and build key {:?}",
+                            &probe_expr, &build_expr
+                        ))
+                    })?;
                 *probe_key = check_cast(
                     probe_expr.span(),
                     false,
@@ -254,7 +273,7 @@ impl PhysicalPlanBuilder {
                     &common_ty,
                     &BUILTIN_FUNCTIONS,
                 )?
-                .as_remote_expr();
+                    .as_remote_expr();
                 *build_key = check_cast(
                     build_expr.span(),
                     false,
@@ -262,7 +281,7 @@ impl PhysicalPlanBuilder {
                     &common_ty,
                     &BUILTIN_FUNCTIONS,
                 )?
-                .as_remote_expr();
+                    .as_remote_expr();
             }
         }
 
@@ -351,9 +370,9 @@ impl PhysicalPlanBuilder {
                         .data_type()
                         .remove_nullable()
                         == build_schema
-                            .field(build_index)
-                            .data_type()
-                            .remove_nullable()
+                        .field(build_index)
+                        .data_type()
+                        .remove_nullable()
                     {
                         probe_to_build_index.push(((probe_index, false), build_index));
                         if !pre_column_projections.contains(&left.column.index) {
@@ -956,6 +975,6 @@ impl PhysicalPlanBuilder {
             build_keys,
             probe_keys,
         )
-        .await
+            .await
     }
 }

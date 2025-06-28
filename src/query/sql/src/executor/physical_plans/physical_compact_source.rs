@@ -28,7 +28,7 @@ use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -38,6 +38,10 @@ pub struct CompactSource {
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+impl IPhysicalPlan for CompactSource {
+
 }
 
 impl PhysicalPlanBuilder {

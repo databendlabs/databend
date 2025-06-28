@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::DataSchemaRef;
-
+use crate::executor::IPhysicalPlan;
 use crate::plans::InsertValue;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -21,4 +21,8 @@ pub struct ReplaceAsyncSourcer {
     pub plan_id: u32,
     pub schema: DataSchemaRef,
     pub source: InsertValue,
+}
+
+impl IPhysicalPlan for ReplaceAsyncSourcer {
+
 }

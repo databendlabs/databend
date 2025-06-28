@@ -23,7 +23,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::planner::CURRENT_BLOCK_ID_COL_NAME;
 use crate::planner::CURRENT_BLOCK_ROW_NUM_COL_NAME;
 use crate::plans::BoundColumnRef;
@@ -42,6 +42,10 @@ pub struct AddStreamColumn {
     pub exprs: Vec<RemoteExpr>,
     pub projections: Vec<usize>,
     pub stream_columns: Vec<StreamColumn>,
+}
+
+impl IPhysicalPlan for AddStreamColumn {
+
 }
 
 impl AddStreamColumn {

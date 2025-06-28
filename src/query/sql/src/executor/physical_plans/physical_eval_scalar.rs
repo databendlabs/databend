@@ -39,19 +39,63 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Visitor;
 use crate::ColumnSet;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use crate::IndexType;
 use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
+    meta: PhysicalPlanMeta,
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub projections: ColumnSet,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for EvalScalar {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        if self.exprs.is_empty() {
+            return self.input.output_schema();
+        }
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
+        let input_column_nums = input_schema.num_fields();
+        for (i, (expr, index)) in self.exprs.iter().enumerate() {
+            let i = i + input_column_nums;
+            if !self.projections.contains(&i) {
+                continue;
+            }
+            let name = index.to_string();
+            let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
+            fields.push(DataField::new(&name, data_type));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl EvalScalar {

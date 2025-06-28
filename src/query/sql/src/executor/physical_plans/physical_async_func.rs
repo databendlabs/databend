@@ -20,7 +20,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AsyncFunctionArgument;
@@ -36,6 +36,19 @@ pub struct AsyncFunction {
     pub async_func_descs: Vec<AsyncFunctionDesc>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for AsyncFunction {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = input_schema.fields().clone();
+        for async_func_desc in self.async_func_descs.iter() {
+            let name = async_func_desc.output_column.to_string();
+            let data_type = async_func_desc.data_type.clone();
+            fields.push(DataField::new(&name, *data_type));
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 impl AsyncFunction {

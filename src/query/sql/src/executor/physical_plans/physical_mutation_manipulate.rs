@@ -21,6 +21,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationStrategy;
+use crate::executor::IPhysicalPlan;
 use crate::executor::physical_plan::PhysicalPlan;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
@@ -41,6 +42,10 @@ pub struct MutationManipulate {
     pub row_id_idx: usize,
     pub can_try_update_column_only: bool,
     pub unmatched_schema: DataSchemaRef,
+}
+
+impl IPhysicalPlan for MutationManipulate {
+
 }
 
 impl MutationManipulate {

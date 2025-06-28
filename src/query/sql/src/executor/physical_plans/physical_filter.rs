@@ -19,7 +19,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanMeta};
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -29,15 +29,45 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
+    meta: PhysicalPlanMeta,
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub projections: ColumnSet,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IPhysicalPlan for Filter {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let input_schema = self.input.output_schema()?;
+        let mut fields = Vec::with_capacity(self.projections.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if self.projections.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
+        Ok(DataSchemaRefExt::create(fields))
+    }
 }
 
 impl Filter {

@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::plans::CacheSource;
 use crate::ColumnSet;
@@ -27,6 +27,10 @@ pub struct CacheScan {
     pub plan_id: u32,
     pub cache_source: CacheSource,
     pub output_schema: DataSchemaRef,
+}
+
+impl IPhysicalPlan for CacheScan {
+
 }
 
 impl CacheScan {

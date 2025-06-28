@@ -25,6 +25,7 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
 use crate::ColumnBinding;
+use crate::executor::IPhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
@@ -42,6 +43,10 @@ pub struct CopyIntoTable {
     pub source: CopyIntoTableSource,
     pub is_transform: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+impl IPhysicalPlan for CopyIntoTable {
+
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]

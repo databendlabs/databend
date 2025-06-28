@@ -17,7 +17,7 @@ use databend_common_exception::Result;
 
 use super::Exchange;
 use super::FragmentKind;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {
@@ -25,11 +25,17 @@ pub struct BroadcastSource {
     pub broadcast_id: u32,
 }
 
+impl IPhysicalPlan for BroadcastSource {}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSink {
     pub plan_id: u32,
     pub broadcast_id: u32,
     pub input: Box<PhysicalPlan>,
+}
+
+impl IPhysicalPlan for BroadcastSink {
+
 }
 
 pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
