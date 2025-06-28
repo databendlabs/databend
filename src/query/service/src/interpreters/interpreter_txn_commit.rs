@@ -99,13 +99,13 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
             {
                 let handler: Arc<VacuumHandlerWrapper> = GlobalInstance::get();
                 let num_tables = tables_need_purge.len();
-                info!("Vacuuming {} tables after transaction commit", num_tables,);
+                info!("Vacuuming {num_tables} tables after transaction commit");
                 if let Err(e) =
                     vacuum_tables_from_info(tables_need_purge, ctx.clone(), handler).await
                 {
-                    warn!( "Failed to vacuum tables after transaction commit (best-effort operation): {}", e);
+                    warn!( "Failed to vacuum tables after transaction commit (best-effort operation): {e}");
                 } else {
-                    info!("{} tables vacuumed after transaction commit", num_tables,);
+                    info!( "{num_tables} tables vacuumed after transaction commit in a best-effort manner" );
                 }
             } else {
                 warn!("EE feature is not enabled, vacuum after transaction commit is skipped");
