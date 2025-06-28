@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
+use databend_common_catalog::plan::{DataSourcePlan, NUM_ROW_ID_PREFIX_BITS};
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -57,7 +57,7 @@ use crate::executor::physical_plans::MutationManipulate;
 use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::{IPhysicalPlan, PhysicalPlanBuilder};
+use crate::executor::{IPhysicalPlan, PhysicalPlanBuilder, PhysicalPlanMeta};
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -82,7 +82,8 @@ pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
@@ -96,7 +97,25 @@ pub struct Mutation {
 }
 
 impl IPhysicalPlan for Mutation {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl PhysicalPlanBuilder {

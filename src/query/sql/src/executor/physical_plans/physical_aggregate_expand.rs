@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -80,34 +81,5 @@ impl IPhysicalPlan for AggregateExpand {
 
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
-    }
-}
-
-impl AggregateExpand {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut output_fields = input_schema.fields().clone();
-        // Add virtual columns to group by.
-        output_fields.reserve(self.group_bys.len() + 1);
-
-        for (group_by, (actual, ty)) in self
-            .group_bys
-            .iter()
-            .zip(self.grouping_sets.dup_group_items.iter())
-        {
-            // All group by columns will wrap nullable.
-            let i = input_schema.index_of(&group_by.to_string())?;
-            let f = &mut output_fields[i];
-            debug_assert!(f.data_type() == ty || f.data_type().wrap_nullable() == *ty);
-            *f = DataField::new(f.name(), f.data_type().wrap_nullable());
-            let new_field = DataField::new(&actual.to_string(), ty.clone());
-            output_fields.push(new_field);
-        }
-
-        output_fields.push(DataField::new(
-            &self.grouping_sets.grouping_id_index.to_string(),
-            DataType::Number(NumberDataType::UInt32),
-        ));
-        Ok(DataSchemaRefExt::create(output_fields))
     }
 }

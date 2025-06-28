@@ -21,7 +21,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationStrategy;
-use crate::executor::IPhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use crate::executor::physical_plan::PhysicalPlan;
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
@@ -29,7 +29,8 @@ pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationManipulate {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
@@ -45,11 +46,19 @@ pub struct MutationManipulate {
 }
 
 impl IPhysicalPlan for MutationManipulate {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl MutationManipulate {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
     }
 }

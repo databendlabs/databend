@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
-
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -84,25 +84,6 @@ impl IPhysicalPlan for AggregateFinal {
 
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
-    }
-}
-
-impl AggregateFinal {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-        for agg in self.agg_funcs.iter() {
-            let data_type = agg.sig.return_type.clone();
-            fields.push(DataField::new(&agg.output_column.to_string(), data_type));
-        }
-        for id in self.group_by.iter() {
-            let data_type = self
-                .before_group_by_schema
-                .field_with_name(&id.to_string())?
-                .data_type()
-                .clone();
-            fields.push(DataField::new(&id.to_string(), data_type));
-        }
-        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

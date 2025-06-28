@@ -12,28 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::plan::{DataSourcePlan, ReclusterTask};
+use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl IPhysicalPlan for Recluster {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct HilbertPartition {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     pub num_partitions: usize,
     pub table_meta_timestamps: TableMetaTimestamps,
@@ -41,5 +51,23 @@ pub struct HilbertPartition {
 }
 
 impl IPhysicalPlan for HilbertPartition {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }

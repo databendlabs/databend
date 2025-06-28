@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
@@ -31,7 +32,7 @@ pub struct AggregatePartial {
     meta: PhysicalPlanMeta,
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub enable_experimental_aggregate_hashtable: bool,
@@ -79,28 +80,5 @@ impl IPhysicalPlan for AggregatePartial {
 
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
-    }
-}
-
-impl AggregatePartial {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-
-        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-
-        fields.extend(self.agg_funcs.iter().map(|func| {
-            let name = func.output_column.to_string();
-            DataField::new(&name, DataType::Binary)
-        }));
-
-        for (idx, field) in self.group_by.iter().zip(
-            self.group_by
-                .iter()
-                .map(|index| input_schema.field_with_name(&index.to_string())),
-        ) {
-            fields.push(DataField::new(&idx.to_string(), field?.data_type().clone()));
-        }
-
-        Ok(DataSchemaRefExt::create(fields))
     }
 }

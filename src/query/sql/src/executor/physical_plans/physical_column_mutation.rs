@@ -13,18 +13,20 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-
-use databend_common_expression::RemoteExpr;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_expression::{DataSchemaRef, RemoteExpr};
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use crate::executor::IPhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plans::MutationKind;
+use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ColumnMutation {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
     pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
@@ -36,5 +38,23 @@ pub struct ColumnMutation {
 }
 
 impl IPhysicalPlan for ColumnMutation {
-    
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }

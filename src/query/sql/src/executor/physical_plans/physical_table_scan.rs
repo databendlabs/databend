@@ -94,6 +94,32 @@ impl IPhysicalPlan for TableScan {
         &mut self.meta
     }
 
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let schema = self.source.schema();
+        let mut fields = Vec::with_capacity(self.name_mapping.len());
+        let mut name_and_ids = self.name_mapping
+            .iter()
+            .map(|(name, id)| {
+                let index = schema.index_of(name)?;
+                Ok((name, id, index))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        // Make the order of output fields the same as their indexes in te table schema.
+        name_and_ids.sort_by_key(|(_, _, index)| *index);
+
+        for (name, id, _) in name_and_ids {
+            let orig_field = schema.field_with_name(name)?;
+            let data_type = DataType::from(orig_field.data_type());
+            fields.push(DataField::new(&id.to_string(), data_type));
+        }
+
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        Some(&self.source)
+    }
+
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
         sources.push((self.get_id(), self.source.clone()));
     }
@@ -131,11 +157,6 @@ impl TableScan {
             fields.push(DataField::new(&id.to_string(), data_type));
         }
         Ok(fields)
-    }
-
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
-        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

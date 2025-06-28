@@ -12,19 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::ColumnBinding;
+use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedInsertSelect {
     /// A unique id of operator in a `PhysicalPlan` tree.
     pub plan_id: u32,
 
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     pub insert_schema: DataSchemaRef,
     pub select_schema: DataSchemaRef,
@@ -34,5 +37,28 @@ pub struct DistributedInsertSelect {
 }
 
 impl IPhysicalPlan for DistributedInsertSelect {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
 }

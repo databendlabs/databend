@@ -14,28 +14,56 @@
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-
+use databend_common_expression::DataSchemaRef;
 use super::Exchange;
 use super::FragmentKind;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub broadcast_id: u32,
 }
 
-impl IPhysicalPlan for BroadcastSource {}
+impl IPhysicalPlan for BroadcastSource {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSink {
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub broadcast_id: u32,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
 }
 
 impl IPhysicalPlan for BroadcastSink {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {

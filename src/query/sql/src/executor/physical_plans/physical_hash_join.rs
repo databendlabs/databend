@@ -77,8 +77,8 @@ pub struct HashJoin {
     pub probe_projections: ColumnSet,
     pub build_projections: ColumnSet,
 
-    pub build: Box<PhysicalPlan>,
-    pub probe: Box<PhysicalPlan>,
+    pub build: Box<dyn IPhysicalPlan>,
+    pub probe: Box<dyn IPhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
     pub is_null_equal: Vec<bool>,
@@ -123,13 +123,11 @@ impl IPhysicalPlan for HashJoin {
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
-        todo!()
+        Box::new(std::iter::once(&self.probe).chain(std::iter::once(&self.build)))
     }
-}
 
-impl HashJoin {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.output_schema.clone())
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
     }
 }
 

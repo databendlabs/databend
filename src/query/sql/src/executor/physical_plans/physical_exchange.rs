@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataSchemaRef;
@@ -19,7 +20,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::physical_plans::common::FragmentKind;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -30,7 +31,8 @@ pub struct Exchange {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
 
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
@@ -38,12 +40,29 @@ pub struct Exchange {
 }
 
 impl IPhysicalPlan for Exchange {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl Exchange {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
+
+    fn is_distributed_plan(&self) -> bool {
+        true
     }
 }
 

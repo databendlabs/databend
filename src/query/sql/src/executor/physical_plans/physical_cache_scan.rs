@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::plans::CacheSource;
 use crate::ColumnSet;
@@ -25,16 +25,21 @@ use crate::ColumnSet;
 pub struct CacheScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub cache_source: CacheSource,
     pub output_schema: DataSchemaRef,
 }
 
 impl IPhysicalPlan for CacheScan {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl CacheScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }
 }

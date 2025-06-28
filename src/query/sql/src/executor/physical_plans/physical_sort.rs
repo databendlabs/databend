@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -104,6 +105,11 @@ impl IPhysicalPlan for Sort {
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
 }
 
 impl Sort {
@@ -118,44 +124,6 @@ impl Sort {
             }
         }
         Ok(DataType::Binary)
-    }
-
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
-        if matches!(self.after_exchange, Some(true)) {
-            // If the plan is after exchange plan in cluster mode,
-            // the order column is at the last of the input schema.
-            debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
-            debug_assert_eq!(
-                fields.last().unwrap().data_type(),
-                &self.order_col_type(&input_schema)?
-            );
-            fields.pop();
-        } else {
-            if let Some(proj) = &self.pre_projection {
-                let fileted_fields = proj
-                    .iter()
-                    .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
-                    .cloned()
-                    .collect::<Vec<_>>();
-                if fileted_fields.len() < fields.len() {
-                    // Only if the projection is not a full projection, we need to add a projection transform.
-                    fields = fileted_fields
-                }
-            }
-
-            if matches!(self.after_exchange, Some(false)) {
-                // If the plan is before exchange plan in cluster mode,
-                // the order column should be added to the output schema.
-                fields.push(DataField::new(
-                    ORDER_COL_NAME,
-                    self.order_col_type(&input_schema)?,
-                ));
-            }
-        }
-
-        Ok(DataSchemaRefExt::create(fields))
     }
 }
 

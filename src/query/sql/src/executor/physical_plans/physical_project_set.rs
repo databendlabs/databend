@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -74,24 +75,10 @@ impl IPhysicalPlan for ProjectSet {
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
-}
 
-impl ProjectSet {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
-        for (i, field) in input_schema.fields().iter().enumerate() {
-            if self.projections.contains(&i) {
-                fields.push(field.clone());
-            }
-        }
-        fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
-            DataField::new(
-                &index.to_string(),
-                srf.as_expr(&BUILTIN_FUNCTIONS).data_type().clone(),
-            )
-        }));
-        Ok(DataSchemaRefExt::create(fields))
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }
 

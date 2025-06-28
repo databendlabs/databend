@@ -14,22 +14,25 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::ReclusterInfoSideCar;
+use databend_common_catalog::plan::{DataSourcePlan, ReclusterInfoSideCar};
+use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::plans::TruncateMode;
+use databend_common_exception::Result;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CommitSink {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub snapshot: Option<Arc<TableSnapshot>>,
     pub table_info: TableInfo,
     pub commit_type: CommitType,
@@ -42,7 +45,25 @@ pub struct CommitSink {
 }
 
 impl IPhysicalPlan for CommitSink {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

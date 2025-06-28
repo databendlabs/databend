@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -20,7 +21,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::AsyncFunctionArgument;
@@ -32,13 +33,22 @@ use crate::ScalarExpr;
 pub struct AsyncFunction {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub async_func_descs: Vec<AsyncFunctionDesc>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl IPhysicalPlan for AsyncFunction {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
@@ -49,18 +59,18 @@ impl IPhysicalPlan for AsyncFunction {
         }
         Ok(DataSchemaRefExt::create(fields))
     }
-}
 
-impl AsyncFunction {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
-        for async_func_desc in self.async_func_descs.iter() {
-            let name = async_func_desc.output_column.to_string();
-            let data_type = async_func_desc.data_type.clone();
-            fields.push(DataField::new(&name, *data_type));
-        }
-        Ok(DataSchemaRefExt::create(fields))
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }
 

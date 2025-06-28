@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
-
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -87,18 +87,10 @@ impl IPhysicalPlan for Window {
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
-}
 
-impl Window {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
-        fields.extend_from_slice(input_schema.fields());
-        fields.push(DataField::new(
-            &self.index.to_string(),
-            self.func.data_type()?,
-        ));
-        Ok(DataSchemaRefExt::create(fields))
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }
 

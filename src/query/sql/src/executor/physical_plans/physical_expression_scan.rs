@@ -18,7 +18,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -28,18 +28,31 @@ use crate::TypeCheck;
 pub struct ExpressionScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub values: Vec<Vec<RemoteExpr>>,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub output_schema: DataSchemaRef,
 }
 
 impl IPhysicalPlan for ExpressionScan {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl ExpressionScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
     }
 }
 

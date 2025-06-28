@@ -19,24 +19,29 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub output_schema: DataSchemaRef,
     pub table_name: String,
     pub stat: PlanStatsInfo,
 }
 
 impl IPhysicalPlan for RecursiveCteScan  {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl RecursiveCteScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }
 }

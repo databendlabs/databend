@@ -14,23 +14,32 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use crate::executor::IPhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSplit {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub split_index: IndexType,
 }
 
 impl IPhysicalPlan for MutationSplit {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl MutationSplit {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
     }
 }

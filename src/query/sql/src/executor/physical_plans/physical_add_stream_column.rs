@@ -23,7 +23,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::planner::CURRENT_BLOCK_ID_COL_NAME;
 use crate::planner::CURRENT_BLOCK_ROW_NUM_COL_NAME;
 use crate::plans::BoundColumnRef;
@@ -38,14 +38,29 @@ use crate::Visibility;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AddStreamColumn {
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub exprs: Vec<RemoteExpr>,
     pub projections: Vec<usize>,
     pub stream_columns: Vec<StreamColumn>,
 }
 
 impl IPhysicalPlan for AddStreamColumn {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
 }
 
 impl AddStreamColumn {
@@ -167,9 +182,5 @@ impl AddStreamColumn {
             projections,
             stream_columns,
         })
-    }
-
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
     }
 }

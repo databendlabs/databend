@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::{DataSourcePlan, Filters};
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::Result;
@@ -27,7 +27,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationType;
-use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan};
+use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
@@ -38,6 +38,7 @@ use crate::ScalarExpr;
 pub struct MutationSource {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
@@ -51,12 +52,20 @@ pub struct MutationSource {
 }
 
 impl IPhysicalPlan for MutationSource {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl MutationSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        Some(self.clone())
     }
 }
 

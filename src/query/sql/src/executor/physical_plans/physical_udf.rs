@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -23,7 +23,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::UDFType;
@@ -35,7 +35,8 @@ use crate::ScalarExpr;
 pub struct Udf {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub udf_funcs: Vec<UdfFunctionDesc>,
     pub script_udf: bool,
     // Only used for explain
@@ -43,11 +44,15 @@ pub struct Udf {
 }
 
 impl IPhysicalPlan for Udf {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl Udf {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
         for udf_func in self.udf_funcs.iter() {
@@ -56,6 +61,19 @@ impl Udf {
             fields.push(DataField::new(&name, *data_type));
         }
         Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }
 

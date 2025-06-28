@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataSchemaRef;
@@ -68,18 +69,10 @@ impl IPhysicalPlan for Filter {
         }
         Ok(DataSchemaRefExt::create(fields))
     }
-}
 
-impl Filter {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::with_capacity(self.projections.len());
-        for (i, field) in input_schema.fields().iter().enumerate() {
-            if self.projections.contains(&i) {
-                fields.push(field.clone());
-            }
-        }
-        Ok(DataSchemaRefExt::create(fields))
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }
 

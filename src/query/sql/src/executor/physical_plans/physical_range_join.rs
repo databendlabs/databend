@@ -26,7 +26,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -41,6 +41,7 @@ use crate::TypeCheck;
 pub struct RangeJoin {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     // The first two conditions: (>, >=, <, <=)
@@ -58,12 +59,24 @@ pub struct RangeJoin {
 }
 
 impl IPhysicalPlan for RangeJoin {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl RangeJoin {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 }
 
@@ -176,10 +189,10 @@ fn resolve_range_condition(
                 let common_type =
                     common_super_type(arg1_data_type.clone(), arg2_data_type.clone(), cast_rules)
                         .ok_or_else(|| {
-                        ErrorCode::IllegalDataType(format!(
-                            "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
-                        ))
-                    })?;
+                            ErrorCode::IllegalDataType(format!(
+                                "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
+                            ))
+                        })?;
                 arg1 = wrap_cast(&arg1, &common_type);
                 arg2 = wrap_cast(&arg2, &common_type);
             };

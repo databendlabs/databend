@@ -15,7 +15,7 @@
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
-
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -96,31 +96,10 @@ impl IPhysicalPlan for EvalScalar {
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
-}
 
-impl EvalScalar {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        if self.exprs.is_empty() {
-            return self.input.output_schema();
-        }
-        let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::with_capacity(self.projections.len());
-        for (i, field) in input_schema.fields().iter().enumerate() {
-            if self.projections.contains(&i) {
-                fields.push(field.clone());
-            }
-        }
-        let input_column_nums = input_schema.num_fields();
-        for (i, (expr, index)) in self.exprs.iter().enumerate() {
-            let i = i + input_column_nums;
-            if !self.projections.contains(&i) {
-                continue;
-            }
-            let name = index.to_string();
-            let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
-            fields.push(DataField::new(&name, data_type));
-        }
-        Ok(DataSchemaRefExt::create(fields))
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
@@ -49,6 +50,11 @@ impl IPhysicalPlan for WindowPartition {
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -62,10 +68,4 @@ pub enum WindowPartitionTopNFunc {
     RowNumber,
     Rank,
     DenseRank,
-}
-
-impl WindowPartition {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
-    }
 }

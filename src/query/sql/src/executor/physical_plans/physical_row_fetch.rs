@@ -62,12 +62,9 @@ impl IPhysicalPlan for RowFetch {
     fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
-}
 
-impl RowFetch {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = self.input.output_schema()?.fields().clone();
-        fields.extend_from_slice(&self.fetched_fields);
-        Ok(DataSchemaRefExt::create(fields))
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
     }
 }

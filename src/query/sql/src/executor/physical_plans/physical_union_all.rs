@@ -20,7 +20,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
@@ -32,6 +32,7 @@ use crate::TypeCheck;
 pub struct UnionAll {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
@@ -44,12 +45,24 @@ pub struct UnionAll {
 }
 
 impl IPhysicalPlan for UnionAll {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-}
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 
-impl UnionAll {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 }
 

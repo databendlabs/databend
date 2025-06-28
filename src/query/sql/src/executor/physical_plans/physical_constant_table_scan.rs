@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -25,20 +25,27 @@ use crate::IndexType;
 pub struct ConstantTableScan {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub values: Vec<Column>,
     pub num_rows: usize,
     pub output_schema: DataSchemaRef,
 }
 
 impl IPhysicalPlan for ConstantTableScan {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
 }
 
 impl ConstantTableScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(self.output_schema.clone())
-    }
-
     pub fn name(&self) -> &str {
         if self.num_rows == 0 {
             "EmptyResultScan"

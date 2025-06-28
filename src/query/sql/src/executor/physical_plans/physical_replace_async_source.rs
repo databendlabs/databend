@@ -12,17 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_expression::DataSchemaRef;
-use crate::executor::IPhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use crate::plans::InsertValue;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub schema: DataSchemaRef,
     pub source: InsertValue,
 }
 
 impl IPhysicalPlan for ReplaceAsyncSourcer {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
 }
