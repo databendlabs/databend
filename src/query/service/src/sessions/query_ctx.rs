@@ -125,6 +125,7 @@ use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SnapshotTimestampValidationContext;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -1545,9 +1546,10 @@ impl TableContext for QueryContext {
             return Ok(ts);
         }
 
+        let fuse_table = FuseTable::try_from_table(table)?;
+        let is_transient = fuse_table.is_transient();
         let delta = {
-            let fuse_table = FuseTable::try_from_table(table)?;
-            let duration = if fuse_table.is_transient() {
+            let duration = if is_transient {
                 Duration::from_secs(0)
             } else {
                 let settings = self.get_settings();
@@ -1571,7 +1573,16 @@ impl TableContext for QueryContext {
             })?
         };
 
-        let table_meta_timestamps = TableMetaTimestamps::new(previous_snapshot, delta);
+        let validation_context = SnapshotTimestampValidationContext {
+            table_id,
+            is_transient,
+        };
+
+        let table_meta_timestamps = TableMetaTimestamps::with_snapshot_timestamp_validation_context(
+            previous_snapshot,
+            delta,
+            Some(validation_context),
+        );
 
         {
             let txn_mgr_ref = self.txn_mgr();
