@@ -40,7 +40,7 @@ impl TryFrom<&str> for TableCompression {
             "zstd" => Ok(TableCompression::Zstd),
             "lz4" => Ok(TableCompression::LZ4),
             "snappy" => Ok(TableCompression::Snappy),
-            other => Err(ErrorCode::UnknownFormat(format!(
+            other => Err(ErrorCode::UnknownCompressionType(format!(
                 "unsupported table compression: {}",
                 other
             ))),
