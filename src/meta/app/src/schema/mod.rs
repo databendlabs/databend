@@ -31,6 +31,7 @@ pub mod marked_deleted_index_id;
 pub mod marked_deleted_index_ident;
 pub mod marked_deleted_table_index_id;
 pub mod marked_deleted_table_index_ident;
+pub mod sequence_storage;
 pub mod table_lock_ident;
 pub mod table_niv;
 
