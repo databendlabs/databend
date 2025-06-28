@@ -259,7 +259,6 @@ impl Interpreter for InsertInterpreter {
                     plan.required_source_schema.clone(),
                     plan.default_exprs.clone(),
                     plan.block_thresholds,
-                    plan.on_error_mode.clone(),
                 )?;
                 if !plan.values_consts.is_empty() {
                     let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));
