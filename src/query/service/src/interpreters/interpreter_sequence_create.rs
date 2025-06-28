@@ -52,6 +52,7 @@ impl Interpreter for CreateSequenceInterpreter {
             ident: self.plan.ident.clone(),
             comment: self.plan.comment.clone(),
             create_on: Utc::now(),
+            storage_version: 0,
         };
         let catalog = self.ctx.get_default_catalog()?;
         let _reply = catalog.create_sequence(req).await?;

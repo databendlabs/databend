@@ -361,8 +361,13 @@ impl Display for FetchAddU64Response {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "FetchAddU64Response key={} before=(seq={} {}), after=(seq={} {})",
-            self.key, self.before_seq, self.before, self.after_seq, self.after
+            "FetchAddU64Response{{ key={} before=(seq={} {}), after=(seq={} {}), delta={} }}",
+            self.key,
+            self.before_seq,
+            self.before,
+            self.after_seq,
+            self.after,
+            self.delta()
         )
     }
 }
@@ -497,7 +502,7 @@ mod tests {
         };
         assert_eq!(
             resp.to_string(),
-            "FetchAddU64Response key=k1 before=(seq=1 3), after=(seq=2 4)"
+            "FetchAddU64Response{ key=k1 before=(seq=1 3), after=(seq=2 4), delta=1 }"
         );
     }
 }
