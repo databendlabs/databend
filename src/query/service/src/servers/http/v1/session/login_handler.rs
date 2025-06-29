@@ -124,7 +124,7 @@ pub async fn login_handler(
                     session_id,
                     tokens: Some(TokensInfo {
                         session_token_ttl_in_secs: ClientSessionManager::instance()
-                            .session_token_ttl
+                            .max_idle_time
                             .as_secs(),
                         session_token: token_pair.session.clone(),
                         refresh_token: token_pair.refresh.clone(),
