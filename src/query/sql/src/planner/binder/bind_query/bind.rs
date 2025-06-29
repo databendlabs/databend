@@ -135,7 +135,7 @@ impl Binder {
             return Ok(());
         };
 
-        for (idx, cte) in with.ctes.iter().enumerate() {
+        for cte in with.ctes.iter() {
             let table_name = self.normalize_identifier(&cte.alias.name).name;
             if bind_context.cte_context.cte_map.contains_key(&table_name) {
                 return Err(ErrorCode::SemanticError(format!(
@@ -152,7 +152,6 @@ impl Binder {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 recursive: with.recursive,
-                cte_idx: idx,
                 columns: vec![],
                 materialized: cte.materialized,
             };

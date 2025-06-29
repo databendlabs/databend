@@ -197,7 +197,6 @@ pub struct CteInfo {
     pub query: Query,
     pub materialized: bool,
     pub recursive: bool,
-    pub cte_idx: IndexType,
     // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
 }
