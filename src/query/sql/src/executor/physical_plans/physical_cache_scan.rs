@@ -23,13 +23,12 @@ use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CacheScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub cache_source: CacheSource,
     pub output_schema: DataSchemaRef,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for CacheScan {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -49,7 +48,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         scan: &crate::plans::CacheScan,
         required: ColumnSet,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let used: ColumnSet = required.intersection(&scan.columns).cloned().collect();
         let (cache_source, fields) = if used == scan.columns {
@@ -62,9 +61,9 @@ impl PhysicalPlanBuilder {
             )
         };
         // 2. Build physical plan.
-        Ok(PhysicalPlan::CacheScan(CacheScan {
-            plan_id: 0,
+        Ok(Box::new(CacheScan {
             cache_source,
+            meta: PhysicalPlanMeta::new("CacheScan"),
             output_schema: DataSchemaRefExt::create(fields),
         }))
     }

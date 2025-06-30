@@ -28,10 +28,7 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
@@ -39,6 +36,7 @@ pub struct Exchange {
     pub allow_adjust_parallelism: bool,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Exchange {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -52,7 +50,7 @@ impl IPhysicalPlan for Exchange {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -72,7 +70,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         exchange: &crate::plans::Exchange,
         mut required: ColumnSet,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         if let crate::plans::Exchange::Hash(exprs) = exchange {
             for expr in exprs {
@@ -105,13 +103,13 @@ impl PhysicalPlanBuilder {
                 FragmentKind::Merge
             }
         };
-        Ok(PhysicalPlan::Exchange(Exchange {
-            plan_id: 0,
+        Ok(Box::new(Exchange {
             input,
             kind,
             keys,
             allow_adjust_parallelism,
             ignore_exchange: false,
+            meta: PhysicalPlanMeta::new("Exchange"),
         }))
     }
 }

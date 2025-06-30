@@ -24,15 +24,14 @@ use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     meta: PhysicalPlanMeta,
     pub output_schema: DataSchemaRef,
     pub table_name: String,
     pub stat: PlanStatsInfo,
 }
 
-impl IPhysicalPlan for RecursiveCteScan  {
+#[typetag::serde]
+impl IPhysicalPlan for RecursiveCteScan {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -51,9 +50,9 @@ impl PhysicalPlanBuilder {
         &mut self,
         recursive_cte_scan: &crate::plans::RecursiveCteScan,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::RecursiveCteScan(RecursiveCteScan {
-            plan_id: 0,
+    ) -> Result<Box<dyn IPhysicalPlan>> {
+        Ok(Box::new(RecursiveCteScan {
+            meta: PhysicalPlanMeta::new("RecursiveCteScan"),
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
             table_name: recursive_cte_scan.table_name.clone(),
             stat: stat_info,

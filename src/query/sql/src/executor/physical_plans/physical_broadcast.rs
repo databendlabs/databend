@@ -21,11 +21,11 @@ use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub broadcast_id: u32,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for BroadcastSource {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -38,12 +38,12 @@ impl IPhysicalPlan for BroadcastSource {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSink {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub broadcast_id: u32,
     pub input: Box<dyn IPhysicalPlan>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for BroadcastSink {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -61,33 +61,34 @@ impl IPhysicalPlan for BroadcastSink {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }
 
-pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
-    let broadcast_source = Box::new(PhysicalPlan::BroadcastSource(BroadcastSource {
-        plan_id: 0,
+pub fn build_broadcast_plan(broadcast_id: u32) -> Result<Box<dyn IPhysicalPlan>> {
+    let broadcast_source: Box<dyn IPhysicalPlan> = Box::new(BroadcastSource {
+        meta: PhysicalPlanMeta::new("BroadcastSource"),
         broadcast_id,
-    }));
-    let exchange = Box::new(PhysicalPlan::Exchange(Exchange {
-        plan_id: 0,
+    });
+
+    let exchange = Box::new(Exchange {
         input: broadcast_source,
         kind: FragmentKind::Expansive,
         keys: vec![],
         allow_adjust_parallelism: true,
         ignore_exchange: false,
-    }));
-    let broadcast_sink = PhysicalPlan::BroadcastSink(BroadcastSink {
-        plan_id: 0,
+        meta: PhysicalPlanMeta::new("Exchange"),
+    });
+
+    Ok(Box::new(BroadcastSink {
         broadcast_id,
         input: exchange,
-    });
-    Ok(broadcast_sink)
+        meta: PhysicalPlanMeta::new("BroadcastSink"),
+    }))
 }
 
-pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>> {
+pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<Box<dyn IPhysicalPlan>>> {
     let mut plans = vec![];
     let next_broadcast_id = ctx.get_next_broadcast_id();
     ctx.reset_broadcast_id();

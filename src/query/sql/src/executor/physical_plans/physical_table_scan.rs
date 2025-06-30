@@ -20,7 +20,7 @@ use std::sync::Arc;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::plan::{DataSourcePlan, PartStatistics, PartitionsShuffleKind};
+use databend_common_catalog::plan::{DataSourceInfo, DataSourcePlan, PartStatistics, PartitionsShuffleKind};
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::PrewhereInfo;
@@ -74,8 +74,6 @@ use crate::DUMMY_TABLE_INDEX;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
     meta: PhysicalPlanMeta,
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     pub scan_id: usize,
     pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,
@@ -85,6 +83,7 @@ pub struct TableScan {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for TableScan {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -133,9 +132,64 @@ impl IPhysicalPlan for TableScan {
     fn is_warehouse_distributed_plan(&self) -> bool {
         self.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse
     }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(format!(
+            "{}.{}",
+            self.source.source_info.catalog_name(),
+            self.source.source_info.desc()
+        ))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(HashMap::from([
+            (String::from("Full table name"), vec![format!(
+                "{}.{}",
+                self.source.source_info.catalog_name(),
+                self.source.source_info.desc()
+            )]),
+            (
+                format!(
+                    "Columns ({} / {})",
+                    self.output_schema()?.num_fields(),
+                    std::cmp::max(
+                        self.output_schema()?.num_fields(),
+                        self.source.source_info.schema().num_fields(),
+                    )
+                ),
+                self.name_mapping.keys().cloned().collect(),
+            ),
+            (String::from("Total partitions"), vec![self
+                .source
+                .statistics
+                .partitions_total
+                .to_string()])
+        ]))
+    }
 }
 
 impl TableScan {
+    pub fn new(scan_id: usize, name_mapping: BTreeMap<String, IndexType>, source: Box<DataSourcePlan>, table_index: Option<IndexType>, stat_info: Option<PlanStatsInfo>, internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>) -> Box<dyn IPhysicalPlan> {
+        let name = match &source.source_info {
+            DataSourceInfo::TableSource(_) => "TableScan".to_string(),
+            DataSourceInfo::StageSource(_) => "StageScan".to_string(),
+            DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
+            DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+            DataSourceInfo::ORCSource(_) => "OrcScan".to_string(),
+        };
+
+        Box::new(TableScan {
+            meta: PhysicalPlanMeta::new(name),
+            source,
+            scan_id,
+            name_mapping,
+            table_index,
+            stat_info,
+            internal_column,
+        })
+    }
+
+
     pub fn output_fields(
         schema: TableSchemaRef,
         name_mapping: &BTreeMap<String, IndexType>,
@@ -166,7 +220,7 @@ impl PhysicalPlanBuilder {
         scan: &crate::plans::Scan,
         required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         // Some table may not have any column,
         // e.g. `system.sync_crash_me`
@@ -354,30 +408,29 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
-        let mut plan = PhysicalPlan::TableScan(TableScan {
-            plan_id: 0,
-            scan_id: scan.scan_id,
+        let mut plan = TableScan::new(
+            scan.scan_id,
             name_mapping,
-            source: Box::new(source),
-            table_index: Some(scan.table_index),
-            stat_info: Some(stat_info),
+            Box::new(source),
+            Some(scan.table_index),
+            Some(stat_info),
             internal_column,
-        });
+        );
 
         // Update stream columns if needed.
         if scan.update_stream_columns {
-            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
+            plan = AddStreamColumn::new(
                 &self.metadata,
                 plan,
                 scan.table_index,
                 table.get_table_info().ident.seq,
-            )?));
+            )?;
         }
 
         Ok(plan)
     }
 
-    pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
+    pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<Box<dyn IPhysicalPlan>> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.session_state())?
@@ -391,17 +444,17 @@ impl PhysicalPlanBuilder {
         let source = table
             .read_plan(self.ctx.clone(), None, None, false, self.dry_run)
             .await?;
-        Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: 0,
-            scan_id: DUMMY_TABLE_INDEX,
-            name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
-            source: Box::new(source),
-            table_index: Some(DUMMY_TABLE_INDEX),
-            stat_info: Some(PlanStatsInfo {
+
+        Ok(TableScan::new(
+            DUMMY_TABLE_INDEX,
+            BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
+            Box::new(source),
+            Some(DUMMY_TABLE_INDEX),
+            Some(PlanStatsInfo {
                 estimated_rows: 1.0,
             }),
-            internal_column: None,
-        }))
+            None,
+        ))
     }
 
     fn push_downs(

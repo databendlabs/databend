@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -30,11 +31,9 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     meta: PhysicalPlanMeta,
-    pub left: Box<PhysicalPlan>,
-    pub right: Box<PhysicalPlan>,
+    pub left: Box<dyn IPhysicalPlan>,
+    pub right: Box<dyn IPhysicalPlan>,
     pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub right_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
@@ -44,6 +43,7 @@ pub struct UnionAll {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for UnionAll {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -61,8 +61,17 @@ impl IPhysicalPlan for UnionAll {
         Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .left_outputs
+            .iter()
+            .zip(self.right_outputs.iter())
+            .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
+            .join(", "))
     }
 }
 
@@ -73,7 +82,7 @@ impl PhysicalPlanBuilder {
         union_all: &crate::plans::UnionAll,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let metadata = self.metadata.read().clone();
         let lazy_columns = metadata.lazy_columns();
@@ -145,14 +154,13 @@ impl PhysicalPlanBuilder {
         let right_outputs =
             process_outputs(&union_all.right_outputs, &right_required, &right_schema)?;
 
-        Ok(PhysicalPlan::UnionAll(UnionAll {
-            plan_id: 0,
-            left: Box::new(left_plan),
-            right: Box::new(right_plan),
+        Ok(Box::new(UnionAll {
+            left: left_plan,
+            right: right_plan,
             left_outputs,
             right_outputs,
             schema: DataSchemaRefExt::create(fields),
-
+            meta: PhysicalPlanMeta::new("UnionAll"),
             cte_scan_names: union_all.cte_scan_names.clone(),
             stat_info: Some(stat_info),
         }))

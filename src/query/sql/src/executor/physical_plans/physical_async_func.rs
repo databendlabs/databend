@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -31,15 +32,14 @@ use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsyncFunction {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub async_func_descs: Vec<AsyncFunctionDesc>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for AsyncFunction {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -64,13 +64,21 @@ impl IPhysicalPlan for AsyncFunction {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .async_func_descs
+            .iter()
+            .map(|x| x.display_name.clone())
+            .join(", "))
     }
 }
 
@@ -92,7 +100,7 @@ impl PhysicalPlanBuilder {
         async_func_plan: &crate::plans::AsyncFunction,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in async_func_plan.items.iter() {
@@ -151,8 +159,8 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(PhysicalPlan::AsyncFunction(AsyncFunction {
-            plan_id: 0,
+        Ok(Box::new(AsyncFunction {
+            meta: PhysicalPlanMeta::new("AsyncFunction"),
             input: Box::new(input),
             async_func_descs,
             stat_info: Some(stat_info),

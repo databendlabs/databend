@@ -23,14 +23,13 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ConstantTableScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     meta: PhysicalPlanMeta,
     pub values: Vec<Column>,
     pub num_rows: usize,
     pub output_schema: DataSchemaRef,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ConstantTableScan {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -60,7 +59,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         scan: &crate::plans::ConstantTableScan,
         required: ColumnSet,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         debug_assert!(scan
             .schema
             .fields
@@ -77,19 +76,19 @@ impl PhysicalPlanBuilder {
                 schema,
                 ..
             } = scan.prune_columns(used);
-            return Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
-                plan_id: 0,
+            return Ok(Box::new(ConstantTableScan {
                 values,
                 num_rows,
                 output_schema: schema,
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
             }));
         }
 
-        Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
-            plan_id: 0,
+        Ok(Box::new(ConstantTableScan {
             values: scan.values.clone(),
             num_rows: scan.num_rows,
             output_schema: scan.schema.clone(),
+            meta: PhysicalPlanMeta::new("ConstantTableScan"),
         }))
     }
 }

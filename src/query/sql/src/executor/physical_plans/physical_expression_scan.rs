@@ -26,14 +26,13 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExpressionScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub values: Vec<Vec<RemoteExpr>>,
     pub input: Box<dyn IPhysicalPlan>,
     pub output_schema: DataSchemaRef,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ExpressionScan {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -51,7 +50,7 @@ impl IPhysicalPlan for ExpressionScan {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }
@@ -62,7 +61,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         scan: &crate::plans::ExpressionScan,
         required: ColumnSet,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
 
@@ -85,11 +84,11 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(PhysicalPlan::ExpressionScan(ExpressionScan {
-            plan_id: 0,
+        Ok(Box::new(ExpressionScan {
             values,
             input: Box::new(input),
             output_schema: scan.schema.clone(),
+            meta: PhysicalPlanMeta::new("ExpressionScan"),
         }))
     }
 }

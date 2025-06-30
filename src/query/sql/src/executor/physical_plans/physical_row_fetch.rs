@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::Result;
@@ -24,9 +25,7 @@ use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RowFetch {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     // cloned from `input`.
     pub source: Box<DataSourcePlan>,
@@ -40,6 +39,7 @@ pub struct RowFetch {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for RowFetch {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -59,12 +59,18 @@ impl IPhysicalPlan for RowFetch {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let table_schema = self.source.source_info.schema();
+        let projected_schema = self.cols_to_fetch.project_schema(&table_schema);
+        Ok(projected_schema.fields.iter().map(|f| f.name()).join(", "))
     }
 }

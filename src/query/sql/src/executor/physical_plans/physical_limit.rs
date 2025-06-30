@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -29,8 +30,6 @@ use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Limit {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub limit: Option<usize>,
@@ -40,6 +39,7 @@ pub struct Limit {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Limit {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -53,13 +53,31 @@ impl IPhysicalPlan for Limit {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(match self.limit {
+            Some(limit) => format!("LIMIT {} OFFSET {}", limit, self.offset),
+            None => format!("OFFSET {}", self.offset),
+        })
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(2);
+        labels.insert(String::from("Offset"), vec![self.offset.to_string()]);
+
+        if let Some(limit) = self.limit {
+            labels.insert(String::from("Number of rows"), vec![limit.to_string()]);
+        }
+
+        Ok(labels)
     }
 }
 
@@ -70,7 +88,7 @@ impl PhysicalPlanBuilder {
         limit: &crate::plans::Limit,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         // Apply lazy.
         let metadata = self.metadata.read().clone();
@@ -85,12 +103,12 @@ impl PhysicalPlanBuilder {
         let input_plan = self.build(s_expr.child(0)?, required).await?;
         let metadata = self.metadata.read().clone();
         if limit.before_exchange || metadata.lazy_columns().is_empty() {
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
+            return Ok(Box::new(Limit {
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Limit"),
             }));
         }
 
@@ -105,12 +123,12 @@ impl PhysicalPlanBuilder {
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
 
         if !input_schema.has_field(&row_id_col_index.to_string()) {
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
+            return Ok(Box::new(Limit {
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Limit"),
             }));
         }
 
@@ -128,12 +146,12 @@ impl PhysicalPlanBuilder {
 
         if limit.before_exchange || lazy_columns.is_empty() {
             // If there is no lazy column, we don't need to build a `RowFetch` plan.
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
+            return Ok(Box::new(Limit {
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Limit"),
             }));
         }
 
@@ -165,15 +183,15 @@ impl PhysicalPlanBuilder {
             false,
         );
 
-        Ok(PhysicalPlan::RowFetch(RowFetch {
-            plan_id: 0,
-            input: Box::new(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
+        Ok(Box::new(RowFetch {
+            meta: PhysicalPlanMeta::new("RowFetch"),
+            input: Box::new(Limit {
+                meta: PhysicalPlanMeta::new("RowFetch"),
                 input: Box::new(input_plan),
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info.clone()),
-            })),
+            }),
             source: Box::new(source_info),
             row_id_col_offset,
             cols_to_fetch,

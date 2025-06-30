@@ -24,7 +24,7 @@ use crate::binder::bind_window_function_info;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::WindowFunctionInfo;
 use crate::binder::WindowOrderByInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
@@ -55,7 +55,7 @@ impl PhysicalPlanBuilder {
         required: (ColumnSet, ColumnSet),
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let mut window_index: usize = 0;
 
         if range_conditions.is_empty() {

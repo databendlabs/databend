@@ -81,8 +81,7 @@ pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
@@ -96,6 +95,7 @@ pub struct Mutation {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Mutation {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -113,7 +113,7 @@ impl IPhysicalPlan for Mutation {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }
@@ -124,7 +124,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         mutation: &crate::plans::Mutation,
         required: ColumnSet,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let crate::plans::Mutation {
             bind_context,
             metadata,
@@ -165,7 +165,7 @@ impl PhysicalPlanBuilder {
 
         if *truncate_table {
             // Do truncate.
-            plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+            plan = Box::new(CommitSink {
                 input: Box::new(plan),
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
@@ -175,10 +175,10 @@ impl PhysicalPlanBuilder {
                 },
                 update_stream_meta: vec![],
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-                plan_id: u32::MAX,
                 recluster_info: None,
+                meta: PhysicalPlanMeta::new("CommitSink"),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
-            }));
+            });
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
         }
@@ -232,9 +232,9 @@ impl PhysicalPlanBuilder {
                     (None, None, MutationKind::Delete)
                 };
 
-            plan = PhysicalPlan::ColumnMutation(ColumnMutation {
-                plan_id: 0,
-                input: Box::new(plan),
+            plan = Box::new(ColumnMutation {
+                input: plan,
+                meta: PhysicalPlanMeta::new("ColumnMutation"),
                 table_info: mutation_build_info.table_info.clone(),
                 mutation_expr,
                 computed_expr,
@@ -246,18 +246,18 @@ impl PhysicalPlanBuilder {
             });
 
             if *distributed {
-                plan = PhysicalPlan::Exchange(Exchange {
-                    plan_id: 0,
-                    input: Box::new(plan),
+                plan = Box::new(Exchange {
+                    input: plan,
                     kind: FragmentKind::Merge,
                     keys: vec![],
                     allow_adjust_parallelism: true,
                     ignore_exchange: false,
+                    meta: PhysicalPlanMeta::new("Exchange"),
                 });
             }
 
-            plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-                input: Box::new(plan),
+            plan = Box::new(CommitSink {
+                input: plan,
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
                 // let's use update first, we will do some optimizations and select exact strategy
@@ -267,10 +267,10 @@ impl PhysicalPlanBuilder {
                 },
                 update_stream_meta: vec![],
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-                plan_id: u32::MAX,
+                meta: PhysicalPlanMeta::new("CommitSink"),
                 recluster_info: None,
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
-            }));
+            });
 
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
@@ -287,23 +287,23 @@ impl PhysicalPlanBuilder {
         // different nodes update the same physical block simultaneously, data blocks that are needed
         // to insert just keep in local node.
         if *distributed && *row_id_shuffle && !is_not_matched_only {
-            plan = PhysicalPlan::Exchange(build_block_id_shuffle_exchange(
+            plan = build_block_id_shuffle_exchange(
                 plan,
                 bind_context,
                 mutation_input_schema.clone(),
                 database_name,
                 &table_name,
-            )?);
+            )?;
         }
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
         if matches!(strategy, MutationStrategy::MixedMatched) {
-            plan = PhysicalPlan::MutationSplit(Box::new(MutationSplit {
-                plan_id: 0,
+            plan = Box::new(MutationSplit {
                 input: Box::new(plan),
                 split_index: row_id_offset,
-            }));
+                meta: PhysicalPlanMeta::new("MutationSplit"),
+            });
         }
 
         // Construct row fetch plan for lazy columns.
@@ -313,7 +313,7 @@ impl PhysicalPlanBuilder {
             .get_table_lazy_columns(target_table_index)
             && !lazy_columns.is_empty()
         {
-            plan = PhysicalPlan::RowFetch(build_mutation_row_fetch(
+            plan = build_mutation_row_fetch(
                 plan,
                 metadata.clone(),
                 mutation_input_schema.clone(),
@@ -321,7 +321,7 @@ impl PhysicalPlanBuilder {
                 lazy_columns.clone(),
                 *target_table_index,
                 row_id_offset,
-            ));
+            );
         }
 
         let output_schema = plan.output_schema()?;
@@ -432,8 +432,7 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        plan = PhysicalPlan::MutationManipulate(Box::new(MutationManipulate {
-            plan_id: 0,
+        plan = Box::new(MutationManipulate {
             input: Box::new(plan.clone()),
             table_info: table_info.clone(),
             unmatched: unmatched.clone(),
@@ -443,13 +442,14 @@ impl PhysicalPlanBuilder {
             row_id_idx: row_id_offset,
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: mutation_input_schema.clone(),
-        }));
+            meta: PhysicalPlanMeta::new("MutationManipulate"),
+        });
 
-        plan = PhysicalPlan::MutationOrganize(Box::new(MutationOrganize {
-            plan_id: 0,
+        plan = Box::new(MutationOrganize {
             input: Box::new(plan.clone()),
             strategy: strategy.clone(),
-        }));
+            meta: PhysicalPlanMeta::new("MutationOrganize"),
+        });
 
         let segments: Vec<_> = mutation_build_info
             .table_snapshot
@@ -459,8 +459,8 @@ impl PhysicalPlanBuilder {
             .enumerate()
             .collect();
 
-        let mutation = PhysicalPlan::Mutation(Box::new(Mutation {
-            input: Box::new(plan.clone()),
+        plan = Box::new(Mutation {
+            input: plan,
             table_info: table_info.clone(),
             unmatched,
             segments: segments.clone(),
@@ -469,22 +469,20 @@ impl PhysicalPlanBuilder {
             target_table_index: *target_table_index,
             need_match: !is_not_matched_only,
             target_build_optimization: false,
-            plan_id: u32::MAX,
+            meta: PhysicalPlanMeta::new("Mutation"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
-        }));
+        });
 
-        let commit_input = if !distributed {
-            mutation
-        } else {
-            PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(mutation),
+        if distributed {
+            plan = Box::new(Exchange {
+                input: plan,
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            })
-        };
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
+        }
 
         let mutation_kind = match mutation_type {
             MutationType::Update | MutationType::Merge => MutationKind::Update,
@@ -492,8 +490,8 @@ impl PhysicalPlanBuilder {
         };
 
         // build mutation_aggregate
-        let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(commit_input),
+        let mut physical_plan = Box::new(CommitSink {
+            input: plan,
             snapshot: mutation_build_info.table_snapshot,
             table_info: table_info.clone(),
             // let's use update first, we will do some optimizations and select exact strategy
@@ -503,10 +501,11 @@ impl PhysicalPlanBuilder {
             },
             update_stream_meta: mutation_build_info.update_stream_meta,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-            plan_id: u32::MAX,
             recluster_info: None,
+            meta: PhysicalPlanMeta::new("CommitSink"),
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
-        }));
+        });
+
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)
     }
@@ -529,12 +528,12 @@ impl PhysicalPlanBuilder {
 }
 
 pub fn build_block_id_shuffle_exchange(
-    plan: PhysicalPlan,
+    plan: Box<dyn IPhysicalPlan>,
     bind_context: &BindContext,
     mutation_input_schema: Arc<DataSchema>,
     database_name: &str,
     table_name: &str,
-) -> Result<Exchange> {
+) -> Result<Box<dyn IPhysicalPlan>> {
     let mut row_id_column = None;
     for column_binding in bind_context.columns.iter() {
         if BindContext::match_column_binding(
@@ -584,25 +583,25 @@ pub fn build_block_id_shuffle_exchange(
         &BUILTIN_FUNCTIONS,
     )?;
 
-    Ok(Exchange {
-        plan_id: 0,
-        input: Box::new(plan),
+    Ok(Box::new(Exchange {
+        input: plan,
         kind: FragmentKind::Normal,
+        meta: PhysicalPlanMeta::new("Exchange"),
         keys: vec![block_id_shuffle_key.as_remote_expr()],
         allow_adjust_parallelism: true,
         ignore_exchange: false,
-    })
+    }))
 }
 
 fn build_mutation_row_fetch(
-    plan: PhysicalPlan,
+    plan: Box<dyn IPhysicalPlan>,
     metadata: MetadataRef,
     mutation_input_schema: Arc<DataSchema>,
     strategy: MutationStrategy,
     lazy_columns: ColumnSet,
     target_table_index: usize,
     row_id_offset: usize,
-) -> RowFetch {
+) -> Box<dyn IPhysicalPlan> {
     let metadata = metadata.read();
 
     let lazy_columns = lazy_columns
@@ -644,16 +643,16 @@ fn build_mutation_row_fetch(
         false,
     );
 
-    RowFetch {
-        plan_id: 0,
-        input: Box::new(plan),
+    Box::new(RowFetch {
+        input: plan,
         source: Box::new(source),
         row_id_col_offset: row_id_offset,
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
         stat_info: None,
-    }
+        meta: PhysicalPlanMeta::new("RowFetch"),
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -673,7 +672,7 @@ pub fn generate_update_list(
         Box::new(DataType::Boolean),
         Visibility::Visible,
     )
-    .build();
+        .build();
     let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
 
     update_list.iter().try_fold(
@@ -758,7 +757,7 @@ pub fn mutation_update_expr(
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
-        .build();
+            .build();
         ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
     } else {
         ScalarExpr::ConstantExpr(ConstantExpr {

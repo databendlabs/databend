@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -29,9 +31,7 @@ use crate::IndexType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
-    meta: PhysicalPlanMeta,
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
@@ -44,6 +44,7 @@ pub struct AggregatePartial {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for AggregatePartial {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -78,7 +79,28 @@ impl IPhysicalPlan for AggregatePartial {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(2);
+
+        if !self.group_by_display.is_empty() {
+            labels.insert(String::from("Grouping keys"), v.group_by_display.clone());
+        }
+
+        if !self.agg_funcs.is_empty() {
+            labels.insert(
+                String::from("Aggregate Functions"),
+                self.agg_funcs.iter().map(|x| x.display.clone()).collect(),
+            );
+        }
+
+        Ok(labels)
     }
 }

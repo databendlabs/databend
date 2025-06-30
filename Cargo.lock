@@ -4197,6 +4197,7 @@ dependencies = [
  "similar",
  "simsearch",
  "tokio",
+ "typetag",
  "unicase",
  "url",
 ]

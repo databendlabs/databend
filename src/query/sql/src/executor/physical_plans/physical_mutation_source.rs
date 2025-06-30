@@ -36,9 +36,7 @@ use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
@@ -51,6 +49,7 @@ pub struct MutationSource {
     pub statistics: PartStatistics,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for MutationSource {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -73,7 +72,7 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_mutation_source(
         &mut self,
         mutation_source: &crate::plans::MutationSource,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let filters = if !mutation_source.predicates.is_empty() {
             Some(create_push_down_filters(
                 &self.ctx.get_function_context()?,
@@ -114,8 +113,7 @@ impl PhysicalPlanBuilder {
 
         let truncate_table =
             mutation_source.mutation_type == MutationType::Delete && filters.is_none();
-        Ok(PhysicalPlan::MutationSource(MutationSource {
-            plan_id: 0,
+        Ok(Box::new(MutationSource {
             table_index: mutation_source.table_index,
             output_schema,
             table_info: mutation_info.table_info.clone(),
@@ -123,6 +121,7 @@ impl PhysicalPlanBuilder {
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
             truncate_table,
+            meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),
             statistics: mutation_info.statistics.clone(),
         }))

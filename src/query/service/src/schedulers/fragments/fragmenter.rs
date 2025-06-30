@@ -155,6 +155,11 @@ impl Fragmenter {
 }
 
 impl PhysicalPlanReplacer for Fragmenter {
+    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
+        self.state = State::Recluster;
+        Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
+    }
+
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
         Ok(PhysicalPlan::TableScan(plan.clone()))
@@ -163,55 +168,6 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
         Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
-    }
-
-    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
-        self.state = State::MutationSource;
-        Ok(PhysicalPlan::MutationSource(plan.clone()))
-    }
-
-    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
-    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        self.state = State::ReplaceInto;
-        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
-    //  TODO(Sky): remove redundant code
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        match &plan.source {
-            CopyIntoTableSource::Stage(_) => {
-                self.state = State::SelectLeaf;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
-            }
-            CopyIntoTableSource::Query(query_physical_plan) => {
-                let input = self.replace(query_physical_plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
-        }
-    }
-
-    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
-        self.state = State::Recluster;
-        Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
-    }
-
-    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
-        self.state = State::Compact;
-        Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
@@ -247,33 +203,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             build_side_cache_info: plan.build_side_cache_info.clone(),
             runtime_filter: plan.runtime_filter.clone(),
             broadcast_id: plan.broadcast_id,
-        }))
-    }
-
-    fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
-        let mut fragments = vec![];
-        let left_input = self.replace(plan.left.as_ref())?;
-        let left_state = self.state.clone();
-
-        // Consume current fragments to prevent them being consumed by `right_input`.
-        fragments.append(&mut self.fragments);
-        let right_input = self.replace(plan.right.as_ref())?;
-        let right_state = self.state.clone();
-
-        fragments.append(&mut self.fragments);
-        self.fragments = fragments;
-
-        // If any of the input is a source fragment, the union all is a source fragment.
-        if left_state == State::SelectLeaf || right_state == State::SelectLeaf {
-            self.state = State::SelectLeaf;
-        } else {
-            self.state = State::Other;
-        }
-
-        Ok(PhysicalPlan::UnionAll(UnionAll {
-            left: Box::new(left_input),
-            right: Box::new(right_input),
-            ..plan.clone()
         }))
     }
 
@@ -340,5 +269,76 @@ impl PhysicalPlanReplacer for Fragmenter {
 
             source_fragment_id,
         }))
+    }
+
+    fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let left_input = self.replace(plan.left.as_ref())?;
+        let left_state = self.state.clone();
+
+        // Consume current fragments to prevent them being consumed by `right_input`.
+        fragments.append(&mut self.fragments);
+        let right_input = self.replace(plan.right.as_ref())?;
+        let right_state = self.state.clone();
+
+        fragments.append(&mut self.fragments);
+        self.fragments = fragments;
+
+        // If any of the input is a source fragment, the union all is a source fragment.
+        if left_state == State::SelectLeaf || right_state == State::SelectLeaf {
+            self.state = State::SelectLeaf;
+        } else {
+            self.state = State::Other;
+        }
+
+        Ok(PhysicalPlan::UnionAll(UnionAll {
+            left: Box::new(left_input),
+            right: Box::new(right_input),
+            ..plan.clone()
+        }))
+    }
+
+    //  TODO(Sky): remove redundant code
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+        match &plan.source {
+            CopyIntoTableSource::Stage(_) => {
+                self.state = State::SelectLeaf;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
+            }
+            CopyIntoTableSource::Query(query_physical_plan) => {
+                let input = self.replace(query_physical_plan)?;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(input)),
+                    ..plan.clone()
+                })))
+            }
+        }
+    }
+
+    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
+        self.state = State::Compact;
+        Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
+    }
+
+    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        self.state = State::ReplaceInto;
+        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
+    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
+        self.state = State::MutationSource;
+        Ok(PhysicalPlan::MutationSource(plan.clone()))
+    }
+
+    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 }

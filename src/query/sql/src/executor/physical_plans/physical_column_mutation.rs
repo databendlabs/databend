@@ -24,8 +24,7 @@ use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ColumnMutation {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
@@ -37,6 +36,7 @@ pub struct ColumnMutation {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ColumnMutation {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -54,7 +54,7 @@ impl IPhysicalPlan for ColumnMutation {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

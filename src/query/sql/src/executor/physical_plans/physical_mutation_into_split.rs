@@ -20,12 +20,12 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSplit {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub split_index: IndexType,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for MutationSplit {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -39,7 +39,7 @@ impl IPhysicalPlan for MutationSplit {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

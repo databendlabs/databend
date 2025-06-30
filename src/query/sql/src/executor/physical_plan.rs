@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use databend_common_catalog::plan::DataSourceInfo;
@@ -83,33 +84,16 @@ use crate::executor::physical_plans::WindowPartition;
 pub struct PhysicalPlanMeta {
     plan_id: u32,
     name: String,
-    // for profile
-    desc: String,
-    // for profile
-    labels: HashMap<String, Vec<String>>,
 }
 
 impl PhysicalPlanMeta {
-    pub fn new(name: String) -> PhysicalPlanMeta {
-        PhysicalPlanMeta {
-            plan_id: 0,
-            name,
-            desc: String::new(),
-            labels: HashMap::new(),
-        }
-    }
-
-    pub fn with_desc(name: String, desc: String, labels: HashMap<String, Vec<String>>) -> PhysicalPlanMeta {
-        PhysicalPlanMeta {
-            plan_id: 0,
-            name,
-            desc,
-            labels,
-        }
+    pub fn new(name: impl Into<String>) -> PhysicalPlanMeta {
+        PhysicalPlanMeta { plan_id: 0, name }
     }
 }
 
-pub trait IPhysicalPlan: serde::Serialize + serde::Deserialize + Clone + Debug {
+#[typetag::serde]
+pub trait IPhysicalPlan: Debug {
     fn get_meta(&self) -> &PhysicalPlanMeta;
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta;
@@ -127,7 +111,7 @@ pub trait IPhysicalPlan: serde::Serialize + serde::Deserialize + Clone + Debug {
     /// Adjust the plan_id of the physical plan.
     /// This function will assign a unique plan_id to each physical plan node in a top-down manner.
     /// Which means the plan_id of a node is always greater than the plan_id of its parent node.
-    #[recursive::recursive]
+    // #[recursive::recursive]
     fn adjust_plan_id(&mut self, next_id: &mut u32) {
         self.get_meta_mut().plan_id = *next_id;
         *next_id += 1;
@@ -144,11 +128,11 @@ pub trait IPhysicalPlan: serde::Serialize + serde::Deserialize + Clone + Debug {
         }
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children(&self) -> Box<dyn Iterator<Item=&'_ Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item=&'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
@@ -157,7 +141,7 @@ pub trait IPhysicalPlan: serde::Serialize + serde::Deserialize + Clone + Debug {
         None
     }
 
-    #[recursive::recursive]
+    // #[recursive::recursive]
     fn try_find_mutation_source(&self) -> Option<MutationSource> {
         for child in self.children() {
             if let Some(plan) = child.try_find_mutation_source() {
@@ -168,29 +152,64 @@ pub trait IPhysicalPlan: serde::Serialize + serde::Deserialize + Clone + Debug {
         None
     }
 
-    #[recursive::recursive]
+    // #[recursive::recursive]
     fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
         for child in self.children() {
             child.get_all_data_source(sources);
         }
     }
 
-    #[recursive::recursive]
+    // #[recursive::recursive]
     fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
         for child in self.children_mut() {
             child.set_pruning_stats(stats)
         }
     }
 
-    #[recursive::recursive]
+    // #[recursive::recursive]
     fn is_distributed_plan(&self) -> bool {
         self.children().any(|child| child.is_distributed_plan())
     }
 
-    #[recursive::recursive]
+    // #[recursive::recursive]
     fn is_warehouse_distributed_plan(&self) -> bool {
         self.children()
             .any(|child| child.is_warehouse_distributed_plan())
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(String::new())
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(HashMap::new())
+    }
+}
+
+pub trait PhysicalPlanExt {
+    fn clone_box(&self) -> Box<dyn IPhysicalPlan>;
+
+    fn visit(&self, visitor: Box<dyn Any>) -> Result<()>;
+}
+
+impl<T> PhysicalPlanExt for T
+where
+    T: 'static + IPhysicalPlan + Clone,
+{
+    fn clone_box(&self) -> Box<dyn IPhysicalPlan> {
+        Box::new(self.clone())
+    }
+
+    fn visit(&self, visitor: Box<dyn Any>) -> Result<()> {
+        visitor.downcast()
+        // visitor.downcast()
+        todo!()
+    }
+}
+
+impl Clone for Box<dyn IPhysicalPlan> {
+    fn clone(&self) -> Self {
+        self.clone_box()
     }
 }
 
@@ -340,273 +359,5 @@ impl PhysicalPlan {
             PhysicalPlan::BroadcastSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::BroadcastSink(_) => "RuntimeFilterSink".to_string(),
         }
-    }
-
-    pub fn get_desc(&self) -> Result<String> {
-        Ok(match self {
-            PhysicalPlan::TableScan(v) => format!(
-                "{}.{}",
-                v.source.source_info.catalog_name(),
-                v.source.source_info.desc()
-            ),
-            PhysicalPlan::Filter(v) => match v.predicates.is_empty() {
-                true => String::new(),
-                false => v.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-            },
-            PhysicalPlan::AggregatePartial(v) => {
-                v.agg_funcs.iter().map(|x| x.display.clone()).join(", ")
-            }
-            PhysicalPlan::AggregateFinal(v) => {
-                v.agg_funcs.iter().map(|x| x.display.clone()).join(", ")
-            }
-            PhysicalPlan::Sort(v) => v
-                .order_by
-                .iter()
-                .map(|x| {
-                    format!(
-                        "{}{}{}",
-                        x.display_name,
-                        if x.asc { "" } else { " DESC" },
-                        if x.nulls_first { " NULLS FIRST" } else { "" },
-                    )
-                })
-                .join(", "),
-            PhysicalPlan::Limit(v) => match v.limit {
-                Some(limit) => format!("LIMIT {} OFFSET {}", limit, v.offset),
-                None => format!("OFFSET {}", v.offset),
-            },
-            PhysicalPlan::EvalScalar(v) => v
-                .exprs
-                .iter()
-                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(", "),
-            PhysicalPlan::HashJoin(v) => {
-                let mut conditions = v
-                    .build_keys
-                    .iter()
-                    .zip(v.probe_keys.iter())
-                    .map(|(l, r)| {
-                        format!(
-                            "({} = {})",
-                            l.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
-                            r.as_expr(&BUILTIN_FUNCTIONS).sql_display()
-                        )
-                    })
-                    .collect::<Vec<_>>();
-
-                conditions.extend(
-                    v.non_equi_conditions
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
-                );
-
-                conditions.join(" AND ")
-            }
-            PhysicalPlan::ProjectSet(v) => v
-                .srf_exprs
-                .iter()
-                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                .join(", "),
-            PhysicalPlan::AggregateExpand(v) => v
-                .grouping_sets
-                .sets
-                .iter()
-                .map(|set| {
-                    set.iter()
-                        .map(|x| x.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                })
-                .map(|s| format!("({})", s))
-                .collect::<Vec<_>>()
-                .join(", "),
-            PhysicalPlan::Window(v) => {
-                let partition_by = v
-                    .partition_by
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                let order_by = v
-                    .order_by
-                    .iter()
-                    .map(|x| {
-                        format!(
-                            "{}{}{}",
-                            x.display_name,
-                            if x.asc { "" } else { " DESC" },
-                            if x.nulls_first { " NULLS FIRST" } else { "" },
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                format!("partition by {}, order by {}", partition_by, order_by)
-            }
-            PhysicalPlan::RowFetch(v) => {
-                let table_schema = v.source.source_info.schema();
-                let projected_schema = v.cols_to_fetch.project_schema(&table_schema);
-                projected_schema.fields.iter().map(|f| f.name()).join(", ")
-            }
-            PhysicalPlan::RangeJoin(v) => {
-                let mut condition = v
-                    .conditions
-                    .iter()
-                    .map(|condition| {
-                        let left = condition
-                            .left_expr
-                            .as_expr(&BUILTIN_FUNCTIONS)
-                            .sql_display();
-                        let right = condition
-                            .right_expr
-                            .as_expr(&BUILTIN_FUNCTIONS)
-                            .sql_display();
-                        format!("{left} {:?} {right}", condition.operator)
-                    })
-                    .collect::<Vec<_>>();
-
-                condition.extend(
-                    v.other_conditions
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
-                );
-
-                condition.join(" AND ")
-            }
-            PhysicalPlan::Udf(v) => v
-                .udf_funcs
-                .iter()
-                .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
-                .join(", "),
-            PhysicalPlan::UnionAll(v) => v
-                .left_outputs
-                .iter()
-                .zip(v.right_outputs.iter())
-                .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
-                .join(", "),
-            PhysicalPlan::AsyncFunction(v) => v
-                .async_func_descs
-                .iter()
-                .map(|x| x.display_name.clone())
-                .join(", "),
-            _ => String::new(),
-        })
-    }
-
-    pub fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        let mut labels = HashMap::with_capacity(16);
-
-        match self {
-            PhysicalPlan::TableScan(v) => {
-                labels.insert(String::from("Full table name"), vec![format!(
-                    "{}.{}",
-                    v.source.source_info.catalog_name(),
-                    v.source.source_info.desc()
-                )]);
-
-                labels.insert(
-                    format!(
-                        "Columns ({} / {})",
-                        v.output_schema()?.num_fields(),
-                        std::cmp::max(
-                            v.output_schema()?.num_fields(),
-                            v.source.source_info.schema().num_fields(),
-                        )
-                    ),
-                    v.name_mapping.keys().cloned().collect(),
-                );
-                labels.insert(String::from("Total partitions"), vec![v
-                    .source
-                    .statistics
-                    .partitions_total
-                    .to_string()]);
-            }
-            PhysicalPlan::Filter(v) => {
-                labels.insert(
-                    String::from("Filter condition"),
-                    v.predicates
-                        .iter()
-                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
-                );
-            }
-            PhysicalPlan::Limit(v) => {
-                labels.insert(String::from("Offset"), vec![v.offset.to_string()]);
-
-                if let Some(limit) = v.limit {
-                    labels.insert(String::from("Number of rows"), vec![limit.to_string()]);
-                }
-            }
-            PhysicalPlan::EvalScalar(v) => {
-                labels.insert(
-                    String::from("List of Expressions"),
-                    v.exprs
-                        .iter()
-                        .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                        .collect(),
-                );
-            }
-            PhysicalPlan::AggregatePartial(v) => {
-                if !v.group_by_display.is_empty() {
-                    labels.insert(String::from("Grouping keys"), v.group_by_display.clone());
-                }
-
-                if !v.agg_funcs.is_empty() {
-                    labels.insert(
-                        String::from("Aggregate Functions"),
-                        v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
-                    );
-                }
-            }
-            PhysicalPlan::AggregateFinal(v) => {
-                if !v.group_by_display.is_empty() {
-                    labels.insert(String::from("Grouping keys"), v.group_by_display.clone());
-                }
-
-                if !v.agg_funcs.is_empty() {
-                    labels.insert(
-                        String::from("Aggregate Functions"),
-                        v.agg_funcs.iter().map(|x| x.display.clone()).collect(),
-                    );
-                }
-            }
-            PhysicalPlan::HashJoin(v) => {
-                labels.insert(String::from("Join Type"), vec![v.join_type.to_string()]);
-
-                if !v.build_keys.is_empty() {
-                    labels.insert(
-                        String::from("Join Build Side Keys"),
-                        v.build_keys
-                            .iter()
-                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                            .collect(),
-                    );
-                }
-
-                if !v.probe_keys.is_empty() {
-                    labels.insert(
-                        String::from("Join Probe Side Keys"),
-                        v.probe_keys
-                            .iter()
-                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                            .collect(),
-                    );
-                }
-
-                if !v.non_equi_conditions.is_empty() {
-                    labels.insert(
-                        String::from("Join Conditions"),
-                        v.non_equi_conditions
-                            .iter()
-                            .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                            .collect(),
-                    );
-                }
-            }
-            _ => {}
-        };
-
-        Ok(labels)
     }
 }

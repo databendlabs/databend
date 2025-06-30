@@ -26,10 +26,7 @@ use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceInto {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    pub plan_id: u32,
-
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,
@@ -41,6 +38,7 @@ pub struct ReplaceInto {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ReplaceInto {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -58,7 +56,7 @@ impl IPhysicalPlan for ReplaceInto {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

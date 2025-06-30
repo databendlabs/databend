@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,9 +34,7 @@ use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Udf {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub udf_funcs: Vec<UdfFunctionDesc>,
     pub script_udf: bool,
@@ -43,6 +42,7 @@ pub struct Udf {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Udf {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -67,13 +67,21 @@ impl IPhysicalPlan for Udf {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .udf_funcs
+            .iter()
+            .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
+            .join(", "))
     }
 }
 
@@ -97,7 +105,7 @@ impl PhysicalPlanBuilder {
         udf_plan: &crate::plans::Udf,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in udf_plan.items.iter() {
@@ -168,12 +176,12 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(PhysicalPlan::Udf(Udf {
-            plan_id: 0,
+        Ok(Box::new(Udf {
             input: Box::new(input),
             udf_funcs,
             script_udf: udf_plan.script_udf,
             stat_info: Some(stat_info),
+            meta: PhysicalPlanMeta::new("Udf"),
         }))
     }
 }

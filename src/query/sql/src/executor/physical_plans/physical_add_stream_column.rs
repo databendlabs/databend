@@ -37,14 +37,14 @@ use crate::Visibility;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AddStreamColumn {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub exprs: Vec<RemoteExpr>,
     pub projections: Vec<usize>,
     pub stream_columns: Vec<StreamColumn>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for AddStreamColumn {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -58,7 +58,7 @@ impl IPhysicalPlan for AddStreamColumn {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut  self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }
@@ -66,10 +66,10 @@ impl IPhysicalPlan for AddStreamColumn {
 impl AddStreamColumn {
     pub fn new(
         metadata: &MetadataRef,
-        input: PhysicalPlan,
+        input: Box<dyn IPhysicalPlan>,
         table_index: usize,
         table_version: u64,
-    ) -> Result<Self> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let input_schema = input.output_schema()?;
         let num_fields = input_schema.fields().len();
         let column_entries = metadata.read().columns_by_table_index(table_index);
@@ -98,7 +98,7 @@ impl AddStreamColumn {
                     Box::new(stream_column.data_type()),
                     Visibility::Visible,
                 )
-                .build(),
+                    .build(),
             });
 
             let current_stream_column_scalar_expr = match stream_column.column_type() {
@@ -119,7 +119,7 @@ impl AddStreamColumn {
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
-                        .build(),
+                            .build(),
                     })
                 }
                 StreamColumnType::OriginRowNum => {
@@ -132,7 +132,7 @@ impl AddStreamColumn {
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
-                        .build(),
+                            .build(),
                     })
                 }
                 StreamColumnType::RowVersion => unreachable!(),
@@ -175,12 +175,12 @@ impl AddStreamColumn {
         // ORIGIN_BLOCK_ROW_NUM, ORIGIN_BLOCK_ID.
         let stream_columns = vec![stream_columns[2].clone(), stream_columns[1].clone()];
 
-        Ok(Self {
-            plan_id: 0,
-            input: Box::new(input),
+        Ok(Box::new(AddStreamColumn {
+            input,
             exprs,
             projections,
             stream_columns,
-        })
+            meta: PhysicalPlanMeta::new("AddStreamColumn"),
+        }))
     }
 }

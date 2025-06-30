@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,8 +42,6 @@ use crate::ScalarExpr;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
     meta: PhysicalPlanMeta,
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     pub input: Box<dyn IPhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
@@ -52,6 +52,7 @@ pub struct AggregateFinal {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for AggregateFinal {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -82,8 +83,28 @@ impl IPhysicalPlan for AggregateFinal {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(2);
+        if !self.group_by_display.is_empty() {
+            labels.insert(String::from("Grouping keys"), self.group_by_display.clone());
+        }
+
+        if !self.agg_funcs.is_empty() {
+            labels.insert(
+                String::from("Aggregate Functions"),
+                self.agg_funcs.iter().map(|x| x.display.clone()).collect(),
+            );
+        }
+
+        Ok(labels)
     }
 }
 
@@ -94,7 +115,7 @@ impl PhysicalPlanBuilder {
         agg: &crate::plans::Aggregate,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let mut used = vec![];
         for item in &agg.aggregate_functions {
@@ -250,12 +271,12 @@ impl PhysicalPlanBuilder {
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
-                                                                                            // If the aggregation function argument if a group item,
-                                                                                            // we cannot use the group item directly.
-                                                                                            // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
-                                                                                            // which will cause panic while executing aggregation function.
-                                                                                            // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
-                                                                                            // we should use these columns instead.
+                    // If the aggregation function argument if a group item,
+                    // we cannot use the group item directly.
+                    // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
+                    // which will cause panic while executing aggregation function.
+                    // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
+                    // we should use these columns instead.
                     for func in agg_funcs.iter_mut() {
                         for arg in func.arg_indices.iter_mut() {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {
@@ -280,84 +301,85 @@ impl PhysicalPlanBuilder {
 
                 match input {
                     PhysicalPlan::Exchange(Exchange { input, kind, .. })
-                        if group_by_shuffle_mode == "before_merge" =>
-                    {
-                        let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
-                            let expand = AggregateExpand {
-                                plan_id: 0,
-                                input,
-                                group_bys: group_items.clone(),
-                                grouping_sets,
-                                stat_info: Some(stat_info.clone()),
+                    if group_by_shuffle_mode == "before_merge" =>
+                        {
+                            let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
+                                let expand = AggregateExpand {
+                                    input,
+                                    grouping_sets,
+                                    group_bys: group_items.clone(),
+                                    stat_info: Some(stat_info.clone()),
+                                    meta: PhysicalPlanMeta::new("AggregateExpand"),
+                                };
+
+                                AggregatePartial {
+                                    input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                    agg_funcs,
+                                    enable_experimental_aggregate_hashtable,
+                                    group_by_display,
+                                    group_by: group_items,
+                                    stat_info: Some(stat_info),
+                                    rank_limit: None,
+                                    meta: PhysicalPlanMeta::new("AggregatePartial"),
+                                }
+                            } else {
+                                AggregatePartial {
+                                    input,
+                                    agg_funcs,
+                                    rank_limit,
+                                    group_by_display,
+                                    enable_experimental_aggregate_hashtable,
+                                    group_by: group_items,
+                                    stat_info: Some(stat_info),
+                                    meta: PhysicalPlanMeta::new("AggregatePartial"),
+                                }
                             };
-                            AggregatePartial {
-                                plan_id: 0,
-                                input: Box::new(PhysicalPlan::AggregateExpand(expand)),
-                                agg_funcs,
-                                enable_experimental_aggregate_hashtable,
-                                group_by_display,
-                                group_by: group_items,
-                                stat_info: Some(stat_info),
-                                rank_limit: None,
-                            }
-                        } else {
-                            AggregatePartial {
-                                plan_id: 0,
-                                input,
-                                agg_funcs,
-                                enable_experimental_aggregate_hashtable,
-                                group_by_display,
-                                group_by: group_items,
-                                stat_info: Some(stat_info),
-                                rank_limit,
-                            }
-                        };
 
-                        let keys = {
-                            let schema = aggregate_partial.output_schema()?;
-                            let end = schema.num_fields();
-                            let start = end - aggregate_partial.group_by.len();
-                            (start..end)
-                                .map(|id| RemoteExpr::ColumnRef {
-                                    span: None,
-                                    id,
-                                    data_type: schema.field(id).data_type().clone(),
-                                    display_name: (id - start).to_string(),
-                                })
-                                .collect()
-                        };
+                            let keys = {
+                                let schema = aggregate_partial.output_schema()?;
+                                let end = schema.num_fields();
+                                let start = end - aggregate_partial.group_by.len();
+                                (start..end)
+                                    .map(|id| RemoteExpr::ColumnRef {
+                                        span: None,
+                                        id,
+                                        data_type: schema.field(id).data_type().clone(),
+                                        display_name: (id - start).to_string(),
+                                    })
+                                    .collect()
+                            };
 
-                        PhysicalPlan::Exchange(Exchange {
-                            plan_id: 0,
-                            kind,
-                            allow_adjust_parallelism: true,
-                            ignore_exchange: false,
-                            input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
-                            keys,
-                        })
-                    }
+                            PhysicalPlan::Exchange(Exchange {
+                                kind,
+                                keys,
+                                ignore_exchange: false,
+                                allow_adjust_parallelism: true,
+                                meta: PhysicalPlanMeta::new("Exchange"),
+                                input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
+                            })
+                        }
                     _ => {
                         if let Some(grouping_sets) = agg.grouping_sets {
                             let expand = AggregateExpand {
-                                plan_id: 0,
+                                grouping_sets,
                                 input: Box::new(input),
                                 group_bys: group_items.clone(),
-                                grouping_sets,
                                 stat_info: Some(stat_info.clone()),
+                                meta: PhysicalPlanMeta::new("AggregateExpand"),
                             };
-                            PhysicalPlan::AggregatePartial(AggregatePartial {
-                                plan_id: 0,
+
+                            Box::new(AggregatePartial {
                                 agg_funcs,
-                                enable_experimental_aggregate_hashtable,
                                 group_by_display,
-                                group_by: group_items,
-                                input: Box::new(PhysicalPlan::AggregateExpand(expand)),
-                                stat_info: Some(stat_info),
+                                enable_experimental_aggregate_hashtable,
                                 rank_limit: None,
+                                group_by: group_items,
+                                input: Box::new(expand),
+                                stat_info: Some(stat_info),
+                                meta: PhysicalPlanMeta::new("AggregatePartial"),
                             })
                         } else {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
-                                plan_id: 0,
                                 agg_funcs,
                                 enable_experimental_aggregate_hashtable,
                                 group_by_display,
@@ -365,6 +387,7 @@ impl PhysicalPlanBuilder {
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
                                 rank_limit,
+                                meta: PhysicalPlanMeta::new("AggregatePartial"),
                             })
                         }
                     }
@@ -377,9 +400,9 @@ impl PhysicalPlanBuilder {
                     PhysicalPlan::AggregatePartial(ref agg) => agg.input.output_schema()?,
 
                     PhysicalPlan::Exchange(Exchange {
-                        input: box PhysicalPlan::AggregatePartial(ref agg),
-                        ..
-                    }) => agg.input.output_schema()?,
+                                               input: box PhysicalPlan::AggregatePartial(ref agg),
+                                               ..
+                                           }) => agg.input.output_schema()?,
 
                     _ => {
                         return Err(ErrorCode::Internal(format!(
@@ -513,32 +536,30 @@ impl PhysicalPlanBuilder {
                         let before_group_by_schema = partial.input.output_schema()?;
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
-                            plan_id: 0,
-                            group_by_display: partial.group_by_display.clone(),
-                            input: Box::new(input),
-                            group_by: group_items,
                             agg_funcs,
                             before_group_by_schema,
-
+                            group_by: group_items,
+                            input: Box::new(input),
                             stat_info: Some(stat_info),
+                            group_by_display: partial.group_by_display.clone(),
+                            meta: PhysicalPlanMeta::new("AggregateFinal"),
                         })
                     }
 
                     PhysicalPlan::Exchange(Exchange {
-                        input: box PhysicalPlan::AggregatePartial(ref partial),
-                        ..
-                    }) => {
+                                               input: box PhysicalPlan::AggregatePartial(ref partial),
+                                               ..
+                                           }) => {
                         let before_group_by_schema = partial.input.output_schema()?;
 
-                        PhysicalPlan::AggregateFinal(AggregateFinal {
-                            plan_id: 0,
-                            group_by_display: partial.group_by_display.clone(),
-                            input: Box::new(input),
-                            group_by: group_items,
+                        Box::new(AggregateFinal {
                             agg_funcs,
                             before_group_by_schema,
-
+                            group_by: group_items,
+                            input: Box::new(input),
                             stat_info: Some(stat_info),
+                            group_by_display: partial.group_by_display.clone(),
+                            meta: PhysicalPlanMeta::new("AggregateFinal"),
                         })
                     }
 

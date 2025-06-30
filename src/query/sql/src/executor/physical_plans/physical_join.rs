@@ -16,7 +16,7 @@ use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -131,7 +131,7 @@ impl PhysicalPlanBuilder {
         join: &crate::plans::Join,
         required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let mut others_required = join
             .non_equi_conditions

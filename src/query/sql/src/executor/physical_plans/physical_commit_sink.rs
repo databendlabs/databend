@@ -30,8 +30,7 @@ use databend_common_exception::Result;
 /// The commit sink is used to commit the data to the table.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CommitSink {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub snapshot: Option<Arc<TableSnapshot>>,
     pub table_info: TableInfo,
@@ -44,6 +43,7 @@ pub struct CommitSink {
     pub recluster_info: Option<ReclusterInfoSideCar>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for CommitSink {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -61,7 +61,7 @@ impl IPhysicalPlan for CommitSink {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

@@ -19,12 +19,12 @@ use crate::plans::InsertValue;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub schema: DataSchemaRef,
     pub source: InsertValue,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ReplaceAsyncSourcer {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta

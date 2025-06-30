@@ -66,9 +66,7 @@ type MergedFieldsResult = (
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     // After building the probe key and build key, we apply probe_projections to probe_datablock
     // and build_projections to build_datablock, which can help us reduce memory usage and calls
     // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
@@ -109,6 +107,7 @@ pub struct HashJoin {
     pub broadcast_id: Option<u32>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for HashJoin {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -126,8 +125,68 @@ impl IPhysicalPlan for HashJoin {
         Box::new(std::iter::once(&self.probe).chain(std::iter::once(&self.build)))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let mut conditions = self
+            .build_keys
+            .iter()
+            .zip(self.probe_keys.iter())
+            .map(|(l, r)| {
+                format!(
+                    "({} = {})",
+                    l.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                    r.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                )
+            })
+            .collect::<Vec<_>>();
+
+        conditions.extend(
+            self.non_equi_conditions
+                .iter()
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
+        );
+
+        Ok(conditions.join(" AND "))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(4);
+        labels.insert(String::from("Join Type"), vec![self.join_type.to_string()]);
+
+        if !self.build_keys.is_empty() {
+            labels.insert(
+                String::from("Join Build Side Keys"),
+                self.build_keys
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            );
+        }
+
+        if !self.probe_keys.is_empty() {
+            labels.insert(
+                String::from("Join Probe Side Keys"),
+                self.probe_keys
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            );
+        }
+
+        if !self.non_equi_conditions.is_empty() {
+            labels.insert(
+                String::from("Join Conditions"),
+                self.non_equi_conditions
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            );
+        }
+
+        Ok(labels)
     }
 }
 
@@ -138,7 +197,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
-    ) -> Result<(Box<PhysicalPlan>, Box<PhysicalPlan>)> {
+    ) -> Result<(Box<dyn IPhysicalPlan>, Box<dyn IPhysicalPlan>)> {
         let probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
         let build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
 
@@ -172,7 +231,7 @@ impl PhysicalPlanBuilder {
     pub(crate) fn prepare_build_schema(
         &self,
         join_type: &JoinType,
-        build_side: &PhysicalPlan,
+        build_side: &Box<dyn IPhysicalPlan>,
     ) -> Result<DataSchemaRef> {
         match join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
@@ -208,7 +267,7 @@ impl PhysicalPlanBuilder {
     pub(crate) fn prepare_probe_schema(
         &self,
         join_type: &JoinType,
-        probe_side: &PhysicalPlan,
+        probe_side: &Box<dyn IPhysicalPlan>,
     ) -> Result<DataSchemaRef> {
         match join_type {
             JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
@@ -236,8 +295,8 @@ impl PhysicalPlanBuilder {
     /// * `build_side` - The build side physical plan
     fn unify_keys(
         &self,
-        probe_side: &mut Box<PhysicalPlan>,
-        build_side: &mut Box<PhysicalPlan>,
+        probe_side: &mut Box<dyn IPhysicalPlan>,
+        build_side: &mut Box<dyn IPhysicalPlan>,
     ) -> Result<()> {
         // Unify the data types of the left and right exchange keys
         if let (
@@ -807,8 +866,8 @@ impl PhysicalPlanBuilder {
         &self,
         s_expr: &SExpr,
         join: &Join,
-        probe_side: Box<PhysicalPlan>,
-        build_side: Box<PhysicalPlan>,
+        probe_side: Box<dyn IPhysicalPlan>,
+        build_side: Box<dyn IPhysicalPlan>,
         projections: ColumnSet,
         probe_projections: ColumnSet,
         build_projections: ColumnSet,
@@ -821,7 +880,7 @@ impl PhysicalPlanBuilder {
         build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
         let broadcast_id = if build_side_data_distribution
             .as_ref()
@@ -831,8 +890,7 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        Ok(PhysicalPlan::HashJoin(HashJoin {
-            plan_id: 0,
+        Ok(Box::new(HashJoin {
             projections,
             build_projections,
             probe_projections,
@@ -844,6 +902,7 @@ impl PhysicalPlanBuilder {
             is_null_equal,
             non_equi_conditions,
             marker_index: join.marker_index,
+            meta: PhysicalPlanMeta::new("HashJoin"),
             from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
@@ -865,7 +924,7 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // Step 1: Build probe and build sides
         let (mut probe_side, mut build_side) = self
             .build_join_sides(s_expr, left_required, right_required)

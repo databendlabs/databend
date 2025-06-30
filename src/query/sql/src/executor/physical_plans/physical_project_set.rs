@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -31,8 +32,6 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProjectSet {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     meta: PhysicalPlanMeta,
     pub projections: ColumnSet,
     pub input: Box<dyn IPhysicalPlan>,
@@ -42,6 +41,7 @@ pub struct ProjectSet {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ProjectSet {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -72,13 +72,21 @@ impl IPhysicalPlan for ProjectSet {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .srf_exprs
+            .iter()
+            .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", "))
     }
 }
 
@@ -89,7 +97,7 @@ impl PhysicalPlanBuilder {
         project_set: &crate::plans::ProjectSet,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let column_projections = required.clone().into_iter().collect::<Vec<_>>();
         for s in project_set.srfs.iter() {
@@ -119,8 +127,8 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        Ok(PhysicalPlan::ProjectSet(ProjectSet {
-            plan_id: 0,
+        Ok(Box::new(ProjectSet {
+            meta: PhysicalPlanMeta::new("Unnest"),
             input: Box::new(input),
             srf_exprs,
             projections,

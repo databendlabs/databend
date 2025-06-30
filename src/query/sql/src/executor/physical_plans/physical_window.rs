@@ -48,9 +48,7 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub index: IndexType,
     pub input: Box<dyn IPhysicalPlan>,
     pub func: WindowFunction,
@@ -60,6 +58,7 @@ pub struct Window {
     pub limit: Option<usize>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Window {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -84,13 +83,38 @@ impl IPhysicalPlan for Window {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let partition_by = self
+            .partition_by
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let order_by = self
+            .order_by
+            .iter()
+            .map(|x| {
+                format!(
+                    "{}{}{}",
+                    x.display_name,
+                    if x.asc { "" } else { " DESC" },
+                    if x.nulls_first { " NULLS FIRST" } else { "" },
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Ok(format!("partition by {}, order by {}", partition_by, order_by))
     }
 }
 
@@ -178,7 +202,7 @@ impl PhysicalPlanBuilder {
         window: &crate::plans::Window,
         mut required: ColumnSet,
         _stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. DO NOT Prune unused Columns cause window may not in required, eg:
         // select s1.a from ( select t1.a as a, dense_rank() over(order by t1.a desc) as rk
         // from (select 'a1' as a) t1 ) s1
@@ -382,8 +406,7 @@ impl PhysicalPlanBuilder {
             WindowFuncType::CumeDist => WindowFunction::CumeDist,
         };
 
-        Ok(PhysicalPlan::Window(Window {
-            plan_id: 0,
+        Ok(Box::new(Window {
             index: w.index,
             input: Box::new(input),
             func,
@@ -391,6 +414,7 @@ impl PhysicalPlanBuilder {
             order_by: order_by_items,
             window_frame: w.frame.clone(),
             limit: w.limit,
+            meta: PhysicalPlanMeta::new("Window"),
         }))
     }
 }

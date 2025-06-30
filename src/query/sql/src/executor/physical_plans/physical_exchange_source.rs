@@ -19,9 +19,7 @@ use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
 
     // Output schema of exchanged data
     pub schema: DataSchemaRef,
@@ -31,6 +29,7 @@ pub struct ExchangeSource {
     pub query_id: String,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ExchangeSource {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta

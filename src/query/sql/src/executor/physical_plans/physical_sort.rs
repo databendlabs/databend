@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -35,9 +36,7 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {
-    /// A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub order_by: Vec<SortDesc>,
     /// limit = Limit.limit + Limit.offset
@@ -51,6 +50,7 @@ pub struct Sort {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Sort {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -102,13 +102,29 @@ impl IPhysicalPlan for Sort {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .order_by
+            .iter()
+            .map(|x| {
+                format!(
+                    "{}{}{}",
+                    x.display_name,
+                    if x.asc { "" } else { " DESC" },
+                    if x.nulls_first { " NULLS FIRST" } else { "" },
+                )
+            })
+            .join(", ")
+        )
     }
 }
 
@@ -134,7 +150,7 @@ impl PhysicalPlanBuilder {
         sort: &crate::plans::Sort,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<dyn IPhysicalPlan> {
         // 1. Prune unused Columns.
         sort.items.iter().for_each(|s| {
             required.insert(s.index);
@@ -167,8 +183,8 @@ impl PhysicalPlanBuilder {
                 .map(|v| v.index)
                 .collect::<Vec<_>>();
 
-            return Ok(PhysicalPlan::WindowPartition(WindowPartition {
-                plan_id: 0,
+            return Ok(Box::new(WindowPartition {
+                meta: PhysicalPlanMeta::new("WindowPartition"),
                 input: Box::new(input_plan.clone()),
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
@@ -187,14 +203,14 @@ impl PhysicalPlanBuilder {
         };
 
         // 2. Build physical plan.
-        Ok(PhysicalPlan::Sort(Sort {
-            plan_id: 0,
-            input: Box::new(input_plan),
+        Ok(Box::new(Sort {
             order_by,
+            pre_projection,
+            input: Box::new(input_plan),
             limit: sort.limit,
             after_exchange: sort.after_exchange,
-            pre_projection,
             stat_info: Some(stat_info),
+            meta: PhysicalPlanMeta::new("Sort"),
         }))
     }
 }

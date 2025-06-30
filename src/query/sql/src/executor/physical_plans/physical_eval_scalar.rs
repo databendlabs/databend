@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::collections::HashSet;
 use std::sync::Arc;
+use itertools::Itertools;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -46,8 +47,6 @@ use crate::TypeCheck;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
     meta: PhysicalPlanMeta,
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     pub projections: ColumnSet,
     pub input: Box<dyn IPhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
@@ -56,6 +55,7 @@ pub struct EvalScalar {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for EvalScalar {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -93,13 +93,34 @@ impl IPhysicalPlan for EvalScalar {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .exprs
+            .iter()
+            .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", ")
+        )
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(HashMap::from([
+            (
+                String::from("List of Expressions"),
+                self.exprs
+                    .iter()
+                    .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            )
+        ]))
     }
 }
 
@@ -110,7 +131,7 @@ impl PhysicalPlanBuilder {
         eval_scalar: &crate::plans::EvalScalar,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let column_projections = required.clone();
         let mut used = vec![];
@@ -149,9 +170,9 @@ impl PhysicalPlanBuilder {
         &mut self,
         eval_scalar: &crate::plans::EvalScalar,
         column_projections: Vec<IndexType>,
-        input: PhysicalPlan,
+        input: Box<dyn IPhysicalPlan>,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let input_schema = input.output_schema()?;
         let exprs = eval_scalar
             .items
@@ -188,12 +209,12 @@ impl PhysicalPlanBuilder {
                 projections.insert(index + input_column_nums);
             }
         }
-        Ok(PhysicalPlan::EvalScalar(EvalScalar {
-            plan_id: 0,
-            projections,
-            input: Box::new(input),
+        Ok(Box::new(EvalScalar {
+            input,
             exprs,
+            projections,
             stat_info: Some(stat_info),
+            meta: PhysicalPlanMeta::new("EvalScalar"),
         }))
     }
 

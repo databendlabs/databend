@@ -39,11 +39,9 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RangeJoin {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
-    pub left: Box<PhysicalPlan>,
-    pub right: Box<PhysicalPlan>,
+    pub meta: PhysicalPlanMeta,
+    pub left: Box<dyn IPhysicalPlan>,
+    pub right: Box<dyn IPhysicalPlan>,
     // The first two conditions: (>, >=, <, <=)
     // Condition's left/right side only contains one table's column
     pub conditions: Vec<RangeJoinCondition>,
@@ -58,6 +56,7 @@ pub struct RangeJoin {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for RangeJoin {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -75,8 +74,34 @@ impl IPhysicalPlan for RangeJoin {
         Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let mut condition = self
+            .conditions
+            .iter()
+            .map(|condition| {
+                let left = condition
+                    .left_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                let right = condition
+                    .right_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                format!("{left} {:?} {right}", condition.operator)
+            })
+            .collect::<Vec<_>>();
+
+        condition.extend(
+            self.other_conditions
+                .iter()
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
+        );
+
+        Ok(condition.join(" AND "))
     }
 }
 
@@ -103,7 +128,7 @@ impl PhysicalPlanBuilder {
         right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
 
@@ -139,10 +164,10 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>(),
         );
 
-        Ok(PhysicalPlan::RangeJoin(RangeJoin {
-            plan_id: 0,
+        Ok(Box::new(RangeJoin {
             left: left_side,
             right: right_side,
+            meta: PhysicalPlanMeta::new("RangeJoin"),
             conditions: range_conditions
                 .iter()
                 .map(|scalar| {

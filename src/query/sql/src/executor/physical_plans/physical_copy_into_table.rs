@@ -29,9 +29,7 @@ use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
-    pub plan_id: u32,
-
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
@@ -46,6 +44,7 @@ pub struct CopyIntoTable {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for CopyIntoTable {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -66,7 +65,7 @@ impl IPhysicalPlan for CopyIntoTable {
         }
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         match &mut self.source {
             CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
             CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),

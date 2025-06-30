@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use super::physical_plans::AddStreamColumn;
 use super::physical_plans::BroadcastSink;
 use super::physical_plans::BroadcastSource;
@@ -131,12 +131,12 @@ pub trait PhysicalPlanReplacer {
         Ok(PhysicalPlan::BroadcastSource(plan.clone()))
     }
 
-    fn replace_runtime_filter_sink(&mut self, plan: &BroadcastSink) -> Result<PhysicalPlan> {
+    fn replace_runtime_filter_sink(&mut self, plan: &BroadcastSink) -> Result<Box<dyn IPhysicalPlan>> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::BroadcastSink(BroadcastSink {
-            plan_id: plan.plan_id,
+        Ok(Box::new(BroadcastSink {
             broadcast_id: plan.broadcast_id,
             input: Box::new(input),
+            meta: PhysicalPlanMeta::new("BroadcastSink"),
         }))
     }
 
@@ -175,12 +175,12 @@ pub trait PhysicalPlanReplacer {
     fn replace_filter(&mut self, plan: &Filter) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
-        Ok(PhysicalPlan::Filter(Filter {
-            plan_id: plan.plan_id,
+        Ok(Box::new(Filter {
             projections: plan.projections.clone(),
             input: Box::new(input),
             predicates: plan.predicates.clone(),
             stat_info: plan.stat_info.clone(),
+            meta: PhysicalPlanMeta::new("Filter"),
         }))
     }
 
@@ -647,155 +647,18 @@ pub trait PhysicalPlanReplacer {
 
 impl PhysicalPlan {
     pub fn traverse<'a, 'b>(
-        plan: &'a PhysicalPlan,
-        pre_visit: &'b mut dyn FnMut(&'a PhysicalPlan) -> bool,
-        visit: &'b mut dyn FnMut(&'a PhysicalPlan),
-        post_visit: &'b mut dyn FnMut(&'a PhysicalPlan),
+        plan: &'a Box<dyn IPhysicalPlan>,
+        pre_visit: &'b mut dyn FnMut(&'a Box<dyn IPhysicalPlan>) -> bool,
+        visit: &'b mut dyn FnMut(&'a Box<dyn IPhysicalPlan>),
+        post_visit: &'b mut dyn FnMut(&'a Box<dyn IPhysicalPlan>),
     ) {
         if pre_visit(plan) {
             visit(plan);
-            match plan {
-                PhysicalPlan::TableScan(_)
-                | PhysicalPlan::ReplaceAsyncSourcer(_)
-                | PhysicalPlan::RecursiveCteScan(_)
-                | PhysicalPlan::ConstantTableScan(_)
-                | PhysicalPlan::ExpressionScan(_)
-                | PhysicalPlan::CacheScan(_)
-                | PhysicalPlan::Recluster(_)
-                | PhysicalPlan::HilbertPartition(_)
-                | PhysicalPlan::ExchangeSource(_)
-                | PhysicalPlan::CompactSource(_)
-                | PhysicalPlan::MutationSource(_)
-                | PhysicalPlan::BroadcastSource(_) => {}
-                PhysicalPlan::Filter(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::EvalScalar(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::AggregateExpand(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::AggregatePartial(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::AggregateFinal(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Window(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::WindowPartition(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Sort(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Limit(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::RowFetch(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::HashJoin(plan) => {
-                    Self::traverse(&plan.build, pre_visit, visit, post_visit);
-                    Self::traverse(&plan.probe, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Exchange(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ExchangeSink(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::UnionAll(plan) => {
-                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
-                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::DistributedInsertSelect(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ProjectSet(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
-                }
-                PhysicalPlan::CopyIntoTable(plan) => match &plan.source {
-                    CopyIntoTableSource::Query(input) => {
-                        Self::traverse(input, pre_visit, visit, post_visit);
-                    }
-                    CopyIntoTableSource::Stage(input) => {
-                        Self::traverse(input, pre_visit, visit, post_visit);
-                    }
-                },
-                PhysicalPlan::CopyIntoLocation(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
-                }
-                PhysicalPlan::RangeJoin(plan) => {
-                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
-                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::CommitSink(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ReplaceDeduplicate(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ReplaceInto(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ColumnMutation(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Mutation(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MutationSplit(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MutationManipulate(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::MutationOrganize(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::AddStreamColumn(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Udf(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::AsyncFunction(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Duplicate(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::Shuffle(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkFilter(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkEvalScalar(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkCastSchema(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkFillAndReorder(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkAppendData(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkMerge(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::ChunkCommitInsert(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::BroadcastSink(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
+
+            for child in plan.children() {
+                Self::traverse(&child, pre_visit, visit, post_visit);
             }
+
             post_visit(plan);
         }
     }

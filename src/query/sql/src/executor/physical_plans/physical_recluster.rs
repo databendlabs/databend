@@ -22,13 +22,13 @@ use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Recluster {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -41,8 +41,7 @@ impl IPhysicalPlan for Recluster {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct HilbertPartition {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     pub num_partitions: usize,
@@ -50,6 +49,7 @@ pub struct HilbertPartition {
     pub rows_per_block: usize,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for HilbertPartition {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -67,7 +67,7 @@ impl IPhysicalPlan for HilbertPartition {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

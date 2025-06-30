@@ -28,8 +28,7 @@ pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationManipulate {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
@@ -45,6 +44,7 @@ pub struct MutationManipulate {
     pub unmatched_schema: DataSchemaRef,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for MutationManipulate {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -58,7 +58,7 @@ impl IPhysicalPlan for MutationManipulate {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

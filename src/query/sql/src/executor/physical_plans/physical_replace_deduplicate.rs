@@ -29,8 +29,7 @@ use databend_common_exception::Result;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceDeduplicate {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
@@ -43,6 +42,7 @@ pub struct ReplaceDeduplicate {
     pub delete_when: Option<(RemoteExpr, String)>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for ReplaceDeduplicate {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -60,7 +60,7 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 }

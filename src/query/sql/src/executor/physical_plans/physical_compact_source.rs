@@ -33,14 +33,14 @@ use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CompactSource {
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub parts: Partitions,
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for CompactSource {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -55,7 +55,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_compact_block(
         &mut self,
         compact_block: &crate::plans::OptimizeCompactBlock,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let crate::plans::OptimizeCompactBlock {
             catalog,
             database,
@@ -83,28 +83,28 @@ impl PhysicalPlanBuilder {
             .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-        let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+        let mut root: Box<dyn IPhysicalPlan> = Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
-            plan_id: u32::MAX,
             table_meta_timestamps,
-        }));
+            meta: PhysicalPlanMeta::new("ConstantTableScan"),
+        });
 
         let is_distributed = (!self.ctx.get_cluster().is_empty())
             && self.ctx.get_settings().get_enable_distributed_compact()?;
         if is_distributed {
-            root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(root),
+            root = Box::new(Exchange {
+                input: root,
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
             });
         }
 
-        root = PhysicalPlan::CommitSink(Box::new(CommitSink {
+        root = Box::new(CommitSink {
             input: Box::new(root),
             table_info,
             snapshot: Some(snapshot),
@@ -114,10 +114,10 @@ impl PhysicalPlanBuilder {
             },
             update_stream_meta: vec![],
             deduplicated_label: None,
-            plan_id: u32::MAX,
             recluster_info: None,
             table_meta_timestamps,
-        }));
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        });
 
         root.adjust_plan_id(&mut 0);
         Ok(root)

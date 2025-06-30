@@ -28,9 +28,7 @@ use crate::IndexType;
 /// Add dummy data before `GROUPING SETS`.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateExpand {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub input: Box<dyn IPhysicalPlan>,
     pub group_bys: Vec<IndexType>,
     pub grouping_sets: GroupingSets,
@@ -39,6 +37,7 @@ pub struct AggregateExpand {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for AggregateExpand {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -79,7 +78,23 @@ impl IPhysicalPlan for AggregateExpand {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .grouping_sets
+            .sets
+            .iter()
+            .map(|set| {
+                set.iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .map(|s| format!("({})", s))
+            .collect::<Vec<_>>()
+            .join(", "))
     }
 }

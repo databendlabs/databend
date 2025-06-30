@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -31,8 +32,6 @@ use crate::TypeCheck;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     meta: PhysicalPlanMeta,
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
     pub projections: ColumnSet,
     pub input: Box<dyn IPhysicalPlan>,
     // Assumption: expression's data type must be `DataType::Boolean`.
@@ -42,6 +41,7 @@ pub struct Filter {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
 impl IPhysicalPlan for Filter {
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
@@ -49,14 +49,6 @@ impl IPhysicalPlan for Filter {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
-    }
-
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
-        Box::new(std::iter::once(&self.input))
-    }
-
-    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
-        Box::new(std::iter::once(&mut self.input))
     }
 
     fn output_schema(&self) -> Result<DataSchemaRef> {
@@ -70,9 +62,36 @@ impl IPhysicalPlan for Filter {
         Ok(DataSchemaRefExt::create(fields))
     }
 
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(match self.predicates.is_empty() {
+            true => String::new(),
+            false => self.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+        })
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(HashMap::from([
+            (
+                String::from("Filter condition"),
+                self.predicates
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            )
+        ]))
     }
 }
 
@@ -83,7 +102,7 @@ impl PhysicalPlanBuilder {
         filter: &crate::plans::Filter,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let used = filter.predicates.iter().fold(required.clone(), |acc, v| {
             acc.union(&v.used_columns()).cloned().collect()
@@ -104,8 +123,8 @@ impl PhysicalPlanBuilder {
             }
         }
 
-        Ok(PhysicalPlan::Filter(Filter {
-            plan_id: 0,
+        Ok(Box::new(Filter {
+            meta: PhysicalPlanMeta::new("Filter"),
             projections,
             input,
             predicates: filter
