@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use chrono::Duration;
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -30,8 +30,6 @@ use databend_common_meta_app::schema::UpdateTempTableReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MatchSeq;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -44,6 +42,15 @@ pub struct TxnManager {
     state: TxnState,
     txn_buffer: TxnBuffer,
     txn_id: String,
+
+    /// Tables that need to be vacuumed after the transaction completes.
+    ///
+    /// A single table may trigger multiple vacuum actions within the same transaction, especially
+    /// when auto-vacuum is enabled.
+    /// While we store the complete TableInfo here, only table_id and catalog_info are
+    /// actually used in subsequent vacuum operations. The table object itself will be reloaded
+    /// when the vacuum is eventually performed after transaction commit.
+    tables_need_purge: HashMap<u64, TableInfo>,
 }
 
 pub type TxnManagerRef = Arc<Mutex<TxnManager>>;
@@ -66,7 +73,8 @@ pub struct TxnBuffer {
     stream_tables: HashMap<u64, StreamSnapshot>,
     need_purge_files: Vec<(StageInfo, Vec<String>)>,
 
-    pub table_meta_timestamps: HashMap<u64, TableMetaTimestamps>,
+    // TODO doc this
+    table_tnx_begin_timestamps: HashMap<u64, DateTime<Utc>>,
 
     temp_table_desc_to_id: HashMap<String, u64>,
     mutated_temp_tables: HashMap<u64, TempTable>,
@@ -136,6 +144,7 @@ impl TxnManager {
             state: TxnState::AutoCommit,
             txn_buffer: TxnBuffer::default(),
             txn_id: "".to_string(),
+            tables_need_purge: HashMap::new(),
         }))
     }
 
@@ -364,25 +373,27 @@ impl TxnManager {
         std::mem::take(&mut self.txn_buffer.need_purge_files)
     }
 
-    pub fn get_table_meta_timestamps(
-        &mut self,
-        table_id: u64,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-        delta: Duration,
-    ) -> TableMetaTimestamps {
-        if !self.is_active() {
-            return TableMetaTimestamps::new(previous_snapshot, delta);
-        }
+    pub fn defer_table_purge(&mut self, table_info: TableInfo) {
+        self.tables_need_purge
+            .insert(table_info.ident.table_id, table_info);
+    }
+    pub fn table_need_purge(&mut self) -> Vec<TableInfo> {
+        std::mem::take(&mut self.tables_need_purge)
+            .into_values()
+            .collect()
+    }
 
-        let entry = self.txn_buffer.table_meta_timestamps.entry(table_id);
-        match entry {
-            Entry::Occupied(e) => *e.get(),
-            Entry::Vacant(e) => {
-                let timestamps = TableMetaTimestamps::new(previous_snapshot, delta);
-                e.insert(timestamps);
-                timestamps
-            }
-        }
+    pub fn get_table_txn_begin_timestamp(&self, table_id: u64) -> Option<DateTime<Utc>> {
+        self.txn_buffer
+            .table_tnx_begin_timestamps
+            .get(&table_id)
+            .cloned()
+    }
+
+    pub fn set_table_txn_begin_timestamp(&mut self, table_id: u64, timestamps: DateTime<Utc>) {
+        self.txn_buffer
+            .table_tnx_begin_timestamps
+            .insert(table_id, timestamps);
     }
 
     pub fn get_base_snapshot_location(&self, table_id: u64) -> Option<String> {
