@@ -46,7 +46,7 @@ impl PhysicalPlanBuilder {
             plan_id: 0,
             stat_info: Some(stat_info),
             cte_name: cte_consumer.cte_name.clone(),
-            cte_schema: Default::default(),
+            cte_schema: cte_consumer.cte_schema.clone(),
         })))
     }
 }

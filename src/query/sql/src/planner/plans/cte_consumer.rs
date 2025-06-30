@@ -14,23 +14,23 @@
 
 use std::hash::Hash;
 
+use databend_common_expression::DataSchemaRef;
+
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use std::hash::Hasher;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTEConsumer {
     pub cte_name: String,
+    pub cte_schema: DataSchemaRef,
 }
 
-// impl CTEConsumer {
-//     // pub fn used_columns(&self) -> Result<ColumnSet> {
-//     //     let mut used_columns = ColumnSet::new();
-//     //     for field in self.fields.iter() {
-//     //         used_columns.insert(field.name().parse()?);
-//     //     }
-//     //     Ok(used_columns)
-//     // }
-// }
+impl Hash for CTEConsumer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.cte_name.hash(state);
+    }
+}
 
 impl Operator for CTEConsumer {
     fn rel_op(&self) -> RelOp {

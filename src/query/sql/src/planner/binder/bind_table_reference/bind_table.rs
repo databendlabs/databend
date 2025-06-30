@@ -31,18 +31,19 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
+use crate::binder::ExprContext;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::CTEConsumer;
 use crate::plans::RelOperator;
 use crate::BindContext;
-use crate::binder::ExprContext;
-
 impl Binder {
     /// Bind a base table.
     /// A base table is a table that is not a view or CTE.
@@ -148,6 +149,18 @@ impl Binder {
                     res_bind_context.columns[index].column_name = column_name.clone();
                 }
 
+                let fields = res_bind_context
+                    .columns
+                    .iter()
+                    .map(|column_binding| {
+                        DataField::new(
+                            &column_binding.index.to_string(),
+                            *column_binding.data_type.clone(),
+                        )
+                    })
+                    .collect();
+                let cte_schema = DataSchemaRefExt::create(fields);
+
                 log::info!("[CTE] columns: {:?}", res_bind_context.columns);
 
                 // Add the columns to the new bind context
@@ -157,6 +170,7 @@ impl Binder {
 
                 let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
                     cte_name: table_name,
+                    cte_schema: cte_schema,
                 })));
                 return Ok((s_expr, new_bind_context));
             } else {
