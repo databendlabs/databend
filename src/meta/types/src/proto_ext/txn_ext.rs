@@ -455,9 +455,16 @@ impl pb::ConditionalOperation {
     }
 }
 
+impl pb::FetchAddU64Response {
+    pub fn delta(&self) -> u64 {
+        self.after.saturating_sub(self.before)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::protobuf::BooleanExpression;
+    use crate::protobuf::FetchAddU64Response;
     use crate::TxnCondition;
 
     #[test]
@@ -559,5 +566,18 @@ mod tests {
                 "((a == seq(1) OR b == seq(2)) AND (c == seq(3) OR d == seq(4))) OR ((e == seq(5) OR f == seq(6)) AND (g == seq(7) OR h == seq(8)))"
             );
         }
+    }
+
+    #[test]
+    fn test_fetch_add_u64_response() {
+        let resp = FetchAddU64Response {
+            key: "test_key".to_string(),
+            before_seq: 10,
+            before: 100,
+            after_seq: 20,
+            after: 200,
+        };
+
+        assert_eq!(resp.delta(), 100);
     }
 }

@@ -37,6 +37,7 @@ pub mod util;
 
 pub mod crud;
 mod sequence_api_impl;
+pub(crate) mod sequence_nextval_impl;
 
 pub use data_mask_api::DatamaskApi;
 pub use schema_api::SchemaApi;
