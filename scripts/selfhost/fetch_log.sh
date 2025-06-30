@@ -8,6 +8,7 @@ VERBOSITY=0  # 0=normal, 1=verbose, 2=debug
 DSN=""
 DATE=""
 OUTPUT_DIR=""
+FORMATTED_DATE=""
 
 # Logging functions
 log() {
@@ -25,6 +26,13 @@ log() {
             echo "[ERROR] $message" >&2
             ;;
     esac
+}
+
+# Convert YYYYMMDD to YYYY-MM-DD
+format_date() {
+    local input_date="$1"
+    FORMATTED_DATE="${input_date:0:4}-${input_date:4:2}-${input_date:6:2}"
+    log DEBUG "Formatted date: $FORMATTED_DATE"
 }
 
 parse_arguments() {
@@ -59,6 +67,7 @@ parse_arguments() {
     done
 
     OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT_DIR}"
+    format_date "$DATE"
 }
 
 validate_arguments() {
@@ -117,6 +126,24 @@ download_file() {
     fi
 }
 
+create_archive() {
+    local dir="$1"
+    local date_str="$2"
+    local archive_name="data_${date_str}.tar.gz"
+
+    log INFO "Creating archive $archive_name from $dir"
+
+    if tar -czf "$archive_name" -C "$dir" .; then
+        archive_size=$(du -h "$archive_name" | cut -f1)
+        log INFO "Created archive: $archive_name ($archive_size)"
+        echo "Archive created: $archive_name"
+        return 0
+    else
+        log ERROR "Failed to create archive"
+        return 1
+    fi
+}
+
 main() {
     parse_arguments "$@"
     validate_arguments
@@ -125,7 +152,7 @@ main() {
     mkdir -p "$OUTPUT_DIR"
     log INFO "Output directory: $OUTPUT_DIR"
 
-    execute_query "DROP STAGE a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
+    execute_query "DROP STAGE IF EXISTS a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
     execute_query "CREATE STAGE a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 
     log INFO "Fetch columns info..."
@@ -143,10 +170,24 @@ main() {
         download_file "$filename" "$OUTPUT_DIR/columns" && ((success++))
     done <<< "$file_list"
 
+    log INFO "Fetch Databend user functions..."
+    execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
+
+    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system.user_functions;"
+
+    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
+    [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
+
+    mkdir -p "$OUTPUT_DIR/user_functions"
+    while IFS= read -r filename; do
+        ((total++))
+        download_file "$filename" "$OUTPUT_DIR/user_functions" && ((success++))
+    done <<< "$file_list"
+
     log INFO "Fetch Databend query logs..."
     execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 
-    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history);"
+    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE event_date = '$FORMATTED_DATE');"
 
     file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
@@ -160,7 +201,7 @@ main() {
     log INFO "Fetch Databend query raw logs..."
     execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 
-    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.log_history);"
+    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.log_history WHERE to_date(timestamp) = '$FORMATTED_DATE');"
 
     file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
@@ -174,7 +215,7 @@ main() {
     log INFO "Fetch Databend query profile logs..."
     execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 
-    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.profile_history);"
+    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.profile_history WHERE to_date(timestamp) = '$FORMATTED_DATE');"
 
     file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
@@ -190,7 +231,16 @@ main() {
     echo "Successfully downloaded: $success"
     echo "Failed: $((total - success))"
 
-    [[ $success -eq $total ]] || exit 1
+    if [[ $success -gt 0 ]]; then
+      if create_archive "$OUTPUT_DIR" "$FORMATTED_DATE"; then
+        echo "Operation completed successfully"
+        exit 0
+      else
+        exit 1
+      fi
+    else
+      exit 1
+    fi
 }
 
 main "$@"
