@@ -49,6 +49,7 @@ pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
+pub use self::decimal::i256;
 pub use self::decimal::DecimalDataType;
 pub use self::decimal::DecimalSize;
 pub use self::empty_array::EmptyArrayType;

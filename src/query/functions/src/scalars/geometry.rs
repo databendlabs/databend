@@ -64,7 +64,7 @@ use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
 use jsonb::parse_value;
-use jsonb::to_string;
+use jsonb::RawJsonb;
 use num_traits::AsPrimitive;
 use proj4rs::transform::transform;
 use proj4rs::Proj;
@@ -1695,7 +1695,8 @@ fn json_to_geometry_impl(
     binary: &[u8],
     srid: Option<i32>,
 ) -> databend_common_exception::Result<Vec<u8>> {
-    let s = to_string(binary);
+    let raw_jsonb = RawJsonb::new(binary);
+    let s = raw_jsonb.to_string();
     let json = GeoJson(s.as_str());
     match json.to_ewkb(CoordDimensions::xy(), srid) {
         Ok(data) => Ok(data),

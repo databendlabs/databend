@@ -19,12 +19,12 @@ use byteorder::WriteBytesExt;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::decimal::Decimal;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_hashtable::DictionaryKeys;
-use ethnum::i256;
 
 use super::large_number::LargeNumber;
 

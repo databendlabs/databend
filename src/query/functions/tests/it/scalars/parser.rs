@@ -29,6 +29,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::decimal::DecimalDataType;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -570,7 +571,7 @@ pub fn transform_literal(lit: ASTLiteral) -> Scalar {
             value,
             precision,
             scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal256(value, DecimalSize {
+        } => Scalar::Decimal(DecimalScalar::Decimal256(i256(value), DecimalSize {
             precision,
             scale,
         })),

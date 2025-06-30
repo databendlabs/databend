@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ethnum::i256;
-
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance;
 use crate::kernels::utils::store_advance_aligned;
 use crate::types::binary::BinaryColumn;
 use crate::types::decimal::DecimalColumn;
+use crate::types::i256;
 use crate::types::NumberColumn;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;

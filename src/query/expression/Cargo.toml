@@ -31,7 +31,7 @@ databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 educe = "0.4"
 enum-as-inner = "0.5"
-ethnum = { workspace = true, features = ["serde", "macros", "borsh"] }
+ethnum = { workspace = true, features = ["serde", "macros"] }
 futures = { workspace = true }
 geo = { workspace = true }
 geos = { workspace = true }

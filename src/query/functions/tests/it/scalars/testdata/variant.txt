@@ -101,18 +101,18 @@ evaluation:
 | Row 3  | '-32768'                                                  | '-32768'                |
 | Row 4  | '1234.5678'                                               | '1234.5678'             |
 | Row 5  | '1.912e2'                                                 | '191.2'                 |
-| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 6  | '"\\\"abc\\\""'                                           | '"\\\\\\"abc\\\\\\""'   |
 | Row 7  | '"databend"'                                              | '"databend"'            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
 +--------+-----------------------------------------------------------+-------------------------+
 evaluation (internal):
-+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| s      | StringColumn { data: 0x6e756c6c74727565393232333337323033363835343737353830372d3332373638313233342e35363738312e3931326532225c5c5c226162635c5c5c2222226461746162656e64227b226b223a2276222c2261223a2262227d5b312c322c332c5b2261222c2262222c2263225d5d, offsets: [0, 4, 8, 27, 33, 42, 49, 62, 72, 89, 110] }                                                                                                                                            |
-| Output | BinaryColumn { data: 0x200000000000000020000000400000002000000020000009507fffffffffffffff200000002000000340800020000000200000096040934a456d5cfaad2000000020000009604067e6666666666620000000100000075c226162635c2220000000100000086461746162656e644000000210000001100000011000000110000001616b6276800000042000000220000002200000025000001350015002500380000003100000011000000110000001616263, offsets: [0, 8, 16, 33, 44, 61, 78, 93, 109, 133, 178] } |
-+--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x6e756c6c74727565393232333337323033363835343737353830372d3332373638313233342e35363738312e3931326532225c5c5c226162635c5c5c2222226461746162656e64227b226b223a2276222c2261223a2262227d5b312c322c332c5b2261222c2262222c2263225d5d, offsets: [0, 4, 8, 27, 33, 42, 49, 62, 72, 89, 110] }                                                                                                                                              |
+| Output | BinaryColumn { data: 0x200000000000000020000000400000002000000020000009507fffffffffffffff2000000020000003408000200000002000000a700000000000bc614e042000000020000009604067e6666666666620000000100000075c226162635c2220000000100000086461746162656e644000000210000001100000011000000110000001616b6276800000042000000220000002200000025000001350015002500380000003100000011000000110000001616263, offsets: [0, 8, 16, 33, 44, 62, 79, 94, 110, 134, 179] } |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : parse_json(s)
@@ -234,18 +234,18 @@ evaluation:
 | Row 3  | '-32768'                                                  | '-32768'                |
 | Row 4  | '1234.5678'                                               | '1234.5678'             |
 | Row 5  | '1.912e2'                                                 | '191.2'                 |
-| Row 6  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'         |
+| Row 6  | '"\\\"abc\\\""'                                           | '"\\\\\\"abc\\\\\\""'   |
 | Row 7  | '"databend"'                                              | '"databend"'            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | '{"a":"b","k":"v"}'     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | '[1,2,3,["a","b","c"]]' |
 +--------+-----------------------------------------------------------+-------------------------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| s      | StringColumn { data: 0x6e756c6c74727565393232333337323033363835343737353830372d3332373638313233342e35363738312e3931326532225c5c5c226162635c5c5c2222226461746162656e64227b226b223a2276222c2261223a2262227d5b312c322c332c5b2261222c2262222c2263225d5d, offsets: [0, 4, 8, 27, 33, 42, 49, 62, 72, 89, 110] }                                                                                                                                                                                                           |
-| Output | NullableColumn { column: BinaryColumn { data: 0x200000000000000020000000400000002000000020000009507fffffffffffffff200000002000000340800020000000200000096040934a456d5cfaad2000000020000009604067e6666666666620000000100000075c226162635c2220000000100000086461746162656e644000000210000001100000011000000110000001616b6276800000042000000220000002200000025000001350015002500380000003100000011000000110000001616263, offsets: [0, 8, 16, 33, 44, 61, 78, 93, 109, 133, 178] }, validity: [0b11111111, 0b______11] } |
-+--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| s      | StringColumn { data: 0x6e756c6c74727565393232333337323033363835343737353830372d3332373638313233342e35363738312e3931326532225c5c5c226162635c5c5c2222226461746162656e64227b226b223a2276222c2261223a2262227d5b312c322c332c5b2261222c2262222c2263225d5d, offsets: [0, 4, 8, 27, 33, 42, 49, 62, 72, 89, 110] }                                                                                                                                                                                                             |
+| Output | NullableColumn { column: BinaryColumn { data: 0x200000000000000020000000400000002000000020000009507fffffffffffffff2000000020000003408000200000002000000a700000000000bc614e042000000020000009604067e6666666666620000000100000075c226162635c2220000000100000086461746162656e644000000210000001100000011000000110000001616b6276800000042000000220000002200000025000001350015002500380000003100000011000000110000001616263, offsets: [0, 8, 16, 33, 44, 62, 79, 94, 110, 134, 179] }, validity: [0b11111111, 0b______11] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 ast            : try_parse_json(s)
@@ -1523,7 +1523,7 @@ ast            : to_boolean(parse_json('true'))
 raw expr       : to_boolean(parse_json('true'))
 checked expr   : to_boolean<Variant>(parse_json<String>("true"))
 optimized expr : true
-output type    : Boolean
+output type    : Boolean NULL
 output domain  : {TRUE}
 output         : true
 
@@ -1548,7 +1548,7 @@ ast            : to_uint64(parse_json('123'))
 raw expr       : to_uint64(parse_json('123'))
 checked expr   : to_uint64<Variant>(parse_json<String>("123"))
 optimized expr : 123_u64
-output type    : UInt64
+output type    : UInt64 NULL
 output domain  : {123..=123}
 output         : 123
 
@@ -1573,7 +1573,7 @@ ast            : to_int64(parse_json('123'))
 raw expr       : to_int64(parse_json('123'))
 checked expr   : to_int64<Variant>(parse_json<String>("123"))
 optimized expr : 123_i64
-output type    : Int64
+output type    : Int64 NULL
 output domain  : {123..=123}
 output         : 123
 
@@ -1582,7 +1582,7 @@ ast            : to_int64(parse_json('-123'))
 raw expr       : to_int64(parse_json('-123'))
 checked expr   : to_int64<Variant>(parse_json<String>("-123"))
 optimized expr : -123_i64
-output type    : Int64
+output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
 
@@ -1599,7 +1599,7 @@ ast            : to_float64(parse_json('12.34'))
 raw expr       : to_float64(parse_json('12.34'))
 checked expr   : to_float64<Variant>(parse_json<String>("12.34"))
 optimized expr : 12.34_f64
-output type    : Float64
+output type    : Float64 NULL
 output domain  : {12.34..=12.34}
 output         : 12.34
 
@@ -1616,7 +1616,7 @@ ast            : to_date(parse_json('"2023-01-01"'))
 raw expr       : to_date(parse_json('"2023-01-01"'))
 checked expr   : to_date<Variant>(parse_json<String>("\"2023-01-01\""))
 optimized expr : 19358
-output type    : Date
+output type    : Date NULL
 output domain  : {19358..=19358}
 output         : '2023-01-01'
 
@@ -1625,7 +1625,7 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
 
 
 
@@ -1633,7 +1633,7 @@ ast            : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 checked expr   : to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
 optimized expr : 1672531200000000
-output type    : Timestamp
+output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
 output         : '2023-01-01 00:00:00.000000'
 
@@ -1642,7 +1642,7 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
 
 
 
@@ -1650,7 +1650,7 @@ ast            : to_string(parse_json('12.34'))
 raw expr       : to_string(parse_json('12.34'))
 checked expr   : to_string<Variant>(parse_json<String>("12.34"))
 optimized expr : "12.34"
-output type    : String
+output type    : String NULL
 output domain  : {"12.34"..="12.34"}
 output         : '12.34'
 
@@ -1659,9 +1659,113 @@ ast            : to_string(parse_json('"abc"'))
 raw expr       : to_string(parse_json('"abc"'))
 checked expr   : to_string<Variant>(parse_json<String>("\"abc\""))
 optimized expr : "abc"
-output type    : String
+output type    : String NULL
 output domain  : {"abc"..="abc"}
 output         : 'abc'
+
+
+ast            : to_decimal(3, 2)(to_variant(1.23))
+raw expr       : to_decimal(3, 2)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(3, 2)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.23_d128(3,2)
+output type    : Decimal(3, 2)
+output domain  : {1.23..=1.23}
+output         : 1.23
+
+
+ast            : to_decimal(2, 1)(to_variant(1.23))
+raw expr       : to_decimal(2, 1)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(2, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.2_d128(2,1)
+output type    : Decimal(2, 1)
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(1, 1)(to_variant(1.23))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(1, 1)('1.23')` in expr `to_decimal(1, 1)(to_variant(1.23))`
+
+
+
+ast            : to_decimal(76, 1)(to_variant(1.23))
+raw expr       : to_decimal(76, 1)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(76, 1)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.2_d256(76,1)
+output type    : Decimal(76, 1)
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+
+ast            : to_decimal(4, 3)(to_variant(1.23))
+raw expr       : to_decimal(4, 3)(to_variant(1.23))
+checked expr   : to_decimal<Variant>(4, 3)(to_variant<T0=Decimal(3, 2)><T0>(1.23_d128(3,2)))
+optimized expr : 1.230_d128(4,3)
+output type    : Decimal(4, 3)
+output domain  : {1.230..=1.230}
+output         : 1.230
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(3, 3)(to_variant(1.23))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(3, 3)('1.23')` in expr `to_decimal(3, 3)(to_variant(1.23))`
+
+
+
+ast            : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
+raw expr       : to_decimal(38, 2)(to_variant(100000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(38, 2)(to_variant<T0=Decimal(38, 2)><T0>(100000000000000000000000000000000000.01_d128(38,2)))
+optimized expr : 100000000000000000000000000000000000.01_d128(38,2)
+output type    : Decimal(38, 2)
+output domain  : {100000000000000000000000000000000000.01..=100000000000000000000000000000000000.01}
+output         : 100000000000000000000000000000000000.01
+
+
+ast            : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
+raw expr       : to_decimal(39, 2)(to_variant(1000000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(39, 2)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+optimized expr : 1000000000000000000000000000000000000.01_d256(39,2)
+output type    : Decimal(39, 2)
+output domain  : {1000000000000000000000000000000000000.01..=1000000000000000000000000000000000000.01}
+output         : 1000000000000000000000000000000000000.01
+
+
+ast            : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
+raw expr       : to_decimal(38, 1)(to_variant(1000000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(38, 1)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+optimized expr : 1000000000000000000000000000000000000.0_d128(38,1)
+output type    : Decimal(38, 1)
+output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
+output         : 1000000000000000000000000000000000000.0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(38, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(38, 3)(to_variant(1000000000000000000000000000000000000.01))`
+
+
+
+ast            : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
+raw expr       : to_decimal(39, 1)(to_variant(1000000000000000000000000000000000000.01))
+checked expr   : to_decimal<Variant>(39, 1)(to_variant<T0=Decimal(39, 2)><T0>(1000000000000000000000000000000000000.01_d256(39,2)))
+optimized expr : 1000000000000000000000000000000000000.0_d256(39,1)
+output type    : Decimal(39, 1)
+output domain  : {1000000000000000000000000000000000000.0..=1000000000000000000000000000000000000.0}
+output         : 1000000000000000000000000000000000000.0
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(39, 3)('1000000000000000000000000000000000000.01')` in expr `to_decimal(39, 3)(to_variant(1000000000000000000000000000000000000.01))`
+
 
 
 ast            : to_boolean(parse_json(s))
@@ -2634,7 +2738,7 @@ ast            : json_to_string(parse_json('true'))
 raw expr       : json_to_string(parse_json('true'))
 checked expr   : to_string<Variant>(parse_json<String>("true"))
 optimized expr : "true"
-output type    : String
+output type    : String NULL
 output domain  : {"true"..="true"}
 output         : 'true'
 
@@ -2643,7 +2747,7 @@ ast            : json_to_string(parse_json('123456'))
 raw expr       : json_to_string(parse_json('123456'))
 checked expr   : to_string<Variant>(parse_json<String>("123456"))
 optimized expr : "123456"
-output type    : String
+output type    : String NULL
 output domain  : {"123456"..="123456"}
 output         : '123456'
 
@@ -2652,7 +2756,7 @@ ast            : json_to_string(parse_json('"abcd"'))
 raw expr       : json_to_string(parse_json('"abcd"'))
 checked expr   : to_string<Variant>(parse_json<String>("\"abcd\""))
 optimized expr : "abcd"
-output type    : String
+output type    : String NULL
 output domain  : {"abcd"..="abcd"}
 output         : 'abcd'
 
@@ -2661,7 +2765,7 @@ ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 checked expr   : to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
 optimized expr : "[1,2,3,4,5,6]"
-output type    : String
+output type    : String NULL
 output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
 output         : '[1,2,3,4,5,6]'
 
@@ -2670,7 +2774,7 @@ ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 checked expr   : to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
 optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
-output type    : String
+output type    : String NULL
 output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}
 output         : '{"k1":123,"k2":"abc"}'
 
@@ -2807,55 +2911,55 @@ output         : NULL
 ast            : json_typeof(parse_json('null'))
 raw expr       : json_typeof(parse_json('null'))
 checked expr   : json_typeof<Variant>(parse_json<String>("null"))
-optimized expr : "null"
+optimized expr : "NULL_VALUE"
 output type    : String
-output domain  : {"null"..="null"}
-output         : 'null'
+output domain  : {"NULL_VALUE"..="NULL_VALUE"}
+output         : 'NULL_VALUE'
 
 
 ast            : json_typeof(parse_json('true'))
 raw expr       : json_typeof(parse_json('true'))
 checked expr   : json_typeof<Variant>(parse_json<String>("true"))
-optimized expr : "boolean"
+optimized expr : "BOOLEAN"
 output type    : String
-output domain  : {"boolean"..="boolean"}
-output         : 'boolean'
+output domain  : {"BOOLEAN"..="BOOLEAN"}
+output         : 'BOOLEAN'
 
 
 ast            : json_typeof(parse_json('"test"'))
 raw expr       : json_typeof(parse_json('"test"'))
 checked expr   : json_typeof<Variant>(parse_json<String>("\"test\""))
-optimized expr : "string"
+optimized expr : "STRING"
 output type    : String
-output domain  : {"string"..="string"}
-output         : 'string'
+output domain  : {"STRING"..="STRING"}
+output         : 'STRING'
 
 
 ast            : json_typeof(parse_json('-1.12'))
 raw expr       : json_typeof(parse_json('-1.12'))
 checked expr   : json_typeof<Variant>(parse_json<String>("-1.12"))
-optimized expr : "number"
+optimized expr : "DECIMAL"
 output type    : String
-output domain  : {"number"..="number"}
-output         : 'number'
+output domain  : {"DECIMAL"..="DECIMAL"}
+output         : 'DECIMAL'
 
 
 ast            : json_typeof(parse_json('[1,2,3]'))
 raw expr       : json_typeof(parse_json('[1,2,3]'))
 checked expr   : json_typeof<Variant>(parse_json<String>("[1,2,3]"))
-optimized expr : "array"
+optimized expr : "ARRAY"
 output type    : String
-output domain  : {"array"..="array"}
-output         : 'array'
+output domain  : {"ARRAY"..="ARRAY"}
+output         : 'ARRAY'
 
 
 ast            : json_typeof(parse_json('{"a":1,"b":2}'))
 raw expr       : json_typeof(parse_json('{"a":1,"b":2}'))
 checked expr   : json_typeof<Variant>(parse_json<String>("{\"a\":1,\"b\":2}"))
-optimized expr : "object"
+optimized expr : "OBJECT"
 output type    : String
-output domain  : {"object"..="object"}
-output         : 'object'
+output domain  : {"OBJECT"..="OBJECT"}
+output         : 'OBJECT'
 
 
 ast            : json_array()
@@ -3516,19 +3620,19 @@ output         : NULL
 ast            : parse_json('{"k": null}') #>> '{k}'
 raw expr       : get_by_keypath_string(parse_json('{"k": null}'), '{k}')
 checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("{\"k\": null}"), "{k}")
-optimized expr : "null"
+optimized expr : NULL
 output type    : String NULL
-output domain  : {"null"..="null"}
-output         : 'null'
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : parse_json('[10, 20, null]') #>> '{2}'
 raw expr       : get_by_keypath_string(parse_json('[10, 20, null]'), '{2}')
 checked expr   : get_by_keypath_string<Variant, String>(parse_json<String>("[10, 20, null]"), "{2}")
-optimized expr : "null"
+optimized expr : NULL
 output type    : String NULL
-output domain  : {"null"..="null"}
-output         : 'null'
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : parse_json('[10, {"a":{"k1":[1,2,3], "k2":2}}, 30]') #>> '{1, a, k1}'

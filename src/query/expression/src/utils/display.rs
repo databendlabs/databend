@@ -20,6 +20,7 @@ use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
@@ -29,6 +30,7 @@ use geozero::GeozeroGeometry;
 use geozero::ToGeos;
 use geozero::ToWkt;
 use itertools::Itertools;
+use jsonb::RawJsonb;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
@@ -259,8 +261,9 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, ")")
             }
             ScalarRef::Variant(s) => {
-                let value = jsonb::to_string(s);
-                write!(f, "'{value}'")
+                let raw_jsonb = RawJsonb::new(s);
+                let value = raw_jsonb.to_string();
+                write!(f, "{}", QuotedString(value, '\''))
             }
             ScalarRef::Geometry(s) => {
                 let ewkb = Ewkb(s);
@@ -338,7 +341,7 @@ impl Debug for DecimalScalar {
                 write!(
                     f,
                     "{}_d256({},{})",
-                    display_decimal_256(*val, size.scale),
+                    display_decimal_256(val.0, size.scale),
                     size.precision,
                     size.scale
                 )
@@ -354,7 +357,7 @@ impl Display for DecimalScalar {
                 write!(f, "{}", display_decimal_128(*val, size.scale))
             }
             DecimalScalar::Decimal256(val, size) => {
-                write!(f, "{}", display_decimal_256(*val, size.scale))
+                write!(f, "{}", display_decimal_256(val.0, size.scale))
             }
         }
     }
@@ -406,7 +409,7 @@ impl Debug for DecimalColumn {
                 .field(&format_args!(
                     "[{}]",
                     &val.iter()
-                        .map(|x| display_decimal_256(*x, size.scale))
+                        .map(|x| display_decimal_256(x.0, size.scale))
                         .join(", ")
                 ))
                 .finish(),
@@ -1034,8 +1037,8 @@ impl Display for DecimalDomain {
             }
             DecimalDomain::Decimal256(SimpleDomain { min, max }, size) => {
                 write!(f, "{}", SimpleDomain {
-                    min: display_decimal_256(*min, size.scale),
-                    max: display_decimal_256(*max, size.scale),
+                    min: display_decimal_256(min.0, size.scale),
+                    max: display_decimal_256(max.0, size.scale),
                 })
             }
         }

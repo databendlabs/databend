@@ -43,6 +43,7 @@ use geozero::ToGeos;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
+use jsonb::RawJsonb;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
@@ -296,7 +297,7 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = jsonb::to_string(v);
+        let s = RawJsonb::new(v).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 

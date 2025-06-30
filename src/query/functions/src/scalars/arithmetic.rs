@@ -22,8 +22,10 @@ use std::sync::Arc;
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::serialize::read_decimal_with_size;
+use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalDomain;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::Number;
@@ -65,7 +67,6 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionEval;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
-use ethnum::i256;
 use lexical_core::FormattedSize;
 use num_traits::AsPrimitive;
 

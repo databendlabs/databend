@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_base::base::OrderedFloat;
-use ethnum::i256;
 
 use crate::types::decimal::DecimalType;
 use crate::types::geometry::GeometryType;
+use crate::types::i256;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::BinaryType;

@@ -34,6 +34,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_deserialize_state;
@@ -178,10 +180,11 @@ where
             cast_scalar_to_variant(v.as_ref(), tz, &mut val);
             kvs.push((key, val));
         }
-        let mut data = vec![];
-        jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut data).unwrap();
-
-        let object_value = Scalar::Variant(data);
+        let owned_jsonb = OwnedJsonb::build_object(
+            kvs.iter().map(|(k, v)| (k, RawJsonb::new(&v[..]))),
+        )
+        .map_err(|e| ErrorCode::Internal(format!("failed to build object error: {:?}", e)))?;
+        let object_value = Scalar::Variant(owned_jsonb.to_vec());
         builder.push(object_value.as_ref());
         Ok(())
     }

@@ -325,7 +325,7 @@ impl Column {
                     let values = unsafe {
                         std::mem::transmute::<
                             Buffer<databend_common_arrow::arrow::types::i256>,
-                            Buffer<ethnum::I256>,
+                            Buffer<crate::types::i256>,
                         >(arrow_col.values().clone())
                     };
                     Column::Decimal(DecimalColumn::Decimal256(values, DecimalSize {

@@ -27,11 +27,11 @@ pub mod variant_transform;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
-use ethnum::i256;
 
 pub use self::column_from::*;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::MAX_DECIMAL256_PRECISION;
+use crate::types::i256;
 use crate::types::AnyType;
 use crate::types::DataType;
 use crate::types::DecimalDataType;

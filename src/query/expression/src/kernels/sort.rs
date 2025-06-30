@@ -28,6 +28,7 @@ use databend_common_arrow::arrow::error::Error as ArrowError;
 use databend_common_arrow::arrow::error::Result as ArrowResult;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use jsonb::RawJsonb;
 
 use crate::converts::arrow2::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::converts::arrow2::ARROW_EXT_TYPE_EMPTY_MAP;
@@ -231,7 +232,9 @@ fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCompar
     Ok(Box::new(move |i, j| {
         let l = unsafe { left.index_unchecked(i) };
         let r = unsafe { right.index_unchecked(j) };
-        jsonb::compare(l, r).unwrap()
+        let l_val = RawJsonb::new(l);
+        let r_val = RawJsonb::new(r);
+        l_val.cmp(&r_val)
     }))
 }
 

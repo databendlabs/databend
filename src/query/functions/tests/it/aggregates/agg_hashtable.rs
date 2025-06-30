@@ -32,6 +32,7 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
 use databend_common_expression::types::decimal::DecimalType;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -56,7 +57,6 @@ use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::DecimalSumState;
-use ethnum::I256;
 use itertools::Itertools;
 
 // cargo test --package databend-common-functions --test it -- aggregates::agg_hashtable::test_agg_hashtable --exact --nocapture
@@ -192,7 +192,7 @@ fn test_layout() {
 
     let aggrs = factory.get("sum", vec![], vec![decimal_type]).unwrap();
     type S = DecimalSumState<false, DecimalType<i128>>;
-    type M = DecimalSumState<false, DecimalType<I256>>;
+    type M = DecimalSumState<false, DecimalType<i256>>;
 
     assert_eq!(
         aggrs.state_layout(),

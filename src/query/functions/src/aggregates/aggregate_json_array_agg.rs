@@ -20,6 +20,7 @@ use std::sync::Arc;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::date_helper::TzLUT;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
@@ -30,6 +31,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
@@ -112,10 +115,9 @@ where
             cast_scalar_to_variant(v.as_ref(), tz, &mut val);
             items.push(val);
         }
-        let mut data = vec![];
-        jsonb::build_array(items.iter().map(|b| &b[..]), &mut data).unwrap();
-
-        let array_value = Scalar::Variant(data);
+        let owned_jsonb = OwnedJsonb::build_array(items.iter().map(|v| RawJsonb::new(v)))
+            .map_err(|e| ErrorCode::Internal(format!("failed to build array error: {:?}", e)))?;
+        let array_value = Scalar::Variant(owned_jsonb.to_vec());
         builder.push(array_value.as_ref());
         Ok(())
     }

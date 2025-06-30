@@ -18,10 +18,10 @@ use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberDataType;
-use ethnum::i256;
 use num_bigint::BigInt;
 use pretty_assertions::assert_eq;
 
