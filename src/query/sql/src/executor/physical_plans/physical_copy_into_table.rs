@@ -21,7 +21,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use enum_as_inner::EnumAsInner;
 
-use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
 use crate::ColumnBinding;
@@ -69,6 +69,20 @@ impl IPhysicalPlan for CopyIntoTable {
         match &mut self.source {
             CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
             CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
+        }
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_copy_into_table = self.clone();
+                assert_eq!(children.len(), 1);
+                new_copy_into_table.input = children[0];
+                Box::new(new_copy_into_table)
+            }
         }
     }
 }

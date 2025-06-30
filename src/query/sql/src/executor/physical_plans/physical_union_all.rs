@@ -25,6 +25,7 @@ use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
@@ -72,6 +73,22 @@ impl IPhysicalPlan for UnionAll {
             .zip(self.right_outputs.iter())
             .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
             .join(", "))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_left = self.left.derive_with(handle);
+        let derive_right = self.right.derive_with(handle);
+
+        match handle.derive(self, vec![derive_left, derive_right]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_union_all = self.clone();
+                assert_eq!(children.len(), 2);
+                new_union_all.left = children[0];
+                new_union_all.right = children[1];
+                Box::new(new_union_all)
+            }
+        }
     }
 }
 

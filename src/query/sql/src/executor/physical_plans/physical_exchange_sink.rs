@@ -19,6 +19,7 @@ use databend_common_expression::RemoteExpr;
 
 use crate::executor::physical_plans::common::FragmentKind;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
@@ -67,5 +68,19 @@ impl IPhysicalPlan for ExchangeSink {
 
     fn is_distributed_plan(&self) -> bool {
         true
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_exchange_sink = self.clone();
+                assert_eq!(children.len(), 1);
+                new_exchange_sink.input = children[0];
+                Box::new(new_exchange_sink)
+            }
+        }
     }
 }

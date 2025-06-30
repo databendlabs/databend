@@ -27,7 +27,7 @@ use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
 use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -121,6 +121,20 @@ impl IPhysicalPlan for EvalScalar {
                     .collect(),
             )
         ]))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_eval_scalar = self.clone();
+                assert_eq!(children.len(), 1);
+                new_eval_scalar.input = children[0];
+                Box::new(new_eval_scalar)
+            }
+        }
     }
 }
 

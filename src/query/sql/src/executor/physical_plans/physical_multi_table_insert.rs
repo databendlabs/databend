@@ -25,6 +25,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {
     pub meta: PhysicalPlanMeta,
@@ -48,6 +50,20 @@ impl IPhysicalPlan for Duplicate {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_duplicate = self.clone();
+                assert_eq!(children.len(), 1);
+                new_duplicate.input = children[0];
+                Box::new(new_duplicate)
+            }
+        }
     }
 }
 
@@ -74,6 +90,20 @@ impl IPhysicalPlan for Shuffle {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_shuffle = self.clone();
+                assert_eq!(children.len(), 1);
+                new_shuffle.input = children[0];
+                Box::new(new_shuffle)
+            }
+        }
     }
 }
 
@@ -128,6 +158,20 @@ impl IPhysicalPlan for ChunkFilter {
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_filter = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_filter.input = children[0];
+                Box::new(new_chunk_filter)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -153,6 +197,20 @@ impl IPhysicalPlan for ChunkEvalScalar {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_eval_scalar = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_eval_scalar.input = children[0];
+                Box::new(new_chunk_eval_scalar)
+            }
+        }
     }
 }
 
@@ -186,6 +244,20 @@ impl IPhysicalPlan for ChunkCastSchema {
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_cast_schema = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_cast_schema.input = children[0];
+                Box::new(new_chunk_cast_schema)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -218,6 +290,20 @@ impl IPhysicalPlan for ChunkFillAndReorder {
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_fill_and_reorder = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_fill_and_reorder.input = children[0];
+                Box::new(new_chunk_fill_and_reorder)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -249,6 +335,20 @@ impl IPhysicalPlan for ChunkAppendData {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_append_data = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_append_data.input = children[0];
+                Box::new(new_chunk_append_data)
+            }
+        }
     }
 }
 
@@ -283,6 +383,20 @@ impl IPhysicalPlan for ChunkMerge {
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_merge = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_merge.input = children[0];
+                Box::new(new_chunk_merge)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -311,5 +425,19 @@ impl IPhysicalPlan for ChunkCommitInsert {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_chunk_commit_insert = self.clone();
+                assert_eq!(children.len(), 1);
+                new_chunk_commit_insert.input = children[0];
+                Box::new(new_chunk_commit_insert)
+            }
+        }
     }
 }

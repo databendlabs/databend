@@ -70,6 +70,7 @@ use crate::TypeCheck;
 use crate::VirtualColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
@@ -165,6 +166,16 @@ impl IPhysicalPlan for TableScan {
                 .partitions_total
                 .to_string()])
         ]))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        match handle.derive(self, vec![]) {
+            Ok(v) => v,
+            Err(children) => {
+                assert!(children.is_empty());
+                Box::new(self.clone())
+            }
+        }
     }
 }
 

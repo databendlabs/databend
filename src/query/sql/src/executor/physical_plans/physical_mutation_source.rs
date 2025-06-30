@@ -31,6 +31,7 @@ use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlan
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -65,6 +66,16 @@ impl IPhysicalPlan for MutationSource {
 
     fn try_find_mutation_source(&self) -> Option<MutationSource> {
         Some(self.clone())
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        match handle.derive(self, vec![]) {
+            Ok(v) => v,
+            Err(children) => {
+                assert!(children.is_empty());
+                Box::new(self.clone())
+            }
+        }
     }
 }
 

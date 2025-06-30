@@ -38,6 +38,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnEntry;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
@@ -187,6 +188,22 @@ impl IPhysicalPlan for HashJoin {
         }
 
         Ok(labels)
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_probe = self.probe.derive_with(handle);
+        let derive_build = self.build.derive_with(handle);
+
+        match handle.derive(self, vec![derive_probe, derive_build]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_hash_join = self.clone();
+                assert_eq!(children.len(), 2);
+                new_hash_join.probe = children[0];
+                new_hash_join.build = children[1];
+                Box::new(new_hash_join)
+            }
+        }
     }
 }
 

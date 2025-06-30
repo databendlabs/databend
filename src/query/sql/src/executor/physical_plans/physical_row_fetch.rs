@@ -22,6 +22,7 @@ use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RowFetch {
@@ -72,5 +73,19 @@ impl IPhysicalPlan for RowFetch {
         let table_schema = self.source.source_info.schema();
         let projected_schema = self.cols_to_fetch.project_schema(&table_schema);
         Ok(projected_schema.fields.iter().map(|f| f.name()).join(", "))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_row_fetch = self.clone();
+                assert_eq!(children.len(), 1);
+                new_row_fetch.input = children[0];
+                Box::new(new_row_fetch)
+            }
+        }
     }
 }

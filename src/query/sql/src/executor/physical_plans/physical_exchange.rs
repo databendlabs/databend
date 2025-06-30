@@ -24,6 +24,7 @@ use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -61,6 +62,20 @@ impl IPhysicalPlan for Exchange {
 
     fn is_distributed_plan(&self) -> bool {
         true
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_exchange = self.clone();
+                assert_eq!(children.len(), 1);
+                new_exchange.input = children[0];
+                Box::new(new_exchange)
+            }
+        }
     }
 }
 

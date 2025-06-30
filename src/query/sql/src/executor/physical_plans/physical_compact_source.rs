@@ -29,6 +29,7 @@ use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -48,6 +49,16 @@ impl IPhysicalPlan for CompactSource {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        match handle.derive(self, vec![]) {
+            Ok(v) => v,
+            Err(children) => {
+                assert!(children.is_empty());
+                Box::new(self.clone())
+            }
+        }
     }
 }
 

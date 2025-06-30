@@ -19,6 +19,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use databend_common_exception::Result;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -36,6 +37,16 @@ impl IPhysicalPlan for Recluster {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        match handle.derive(self, vec![]) {
+            Ok(v) => v,
+            Err(children) => {
+                assert!(children.is_empty());
+                Box::new(self.clone())
+            }
+        }
     }
 }
 
@@ -69,5 +80,19 @@ impl IPhysicalPlan for HilbertPartition {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_hilbert_partition = self.clone();
+                assert_eq!(children.len(), 1);
+                new_hilbert_partition.input = children[0];
+                Box::new(new_hilbert_partition)
+            }
+        }
     }
 }

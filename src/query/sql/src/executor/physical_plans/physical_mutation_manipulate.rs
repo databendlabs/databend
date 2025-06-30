@@ -22,7 +22,7 @@ use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationStrategy;
 use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
-use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
 
 pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
@@ -60,5 +60,19 @@ impl IPhysicalPlan for MutationManipulate {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_mutation_manipulate = self.clone();
+                assert_eq!(children.len(), 1);
+                new_mutation_manipulate.input = children[0];
+                Box::new(new_mutation_manipulate)
+            }
+        }
     }
 }

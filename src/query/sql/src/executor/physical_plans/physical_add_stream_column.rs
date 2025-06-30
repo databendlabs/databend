@@ -31,6 +31,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::Binder;
 use crate::ColumnBindingBuilder;
+use crate::executor::physical_plan::{DeriveExt, PhysicalPlanDeriveHandle};
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -58,8 +59,22 @@ impl IPhysicalPlan for AddStreamColumn {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut  self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_add_stream_column = self.clone();
+                assert_eq!(children.len(), 1);
+                new_add_stream_column.input = children[0];
+                Box::new(new_add_stream_column)
+            }
+        }
     }
 }
 

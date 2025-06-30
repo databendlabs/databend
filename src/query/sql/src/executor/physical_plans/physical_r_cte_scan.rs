@@ -20,6 +20,7 @@ use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -42,6 +43,16 @@ impl IPhysicalPlan for RecursiveCteScan {
 
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        match handle.derive(self, vec![]) {
+            Ok(v) => v,
+            Err(children) => {
+                assert!(children.is_empty());
+                Box::new(self.clone())
+            }
+        }
     }
 }
 

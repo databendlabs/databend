@@ -42,6 +42,7 @@ use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
@@ -115,6 +116,20 @@ impl IPhysicalPlan for Window {
             .join(", ");
 
         Ok(format!("partition by {}, order by {}", partition_by, order_by))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_window = self.clone();
+                assert_eq!(children.len(), 1);
+                new_window.input = children[0];
+                Box::new(new_window)
+            }
+        }
     }
 }
 

@@ -29,6 +29,7 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::UDFType;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -82,6 +83,20 @@ impl IPhysicalPlan for Udf {
             .iter()
             .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
             .join(", "))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_udf = self.clone();
+                assert_eq!(children.len(), 1);
+                new_udf.input = children[0];
+                Box::new(new_udf)
+            }
+        }
     }
 }
 

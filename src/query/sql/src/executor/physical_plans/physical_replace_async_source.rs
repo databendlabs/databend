@@ -15,6 +15,7 @@
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_expression::DataSchemaRef;
 use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::plans::InsertValue;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -32,5 +33,15 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        match handle.derive(self, vec![]) {
+            Ok(v) => v,
+            Err(children) => {
+                assert!(children.is_empty());
+                Box::new(self.clone())
+            }
+        }
     }
 }

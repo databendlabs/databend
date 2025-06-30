@@ -34,6 +34,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
@@ -102,6 +103,22 @@ impl IPhysicalPlan for RangeJoin {
         );
 
         Ok(condition.join(" AND "))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_left = self.left.derive_with(handle);
+        let derive_right = self.right.derive_with(handle);
+
+        match handle.derive(self, vec![derive_left, derive_right]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_range_join = self.clone();
+                assert_eq!(children.len(), 2);
+                new_range_join.left = children[0];
+                new_range_join.right = children[1];
+                Box::new(new_range_join)
+            }
+        }
     }
 }
 

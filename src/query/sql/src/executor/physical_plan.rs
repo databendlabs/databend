@@ -92,6 +92,14 @@ impl PhysicalPlanMeta {
     }
 }
 
+pub trait PhysicalPlanDeriveHandle {
+    fn derive(
+        &mut self,
+        v: &Box<dyn IPhysicalPlan>,
+        children: Vec<Box<dyn IPhysicalPlan>>,
+    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>>;
+}
+
 #[typetag::serde]
 pub trait IPhysicalPlan: Debug {
     fn get_meta(&self) -> &PhysicalPlanMeta;
@@ -184,12 +192,14 @@ pub trait IPhysicalPlan: Debug {
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
         Ok(HashMap::new())
     }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan>;
 }
 
 pub trait PhysicalPlanExt {
     fn clone_box(&self) -> Box<dyn IPhysicalPlan>;
 
-    fn visit(&self, visitor: Box<dyn Any>) -> Result<()>;
+    fn down_cast<T>(&self) -> Option<&T>;
 }
 
 impl<T> PhysicalPlanExt for T
@@ -198,12 +208,6 @@ where
 {
     fn clone_box(&self) -> Box<dyn IPhysicalPlan> {
         Box::new(self.clone())
-    }
-
-    fn visit(&self, visitor: Box<dyn Any>) -> Result<()> {
-        visitor.downcast()
-        // visitor.downcast()
-        todo!()
     }
 }
 

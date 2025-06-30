@@ -36,6 +36,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::AggregateMode;
 use crate::plans::DummyTableScan;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -105,6 +106,20 @@ impl IPhysicalPlan for AggregateFinal {
         }
 
         Ok(labels)
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_aggregate_final = self.clone();
+                assert_eq!(children.len(), 1);
+                new_aggregate_final.input = children[0];
+                Box::new(new_aggregate_final)
+            }
+        }
     }
 }
 

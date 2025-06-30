@@ -17,7 +17,7 @@ use databend_common_expression::DataSchemaRef;
 
 use crate::binder::MutationStrategy;
 use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
-use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationOrganize {
@@ -42,5 +42,19 @@ impl IPhysicalPlan for MutationOrganize {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_mutation_organize = self.clone();
+                assert_eq!(children.len(), 1);
+                new_mutation_organize.input = children[0];
+                Box::new(new_mutation_organize)
+            }
+        }
     }
 }

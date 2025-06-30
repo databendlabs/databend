@@ -33,6 +33,7 @@ use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlanDeriveHandle};
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
@@ -68,7 +69,7 @@ pub enum FragmentType {
 
 #[derive(Clone)]
 pub struct PlanFragment {
-    pub plan: PhysicalPlan,
+    pub plan: Box<dyn IPhysicalPlan>,
     pub fragment_type: FragmentType,
     pub fragment_id: usize,
     pub exchange: Option<DataExchange>,
@@ -276,13 +277,8 @@ impl PlanFragment {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
 
-                    let mut replace_replace_into = ReplaceReplaceInto {
-                        partitions: parts,
-                        slot: None,
-                        need_insert,
-                    };
-                    plan = replace_replace_into.replace(&plan)?;
-
+                    let mut handle = ReplaceDeriveHandle::new(parts, None, need_insert);
+                    plan = plan.derive_with(&mut handle);
                     fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
             }
@@ -293,15 +289,16 @@ impl PlanFragment {
                 for (executor_idx, executor) in executors.into_iter().enumerate() {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
-                    let mut replace_replace_into = ReplaceReplaceInto {
-                        partitions: partitions.clone(),
-                        slot: Some(BlockSlotDescription {
+                    let mut handle = ReplaceDeriveHandle::new(
+                        partitions.clone(),
+                        Some(BlockSlotDescription {
                             num_slots,
                             slot: executor_idx as u32,
                         }),
                         need_insert,
-                    };
-                    plan = replace_replace_into.replace(&plan)?;
+                    );
+
+                    plan = plan.derive_with(&mut handle);
 
                     fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
@@ -332,9 +329,8 @@ impl PlanFragment {
         for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
-            let mut replace_compact_source = ReplaceCompactBlock { partitions: parts };
-            plan = replace_compact_source.replace(&plan)?;
-
+            let mut handle = CompactSourceDeriveHandle::new(parts);
+            plan = plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
@@ -577,47 +573,78 @@ impl PhysicalPlanReplacer for ReplaceMutationSource {
     }
 }
 
-struct ReplaceCompactBlock {
+struct CompactSourceDeriveHandle {
     pub partitions: Partitions,
 }
 
-impl PhysicalPlanReplacer for ReplaceCompactBlock {
-    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactSource(Box::new(CompactSource {
-            parts: self.partitions.clone(),
-            ..plan.clone()
-        })))
+impl CompactSourceDeriveHandle {
+    pub fn new(partitions: Partitions) -> Box<dyn PhysicalPlanDeriveHandle> {
+        Box::new(CompactSourceDeriveHandle {
+            partitions
+        })
     }
 }
 
-struct ReplaceReplaceInto {
+impl PhysicalPlanDeriveHandle for CompactSourceDeriveHandle {
+    fn derive(
+        &mut self,
+        v: &Box<dyn IPhysicalPlan>,
+        children: Vec<Box<dyn IPhysicalPlan>>,
+    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        let Some(compact_source) = v.down_cast::<CompactSource>() else {
+            return Err(children);
+        };
+
+
+        Ok(Box::new(CompactSource {
+            parts: self.partitions.clone(),
+            ..compact_source.clone()
+        }))
+    }
+}
+
+struct ReplaceDeriveHandle {
     pub partitions: Vec<(usize, Location)>,
     // for standalone mode, slot is None
     pub slot: Option<BlockSlotDescription>,
     pub need_insert: bool,
 }
 
-impl PhysicalPlanReplacer for ReplaceReplaceInto {
-    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
-            input: Box::new(input),
-            need_insert: self.need_insert,
-            segments: self.partitions.clone(),
-            block_slots: self.slot.clone(),
-            ..plan.clone()
-        })))
+impl ReplaceDeriveHandle {
+    pub fn new(partitions: Vec<(usize, Location)>, slot: Option<BlockSlotDescription>, need_insert: bool) -> Box<dyn PhysicalPlanDeriveHandle> {
+        Box::new(ReplaceDeriveHandle {
+            partitions,
+            slot,
+            need_insert,
+        })
     }
+}
 
-    fn replace_deduplicate(&mut self, plan: &ReplaceDeduplicate) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceDeduplicate(Box::new(
-            ReplaceDeduplicate {
-                input: Box::new(input),
+impl PhysicalPlanDeriveHandle for ReplaceDeriveHandle {
+    fn derive(
+        &mut self,
+        v: &Box<dyn IPhysicalPlan>,
+        children: Vec<Box<dyn IPhysicalPlan>>,
+    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        if let Some(replace_into) = v.down_cast::<ReplaceInto>() {
+            assert_eq!(children.len(), 1);
+            return Ok(Box::new(ReplaceInto {
+                input: children[0],
+                need_insert: self.need_insert,
+                segments: self.partitions.clone(),
+                block_slots: self.slot.clone(),
+                ..replace_into.clone()
+            }));
+        } else if let Some(replace_deduplicate) = v.down_cast::<ReplaceDeduplicate>() {
+            assert_eq!(children.len(), 1);
+            return Ok(Box::new(ReplaceDeduplicate {
+                input: children[0],
                 need_insert: self.need_insert,
                 table_is_empty: self.partitions.is_empty(),
-                ..plan.clone()
-            },
-        )))
+                ..replace_deduplicate.clone()
+            }));
+        }
+
+        None
     }
 }

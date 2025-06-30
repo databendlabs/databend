@@ -27,6 +27,7 @@ use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::TypeCheck;
 
@@ -87,6 +88,20 @@ impl IPhysicalPlan for ProjectSet {
             .iter()
             .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .join(", "))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_project_set = self.clone();
+                assert_eq!(children.len(), 1);
+                new_project_set.input = children[0];
+                Box::new(new_project_set)
+            }
+        }
     }
 }
 

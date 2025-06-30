@@ -18,7 +18,7 @@ use databend_common_expression::{DataSchemaRef, RemoteExpr};
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
-use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
 use crate::executor::physical_plans::MutationKind;
 use databend_common_exception::Result;
 
@@ -56,5 +56,19 @@ impl IPhysicalPlan for ColumnMutation {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_column_mutation = self.clone();
+                assert_eq!(children.len(), 1);
+                new_column_mutation.input = children[0];
+                Box::new(new_column_mutation)
+            }
+        }
     }
 }

@@ -25,6 +25,7 @@ use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::plans::TruncateMode;
 use databend_common_exception::Result;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
@@ -63,6 +64,20 @@ impl IPhysicalPlan for CommitSink {
 
     fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_commit_sink = self.clone();
+                assert_eq!(children.len(), 1);
+                new_commit_sink.input = children[0];
+                Box::new(new_commit_sink)
+            }
+        }
     }
 }
 

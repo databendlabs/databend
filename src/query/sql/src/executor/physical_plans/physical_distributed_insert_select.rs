@@ -20,6 +20,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::ColumnBinding;
 use databend_common_exception::Result;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedInsertSelect {
@@ -58,5 +59,19 @@ impl IPhysicalPlan for DistributedInsertSelect {
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_distributed_insert_select = self.clone();
+                assert_eq!(children.len(), 1);
+                new_distributed_insert_select.input = children[0];
+                Box::new(new_distributed_insert_select)
+            }
+        }
     }
 }

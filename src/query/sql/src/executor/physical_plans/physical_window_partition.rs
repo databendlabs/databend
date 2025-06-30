@@ -19,6 +19,7 @@ use databend_common_expression::DataSchemaRef;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::SortDesc;
 use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -54,6 +55,20 @@ impl IPhysicalPlan for WindowPartition {
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let derive_input = self.input.derive_with(handle);
+
+        match handle.derive(self, vec![derive_input]) {
+            Ok(v) => v,
+            Err(children) => {
+                let mut new_window_partition = self.clone();
+                assert_eq!(children.len(), 1);
+                new_window_partition.input = children[0];
+                Box::new(new_window_partition)
+            }
+        }
     }
 }
 
