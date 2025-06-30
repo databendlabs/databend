@@ -21,6 +21,7 @@ use databend_common_metrics::storage::metrics_set_compact_segments_select_durati
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
@@ -51,6 +52,7 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl SegmentCompactMutator {
@@ -60,6 +62,7 @@ impl SegmentCompactMutator {
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
         default_cluster_key_id: Option<u32>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -68,6 +71,7 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
+            table_meta_timestamps,
         })
     }
 
@@ -110,6 +114,7 @@ impl SegmentCompactMutator {
             &fuse_segment_io,
             &self.data_accessor,
             &self.location_generator,
+            self.table_meta_timestamps,
         );
 
         self.compaction = compactor
@@ -135,11 +140,12 @@ impl SegmentCompactMutator {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
         fuse_table
-            .commit_mutation(
+            .commit_segment_compaction(
                 &self.ctx,
                 self.compact_params.base_snapshot.clone(),
                 &self.compaction.segments_locations,
                 statistics,
+                self.table_meta_timestamps,
                 None,
             )
             .await
@@ -172,6 +178,7 @@ pub struct SegmentCompactor<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     // accumulated compaction state
     compacted_state: SegmentCompactionState,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<'a> SegmentCompactor<'a> {
@@ -182,6 +189,7 @@ impl<'a> SegmentCompactor<'a> {
         segment_reader: &'a SegmentsIO,
         operator: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         Self {
             threshold,
@@ -193,6 +201,7 @@ impl<'a> SegmentCompactor<'a> {
             operator,
             location_generator,
             compacted_state: Default::default(),
+            table_meta_timestamps,
         }
     }
 
@@ -357,7 +366,7 @@ impl<'a> SegmentCompactor<'a> {
         let new_segment = SegmentInfo::new(blocks, new_statistics);
         let location = self
             .location_generator
-            .gen_segment_info_location(Default::default(), false);
+            .gen_segment_info_location(self.table_meta_timestamps, false);
         new_segment
             .write_meta_through_cache(self.operator, &location)
             .await?;

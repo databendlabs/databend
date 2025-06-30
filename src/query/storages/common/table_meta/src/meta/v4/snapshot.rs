@@ -17,6 +17,7 @@ use std::io::Read;
 use std::sync::Arc;
 
 use chrono::DateTime;
+use chrono::TimeDelta;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -106,22 +107,42 @@ impl TableSnapshot {
         let TableMetaTimestamps {
             segment_block_timestamp,
             snapshot_timestamp,
+            snapshot_timestamp_validation_context,
         } = table_meta_timestamps;
 
-        let snapshot_timestamp =
+        let snapshot_timestamp_adjusted =
             monotonically_increased_timestamp(snapshot_timestamp, &prev_snapshot.timestamp());
 
-        if segment_block_timestamp < snapshot_timestamp {
-            return Err(ErrorCode::TransactionTimeout(format!(
-                "Snapshot is generated too late, segment_block_timestamp: {:?}, snapshot_timestamp: {:?}",
-                segment_block_timestamp, snapshot_timestamp
-            )));
+        if segment_block_timestamp < snapshot_timestamp_adjusted {
+            let mut err_msg = format!(
+                "Unresolvable conflict: Transaction conflicts with commit at {:?}. Can only merge with commits before {:?}.",
+                snapshot_timestamp_adjusted, segment_block_timestamp
+            );
+
+            if let Some(ctx) = snapshot_timestamp_validation_context {
+                if ctx.is_transient {
+                    err_msg.push_str(
+                        &format!(" Transient table (ID: {}) detected. Concurrent mutations same transient table likely cause conflicts. Consider using regular tables.", ctx.table_id)
+                    );
+                } else {
+                    let delta = snapshot_timestamp - segment_block_timestamp;
+                    if delta < TimeDelta::hours(1) {
+                        // TODO give user a doc url, which describes this situation more clearly, such as increasing the value of setting 'max_execute_time_in_seconds' also work, and what the tradeoffs are.
+                        err_msg.push_str(&format!(
+                            " Conflict window too narrow ({:?}). Consider increasing the value of setting 'data_retention_time_in_days'.",
+                            delta
+                        ));
+                    }
+                }
+            }
+
+            return Err(ErrorCode::TransactionTimeout(err_msg));
         }
 
         Ok(Self {
             format_version: TableSnapshot::VERSION,
-            snapshot_id: uuid_from_date_time(snapshot_timestamp),
-            timestamp: Some(snapshot_timestamp),
+            snapshot_id: uuid_from_date_time(snapshot_timestamp_adjusted),
+            timestamp: Some(snapshot_timestamp_adjusted),
             prev_table_seq,
             prev_snapshot_id: prev_snapshot.snapshot_id(),
             schema,
@@ -133,6 +154,7 @@ impl TableSnapshot {
     }
 
     /// used in ut
+    #[cfg(test)]
     pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
         Self::try_new(
             prev_table_seq,

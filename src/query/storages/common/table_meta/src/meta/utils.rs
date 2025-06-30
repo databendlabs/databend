@@ -73,13 +73,28 @@ pub fn monotonically_increased_timestamp(
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy)]
+pub struct SnapshotTimestampValidationContext {
+    pub table_id: u64,
+    pub is_transient: bool,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy)]
 pub struct TableMetaTimestamps {
     pub segment_block_timestamp: DateTime<Utc>,
     pub snapshot_timestamp: DateTime<Utc>,
+    pub snapshot_timestamp_validation_context: Option<SnapshotTimestampValidationContext>,
 }
 
 impl TableMetaTimestamps {
     pub fn new(previous_snapshot: Option<Arc<TableSnapshot>>, delta: Duration) -> Self {
+        Self::with_snapshot_timestamp_validation_context(previous_snapshot, delta, None)
+    }
+
+    pub fn with_snapshot_timestamp_validation_context(
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+        delta: Duration,
+        snapshot_timestamp_validation_context: Option<SnapshotTimestampValidationContext>,
+    ) -> Self {
         let snapshot_timestamp =
             monotonically_increased_timestamp(Utc::now(), &previous_snapshot.timestamp());
 
@@ -88,11 +103,13 @@ impl TableMetaTimestamps {
         Self {
             snapshot_timestamp,
             segment_block_timestamp,
+            snapshot_timestamp_validation_context,
         }
     }
 }
 
 /// used in ut
+#[cfg(test)]
 impl Default for TableMetaTimestamps {
     fn default() -> Self {
         // for unit test, set delta to 1 hour

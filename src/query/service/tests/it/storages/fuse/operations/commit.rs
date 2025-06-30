@@ -279,7 +279,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 Statistics::default(),
                 new_segments,
                 None,
-                Default::default(),
+                TestFixture::default_table_meta_timestamps(),
             )
             .unwrap();
 
@@ -883,10 +883,6 @@ impl TableContext for CtxDelegation {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
-    }
-
-    fn clear_table_meta_timestamps_cache(&self) {
-        self.ctx.clear_table_meta_timestamps_cache();
     }
 }
 

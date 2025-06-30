@@ -70,7 +70,7 @@ pub async fn generate_snapshot_with_segments(
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
         Some(fuse_table.get_table_info().ident.seq),
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )?;
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
@@ -107,8 +107,13 @@ pub async fn generate_segments_v2(
     let mut segs = vec![];
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
-        let block_metas =
-            generate_blocks(fuse_table, blocks_per_segment, false, Default::default()).await?;
+        let block_metas = generate_blocks(
+            fuse_table,
+            blocks_per_segment,
+            false,
+            TestFixture::default_table_meta_timestamps(),
+        )
+        .await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfoV2::new(block_metas, summary);
         let uuid = Uuid::new_v4();
@@ -233,7 +238,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         num_of_segments,
         blocks_per_segment,
         false,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )
     .await?;
 
@@ -246,7 +251,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         Statistics::default(),
         locations,
         None,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary =
@@ -263,8 +268,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v3[0].0.clone(),
         segments_v2[0].0.clone(),
     ];
-    let mut snapshot_2 =
-        TableSnapshot::try_from_previous(Arc::new(snapshot_1.clone()), None, Default::default())?;
+    let mut snapshot_2 = TableSnapshot::try_from_previous(
+        Arc::new(snapshot_1.clone()),
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )?;
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary =
@@ -424,7 +432,7 @@ pub async fn generate_snapshot_v4(
         number_of_segments,
         blocks_per_segment,
         false,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )
     .await?;
 
@@ -435,7 +443,7 @@ pub async fn generate_snapshot_v4(
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
         None,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )?;
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshotV4::VERSION)?;

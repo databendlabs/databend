@@ -161,6 +161,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
+
     pub(in crate::sessions) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
 
     pub(in crate::sessions) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
@@ -246,7 +247,6 @@ impl QueryContextShared {
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
             table_meta_timestamps: Arc::new(Mutex::new(HashMap::new())),
-
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
@@ -852,10 +852,6 @@ impl QueryContextShared {
         }
 
         nodes_peek_memory_usage
-    }
-
-    pub fn get_table_meta_timestamps(&self) -> Arc<Mutex<HashMap<u64, TableMetaTimestamps>>> {
-        self.table_meta_timestamps.clone()
     }
 
     pub fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {

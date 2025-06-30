@@ -37,6 +37,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stage::StageTable;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::debug;
 use log::info;
 
@@ -100,21 +101,8 @@ impl CopyIntoTableInterpreter {
         &self,
         table_info: TableInfo,
         plan: &CopyIntoTablePlan,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
-        let to_table = self
-            .ctx
-            .get_table(
-                plan.catalog_info.catalog_name(),
-                &plan.database_name,
-                &plan.table_name,
-            )
-            .await?;
-        let snapshot = FuseTable::try_from_table(to_table.as_ref())?
-            .read_table_snapshot()
-            .await?;
-        let table_meta_timestamps = self
-            .ctx
-            .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
@@ -244,6 +232,7 @@ impl CopyIntoTableInterpreter {
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         deduplicated_label: Option<String>,
         path_prefix: Option<String>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx
@@ -264,11 +253,6 @@ impl CopyIntoTableInterpreter {
                 path_prefix,
             )?;
 
-            let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
-            let table_meta_timestamps = ctx.get_table_meta_timestamps(
-                to_table.as_ref(),
-                fuse_table.read_table_snapshot().await?,
-            )?;
             to_table.commit_insertion(
                 ctx.clone(),
                 main_pipeline,
@@ -379,9 +363,21 @@ impl Interpreter for CopyIntoTableInterpreter {
             return self.on_no_files_to_copy().await;
         }
 
-        let (physical_plan, update_stream_meta) = self
-            .build_physical_plan(to_table.get_table_info().clone(), &self.plan)
+        let snapshot = FuseTable::try_from_table(to_table.as_ref())?
+            .read_table_snapshot()
             .await?;
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
+
+        let (physical_plan, update_stream_meta) = self
+            .build_physical_plan(
+                to_table.get_table_info().clone(),
+                &self.plan,
+                table_meta_timestamps,
+            )
+            .await?;
+
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
@@ -405,6 +401,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 update_stream_meta,
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 self.plan.path_prefix.clone(),
+                table_meta_timestamps,
             )
             .await?;
         }

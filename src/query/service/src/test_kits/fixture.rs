@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::str;
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
@@ -60,6 +61,7 @@ use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_tracing::set_panic_hook;
 use databend_common_version::DATABEND_COMMIT_VERSION;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use futures::TryStreamExt;
 use jsonb::Number as JsonbNumber;
@@ -867,7 +869,7 @@ impl TestFixture {
         table.append_data(
             ctx.clone(),
             &mut build_res.main_pipeline,
-            Default::default(),
+            Self::default_table_meta_timestamps(),
         )?;
         if commit {
             table.commit_insertion(
@@ -878,7 +880,7 @@ impl TestFixture {
                 overwrite,
                 None,
                 None,
-                Default::default(),
+                Self::default_table_meta_timestamps(),
             )?;
         } else {
             build_res
@@ -901,6 +903,10 @@ impl TestFixture {
         let (plan, _) = planner.plan_sql(query).await?;
         let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
         executor.execute(ctx).await
+    }
+
+    pub fn default_table_meta_timestamps() -> TableMetaTimestamps {
+        TableMetaTimestamps::new(None, Duration::hours(1))
     }
 }
 
