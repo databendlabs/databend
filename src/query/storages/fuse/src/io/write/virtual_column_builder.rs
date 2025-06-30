@@ -286,6 +286,7 @@ impl VirtualColumnBuilder {
             vec![virtual_block],
             &mut data,
             write_settings.table_compression,
+            false,
         )?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
