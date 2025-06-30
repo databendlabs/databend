@@ -2,7 +2,7 @@
 query 
 select json_typeof($1:c_date), json_typeof($1:c_uuid)  from @data/avro/extension.avro(file_format=>'avro');
 ----
-date string
+DATE STRING
 
 query 
 select $1:c_date::date, $1:c_uuid::string  from @data/avro/extension.avro(file_format=>'avro');

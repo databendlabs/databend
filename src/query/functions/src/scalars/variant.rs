@@ -99,6 +99,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("try_object_construct_keep_null", &[
         "try_json_object_keep_null",
     ]);
+    registry.register_aliases("is_float", &["is_double", "is_real"]);
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
         "parse_json",
@@ -1034,6 +1035,28 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Some(res) => output.push(res),
                     None => output.push(false),
                 },
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_decimal",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_number() {
+                Ok(Some(num)) => match num {
+                    jsonb::Number::Float64(_) => output.push(false),
+                    _ => output.push(true),
+                },
+                _ => {
+                    output.push(false);
+                }
             }
         }),
     );
