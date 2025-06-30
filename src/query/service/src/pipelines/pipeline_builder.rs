@@ -27,6 +27,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
+use parking_lot::Mutex;
 use tokio::sync::watch::Receiver;
 
 use super::PipelineBuilderData;
@@ -60,7 +61,7 @@ pub struct PipelineBuilder {
 
     pub contain_sink_processor: bool,
     pub cte_receivers: HashMap<String, Receiver<Arc<MaterializedCteData>>>,
-    pub next_cte_consumer_id: HashMap<String, usize>,
+    pub next_cte_consumer_id: Arc<Mutex<HashMap<String, usize>>>,
 }
 
 impl PipelineBuilder {
@@ -83,7 +84,7 @@ impl PipelineBuilder {
             contain_sink_processor: false,
             is_exchange_stack: vec![],
             cte_receivers: HashMap::new(),
-            next_cte_consumer_id: HashMap::new(),
+            next_cte_consumer_id: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 

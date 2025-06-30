@@ -25,15 +25,19 @@ impl PipelineBuilder {
     pub(crate) fn build_materialized_cte(&mut self, cte: &MaterializedCTE) -> Result<()> {
         // init builder for cte pipeline
         let sub_context = QueryContext::create_from(self.ctx.as_ref());
-        let sub_builder =
+        let mut sub_builder =
             PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), sub_context);
+        sub_builder.cte_receivers = self.cte_receivers.clone();
+        sub_builder.next_cte_consumer_id = self.next_cte_consumer_id.clone();
 
         // build cte pipeline
         let mut build_res = sub_builder.finalize(&cte.left)?;
         build_res.main_pipeline.try_resize(1)?;
         let (tx, rx) = tokio::sync::watch::channel(Arc::new(MaterializedCteData::default()));
         self.cte_receivers.insert(cte.cte_name.clone(), rx);
-        self.next_cte_consumer_id.insert(cte.cte_name.clone(), 0);
+        self.next_cte_consumer_id
+            .lock()
+            .insert(cte.cte_name.clone(), 0);
         build_res
             .main_pipeline
             .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))?;

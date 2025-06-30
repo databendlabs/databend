@@ -30,19 +30,15 @@ impl PipelineBuilder {
             })?
             .clone();
 
-        let current_consumer_id =
-            *self
-                .next_cte_consumer_id
-                .get(&cte.cte_name)
-                .ok_or_else(|| {
-                    ErrorCode::Internal(format!(
-                        "CTE consumer id not found for name: {}",
-                        cte.cte_name
-                    ))
-                })?;
+        let mut next_cte_consumer_id = self.next_cte_consumer_id.lock();
+        let current_consumer_id = *next_cte_consumer_id.get(&cte.cte_name).ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "CTE consumer id not found for name: {}",
+                cte.cte_name
+            ))
+        })?;
 
-        self.next_cte_consumer_id
-            .insert(cte.cte_name.clone(), current_consumer_id + 1);
+        next_cte_consumer_id.insert(cte.cte_name.clone(), current_consumer_id + 1);
 
         self.main_pipeline.add_source(
             |output_port| {
