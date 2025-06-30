@@ -27,9 +27,11 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
+use tokio::sync::watch::Receiver;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
+use crate::pipelines::processors::transforms::MaterializedCteData;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
@@ -57,6 +59,8 @@ pub struct PipelineBuilder {
     pub(crate) is_exchange_stack: Vec<bool>,
 
     pub contain_sink_processor: bool,
+    pub cte_receivers: HashMap<String, Receiver<Arc<MaterializedCteData>>>,
+    pub next_cte_consumer_id: HashMap<String, usize>,
 }
 
 impl PipelineBuilder {
@@ -78,6 +82,8 @@ impl PipelineBuilder {
             r_cte_scan_interpreters: vec![],
             contain_sink_processor: false,
             is_exchange_stack: vec![],
+            cte_receivers: HashMap::new(),
+            next_cte_consumer_id: HashMap::new(),
         }
     }
 
@@ -295,6 +301,9 @@ impl PipelineBuilder {
             PhysicalPlan::Exchange(_) => Err(ErrorCode::Internal(
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
+
+            PhysicalPlan::MaterializedCTE(cte) => self.build_materialized_cte(cte),
+            PhysicalPlan::CTEConsumer(cte_consumer) => self.build_cte_consumer(cte_consumer),
         }?;
 
         self.is_exchange_stack.pop();

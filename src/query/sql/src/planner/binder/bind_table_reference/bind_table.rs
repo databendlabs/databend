@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -27,14 +31,19 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
+use crate::binder::ExprContext;
+use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
+use crate::plans::CTEConsumer;
+use crate::plans::RelOperator;
 use crate::BindContext;
-
 impl Binder {
     /// Bind a base table.
     /// A base table is a table that is not a view or CTE.
@@ -69,12 +78,101 @@ impl Binder {
             (false, None, String::new())
         };
 
-        // Check and bind common table expression
-        let mut cte_suffix_name = None;
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
+                // For materialized CTE, we need to add column bindings to the bind_context
+                // so that column references can be resolved correctly
+                let mut new_bind_context = bind_context.clone();
+
+                // We need to bind the CTE definition to get the columns
+                // This is similar to how non-materialized CTEs are handled
+                let mut cte_bind_context = BindContext {
+                    parent: Some(Box::new(bind_context.clone())),
+                    bound_internal_columns: BTreeMap::new(),
+                    columns: vec![],
+                    aggregate_info: Default::default(),
+                    windows: Default::default(),
+                    srf_info: Default::default(),
+                    cte_context: bind_context.cte_context.clone(),
+                    in_grouping: false,
+                    view_info: None,
+                    have_async_func: false,
+                    have_udf_script: false,
+                    have_udf_server: false,
+                    inverted_index_map: Box::default(),
+                    allow_virtual_column: false,
+                    expr_context: ExprContext::default(),
+                    planning_agg_index: false,
+                    window_definitions: DashMap::new(),
+                };
+
+                cte_bind_context.cte_context.cte_name = Some(table_name.to_string());
+
+                // Bind the CTE definition to get the columns
+                let (_, mut res_bind_context) =
+                    self.bind_query(&mut cte_bind_context, &cte_info.query)?;
+
+                // Apply column aliases
+                let mut cols_alias = cte_info.columns_alias.clone();
+                if let Some(alias) = alias {
+                    for (idx, col_alias) in alias.columns.iter().enumerate() {
+                        if idx < cte_info.columns_alias.len() {
+                            cols_alias[idx] = col_alias.name.clone();
+                        } else {
+                            cols_alias.push(col_alias.name.clone());
+                        }
+                    }
+                }
+
+                let alias_table_name = alias
+                    .as_ref()
+                    .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+                    .unwrap_or_else(|| table_name.to_string());
+
+                for column in res_bind_context.columns.iter_mut() {
+                    column.database_name = None;
+                    column.table_name = Some(alias_table_name.clone());
+                }
+
+                if cols_alias.len() > res_bind_context.columns.len() {
+                    return Err(ErrorCode::SemanticError(format!(
+                            "The CTE '{}' has {} columns, but {} aliases were provided. Ensure the number of aliases matches the number of columns in the CTE.",
+                            table_name,
+                            res_bind_context.columns.len(),
+                            cols_alias.len()
+                        ))
+                            .set_span(*span));
+                }
+
+                for (index, column_name) in cols_alias.iter().enumerate() {
+                    res_bind_context.columns[index].column_name = column_name.clone();
+                }
+
+                let fields = res_bind_context
+                    .columns
+                    .iter()
+                    .map(|column_binding| {
+                        DataField::new(
+                            &column_binding.index.to_string(),
+                            *column_binding.data_type.clone(),
+                        )
+                    })
+                    .collect();
+                let cte_schema = DataSchemaRefExt::create(fields);
+
+                log::info!("[CTE] columns: {:?}", res_bind_context.columns);
+
+                // Add the columns to the new bind context
+                for column in res_bind_context.columns {
+                    new_bind_context.add_column_binding(column);
+                }
+
+                let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
+                    cte_name: table_name,
+                    cte_schema: cte_schema,
+                })));
+                return Ok((s_expr, new_bind_context));
             } else {
                 if self
                     .metadata
@@ -104,11 +202,6 @@ impl Binder {
 
         // Resolve table with catalog
         let table_meta = {
-            let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
-                format!("{}${}", &table_name, cte_suffix_name)
-            } else {
-                table_name.clone()
-            };
             match self.resolve_data_source(
                 catalog.as_str(),
                 database.as_str(),
@@ -161,7 +254,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    None,
                     false,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
@@ -247,7 +339,6 @@ impl Binder {
                         false,
                         false,
                         false,
-                        None,
                         bind_context.allow_virtual_column,
                     );
                     let (s_expr, mut new_bind_context) =
@@ -280,7 +371,6 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    cte_suffix_name,
                     bind_context.allow_virtual_column,
                 );
 

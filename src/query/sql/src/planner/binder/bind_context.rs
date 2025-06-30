@@ -160,6 +160,7 @@ pub struct CteContext {
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
     pub cte_map: Box<IndexMap<String, CteInfo>>,
+    pub is_binding_materialized_cte: bool,
 }
 
 impl CteContext {
@@ -196,7 +197,6 @@ pub struct CteInfo {
     pub query: Query,
     pub materialized: bool,
     pub recursive: bool,
-    pub cte_idx: IndexType,
     // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
 }
