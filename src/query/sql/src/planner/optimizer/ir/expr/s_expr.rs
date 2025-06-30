@@ -487,9 +487,12 @@ impl SExpr {
             | crate::plans::RelOp::ConstantTableScan
             | crate::plans::RelOp::ExpressionScan
             | crate::plans::RelOp::CacheScan
+            | crate::plans::RelOp::CTEConsumer
             | crate::plans::RelOp::RecursiveCteScan => Ok(None),
 
             crate::plans::RelOp::Join => self.probe_side_child().get_data_distribution(),
+
+            crate::plans::RelOp::MaterializedCTE => self.child(1)?.get_data_distribution(),
 
             crate::plans::RelOp::Exchange => {
                 Ok(Some(self.plan.as_ref().clone().try_into().unwrap()))
