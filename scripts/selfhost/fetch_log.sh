@@ -93,14 +93,10 @@ execute_query() {
     local sql="$1"
     log DEBUG "Executing: ${sql:0:60}..."
 
-    # Execute query directly without capturing output
-    eval "$BASE_CMD --query=\"$sql\""
+    eval "$BASE_CMD --quote-style never --query=\"$sql\""
     local retval=$?
 
-    if [[ $retval -ne 0 ]]; then
-        log ERROR "Query failed: ${sql:0:60}"
-        exit $retval
-    fi
+    [[ $retval -ne 0 ]] && { log ERROR "Query failed"; exit $retval; }
 }
 
 download_file() {
@@ -109,8 +105,8 @@ download_file() {
 
     log INFO "Processing file: $filename"
 
-    presign_result=$(execute_query "PRESIGN DOWNLOAD @fetch_columns/$filename")
-    presign_url=$(echo "$presign_result" | awk 'NR>1 {print $3}')
+    presign_result=$(execute_query "PRESIGN DOWNLOAD @a5c7667401c0c728c2ef9703bdaea66d9ae2d906/$filename")
+    presign_url=$(echo "$presign_result" | awk '{print $3}')
 
     [[ -z "$presign_url" ]] && { log ERROR "Empty presigned URL"; return 1; }
     [[ "$presign_url" =~ ^https?:// ]] || { log ERROR "Invalid URL format"; return 1; }
@@ -127,22 +123,67 @@ download_file() {
 }
 
 create_archive() {
-    local dir="$1"
-    local date_str="$2"
+    local date_str="$1"
+    shift
+    local dirs=("$@")
+    local deleted_files=0
+    local temp_log=$(mktemp)
+
     local archive_name="data_${date_str}.tar.gz"
 
-    log INFO "Creating archive $archive_name from $dir"
+    local missing_dirs=()
+    for dir in "${dirs[@]}"; do
+        if [[ ! -d "$dir" ]]; then
+            missing_dirs+=("$dir")
+        elif [[ ! -r "$dir" ]]; then
+            log WARN "[WARN] Directory exists but not readable: $dir"
+        fi
+    done
 
-    if tar -czf "$archive_name" -C "$dir" .; then
-        archive_size=$(du -h "$archive_name" | cut -f1)
-        log INFO "Created archive: $archive_name ($archive_size)"
-        echo "Archive created: $archive_name"
-        return 0
-    else
-        log ERROR "Failed to create archive"
+    if [[ ${#missing_dirs[@]} -gt 0 ]]; then
+        log ERROR "[ERROR] Missing directories: ${missing_dirs[*]}"
         return 1
     fi
+
+    local file_list
+    file_list=$(mktemp)
+    find "${dirs[@]}" -type f -print > "$file_list" 2>/dev/null
+
+    log INFO "[INFO] Creating archive $archive_name from ${#dirs[@]} directories..."
+    if ! tar -czf "$archive_name" --files-from="$file_list" 2>>"$temp_log"; then
+      log ERROR "[ERROR] Create archive failure, for details:"
+      cat "$temp_log" >&2
+      rm -f "$file_list" "$temp_log" "$archive_name"
+      return 1
+    fi
+
+    if ! tar -tzf "$archive_name" &>/dev/null; then
+      log ERROR "[ERROR] Create archive failure"
+      rm -f "$archive_name"
+      return 1
+    fi
+
+    log INFO "[INFO] Clean temp files..."
+    while IFS= read -r file; do
+        if rm -f "$file" 2>>"$temp_log"; then
+            ((deleted_files++))
+        else
+          log WARN "[WARN] remove file failure: $file"
+        fi
+    done < "$file_list"
+
+    rm -f "$file_list" "$temp_log"
+    return 0
 }
+
+extract_first_column() {
+    sed 's/[[:space:]]\{1,\}/\t/g' | \
+    sed -e 's/^[[:space:]]*//' \
+        -e 's/[[:space:]]*$//' \
+        -e 's/"//g' | \
+    awk -F '\t' 'NF>0 {print $1}'
+}
+
 
 main() {
     parse_arguments "$@"
@@ -158,7 +199,7 @@ main() {
     log INFO "Fetch columns info..."
     execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM system.columns;"
 
-    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
+    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
 
     total=0
@@ -173,9 +214,9 @@ main() {
     log INFO "Fetch Databend user functions..."
     execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 
-    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system.user_functions;"
+    execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system.user_functions);"
 
-    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
+    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
 
     mkdir -p "$OUTPUT_DIR/user_functions"
@@ -189,7 +230,7 @@ main() {
 
     execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE event_date = '$FORMATTED_DATE');"
 
-    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
+    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
 
     mkdir -p "$OUTPUT_DIR/query_logs"
@@ -203,7 +244,7 @@ main() {
 
     execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.log_history WHERE to_date(timestamp) = '$FORMATTED_DATE');"
 
-    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
+    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
 
     mkdir -p "$OUTPUT_DIR/query_raw_logs"
@@ -217,7 +258,7 @@ main() {
 
     execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.profile_history WHERE to_date(timestamp) = '$FORMATTED_DATE');"
 
-    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk 'NR>1 {print $1}')
+    file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
     [[ -z "$file_list" ]] && { log ERROR "No files found"; exit 1; }
 
     mkdir -p "$OUTPUT_DIR/query_profile_logs"
@@ -232,7 +273,7 @@ main() {
     echo "Failed: $((total - success))"
 
     if [[ $success -gt 0 ]]; then
-      if create_archive "$OUTPUT_DIR" "$FORMATTED_DATE"; then
+      if create_archive "$FORMATTED_DATE" "$OUTPUT_DIR/columns" "$OUTPUT_DIR/user_functions" "$OUTPUT_DIR/query_logs" "$OUTPUT_DIR/query_raw_logs" "$OUTPUT_DIR/query_profile_logs" ; then
         echo "Operation completed successfully"
         exit 0
       else
