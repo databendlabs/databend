@@ -26,6 +26,7 @@ use databend_common_expression::ColumnId;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use opendal::Operator;
 
@@ -39,6 +40,7 @@ pub struct AnalyzeLightMutator {
     ctx: Arc<dyn TableContext>,
     operator: Operator,
     base_snapshot: Arc<TableSnapshot>,
+    table_meta_timestamps: TableMetaTimestamps,
     distinct_columns: HashSet<ColumnId>,
     cluster_key_id: Option<u32>,
 
@@ -52,6 +54,7 @@ impl AnalyzeLightMutator {
         operator: Operator,
         base_snapshot: Arc<TableSnapshot>,
         cluster_key_id: Option<u32>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         let mut distinct_columns = HashSet::new();
         // Only track columns whose NDV is not yet computed.
@@ -64,6 +67,7 @@ impl AnalyzeLightMutator {
             ctx,
             operator,
             base_snapshot,
+            table_meta_timestamps,
             distinct_columns,
             cluster_key_id,
             col_stats: HashMap::new(),
@@ -192,6 +196,7 @@ impl AnalyzeLightMutator {
                 self.base_snapshot.clone(),
                 &self.base_snapshot.segments,
                 statistics,
+                self.table_meta_timestamps,
                 None,
             )
             .await

@@ -237,6 +237,7 @@ fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut Co
         }
         DataType::Decimal(_) => {
             match scalar {
+                ScalarRef::Decimal(DecimalScalar::Decimal64(v, _)) => hll.add_object(&v),
                 ScalarRef::Decimal(DecimalScalar::Decimal128(v, _)) => hll.add_object(&v),
                 ScalarRef::Decimal(DecimalScalar::Decimal256(v, _)) => hll.add_object(&v),
                 _ => unreachable!(),

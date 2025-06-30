@@ -1038,34 +1038,34 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomain<BooleanType>> {
-    let pattern_type = generate_like_pattern(pattern.as_bytes(), 1);
-
-    if matches!(pattern_type, LikePattern::OrdinalStr(_)) {
-        return Some(lhs.domain_eq(&StringDomain {
+    match generate_like_pattern(pattern.as_bytes(), 1) {
+        LikePattern::StartOfPercent(v) if v.is_empty() => {
+            Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
+        }
+        LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
             min: pattern.clone(),
             max: Some(pattern),
-        }));
+        })),
+        LikePattern::EndOfPercent(_) => {
+            let mut pat_str = pattern;
+            // remove the last char '%'
+            pat_str.pop();
+            let pat_len = pat_str.chars().count();
+            let other = StringDomain {
+                min: pat_str.clone(),
+                max: Some(pat_str),
+            };
+            let lhs = StringDomain {
+                min: lhs.min.chars().take(pat_len).collect(),
+                max: lhs
+                    .max
+                    .as_ref()
+                    .map(|max| max.chars().take(pat_len).collect()),
+            };
+            Some(lhs.domain_eq(&other))
+        }
+        _ => None,
     }
-
-    if matches!(pattern_type, LikePattern::EndOfPercent(_)) {
-        let mut pat_str = pattern;
-        // remove the last char '%'
-        pat_str.pop();
-        let pat_len = pat_str.chars().count();
-        let other = StringDomain {
-            min: pat_str.clone(),
-            max: Some(pat_str),
-        };
-        let lhs = StringDomain {
-            min: lhs.min.chars().take(pat_len).collect(),
-            max: lhs
-                .max
-                .as_ref()
-                .map(|max| max.chars().take(pat_len).collect()),
-        };
-        return Some(lhs.domain_eq(&other));
-    }
-    None
 }
 
 fn variant_vectorize_like_jsonb() -> impl Fn(

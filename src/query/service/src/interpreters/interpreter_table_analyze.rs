@@ -117,8 +117,16 @@ impl Interpreter for AnalyzeTableInterpreter {
         if self.plan.no_scan {
             let operator = table.get_operator();
             let cluster_key_id = table.cluster_key_id();
-            let mut mutator =
-                AnalyzeLightMutator::create(self.ctx.clone(), operator, snapshot, cluster_key_id);
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(table, Some(snapshot.clone()))?;
+            let mut mutator = AnalyzeLightMutator::create(
+                self.ctx.clone(),
+                operator,
+                snapshot,
+                cluster_key_id,
+                table_meta_timestamps,
+            );
             mutator.target_select().await?;
             mutator.try_commit(table).await?;
             return Ok(PipelineBuildResult::create());
