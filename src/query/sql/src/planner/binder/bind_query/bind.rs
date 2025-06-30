@@ -252,11 +252,11 @@ impl Binder {
                 };
 
                 // Bind the CTE definition
-                let (cte_definition_expr, _) =
+                let (cte_definition_expr, bind_context) =
                     self.bind_query(&mut cte_bind_context, &cte.query)?;
 
                 // Create the MaterializedCTE operator
-                let materialized_cte = MaterializedCTE::new(cte_name);
+                let materialized_cte = MaterializedCTE::new(cte_name, bind_context.column_set());
                 current_expr = SExpr::create_binary(
                     Arc::new(materialized_cte.into()),
                     Arc::new(cte_definition_expr),

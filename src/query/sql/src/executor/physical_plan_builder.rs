@@ -130,7 +130,7 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
             RelOperator::MaterializedCTE(materialized_cte) => {
-                self.build_materialized_cte(s_expr, materialized_cte, stat_info)
+                self.build_materialized_cte(s_expr, materialized_cte, stat_info, required)
                     .await
             }
             RelOperator::CTEConsumer(cte_consumer) => {

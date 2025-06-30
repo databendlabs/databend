@@ -19,6 +19,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
+use crate::ColumnSet;
 
 /// This is a binary operator that executes its children in order (left to right), and returns the results of the right child
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -44,9 +45,10 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         materialized_cte: &crate::plans::MaterializedCTE,
         stat_info: PlanStatsInfo,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let left_side = Box::new(self.build(s_expr.child(0)?, Default::default()).await?);
-        let right_side = Box::new(self.build(s_expr.child(1)?, Default::default()).await?);
+        let left_side = Box::new(self.build(s_expr.child(0)?, materialized_cte.required.clone()).await?);
+        let right_side = Box::new(self.build(s_expr.child(1)?, required).await?);
         Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
             plan_id: 0,
             stat_info: Some(stat_info),

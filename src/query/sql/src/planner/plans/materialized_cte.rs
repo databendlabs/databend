@@ -16,15 +16,17 @@ use std::hash::Hash;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::ColumnSet;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
+    pub required: ColumnSet,
 }
 
 impl MaterializedCTE {
-    pub fn new(cte_name: String) -> Self {
-        Self { cte_name }
+    pub fn new(cte_name: String, required: ColumnSet) -> Self {
+        Self { cte_name, required }
     }
 }
 
