@@ -54,7 +54,7 @@ impl<T: AccessType> AccessType for ArrayType<T> {
         scalar.clone()
     }
 
-    fn try_downcast_scalar<'a>(scalar: &'a ScalarRef) -> Option<Self::ScalarRef<'a>> {
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
         match scalar {
             ScalarRef::Array(array) => T::try_downcast_column(array),
             _ => None,
