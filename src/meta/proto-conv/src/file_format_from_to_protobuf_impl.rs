@@ -83,6 +83,7 @@ impl FromToProtoEnum for mt::principal::StageFileCompression {
             pb::StageFileCompression::Snappy => Ok(mt::principal::StageFileCompression::Snappy),
             pb::StageFileCompression::None => Ok(mt::principal::StageFileCompression::None),
             pb::StageFileCompression::Xz => Ok(mt::principal::StageFileCompression::Xz),
+            pb::StageFileCompression::Zip => Ok(mt::principal::StageFileCompression::Zip),
         }
     }
 
@@ -101,6 +102,7 @@ impl FromToProtoEnum for mt::principal::StageFileCompression {
             mt::principal::StageFileCompression::Snappy => Ok(pb::StageFileCompression::Snappy),
             mt::principal::StageFileCompression::None => Ok(pb::StageFileCompression::None),
             mt::principal::StageFileCompression::Xz => Ok(pb::StageFileCompression::Xz),
+            mt::principal::StageFileCompression::Zip => Ok(pb::StageFileCompression::Zip),
         }
     }
 }
@@ -348,6 +350,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
             compression,
             p.missing_field_as.as_deref(),
             p.null_if,
+            p.use_logic_type,
         )
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
@@ -361,6 +364,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
+            use_logic_type: Some(self.use_logic_type),
         })
     }
 }
@@ -603,6 +607,7 @@ impl FromToProto for mt::principal::AvroFileFormatParams {
             compression,
             p.missing_field_as.as_deref(),
             p.null_if,
+            p.use_logic_type,
         )
         .map_err(|e| Incompatible::new(format!("{e}")))
     }
@@ -616,6 +621,7 @@ impl FromToProto for mt::principal::AvroFileFormatParams {
             compression,
             missing_field_as: Some(self.missing_field_as.to_string()),
             null_if: self.null_if.clone(),
+            use_logic_type: Some(self.use_logic_type),
         })
     }
 }

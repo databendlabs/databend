@@ -325,14 +325,24 @@ impl ColumnOrientedSegmentBuilder {
         for (col_id, mut col_stat) in std::mem::take(&mut self.column_stats).into_iter() {
             let mins = col_stat.min.build();
             let maxs = col_stat.max.build();
-            let (mins_of_mins, _) =
-                eval_aggr("min", vec![], &[mins.clone()], block_count as usize, vec![])?;
+            let (mins_of_mins, _) = eval_aggr(
+                "min",
+                vec![],
+                &[mins.clone().into()],
+                block_count as usize,
+                vec![],
+            )?;
             let min = mins_of_mins
                 .index(0)
                 .map(|x| x.to_owned())
                 .unwrap_or(Scalar::Null);
-            let (maxs_of_maxs, _) =
-                eval_aggr("max", vec![], &[maxs.clone()], block_count as usize, vec![])?;
+            let (maxs_of_maxs, _) = eval_aggr(
+                "max",
+                vec![],
+                &[maxs.clone().into()],
+                block_count as usize,
+                vec![],
+            )?;
             let max = maxs_of_maxs
                 .index(0)
                 .map(|x| x.to_owned())

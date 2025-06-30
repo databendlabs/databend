@@ -14,7 +14,6 @@
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::ops::Not;
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
@@ -24,30 +23,22 @@ use databend_common_hashtable::FastHash;
 use ethnum::u256;
 use micromarshal::Marshal;
 
-use crate::types::boolean::BooleanType;
-use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::i256;
-use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::AccessType;
 use crate::types::ArgType;
-use crate::types::DataType;
-use crate::types::Decimal128As256Type;
-use crate::types::Decimal128Type;
-use crate::types::Decimal256As128Type;
-use crate::types::Decimal256Type;
-use crate::types::NumberDataType;
+use crate::types::DecimalDataKind;
+use crate::types::DecimalView;
 use crate::types::NumberType;
-use crate::with_integer_mapped_type;
+use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
-use crate::ColumnBuilder;
 use crate::HashMethod;
-use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
+use crate::ProjectedBlock;
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
 pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
@@ -56,25 +47,19 @@ pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 pub type HashMethodKeysU128 = HashMethodFixedKeys<u128>;
 pub type HashMethodKeysU256 = HashMethodFixedKeys<u256>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct HashMethodFixedKeys<T> {
-    t: PhantomData<T>,
-}
-
-impl<T> HashMethodFixedKeys<T>
-where T: Number
-{
-    #[inline]
-    pub fn get_key(&self, column: &Buffer<T>, row: usize) -> T {
-        column[row]
-    }
+    _t: PhantomData<T>,
 }
 
 impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
-    fn build_keys_vec(&self, group_columns: InputColumns, rows: usize) -> Result<Vec<T>> {
-        let mut group_columns = group_columns.iter().collect::<Vec<_>>();
+    fn build_keys_vec(group_columns: ProjectedBlock, rows: usize) -> Result<Vec<T>> {
+        let mut group_columns = group_columns
+            .iter()
+            .map(|entry| entry.as_column().unwrap())
+            .collect::<Vec<_>>();
         group_columns.sort_by_key(|col| {
             col.data_type()
                 .remove_nullable()
@@ -93,275 +78,218 @@ where T: Clone + Default
     }
 }
 
-impl<T> Default for HashMethodFixedKeys<T>
-where T: Clone
-{
-    fn default() -> Self {
-        HashMethodFixedKeys { t: PhantomData }
+trait FixedKey: FastHash + 'static + Sized + Clone + Default + Eq + Debug + Sync + Send {
+    fn downcast(keys_state: &KeysState) -> Option<&Buffer<Self>>;
+
+    fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>>;
+
+    fn upcast(buffer: Buffer<Self>) -> KeysState;
+
+    fn single_build(_: &Column) -> Option<KeysState> {
+        None
     }
 }
 
-impl<T> HashMethodFixedKeys<T>
-where T: Clone
-{
-    #[expect(dead_code)]
-    fn deserialize_group_columns(
+impl<T: FixedKey> HashMethod for HashMethodFixedKeys<T> {
+    type HashKey = T;
+    type HashKeyIter<'a> = std::slice::Iter<'a, T>;
+
+    fn name(&self) -> String {
+        format!("FixedKeys{}", std::mem::size_of::<T>())
+    }
+
+    fn build_keys_state(&self, group_columns: ProjectedBlock, rows: usize) -> Result<KeysState> {
+        // faster path for single fixed keys
+        if group_columns.len() == 1 {
+            if let Some(res) = T::single_build(&group_columns[0].to_column()) {
+                return Ok(res);
+            }
+        }
+        let keys = HashMethodFixedKeys::<T>::build_keys_vec(group_columns, rows)?;
+        Ok(T::upcast(keys.into()))
+    }
+
+    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        match T::downcast(keys_state) {
+            Some(buffer) => Ok(buffer.iter()),
+            None => unreachable!(),
+        }
+    }
+
+    fn build_keys_accessor(
         &self,
-        keys: Vec<T>,
-        group_items: &[(usize, DataType)],
-    ) -> Result<Vec<Column>> {
-        debug_assert!(!keys.is_empty());
-
-        // faster path for single signed/unsigned integer to column
-        match group_items {
-            [(_, DataType::Number(ty))] => {
-                with_integer_mapped_type!(|NUM_TYPE| match ty {
-                    NumberDataType::NUM_TYPE => {
-                        let buffer: Buffer<T> = keys.into();
-                        let col: Buffer<NUM_TYPE> = unsafe { std::mem::transmute(buffer) };
-                        return Ok(vec![NumberType::<NUM_TYPE>::upcast_column(col)]);
-                    }
-                    _ => {}
-                })
-            }
-            [(_, DataType::Decimal(size))] => {
-                let buffer: Buffer<T> = keys.into();
-                if size.can_carried_by_128() {
-                    let col: Buffer<i128> = unsafe { std::mem::transmute(buffer) };
-                    return Ok(vec![i128::upcast_column(col, *size)]);
-                } else {
-                    let col: Buffer<i256> = unsafe { std::mem::transmute(buffer) };
-                    return Ok(vec![i256::upcast_column(col, *size)]);
-                }
-            }
-            _ => (),
-        }
-
-        let mut keys = keys;
-        let rows = keys.len();
-        let step = std::mem::size_of::<T>();
-        let length = rows * step;
-        let capacity = keys.capacity() * step;
-        let mutptr = keys.as_mut_ptr() as *mut u8;
-        let vec8 = unsafe {
-            std::mem::forget(keys);
-            // construct new vec
-            Vec::from_raw_parts(mutptr, length, capacity)
+        keys_state: KeysState,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
+        let Some(buffer) = T::downcast_owned(keys_state) else {
+            unreachable!()
         };
+        Ok(Box::new(PrimitiveKeyAccessor::new(buffer)))
+    }
 
-        let mut res = Vec::with_capacity(group_items.len());
-        let mut offsize = 0;
-
-        let mut null_offsize = group_items
-            .iter()
-            .map(|(_, ty)| ty.remove_nullable().numeric_byte_size().unwrap())
-            .sum::<usize>();
-
-        let mut sorted_group_items = group_items.to_vec();
-        sorted_group_items.sort_by(|(_, a), (_, b)| {
-            let a = a.remove_nullable();
-            let b = b.remove_nullable();
-            b.numeric_byte_size()
-                .unwrap()
-                .cmp(&a.numeric_byte_size().unwrap())
-        });
-
-        for (_, data_type) in sorted_group_items.iter() {
-            let non_null_type = data_type.remove_nullable();
-            let mut column = ColumnBuilder::with_capacity(&non_null_type, rows);
-            let reader = vec8.as_slice();
-
-            let col = match data_type.is_nullable() {
-                false => {
-                    column.push_fix_len_binaries(&reader[offsize..], step, rows)?;
-                    column.build()
-                }
-
-                true => {
-                    let mut bitmap_column = ColumnBuilder::with_capacity(&DataType::Boolean, rows);
-                    bitmap_column.push_fix_len_binaries(&reader[null_offsize..], step, rows)?;
-
-                    null_offsize += 1;
-
-                    let col = bitmap_column.build();
-                    let col = BooleanType::try_downcast_column(&col).unwrap();
-
-                    // we store 1 for nulls in fixed_hash
-                    let bitmap = col.not();
-                    column.push_fix_len_binaries(&reader[offsize..], step, rows)?;
-                    let inner = column.build();
-                    NullableColumn::new_column(inner, bitmap)
-                }
-            };
-
-            offsize += non_null_type.numeric_byte_size()?;
-            res.push(col);
+    fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
+        if let Some(buffer) = T::downcast(keys_state) {
+            hashes.extend(buffer.iter().map(|key| key.fast_hash()));
+        } else {
+            unreachable!("Invalid keys state for type");
         }
-
-        // sort back
-        let mut result_columns = Vec::with_capacity(res.len());
-        for (index, data_type) in group_items.iter() {
-            for (sf, col) in sorted_group_items.iter().zip(res.iter()) {
-                if data_type == &sf.1 && index == &sf.0 {
-                    result_columns.push(col.clone());
-                    break;
-                }
-            }
-        }
-        Ok(result_columns)
     }
 }
 
 macro_rules! impl_hash_method_fixed_keys {
-    ($dt: ident, $ty:ty, $signed_ty: ty) => {
-        impl HashMethod for HashMethodFixedKeys<$ty> {
-            type HashKey = $ty;
-            type HashKeyIter<'a> = std::slice::Iter<'a, $ty>;
-
-            fn name(&self) -> String {
-                format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
+    ($dt: ident, $ty:ty) => {
+        fn downcast(keys_state: &KeysState) -> Option<&Buffer<Self>> {
+            if let KeysState::Column(Column::Number(NumberColumn::$dt(col))) = keys_state {
+                Some(col)
+            } else {
+                None
             }
+        }
 
-            fn build_keys_state(
-                &self,
-                group_columns: InputColumns,
-                rows: usize,
-            ) -> Result<KeysState> {
-                // faster path for single fixed keys
-                if group_columns.len() == 1 {
-                    let column = &group_columns[0];
-                    if column.data_type().is_unsigned_numeric() {
-                        return Ok(KeysState::Column(column.clone()));
-                    }
-
-                    if column.data_type().is_signed_numeric() {
-                        let col = NumberType::<$signed_ty>::try_downcast_column(&column).unwrap();
-                        let buffer =
-                            unsafe { std::mem::transmute::<Buffer<$signed_ty>, Buffer<$ty>>(col) };
-                        return Ok(KeysState::Column(NumberType::<$ty>::upcast_column(buffer)));
-                    }
-                }
-
-                let keys = self.build_keys_vec(group_columns, rows)?;
-                let col = Buffer::<$ty>::from(keys);
-                Ok(KeysState::Column(NumberType::<$ty>::upcast_column(col)))
+        fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>> {
+            if let KeysState::Column(Column::Number(NumberColumn::$dt(col))) = keys_state {
+                Some(col)
+            } else {
+                None
             }
+        }
 
-            #[inline]
-            fn build_keys_iter<'a>(
-                &self,
-                key_state: &'a KeysState,
-            ) -> Result<Self::HashKeyIter<'a>> {
-                match key_state {
-                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => Ok(col.iter()),
-                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
-                }
-            }
-
-            fn build_keys_accessor(
-                &self,
-                keys_state: KeysState,
-            ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-                match keys_state {
-                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
-                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
-                    }
-                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
-                }
-            }
-
-            fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
-                match keys_state {
-                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
-                        hashes.extend(col.iter().map(|key| key.fast_hash()));
-                    }
-                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
-                }
-            }
+        fn upcast(buffer: Buffer<Self>) -> KeysState {
+            KeysState::Column(NumberType::<Self>::upcast_column(buffer))
         }
     };
 }
 
-impl_hash_method_fixed_keys! {UInt8, u8, i8}
-impl_hash_method_fixed_keys! {UInt16, u16, i16}
-impl_hash_method_fixed_keys! {UInt32, u32, i32}
-impl_hash_method_fixed_keys! {UInt64, u64, i64}
+impl FixedKey for u8 {
+    impl_hash_method_fixed_keys!(UInt8, u8);
+
+    fn single_build(column: &Column) -> Option<KeysState> {
+        match column {
+            Column::Number(NumberColumn::UInt8(_)) => Some(KeysState::Column(column.clone())),
+            Column::Number(NumberColumn::Int8(buffer)) => {
+                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                Some(KeysState::Column(Column::Number(
+                    <u8 as Number>::upcast_column(buffer),
+                )))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl FixedKey for u16 {
+    impl_hash_method_fixed_keys!(UInt16, u16);
+
+    fn single_build(column: &Column) -> Option<KeysState> {
+        match column {
+            Column::Number(NumberColumn::UInt16(_)) => Some(KeysState::Column(column.clone())),
+            Column::Number(NumberColumn::Int16(buffer)) => {
+                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                Some(KeysState::Column(Column::Number(u16::upcast_column(
+                    buffer,
+                ))))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl FixedKey for u32 {
+    impl_hash_method_fixed_keys!(UInt32, u32);
+
+    fn single_build(column: &Column) -> Option<KeysState> {
+        match column {
+            Column::Number(NumberColumn::UInt32(_)) => Some(KeysState::Column(column.clone())),
+            Column::Number(NumberColumn::Float32(buffer)) => {
+                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                Some(KeysState::Column(Column::Number(u32::upcast_column(
+                    buffer,
+                ))))
+            }
+            Column::Number(NumberColumn::Int32(buffer)) | Column::Date(buffer) => {
+                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                Some(KeysState::Column(Column::Number(u32::upcast_column(
+                    buffer,
+                ))))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl FixedKey for u64 {
+    impl_hash_method_fixed_keys!(UInt64, u64);
+
+    fn single_build(column: &Column) -> Option<KeysState> {
+        match column {
+            Column::Number(NumberColumn::UInt64(_)) => Some(KeysState::Column(column.clone())),
+            Column::Number(NumberColumn::Float64(buffer)) => {
+                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                Some(KeysState::Column(Column::Number(u64::upcast_column(
+                    buffer,
+                ))))
+            }
+            Column::Number(NumberColumn::Int64(buffer))
+            | Column::Decimal(DecimalColumn::Decimal64(buffer, _))
+            | Column::Timestamp(buffer) => {
+                let buffer = unsafe { std::mem::transmute(buffer.clone()) };
+                Some(KeysState::Column(Column::Number(u64::upcast_column(
+                    buffer,
+                ))))
+            }
+            _ => None,
+        }
+    }
+}
 
 macro_rules! impl_hash_method_fixed_large_keys {
-    ($ty:ty, $name: ident) => {
-        impl HashMethod for HashMethodFixedKeys<$ty> {
-            type HashKey = $ty;
-
-            type HashKeyIter<'a> = std::slice::Iter<'a, $ty>;
-
-            fn name(&self) -> String {
-                format!("FixedKeys{}", std::mem::size_of::<Self::HashKey>())
+    ($ty: ty, $name: ident) => {
+        fn downcast(keys_state: &KeysState) -> Option<&Buffer<Self>> {
+            match keys_state {
+                KeysState::$name(v) => Some(v),
+                _ => None,
             }
+        }
 
-            fn build_keys_state(
-                &self,
-                group_columns: InputColumns,
-                rows: usize,
-            ) -> Result<KeysState> {
-                // faster path for single fixed decimal keys
-                if group_columns.len() == 1 {
-                    if let Column::Decimal(decimal_column) = &group_columns[0] {
-                        match decimal_column {
-                            DecimalColumn::Decimal128(c, _)
-                                if std::mem::size_of::<Self::HashKey>() == 16 =>
-                            {
-                                let buffer: Buffer<$ty> = unsafe { std::mem::transmute(c.clone()) };
-                                return Ok(KeysState::$name(buffer));
-                            }
-                            DecimalColumn::Decimal256(c, _)
-                                if std::mem::size_of::<Self::HashKey>() == 32 =>
-                            {
-                                let buffer: Buffer<$ty> = unsafe { std::mem::transmute(c.clone()) };
-                                return Ok(KeysState::$name(buffer));
-                            }
-                            _ => (),
-                        }
-                    }
-                }
-
-                let keys = self.build_keys_vec(group_columns, rows)?;
-                Ok(KeysState::$name(keys.into()))
+        fn downcast_owned(keys_state: KeysState) -> Option<Buffer<Self>> {
+            match keys_state {
+                KeysState::$name(v) => Some(v),
+                _ => None,
             }
+        }
 
-            fn build_keys_iter<'a>(
-                &self,
-                key_state: &'a KeysState,
-            ) -> Result<Self::HashKeyIter<'a>> {
-                match key_state {
-                    KeysState::$name(v) => Ok(v.iter()),
-                    _ => unreachable!(),
-                }
-            }
-
-            fn build_keys_accessor(
-                &self,
-                keys_state: KeysState,
-            ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
-                match keys_state {
-                    KeysState::$name(v) => Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(v))),
-                    _ => unreachable!(),
-                }
-            }
-
-            fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
-                match keys_state {
-                    KeysState::$name(v) => {
-                        hashes.extend(v.iter().map(|key| key.fast_hash()));
-                    }
-                    _ => unreachable!(),
-                }
-            }
+        fn upcast(buffer: Buffer<Self>) -> KeysState {
+            KeysState::$name(buffer)
         }
     };
 }
 
-impl_hash_method_fixed_large_keys! {u128, U128}
-impl_hash_method_fixed_large_keys! {u256, U256}
+impl FixedKey for u128 {
+    impl_hash_method_fixed_large_keys!(u128, U128);
+
+    fn single_build(column: &Column) -> Option<KeysState> {
+        match column {
+            Column::Decimal(DecimalColumn::Decimal128(c, _)) => {
+                let buffer = unsafe { std::mem::transmute(c.clone()) };
+                Some(Self::upcast(buffer))
+            }
+            _ => None,
+        }
+    }
+}
+
+impl FixedKey for u256 {
+    impl_hash_method_fixed_large_keys!(u256, U256);
+
+    fn single_build(column: &Column) -> Option<KeysState> {
+        match column {
+            Column::Decimal(DecimalColumn::Decimal256(c, _)) => {
+                let buffer = unsafe { std::mem::transmute(c.clone()) };
+                Some(Self::upcast(buffer))
+            }
+            _ => None,
+        }
+    }
+}
 
 // Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.
 // If the value is null, we write 1 to the null_offset, otherwise we write 0.
@@ -557,19 +485,18 @@ fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Resu
                 }
             }
         },
-        Column::Decimal(DecimalColumn::Decimal128(buffer, size)) => {
-            if size.can_carried_by_128() {
-                fixed_hash_decimal::<Decimal128Type>(keys_vec, col_index, bitmap, buffer);
-            } else {
-                fixed_hash_decimal::<Decimal128As256Type>(keys_vec, col_index, bitmap, buffer);
-            }
-        }
-        Column::Decimal(DecimalColumn::Decimal256(buffer, size)) => {
-            if size.can_carried_by_128() {
-                fixed_hash_decimal::<Decimal256As128Type>(keys_vec, col_index, bitmap, buffer);
-            } else {
-                fixed_hash_decimal::<Decimal256Type>(keys_vec, col_index, bitmap, buffer);
-            }
+        Column::Decimal(decimal) => {
+            with_decimal_mapped_type!(|TO| match decimal.size().data_kind() {
+                DecimalDataKind::TO => {
+                    with_decimal_mapped_type!(|FROM| match decimal {
+                        DecimalColumn::FROM(buffer, _) => {
+                            fixed_hash_decimal::<DecimalView<FROM, TO>>(
+                                keys_vec, col_index, bitmap, buffer,
+                            );
+                        }
+                    })
+                }
+            })
         }
         _ => {
             return Err(ErrorCode::BadDataValueType(format!(

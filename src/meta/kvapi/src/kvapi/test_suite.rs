@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
+use databend_common_meta_types::protobuf::FetchAddU64Response;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
@@ -92,6 +93,10 @@ impl kvapi::TestSuite {
         self.kv_mget(&builder.build().await).await?;
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
+        self.kv_transaction_fetch_add_u64(&builder.build().await)
+            .await?;
+        self.kv_transaction_fetch_add_u64_match_seq(&builder.build().await)
+            .await?;
         self.kv_transaction_with_ttl(&builder.build().await).await?;
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
             .await?;
@@ -1041,6 +1046,230 @@ impl kvapi::TestSuite {
                 normalize_txn_response(expected)
             );
         }
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    pub async fn kv_transaction_fetch_add_u64<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        // - Add a record via transaction with ttl
+
+        info!("--- {}", func_path!());
+
+        info!("--- non-existent keys should be initialized to 0");
+        {
+            let txn = TxnRequest::new(vec![], vec![
+                TxnOp::fetch_add_u64("k1", 2),
+                TxnOp::fetch_add_u64("k2", 3),
+            ]);
+
+            let resp = kv.transaction(txn).await?;
+
+            assert_eq!(
+                resp.responses[0].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 0,
+                    before: 0,
+                    after_seq: 1,
+                    after: 2,
+                }
+            );
+            assert_eq!(
+                resp.responses[1].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k2".to_string(),
+                    before_seq: 0,
+                    before: 0,
+                    after_seq: 2,
+                    after: 3,
+                }
+            );
+        }
+
+        info!("--- existing keys should be incremented");
+        {
+            let txn = TxnRequest::new(vec![], vec![
+                TxnOp::fetch_add_u64("k1", 2),
+                TxnOp::fetch_add_u64("k2", 3),
+            ]);
+
+            let resp = kv.transaction(txn).await?;
+
+            assert_eq!(
+                resp.responses[0].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 1,
+                    before: 2,
+                    after_seq: 3,
+                    after: 4,
+                }
+            );
+            assert_eq!(
+                resp.responses[1].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k2".to_string(),
+                    before_seq: 2,
+                    before: 3,
+                    after_seq: 4,
+                    after: 6,
+                }
+            );
+        }
+
+        info!("--- underflow or overflow should not happen");
+        {
+            let txn = TxnRequest::new(vec![], vec![
+                TxnOp::fetch_add_u64("k1", -10),
+                TxnOp::fetch_add_u64("k2", i64::MAX),
+                TxnOp::fetch_add_u64("k2", i64::MAX),
+            ]);
+
+            let resp = kv.transaction(txn).await?;
+
+            assert_eq!(
+                resp.responses[0].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 3,
+                    before: 4,
+                    after_seq: 5,
+                    after: 0,
+                }
+            );
+            assert_eq!(
+                resp.responses[1].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k2".to_string(),
+                    before_seq: 4,
+                    before: 6,
+                    after_seq: 6,
+                    after: u64::MAX / 2 + 6,
+                }
+            );
+            assert_eq!(
+                resp.responses[2].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k2".to_string(),
+                    before_seq: 6,
+                    before: u64::MAX / 2 + 6,
+                    after_seq: 7,
+                    after: u64::MAX,
+                }
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Tests match_seq must match the record seq to take place the operation.
+    #[fastrace::trace]
+    pub async fn kv_transaction_fetch_add_u64_match_seq<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        // - Add a record via transaction with ttl
+
+        info!("--- {}", func_path!());
+
+        info!("--- match_seq zero");
+        {
+            let txn = TxnRequest::new(vec![], vec![
+                TxnOp::fetch_add_u64("k1", 2).match_seq(Some(0)),
+                TxnOp::fetch_add_u64("k1", 3).match_seq(Some(0)),
+                TxnOp::fetch_add_u64("k1", 4),
+                TxnOp::fetch_add_u64("k2", 5),
+            ]);
+
+            let resp = kv.transaction(txn).await?;
+
+            assert_eq!(
+                resp.responses[0].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 0,
+                    before: 0,
+                    after_seq: 1,
+                    after: 2,
+                }
+            );
+            assert_eq!(
+                resp.responses[1].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 1,
+                    before: 2,
+                    after_seq: 1,
+                    after: 2,
+                }
+            );
+            assert_eq!(
+                resp.responses[2].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 1,
+                    before: 2,
+                    after_seq: 2,
+                    after: 6,
+                }
+            );
+            assert_eq!(
+                resp.responses[3].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k2".to_string(),
+                    before_seq: 0,
+                    before: 0,
+                    after_seq: 3,
+                    after: 5,
+                }
+            );
+        }
+
+        info!("--- match_seq non zero");
+        {
+            let txn = TxnRequest::new(vec![], vec![
+                TxnOp::fetch_add_u64("k1", 2).match_seq(Some(2)),
+                TxnOp::fetch_add_u64("k1", 3).match_seq(Some(2)),
+                TxnOp::fetch_add_u64("k1", 4),
+            ]);
+
+            let resp = kv.transaction(txn).await?;
+
+            assert_eq!(
+                resp.responses[0].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 2,
+                    before: 6,
+                    after_seq: 4,
+                    after: 8,
+                }
+            );
+            assert_eq!(
+                resp.responses[1].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 4,
+                    before: 8,
+                    after_seq: 4,
+                    after: 8,
+                }
+            );
+            assert_eq!(
+                resp.responses[2].try_as_fetch_add_u64().unwrap(),
+                &FetchAddU64Response {
+                    key: "k1".to_string(),
+                    before_seq: 4,
+                    before: 8,
+                    after_seq: 5,
+                    after: 12,
+                }
+            );
+        }
+
         Ok(())
     }
 

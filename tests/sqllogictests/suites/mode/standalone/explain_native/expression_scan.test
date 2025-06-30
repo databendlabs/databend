@@ -26,7 +26,6 @@ HashJoin
 ├── probe keys: [v1.c1 (#3), b (#5)]
 ├── keys is null equal: [false, true]
 ├── filters: []
-├── build join filters:
 ├── cache index: 0
 ├── cache columns: [1]
 ├── estimated rows: 3.00
@@ -68,7 +67,6 @@ HashJoin
 ├── probe keys: [v1.c1 (#3), b (#5), c (#6)]
 ├── keys is null equal: [false, true, true]
 ├── filters: []
-├── build join filters:
 ├── cache index: 0
 ├── cache columns: [1, 2]
 ├── estimated rows: 6.00
@@ -110,7 +108,6 @@ HashJoin
 ├── probe keys: [v1.c2 (#4), b (#6), c (#7)]
 ├── keys is null equal: [false, true, true]
 ├── filters: []
-├── build join filters:
 ├── cache index: 0
 ├── cache columns: [1, 2]
 ├── estimated rows: 6.00
@@ -156,7 +153,6 @@ HashJoin
 ├── probe keys: [v2.c2 (#10), b (#12), c (#13)]
 ├── keys is null equal: [false, true, true]
 ├── filters: []
-├── build join filters:
 ├── cache index: 1
 ├── cache columns: [1, 2]
 ├── estimated rows: 12.00
@@ -167,7 +163,6 @@ HashJoin
 │   ├── probe keys: [v1.c2 (#4), b (#6), c (#7)]
 │   ├── keys is null equal: [false, true, true]
 │   ├── filters: []
-│   ├── build join filters:
 │   ├── cache index: 0
 │   ├── cache columns: [1, 2]
 │   ├── estimated rows: 6.00
@@ -230,7 +225,6 @@ HashJoin
 ├── probe keys: [v2.c2 (#9), b (#11), c1 (#13)]
 ├── keys is null equal: [false, true, true]
 ├── filters: []
-├── build join filters:
 ├── cache index: 1
 ├── cache columns: [1, 3]
 ├── estimated rows: 12.00
@@ -241,7 +235,6 @@ HashJoin
 │   ├── probe keys: [v1.c2 (#4), b (#6), c (#7)]
 │   ├── keys is null equal: [false, true, true]
 │   ├── filters: []
-│   ├── build join filters:
 │   ├── cache index: 0
 │   ├── cache columns: [1, 2]
 │   ├── estimated rows: 6.00

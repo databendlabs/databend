@@ -245,7 +245,7 @@ async fn test_virtual_column_builder() -> Result<()> {
         "['geo']['lat']",
     )
     .unwrap();
-    assert_eq!(meta_geo_lat.data_type, VariantDataType::Float64);
+    assert_eq!(meta_geo_lat.data_type, VariantDataType::Jsonb);
 
     let entries = vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),

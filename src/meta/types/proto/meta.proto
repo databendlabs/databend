@@ -182,6 +182,8 @@ message TxnOp {
     TxnPutRequest put = 2;
     TxnDeleteRequest delete = 3;
     TxnDeleteByPrefixRequest delete_by_prefix = 4;
+
+    FetchAddU64 fetch_add_u64 = 5;
   }
 }
 
@@ -191,6 +193,8 @@ message TxnOpResponse {
     TxnPutResponse put = 2;
     TxnDeleteResponse delete = 3;
     TxnDeleteByPrefixResponse delete_by_prefix = 4;
+
+    FetchAddU64Response fetch_add_u64 = 5;
   }
 }
 

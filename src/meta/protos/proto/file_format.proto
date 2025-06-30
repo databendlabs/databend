@@ -42,6 +42,7 @@ enum StageFileCompression {
   // Please change this value to 0 instead in next version bump.
   None = 9;
   Xz = 10;
+  Zip = 11;
 }
 
 message UserDefinedFileFormat {
@@ -95,6 +96,7 @@ message ParquetFileFormatParams {
   optional string missing_field_as = 1;
   StageFileCompression compression = 2;
   repeated string null_if = 4;
+  optional bool use_logic_type = 5;
 }
 
 message CsvFileFormatParams {
@@ -165,4 +167,5 @@ message AvroFileFormatParams {
   StageFileCompression compression = 1;
   optional string missing_field_as = 2;
   repeated string null_if = 3;
+  optional bool use_logic_type = 4;
 }

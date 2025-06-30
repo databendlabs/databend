@@ -34,9 +34,10 @@ use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_hashtable::HashSet as CommonHashSet;
 use databend_common_hashtable::HashtableKeyable;
@@ -55,15 +56,15 @@ pub trait DistinctStateFunc: Sized + Send + Sync {
     fn deserialize(reader: &mut &[u8]) -> Result<Self>;
     fn is_empty(&self) -> bool;
     fn len(&self) -> usize;
-    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()>;
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()>;
     fn batch_add(
         &mut self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
-    fn build_columns(&mut self, types: &[DataType]) -> Result<Vec<Column>>;
+    fn build_entries(&mut self, types: &[DataType]) -> Result<Vec<BlockEntry>>;
 }
 
 pub struct AggregateDistinctState {
@@ -102,10 +103,15 @@ impl DistinctStateFunc for AggregateDistinctState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
         let values = columns
             .iter()
-            .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
+            .map(|entry| match entry {
+                BlockEntry::Const(scalar, _, _) => scalar.clone(),
+                BlockEntry::Column(column) => {
+                    unsafe { AnyType::index_column_unchecked(column, row) }.to_owned()
+                }
+            })
             .collect::<Vec<_>>();
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
         values.serialize(&mut buffer)?;
@@ -115,7 +121,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
     fn batch_add(
         &mut self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -123,7 +129,12 @@ impl DistinctStateFunc for AggregateDistinctState {
             if validity.map(|v| v.get_bit(row)).unwrap_or(true) {
                 let values = columns
                     .iter()
-                    .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
+                    .map(|entry| match entry {
+                        BlockEntry::Const(scalar, _, _) => scalar.clone(),
+                        BlockEntry::Column(column) => {
+                            unsafe { AnyType::index_column_unchecked(column, row) }.to_owned()
+                        }
+                    })
                     .collect::<Vec<_>>();
 
                 let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
@@ -138,7 +149,7 @@ impl DistinctStateFunc for AggregateDistinctState {
         Ok(())
     }
 
-    fn build_columns(&mut self, types: &[DataType]) -> Result<Vec<Column>> {
+    fn build_entries(&mut self, types: &[DataType]) -> Result<Vec<BlockEntry>> {
         let mut builders: Vec<ColumnBuilder> = types
             .iter()
             .map(|ty| ColumnBuilder::with_capacity(ty, self.set.len()))
@@ -152,7 +163,7 @@ impl DistinctStateFunc for AggregateDistinctState {
             });
         }
 
-        Ok(builders.into_iter().map(|b| b.build()).collect())
+        Ok(builders.into_iter().map(|b| b.build().into()).collect())
     }
 }
 
@@ -191,33 +202,32 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
-        let data = unsafe { column.index_unchecked(row) };
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let view = columns[0].downcast::<StringType>().unwrap();
+        let data = unsafe { view.index_unchecked(row) };
         let _ = self.set.set_insert(data.as_bytes());
         Ok(())
     }
 
     fn batch_add(
         &mut self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
-
+        let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
             Some(v) => {
                 for row in 0..input_rows {
                     if v.get_bit(row) {
-                        let data = unsafe { column.index_unchecked(row) };
+                        let data = unsafe { view.index_unchecked(row) };
                         let _ = self.set.set_insert(data.as_bytes());
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
-                    let data = unsafe { column.index_unchecked(row) };
+                    let data = unsafe { view.index_unchecked(row) };
                     let _ = self.set.set_insert(data.as_bytes());
                 }
             }
@@ -230,12 +240,12 @@ impl DistinctStateFunc for AggregateDistinctStringState {
         Ok(())
     }
 
-    fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
+    fn build_entries(&mut self, _types: &[DataType]) -> Result<Vec<BlockEntry>> {
         let mut builder = StringColumnBuilder::with_capacity(self.set.len());
         for key in self.set.iter() {
             builder.put_and_commit(unsafe { std::str::from_utf8_unchecked(key.key()) });
         }
-        Ok(vec![Column::String(builder.build())])
+        Ok(vec![Column::String(builder.build()).into()])
     }
 }
 
@@ -274,32 +284,32 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
         self.set.len()
     }
 
-    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
-        let col = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
-        let v = unsafe { col.get_unchecked(row) };
-        let _ = self.set.set_insert(*v).is_ok();
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let view = columns[0].downcast::<NumberType<T>>().unwrap();
+        let v = unsafe { view.index_unchecked(row) };
+        let _ = self.set.set_insert(v).is_ok();
         Ok(())
     }
 
     fn batch_add(
         &mut self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let col = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
+        let view = columns[0].downcast::<NumberType<T>>().unwrap();
         match validity {
             Some(bitmap) => {
-                for (t, v) in col.iter().zip(bitmap.iter()) {
+                for (t, v) in view.iter().zip(bitmap.iter()) {
                     if v {
-                        let _ = self.set.set_insert(*t).is_ok();
+                        let _ = self.set.set_insert(t).is_ok();
                     }
                 }
             }
             None => {
                 for row in 0..input_rows {
-                    let v = unsafe { col.get_unchecked(row) };
-                    let _ = self.set.set_insert(*v).is_ok();
+                    let v = unsafe { view.index_unchecked(row) };
+                    let _ = self.set.set_insert(v).is_ok();
                 }
             }
         }
@@ -311,9 +321,9 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
         Ok(())
     }
 
-    fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
+    fn build_entries(&mut self, _types: &[DataType]) -> Result<Vec<BlockEntry>> {
         let values: Buffer<T> = self.set.iter().map(|e| *e.key()).collect();
-        Ok(vec![NumberType::<T>::upcast_column(values)])
+        Ok(vec![NumberType::<T>::upcast_column(values).into()])
     }
 }
 
@@ -355,11 +365,11 @@ impl DistinctStateFunc for AggregateUniqStringState {
         self.set.len()
     }
 
-    fn add(&mut self, columns: InputColumns, row: usize) -> Result<()> {
-        let column = columns[0].as_string().unwrap();
-        let data = unsafe { column.index_unchecked(row) };
+    fn add(&mut self, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let view = columns[0].downcast::<StringType>().unwrap();
+        let data = unsafe { view.index_unchecked(row) }.as_bytes();
         let mut hasher = SipHasher24::new();
-        hasher.write(data.as_bytes());
+        hasher.write(data);
         let hash128 = hasher.finish128();
         let _ = self.set.set_insert(hash128.into()).is_ok();
         Ok(())
@@ -367,14 +377,14 @@ impl DistinctStateFunc for AggregateUniqStringState {
 
     fn batch_add(
         &mut self,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let column = columns[0].as_string().unwrap();
+        let view = columns[0].downcast::<StringType>().unwrap();
         match validity {
             Some(v) => {
-                for (t, v) in column.iter().zip(v.iter()) {
+                for (t, v) in view.iter().zip(v.iter()) {
                     if v {
                         let mut hasher = SipHasher24::new();
                         hasher.write(t.as_bytes());
@@ -385,7 +395,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
             }
             _ => {
                 for row in 0..input_rows {
-                    let data = unsafe { column.index_unchecked(row) };
+                    let data = unsafe { view.index_unchecked(row) };
                     let mut hasher = SipHasher24::new();
                     hasher.write(data.as_bytes());
                     let hash128 = hasher.finish128();
@@ -402,7 +412,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
     }
 
     // This method won't be called.
-    fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
+    fn build_entries(&mut self, _types: &[DataType]) -> Result<Vec<BlockEntry>> {
         Ok(vec![])
     }
 }

@@ -432,12 +432,13 @@ impl Scalar {
                 NumberDataType::Float64 => NumberScalar::Float64(OrderedFloat(0.0)),
             }),
             DataType::Decimal(size) => {
-                let scalar = if size.can_carried_by_128() {
-                    DecimalDataType::Decimal128(*size).default_scalar()
-                } else {
-                    DecimalDataType::Decimal256(*size).default_scalar()
-                };
-                Scalar::Decimal(scalar)
+                with_decimal_type!(
+                    |DECIMAL_TYPE| match DecimalDataType::from(*size).data_kind() {
+                        DecimalDataKind::DECIMAL_TYPE => {
+                            Scalar::Decimal(DecimalDataType::DECIMAL_TYPE(*size).default_scalar())
+                        }
+                    }
+                )
             }
             DataType::Timestamp => Scalar::Timestamp(0),
             DataType::Date => Scalar::Date(0),
@@ -1434,17 +1435,14 @@ impl Column {
                 })
             }
             DataType::Decimal(size) => {
-                if size.can_carried_by_128() {
-                    let values = (0..len)
-                        .map(|_| i128::from(rng.gen::<i16>()))
-                        .collect::<Vec<i128>>();
-                    Column::Decimal(DecimalColumn::Decimal128(values.into(), *size))
-                } else {
-                    let values = (0..len)
-                        .map(|_| i256::from(rng.gen::<i16>()))
-                        .collect::<Vec<i256>>();
-                    Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
-                }
+                with_decimal_mapped_type!(|DECIMAL| match DecimalDataType::from(*size) {
+                    DecimalDataType::DECIMAL(size) => {
+                        let values = (0..len)
+                            .map(|_| DECIMAL::from(rng.gen::<i16>()))
+                            .collect::<Vec<DECIMAL>>();
+                        <DECIMAL as Decimal>::upcast_column(values.into(), size)
+                    }
+                })
             }
             DataType::Timestamp => TimestampType::from_data(
                 (0..len)
@@ -1972,14 +1970,10 @@ impl ColumnBuilder {
             DataType::Number(num_ty) => {
                 ColumnBuilder::Number(NumberColumnBuilder::with_capacity(num_ty, capacity))
             }
-            DataType::Decimal(size) => {
-                let decimal_type = if size.can_carried_by_128() {
-                    DecimalDataType::Decimal128(*size)
-                } else {
-                    DecimalDataType::Decimal256(*size)
-                };
-                ColumnBuilder::Decimal(DecimalColumnBuilder::with_capacity(&decimal_type, capacity))
-            }
+            DataType::Decimal(size) => ColumnBuilder::Decimal(DecimalColumnBuilder::with_capacity(
+                &(*size).into(),
+                capacity,
+            )),
             DataType::Boolean => ColumnBuilder::Boolean(MutableBitmap::with_capacity(capacity)),
             DataType::Binary => {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
@@ -2066,12 +2060,7 @@ impl ColumnBuilder {
                 ColumnBuilder::Number(NumberColumnBuilder::repeat_default(num_ty, len))
             }
             DataType::Decimal(size) => {
-                let decimal_type = if size.can_carried_by_128() {
-                    DecimalDataType::Decimal128(*size)
-                } else {
-                    DecimalDataType::Decimal256(*size)
-                };
-                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(&decimal_type, len))
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat_default(&(*size).into(), len))
             }
             DataType::Timestamp => ColumnBuilder::Timestamp(vec![0; len]),
             DataType::Date => ColumnBuilder::Date(vec![0; len]),

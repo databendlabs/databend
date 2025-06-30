@@ -29,11 +29,12 @@ use databend_common_expression::types::i256;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
@@ -227,24 +228,23 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        entries: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
-        if column.is_empty() {
+        let view = entries[0].downcast::<BitmapType>().unwrap();
+        if view.len() == 0 {
             return Ok(());
         }
 
-        let column_iter = column.iter();
         let state = place.get::<BitmapAggState>();
 
         if let Some(validity) = validity {
-            if validity.null_count() == column.len() {
+            if validity.null_count() == view.len() {
                 return Ok(());
             }
 
-            for (data, valid) in column_iter.zip(validity.iter()) {
+            for (data, valid) in view.iter().zip(validity.iter()) {
                 if !valid {
                     continue;
                 }
@@ -252,7 +252,7 @@ where
                 state.add::<OP>(rb);
             }
         } else {
-            for data in column_iter {
+            for data in view.iter() {
                 let rb = deserialize_bitmap(data)?;
                 state.add::<OP>(rb);
             }
@@ -264,12 +264,12 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        entries: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
+        let view = entries[0].downcast::<BitmapType>().unwrap();
 
-        for (data, addr) in column.iter().zip(places.iter().cloned()) {
+        for (data, addr) in view.iter().zip(places.iter().cloned()) {
             let state = AggrState::new(addr, loc).get::<BitmapAggState>();
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
@@ -277,10 +277,10 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
+    fn accumulate_row(&self, place: AggrState, entries: ProjectedBlock, row: usize) -> Result<()> {
+        let view = entries[0].downcast::<BitmapType>().unwrap();
         let state = place.get::<BitmapAggState>();
-        if let Some(data) = BitmapType::index_column(&column, row) {
+        if let Some(data) = view.index(row) {
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }
@@ -373,16 +373,16 @@ where
         Ok(Arc::new(func))
     }
 
-    fn get_filter_bitmap(&self, columns: InputColumns) -> Bitmap {
-        let filter_col = T::try_downcast_column(&columns[1]).unwrap();
+    fn get_filter_bitmap(&self, columns: ProjectedBlock) -> Bitmap {
+        let filter_col = columns[1].downcast::<T>().unwrap();
 
         let mut result = MutableBitmap::from_len_zeroed(columns[0].len());
 
         for filter_val in &self.filter_values {
             let filter_ref = T::to_scalar_ref(filter_val);
-            let mut col_bitmap = MutableBitmap::with_capacity(T::column_len(&filter_col));
+            let mut col_bitmap = MutableBitmap::with_capacity(filter_col.len());
 
-            T::iter_column(&filter_col).for_each(|val| {
+            filter_col.iter().for_each(|val| {
                 col_bitmap.push(val == filter_ref);
             });
             (&mut result).bitor_assign(&Bitmap::from(col_bitmap));
@@ -391,14 +391,13 @@ where
         Bitmap::from(result)
     }
 
-    fn filter_row(&self, columns: InputColumns, row: usize) -> Result<bool> {
-        let check_col = T::try_downcast_column(&columns[1]).unwrap();
-        let check_val_opt = T::index_column(&check_col, row);
+    fn filter_row(&self, columns: ProjectedBlock, row: usize) -> Result<bool> {
+        let check_col = columns[1].downcast::<T>().unwrap();
+        let check_val_opt = check_col.index(row);
 
         if let Some(check_val) = check_val_opt {
             for filter_val in &self.filter_values {
-                let filter_ref = T::to_scalar_ref(filter_val);
-                if filter_ref == check_val {
+                if T::to_scalar_ref(filter_val) == check_val {
                     return Ok(true);
                 }
             }
@@ -444,7 +443,7 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -461,22 +460,22 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         let predicate = self.get_filter_bitmap(columns);
-        let column = columns[0].filter(&predicate);
+        let entry = columns[0].to_column().filter(&predicate).into();
 
         let new_places = Self::filter_place(places, &predicate);
         let new_places_slice = new_places.as_slice();
         let row_size = predicate.len() - predicate.null_count();
 
-        let input = [column];
+        let input = [entry];
         self.inner
             .accumulate_keys(new_places_slice, loc, input.as_slice().into(), row_size)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         if self.filter_row(columns, row)? {
             return self.inner.accumulate_row(place, columns, row);
         }
@@ -585,17 +584,19 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 }
             })
         }
-        DataType::Decimal(decimal) if decimal.can_carried_by_128() => {
-            AggregateBitmapIntersectCountFunction::<DecimalType<i128>>::try_create(
-                display_name,
-                extract_params::<DecimalType<i128>>(display_name, filter_column_type, params)?,
-            )
-        }
-        DataType::Decimal(_) => {
-            AggregateBitmapIntersectCountFunction::<DecimalType<i256>>::try_create(
-                display_name,
-                extract_params::<DecimalType<i256>>(display_name, filter_column_type, params)?,
-            )
+        DataType::Decimal(size) => {
+            with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    AggregateBitmapIntersectCountFunction::<DecimalType<DECIMAL>>::try_create(
+                        display_name,
+                        extract_params::<DecimalType<DECIMAL>>(
+                            display_name,
+                            filter_column_type,
+                            params,
+                        )?,
+                    )
+                }
+            })
         }
         _ => {
             AggregateBitmapIntersectCountFunction::<AnyType>::try_create(

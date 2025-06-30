@@ -16,10 +16,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::NullableType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::KeyAccessor;
@@ -127,15 +123,12 @@ impl HashJoinProbeState {
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
         let input_num_rows = process_state.input.num_rows();
-        let cols = process_state
-            .input
-            .columns()
-            .iter()
-            .map(BlockEntry::to_column)
-            .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
-        self.hash_join_state
-            .init_markers((&cols).into(), input_num_rows, markers);
+        self.hash_join_state.init_markers(
+            process_state.input.columns().into(),
+            input_num_rows,
+            markers,
+        );
 
         // Build states.
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };
@@ -294,9 +287,8 @@ impl HashJoinProbeState {
 
         let result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
 
-        let filter =
+        let filter_viewer =
             self.get_nullable_filter_column(&result_block, other_predicate, &self.func_ctx)?;
-        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
         let validity = &filter_viewer.validity;
         let data = &filter_viewer.column;
 

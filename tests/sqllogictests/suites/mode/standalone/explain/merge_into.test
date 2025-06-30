@@ -37,7 +37,6 @@ CommitSink
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 4.00
         ├── EmptyResultScan(Build)
         └── TableScan(Probe)
@@ -75,7 +74,6 @@ CommitSink
             ├── probe keys: [employees2.employee_id (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 4.00
             ├── TableScan(Build)
             │   ├── table: default.default.salaries2
@@ -224,7 +222,6 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target
@@ -264,7 +261,6 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target
@@ -307,7 +303,6 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target
@@ -347,7 +342,6 @@ CommitSink
             ├── probe keys: [t2.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 0.00
             ├── TableScan(Build)
             │   ├── table: default.default.column_only_optimization_target

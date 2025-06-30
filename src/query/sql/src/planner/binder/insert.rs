@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::str::FromStr;
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InsertSource;
 use databend_common_ast::ast::InsertStmt;
-use databend_common_ast::ast::OnErrorMode;
 use databend_common_ast::ast::Statement;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -29,8 +29,10 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_storage::StageFilesInfo;
 
 use super::util::TableIdentifier;
+use crate::binder::resolve_stage_location;
 use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
@@ -42,6 +44,7 @@ use crate::plans::StreamingLoadPlan;
 use crate::BindContext;
 use crate::DefaultExprBinder;
 
+pub const STAGE_PLACEHOLDER: &str = "_databend_load";
 impl Binder {
     pub fn schema_project(
         &self,
@@ -178,44 +181,81 @@ impl Binder {
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
-            InsertSource::StreamingLoad {
+            InsertSource::LoadFile {
                 value,
                 format_options,
-                on_error_mode,
+                location,
             } => {
                 let settings = self.ctx.get_settings();
-                let (required_source_schema, values_consts) = if let Some(value) = value {
-                    self.prepared_values(value, &schema, settings).await?
-                } else {
-                    (schema.clone(), vec![])
-                };
                 let file_format_params = FileFormatParams::try_from_reader(
                     FileFormatOptionsReader::from_ast(&format_options),
                     false,
                 )?;
-                let required_values_schema: DataSchemaRef = Arc::new(schema.clone().into());
+                match location.as_str() {
+                    STAGE_PLACEHOLDER => {
+                        if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
+                            return Err(ErrorCode::BadArguments("placeholder @_databend_upload should be used in streaming_load handler or replaced in client."));
+                        }
+                        let (required_source_schema, values_consts) = if let Some(value) = value {
+                            self.prepared_values(value, &schema, settings).await?
+                        } else {
+                            (schema.clone(), vec![])
+                        };
 
-                let default_exprs = if file_format_params.need_field_default() {
-                    Some(
-                        DefaultExprBinder::try_new(self.ctx.clone())?
-                            .prepare_default_values(&required_values_schema)?,
-                    )
-                } else {
-                    None
-                };
-                Ok(InsertInputSource::StreamingLoad(StreamingLoadPlan {
-                    file_format: Box::new(file_format_params),
-                    on_error_mode: OnErrorMode::from_str(
-                        &on_error_mode.unwrap_or("abort".to_string()),
-                    )?,
-                    required_values_schema,
-                    values_consts,
-                    block_thresholds: table.get_block_thresholds(),
-                    default_exprs,
-                    // fill it in HTTP handler
-                    receiver: Default::default(),
-                    required_source_schema,
-                }))
+                        let required_values_schema: DataSchemaRef = Arc::new(schema.clone().into());
+
+                        let default_exprs = if file_format_params.need_field_default() {
+                            Some(
+                                DefaultExprBinder::try_new(self.ctx.clone())?
+                                    .prepare_default_values(&required_values_schema)?,
+                            )
+                        } else {
+                            None
+                        };
+                        Ok(InsertInputSource::StreamingLoad(StreamingLoadPlan {
+                            file_format: Box::new(file_format_params),
+                            required_values_schema,
+                            values_consts,
+                            block_thresholds: table.get_block_thresholds(),
+                            default_exprs,
+                            // fill it in HTTP handler
+                            receiver: Default::default(),
+                            required_source_schema,
+                        }))
+                    }
+                    loc => {
+                        let (mut stage_info, path) =
+                            resolve_stage_location(self.ctx.as_ref(), loc).await?;
+                        stage_info.file_format_params = file_format_params;
+
+                        let files_info = StageFilesInfo {
+                            path,
+                            files: None,
+                            pattern: None,
+                        };
+                        let options = CopyIntoTableOptions {
+                            purge: true,
+                            force: true,
+                            ..Default::default()
+                        };
+                        return self
+                            .bind_copy_from_upload(
+                                bind_context,
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                schema,
+                                value,
+                                stage_info,
+                                files_info,
+                                options,
+                                CopyIntoTableMode::Insert {
+                                    overwrite: *overwrite,
+                                },
+                            )
+                            .await;
+                    }
+                }
             }
         };
 

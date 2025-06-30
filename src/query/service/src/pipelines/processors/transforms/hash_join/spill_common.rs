@@ -57,7 +57,7 @@ pub fn get_hashes(
 
     let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
     // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
-    let columns = keys
+    let entries = keys
         .iter()
         .zip(is_null_equal)
         .map(|(expr, is_null_equal)| {
@@ -65,13 +65,13 @@ pub fn get_hashes(
                 .run(expr)?
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             if !is_null_equal && expr.data_type().is_nullable() {
-                Ok(column.remove_nullable())
+                Ok(column.remove_nullable().into())
             } else {
-                Ok(column)
+                Ok(column.into())
             }
         })
         .collect::<Result<Vec<_>>>()?;
-    hash_by_method(method, (&columns).into(), block.num_rows(), hashes)?;
+    hash_by_method(method, (&entries).into(), block.num_rows(), hashes)?;
     Ok(())
 }
 

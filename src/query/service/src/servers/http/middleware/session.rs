@@ -610,13 +610,13 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         .map_err(HttpErrorCode::server_error)?
                     {
                         log::info!(
-                            "forwarding /v1{} from {local_id} to {sticky_node_id}",
+                            "[HTTP-SESSION] forwarding /v1{} from {local_id} to {sticky_node_id}",
                             req.uri()
                         );
                         forward_request(req, node).await
                     } else {
                         let msg =
-                            format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
+                            format!("session lost due to server restart or shutdown: node '{sticky_node_id}' not found in cluster",);
                         warn!("[HTTP-SESSION] {}", msg);
                         Err(Error::from(HttpErrorCode::bad_request(
                             ErrorCode::BadArguments(msg),

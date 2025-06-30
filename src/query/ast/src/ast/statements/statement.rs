@@ -654,6 +654,7 @@ impl Display for Statement {
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
                     ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
+                    ExplainKind::Perf => write!(f, " PERF")?,
                 }
                 write!(f, " {query}")?;
             }

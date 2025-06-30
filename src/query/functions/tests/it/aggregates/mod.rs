@@ -25,6 +25,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -220,7 +221,8 @@ pub fn simulate_two_groups_group_by(
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    func.accumulate_keys(&places, &loc, columns.into(), rows)?;
+    let block_entries: Vec<BlockEntry> = columns.iter().map(|c| c.clone().into()).collect();
+    func.accumulate_keys(&places, &loc, (&block_entries).into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(state1, &mut builder)?;

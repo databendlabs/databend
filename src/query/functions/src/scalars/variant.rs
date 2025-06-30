@@ -44,6 +44,7 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
+use databend_common_expression::types::NullType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
@@ -98,6 +99,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("try_object_construct_keep_null", &[
         "try_json_object_keep_null",
     ]);
+    registry.register_aliases("is_float", &["is_double", "is_real"]);
 
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
         "parse_json",
@@ -1038,6 +1040,28 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
+        "is_decimal",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(false);
+                    return;
+                }
+            }
+            match RawJsonb::new(v).as_number() {
+                Ok(Some(num)) => match num {
+                    jsonb::Number::Float64(_) => output.push(false),
+                    _ => output.push(true),
+                },
+                _ => {
+                    output.push(false);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, BooleanType, _, _>(
         "is_string",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, BooleanType>(|v, output, ctx| {
@@ -1781,12 +1805,551 @@ pub fn register(registry: &mut FunctionRegistry) {
                         output.push(res);
                     }
                     Err(err) => {
-                        output.push(false);
                         ctx.set_error(output.len(), err.to_string());
+                        output.push(false);
                     }
                 }
             },
         ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, GenericType<0>, BooleanType, _, _>(
+        "contains",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, GenericType<0>, BooleanType>(
+            |val, item, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                match array_val.array_values() {
+                    Ok(vals_opt) => {
+                        let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                        for val in vals.iter() {
+                            if val.eq(&item_val) {
+                                output.push(true);
+                                return;
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.push(false);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, Int64Type, VariantType, _, _>(
+        "slice",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, Int64Type, VariantType>(
+            |val, start, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let vals = match array_val.array_values() {
+                    Ok(Some(vals)) => {
+                        let start = if start >= 0 {
+                            start as usize
+                        } else {
+                            let start = vals.len() as i64 + start;
+                            if start >= 0 {
+                                start as usize
+                            } else {
+                                0
+                            }
+                        };
+                        let mut new_vals = vec![];
+                        for (i, val) in vals.into_iter().enumerate() {
+                            if i >= start {
+                                new_vals.push(val);
+                            }
+                        }
+                        new_vals
+                    }
+                    Ok(None) => {
+                        vec![]
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.commit_row();
+                        return;
+                    }
+                };
+                match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<VariantType, Int64Type, Int64Type, VariantType, _, _>(
+        "slice",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<VariantType, Int64Type, Int64Type, VariantType>(
+            |val, start, end, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let vals = match array_val.array_values() {
+                    Ok(Some(vals)) => {
+                        let start = if start >= 0 {
+                            start as usize
+                        } else {
+                            let start = vals.len() as i64 + start;
+                            if start >= 0 {
+                                start as usize
+                            } else {
+                                0
+                            }
+                        };
+                        let end = if end >= 0 {
+                            end as usize
+                        } else {
+                            let end = vals.len() as i64 + end;
+                            if end >= 0 {
+                                end as usize
+                            } else {
+                                0
+                            }
+                        };
+                        let mut new_vals = vec![];
+                        for (i, val) in vals.into_iter().enumerate() {
+                            if i >= start && i < end {
+                                new_vals.push(val);
+                            }
+                        }
+                        new_vals
+                    }
+                    Ok(None) => {
+                        vec![]
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.commit_row();
+                        return;
+                    }
+                };
+                match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_2_arg_core::<NullType, GenericType<0>, NullType, _, _>(
+        "array_indexof",
+        |_, _, _| FunctionDomain::Full,
+        |_, _, _| Value::Scalar(()),
+    );
+
+    registry.register_combine_nullable_2_arg::<VariantType, GenericType<0>, UInt64Type, _, _>(
+        "array_indexof",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, GenericType<0>, NullableType<UInt64Type>>(
+            |val, item, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                match array_val.array_values() {
+                    Ok(Some(vals)) => {
+                        for (i, val) in vals.iter().enumerate() {
+                            if val.eq(&item_val) {
+                                output.push(i as u64);
+                                return;
+                            }
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.push_null();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, GenericType<0>, VariantType, _, _>(
+        "array_remove",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, GenericType<0>, VariantType>(
+            |val, item, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.commit_row();
+                        return;
+                    }
+                }
+                let array_val = RawJsonb::new(val);
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                match array_val.array_values() {
+                    Ok(vals_opt) => {
+                        let vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                        let mut new_vals = vec![];
+                        for val in vals.into_iter() {
+                            if !val.eq(&item_val) {
+                                new_vals.push(val);
+                            }
+                        }
+                        match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                            Ok(owned_jsonb) => {
+                                output.put_slice(owned_jsonb.as_ref());
+                            }
+                            Err(err) => {
+                                ctx.set_error(output.len(), err.to_string());
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_remove_first",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(vals_opt) => {
+                    let vals = vals_opt.unwrap_or_default();
+                    match OwnedJsonb::build_array(vals.iter().skip(1).map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_remove_last",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(vals_opt) => {
+                    let mut vals = vals_opt.unwrap_or_default();
+                    let _ = vals.pop();
+                    match OwnedJsonb::build_array(vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_2_arg_core::<GenericType<0>, NullableType<VariantType>, VariantType, _, _>(
+        "array_prepend",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GenericType<0>, NullableType<VariantType>, VariantType>(
+            |item, arr, output, ctx| {
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                let new_vals = if let Some(arr) = arr {
+                    let array_val = RawJsonb::new(arr);
+                    match array_val.array_values() {
+                        Ok(vals_opt) => {
+                            let mut vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                            let mut new_vals = Vec::with_capacity(vals.len() + 1);
+                            new_vals.push(item_val);
+                            new_vals.append(&mut vals);
+                            new_vals
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                } else {
+                    vec![item_val]
+                };
+
+                match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_2_arg_core::<NullableType<VariantType>, GenericType<0>, VariantType, _, _>(
+        "array_append",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<NullableType<VariantType>, GenericType<0>, VariantType>(
+            |arr, item, output, ctx| {
+                let mut item_buf = vec![];
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
+                let item_val = OwnedJsonb::new(item_buf);
+                let new_vals = if let Some(arr) = arr {
+                    let array_val = RawJsonb::new(arr);
+                    match array_val.array_values() {
+                        Ok(vals_opt) => {
+                            let mut new_vals = vals_opt.unwrap_or(vec![array_val.to_owned()]);
+                            new_vals.push(item_val);
+                            new_vals
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                } else {
+                    vec![item_val]
+                };
+
+                match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_compact",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(Some(vals)) => {
+                    let mut new_vals = Vec::new();
+                    for val in vals.into_iter() {
+                        let raw_val = val.as_raw();
+                        if matches!(raw_val.is_null(), Ok(true)) {
+                            continue;
+                        }
+                        new_vals.push(val);
+                    }
+                    match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    ctx.set_error(
+                        output.len(),
+                        "Input argument ARRAY_COMPACT is not an array".to_string(),
+                    );
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, UInt64Type, _, _>(
+        "array_unique",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, UInt64Type>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push(0);
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(Some(vals)) => {
+                    let mut set = BTreeSet::new();
+                    for val in vals.into_iter() {
+                        set.insert(val);
+                    }
+                    output.push(set.len() as u64);
+                }
+                Ok(None) => {
+                    output.push(1);
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                    output.push(0);
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_flatten",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(Some(vals)) => {
+                    let mut new_vals = Vec::new();
+                    for val in vals.into_iter() {
+                        let raw_val = val.as_raw();
+                        match raw_val.array_values() {
+                            Ok(Some(inner_vals)) => {
+                                for inner_val in inner_vals.into_iter() {
+                                    new_vals.push(inner_val);
+                                }
+                            }
+                            Ok(None) => {
+                                ctx.set_error(
+                                    output.len(),
+                                    "Input argument ARRAY_FLATTEN is not an array of arrays"
+                                        .to_string(),
+                                );
+                            }
+                            Err(err) => {
+                                ctx.set_error(output.len(), err.to_string());
+                            }
+                        }
+                    }
+                    match OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    ctx.set_error(
+                        output.len(),
+                        "Input argument ARRAY_FLATTEN is not an array of arrays".to_string(),
+                    );
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "array_reverse",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|val, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            let val = RawJsonb::new(val);
+            match val.array_values() {
+                Ok(vals_opt) => {
+                    let vals = vals_opt.unwrap_or(vec![val.to_owned()]);
+                    match OwnedJsonb::build_array(vals.iter().rev().map(|v| v.as_raw())) {
+                        Ok(owned_jsonb) => {
+                            output.put_slice(owned_jsonb.as_ref());
+                        }
+                        Err(err) => {
+                            ctx.set_error(output.len(), err.to_string());
+                        }
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
     );
 
     let delete_by_keypath = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {

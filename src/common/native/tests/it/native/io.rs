@@ -202,8 +202,7 @@ fn test_write_read_with_options(chunk: Vec<Column>, options: WriteOptions) {
 
     let mut metas = writer.metas.clone();
 
-    let mut results = Vec::with_capacity(schema.fields.len());
-    for field in schema.fields.iter() {
+    for (field, want) in schema.fields.iter().zip(chunk.iter()) {
         let n = n_columns(&field.data_type);
 
         let curr_metas: Vec<ColumnMeta> = metas.drain(..n).collect();
@@ -224,15 +223,11 @@ fn test_write_read_with_options(chunk: Vec<Column>, options: WriteOptions) {
             cols.push(col.unwrap());
         }
         let result = Column::concat_columns(cols.into_iter()).unwrap();
-        results.push(result);
+        assert_eq!(want, &result);
     }
 
-    let result_chunk = results;
-    assert_eq!(chunk, result_chunk);
-
     // test batch read
-    let mut batch_results = Vec::with_capacity(schema.fields.len());
-    for field in schema.fields.iter() {
+    for (field, want) in schema.fields.iter().zip(chunk.iter()) {
         let n = n_columns(&field.data_type);
 
         let curr_metas: Vec<ColumnMeta> = batch_metas.drain(..n).collect();
@@ -250,10 +245,8 @@ fn test_write_read_with_options(chunk: Vec<Column>, options: WriteOptions) {
             readers.push(reader);
         }
         let batch_result = batch_read_column(readers, field.data_type().clone(), pages).unwrap();
-        batch_results.push(batch_result);
+        assert_eq!(want, &batch_result);
     }
-    let batch_result_chunk = batch_results;
-    assert_eq!(chunk, batch_result_chunk);
 }
 
 fn get_all_test_data_types() -> Vec<DataType> {

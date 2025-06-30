@@ -369,6 +369,8 @@ pub enum TokenKind {
     ARRAY,
     #[token("AS", ignore(ascii_case))]
     AS,
+    #[token("ASOF", ignore(ascii_case))]
+    ASOF,
     #[token("AST", ignore(ascii_case))]
     AST,
     #[token("AT", ignore(ascii_case))]
@@ -942,6 +944,8 @@ pub enum TokenKind {
     PASSWORD_HISTORY,
     #[token("PATTERN", ignore(ascii_case))]
     PATTERN,
+    #[token("PERF", ignore(ascii_case))]
+    PERF,
     #[token("PIPELINE", ignore(ascii_case))]
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
@@ -1126,6 +1130,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("USE_LOGIC_TYPE", ignore(ascii_case))]
+    USE_LOGIC_TYPE,
     #[token("USE_RAW_PATH", ignore(ascii_case))]
     USE_RAW_PATH,
     #[token("UPDATE", ignore(ascii_case))]
@@ -1298,6 +1304,8 @@ pub enum TokenKind {
     XZ,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("ZIP", ignore(ascii_case))]
+    ZIP,
     #[token("ZSTD", ignore(ascii_case))]
     ZSTD,
     #[token("NULLIF", ignore(ascii_case))]
@@ -1783,6 +1791,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
+            | TokenKind::ASOF
             | TokenKind::BETWEEN
             | TokenKind::CREATE
             | TokenKind::ATTACH

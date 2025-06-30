@@ -312,6 +312,36 @@ impl pb::TxnOp {
             })),
         }
     }
+
+    pub fn fetch_add_u64(key: impl ToString, delta: i64) -> Self {
+        pb::TxnOp {
+            request: Some(pb::txn_op::Request::FetchAddU64(pb::FetchAddU64 {
+                key: key.to_string(),
+                match_seq: None,
+                delta,
+            })),
+        }
+    }
+
+    /// Add a match-sequence-number condition to the operation.
+    ///
+    /// If the sequence number does not match, the operation won't be take place.
+    pub fn match_seq(mut self, seq: Option<u64>) -> Self {
+        let req = self
+            .request
+            .as_mut()
+            .expect("TxnOp must have a non-None request field");
+
+        match req {
+            pb::txn_op::Request::Delete(p) => p.match_seq = seq,
+            pb::txn_op::Request::FetchAddU64(d) => d.match_seq = seq,
+            _ => {
+                unreachable!("Not support match_seq for: {}", req)
+            }
+        }
+
+        self
+    }
 }
 
 impl pb::TxnOpResponse {
@@ -343,6 +373,30 @@ impl pb::TxnOpResponse {
         }
     }
 
+    pub fn unchanged_fetch_add_u64(key: impl ToString, seq: u64, value: u64) -> Self {
+        Self::fetch_add_u64(key, seq, value, seq, value)
+    }
+
+    pub fn fetch_add_u64(
+        key: impl ToString,
+        before_seq: u64,
+        before: u64,
+        after_seq: u64,
+        after: u64,
+    ) -> Self {
+        pb::TxnOpResponse {
+            response: Some(pb::txn_op_response::Response::FetchAddU64(
+                pb::FetchAddU64Response {
+                    key: key.to_string(),
+                    before_seq,
+                    before,
+                    after_seq,
+                    after,
+                },
+            )),
+        }
+    }
+
     pub fn get(key: impl ToString, value: Option<SeqV>) -> Self {
         pb::TxnOpResponse {
             response: Some(pb::txn_op_response::Response::Get(pb::TxnGetResponse {
@@ -368,6 +422,13 @@ impl pb::TxnOpResponse {
     pub fn try_as_get(&self) -> Option<&pb::TxnGetResponse> {
         match &self.response {
             Some(pb::txn_op_response::Response::Get(resp)) => Some(resp),
+            _ => None,
+        }
+    }
+
+    pub fn try_as_fetch_add_u64(&self) -> Option<&pb::FetchAddU64Response> {
+        match &self.response {
+            Some(pb::txn_op_response::Response::FetchAddU64(resp)) => Some(resp),
             _ => None,
         }
     }

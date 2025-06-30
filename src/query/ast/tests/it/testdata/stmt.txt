@@ -14864,6 +14864,141 @@ CreateTable(
 
 
 ---------- Input ----------
+COMMENT IF EXISTS ON TABLE t IS 'test'
+---------- Output ---------
+ALTER TABLE IF EXISTS t COMMENT='test'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: true,
+        table_reference: Table {
+            span: Some(
+                27..28,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    27..28,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyTableComment {
+            new_comment: "test",
+        },
+    },
+)
+
+
+---------- Input ----------
+COMMENT ON COLUMN t.C1 IS 'test'
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN C1 COMMENT 'test'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                18..22,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    18..19,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: ModifyColumn {
+            action: Comment(
+                [
+                    ColumnComment {
+                        name: Identifier {
+                            span: Some(
+                                20..22,
+                            ),
+                            name: "C1",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        comment: "test",
+                    },
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+COMMENT ON network policy n1 IS 'test'
+---------- Output ---------
+ALTER NETWORK POLICY n1 SET  COMMENT = 'test'
+---------- AST ------------
+AlterNetworkPolicy(
+    AlterNetworkPolicyStmt {
+        if_exists: false,
+        name: "n1",
+        allowed_ip_list: None,
+        blocked_ip_list: None,
+        comment: Some(
+            "test",
+        ),
+    },
+)
+
+
+---------- Input ----------
+COMMENT ON password policy p1 IS 'test'
+---------- Output ---------
+ALTER PASSWORD POLICY p1 SET  COMMENT = 'test'
+---------- AST ------------
+AlterPasswordPolicy(
+    AlterPasswordPolicyStmt {
+        if_exists: false,
+        name: "p1",
+        action: SetOptions(
+            PasswordSetOptions {
+                min_length: None,
+                max_length: None,
+                min_upper_case_chars: None,
+                min_lower_case_chars: None,
+                min_numeric_chars: None,
+                min_special_chars: None,
+                min_age_days: None,
+                max_age_days: None,
+                max_retries: None,
+                lockout_time_mins: None,
+                history: None,
+                comment: Some(
+                    "test",
+                ),
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')
 ---------- Output ---------
 CREATE TEMPORARY  TABLE t (a Int32 COMMENT 'col comment')

@@ -23,11 +23,13 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::Buffer;
 use databend_common_expression::types::BuilderMut;
+use databend_common_expression::types::DecimalDataKind;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
-use databend_common_expression::Column;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
@@ -48,10 +50,14 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
         None
     }
 
-    fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
+    fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
 
-    fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
-    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()>;
+    fn accumulate_row(&mut self, column: &BlockEntry, row: usize) -> Result<()>;
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        entry: &BlockEntry,
+    ) -> Result<()>;
 
     fn merge_result(
         &mut self,
@@ -351,53 +357,34 @@ pub fn try_create_aggregate_sum_function(
                 arguments[0].clone(),
             )
         }
-        DataType::Decimal(s) if s.can_carried_by_128() => {
-            let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL128_PRECISION, s.scale());
-
-            // DecimalWidth<int64_t> = 18
-            let should_check_overflow = s.precision() > 18;
-            let return_type = DataType::Decimal(decimal_size);
-            if should_check_overflow {
-                AggregateUnaryFunction::<
-                    DecimalSumState<true, i128>,
-                    Decimal128Type,
-                    Decimal128Type,
-                >::try_create_unary(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-            } else {
-                AggregateUnaryFunction::<
-                    DecimalSumState<false, i128>,
-                    Decimal128Type,
-                    Decimal128Type,
-                >::try_create_unary(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-            }
-        }
         DataType::Decimal(s) => {
-            let decimal_size = DecimalSize::new_unchecked(MAX_DECIMAL256_PRECISION, s.scale());
+            with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let decimal_size =
+                        DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, s.scale());
 
-            let should_check_overflow = s.precision() > 18;
-            let return_type = DataType::Decimal(decimal_size);
-
-            if should_check_overflow {
-                AggregateUnaryFunction::<
-                    DecimalSumState<true, i256>,
-                    Decimal256Type,
-                    Decimal256Type,
-                >::try_create_unary(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-            } else {
-                AggregateUnaryFunction::<
-                    DecimalSumState<false, i256>,
-                    Decimal256Type,
-                    Decimal256Type,
-                >::try_create_unary(
-                    display_name, return_type, params, arguments[0].clone()
-                )
-            }
+                    let should_check_overflow = DECIMAL::MAX_PRECISION > i64::MAX_PRECISION
+                        && s.precision() > i64::MAX_PRECISION;
+                    let return_type = DataType::Decimal(decimal_size);
+                    if should_check_overflow {
+                        AggregateUnaryFunction::<
+                            DecimalSumState<true, DECIMAL>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >::try_create_unary(
+                            display_name, return_type, params, arguments[0].clone()
+                        )
+                    } else {
+                        AggregateUnaryFunction::<
+                            DecimalSumState<false, DECIMAL>,
+                            DecimalType<DECIMAL>,
+                            DecimalType<DECIMAL>,
+                        >::try_create_unary(
+                            display_name, return_type, params, arguments[0].clone()
+                        )
+                    }
+                }
+            })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",

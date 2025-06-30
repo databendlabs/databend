@@ -87,6 +87,16 @@ pub async fn do_vacuum2(
     ctx: Arc<dyn TableContext>,
     respect_flash_back: bool,
 ) -> Result<Vec<String>> {
+    {
+        if ctx.txn_mgr().lock().is_active() {
+            info!(
+                "[FUSE-VACUUM2] Transaction is active, skipping vacuum, target table {}",
+                table.get_table_info().desc
+            );
+            return Ok(vec![]);
+        }
+    }
+
     let fuse_table = FuseTable::try_from_table(table)?;
     let start = std::time::Instant::now();
 

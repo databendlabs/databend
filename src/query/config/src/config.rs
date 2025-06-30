@@ -1674,7 +1674,7 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "60")]
     pub http_handler_result_timeout_secs: u64,
 
-    #[clap(long, value_name = "VALUE", default_value = "3600")]
+    #[clap(long, value_name = "VALUE", default_value = "14400")]
     pub http_session_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]

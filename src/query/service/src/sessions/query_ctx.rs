@@ -1636,8 +1636,8 @@ impl TableContext for QueryContext {
         } else {
             format!("{}/", stage_root)
         };
-        match stage_info.file_format_params {
-            FileFormatParams::Parquet(..) => {
+        match &stage_info.file_format_params {
+            FileFormatParams::Parquet(fmt) => {
                 if max_column_position > 1 {
                     Err(ErrorCode::SemanticError(
                         "[QUERY-CTX] Query from parquet file only support $1 as column position",
@@ -1665,6 +1665,7 @@ impl TableContext for QueryContext {
                         self.get_settings(),
                         self.get_query_kind(),
                         case_sensitive,
+                        fmt,
                     )
                     .await
                 } else {
@@ -1873,6 +1874,22 @@ impl TableContext for QueryContext {
 
     fn get_session_type(&self) -> SessionType {
         self.shared.session.get_type()
+    }
+
+    fn get_perf_flag(&self) -> bool {
+        self.shared.get_perf_flag()
+    }
+
+    fn set_perf_flag(&self, flag: bool) {
+        self.shared.set_perf_flag(flag);
+    }
+
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.shared.get_nodes_perf()
+    }
+
+    fn set_nodes_perf(&self, node: String, perf: String) {
+        self.shared.set_nodes_perf(node, perf);
     }
 }
 

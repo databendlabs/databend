@@ -96,7 +96,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.00
 ├── TableScan(Build)
 │   ├── table: default.default.t
@@ -133,7 +132,6 @@ Filter
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.default.t
@@ -177,7 +175,6 @@ HashJoin
 │   ├── probe keys: []
 │   ├── keys is null equal: []
 │   ├── filters: []
-│   ├── build join filters:
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
 │   │   ├── table: default.default.t
@@ -352,7 +349,6 @@ Filter
     ├── probe keys: [a.x (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 4.00
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
@@ -385,7 +381,6 @@ HashJoin
 ├── probe keys: [b.x (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 2.67
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
@@ -724,7 +719,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_2 (#2)]
-├── build join filters:
 ├── estimated rows: 4.00
 ├── EvalScalar(Build)
 │   ├── output columns: [MAX(a) (#2)]
@@ -752,7 +746,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_1 (#1)]
-├── build join filters:
 ├── estimated rows: 4.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
@@ -785,7 +778,6 @@ HashJoin
 ├── probe keys: [CAST(t1.a (#0) AS Decimal(38, 5) NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 12.00
 ├── TableScan(Build)
 │   ├── table: default.default.t3
@@ -851,4 +843,3 @@ DROP TABLE t2;
 
 statement ok
 DROP TABLE t3;
-

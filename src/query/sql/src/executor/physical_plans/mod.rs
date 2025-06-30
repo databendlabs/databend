@@ -117,3 +117,4 @@ pub use physical_udf::UdfFunctionDesc;
 pub use physical_union_all::UnionAll;
 pub use physical_window::*;
 pub use physical_window_partition::*;
+mod physical_asof_join;

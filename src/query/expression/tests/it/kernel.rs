@@ -52,7 +52,7 @@ pub fn test_pass() {
     run_filter(
         &mut file,
         vec![true, false, false, false, true],
-        &new_block(&[
+        &DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
             UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
@@ -65,7 +65,7 @@ pub fn test_pass() {
     );
 
     run_concat(&mut file, &[
-        new_block(&[
+        DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
             UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
@@ -76,7 +76,7 @@ pub fn test_pass() {
                 false, true, true, false, false,
             ]),
         ]),
-        new_block(&[
+        DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![5i32, 6]),
             UInt8Type::from_data_with_validity(vec![15u8, 16], vec![false, true]),
             Column::Null { len: 2 },
@@ -88,7 +88,7 @@ pub fn test_pass() {
     run_take(
         &mut file,
         &[0, 3, 1],
-        &new_block(&[
+        &DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
             UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
@@ -175,7 +175,7 @@ pub fn test_pass() {
 
     run_take_by_slice_limit(
         &mut file,
-        &new_block(&[
+        &DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
             UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
@@ -191,7 +191,7 @@ pub fn test_pass() {
 
     run_take_by_slice_limit(
         &mut file,
-        &new_block(&[
+        &DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
             UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,
@@ -207,7 +207,7 @@ pub fn test_pass() {
 
     run_scatter(
         &mut file,
-        &new_block(&[
+        &DataBlock::new_from_columns(vec![
             Int32Type::from_data(vec![0i32, 1, 2, 3, -4]),
             UInt8Type::from_data_with_validity(vec![10u8, 11, 12, 13, 14], vec![
                 false, true, false, false, false,

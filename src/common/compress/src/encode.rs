@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
 use std::io::Result;
+use std::io::Write;
 
 use async_compression::codec::BrotliEncoder;
 use async_compression::codec::BzEncoder;
@@ -27,6 +29,8 @@ use async_compression::util::PartialBuffer;
 use async_compression::Level;
 use brotli::enc::backward_references::BrotliEncoderParams;
 use databend_common_exception::ErrorCode;
+use zip::write::FileOptions;
+use zip::ZipWriter;
 
 use crate::CompressAlgorithm;
 
@@ -77,6 +81,9 @@ impl From<CompressAlgorithm> for CompressCodec {
             }
             CompressAlgorithm::Zstd => {
                 CompressCodec::Zstd(ZstdEncoder::new(Level::Default.into_zstd()))
+            }
+            CompressAlgorithm::Zip => {
+                unreachable!("Zip type requires additional judgment and use `compress_all_zip`")
             }
         }
     }
@@ -174,6 +181,26 @@ impl CompressCodec {
             }
         }
         Ok(compress_bufs.concat())
+    }
+
+    pub fn compress_all_zip(to_compress: &[u8]) -> databend_common_exception::Result<Vec<u8>> {
+        let mut cursor = Cursor::new(Vec::new());
+
+        let mut zip = ZipWriter::new(&mut cursor);
+        let options: FileOptions<()> = FileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .unix_permissions(0o644);
+
+        // zip for archive files
+        zip.start_file("tmp", options)
+            .map_err(|e| ErrorCode::InvalidCompressionData(format!("zip start_file error: {e}")))?;
+
+        zip.write_all(to_compress)
+            .map_err(|e| ErrorCode::InvalidCompressionData(format!("zip write error: {e}")))?;
+
+        zip.finish()
+            .map_err(|e| ErrorCode::InvalidCompressionData(format!("zip finish error: {e}")))?;
+        Ok(cursor.into_inner())
     }
 }
 

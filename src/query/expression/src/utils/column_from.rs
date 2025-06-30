@@ -115,15 +115,15 @@ impl FromData<f64> for Float64Type {
     }
 }
 
-impl<Num: Decimal> DecimalType<Num> {
-    pub fn from_data_with_size<D: AsRef<[Num]>>(d: D, size: Option<DecimalSize>) -> Column {
-        Num::upcast_column(
+impl<T: Decimal> DecimalType<T> {
+    pub fn from_data_with_size<D: AsRef<[T]>>(d: D, size: Option<DecimalSize>) -> Column {
+        T::upcast_column(
             Self::column_from_iter(d.as_ref().iter().copied(), &[]),
-            size.unwrap_or(Num::default_decimal_size()),
+            size.unwrap_or(T::default_decimal_size()),
         )
     }
 
-    pub fn from_opt_data_with_size<D: AsRef<[Option<Num>]>>(
+    pub fn from_opt_data_with_size<D: AsRef<[Option<T>]>>(
         d: D,
         size: Option<DecimalSize>,
     ) -> Column {
@@ -134,7 +134,7 @@ impl<Num: Decimal> DecimalType<Num> {
                 data.push(*v);
                 validity.push(true);
             } else {
-                data.push(Num::default());
+                data.push(T::default());
                 validity.push(false);
             }
         }

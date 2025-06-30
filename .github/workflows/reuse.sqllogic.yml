@@ -279,6 +279,9 @@ jobs:
         dedup:
           - "full_path"
           - "sub_path"
+        size:
+          - "small"
+          - "large"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
@@ -292,7 +295,7 @@ jobs:
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handler }}-${{ matrix.dedup }}
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handler }}-${{ matrix.dedup }}-${{ matrix.size }}
 
   standalone_no_table_meta_cache:
     runs-on:

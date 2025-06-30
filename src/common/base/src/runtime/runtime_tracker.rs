@@ -61,6 +61,7 @@ use crate::runtime::time_series::QueryTimeSeriesProfile;
 use crate::runtime::workload_group::WorkloadGroupResource;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::OutOfLimit;
+use crate::runtime::QueryPerf;
 use crate::runtime::TimeSeriesProfiles;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
@@ -141,6 +142,7 @@ pub struct TrackingPayload {
     pub time_series_profile: Option<Arc<QueryTimeSeriesProfile>>,
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
+    pub perf_enabled: bool,
 }
 
 pub struct TrackingGuard {
@@ -165,6 +167,9 @@ impl Drop for TrackingGuard {
         TRACKER.with(|x| {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut self.saved);
+
+            // Sync perf flag when restoring the previous payload
+            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
         });
     }
 }
@@ -216,6 +221,7 @@ impl ThreadTracker {
                 time_series_profile: None,
                 local_time_series_profile: None,
                 workload_group_resource: None,
+                perf_enabled: false,
             }),
         }
     }
@@ -225,7 +231,7 @@ impl ThreadTracker {
     pub fn init() {
         TRACKER.with(|x| {
             let _ = x.borrow_mut();
-        })
+        });
     }
 
     pub(crate) fn with<F, R>(f: F) -> R
@@ -245,6 +251,9 @@ impl ThreadTracker {
         TRACKER.with(move |x| {
             let mut thread_tracker = x.borrow_mut();
             std::mem::swap(&mut thread_tracker.payload, &mut guard.saved);
+
+            // Sync perf flag from the new payload to thread_local PERF_FLAG
+            QueryPerf::sync_from_payload(thread_tracker.payload.perf_enabled);
 
             guard
         })

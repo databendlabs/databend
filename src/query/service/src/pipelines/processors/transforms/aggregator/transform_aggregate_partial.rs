@@ -20,16 +20,14 @@ use bumpalo::Bump;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::HashTableConfig;
-use databend_common_expression::InputColumns;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
-use databend_common_functions::scalars::strict_decimal_data_type;
+use databend_common_expression::ProjectedBlock;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -115,10 +113,10 @@ impl TransformPartialAggregate {
     fn aggregate_arguments<'a>(
         block: &'a DataBlock,
         aggregate_functions_arguments: &'a [Vec<usize>],
-    ) -> Vec<InputColumns<'a>> {
+    ) -> Vec<ProjectedBlock<'a>> {
         aggregate_functions_arguments
             .iter()
-            .map(|function_arguments| InputColumns::new_block_proxy(function_arguments, block))
+            .map(|function_arguments| ProjectedBlock::project(function_arguments, block))
             .collect::<Vec<_>>()
     }
 
@@ -130,10 +128,8 @@ impl TransformPartialAggregate {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = strict_decimal_data_type(block)
-            .map_err(ErrorCode::Internal)?
-            .consume_convert_to_full();
-        let group_columns = InputColumns::new_block_proxy(&self.params.group_columns, &block);
+        let block = block.consume_convert_to_full();
+        let group_columns = ProjectedBlock::project(&self.params.group_columns, &block);
         let rows_num = block.num_rows();
 
         self.processed_bytes += block.memory_size();
@@ -171,7 +167,7 @@ impl TransformPartialAggregate {
                     };
 
                     let agg_states = if !states_index.is_empty() {
-                        InputColumns::new_block_proxy(&states_index, &block)
+                        ProjectedBlock::project(&states_index, &block)
                     } else {
                         (&[]).into()
                     };

@@ -29,6 +29,9 @@ create file format if not exists csv_snappy type=csv compression=snappy;
 statement ok
 create file format if not exists csv_none type=csv compression=none;
 
+statement ok
+create file format if not exists csv_zip type=csv compression=zip;
+
 
 # test csv
 query
@@ -67,10 +70,16 @@ copy into @unload from ii file_format=(format_name='csv_none');
 3 12 12
 
 query
+copy into @unload from ii file_format=(format_name='csv_zip');
+----
+3 12 118
+
+query
 select right(name, 7), size from list_stage(location=>'@unload');
 ----
 .csv.gz 32
 000.csv 12
+csv.zip 118
 
 query
 select $1, $2 from @unload(file_format => 'csv_gzip' pattern => '.*.gz');
@@ -81,6 +90,13 @@ select $1, $2 from @unload(file_format => 'csv_gzip' pattern => '.*.gz');
 
 query
 select $1, $2 from @unload(file_format => 'csv_none' pattern => '.*.csv');
+----
+1 2
+3 4
+5 6
+
+query
+select $1, $2 from @unload(file_format => 'csv_zip' pattern => '.*.zip');
 ----
 1 2
 3 4

@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::MAX_DECIMAL128_PRECISION;
 use databend_common_expression::Column;
 use databend_common_expression::TableDataType;
 
@@ -31,7 +31,7 @@ use crate::nested::NestedState;
 use crate::util::n_columns;
 use crate::PageMeta;
 
-pub fn read_nested_column<R: NativeReadBuf>(
+fn read_nested_column<R: NativeReadBuf>(
     mut readers: Vec<R>,
     data_type: TableDataType,
     mut init: Vec<InitNested>,
@@ -72,31 +72,51 @@ pub fn read_nested_column<R: NativeReadBuf>(
             )?
         }
         ),
-        Decimal(decimal) if decimal.precision() > MAX_DECIMAL128_PRECISION => {
-            init.push(InitNested::Primitive(is_nullable));
-            read_nested_decimal::<
-                databend_common_column::types::i256,
-                databend_common_expression::types::i256,
-                _,
-            >(
-                &mut readers.pop().unwrap(),
-                data_type.clone(),
-                decimal.size(),
-                init,
-                page_metas.pop().unwrap(),
-            )?
-        }
-        Decimal(decimal) => {
-            init.push(InitNested::Primitive(is_nullable));
+        Decimal(decimal) => match decimal {
+            DecimalDataType::Decimal128(decimal_size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                let mut results = read_nested_decimal::<i128, i128, _>(
+                    &mut readers.pop().unwrap(),
+                    data_type.clone(),
+                    decimal_size,
+                    init,
+                    page_metas.pop().unwrap(),
+                )?;
+                if decimal_size.can_carried_by_64() {
+                    for (_, col) in results.iter_mut() {
+                        if data_type.is_nullable() {
+                            let decimal = col
+                                .as_nullable_mut()
+                                .unwrap()
+                                .column
+                                .as_decimal_mut()
+                                .unwrap();
+                            *decimal = decimal.clone().strict_decimal();
+                        } else {
+                            let decimal = col.as_decimal_mut().unwrap();
+                            *decimal = decimal.clone().strict_decimal();
+                        }
+                    }
+                }
 
-            read_nested_decimal::<i128, i128, _>(
-                &mut readers.pop().unwrap(),
-                data_type.clone(),
-                decimal.size(),
-                init,
-                page_metas.pop().unwrap(),
-            )?
-        }
+                results
+            }
+            DecimalDataType::Decimal256(decimal_size) => {
+                init.push(InitNested::Primitive(is_nullable));
+                read_nested_decimal::<
+                    databend_common_column::types::i256,
+                    databend_common_expression::types::i256,
+                    _,
+                >(
+                    &mut readers.pop().unwrap(),
+                    data_type.clone(),
+                    decimal_size,
+                    init,
+                    page_metas.pop().unwrap(),
+                )?
+            }
+            _ => unreachable!(),
+        },
         Interval => {
             init.push(InitNested::Primitive(is_nullable));
 

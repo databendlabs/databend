@@ -55,7 +55,7 @@ statement ok
 CREATE DATABASE databend6
 
 statement ok
-create table t1(id int)
+create or replace table t1(id int)
 
 statement ok
 insert into t1 select number as id from numbers(10)
@@ -70,7 +70,7 @@ select * from t1 where id in (1,3) or null order by id
 3
 
 statement ok
-CREATE TABLE t0(c0INT INT32 NOT NULL DEFAULT(1456832334))
+CREATE OR REPLACE TABLE t0(c0INT INT32 NOT NULL DEFAULT(1456832334))
 
 statement ok
 INSERT INTO t0(c0int) VALUES (1388388634), (-1943680716)
@@ -88,7 +88,7 @@ SELECT t0.c0int FROM t0 WHERE 's' NOT IN ('oE', '70', '3r', 'k', '9aRgze') or to
 -1943680716
 
 statement ok
-create table t2(a float64, b decimal(7, 2))
+create or replace table t2(a float64, b decimal(7, 2))
 
 statement ok
 insert into t2 values (1.1, 0.0),(0.0, 2.1)

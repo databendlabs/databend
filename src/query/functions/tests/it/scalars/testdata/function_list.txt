@@ -1,6 +1,7 @@
 Function aliases (alias to origin):
 add -> plus
 array_contains -> contains
+array_generate_range -> range
 array_get -> get
 array_length -> length
 array_size -> length
@@ -30,6 +31,8 @@ hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
+is_double -> is_float
+is_real -> is_float
 json_array -> array_construct
 json_array_distinct -> array_distinct
 json_array_except -> array_except
@@ -162,9 +165,16 @@ Functions overloads:
 0 array() :: Array(Nothing)
 1 array FACTORY
 0 array_any FACTORY
-0 array_append(Array(T0) NULL, T0) :: Array(T0)
+0 array_append(Variant NULL, T0) :: Variant
+1 array_append(Array(T0) NULL, T0) :: Array(T0)
 0 array_approx_count_distinct FACTORY
 0 array_avg FACTORY
+0 array_compact(Variant) :: Variant
+1 array_compact(Variant NULL) :: Variant NULL
+2 array_compact(Array(Nothing)) :: Array(Nothing)
+3 array_compact(Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_compact(Array(T0)) :: Array(T0)
+5 array_compact(Array(T0) NULL) :: Array(T0) NULL
 0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
 1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
 2 array_concat(Array(T0), Array(T0)) :: Array(T0)
@@ -179,49 +189,86 @@ Functions overloads:
 5 array_distinct(Array(T0) NULL) :: Array(T0) NULL
 0 array_except(Variant, Variant) :: Variant
 1 array_except(Variant NULL, Variant NULL) :: Variant NULL
-0 array_flatten(Array(Array(T0))) :: Array(T0)
-1 array_flatten(Array(Array(T0)) NULL) :: Array(T0) NULL
-0 array_indexof(NULL, NULL) :: NULL
-1 array_indexof(Array(T0), T0) :: UInt64
-2 array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
+2 array_except(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+3 array_except(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_except(Array(T0), Array(T0)) :: Array(T0)
+5 array_except(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_flatten(Variant) :: Variant
+1 array_flatten(Variant NULL) :: Variant NULL
+2 array_flatten(Array(Array(T0))) :: Array(T0)
+3 array_flatten(Array(Array(T0)) NULL) :: Array(T0) NULL
+0 array_indexof(NULL, T0) :: NULL
+1 array_indexof(Variant, T0) :: UInt64 NULL
+2 array_indexof(Variant NULL, T0 NULL) :: UInt64 NULL
+3 array_indexof(Array(T0), T0) :: UInt64
+4 array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL
 0 array_insert(Variant, Int32, Variant) :: Variant
 1 array_insert(Variant NULL, Int32 NULL, Variant NULL) :: Variant NULL
 0 array_intersection(Variant, Variant) :: Variant
 1 array_intersection(Variant NULL, Variant NULL) :: Variant NULL
-2 array_intersection(Array(T0), Array(T0)) :: Array(T0)
-3 array_intersection(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+2 array_intersection(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+3 array_intersection(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_intersection(Array(T0), Array(T0)) :: Array(T0)
+5 array_intersection(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_kurtosis FACTORY
 0 array_max FACTORY
 0 array_median FACTORY
 0 array_min FACTORY
 0 array_overlap(Variant, Variant) :: Boolean
 1 array_overlap(Variant NULL, Variant NULL) :: Boolean NULL
-0 array_prepend(T0, Array(T0) NULL) :: Array(T0)
-0 array_remove_first(Array(Nothing)) :: Array(Nothing)
-1 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_remove_first(Array(T0)) :: Array(T0)
-3 array_remove_first(Array(T0) NULL) :: Array(T0) NULL
-0 array_remove_last(Array(Nothing)) :: Array(Nothing)
-1 array_remove_last(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_remove_last(Array(T0)) :: Array(T0)
-3 array_remove_last(Array(T0) NULL) :: Array(T0) NULL
+2 array_overlap(Array(Nothing), Array(Nothing)) :: Boolean
+3 array_overlap(Array(Nothing) NULL, Array(Nothing) NULL) :: Boolean NULL
+4 array_overlap(Array(T0), Array(T0)) :: Boolean
+5 array_overlap(Array(T0) NULL, Array(T0) NULL) :: Boolean NULL
+0 array_prepend(T0, Variant NULL) :: Variant
+1 array_prepend(T0, Array(T0) NULL) :: Array(T0)
+0 array_remove(Variant, T0) :: Variant
+1 array_remove(Variant NULL, T0 NULL) :: Variant NULL
+2 array_remove(Array(T0), T0) :: Array(T0)
+3 array_remove(Array(T0) NULL, T0 NULL) :: Array(T0) NULL
+0 array_remove_first(Variant) :: Variant
+1 array_remove_first(Variant NULL) :: Variant NULL
+2 array_remove_first(Array(Nothing)) :: Array(Nothing)
+3 array_remove_first(Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_remove_first(Array(T0)) :: Array(T0)
+5 array_remove_first(Array(T0) NULL) :: Array(T0) NULL
+0 array_remove_last(Variant) :: Variant
+1 array_remove_last(Variant NULL) :: Variant NULL
+2 array_remove_last(Array(Nothing)) :: Array(Nothing)
+3 array_remove_last(Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_remove_last(Array(T0)) :: Array(T0)
+5 array_remove_last(Array(T0) NULL) :: Array(T0) NULL
+0 array_reverse(Variant) :: Variant
+1 array_reverse(Variant NULL) :: Variant NULL
+2 array_reverse(Array(Nothing)) :: Array(Nothing)
+3 array_reverse(Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_reverse(Array(T0)) :: Array(T0)
+5 array_reverse(Array(T0) NULL) :: Array(T0) NULL
 0 array_skewness FACTORY
 0 array_sort_asc_null_first(Array(Nothing)) :: Array(Nothing)
 1 array_sort_asc_null_first(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_sort_asc_null_first(Array(T0)) :: Array(T0)
-3 array_sort_asc_null_first(Array(T0) NULL) :: Array(T0) NULL
+2 array_sort_asc_null_first(Variant) :: Variant
+3 array_sort_asc_null_first(Variant NULL) :: Variant NULL
+4 array_sort_asc_null_first(Array(T0)) :: Array(T0)
+5 array_sort_asc_null_first(Array(T0) NULL) :: Array(T0) NULL
 0 array_sort_asc_null_last(Array(Nothing)) :: Array(Nothing)
 1 array_sort_asc_null_last(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_sort_asc_null_last(Array(T0)) :: Array(T0)
-3 array_sort_asc_null_last(Array(T0) NULL) :: Array(T0) NULL
+2 array_sort_asc_null_last(Variant) :: Variant
+3 array_sort_asc_null_last(Variant NULL) :: Variant NULL
+4 array_sort_asc_null_last(Array(T0)) :: Array(T0)
+5 array_sort_asc_null_last(Array(T0) NULL) :: Array(T0) NULL
 0 array_sort_desc_null_first(Array(Nothing)) :: Array(Nothing)
 1 array_sort_desc_null_first(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_sort_desc_null_first(Array(T0)) :: Array(T0)
-3 array_sort_desc_null_first(Array(T0) NULL) :: Array(T0) NULL
+2 array_sort_desc_null_first(Variant) :: Variant
+3 array_sort_desc_null_first(Variant NULL) :: Variant NULL
+4 array_sort_desc_null_first(Array(T0)) :: Array(T0)
+5 array_sort_desc_null_first(Array(T0) NULL) :: Array(T0) NULL
 0 array_sort_desc_null_last(Array(Nothing)) :: Array(Nothing)
 1 array_sort_desc_null_last(Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_sort_desc_null_last(Array(T0)) :: Array(T0)
-3 array_sort_desc_null_last(Array(T0) NULL) :: Array(T0) NULL
+2 array_sort_desc_null_last(Variant) :: Variant
+3 array_sort_desc_null_last(Variant NULL) :: Variant NULL
+4 array_sort_desc_null_last(Array(T0)) :: Array(T0)
+5 array_sort_desc_null_last(Array(T0) NULL) :: Array(T0) NULL
 0 array_std FACTORY
 0 array_stddev FACTORY
 0 array_stddev_pop FACTORY
@@ -231,10 +278,12 @@ Functions overloads:
 1 array_to_string(Array(String) NULL, String NULL) :: String NULL
 2 array_to_string(Array(String NULL), String) :: String
 3 array_to_string(Array(String NULL) NULL, String NULL) :: String NULL
-0 array_unique(Array(Nothing)) :: UInt64
-1 array_unique(Array(Nothing) NULL) :: UInt64 NULL
-2 array_unique(Array(T0)) :: UInt64
-3 array_unique(Array(T0) NULL) :: UInt64 NULL
+0 array_unique(Variant) :: UInt64
+1 array_unique(Variant NULL) :: UInt64 NULL
+2 array_unique(Array(Nothing)) :: UInt64
+3 array_unique(Array(Nothing) NULL) :: UInt64 NULL
+4 array_unique(Array(T0)) :: UInt64
+5 array_unique(Array(T0) NULL) :: UInt64 NULL
 0 arrays_zip FACTORY
 0 as_array(Variant) :: Variant NULL
 1 as_array(Variant NULL) :: Variant NULL
@@ -1257,35 +1306,37 @@ Functions overloads:
 3 concat FACTORY
 0 concat_ws FACTORY
 1 concat_ws FACTORY
-0 contains(Array(UInt8), UInt8) :: Boolean
-1 contains(Array(UInt8) NULL, UInt8 NULL) :: Boolean NULL
-2 contains(Array(UInt16), UInt16) :: Boolean
-3 contains(Array(UInt16) NULL, UInt16 NULL) :: Boolean NULL
-4 contains(Array(UInt32), UInt32) :: Boolean
-5 contains(Array(UInt32) NULL, UInt32 NULL) :: Boolean NULL
-6 contains(Array(UInt64), UInt64) :: Boolean
-7 contains(Array(UInt64) NULL, UInt64 NULL) :: Boolean NULL
-8 contains(Array(Int8), Int8) :: Boolean
-9 contains(Array(Int8) NULL, Int8 NULL) :: Boolean NULL
-10 contains(Array(Int16), Int16) :: Boolean
-11 contains(Array(Int16) NULL, Int16 NULL) :: Boolean NULL
-12 contains(Array(Int32), Int32) :: Boolean
-13 contains(Array(Int32) NULL, Int32 NULL) :: Boolean NULL
-14 contains(Array(Int64), Int64) :: Boolean
-15 contains(Array(Int64) NULL, Int64 NULL) :: Boolean NULL
-16 contains(Array(Float32), Float32) :: Boolean
-17 contains(Array(Float32) NULL, Float32 NULL) :: Boolean NULL
-18 contains(Array(Float64), Float64) :: Boolean
-19 contains(Array(Float64) NULL, Float64 NULL) :: Boolean NULL
-20 contains(Array(String), String) :: Boolean
-21 contains(Array(String) NULL, String NULL) :: Boolean NULL
-22 contains(Array(Date), Date) :: Boolean
-23 contains(Array(Date) NULL, Date NULL) :: Boolean NULL
-24 contains(Array(Timestamp), Timestamp) :: Boolean
-25 contains(Array(Timestamp) NULL, Timestamp NULL) :: Boolean NULL
-26 contains(Array(Boolean), Boolean) :: Boolean
-27 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
-28 contains(Array(T0) NULL, T0) :: Boolean
+0 contains(Variant, T0) :: Boolean
+1 contains(Variant NULL, T0 NULL) :: Boolean NULL
+2 contains(Array(UInt8), UInt8) :: Boolean
+3 contains(Array(UInt8) NULL, UInt8 NULL) :: Boolean NULL
+4 contains(Array(UInt16), UInt16) :: Boolean
+5 contains(Array(UInt16) NULL, UInt16 NULL) :: Boolean NULL
+6 contains(Array(UInt32), UInt32) :: Boolean
+7 contains(Array(UInt32) NULL, UInt32 NULL) :: Boolean NULL
+8 contains(Array(UInt64), UInt64) :: Boolean
+9 contains(Array(UInt64) NULL, UInt64 NULL) :: Boolean NULL
+10 contains(Array(Int8), Int8) :: Boolean
+11 contains(Array(Int8) NULL, Int8 NULL) :: Boolean NULL
+12 contains(Array(Int16), Int16) :: Boolean
+13 contains(Array(Int16) NULL, Int16 NULL) :: Boolean NULL
+14 contains(Array(Int32), Int32) :: Boolean
+15 contains(Array(Int32) NULL, Int32 NULL) :: Boolean NULL
+16 contains(Array(Int64), Int64) :: Boolean
+17 contains(Array(Int64) NULL, Int64 NULL) :: Boolean NULL
+18 contains(Array(Float32), Float32) :: Boolean
+19 contains(Array(Float32) NULL, Float32 NULL) :: Boolean NULL
+20 contains(Array(Float64), Float64) :: Boolean
+21 contains(Array(Float64) NULL, Float64 NULL) :: Boolean NULL
+22 contains(Array(String), String) :: Boolean
+23 contains(Array(String) NULL, String NULL) :: Boolean NULL
+24 contains(Array(Date), Date) :: Boolean
+25 contains(Array(Date) NULL, Date NULL) :: Boolean NULL
+26 contains(Array(Timestamp), Timestamp) :: Boolean
+27 contains(Array(Timestamp) NULL, Timestamp NULL) :: Boolean NULL
+28 contains(Array(Boolean), Boolean) :: Boolean
+29 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
+30 contains(Array(T0) NULL, T0) :: Boolean
 0 convert_timezone(String, Timestamp) :: Timestamp
 1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
 0 cos(Float64) :: Float64
@@ -2197,6 +2248,8 @@ Functions overloads:
 1 is_boolean(Variant NULL) :: Boolean NULL
 0 is_date(Variant) :: Boolean
 1 is_date(Variant NULL) :: Boolean NULL
+0 is_decimal(Variant) :: Boolean
+1 is_decimal(Variant NULL) :: Boolean NULL
 0 is_float(Variant) :: Boolean
 1 is_float(Variant NULL) :: Boolean NULL
 0 is_integer(Variant) :: Boolean
@@ -3543,8 +3596,10 @@ Functions overloads:
 0 rand() :: Float64
 1 rand(UInt64) :: Float64
 2 rand(UInt64 NULL) :: Float64 NULL
-0 range(UInt64, UInt64) :: Array(UInt64)
-1 range(UInt64 NULL, UInt64 NULL) :: Array(UInt64) NULL
+0 range(Int64, Int64) :: Array(Int64)
+1 range(Int64 NULL, Int64 NULL) :: Array(Int64) NULL
+2 range(Int64, Int64, Int64) :: Array(Int64)
+3 range(Int64 NULL, Int64 NULL, Int64 NULL) :: Array(Int64) NULL
 0 range_partition_id(T0, Array(T0)) :: UInt64
 1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64
 0 regexp(String, String) :: Boolean
@@ -3675,14 +3730,18 @@ Functions overloads:
 33 siphash64(T0) :: UInt64
 34 siphash64(T0 NULL) :: UInt64 NULL
 0 sleep(Float64) :: UInt8
-0 slice(Array(Nothing), UInt64) :: Array(Nothing)
-1 slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL
-2 slice(Array(T0), UInt64) :: Array(T0)
-3 slice(Array(T0) NULL, UInt64 NULL) :: Array(T0) NULL
-4 slice(Array(Nothing), UInt64, UInt64) :: Array(Nothing)
-5 slice(Array(Nothing) NULL, UInt64 NULL, UInt64 NULL) :: Array(Nothing) NULL
-6 slice(Array(T0), UInt64, UInt64) :: Array(T0)
-7 slice(Array(T0) NULL, UInt64 NULL, UInt64 NULL) :: Array(T0) NULL
+0 slice(Variant, Int64) :: Variant
+1 slice(Variant NULL, Int64 NULL) :: Variant NULL
+2 slice(Variant, Int64, Int64) :: Variant
+3 slice(Variant NULL, Int64 NULL, Int64 NULL) :: Variant NULL
+4 slice(Array(Nothing), Int64) :: Array(Nothing)
+5 slice(Array(Nothing) NULL, Int64 NULL) :: Array(Nothing) NULL
+6 slice(Array(T0), Int64) :: Array(T0)
+7 slice(Array(T0) NULL, Int64 NULL) :: Array(T0) NULL
+8 slice(Array(Nothing), Int64, Int64) :: Array(Nothing)
+9 slice(Array(Nothing) NULL, Int64 NULL, Int64 NULL) :: Array(Nothing) NULL
+10 slice(Array(T0), Int64, Int64) :: Array(T0)
+11 slice(Array(T0) NULL, Int64 NULL, Int64 NULL) :: Array(T0) NULL
 0 soundex(String) :: String
 1 soundex(String NULL) :: String NULL
 0 space(UInt64) :: String

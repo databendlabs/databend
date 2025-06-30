@@ -38,7 +38,7 @@ use crate::types::TimestampType;
 use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
-use crate::InputColumns;
+use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::SelectVector;
 
@@ -94,7 +94,7 @@ pub(super) unsafe fn serialize_column_to_rowformat(
         Column::Decimal(decimal_column) => {
             with_decimal_mapped_type!(|F| match decimal_column {
                 DecimalColumn::F(buffer, size) => {
-                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
                         DecimalDataKind::T => {
                             serialize_fixed_size_column_to_rowformat::<DecimalView<F, T>>(
                                 buffer,
@@ -196,7 +196,7 @@ unsafe fn serialize_fixed_size_column_to_rowformat<T>(
 }
 
 pub(super) unsafe fn row_match_columns(
-    cols: InputColumns,
+    cols: ProjectedBlock,
     address: &[*const u8],
     select_vector: &mut SelectVector,
     temp_vector: &mut SelectVector,
@@ -207,13 +207,13 @@ pub(super) unsafe fn row_match_columns(
     no_match_count: &mut usize,
 ) {
     let mut count = count;
-    for ((col, col_offset), validity_offset) in cols
+    for ((entry, col_offset), validity_offset) in cols
         .iter()
         .zip(col_offsets.iter())
         .zip(validity_offset.iter())
     {
         row_match_column(
-            col,
+            &entry.to_column(),
             address,
             select_vector,
             temp_vector,
@@ -272,7 +272,7 @@ unsafe fn row_match_column(
         Column::Decimal(decimal_column) => {
             with_decimal_mapped_type!(|F| match decimal_column {
                 DecimalColumn::F(_, size) => {
-                    with_decimal_mapped_type!(|T| match size.best_type().data_kind() {
+                    with_decimal_mapped_type!(|T| match size.data_kind() {
                         DecimalDataKind::T => {
                             row_match_column_type::<DecimalView<F, T>>(
                                 col,

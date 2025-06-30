@@ -96,7 +96,7 @@ impl WriterV003 {
                 WriteEntry::Data(ent) => ent,
                 WriteEntry::Finish(sys_data) => {
                     info!(
-                        "received Commit, written {} entries, flush with: {:?}",
+                        "received WriteEntry::Finish event, written: {}, flush with: {:?}",
                         self.stat, sys_data
                     );
                     let temp_snapshot_data = self.flush(sys_data)?;

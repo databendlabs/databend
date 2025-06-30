@@ -48,7 +48,22 @@ use crate::sessions::QueryContext;
 impl PipelineBuilder {
     pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
         let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
-        let source_schema = match &copy.source {
+        let source_schema = self.build_copy_into_table_input(copy, &to_table)?;
+        Self::build_copy_into_table_append(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            copy,
+            source_schema,
+            to_table,
+        )?;
+        Ok(())
+    }
+    pub(crate) fn build_copy_into_table_input(
+        &mut self,
+        copy: &CopyIntoTable,
+        to_table: &Arc<dyn Table>,
+    ) -> Result<DataSchemaRef> {
+        match &copy.source {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(input)?;
                 // Reorder the result for select clause
@@ -71,24 +86,16 @@ impl PipelineBuilder {
                         )
                     })
                     .collect();
-                DataSchemaRefExt::create(fields)
+                Ok(DataSchemaRefExt::create(fields))
             }
             CopyIntoTableSource::Stage(input) => {
                 self.ctx
                     .set_read_block_thresholds(to_table.get_block_thresholds());
 
                 self.build_pipeline(input)?;
-                copy.required_source_schema.clone()
+                Ok(copy.required_source_schema.clone())
             }
-        };
-        Self::build_append_data_pipeline(
-            self.ctx.clone(),
-            &mut self.main_pipeline,
-            copy,
-            source_schema,
-            to_table,
-        )?;
-        Ok(())
+        }
     }
 
     fn need_null_if_processor<'a>(
@@ -120,7 +127,7 @@ impl PipelineBuilder {
         None
     }
 
-    fn build_append_data_pipeline(
+    fn build_copy_into_table_append(
         ctx: Arc<QueryContext>,
         main_pipeline: &mut Pipeline,
         plan: &CopyIntoTable,

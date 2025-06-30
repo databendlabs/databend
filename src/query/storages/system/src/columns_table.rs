@@ -23,10 +23,11 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -48,7 +49,7 @@ use log::warn;
 use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_or_filter;
+use crate::util::find_database_table_filters;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -86,29 +87,39 @@ impl AsyncSystemTable for ColumnsTable {
         let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
         let mut comments: Vec<String> = Vec::with_capacity(rows.len());
-        for (database_name, table_name, comment, field) in rows.into_iter() {
-            names.push(field.name().clone());
-            tables.push(table_name);
-            databases.push(database_name);
-            types.push(field.data_type().wrapped_display());
-            let data_type = field.data_type().remove_recursive_nullable().sql_name();
+        let mut row_count: Vec<Option<u64>> = Vec::with_capacity(rows.len());
+        let mut column_ndv: Vec<Option<u64>> = Vec::with_capacity(rows.len());
+        let mut column_null_count: Vec<Option<u64>> = Vec::with_capacity(rows.len());
+        for column_info in rows.into_iter() {
+            names.push(column_info.column.name().clone());
+            tables.push(column_info.table_name);
+            databases.push(column_info.database_name);
+            types.push(column_info.column.data_type().wrapped_display());
+            let data_type = column_info
+                .column
+                .data_type()
+                .remove_recursive_nullable()
+                .sql_name();
             data_types.push(data_type);
 
             let mut default_kind = "".to_string();
             let mut default_expr = "".to_string();
-            if let Some(expr) = field.default_expr() {
+            if let Some(expr) = column_info.column.default_expr() {
                 default_kind = "DEFAULT".to_string();
                 default_expr = expr.to_string();
             }
             default_kinds.push(default_kind);
             default_exprs.push(default_expr);
-            if field.is_nullable() {
+            if column_info.column.is_nullable() {
                 is_nullables.push("YES".to_string());
             } else {
                 is_nullables.push("NO".to_string());
             }
 
-            comments.push(comment);
+            comments.push(column_info.column_comment);
+            row_count.push(column_info.column_rows);
+            column_ndv.push(column_info.column_ndv);
+            column_null_count.push(column_info.column_null_count);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -121,8 +132,22 @@ impl AsyncSystemTable for ColumnsTable {
             StringType::from_data(default_exprs),
             StringType::from_data(is_nullables),
             StringType::from_data(comments),
+            UInt64Type::from_opt_data(row_count),
+            UInt64Type::from_opt_data(column_ndv),
+            UInt64Type::from_opt_data(column_null_count),
         ]))
     }
+}
+
+struct TableColumnInfo {
+    database_name: String,
+    table_name: String,
+
+    column: TableField,
+    column_comment: String,
+    column_rows: Option<u64>,
+    column_ndv: Option<u64>,
+    column_null_count: Option<u64>,
 }
 
 impl ColumnsTable {
@@ -139,6 +164,18 @@ impl ColumnsTable {
             TableField::new("default_expression", TableDataType::String),
             TableField::new("is_nullable", TableDataType::String),
             TableField::new("comment", TableDataType::String),
+            TableField::new(
+                "row_count",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "ndv",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "null_count",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
         ]);
 
         let table_info = TableInfo {
@@ -167,10 +204,10 @@ impl ColumnsTable {
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         catalog: &Arc<dyn Catalog>,
-    ) -> Result<Vec<(String, String, String, TableField)>> {
+    ) -> Result<Vec<TableColumnInfo>> {
         let database_and_tables = dump_tables(&ctx, push_downs, catalog).await?;
 
-        let mut rows: Vec<(String, String, String, TableField)> = vec![];
+        let mut rows: Vec<TableColumnInfo> = vec![];
         for (database, tables) in database_and_tables {
             for table in tables {
                 match table.engine() {
@@ -195,12 +232,15 @@ impl ColumnsTable {
                             vec![]
                         };
                         for field in fields {
-                            rows.push((
-                                database.clone(),
-                                table.name().into(),
-                                "".to_string(),
-                                field.clone(),
-                            ))
+                            rows.push(TableColumnInfo {
+                                database_name: database.clone(),
+                                table_name: table.name().into(),
+                                column: field.clone(),
+                                column_comment: "".to_string(),
+                                column_rows: None,
+                                column_ndv: None,
+                                column_null_count: None,
+                            })
                         }
                     }
                     STREAM_ENGINE => {
@@ -208,12 +248,15 @@ impl ColumnsTable {
                         match stream.source_table(ctx.clone()).await {
                             Ok(source_table) => {
                                 for field in source_table.schema().fields() {
-                                    rows.push((
-                                        database.clone(),
-                                        table.name().into(),
-                                        "".to_string(),
-                                        field.clone(),
-                                    ))
+                                    rows.push(TableColumnInfo {
+                                        database_name: database.clone(),
+                                        table_name: table.name().into(),
+                                        column: field.clone(),
+                                        column_comment: "".to_string(),
+                                        column_rows: None,
+                                        column_ndv: None,
+                                        column_null_count: None,
+                                    })
                                 }
                             }
                             Err(e) => {
@@ -228,7 +271,10 @@ impl ColumnsTable {
                     _ => {
                         let schema = table.schema();
                         let field_comments = table.field_comments();
+                        let columns_statistics =
+                            table.column_statistics_provider(ctx.clone()).await?;
 
+                        let row_count = columns_statistics.num_rows();
                         for (idx, field) in schema.fields().iter().enumerate() {
                             let comment = if field_comments.len() == schema.fields.len()
                                 && !field_comments[idx].is_empty()
@@ -239,12 +285,17 @@ impl ColumnsTable {
                                 "".to_string()
                             };
 
-                            rows.push((
-                                database.clone(),
-                                table.name().into(),
-                                comment,
-                                field.clone(),
-                            ))
+                            let column_statistics =
+                                columns_statistics.column_statistics(field.column_id);
+                            rows.push(TableColumnInfo {
+                                database_name: database.clone(),
+                                table_name: table.name().into(),
+                                column: field.clone(),
+                                column_comment: comment,
+                                column_rows: row_count,
+                                column_ndv: column_statistics.and_then(|x| x.ndv),
+                                column_null_count: column_statistics.map(|x| x.null_count),
+                            })
                         }
                     }
                 }
@@ -267,42 +318,15 @@ pub(crate) async fn dump_tables(
     // - for read-only attached tables, the data may be outdated
     let catalog = catalog.clone().disable_table_info_refresh()?;
 
-    let mut filtered_db_names: Option<Vec<String>> = None;
-    let mut filtered_table_names: Option<Vec<String>> = None;
-    let mut invalid_optimize = false;
+    let mut filtered_db_names = vec![];
+    let mut filtered_table_names = vec![];
+    let func_ctx = ctx.get_function_context()?;
 
     if let Some(push_downs) = push_downs {
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            let mut databases: Vec<String> = Vec::new();
-            let mut tables: Vec<String> = Vec::new();
-
-            invalid_optimize = find_eq_or_filter(
-                &expr,
-                &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(database) = scalar {
-                            if !databases.contains(database) {
-                                databases.push(database.clone());
-                            }
-                        }
-                    } else if col_name == "table" {
-                        if let Scalar::String(table) = scalar {
-                            if !tables.contains(table) {
-                                tables.push(table.clone());
-                            }
-                        }
-                    }
-                    Ok(())
-                },
-                invalid_optimize,
-            );
-            if !databases.is_empty() {
-                filtered_db_names = Some(databases);
-            }
-            if !tables.is_empty() {
-                filtered_table_names = Some(tables);
-            }
+            (filtered_db_names, filtered_table_names) =
+                find_database_table_filters(&expr, &func_ctx)?;
         }
     }
 
@@ -314,10 +338,17 @@ pub(crate) async fn dump_tables(
 
     let mut final_dbs: Vec<Arc<dyn Database>> = Vec::new();
 
-    if invalid_optimize {
-        filtered_db_names = None;
-        filtered_table_names = None;
-    }
+    let filtered_db_names = if filtered_db_names.is_empty() {
+        None
+    } else {
+        Some(filtered_db_names)
+    };
+
+    let filtered_table_names = if filtered_table_names.is_empty() {
+        None
+    } else {
+        Some(filtered_table_names)
+    };
 
     match (filtered_db_names, &visibility_checker) {
         (Some(db_names), Some(checker)) => {

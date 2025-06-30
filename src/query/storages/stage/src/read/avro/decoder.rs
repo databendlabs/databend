@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use apache_avro::schema::UnionSchema;
 use apache_avro::types::Value;
 use apache_avro::Reader;
 use apache_avro::Schema;
@@ -89,6 +90,32 @@ pub(super) struct AvroDecoder {
     is_select: bool,
 }
 
+fn date_time_to_int(schema: &mut Schema) {
+    match schema {
+        Schema::Array(a) => date_time_to_int(&mut a.items),
+        Schema::Map(m) => date_time_to_int(&mut m.types),
+        Schema::Union(u) => {
+            *u = {
+                let mut variants = u.variants().to_owned();
+                variants.iter_mut().for_each(date_time_to_int);
+                UnionSchema::new(variants).expect("should never fail")
+            }
+        }
+        Schema::Record(r) => r
+            .fields
+            .iter_mut()
+            .for_each(|f| date_time_to_int(&mut f.schema)),
+        Schema::Date => *schema = Schema::Int,
+        Schema::TimestampMillis
+        | Schema::TimestampMicros
+        | Schema::TimestampNanos
+        | Schema::LocalTimestampMillis
+        | Schema::LocalTimestampMicros
+        | Schema::LocalTimestampNanos => *schema = Schema::Long,
+        _ => {}
+    }
+}
+
 impl AvroDecoder {
     pub fn new(ctx: Arc<LoadContext>, params: AvroFileFormatParams) -> Self {
         let is_rounding_mode = ctx.file_format_options_ext.is_rounding_mode;
@@ -111,8 +138,9 @@ impl AvroDecoder {
         &self,
         reader: Reader<&[u8]>,
         state: &mut BlockBuilderState,
+        schema: Schema,
     ) -> Result<()> {
-        let schema = MatchedSchema::Primary(reader.writer_schema().clone());
+        let schema = MatchedSchema::Primary(schema);
         for (row, value) in reader.enumerate() {
             let column_builder = if let ColumnBuilder::Variant(b) = &mut state.column_builders[0] {
                 b
@@ -131,11 +159,14 @@ impl AvroDecoder {
     }
     fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
         let reader = Reader::new(file_data).unwrap();
-        if self.is_select {
-            return self.read_file_for_select(reader, state);
+        let mut schema = reader.writer_schema().clone();
+        if !self.params.use_logic_type {
+            date_time_to_int(&mut schema);
         }
-        let src_schema = reader.writer_schema().clone();
-        let src_schema = if let Schema::Record(record) = src_schema {
+        if self.is_select {
+            return self.read_file_for_select(reader, state, schema);
+        }
+        let src_schema = if let Schema::Record(record) = schema {
             record
         } else {
             return Err(ErrorCode::BadArguments(
@@ -272,6 +303,13 @@ impl AvroDecoder {
                             }
                             self.read_number(c, OrderedFloat::<f64>(v))
                         }
+                        Value::TimestampMicros(v)
+                        | Value::LocalTimestampMicros(v)
+                        | Value::TimestampMillis(v)
+                        | Value::LocalTimestampMillis(v)
+                        | Value::TimestampNanos(v)
+                        | Value::LocalTimestampNanos(v) => self.read_number(c, v),
+                        Value::Date(v) => self.read_number(c, v),
                         _ => Err(Error::default()),
                     }
                 }
@@ -368,9 +406,9 @@ impl AvroDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, value: Value) -> ReadFieldResult {
         let v = match value {
-            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000000,
-            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v * 1000,
-            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v,
+            Value::TimestampMillis(v) | Value::LocalTimestampMillis(v) => v * 1000,
+            Value::TimestampMicros(v) | Value::LocalTimestampMicros(v) => v,
+            Value::TimestampNanos(v) | Value::LocalTimestampNanos(v) => v / 1000,
             _ => return Err(Error::default()),
         };
         column.push(v);
@@ -679,6 +717,7 @@ mod test {
         assert_eq!(expected, row);
         Ok(())
     }
+
     #[test]
     fn test_decimal() -> Result<(), String> {
         let avro_schema = json!(
@@ -695,8 +734,7 @@ mod test {
         let value = make_value("12345");
         let decimal_size = DecimalSize::new_unchecked(7, 4);
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field,
             avro_schema.clone(),
@@ -728,8 +766,7 @@ mod test {
         let table_field = TableDataType::Decimal(DecimalDataType::Decimal256(decimal_size));
 
         let value = make_value("12345");
-        let expected =
-            ScalarRef::Decimal(DecimalScalar::Decimal128(i128::from(1234500), decimal_size));
+        let expected = ScalarRef::Decimal(DecimalScalar::Decimal64(1234500, decimal_size));
         test_single_field(
             table_field.clone(),
             avro_schema.clone(),

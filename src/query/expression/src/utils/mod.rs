@@ -31,7 +31,6 @@ use databend_common_exception::Result;
 
 pub use self::column_from::*;
 use crate::types::decimal::DecimalScalar;
-use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::i256;
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -108,10 +107,17 @@ pub fn cast_scalar(
     Ok(evaluator.run(&expr)?.into_scalar().unwrap())
 }
 
-pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
-    match column {
-        Column::Nullable(c) => match bitmap {
-            None => Some(c.validity.clone()),
+pub fn column_merge_validity(entry: &BlockEntry, bitmap: Option<Bitmap>) -> Option<Bitmap> {
+    match entry {
+        BlockEntry::Const(scalar, data_type, n) => {
+            if scalar.is_null() && data_type.is_nullable() {
+                Some(Bitmap::new_zeroed(*n))
+            } else {
+                bitmap
+            }
+        }
+        BlockEntry::Column(Column::Nullable(c)) => match bitmap {
+            None => Some(c.validity().clone()),
             Some(v) => Some(&c.validity & (&v)),
         },
         _ => bitmap,
@@ -128,6 +134,7 @@ pub fn shrink_scalar(scalar: Scalar) -> Scalar {
         Scalar::Number(NumberScalar::Int16(n)) => shrink_i64(n as i64),
         Scalar::Number(NumberScalar::Int32(n)) => shrink_i64(n as i64),
         Scalar::Number(NumberScalar::Int64(n)) => shrink_i64(n),
+        Scalar::Decimal(DecimalScalar::Decimal64(d, size)) => shrink_d256(d.into(), size),
         Scalar::Decimal(DecimalScalar::Decimal128(d, size)) => shrink_d256(d.into(), size),
         Scalar::Decimal(DecimalScalar::Decimal256(d, size)) => shrink_d256(d, size),
         Scalar::Tuple(mut fields) => {
@@ -189,13 +196,48 @@ fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
     if precision < size.scale() {
         precision = size.scale();
     }
-    precision = precision.clamp(1, MAX_DECIMAL256_PRECISION);
+    precision = precision.clamp(1, i256::MAX_PRECISION);
 
     let size = DecimalSize::new(precision, size.scale()).unwrap();
     match size.data_kind() {
-        DecimalDataKind::Decimal64 | DecimalDataKind::Decimal128 => {
+        DecimalDataKind::Decimal64 => {
+            Scalar::Decimal(DecimalScalar::Decimal64(decimal.as_i64(), size))
+        }
+        DecimalDataKind::Decimal128 => {
             Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
         }
         DecimalDataKind::Decimal256 => Scalar::Decimal(DecimalScalar::Decimal256(decimal, size)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shrink_scalar() {
+        let tests = [
+            (
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    50,
+                    DecimalSize::new_unchecked(10, 1),
+                )),
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    50,
+                    DecimalSize::new_unchecked(2, 1),
+                )),
+            ),
+            (
+                Scalar::Decimal(DecimalScalar::Decimal64(
+                    50,
+                    DecimalSize::new_unchecked(10, 0),
+                )),
+                Scalar::Number(NumberScalar::UInt8(50)),
+            ),
+        ];
+
+        for (t, want) in tests {
+            assert_eq!(shrink_scalar(t), want);
+        }
     }
 }

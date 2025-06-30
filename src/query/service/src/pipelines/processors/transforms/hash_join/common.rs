@@ -17,7 +17,9 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
-use databend_common_expression::types::AnyType;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
@@ -25,8 +27,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FilterExecutor;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::InputColumns;
-use databend_common_expression::Value;
+use databend_common_expression::ProjectedBlock;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::desc::MARKER_KIND_FALSE;
@@ -125,19 +126,20 @@ impl HashJoinProbeState {
         merged_block: &DataBlock,
         filter: &Expr,
         func_ctx: &FunctionContext,
-    ) -> Result<Column> {
+    ) -> Result<NullableColumn<BooleanType>> {
         let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
-        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
-        let filter_vector =
-            filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
+        let filter_vector = evaluator
+            .run(filter)?
+            .convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
         match filter_vector {
-            Column::Nullable(_) => Ok(filter_vector),
+            Column::Nullable(_) => {
+                Ok(NullableType::<BooleanType>::try_downcast_column(&filter_vector).unwrap())
+            }
             other => {
                 let validity = Bitmap::new_constant(true, other.len());
-                Ok(Column::Nullable(Box::new(NullableColumn::new(
-                    other, validity,
-                ))))
+                let column = NullableColumn::new(other, validity);
+                Ok(column.try_downcast().unwrap())
             }
         }
     }
@@ -145,14 +147,14 @@ impl HashJoinProbeState {
 
 impl HashJoinState {
     /// if all cols in the same row are all null, we mark this row as null.
-    pub(crate) fn init_markers(&self, cols: InputColumns, num_rows: usize, markers: &mut [u8]) {
+    pub(crate) fn init_markers(&self, cols: ProjectedBlock, num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()
-            .any(|c| matches!(c, Column::Null { .. } | Column::Nullable(_)))
+            .any(|entry| entry.data_type().is_nullable_or_null())
         {
             let mut valids = None;
-            for col in cols.iter() {
-                match col {
+            for entry in cols.iter() {
+                match entry.to_column() {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
                         if bitmap.null_count() == 0 {
@@ -163,7 +165,7 @@ impl HashJoinState {
                         }
                     }
                     Column::Null { .. } => {}
-                    _c => {
+                    _ => {
                         valids = Some(Bitmap::new_constant(true, num_rows));
                         break;
                     }
@@ -182,7 +184,7 @@ impl HashJoinState {
     }
 }
 
-pub(crate) fn wrap_true_validity(
+pub fn wrap_true_validity(
     entry: &BlockEntry,
     num_rows: usize,
     true_validity: &Bitmap,

@@ -40,6 +40,7 @@ use crate::types::NumberType;
 use crate::types::ReturnType;
 use crate::types::TimestampType;
 use crate::with_number_mapped_type;
+use crate::BlockEntry;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
@@ -49,8 +50,8 @@ use crate::BATCH_SIZE;
 
 pub struct PayloadFlushState {
     pub probe_state: ProbeState,
-    pub group_columns: Vec<Column>,
-    pub aggregate_results: Vec<Column>,
+    pub group_columns: Vec<BlockEntry>,
+    pub(super) aggregate_results: Vec<BlockEntry>,
     pub row_count: usize,
 
     pub flush_partition: usize,
@@ -88,10 +89,10 @@ impl PayloadFlushState {
         self.flush_page_row = 0;
     }
 
-    pub fn take_group_columns(&mut self) -> Vec<Column> {
+    pub fn take_group_columns(&mut self) -> Vec<BlockEntry> {
         std::mem::take(&mut self.group_columns)
     }
-    pub fn take_aggregate_results(&mut self) -> Vec<Column> {
+    pub fn take_aggregate_results(&mut self) -> Vec<BlockEntry> {
         std::mem::take(&mut self.aggregate_results)
     }
 }
@@ -136,7 +137,7 @@ impl Payload {
 
         let row_count = state.row_count;
 
-        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        let mut entries = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
         if let Some(state_layout) = self.states_layout.as_ref() {
             let mut builders = state_layout.serialize_builders(row_count);
 
@@ -155,15 +156,15 @@ impl Payload {
                 }
             }
 
-            cols.extend(
+            entries.extend(
                 builders
                     .into_iter()
-                    .map(|builder| Column::Binary(builder.build())),
+                    .map(|builder| Column::Binary(builder.build()).into()),
             );
         }
 
-        cols.extend_from_slice(&state.take_group_columns());
-        Ok(Some(DataBlock::new_from_columns(cols)))
+        entries.extend_from_slice(&state.take_group_columns());
+        Ok(Some(DataBlock::new(entries, row_count)))
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {
@@ -171,8 +172,8 @@ impl Payload {
         let mut blocks = vec![];
 
         while self.flush(&mut state) {
-            let cols = state.take_group_columns();
-            blocks.push(DataBlock::new_from_columns(cols));
+            let entries = state.take_group_columns();
+            blocks.push(DataBlock::new(entries, state.row_count));
         }
 
         if blocks.is_empty() {
@@ -219,7 +220,7 @@ impl Payload {
 
         for col_index in 0..self.group_types.len() {
             let col = self.flush_column(col_index, state);
-            state.group_columns.push(col);
+            state.group_columns.push(col.into());
         }
 
         state.flush_page_row = end;
@@ -239,7 +240,7 @@ impl Payload {
                 NumberDataType::NUM_TYPE =>
                     self.flush_type_column::<NumberType<NUM_TYPE>>(col_offset, state),
             }),
-            DataType::Decimal(size) => match size.best_type().data_kind() {
+            DataType::Decimal(size) => match size.data_kind() {
                 DecimalDataKind::Decimal64 => {
                     self.flush_decimal_column::<i64>(col_offset, state, size)
                 }

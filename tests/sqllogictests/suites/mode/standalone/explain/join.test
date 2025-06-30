@@ -100,7 +100,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t.number (#0)]
@@ -145,7 +144,6 @@ Filter
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 10.00
     ├── TableScan(Build)
     │   ├── table: default.default.t
@@ -189,7 +187,6 @@ HashJoin
 │   ├── probe keys: []
 │   ├── keys is null equal: []
 │   ├── filters: []
-│   ├── build join filters:
 │   ├── estimated rows: 0.00
 │   ├── Filter(Build)
 │   │   ├── output columns: [t.number (#0)]
@@ -392,7 +389,6 @@ Filter
     ├── probe keys: [a.x (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 4.00
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
@@ -425,7 +421,6 @@ HashJoin
 ├── probe keys: [b.x (#1)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 2.67
 ├── Filter(Build)
 │   ├── output columns: [a.x (#0)]
@@ -902,7 +897,6 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t2.wms_id (#4)]
@@ -945,7 +939,6 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 0.00
     ├── Filter(Build)
     │   ├── output columns: [t2.wms_id (#4)]
@@ -988,7 +981,6 @@ EvalScalar
     ├── probe keys: [replace(t1.ext (#1), '33', '44')]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 0.00
     ├── TableScan(Build)
     │   ├── table: default.default.t2
@@ -1044,7 +1036,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_2 (#2)]
-├── build join filters:
 ├── estimated rows: 4.00
 ├── EvalScalar(Build)
 │   ├── output columns: [MAX(a) (#2)]
@@ -1072,7 +1063,6 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_1 (#1)]
-├── build join filters:
 ├── estimated rows: 4.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#1)]
@@ -1109,7 +1099,6 @@ HashJoin
 ├── probe keys: [CAST(t1.a (#0) AS Decimal(38, 5) NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── build join filters:
 ├── estimated rows: 12.00
 ├── TableScan(Build)
 │   ├── table: default.default.t3

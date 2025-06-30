@@ -23,8 +23,8 @@ use crate::get_states_layout;
 use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
-use crate::InputColumns;
 use crate::PayloadFlushState;
+use crate::ProjectedBlock;
 use crate::StatesLayout;
 use crate::BATCH_SIZE;
 
@@ -111,7 +111,7 @@ impl PartitionedPayload {
         &mut self,
         state: &mut ProbeState,
         new_group_rows: usize,
-        group_columns: InputColumns,
+        group_columns: ProjectedBlock,
     ) {
         if self.payloads.len() == 1 {
             self.payloads[0].reserve_append_rows(

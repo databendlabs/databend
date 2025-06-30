@@ -20,13 +20,14 @@ use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
 use databend_common_meta_types::protobuf::BooleanExpression;
+use databend_common_meta_types::protobuf::FetchAddU64;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition::Target;
-use databend_common_meta_types::txn_op;
+use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::txn_op_response;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
@@ -158,6 +159,8 @@ where SM: StateMachineApi + 'static
 
             Cmd::RemoveNode { ref node_id } => self.apply_remove_node(node_id),
 
+            Cmd::SetFeature { feature, enable } => self.apply_set_feature(feature, *enable),
+
             Cmd::UpsertKV(ref upsert_kv) => self.apply_upsert_kv(upsert_kv).await?,
 
             Cmd::Transaction(txn) => self.apply_txn(txn).await?,
@@ -218,6 +221,26 @@ where SM: StateMachineApi + 'static
 
         let st = Change::new(prev, result).into();
         Ok(st)
+    }
+
+    /// Toggle a state machine functional feature.
+    #[fastrace::trace]
+    fn apply_set_feature(&mut self, feature: &str, enable: bool) -> AppliedState {
+        let sys_data = self.sm.sys_data_mut();
+        let prev = sys_data.feature_enabled(feature);
+
+        if enable {
+            sys_data.features_mut().insert(feature.to_string());
+        } else {
+            sys_data.features_mut().remove(feature);
+        }
+
+        info!(
+            "apply_set_feature done: {} from {} to {}",
+            feature, prev, enable
+        );
+
+        AppliedState::None
     }
 
     /// Update or insert a kv entry.
@@ -428,21 +451,29 @@ where SM: StateMachineApi + 'static
         resp: &mut TxnReply,
     ) -> Result<(), io::Error> {
         debug!(op :% =(op); "txn execute TxnOp");
-        match &op.request {
-            Some(txn_op::Request::Get(get)) => {
+
+        let Some(request) = &op.request else {
+            warn!("txn_execute_operation: no request in TxnOp: {}", op);
+            return Ok(());
+        };
+
+        match request {
+            Request::Get(get) => {
                 self.txn_execute_get(get, resp).await?;
             }
-            Some(txn_op::Request::Put(put)) => {
+            Request::Put(put) => {
                 self.txn_execute_put(put, resp).await?;
             }
-            Some(txn_op::Request::Delete(delete)) => {
+            Request::Delete(delete) => {
                 self.txn_execute_delete(delete, resp).await?;
             }
-            Some(txn_op::Request::DeleteByPrefix(delete_by_prefix)) => {
+            Request::DeleteByPrefix(delete_by_prefix) => {
                 self.txn_execute_delete_by_prefix(delete_by_prefix, resp)
                     .await?;
             }
-            None => {}
+            Request::FetchAddU64(fetch_add_u64) => {
+                self.txn_execute_fetch_add_u64(fetch_add_u64, resp).await?;
+            }
         }
         Ok(())
     }
@@ -536,6 +567,56 @@ where SM: StateMachineApi + 'static
         resp.responses.push(TxnOpResponse {
             response: Some(txn_op_response::Response::DeleteByPrefix(del_resp)),
         });
+        Ok(())
+    }
+
+    async fn txn_execute_fetch_add_u64(
+        &mut self,
+        req: &FetchAddU64,
+        resp: &mut TxnReply,
+    ) -> Result<(), io::Error> {
+        let before_seqv = self.sm.get_maybe_expired_kv(&req.key).await?;
+
+        let before_seq = before_seqv.seq();
+
+        let before = if let Some(seqv) = &before_seqv {
+            let bytes = &seqv.data;
+            let u64_res: Result<u64, _> = serde_json::from_slice(bytes.as_slice());
+            match u64_res {
+                Ok(v) => v,
+                Err(e) => {
+                    warn!(
+                        "fetch_add_u64: failed to deserialize u64 value: {:?}, error: {}",
+                        bytes, e
+                    );
+                    0
+                }
+            }
+        } else {
+            0
+        };
+
+        if let Some(match_seq) = req.match_seq {
+            if match_seq != before_seq {
+                let r = TxnOpResponse::unchanged_fetch_add_u64(&req.key, before_seq, before);
+                resp.responses.push(r);
+                return Ok(());
+            }
+        }
+
+        let after = before.saturating_add_signed(req.delta);
+
+        let (_prev, result) = {
+            let after_value = serde_json::to_vec(&after).expect("serialize u64 to json");
+            let upsert = UpsertKV::update(&req.key, &after_value);
+            self.upsert_kv(&upsert).await?
+        };
+
+        let fetch_add_resp =
+            TxnOpResponse::fetch_add_u64(req.key.clone(), before_seq, before, result.seq(), after);
+
+        resp.responses.push(fetch_add_resp);
+
         Ok(())
     }
 

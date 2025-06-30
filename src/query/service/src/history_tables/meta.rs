@@ -18,6 +18,7 @@ use std::time::Duration;
 use databend_common_base::runtime::block_on;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -26,6 +27,7 @@ use databend_common_meta_semaphore::Semaphore;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
+use futures_util::future;
 
 /// RAII wrapper for Permit that automatically updates timestamp on drop
 pub struct PermitGuard {
@@ -132,6 +134,33 @@ impl HistoryMetaHandle {
         } else {
             Ok(None)
         }
+    }
+
+    pub async fn acquire_all(
+        &self,
+        prepare_key: &str,
+        transform_keys: &[String],
+    ) -> Result<Vec<Permit>> {
+        // To avoid deadlock of acquiring multiple semaphores,
+        // we first acquire the prepare semaphore, then acquire others
+        let prepare_permit = self.acquire(prepare_key, 0).await?;
+        if let Some(prepare_permit) = prepare_permit {
+            let futures = transform_keys
+                .iter()
+                .map(|meta_key| self.acquire(meta_key, 0));
+
+            let results = future::join_all(futures).await;
+
+            let mut permits = Vec::with_capacity(transform_keys.len());
+            for result in results {
+                if let Some(permit) = result? {
+                    permits.push(permit);
+                }
+            }
+            permits.push(prepare_permit);
+            return Ok(permits);
+        }
+        Err(ErrorCode::Internal("Cannot acquire prepare semaphore"))
     }
 
     /// Updating the last execution timestamp in the metadata.

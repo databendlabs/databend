@@ -35,6 +35,7 @@ use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
+use databend_common_meta_raft_store::StateMachineFeature;
 use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
@@ -1125,6 +1126,21 @@ impl MetaNode {
             .await?;
 
         Ok(resp)
+    }
+
+    /// Propose a log entry to set a feature.
+    pub async fn set_feature(
+        &self,
+        feature: StateMachineFeature,
+        enable: bool,
+    ) -> Result<(), MetaAPIError> {
+        let cmd = Cmd::SetFeature {
+            feature: feature.to_string(),
+            enable,
+        };
+
+        self.write(LogEntry::new(cmd)).await?;
+        Ok(())
     }
 
     /// Submit a write request to the known leader. Returns the response after applying the request.

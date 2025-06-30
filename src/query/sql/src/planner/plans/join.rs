@@ -63,6 +63,10 @@ pub enum JoinType {
     /// Single Join is a special kind of join that is used to process correlated scalar subquery.
     LeftSingle,
     RightSingle,
+    /// Asof Join special for  Speed ​​up timestamp join
+    Asof,
+    LeftAsof,
+    RightAsof,
 }
 
 impl JoinType {
@@ -78,6 +82,8 @@ impl JoinType {
             JoinType::RightAnti => JoinType::LeftAnti,
             JoinType::LeftMark => JoinType::RightMark,
             JoinType::RightMark => JoinType::LeftMark,
+            JoinType::RightAsof => JoinType::LeftAsof,
+            JoinType::LeftAsof => JoinType::RightAsof,
             _ => self.clone(),
         }
     }
@@ -90,6 +96,8 @@ impl JoinType {
                 | JoinType::Full
                 | JoinType::LeftSingle
                 | JoinType::RightSingle
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
         )
     }
 
@@ -139,6 +147,15 @@ impl Display for JoinType {
             }
             JoinType::RightSingle => {
                 write!(f, "RIGHT SINGLE")
+            }
+            JoinType::Asof => {
+                write!(f, "ASOF")
+            }
+            JoinType::LeftAsof => {
+                write!(f, "LEFT ASOF")
+            }
+            JoinType::RightAsof => {
+                write!(f, "RIGHT ASOF")
             }
         }
     }
@@ -432,9 +449,13 @@ impl Join {
             &mut right_statistics,
         )?;
         let cardinality = match self.join_type {
-            JoinType::Inner | JoinType::Cross => inner_join_cardinality,
-            JoinType::Left => f64::max(left_cardinality, inner_join_cardinality),
-            JoinType::Right => f64::max(right_cardinality, inner_join_cardinality),
+            JoinType::Inner | JoinType::Asof | JoinType::Cross => inner_join_cardinality,
+            JoinType::Left | JoinType::LeftAsof => {
+                f64::max(left_cardinality, inner_join_cardinality)
+            }
+            JoinType::Right | JoinType::RightAsof => {
+                f64::max(right_cardinality, inner_join_cardinality)
+            }
             JoinType::Full => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)
@@ -560,7 +581,7 @@ impl Operator for Join {
             });
         }
 
-        if !matches!(self.join_type, JoinType::Inner) {
+        if !matches!(self.join_type, JoinType::Inner | JoinType::Asof) {
             return Ok(PhysicalProperty {
                 distribution: Distribution::Random,
             });
@@ -624,6 +645,9 @@ impl Operator for Join {
                 | JoinType::RightAnti
                 | JoinType::RightSemi
                 | JoinType::LeftMark
+                | JoinType::Asof
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
         ) {
             let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
@@ -742,6 +766,9 @@ impl Operator for Join {
                 | JoinType::RightSemi
                 | JoinType::LeftMark
                 | JoinType::RightSingle
+                | JoinType::Asof
+                | JoinType::LeftAsof
+                | JoinType::RightAsof
         ) && !settings.get_enforce_shuffle_join()?
         {
             // (Any, Broadcast)

@@ -26,7 +26,7 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 
 use super::aggregate_distinct_state::AggregateDistinctNumberState;
@@ -93,7 +93,7 @@ where State: DistinctStateFunc
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -101,7 +101,7 @@ where State: DistinctStateFunc
         state.batch_add(columns, validity, input_rows)
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
         state.add(columns, row)
     }
@@ -141,9 +141,9 @@ where State: DistinctStateFunc
             if state.is_empty() {
                 return self.nested.merge_result(nested_place, builder);
             }
-            let columns = &state.build_columns(&self.arguments).unwrap();
+            let entries = &state.build_entries(&self.arguments).unwrap();
             self.nested
-                .accumulate(nested_place, columns.into(), None, state.len())?;
+                .accumulate(nested_place, entries.into(), None, state.len())?;
             // merge_result
             self.nested.merge_result(nested_place, builder)
         }
@@ -162,7 +162,7 @@ where State: DistinctStateFunc
         }
     }
 
-    fn get_if_condition(&self, columns: InputColumns) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
         self.nested.get_if_condition(columns)
     }
 }

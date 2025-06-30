@@ -27,11 +27,10 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StatesLayout;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StateAddr;
-use databend_common_functions::scalars::strict_decimal_data_type;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -101,15 +100,13 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             .map(|index| index.is_agg)
             .unwrap_or_default();
 
-        let block = strict_decimal_data_type(block)
-            .map_err(ErrorCode::Internal)?
-            .consume_convert_to_full();
+        let block = block.consume_convert_to_full();
         if is_agg_index_block {
             // Aggregation states are in the back of the block.
             let states_indices = (block.num_columns() - self.states_layout.states_loc.len()
                 ..block.num_columns())
                 .collect::<Vec<_>>();
-            let states = InputColumns::new_block_proxy(&states_indices, &block);
+            let states = ProjectedBlock::project(&states_indices, &block);
 
             for ((place, func), state) in self
                 .states_layout
@@ -130,7 +127,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 .zip(
                     self.arg_indices
                         .iter()
-                        .map(|indices| InputColumns::new_block_proxy(indices.as_slice(), &block)),
+                        .map(|indices| ProjectedBlock::project(indices.as_slice(), &block)),
                 )
                 .zip(self.funcs.iter())
             {
@@ -281,8 +278,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .enumerate()
         {
             for block in self.to_merge_data.iter() {
-                let state = block.get_by_offset(idx).as_column().unwrap();
-                func.batch_merge_single(place, state)?;
+                func.batch_merge_single(place, block.get_by_offset(idx))?;
             }
             func.merge_result(place, builder)?;
         }
