@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
+
 use super::physical_plans::AddStreamColumn;
 use super::physical_plans::BroadcastSink;
 use super::physical_plans::BroadcastSource;
@@ -24,7 +24,8 @@ use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSplit;
 use super::physical_plans::RecursiveCteScan;
-use crate::executor::physical_plan::{PhysicalPlan, PhysicalPlanExt};
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlanExt;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -68,7 +69,8 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowPartition;
-//
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 // pub trait PhysicalPlanReplacer {
 //     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
 //         match plan {

@@ -15,7 +15,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::plan::{DataSourcePlan, NUM_ROW_ID_PREFIX_BITS};
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -48,7 +49,8 @@ use super::CommitType;
 use crate::binder::wrap_cast;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
-use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -57,7 +59,9 @@ use crate::executor::physical_plans::MutationManipulate;
 use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
-use crate::executor::{IPhysicalPlan, PhysicalPlanBuilder, PhysicalPlanMeta};
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -109,15 +113,20 @@ impl IPhysicalPlan for Mutation {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {
@@ -686,7 +695,7 @@ pub fn generate_update_list(
         Box::new(DataType::Boolean),
         Visibility::Visible,
     )
-        .build();
+    .build();
     let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
 
     update_list.iter().try_fold(
@@ -771,7 +780,7 @@ pub fn mutation_update_expr(
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
-            .build();
+        .build();
         ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
     } else {
         ScalarExpr::ConstantExpr(ConstantExpr {

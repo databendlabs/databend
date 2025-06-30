@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::{DataSourcePlan, StageTableInfo};
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -21,11 +22,13 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use enum_as_inner::EnumAsInner;
 
-use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
 use crate::ColumnBinding;
-use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
@@ -58,30 +61,52 @@ impl IPhysicalPlan for CopyIntoTable {
         Ok(DataSchemaRefExt::create(vec![]))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         match &self.source {
             CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
             CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
         }
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         match &mut self.source {
             CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
             CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
         }
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_copy_into_table = self.clone();
-                assert_eq!(children.len(), 1);
-                new_copy_into_table.input = children[0];
-                Box::new(new_copy_into_table)
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
+        match &self.source {
+            CopyIntoTableSource::Query(query_physical_plan) => {
+                let derive_input = query_physical_plan.derive_with(handle);
+                match handle.derive(self, vec![derive_input]) {
+                    Ok(v) => v,
+                    Err(children) => {
+                        let mut new_copy_into_table = self.clone();
+                        assert_eq!(children.len(), 1);
+                        new_copy_into_table.source =
+                            CopyIntoTableSource::Query(Box::new(children[0]));
+                        Box::new(new_copy_into_table)
+                    }
+                }
+            }
+            CopyIntoTableSource::Stage(v) => {
+                let derive_input = v.derive_with(handle);
+                match handle.derive(self, vec![derive_input]) {
+                    Ok(v) => v,
+                    Err(children) => {
+                        let mut new_copy_into_table = self.clone();
+                        assert_eq!(children.len(), 1);
+                        new_copy_into_table.source =
+                            CopyIntoTableSource::Stage(Box::new(children[0]));
+                        Box::new(new_copy_into_table)
+                    }
+                }
             }
         }
     }

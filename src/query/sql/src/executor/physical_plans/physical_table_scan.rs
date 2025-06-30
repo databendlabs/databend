@@ -13,16 +13,20 @@
 // limitations under the License.
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::plan::{DataSourceInfo, DataSourcePlan, PartStatistics, PartitionsShuffleKind};
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
@@ -51,12 +55,15 @@ use rand::distributions::Distribution;
 use rand::thread_rng;
 
 use crate::binder::INTERNAL_COLUMN_FACTORY;
-use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanMeta};
+use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::plans::FunctionCall;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
@@ -70,7 +77,6 @@ use crate::TypeCheck;
 use crate::VirtualColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
@@ -97,7 +103,8 @@ impl IPhysicalPlan for TableScan {
     fn output_schema(&self) -> Result<DataSchemaRef> {
         let schema = self.source.schema();
         let mut fields = Vec::with_capacity(self.name_mapping.len());
-        let mut name_and_ids = self.name_mapping
+        let mut name_and_ids = self
+            .name_mapping
             .iter()
             .map(|(name, id)| {
                 let index = schema.index_of(name)?;
@@ -164,11 +171,14 @@ impl IPhysicalPlan for TableScan {
                 .source
                 .statistics
                 .partitions_total
-                .to_string()])
+                .to_string()]),
         ]))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         match handle.derive(self, vec![]) {
             Ok(v) => v,
             Err(children) => {
@@ -180,7 +190,14 @@ impl IPhysicalPlan for TableScan {
 }
 
 impl TableScan {
-    pub fn new(scan_id: usize, name_mapping: BTreeMap<String, IndexType>, source: Box<DataSourcePlan>, table_index: Option<IndexType>, stat_info: Option<PlanStatsInfo>, internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>) -> Box<dyn IPhysicalPlan> {
+    pub fn new(
+        scan_id: usize,
+        name_mapping: BTreeMap<String, IndexType>,
+        source: Box<DataSourcePlan>,
+        table_index: Option<IndexType>,
+        stat_info: Option<PlanStatsInfo>,
+        internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
+    ) -> Box<dyn IPhysicalPlan> {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
             DataSourceInfo::StageSource(_) => "StageScan".to_string(),
@@ -199,7 +216,6 @@ impl TableScan {
             internal_column,
         })
     }
-
 
     pub fn output_fields(
         schema: TableSchemaRef,
@@ -298,8 +314,8 @@ impl PhysicalPlanBuilder {
                     }
                 }
                 ColumnEntry::InternalColumn(TableInternalColumn {
-                                                internal_column, ..
-                                            }) => {
+                    internal_column, ..
+                }) => {
                     project_internal_columns.insert(*index, internal_column.to_owned());
                 }
                 ColumnEntry::VirtualColumn(virtual_column) => {
@@ -620,14 +636,14 @@ impl PhysicalPlanBuilder {
                     let column = metadata.column(item.index);
                     let (name, data_type) = match column {
                         ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                                         column_name,
-                                                         data_type,
-                                                         ..
-                                                     }) => (column_name.clone(), DataType::from(data_type)),
+                            column_name,
+                            data_type,
+                            ..
+                        }) => (column_name.clone(), DataType::from(data_type)),
                         ColumnEntry::InternalColumn(TableInternalColumn {
-                                                        internal_column,
-                                                        ..
-                                                    }) => (
+                            internal_column,
+                            ..
+                        }) => (
                             internal_column.column_name().to_owned(),
                             internal_column.data_type(),
                         ),
@@ -799,7 +815,7 @@ impl PhysicalPlanBuilder {
                     cast_expr_to_non_null_boolean(pred.as_expr()?.project_column_ref(|col| {
                         output_schema.index_of(&col.index.to_string()).unwrap()
                     }))?
-                        .as_remote_expr(),
+                    .as_remote_expr(),
                 )
             })
             .transpose()?;
@@ -837,7 +853,7 @@ impl PhysicalPlanBuilder {
     pub fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
-        columns: impl Iterator<Item=&'a IndexType>,
+        columns: impl Iterator<Item = &'a IndexType>,
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
@@ -856,16 +872,16 @@ impl PhysicalPlanBuilder {
                     }
                     ColumnEntry::DerivedColumn(DerivedColumn { alias, .. }) => alias,
                     ColumnEntry::InternalColumn(TableInternalColumn {
-                                                    internal_column, ..
-                                                }) => {
+                        internal_column, ..
+                    }) => {
                         if ignore_internal_column {
                             continue;
                         }
                         internal_column.column_name()
                     }
                     ColumnEntry::VirtualColumn(VirtualColumn {
-                                                   source_column_name, ..
-                                               }) => {
+                        source_column_name, ..
+                    }) => {
                         if add_virtual_source_column {
                             virtual_col_indices
                                 .insert(schema.index_of(source_column_name).unwrap());
@@ -893,10 +909,10 @@ impl PhysicalPlanBuilder {
                 let column = metadata.column(*index);
                 match column {
                     ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                                     column_name,
-                                                     path_indices,
-                                                     ..
-                                                 }) => match path_indices {
+                        column_name,
+                        path_indices,
+                        ..
+                    }) => match path_indices {
                         Some(path_indices) => {
                             col_indices.insert(column.index(), path_indices.to_vec());
                         }
@@ -915,8 +931,8 @@ impl PhysicalPlanBuilder {
                         }
                     }
                     ColumnEntry::VirtualColumn(VirtualColumn {
-                                                   source_column_name, ..
-                                               }) => {
+                        source_column_name, ..
+                    }) => {
                         if add_virtual_source_column {
                             let idx = schema.index_of(source_column_name).unwrap();
                             col_indices.insert(idx, vec![idx]);

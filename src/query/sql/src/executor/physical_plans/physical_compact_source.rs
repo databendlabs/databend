@@ -14,23 +14,27 @@
 
 use std::collections::HashSet;
 
-use databend_common_catalog::plan::{DataSourcePlan, PartInfoType};
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{ColumnId, DataSchemaRef};
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
-use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CompactSource {
@@ -51,7 +55,10 @@ impl IPhysicalPlan for CompactSource {
         &mut self.meta
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         match handle.derive(self, vec![]) {
             Ok(v) => v,
             Err(children) => {

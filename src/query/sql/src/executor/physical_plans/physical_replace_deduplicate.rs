@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
@@ -22,11 +24,12 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::executor::physical_plans::common::OnConflictField;
-use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
-use crate::ColumnBinding;
-use databend_common_exception::Result;
 use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plans::common::OnConflictField;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
+use crate::ColumnBinding;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceDeduplicate {
@@ -57,15 +60,20 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {

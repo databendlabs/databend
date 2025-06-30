@@ -35,9 +35,10 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::executor::PhysicalPlanReplacer;
+use databend_common_sql::executor::PhysicalPlanDeriveHandle;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RelOperator;
@@ -377,14 +378,23 @@ async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Resu
     Ok(())
 }
 
-struct ReadSourceReplacer {
+struct ReadSourceDeriveHandle {
     source: DataSourcePlan,
 }
 
-impl PhysicalPlanReplacer for ReadSourceReplacer {
-    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
-        let mut plan = plan.clone();
-        plan.source = Box::new(self.source.clone());
-        Ok(PhysicalPlan::TableScan(plan))
+impl PhysicalPlanDeriveHandle for ReadSourceDeriveHandle {
+    fn derive(
+        &mut self,
+        v: &Box<dyn IPhysicalPlan>,
+        children: Vec<Box<dyn IPhysicalPlan>>,
+    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        let Some(table_scan) = v.down_cast::<TableScan>() else {
+            return Err(children);
+        };
+
+        Ok(Box::new(TableScan {
+            source: Box::new(self.source.clone()),
+            ..table_scan.clone()
+        }))
     }
 }

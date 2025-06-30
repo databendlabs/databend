@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use itertools::Itertools;
+
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -25,10 +26,14 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::{PhysicalPlanDeriveHandle, PhysicalPlan};
+use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
@@ -40,7 +45,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Visitor;
 use crate::ColumnSet;
-use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 use crate::IndexType;
 use crate::TypeCheck;
 
@@ -89,11 +93,13 @@ impl IPhysicalPlan for EvalScalar {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -107,23 +113,23 @@ impl IPhysicalPlan for EvalScalar {
             .exprs
             .iter()
             .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .join(", ")
-        )
+            .join(", "))
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        Ok(HashMap::from([
-            (
-                String::from("List of Expressions"),
-                self.exprs
-                    .iter()
-                    .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                    .collect(),
-            )
-        ]))
+        Ok(HashMap::from([(
+            String::from("List of Expressions"),
+            self.exprs
+                .iter()
+                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .collect(),
+        )]))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {

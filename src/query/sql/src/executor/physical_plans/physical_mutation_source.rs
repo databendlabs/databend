@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::{DataSourcePlan, Filters};
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::Result;
@@ -27,11 +28,13 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationType;
-use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanMeta};
+use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::ColumnSet;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -68,7 +71,10 @@ impl IPhysicalPlan for MutationSource {
         Some(self.clone())
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         match handle.derive(self, vec![]) {
             Ok(v) => v,
             Err(children) => {

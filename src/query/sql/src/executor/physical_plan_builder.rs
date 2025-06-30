@@ -25,7 +25,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::plans::RelOperator;
@@ -62,7 +63,11 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<Box<dyn IPhysicalPlan>> {
+    pub async fn build(
+        &mut self,
+        s_expr: &SExpr,
+        required: ColumnSet,
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
 
@@ -96,7 +101,9 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
             RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
-            RelOperator::Exchange(exchange) => self.build_exchange(s_expr, exchange, required).await,
+            RelOperator::Exchange(exchange) => {
+                self.build_exchange(s_expr, exchange, required).await
+            }
             RelOperator::UnionAll(union_all) => {
                 self.build_union_all(s_expr, union_all, required, stat_info)
                     .await

@@ -16,7 +16,8 @@ use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{IPhysicalPlan, PhysicalPlan};
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;

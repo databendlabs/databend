@@ -15,8 +15,10 @@
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
+
 use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
@@ -48,7 +50,10 @@ impl IPhysicalPlan for ExchangeSource {
         true
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         match handle.derive(self, vec![]) {
             Ok(v) => v,
             Err(children) => {

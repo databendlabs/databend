@@ -23,7 +23,11 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 
-use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
+use crate::executor::physical_plan::DeriveExt;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 use crate::planner::CURRENT_BLOCK_ID_COL_NAME;
 use crate::planner::CURRENT_BLOCK_ROW_NUM_COL_NAME;
 use crate::plans::BoundColumnRef;
@@ -31,7 +35,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::Binder;
 use crate::ColumnBindingBuilder;
-use crate::executor::physical_plan::{DeriveExt, PhysicalPlanDeriveHandle};
 use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -55,15 +58,20 @@ impl IPhysicalPlan for AddStreamColumn {
         &mut self.meta
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {
@@ -113,7 +121,7 @@ impl AddStreamColumn {
                     Box::new(stream_column.data_type()),
                     Visibility::Visible,
                 )
-                    .build(),
+                .build(),
             });
 
             let current_stream_column_scalar_expr = match stream_column.column_type() {
@@ -134,7 +142,7 @@ impl AddStreamColumn {
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
-                            .build(),
+                        .build(),
                     })
                 }
                 StreamColumnType::OriginRowNum => {
@@ -147,7 +155,7 @@ impl AddStreamColumn {
                             Box::new(stream_column.data_type()),
                             Visibility::Visible,
                         )
-                            .build(),
+                        .build(),
                     })
                 }
                 StreamColumnType::RowVersion => unreachable!(),

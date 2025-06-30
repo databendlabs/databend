@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -21,13 +22,15 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanMeta};
+use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -63,11 +66,13 @@ impl IPhysicalPlan for Filter {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -84,18 +89,19 @@ impl IPhysicalPlan for Filter {
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
-        Ok(HashMap::from([
-            (
-                String::from("Filter condition"),
-                self.predicates
-                    .iter()
-                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-                    .collect(),
-            )
-        ]))
+        Ok(HashMap::from([(
+            String::from("Filter condition"),
+            self.predicates
+                .iter()
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .collect(),
+        )]))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {

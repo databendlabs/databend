@@ -14,18 +14,21 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::{DataSourcePlan, ReclusterInfoSideCar};
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::ReclusterInfoSideCar;
+use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::executor::physical_plans::common::MutationKind;
-use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
-use crate::plans::TruncateMode;
-use databend_common_exception::Result;
 use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plans::common::MutationKind;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
+use crate::plans::TruncateMode;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
@@ -58,15 +61,20 @@ impl IPhysicalPlan for CommitSink {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {

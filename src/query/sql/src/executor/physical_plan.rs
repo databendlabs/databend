@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
+
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -132,15 +133,15 @@ pub trait IPhysicalPlan: Debug {
     fn output_schema(&self) -> Result<DataSchemaRef> {
         match self.children().next() {
             None => Ok(DataSchemaRef::default()),
-            Some(child) => child.output_schema()
+            Some(child) => child.output_schema(),
         }
     }
 
-    fn children(&self) -> Box<dyn Iterator<Item=&'_ Box<dyn IPhysicalPlan>> + '_> {
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
-    fn children_mut(&mut self) -> Box<dyn Iterator<Item=&'_ mut Box<dyn IPhysicalPlan>> + '_> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
@@ -193,7 +194,8 @@ pub trait IPhysicalPlan: Debug {
         Ok(HashMap::new())
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan>;
+    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>)
+        -> Box<dyn IPhysicalPlan>;
 }
 
 pub trait PhysicalPlanExt {
@@ -203,8 +205,7 @@ pub trait PhysicalPlanExt {
 }
 
 impl<T> PhysicalPlanExt for T
-where
-    T: 'static + IPhysicalPlan + Clone,
+where T: 'static + IPhysicalPlan + Clone
 {
     fn clone_box(&self) -> Box<dyn IPhysicalPlan> {
         Box::new(self.clone())

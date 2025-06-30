@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use itertools::Itertools;
+
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -22,12 +22,15 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use itertools::Itertools;
 
 use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plans::common::AggregateFunctionDesc;
-use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plans::common::AggregateFunctionDesc;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 use crate::IndexType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -76,11 +79,13 @@ impl IPhysicalPlan for AggregatePartial {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -105,7 +110,10 @@ impl IPhysicalPlan for AggregatePartial {
         Ok(labels)
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(
+        &self,
+        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
+    ) -> Box<dyn IPhysicalPlan> {
         let derive_input = self.input.derive_with(handle);
 
         match handle.derive(self, vec![derive_input]) {

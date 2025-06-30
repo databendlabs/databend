@@ -31,7 +31,6 @@ use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
-use databend_common_sql::executor::PhysicalPlanReplacer;
 
 use crate::clusters::ClusterHelper;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
