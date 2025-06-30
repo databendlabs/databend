@@ -40,13 +40,27 @@ pub struct Sort {
     pub order_by: Vec<SortDesc>,
     /// limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
-    /// If the sort plan is after the exchange plan.
-    /// It's [None] if the sorting plan is in single node mode.
-    pub after_exchange: Option<bool>,
+    pub step: SortStep,
     pub pre_projection: Option<Vec<IndexType>>,
+    pub broadcast_id: Option<u32>,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+}
+
+#[derive(Debug, Hash, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum SortStep {
+    // single node mode
+    Single,
+
+    // cluster mode
+    Partial,    // before the exchange plan
+    FinalMerge, // after the exchange plan
+
+    // range shuffle mode
+    Sample,
+    RangeSort,
+    Route,
 }
 
 impl Sort {
@@ -66,7 +80,7 @@ impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
-        if matches!(self.after_exchange, Some(true)) {
+        if self.step == SortStep::FinalMerge {
             // If the plan is after exchange plan in cluster mode,
             // the order column is at the last of the input schema.
             debug_assert_eq!(fields.last().unwrap().name(), ORDER_COL_NAME);
@@ -88,7 +102,7 @@ impl Sort {
                 }
             }
 
-            if matches!(self.after_exchange, Some(false)) {
+            if self.step == SortStep::Partial {
                 // If the plan is before exchange plan in cluster mode,
                 // the order column should be added to the output schema.
                 fields.push(DataField::new(
@@ -134,6 +148,17 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Vec<_>>();
 
+        let enable_range_shuffle_sort = self.ctx.get_settings().get_enable_range_shuffle_sort()?;
+        let sort_step = match sort.after_exchange {
+            Some(false) => SortStep::Partial,
+            Some(true) => SortStep::FinalMerge,
+            None => SortStep::Single,
+        };
+        let broadcast_id = match sort.after_exchange {
+            Some(false) if enable_range_shuffle_sort => Some(self.ctx.get_next_broadcast_id()),
+            _ => None,
+        };
+
         // Add WindowPartition for parallel sort in window.
         if let Some(window) = &sort.window_partition {
             let window_partition = window
@@ -147,7 +172,7 @@ impl PhysicalPlanBuilder {
                 input: Box::new(input_plan.clone()),
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
-                after_exchange: sort.after_exchange,
+                sort_step,
                 top_n: window.top.map(|top| WindowPartitionTopN {
                     func: match window.func {
                         WindowFuncType::RowNumber => WindowPartitionTopNFunc::RowNumber,
@@ -167,8 +192,9 @@ impl PhysicalPlanBuilder {
             input: Box::new(input_plan),
             order_by,
             limit: sort.limit,
-            after_exchange: sort.after_exchange,
+            step: sort_step,
             pre_projection,
+            broadcast_id,
             stat_info: Some(stat_info),
         }))
     }

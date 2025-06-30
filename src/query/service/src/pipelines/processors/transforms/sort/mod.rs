@@ -30,6 +30,7 @@ mod sort_builder;
 mod sort_collect;
 mod sort_combine;
 mod sort_exchange;
+mod sort_exchange_injector;
 mod sort_execute;
 mod sort_route;
 mod sort_shuffle;

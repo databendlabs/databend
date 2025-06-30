@@ -47,8 +47,7 @@ impl Operator for Exchange {
             distribution: match self {
                 Exchange::Hash(hash_keys) => Distribution::Hash(hash_keys.clone()),
                 Exchange::Broadcast => Distribution::Broadcast,
-                Exchange::Merge => Distribution::Serial,
-                Exchange::MergeSort => Distribution::Serial,
+                Exchange::Merge | Exchange::MergeSort => Distribution::Serial,
             },
         })
     }

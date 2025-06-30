@@ -260,7 +260,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             partition_by: plan.partition_by.clone(),
             order_by: plan.order_by.clone(),
-            after_exchange: plan.after_exchange,
+            sort_step: plan.sort_step,
             top_n: plan.top_n.clone(),
             stat_info: plan.stat_info.clone(),
         }))
@@ -313,16 +313,11 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_sort(&mut self, plan: &Sort) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
+        let input = self.replace(&plan.input)?.into();
 
         Ok(PhysicalPlan::Sort(Sort {
-            plan_id: plan.plan_id,
-            input: Box::new(input),
-            order_by: plan.order_by.clone(),
-            limit: plan.limit,
-            after_exchange: plan.after_exchange,
-            pre_projection: plan.pre_projection.clone(),
-            stat_info: plan.stat_info.clone(),
+            input,
+            ..plan.clone()
         }))
     }
 

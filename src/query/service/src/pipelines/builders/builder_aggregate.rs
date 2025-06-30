@@ -227,7 +227,7 @@ impl PipelineBuilder {
         if matches!(input, PhysicalPlan::ExchangeSource(_)) {
             self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
         }
-        self.build_pipeline(&aggregate.input)?;
+        self.build_pipeline(input)?;
         self.exchange_injector = old_inject;
         build_partition_bucket(&mut self.main_pipeline, params.clone(), max_restore_worker)
     }

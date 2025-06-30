@@ -198,7 +198,12 @@ impl PipelineBuilder {
             .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
             .transpose()?;
 
-        let have_order_col = window_partition.after_exchange.unwrap_or(false);
+        let have_order_col = match window_partition.sort_step {
+            SortStep::Single | SortStep::Partial => false,
+            SortStep::FinalMerge => true,
+            _ => unimplemented!(),
+        };
+
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
 
         let processor_id = AtomicUsize::new(0);

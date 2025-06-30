@@ -29,6 +29,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Sort;
+use databend_common_sql::executor::physical_plans::SortStep;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
@@ -53,7 +54,7 @@ impl PipelineBuilder {
 
         let input_schema = sort.input.output_schema()?;
 
-        if !matches!(sort.after_exchange, Some(true)) {
+        if sort.step == SortStep::FinalMerge {
             // If the Sort plan is after exchange, we don't need to do a projection,
             // because the data is already projected in each cluster node.
             if let Some(proj) = &sort.pre_projection {
@@ -93,7 +94,7 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.after_exchange)
+        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.step)
     }
 
     fn build_sort_pipeline(
@@ -101,7 +102,7 @@ impl PipelineBuilder {
         plan_schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
         limit: Option<usize>,
-        after_exchange: Option<bool>,
+        sort_step: SortStep,
     ) -> Result<()> {
         let max_threads = self.settings.get_max_threads()? as usize;
         let sort_desc = sort_desc.into();
@@ -114,8 +115,8 @@ impl PipelineBuilder {
         let builder = SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc)?
             .with_limit(limit);
 
-        match after_exchange {
-            Some(true) => {
+        match sort_step {
+            SortStep::FinalMerge => {
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
                 // as the data is already sorted in each cluster node.
@@ -130,13 +131,13 @@ impl PipelineBuilder {
                         .build_merge_sort_pipeline(&mut self.main_pipeline, true)
                 }
             }
-            Some(false) => {
+            SortStep::Partial => {
                 // Build for each cluster node.
                 // We build the full sort pipeline for it.
                 // Don't remove the order column at last.
                 builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
-            None => {
+            SortStep::Single => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
                 if self.settings.get_enable_range_shuffle_sort()?
@@ -151,6 +152,7 @@ impl PipelineBuilder {
                         .build_full_sort_pipeline(&mut self.main_pipeline)
                 }
             }
+            _ => unimplemented!(),
         }
     }
 }
