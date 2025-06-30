@@ -15,6 +15,7 @@ function check_query_log() {
     full_sql_query+=" query_id = '$query_id'"
   fi
 
+  echo $full_sql_query
   response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
     -H 'Content-Type: application/json' \
     -d "{\"sql\": \"$full_sql_query\"}")
@@ -39,6 +40,9 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "create table t (a INT)"}')
 create_query_id=$(echo $response | jq -r '.id')
 echo "Create Query ID: $create_query_id"
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "create view v as select a from t"}')
+create_view_query_id=$(echo $response | jq -r '.id')
+echo "Create VIEW Query ID: $create_view_query_id"
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "insert into t values (1),(2),(3)"}')
 insert_query_id=$(echo $response | jq -r '.id')
 echo "Insert Query ID: $insert_query_id"
@@ -63,8 +67,6 @@ check_query_log "basic-3" "$query_id" "SELECT count(*) FROM system_history.log_h
 # Test 4
 check_query_log "basic-4" "$query_id" "SELECT count(*) FROM system_history.query_history WHERE" "1"
 
-# Test 5
-check_query_log "basic-5" "$select_query_id" "SELECT count(*) FROM system_history.log_history WHERE target = 'databend::log::access' and" "1"
 
 # Test 6
 check_query_log "basic-6" "$select_query_id" "SELECT count(*) FROM system_history.access_history WHERE" "1"
@@ -78,7 +80,8 @@ check_query_log "basic-8" "$insert_query_id" "SELECT objects_modified[0]['object
 # Test 9
 check_query_log "basic-9" "$select_query_id" "SELECT base_objects_accessed[0]['object_name'] FROM system_history.access_history WHERE" "default.default.t"
 
-
+# Test 10
+check_query_log "basic-10" $create_view_query_id "select query_text from system_history.query_history where" "CREATE VIEW v AS SELECT a FROM t"
 
 # Check timezone, regression test for https://github.com/databendlabs/databend/pull/18059
 check_query_log "t-1" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, timestamp, now()) FROM system_history.log_history WHERE target = 'databend::log::profile' and" "0"

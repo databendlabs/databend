@@ -631,6 +631,10 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        // `create view as view_query` the view_query should not cover create view
+        if !self.get_query_str().is_empty() {
+            return;
+        }
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
@@ -649,14 +653,18 @@ impl QueryContextShared {
 
     pub fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
         {
-            let mut running_query_hash = self.running_query_text_hash.write();
-            *running_query_hash = Some(text_hash);
+            if self.get_query_text_hash().is_empty() {
+                let mut running_query_hash = self.running_query_text_hash.write();
+                *running_query_hash = Some(text_hash);
+            }
         }
 
         {
-            let mut running_query_parameterized_hash =
-                self.running_query_parameterized_hash.write();
-            *running_query_parameterized_hash = Some(parameterized_hash);
+            if self.get_query_parameterized_hash().is_empty() {
+                let mut running_query_parameterized_hash =
+                    self.running_query_parameterized_hash.write();
+                *running_query_parameterized_hash = Some(parameterized_hash);
+            }
         }
     }
 
