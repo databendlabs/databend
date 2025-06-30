@@ -42,8 +42,8 @@ impl ExprBloomFilter {
         let data_type = column.data_type();
         let num_rows = column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
-        let columns = &[column];
-        let group_columns = columns.into();
+        let entries = &[column.into()];
+        let group_columns = entries.into();
         let mut idx = 0;
 
         match method {

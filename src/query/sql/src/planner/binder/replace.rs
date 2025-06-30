@@ -139,7 +139,7 @@ impl Binder {
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 Ok(InsertInputSource::SelectPlan(Box::new(select_plan)))
             }
-            InsertSource::StreamingLoad { .. } => Err(ErrorCode::Unimplemented(
+            InsertSource::LoadFile { .. } => Err(ErrorCode::Unimplemented(
                 "Replace with streaming load not supported yet.",
             )),
         };

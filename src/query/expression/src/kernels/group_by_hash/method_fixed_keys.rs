@@ -36,9 +36,9 @@ use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
+use crate::ProjectedBlock;
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
 pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
@@ -55,8 +55,11 @@ pub struct HashMethodFixedKeys<T> {
 impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
-    fn build_keys_vec(group_columns: InputColumns, rows: usize) -> Result<Vec<T>> {
-        let mut group_columns = group_columns.iter().collect::<Vec<_>>();
+    fn build_keys_vec(group_columns: ProjectedBlock, rows: usize) -> Result<Vec<T>> {
+        let mut group_columns = group_columns
+            .iter()
+            .map(|entry| entry.as_column().unwrap())
+            .collect::<Vec<_>>();
         group_columns.sort_by_key(|col| {
             col.data_type()
                 .remove_nullable()
@@ -95,10 +98,10 @@ impl<T: FixedKey> HashMethod for HashMethodFixedKeys<T> {
         format!("FixedKeys{}", std::mem::size_of::<T>())
     }
 
-    fn build_keys_state(&self, group_columns: InputColumns, rows: usize) -> Result<KeysState> {
+    fn build_keys_state(&self, group_columns: ProjectedBlock, rows: usize) -> Result<KeysState> {
         // faster path for single fixed keys
         if group_columns.len() == 1 {
-            if let Some(res) = T::single_build(&group_columns[0]) {
+            if let Some(res) = T::single_build(&group_columns[0].to_column()) {
                 return Ok(res);
             }
         }

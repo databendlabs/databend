@@ -16,6 +16,7 @@ futures = { workspace = true }
 log = { workspace = true }
 pin-project = { workspace = true }
 serde = { workspace = true }
+zip = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }

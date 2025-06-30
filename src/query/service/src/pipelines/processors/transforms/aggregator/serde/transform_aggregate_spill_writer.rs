@@ -202,10 +202,9 @@ pub fn agg_spilling_aggregate_payload(
         rows += data_block.num_rows();
 
         let begin = write_size;
-        let columns = data_block.columns();
-        let mut columns_data = Vec::with_capacity(columns.len());
-        let mut columns_layout = Vec::with_capacity(columns.len());
-        for entry in columns.iter() {
+        let mut columns_data = Vec::with_capacity(data_block.num_columns());
+        let mut columns_layout = Vec::with_capacity(data_block.num_columns());
+        for entry in data_block.columns() {
             let column_data = serialize_column(entry.as_column().unwrap());
             write_size += column_data.len() as u64;
             columns_layout.push(column_data.len() as u64);

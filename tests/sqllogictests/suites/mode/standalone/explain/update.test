@@ -33,7 +33,6 @@ CommitSink
             ├── probe keys: [t1.a (#0)]
             ├── keys is null equal: [false]
             ├── filters: []
-            ├── build join filters:
             ├── estimated rows: 2.00
             ├── TableScan(Build)
             │   ├── table: default.default.t2
@@ -100,7 +99,6 @@ CommitSink
         ├── probe keys: [t1.a (#0)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 2.00
         ├── TableScan(Build)
         │   ├── table: default.default.t2

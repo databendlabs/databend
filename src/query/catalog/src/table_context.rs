@@ -435,6 +435,18 @@ pub trait TableContext: Send + Sync {
     fn get_session_type(&self) -> SessionType {
         unimplemented!()
     }
+    fn get_perf_flag(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_perf_flag(&self, _flag: bool) {
+        unimplemented!()
+    }
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        unimplemented!()
+    }
+    fn set_nodes_perf(&self, _node: String, _perf: String) {
+        unimplemented!()
+    }
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

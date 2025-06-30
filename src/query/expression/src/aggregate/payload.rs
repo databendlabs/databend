@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
-use itertools::Itertools;
 use log::info;
 use strength_reduce::StrengthReducedU64;
 
@@ -31,8 +30,8 @@ use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
-use crate::InputColumns;
 use crate::PayloadFlushState;
+use crate::ProjectedBlock;
 use crate::SelectVector;
 use crate::StateAddr;
 use crate::StatesLayout;
@@ -202,7 +201,7 @@ impl Payload {
         address: &mut [*const u8],
         page_index: &mut [usize],
         new_group_rows: usize,
-        group_columns: InputColumns,
+        group_columns: ProjectedBlock,
     ) {
         let tuple_size = self.tuple_size;
         let (mut page, mut page_index_value) = self.writable_page();
@@ -233,13 +232,13 @@ impl Payload {
         address: &mut [*const u8],
         page_index: &mut [usize],
         new_group_rows: usize,
-        group_columns: InputColumns,
+        group_columns: ProjectedBlock,
     ) {
         let mut write_offset = 0;
         // write validity
-        for col in group_columns.iter() {
-            if let Column::Nullable(c) = col {
-                let bitmap = &c.validity;
+        for entry in group_columns.iter() {
+            if let Column::Nullable(c) = entry.to_column() {
+                let bitmap = c.validity();
                 if bitmap.null_count() == 0 || bitmap.null_count() == bitmap.len() {
                     let val: u8 = if bitmap.null_count() == 0 { 1 } else { 0 };
                     // faster path
@@ -262,13 +261,13 @@ impl Payload {
         }
 
         let mut scratch = vec![];
-        for (idx, col) in group_columns.iter().enumerate() {
+        for (idx, entry) in group_columns.iter().enumerate() {
             debug_assert!(write_offset == self.group_offsets[idx]);
 
             unsafe {
                 serialize_column_to_rowformat(
                     &self.arena,
-                    col,
+                    &entry.to_column(),
                     select_vector,
                     new_group_rows,
                     address,
@@ -424,15 +423,19 @@ impl Payload {
 
     pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
         let fake_rows = fake_rows.unwrap_or(0);
-        let columns = (0..self.aggrs.len())
-            .map(|_| ColumnBuilder::repeat_default(&DataType::Binary, fake_rows).build())
+        let entries = (0..self.aggrs.len())
+            .map(|_| {
+                ColumnBuilder::repeat_default(&DataType::Binary, fake_rows)
+                    .build()
+                    .into()
+            })
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build()),
+                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build().into()),
             )
-            .collect_vec();
-        DataBlock::new_from_columns(columns)
+            .collect();
+        DataBlock::new(entries, fake_rows)
     }
 }
 

@@ -178,6 +178,10 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) next_broadcast_id: AtomicU32,
     pub(in crate::sessions) broadcast_channels: Arc<Mutex<HashMap<u32, BroadcastChannel>>>,
+
+    // QueryPerf used to draw flamegraph
+    pub(in crate::sessions) perf_flag: AtomicBool,
+    pub(in crate::sessions) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
 }
 
 #[derive(Default)]
@@ -253,6 +257,8 @@ impl QueryContextShared {
             pruned_partitions_stats: Arc::new(RwLock::new(HashMap::new())),
             next_broadcast_id: AtomicU32::new(0),
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
+            perf_flag: AtomicBool::new(false),
+            nodes_perf: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
@@ -625,6 +631,10 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        // `create view as view_query` the view_query should not cover create view
+        if !self.get_query_str().is_empty() {
+            return;
+        }
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
@@ -643,14 +653,18 @@ impl QueryContextShared {
 
     pub fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
         {
-            let mut running_query_hash = self.running_query_text_hash.write();
-            *running_query_hash = Some(text_hash);
+            if self.get_query_text_hash().is_empty() {
+                let mut running_query_hash = self.running_query_text_hash.write();
+                *running_query_hash = Some(text_hash);
+            }
         }
 
         {
-            let mut running_query_parameterized_hash =
-                self.running_query_parameterized_hash.write();
-            *running_query_parameterized_hash = Some(parameterized_hash);
+            if self.get_query_parameterized_hash().is_empty() {
+                let mut running_query_parameterized_hash =
+                    self.running_query_parameterized_hash.write();
+                *running_query_parameterized_hash = Some(parameterized_hash);
+            }
         }
     }
 
@@ -849,6 +863,23 @@ impl QueryContextShared {
             .write()
             .entry(plan_id)
             .or_insert(stats);
+    }
+
+    pub fn set_perf_flag(&self, flag: bool) {
+        self.perf_flag.store(flag, Ordering::SeqCst);
+    }
+
+    pub fn get_perf_flag(&self) -> bool {
+        self.perf_flag.load(Ordering::SeqCst)
+    }
+
+    pub fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        self.nodes_perf.clone()
+    }
+
+    pub fn set_nodes_perf(&self, node: String, perf: String) {
+        let mut nodes_perf = self.nodes_perf.lock();
+        nodes_perf.insert(node, perf);
     }
 }
 

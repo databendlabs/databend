@@ -349,7 +349,11 @@ impl Display for ConditionalOperation {
 
 impl Display for FetchAddU64 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FetchAddU64 key={} delta={}", self.key, self.delta)
+        write!(f, "FetchAddU64 key={} delta={}", self.key, self.delta)?;
+        if let Some(match_seq) = self.match_seq {
+            write!(f, " match_seq: {}", match_seq)?;
+        }
+        Ok(())
     }
 }
 
@@ -466,9 +470,20 @@ mod tests {
     fn test_display_fetch_add_u64() {
         let req = FetchAddU64 {
             key: "k1".to_string(),
+            match_seq: None,
             delta: 1,
         };
         assert_eq!(req.to_string(), "FetchAddU64 key=k1 delta=1");
+
+        let req_with_seq = FetchAddU64 {
+            key: "k1".to_string(),
+            match_seq: Some(10),
+            delta: 1,
+        };
+        assert_eq!(
+            req_with_seq.to_string(),
+            "FetchAddU64 key=k1 delta=1 match_seq: 10"
+        );
     }
 
     #[test]

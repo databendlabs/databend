@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::OutofSequenceRange;
 use databend_common_meta_app::app_error::SequenceError;
@@ -152,7 +151,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
             // update meta
             sequence_meta.current += count;
-            sequence_meta.update_on = Utc::now();
 
             let condition = vec![txn_cond_eq_seq(&ident, sequence_seq)];
             let if_then = vec![

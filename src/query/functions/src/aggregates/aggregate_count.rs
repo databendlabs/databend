@@ -27,7 +27,7 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
@@ -93,7 +93,7 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -101,7 +101,7 @@ impl AggregateFunction for AggregateCountFunction {
         let nulls = if columns.is_empty() {
             validity.map(|v| v.null_count()).unwrap_or(0)
         } else {
-            match &columns[0] {
+            match &columns[0].to_column() {
                 Column::Nullable(c) => validity
                     .map(|v| v & (&c.validity))
                     .unwrap_or_else(|| c.validity.clone())
@@ -117,12 +117,12 @@ impl AggregateFunction for AggregateCountFunction {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
         let validity = columns
             .iter()
-            .fold(None, |acc, col| column_merge_validity(col, acc));
+            .fold(None, |acc, col| column_merge_validity(&col.clone(), acc));
 
         match validity {
             Some(v) => {
@@ -149,7 +149,12 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, _columns: InputColumns, _row: usize) -> Result<()> {
+    fn accumulate_row(
+        &self,
+        place: AggrState,
+        _columns: ProjectedBlock,
+        _row: usize,
+    ) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())

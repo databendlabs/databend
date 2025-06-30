@@ -19,9 +19,9 @@ use crate::types::binary::BinaryColumnIter;
 use crate::types::BinaryColumn;
 use crate::Column;
 use crate::HashMethod;
-use crate::InputColumns;
 use crate::KeyAccessor;
 use crate::KeysState;
+use crate::ProjectedBlock;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSingleBinary {}
@@ -35,8 +35,8 @@ impl HashMethod for HashMethodSingleBinary {
         "SingleBinary".to_string()
     }
 
-    fn build_keys_state(&self, group_columns: InputColumns, _rows: usize) -> Result<KeysState> {
-        Ok(KeysState::Column(group_columns[0].clone()))
+    fn build_keys_state(&self, group_columns: ProjectedBlock, _rows: usize) -> Result<KeysState> {
+        Ok(KeysState::Column(group_columns[0].to_column()))
     }
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {

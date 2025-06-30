@@ -40,6 +40,7 @@ pub fn get_compression_with_path(
             ));
         }
         StageFileCompression::None => None,
+        StageFileCompression::Zip => Some(CompressAlgorithm::Zip),
     };
     Ok(compression_algo)
 }

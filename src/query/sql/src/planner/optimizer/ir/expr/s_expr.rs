@@ -145,6 +145,16 @@ impl SExpr {
         &self.children[1]
     }
 
+    pub fn build_side_child(&self) -> &SExpr {
+        assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        &self.children[1]
+    }
+
+    pub fn probe_side_child(&self) -> &SExpr {
+        assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        &self.children[0]
+    }
+
     pub fn arity(&self) -> usize {
         self.children.len()
     }
@@ -466,5 +476,38 @@ impl SExpr {
             .derive_relational_prop(&RelExpr::SExpr { expr: self })?;
         *self.rel_prop.lock().unwrap() = Some(rel_prop.clone());
         Ok(rel_prop)
+    }
+
+    pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
+        match self.plan.rel_op() {
+            crate::plans::RelOp::Scan
+            | crate::plans::RelOp::DummyTableScan
+            | crate::plans::RelOp::ConstantTableScan
+            | crate::plans::RelOp::ExpressionScan
+            | crate::plans::RelOp::CacheScan
+            | crate::plans::RelOp::RecursiveCteScan => Ok(None),
+
+            crate::plans::RelOp::Join => self.probe_side_child().get_data_distribution(),
+
+            crate::plans::RelOp::Exchange => {
+                Ok(Some(self.plan.as_ref().clone().try_into().unwrap()))
+            }
+
+            crate::plans::RelOp::EvalScalar
+            | crate::plans::RelOp::Filter
+            | crate::plans::RelOp::Aggregate
+            | crate::plans::RelOp::Sort
+            | crate::plans::RelOp::Limit
+            | crate::plans::RelOp::UnionAll
+            | crate::plans::RelOp::Window
+            | crate::plans::RelOp::ProjectSet
+            | crate::plans::RelOp::Udf
+            | crate::plans::RelOp::Udaf
+            | crate::plans::RelOp::AsyncFunction
+            | crate::plans::RelOp::MergeInto
+            | crate::plans::RelOp::CompactBlock
+            | crate::plans::RelOp::MutationSource
+            | crate::plans::RelOp::Pattern => self.child(0)?.get_data_distribution(),
+        }
     }
 }

@@ -944,6 +944,8 @@ pub enum TokenKind {
     PASSWORD_HISTORY,
     #[token("PATTERN", ignore(ascii_case))]
     PATTERN,
+    #[token("PERF", ignore(ascii_case))]
+    PERF,
     #[token("PIPELINE", ignore(ascii_case))]
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
@@ -1302,6 +1304,8 @@ pub enum TokenKind {
     XZ,
     #[token("YEAR", ignore(ascii_case))]
     YEAR,
+    #[token("ZIP", ignore(ascii_case))]
+    ZIP,
     #[token("ZSTD", ignore(ascii_case))]
     ZSTD,
     #[token("NULLIF", ignore(ascii_case))]

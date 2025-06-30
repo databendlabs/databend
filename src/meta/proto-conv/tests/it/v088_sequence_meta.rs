@@ -31,7 +31,6 @@ fn test_decode_v88_sequence_meta() -> anyhow::Result<()> {
         create_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         update_on: DateTime::<Utc>::from_timestamp(10267, 0).unwrap(),
         comment: Some("seq".to_string()),
-        start: 1,
         step: 1,
         current: 10,
     };

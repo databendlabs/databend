@@ -20,7 +20,6 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -28,7 +27,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
@@ -87,18 +86,18 @@ impl AggregateFunction for AggregateRetentionFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let new_columns = columns
+        let views = columns
             .iter()
-            .map(|col| BooleanType::try_downcast_column(col).unwrap())
+            .map(|entry| entry.downcast::<BooleanType>().unwrap())
             .collect::<Vec<_>>();
         for i in 0..input_rows {
             for j in 0..self.events_size {
-                if new_columns[j as usize].get_bit(i) {
+                if views[j as usize].index(i).unwrap() {
                     state.add(j);
                 }
             }
@@ -110,17 +109,18 @@ impl AggregateFunction for AggregateRetentionFunction {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let new_columns = columns
+        let views = columns
             .iter()
-            .map(|col| BooleanType::try_downcast_column(col).unwrap())
+            .map(|entry| entry.downcast::<BooleanType>().unwrap())
             .collect::<Vec<_>>();
         for (row, place) in places.iter().enumerate() {
             let state = AggrState::new(*place, loc).get::<AggregateRetentionState>();
             for j in 0..self.events_size {
-                if new_columns[j as usize].get_bit(row) {
+                let view = &views[j as usize];
+                if unsafe { view.index_unchecked(row) } {
                     state.add(j);
                 }
             }
@@ -128,14 +128,15 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        let new_columns = columns
+        let views = columns
             .iter()
-            .map(|col| BooleanType::try_downcast_column(col).unwrap())
+            .map(|entry| entry.downcast::<BooleanType>().unwrap())
             .collect::<Vec<_>>();
         for j in 0..self.events_size {
-            if new_columns[j as usize].get_bit(row) {
+            let view = &views[j as usize];
+            if unsafe { view.index_unchecked(row) } {
                 state.add(j);
             }
         }

@@ -128,17 +128,21 @@ fn convert_decimal(
     scale: usize,
     big_int: BigInt,
 ) -> Result<jsonb::Number, String> {
+    let max_64 = i64::MAX_PRECISION as usize;
     let max_128 = i128::MAX_PRECISION as usize;
     let max_256 = i256::MAX_PRECISION as usize;
-    if precision <= max_128 {
+    if precision <= max_64 {
+        Ok(jsonb::Number::Decimal64(jsonb::Decimal64 {
+            scale: scale as u8,
+            value: i64::from_bigint(big_int).ok_or("too many bits for i64".to_string())?,
+        }))
+    } else if precision <= max_128 {
         Ok(jsonb::Number::Decimal128(jsonb::Decimal128 {
-            precision: precision as u8,
             scale: scale as u8,
             value: i128::from_bigint(big_int).ok_or("too many bits for i128".to_string())?,
         }))
     } else if precision <= max_256 {
         Ok(jsonb::Number::Decimal256(jsonb::Decimal256 {
-            precision: precision as u8,
             scale: scale as u8,
             value: i256::from_bigint(big_int)
                 .ok_or("too many bits for i256".to_string())?
@@ -192,15 +196,14 @@ mod tests {
     #[test]
     fn test_decimal_128_ok() {
         let cases = vec![
-            (7, 4, 1234567i128, 7),
-            (7, 4, 123456i128, 6),
-            (38, 10, i128::DECIMAL_MAX, 38),
+            (7, 4, 1234567i128),
+            (7, 4, 123456i128),
+            (38, 10, i128::DECIMAL_MAX),
         ];
-        for (p, s, v, digits) in cases {
+        for (p, s, v) in cases {
             let (value, schema) = create_avro_decimal(&v.to_string(), p, s);
             let jsonb_value = to_jsonb(&value, &schema).unwrap();
             let expected = jsonb::Value::Number(jsonb::Number::Decimal128(jsonb::Decimal128 {
-                precision: p as u8,
                 scale: s as u8,
                 value: v,
             }));
@@ -209,7 +212,6 @@ mod tests {
             let (value, schema) = create_avro_big_decimal(&v.to_string(), s);
             let jsonb_value = to_jsonb(&value, &schema).unwrap();
             let expected = jsonb::Value::Number(jsonb::Number::Decimal128(jsonb::Decimal128 {
-                precision: digits as u8,
                 scale: s as u8,
                 value: v,
             }));
@@ -220,25 +222,14 @@ mod tests {
     #[test]
     fn test_decimal_256_ok() {
         let cases = vec![
-            (
-                39,
-                10,
-                i256::from_i128(i128::MAX).mul(i256::from_i128(10)),
-                39,
-            ),
-            (
-                72,
-                10,
-                i256::from_i128(i128::MAX).mul(i256::from_i128(10)),
-                39,
-            ),
-            (72, 10, i256::DECIMAL_MAX, 72),
+            (39, 10, i256::from_i128(i128::MAX).mul(i256::from_i128(10))),
+            (72, 10, i256::from_i128(i128::MAX).mul(i256::from_i128(10))),
+            (72, 10, i256::DECIMAL_MAX),
         ];
-        for (p, s, v, digits) in cases {
+        for (p, s, v) in cases {
             let (value, schema) = create_avro_decimal(&v.to_string(), p, s);
             let jsonb_value = to_jsonb(&value, &schema).unwrap();
             let expected = jsonb::Value::Number(jsonb::Number::Decimal256(jsonb::Decimal256 {
-                precision: p as u8,
                 scale: s as u8,
                 value: v.0,
             }));
@@ -247,7 +238,6 @@ mod tests {
             let (value, schema) = create_avro_big_decimal(&v.to_string(), s);
             let jsonb_value = to_jsonb(&value, &schema).unwrap();
             let expected = jsonb::Value::Number(jsonb::Number::Decimal256(jsonb::Decimal256 {
-                precision: digits as u8,
                 scale: s as u8,
                 value: v.0,
             }));

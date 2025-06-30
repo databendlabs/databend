@@ -68,6 +68,7 @@ use log::warn;
 use parking_lot::RwLock;
 
 use crate::binder::bind_query::MaxColumnPosition;
+use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::plans::CopyIntoTableMode;
@@ -358,19 +359,52 @@ impl Binder {
         values_str: &str,
         write_mode: CopyIntoTableMode,
     ) -> Result<Plan> {
-        let (required_source_schema, const_columns) = if values_str.is_empty() {
-            (required_values_schema.clone(), vec![])
+        let expr_or_placeholders = if values_str.is_empty() {
+            None
         } else {
-            self.prepared_values_str(values_str, &required_values_schema)
-                .await?
+            Some(self.parse_values_str(values_str).await?)
         };
 
+        let (stage_info, files_info, options) = self.bind_attachment(attachment).await?;
+        self.bind_copy_from_upload(
+            bind_context,
+            catalog_name,
+            database_name,
+            table_name,
+            required_values_schema,
+            expr_or_placeholders,
+            stage_info,
+            files_info,
+            options,
+            write_mode,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_copy_from_upload(
+        &mut self,
+        bind_context: &mut BindContext,
+        catalog_name: String,
+        database_name: String,
+        table_name: String,
+        required_values_schema: TableSchemaRef,
+        expr_or_placeholders: Option<Vec<Expr>>,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        copy_into_table_options: CopyIntoTableOptions,
+        write_mode: CopyIntoTableMode,
+    ) -> Result<Plan> {
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
-
-        let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
-
-        let (stage_info, files_info, options) = self.bind_attachment(attachment).await?;
+        let settings = self.ctx.get_settings();
+        let (required_source_schema, values_consts) = if let Some(exprs) = expr_or_placeholders {
+            self.prepared_values(exprs, &required_values_schema, settings.clone())
+                .await?
+        } else {
+            (required_values_schema.clone(), vec![])
+        };
 
         // list the files to be copied in binding phase
         // note that, this method(`bind_copy_from_attachment`) are used by
@@ -379,6 +413,7 @@ impl Binder {
         // currently, they do NOT enforce the deduplication detection rules,
         // as the vanilla Copy-Into does.
         // thus, we do not care about the "duplicated_files_detected", just set it to empty vector.
+        let thread_num = settings.get_max_threads()? as usize;
         let files_to_copy = list_stage_files(&stage_info, &files_info, thread_num, None).await?;
         let duplicated_files_detected = vec![];
 
@@ -396,7 +431,7 @@ impl Binder {
             required_values_schema,
             dedup_full_path: false,
             path_prefix: None,
-            values_consts: const_columns,
+            values_consts,
             stage_table_info: StageTableInfo {
                 schema: required_source_schema,
                 files_info,
@@ -405,7 +440,7 @@ impl Binder {
                 duplicated_files_detected,
                 is_select: false,
                 default_exprs: Some(default_values),
-                copy_into_table_options: options,
+                copy_into_table_options,
                 stage_root: "".to_string(),
                 is_variant: false,
             },
@@ -526,17 +561,12 @@ impl Binder {
         Ok(Plan::CopyIntoTable(Box::new(plan)))
     }
 
-    pub(crate) async fn prepared_values_str(
-        &self,
-        values_str: &str,
-        source_schema: &TableSchemaRef,
-    ) -> Result<(TableSchemaRef, Vec<Scalar>)> {
+    pub(crate) async fn parse_values_str(&self, values_str: &str) -> Result<Vec<Expr>> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parse_values(&tokens, sql_dialect)?;
-        self.prepared_values(expr_or_placeholders, source_schema, settings)
-            .await
+        let values = parse_values(&tokens, sql_dialect)?;
+        Ok(values)
     }
 
     #[async_backtrace::framed]
@@ -660,6 +690,9 @@ pub async fn resolve_stage_location(
 ) -> Result<(StageInfo, String)> {
     // my_named_stage/abc/
     let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
+    if names[0] == STAGE_PLACEHOLDER {
+        return Err(ErrorCode::BadArguments("placeholder @_databend_upload should be used in streaming_load handler or replaced in client."));
+    }
 
     let stage = if names[0] == "~" {
         StageInfo::new_user_stage(&ctx.get_current_user()?.name)

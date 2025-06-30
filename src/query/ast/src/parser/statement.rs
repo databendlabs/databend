@@ -60,7 +60,7 @@ pub enum CreateDatabaseOption {
 pub fn statement_body(i: Input) -> IResult<Statement> {
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED)? ~ #statement
+            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -78,6 +78,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     Some(TokenKind::DECORRELATED) => ExplainKind::Decorrelated,
                     Some(TokenKind::MEMO) => ExplainKind::Memo("".to_string()),
                     Some(TokenKind::GRAPHICAL) => ExplainKind::Graphical,
+                    Some(TokenKind::PERF) => ExplainKind::Perf,
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
@@ -2964,22 +2965,14 @@ pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
     );
     map(
         rule! {
-           VALUES ~ #value? ~ #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)?
+           (VALUES ~ #value?)? ~ FROM ~ #at_string ~  #file_format_clause
         },
-        |(_, value, options, on_error_opt)| InsertSource::StreamingLoad {
-            format_options: options,
-            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
-            value,
+        |(values, _, location, format_options)| InsertSource::LoadFile {
+            value: values.map(|(_, value)| value).unwrap_or_default(),
+            location,
+            format_options,
         },
     )(i)
-    // TODO: support query later
-    // let query = map(query, |query| InsertSource::Select {
-    //     query: Box::new(query),
-    // });
-    // rule!(
-    //     #file
-    //     | #query
-    // )(i)
 }
 
 // `INSERT INTO ... VALUES` statement will
@@ -3003,6 +2996,7 @@ pub fn insert_source_fast_values(i: Input) -> IResult<InsertSource> {
     );
 
     rule!(
+        #insert_source_file |
         #values
         | #query
     )(i)

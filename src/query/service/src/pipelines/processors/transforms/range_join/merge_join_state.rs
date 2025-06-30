@@ -43,11 +43,11 @@ impl RangeJoinState {
         let left_len = left_sorted_block.num_rows();
         let right_len = right_sort_block.num_rows();
 
-        let left_idx_col = &left_sorted_block.get_by_offset(1).to_column();
-        let left_join_key_col = &left_sorted_block.get_by_offset(0).to_column();
+        let left_idx_col = left_sorted_block.get_by_offset(1);
+        let left_join_key_col = left_sorted_block.get_by_offset(0);
 
-        let right_idx_col = &right_sort_block.get_by_offset(1).to_column();
-        let right_join_key_col = &right_sort_block.get_by_offset(0).to_column();
+        let right_idx_col = right_sort_block.get_by_offset(1);
+        let right_join_key_col = right_sort_block.get_by_offset(0);
 
         let mut i = 0;
         let mut j = 0;

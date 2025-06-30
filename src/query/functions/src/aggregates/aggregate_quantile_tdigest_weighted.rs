@@ -29,7 +29,7 @@ use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
 
@@ -88,12 +88,12 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let weighted = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+        let column = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let weighted = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
         let state = place.get::<QuantileTDigestState>();
         match validity {
             Some(bitmap) => {
@@ -114,9 +114,9 @@ where
 
         Ok(())
     }
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let weighted = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let column = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let weighted = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
         let value = unsafe { column.get_unchecked(row) };
         let weight = unsafe { weighted.get_unchecked(row) };
 
@@ -128,11 +128,11 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
-        let weighted = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
+        let column = NumberType::<T0>::try_downcast_column(&columns[0].to_column()).unwrap();
+        let weighted = NumberType::<T1>::try_downcast_column(&columns[1].to_column()).unwrap();
         column
             .iter()
             .zip(weighted.iter())

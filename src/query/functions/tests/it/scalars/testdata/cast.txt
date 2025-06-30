@@ -231,7 +231,7 @@ output         : '-1'
 ast            : CAST(1.1 AS VARIANT)
 raw expr       : CAST(1.1 AS Variant)
 checked expr   : CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant)
-optimized expr : 0x2000000020000013700000000000000000000000000000000b0201
+optimized expr : 0x200000002000000a70000000000000000b01
 output type    : Variant
 output domain  : Undefined
 output         : '1.1'
@@ -2409,7 +2409,7 @@ output         : '-1'
 ast            : TRY_CAST(1.1 AS VARIANT)
 raw expr       : TRY_CAST(1.1 AS Variant)
 checked expr   : TRY_CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant NULL)
-optimized expr : 0x2000000020000013700000000000000000000000000000000b0201
+optimized expr : 0x200000002000000a70000000000000000b01
 output type    : Variant NULL
 output domain  : Undefined
 output         : '1.1'

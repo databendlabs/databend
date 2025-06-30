@@ -213,6 +213,40 @@ pub fn wrap_nullable_for_try_cast(span: Span, ty: &DataType) -> Result<DataType>
     }
 }
 
+pub fn check_string<Index: ColumnIndex>(
+    span: Span,
+    func_ctx: &FunctionContext,
+    expr: &Expr<Index>,
+    fn_registry: &FunctionRegistry,
+) -> Result<String> {
+    let origin_ty = expr.data_type();
+    let (expr, _) = if origin_ty != &DataType::String {
+        ConstantFolder::fold(
+            &Expr::Cast(Cast {
+                span,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type: DataType::String,
+            }),
+            func_ctx,
+            fn_registry,
+        )
+    } else {
+        ConstantFolder::fold(expr, func_ctx, fn_registry)
+    };
+
+    match expr {
+        Expr::Constant(Constant {
+            scalar: Scalar::String(string),
+            ..
+        }) => Ok(string.clone()),
+        _ => Err(
+            ErrorCode::from_string_no_backtrace("expected string literal".to_string())
+                .set_span(span),
+        ),
+    }
+}
+
 pub fn check_number<T: Number, Index: ColumnIndex>(
     span: Span,
     func_ctx: &FunctionContext,

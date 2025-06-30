@@ -199,14 +199,15 @@ impl HashJoinProbeState {
             Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
         };
         let probe_keys = &self.hash_join_state.hash_join_desc.probe_keys;
-        let mut keys_columns = probe_keys
+        let mut keys_entries: Vec<BlockEntry> = probe_keys
             .iter()
             .map(|expr| {
                 Ok(evaluator
                     .run(expr)?
-                    .convert_to_full_column(expr.data_type(), input_num_rows))
+                    .convert_to_full_column(expr.data_type(), input_num_rows)
+                    .into())
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<_>>()?;
 
         if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark
             && self
@@ -216,7 +217,7 @@ impl HashJoinProbeState {
                 .is_none()
         {
             self.hash_join_state.init_markers(
-                (&keys_columns).into(),
+                (&keys_entries).into(),
                 input_num_rows,
                 probe_state.markers.as_mut().unwrap(),
             );
@@ -230,11 +231,11 @@ impl HashJoinProbeState {
             let ty = expr.data_type();
             ty.is_nullable() || ty.is_null()
         }) {
-            let valids = keys_columns
+            let valids = keys_entries
                 .iter()
                 .zip(is_null_equal.iter().copied())
                 .filter(|(_, is_null_equal)| !is_null_equal)
-                .map(|(col, _)| col.validity())
+                .map(|(entry, _)| entry.as_column().unwrap().validity())
                 .try_fold(None, |valids, (is_all_null, tmp_valids)| {
                     if is_all_null {
                         ControlFlow::Break(Some(Bitmap::new_constant(false, input_num_rows)))
@@ -249,14 +250,14 @@ impl HashJoinProbeState {
             None
         };
 
-        keys_columns
+        keys_entries
             .iter_mut()
             .zip(is_null_equal.iter().copied())
-            .filter(|(col, is_null_equal)| !is_null_equal && col.as_nullable().is_some())
-            .for_each(|(col, _)| {
-                *col = col.remove_nullable();
+            .filter(|(entry, is_null_equal)| !is_null_equal && entry.data_type().is_nullable())
+            .for_each(|(entry, _)| {
+                *entry = entry.clone().remove_nullable();
             });
-        let probe_keys = (&keys_columns).into();
+        let probe_keys = (&keys_entries).into();
 
         let probe_has_null = if self.join_type() == JoinType::LeftMark {
             match input.get_by_offset(0) {

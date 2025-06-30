@@ -25,18 +25,17 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 
-use crate::common::new_block;
-
 #[test]
 fn test_split_block() {
     let value = "abc";
     let n = 10;
-    let block = new_block(&[Column::String(
+    let block = DataBlock::new_from_columns(vec![Column::String(
         StringColumnBuilder::repeat(value, n).build(),
     )]);
     let sizes = block
@@ -51,7 +50,7 @@ fn test_split_block() {
 fn test_box_render_block() {
     let value = "abc";
     let n = 10;
-    let block = new_block(&[
+    let block = DataBlock::new_from_columns(vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
         Column::String(StringColumnBuilder::repeat(value, n).build()),
     ]);

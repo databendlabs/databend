@@ -4554,8 +4554,13 @@ impl<'a> TypeChecker<'a> {
         let code_blob = match compress_algo {
             Some(algo) => {
                 log::trace!("Decompressing module using {:?} algorithm", algo);
-                let mut decoder = DecompressDecoder::new(algo);
-                decoder.decompress_all(&code_blob).map_err(|err| {
+                if algo == CompressAlgorithm::Zip {
+                    DecompressDecoder::decompress_all_zip(&code_blob)
+                } else {
+                    let mut decoder = DecompressDecoder::new(algo);
+                    decoder.decompress_all(&code_blob)
+                }
+                .map_err(|err| {
                     let error_msg = format!("Failed to decompress module {}: {}", module_path, err);
                     log::error!("{}", error_msg);
                     ErrorCode::SemanticError(error_msg)

@@ -47,6 +47,11 @@ message FetchAddU64 {
   // The key to fetch and add the delta.
   string key = 1;
 
+  // Assert the seq number of the record before update.
+  // - If it does not match, no update will be made and the record seq number won't change.
+  // - If it is None, the update will always be made.
+  optional uint64 match_seq = 3;
+
   // The delta to add to the value.
   int64 delta = 2;
 }

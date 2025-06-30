@@ -137,7 +137,7 @@ impl TransformUdfServer {
                 let arg = data_block.get_by_offset(*i).clone();
                 if contains_variant(&arg.data_type()) {
                     let new_arg = BlockEntry::new(transform_variant(&arg.value(), true)?, || {
-                        (arg.data_type(), arg.num_rows())
+                        (arg.data_type(), arg.len())
                     });
                     Ok(new_arg)
                 } else {

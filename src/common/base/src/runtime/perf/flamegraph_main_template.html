@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Query Performance Flamegraphs</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .flamegraph-container {
+            /* --- Start of centering rules --- */
+            max-width: 1200px; /* Set a max width for the container */
+            margin-left: auto; /* Automatically calculate left margin */
+            margin-right: auto; /* Automatically calculate right margin */
+            /* --- End of centering rules --- */
+
+            margin-bottom: 30px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .flamegraph-header {
+            background-color: #4a90e2;
+            color: white;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .flamegraph-content iframe {
+            width: 100%;
+            border: none;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+<h1>Query Performance Flamegraphs</h1>
+
+{{CURRENT_NODE_IFRAME}}
+
+{{OTHER_NODES_IFRAMES}}
+
+<script>
+    function resizeIframe(iframe) {
+        // A small delay can help ensure the content has been fully rendered
+        // before calculating its height, especially for complex SVGs.
+        setTimeout(() => {
+            try {
+                const body = iframe.contentWindow.document.body;
+                const svg = body.querySelector('svg');
+                if (svg) {
+                    iframe.style.height = svg.scrollHeight + 'px';
+                } else if (body && body.scrollHeight > 0) {
+                    iframe.style.height = body.scrollHeight + 'px';
+                }
+            } catch (e) {
+                console.error("Failed to resize iframe:", e);
+            }
+        }, 150);
+    }
+</script>
+</body>
+</html>

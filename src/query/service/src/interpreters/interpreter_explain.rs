@@ -281,7 +281,10 @@ impl Interpreter for ExplainInterpreter {
                 vec![DataBlock::new_from_columns(vec![column])]
             }
 
-            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
+            ExplainKind::Raw
+            | ExplainKind::Optimized
+            | ExplainKind::Decorrelated
+            | ExplainKind::Perf => {
                 unreachable!()
             }
         };
@@ -453,7 +456,6 @@ impl ExplainInterpreter {
             statistics_desc: get_statistics_desc(),
         })
     }
-
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
@@ -477,7 +479,6 @@ impl ExplainInterpreter {
         if !pruned_partitions_stats.is_empty() {
             plan.set_pruning_stats(&mut pruned_partitions_stats);
         }
-
         let result = if self.partial {
             format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
         } else {
@@ -486,7 +487,6 @@ impl ExplainInterpreter {
         };
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
-
         if self.graphical {
             let profiles = GraphicalProfiles {
                 query_id: self.ctx.clone().get_id(),
@@ -495,7 +495,6 @@ impl ExplainInterpreter {
             };
             return Ok(Self::graphical_profiles_to_datablocks(profiles));
         }
-
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 

@@ -1191,7 +1191,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     match scalar_to_array_column(scalar.as_ref()) {
                         Ok(col) => {
                             let len = col.len();
-                            match eval_aggr(name, vec![], &[col.clone()], len, vec![]) {
+                            match eval_aggr(name, vec![], &[col.clone().into()], len, vec![]) {
                                 Ok((res_col, _)) => {
                                     let val = unsafe { res_col.index_unchecked(0) };
                                     Value::Scalar(val.to_owned())
@@ -1221,7 +1221,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     match scalar_to_array_column(scalar) {
                         Ok(col) => {
                             let len = col.len();
-                            match eval_aggr(name, vec![], &[col.clone()], len, vec![]) {
+                            match eval_aggr(name, vec![], &[col.clone().into()], len, vec![]) {
                                 Ok((col, _)) => {
                                     let val = unsafe { col.index_unchecked(0) };
                                     builder.push(val)

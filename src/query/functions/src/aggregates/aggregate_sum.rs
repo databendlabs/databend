@@ -29,7 +29,7 @@ use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
-use databend_common_expression::Column;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
@@ -50,10 +50,14 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
         None
     }
 
-    fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
+    fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
 
-    fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
-    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()>;
+    fn accumulate_row(&mut self, column: &BlockEntry, row: usize) -> Result<()>;
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        entry: &BlockEntry,
+    ) -> Result<()>;
 
     fn merge_result(
         &mut self,

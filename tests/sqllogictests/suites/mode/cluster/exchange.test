@@ -181,7 +181,6 @@ Exchange
     ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 2.00
     ├── Exchange(Build)
     │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
@@ -267,7 +266,6 @@ Fragment 2:
         ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
         ├── keys is null equal: [false]
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)
         │   ├── output columns: [sum(number) (#1), numbers.number (#0)]
@@ -573,7 +571,6 @@ Exchange
     ├── probe keys: []
     ├── keys is null equal: []
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 100000.00
     ├── Exchange(Build)
     │   ├── output columns: [numbers.number (#2)]
@@ -594,7 +591,6 @@ Exchange
         ├── probe keys: []
         ├── keys is null equal: []
         ├── filters: []
-        ├── build join filters:
         ├── estimated rows: 10000.00
         ├── Exchange(Build)
         │   ├── output columns: [numbers.number (#0)]
@@ -634,7 +630,7 @@ Exchange
     ├── probe keys: [t1.number (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
+    ├── build join filters(distributed):
     │   └── filter id:0, build key:t2.number (#1), probe key:t1.number (#0), filter type:inlist,min_max
     ├── estimated rows: 200.00
     ├── Exchange(Build)
