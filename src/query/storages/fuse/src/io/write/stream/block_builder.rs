@@ -36,6 +36,7 @@ use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
@@ -53,7 +54,7 @@ use parquet::file::properties::WriterProperties;
 use crate::io::create_inverted_index_builders;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
-use crate::io::write::stream::column_statistics::ColumnStatisticsState;
+use crate::io::write::stream::ColumnStatisticsState;
 use crate::io::write::InvertedIndexState;
 use crate::io::BlockSerialization;
 use crate::io::BloomIndexState;
@@ -263,7 +264,7 @@ impl StreamBlockBuilder {
     pub fn need_flush(&self) -> bool {
         let file_size = self.block_writer.compressed_size();
         self.row_count >= self.properties.block_thresholds.min_rows_per_block
-            || self.block_size >= self.properties.block_thresholds.max_bytes_per_block
+            || self.block_size >= self.properties.block_thresholds.min_bytes_per_block * 2
             || (file_size >= self.properties.block_thresholds.min_compressed_per_block
                 && self.block_size >= self.properties.block_thresholds.min_bytes_per_block)
     }
@@ -410,8 +411,8 @@ pub struct StreamBlockProperties {
     source_schema: TableSchemaRef,
 
     cluster_stats_builder: Arc<ClusterStatisticsBuilder>,
-    stats_columns: Vec<ColumnId>,
-    distinct_columns: Vec<ColumnId>,
+    stats_columns: Vec<(ColumnId, DataType)>,
+    distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
@@ -424,16 +425,23 @@ impl StreamBlockProperties {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         table: &FuseTable,
+        kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Arc<Self>> {
         // remove virtual computed fields.
-        let fields = table
+        let mut fields = table
             .schema()
             .fields()
             .iter()
             .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .cloned()
             .collect::<Vec<_>>();
+        if !matches!(kind, MutationKind::Insert | MutationKind::Replace) {
+            // add stream fields.
+            for stream_column in table.stream_columns().iter() {
+                fields.push(stream_column.table_field());
+            }
+        }
 
         let source_schema = Arc::new(TableSchema {
             fields,
@@ -464,12 +472,12 @@ impl StreamBlockProperties {
         let leaf_fields = source_schema.leaf_fields();
         for field in leaf_fields.iter() {
             let column_id = field.column_id();
-            if RangeIndex::supported_type(&DataType::from(field.data_type()))
-                && column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
+            let data_type = DataType::from(field.data_type());
+            if RangeIndex::supported_type(&data_type) && column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
             {
-                stats_columns.push(column_id);
+                stats_columns.push((column_id, data_type.clone()));
                 if !bloom_column_ids.contains(&column_id) {
-                    distinct_columns.push(column_id);
+                    distinct_columns.push((column_id, data_type));
                 }
             }
         }
