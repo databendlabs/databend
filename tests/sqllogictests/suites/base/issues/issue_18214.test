@@ -1,0 +1,31 @@
+# https://github.com/databendlabs/databend/issues/18214
+# bug: transient table corrupted during aborting transaction
+
+
+
+statement ok
+create or replace database issue_18214;
+
+statement ok
+use issue_18214;
+
+statement ok
+create or replace transient table t (c int);
+
+statement ok
+insert into t values(1);
+
+statement ok
+begin;
+
+statement ok
+insert into t values(2);
+
+statement ok
+abort;
+
+query T
+select * from t;
+----
+1
+

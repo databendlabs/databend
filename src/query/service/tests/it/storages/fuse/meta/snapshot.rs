@@ -17,16 +17,27 @@ use std::ops::Add;
 use std::sync::Arc;
 
 use databend_common_expression::TableSchema;
+use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::meta::testing::StatisticsV0;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV1;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
+
 fn default_snapshot() -> TableSnapshot {
     let schema = TableSchema::empty();
     let stats = Default::default();
-    TableSnapshot::try_new(None, None, schema, stats, vec![], None, Default::default()).unwrap()
+    TableSnapshot::try_new(
+        None,
+        None,
+        schema,
+        stats,
+        vec![],
+        None,
+        TestFixture::default_table_meta_timestamps(),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -46,7 +57,7 @@ fn snapshot_timestamp_monotonic_increase() {
         Default::default(),
         vec![],
         None,
-        Default::default(),
+        TestFixture::default_table_meta_timestamps(),
     )
     .unwrap();
     let current_ts = current.timestamp.unwrap();

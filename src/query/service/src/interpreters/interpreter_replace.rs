@@ -48,6 +48,7 @@ use databend_common_sql::ScalarBinder;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::ClusterType;
 use parking_lot::RwLock;
@@ -198,6 +199,7 @@ impl ReplaceInterpreter {
                 &self.plan.source,
                 self.plan.schema(),
                 &mut purge_info,
+                table_meta_timestamps,
             )
             .await?;
         if let Some(s) = &select_ctx {
@@ -394,6 +396,7 @@ impl ReplaceInterpreter {
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ReplaceSourceCtx> {
         match source {
             InsertInputSource::Values(source) => self
@@ -413,7 +416,7 @@ impl ReplaceInterpreter {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
                     let (physical_plan, _) = interpreter
-                        .build_physical_plan(table_info, &copy_plan)
+                        .build_physical_plan(table_info, &copy_plan, table_meta_timestamps)
                         .await?;
 
                     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan

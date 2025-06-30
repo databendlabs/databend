@@ -122,12 +122,26 @@ impl SegmentsDiff {
 
 #[cfg(test)]
 mod tests {
+    use chrono::Duration;
+    use databend_common_expression::TableSchema;
+    use databend_storages_common_table_meta::meta::Statistics;
+    use databend_storages_common_table_meta::meta::TableMetaTimestamps;
     use databend_storages_common_table_meta::meta::TableSnapshot;
 
     use super::*;
 
     fn snapshot_from_segments(segments: Vec<&str>) -> TableSnapshot {
-        let mut snapshot = TableSnapshot::new_empty_snapshot(Default::default(), None);
+        let mut snapshot = TableSnapshot::try_new(
+            None,
+            None,
+            TableSchema::default(),
+            Statistics::default(),
+            vec![],
+            None,
+            // Dummy timestamps for test
+            TableMetaTimestamps::new(None, Duration::hours(1)),
+        )
+        .unwrap();
         snapshot.segments = segments.iter().map(|s| (s.to_string(), 0)).collect();
         snapshot
     }

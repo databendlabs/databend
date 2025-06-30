@@ -252,6 +252,8 @@ async fn build_mutator(
         return Ok(None);
     }
 
+    let table_meta_timestamps = ctx.get_table_meta_timestamps(tbl, Some(base_snapshot.clone()))?;
+
     let block_per_seg = tbl.get_option("block_per_segment", 1000);
 
     let compact_params = CompactOptions {
@@ -267,6 +269,7 @@ async fn build_mutator(
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
         tbl.cluster_key_id(),
+        table_meta_timestamps,
     )?;
 
     if segment_mutator.target_select().await? {
@@ -669,6 +672,7 @@ impl CompactSegmentTestFixture {
             &fuse_segment_io,
             data_accessor,
             location_gen,
+            TestFixture::default_table_meta_timestamps(),
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -746,7 +750,8 @@ impl CompactSegmentTestFixture {
                         })
                     };
 
-                    let (location, _) = location_gen.gen_block_location(Default::default());
+                    let (location, _) = location_gen
+                        .gen_block_location(TestFixture::default_table_meta_timestamps());
                     let row_count = block.num_rows() as u64;
                     let block_size = block.memory_size() as u64;
 
@@ -782,7 +787,8 @@ impl CompactSegmentTestFixture {
                     stats_acc.add_block(block_meta).unwrap();
                 }
                 let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
-                let path = location_gen.gen_segment_info_location(Default::default(), false);
+                let path = location_gen
+                    .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
             });
@@ -1028,6 +1034,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             &fuse_segment_io,
             &data_accessor,
             &location_gen,
+            TestFixture::default_table_meta_timestamps(),
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

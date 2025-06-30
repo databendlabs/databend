@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Duration;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_storages_stage::StageSinkTable;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -32,7 +34,11 @@ impl PipelineBuilder {
             false,
         )?;
 
+        // The stage table that copying into
         let to_table = StageSinkTable::create(copy.info.clone(), copy.input_table_schema.clone())?;
+
+        // StageSinkTable needs not to hold the table meta timestamps invariants, just pass a dummy one
+        let dummy_table_meta_timestamps = TableMetaTimestamps::new(None, Duration::hours(1));
         PipelineBuilder::build_append2table_with_commit_pipeline(
             self.ctx.clone(),
             &mut self.main_pipeline,
@@ -42,7 +48,7 @@ impl PipelineBuilder {
             vec![],
             false,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-            Default::default(),
+            dummy_table_meta_timestamps,
         )
     }
 }

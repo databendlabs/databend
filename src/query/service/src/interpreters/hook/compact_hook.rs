@@ -165,6 +165,8 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
+    ctx.clear_table_meta_timestamps_cache();
+
     {
         // do compact.
         let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
