@@ -47,7 +47,10 @@ impl PhysicalPlanBuilder {
         stat_info: PlanStatsInfo,
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let left_side = Box::new(self.build(s_expr.child(0)?, materialized_cte.required.clone()).await?);
+        let left_side = Box::new(
+            self.build(s_expr.child(0)?, materialized_cte.required.clone())
+                .await?,
+        );
         let right_side = Box::new(self.build(s_expr.child(1)?, required).await?);
         Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
             plan_id: 0,

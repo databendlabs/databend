@@ -170,7 +170,7 @@ impl Binder {
 
                 let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
                     cte_name: table_name,
-                    cte_schema: cte_schema,
+                    cte_schema,
                 })));
                 return Ok((s_expr, new_bind_context));
             } else {

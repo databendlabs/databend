@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::hash::Hash;
+use std::hash::Hasher;
 
 use databend_common_expression::DataSchemaRef;
 
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use std::hash::Hasher;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTEConsumer {
