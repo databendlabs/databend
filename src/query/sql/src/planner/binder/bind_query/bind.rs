@@ -245,9 +245,12 @@ impl Binder {
             if cte.materialized {
                 let cte_name = self.normalize_identifier(&cte.alias.name).name;
 
+                let mut cte_context = cte_context.clone();
+                cte_context.cte_name = Some(cte_name.clone());
+
                 // Create a new bind context for the CTE definition
                 let mut cte_bind_context = BindContext {
-                    cte_context: cte_context.clone(),
+                    cte_context,
                     ..Default::default()
                 };
 

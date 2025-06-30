@@ -68,6 +68,15 @@ impl Binder {
             table_identifier.table_name_alias(),
         );
 
+        if let Some(cte_name) = &bind_context.cte_context.cte_name {
+            if cte_name == &table_name {
+                return Err(ErrorCode::SemanticError(format!(
+                    "The cte {table_name} is not recursive, but it references itself.",
+                ))
+                .set_span(*span));
+            }
+        }
+
         let (consume, max_batch_size, with_opts_str) = if let Some(with_options) = with_options {
             check_with_opt_valid(with_options)?;
             let consume = get_with_opt_consume(with_options)?;

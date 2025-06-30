@@ -163,15 +163,6 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        if let Some(cte_name) = &bind_context.cte_context.cte_name {
-            if cte_name == table_name {
-                return Err(ErrorCode::SemanticError(format!(
-                    "The cte {table_name} is not recursive, but it references itself.",
-                ))
-                .set_span(span));
-            }
-        }
-
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
