@@ -533,7 +533,7 @@ fn to_format_tree(
             children.push(to_format_tree(&plan.left, metadata, profs, context)?);
             children.push(to_format_tree(&plan.right, metadata, profs, context)?);
             Ok(FormatTreeNode::with_children(
-                "MaterializedCTE".to_string(),
+                format!("MaterializedCTE: {}", plan.cte_name),
                 children,
             ))
         }
