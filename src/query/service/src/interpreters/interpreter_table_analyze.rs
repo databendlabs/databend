@@ -124,13 +124,11 @@ impl Interpreter for AnalyzeTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // plan sql
-        let _table_info = table.get_table_info();
-
         let table_statistics = table
             .read_table_snapshot_statistics(Some(&snapshot))
             .await?;
 
+        // plan sql
         let (is_full, temporal_str) = if let Some(table_statistics) = &table_statistics {
             let is_full = match table
                 .navigate_to_point(
