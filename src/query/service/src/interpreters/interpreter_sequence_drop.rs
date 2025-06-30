@@ -53,7 +53,8 @@ impl Interpreter for DropSequenceInterpreter {
         };
         let catalog = self.ctx.get_default_catalog()?;
         let reply = catalog.drop_sequence(req).await?;
-        if reply.prev.is_none() && !self.plan.if_exists {
+
+        if !reply.success && !self.plan.if_exists {
             return Err(ErrorCode::UnknownSequence(format!(
                 "unknown sequence {:?}",
                 self.plan.ident.name()

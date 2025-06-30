@@ -897,13 +897,13 @@ impl IndexColumnIdNotFound {
 }
 
 #[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
-#[error("OutofSequenceRange: `{name}` while `{context}`")]
-pub struct OutofSequenceRange {
+#[error("OutOfSequenceRange: `{name}` while `{context}`")]
+pub struct OutOfSequenceRange {
     name: String,
     context: String,
 }
 
-impl OutofSequenceRange {
+impl OutOfSequenceRange {
     pub fn new(name: impl ToString, context: impl ToString) -> Self {
         Self {
             name: name.to_string(),
@@ -923,6 +923,18 @@ impl WrongSequenceCount {
         Self {
             name: name.to_string(),
         }
+    }
+}
+
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("UnsupportedSequenceStorageVersion: `{version}`")]
+pub struct UnsupportedSequenceStorageVersion {
+    version: u64,
+}
+
+impl UnsupportedSequenceStorageVersion {
+    pub fn new(version: u64) -> Self {
+        Self { version }
     }
 }
 
@@ -1157,10 +1169,13 @@ pub enum SequenceError {
     UnknownSequence(#[from] UnknownError<SequenceRsc>),
 
     #[error(transparent)]
-    OutofSequenceRange(#[from] OutofSequenceRange),
+    OutOfSequenceRange(#[from] OutOfSequenceRange),
 
     #[error(transparent)]
     WrongSequenceCount(#[from] WrongSequenceCount),
+
+    #[error(transparent)]
+    UnsupportedSequenceStorageVersion(#[from] UnsupportedSequenceStorageVersion),
 }
 
 impl AppErrorMessage for TenantIsEmpty {
@@ -1476,7 +1491,7 @@ impl AppErrorMessage for UnmatchMaskPolicyReturnType {
     }
 }
 
-impl AppErrorMessage for OutofSequenceRange {
+impl AppErrorMessage for OutOfSequenceRange {
     fn message(&self) -> String {
         format!("Sequence '{}' out of range", self.name)
     }
@@ -1488,6 +1503,15 @@ impl AppErrorMessage for WrongSequenceCount {
     }
 }
 
+impl AppErrorMessage for UnsupportedSequenceStorageVersion {
+    fn message(&self) -> String {
+        format!(
+            "Sequence storage version({}) is not supported",
+            self.version
+        )
+    }
+}
+
 impl AppErrorMessage for SequenceError {
     fn message(&self) -> String {
         match self {
@@ -1495,11 +1519,14 @@ impl AppErrorMessage for SequenceError {
                 format!("SequenceAlreadyExists: '{}'", e.message())
             }
             SequenceError::UnknownSequence(e) => format!("UnknownSequence: '{}'", e.message()),
-            SequenceError::OutofSequenceRange(e) => {
-                format!("OutofSequenceRange: '{}'", e.message())
+            SequenceError::OutOfSequenceRange(e) => {
+                format!("OutOfSequenceRange: '{}'", e.message())
             }
             SequenceError::WrongSequenceCount(e) => {
-                format!("SequenceAlreadyExists: '{}'", e.message())
+                format!("WrongSequenceCount: '{}'", e.message())
+            }
+            SequenceError::UnsupportedSequenceStorageVersion(e) => {
+                format!("UnsupportedSequenceStorageVersion: '{}'", e.message())
             }
         }
     }
@@ -1632,8 +1659,11 @@ impl From<SequenceError> for ErrorCode {
         match app_err {
             SequenceError::SequenceAlreadyExists(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::UnknownSequence(err) => ErrorCode::SequenceError(err.message()),
-            SequenceError::OutofSequenceRange(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::OutOfSequenceRange(err) => ErrorCode::SequenceError(err.message()),
             SequenceError::WrongSequenceCount(err) => ErrorCode::SequenceError(err.message()),
+            SequenceError::UnsupportedSequenceStorageVersion(err) => {
+                ErrorCode::SequenceError(err.message())
+            }
         }
     }
 }
