@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::plan::{DataSourcePlan, StageTableInfo};
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -25,11 +25,13 @@ use crate::executor::physical_plan::PhysicalPlan;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::ValidationMode;
 use crate::ColumnBinding;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
     pub plan_id: u32,
 
+    meta: PhysicalPlanMeta,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
     pub required_source_schema: DataSchemaRef,
@@ -44,14 +46,36 @@ pub struct CopyIntoTable {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
-pub enum CopyIntoTableSource {
-    Query(Box<PhysicalPlan>),
-    Stage(Box<PhysicalPlan>),
-}
+impl IPhysicalPlan for CopyIntoTable {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
 
-impl CopyIntoTable {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRefExt::create(vec![]))
     }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        match &self.source {
+            CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
+            CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
+        }
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        match &mut self.source {
+            CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
+            CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, EnumAsInner)]
+pub enum CopyIntoTableSource {
+    Query(Box<dyn IPhysicalPlan>),
+    Stage(Box<dyn IPhysicalPlan>),
 }

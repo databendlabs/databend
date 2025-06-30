@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use crate::executor::{IPhysicalPlan, PhysicalPlanMeta};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
+    meta: PhysicalPlanMeta,
 
     // Output schema of exchanged data
     pub schema: DataSchemaRef,
@@ -28,8 +31,20 @@ pub struct ExchangeSource {
     pub query_id: String,
 }
 
-impl ExchangeSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+impl IPhysicalPlan for ExchangeSource {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
+    }
+
+    fn is_distributed_plan(&self) -> bool {
+        true
     }
 }

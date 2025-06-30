@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -25,7 +26,7 @@ use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::physical_plans::WindowPartition;
 use crate::executor::physical_plans::WindowPartitionTopN;
 use crate::executor::physical_plans::WindowPartitionTopNFunc;
-use crate::executor::PhysicalPlan;
+use crate::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncType;
@@ -36,7 +37,8 @@ use crate::IndexType;
 pub struct Sort {
     /// A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub order_by: Vec<SortDesc>,
     /// limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
@@ -49,21 +51,16 @@ pub struct Sort {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl Sort {
-    fn order_col_type(&self, schema: &DataSchema) -> Result<DataType> {
-        if self.order_by.len() == 1 {
-            let order_by_field = schema.field_with_name(&self.order_by[0].order_by.to_string())?;
-            if matches!(
-                order_by_field.data_type(),
-                DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
-            ) {
-                return Ok(order_by_field.data_type().clone());
-            }
-        }
-        Ok(DataType::Binary)
+impl IPhysicalPlan for Sort {
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
     }
 
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
         if matches!(self.after_exchange, Some(true)) {
@@ -99,6 +96,34 @@ impl Sort {
         }
 
         Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a self) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
+}
+
+impl Sort {
+    fn order_col_type(&self, schema: &DataSchema) -> Result<DataType> {
+        if self.order_by.len() == 1 {
+            let order_by_field = schema.field_with_name(&self.order_by[0].order_by.to_string())?;
+            if matches!(
+                order_by_field.data_type(),
+                DataType::Number(_) | DataType::Date | DataType::Timestamp | DataType::String
+            ) {
+                return Ok(order_by_field.data_type().clone());
+            }
+        }
+        Ok(DataType::Binary)
     }
 }
 
