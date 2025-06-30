@@ -200,4 +200,48 @@ statement ok
 DROP TABLE t_string
 
 statement ok
+create or replace table t2(a int, b int);
+
+query I
+insert into t2 values(1,1),(2,2);
+----
+2
+
+query I
+insert into t2 values(2,2),(4,4);
+----
+2
+
+query I
+delete from t2 where a=1;
+----
+1
+
+statement ok
+analyze table t2 noscan;
+
+query TII
+select name, row_count, ndv from system.columns where table = 't2' and database = 'db_09_0020' order by name;
+----
+a 3 3
+b 3 3
+
+statement ok
+analyze table t2;
+
+query TII
+select name, row_count, ndv from system.columns where table = 't2' and database = 'db_09_0020' order by name;
+----
+a 3 2
+b 3 2
+
+query I
+select count() from fuse_snapshot('db_09_0020','t2');
+----
+5
+
+statement ok
+DROP TABLE t2;
+
+statement ok
 DROP DATABASE db_09_0020

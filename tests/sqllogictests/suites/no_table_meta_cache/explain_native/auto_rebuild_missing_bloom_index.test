@@ -116,7 +116,7 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 1, bloom pruning: 1 to 0>]
 ├── push downs: [filters: [is_true(t.s (#1) = '12')], limit: NONE]
-└── estimated rows: 2.00
+└── estimated rows: 2.67
 
 query TT
 select * from t where s = '12';

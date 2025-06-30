@@ -89,7 +89,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
-    mutator.try_commit(table.clone()).await?;
+    mutator.try_commit(fuse_table).await?;
 
     // check segment count
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -134,7 +134,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let num_inserts = 9;
     fixture.append_rows(num_inserts).await?;
 
-    mutator.try_commit(table.clone()).await?;
+    mutator.try_commit(fuse_table).await?;
 
     // check segment count
     let count_seg = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -194,7 +194,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     }
 
     // the compact operation committed latter should be failed.
-    let r = mutator.try_commit(table.clone()).await;
+    let r = mutator.try_commit(fuse_table).await;
     assert!(r.is_err());
     assert_eq!(r.err().unwrap().code(), ErrorCode::UNRESOLVABLE_CONFLICT);
 
@@ -232,7 +232,7 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
 pub async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
-    mutator.try_commit(table.clone()).await
+    mutator.try_commit(fuse_table).await
 }
 
 async fn build_mutator(

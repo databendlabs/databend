@@ -1170,13 +1170,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3
+            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN?
         },
-        |(_, _, (catalog, database, table))| {
+        |(_, _, (catalog, database, table), no_scan)| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
                 catalog,
                 database,
                 table,
+                no_scan: no_scan.is_some(),
             })
         },
     );

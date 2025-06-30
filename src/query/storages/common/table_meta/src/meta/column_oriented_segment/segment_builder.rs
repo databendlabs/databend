@@ -349,9 +349,13 @@ impl ColumnOrientedSegmentBuilder {
                 .unwrap_or(Scalar::Null);
             let null_count = col_stat.null_count.iter().sum();
             let in_memory_size = col_stat.in_memory_size.iter().sum();
+            let distinct_of_values = col_stat
+                .distinct_of_values
+                .iter()
+                .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
             col_stats.insert(
                 col_id,
-                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+                ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values),
             );
             col_stat.min = ColumnBuilder::from_column(mins);
             col_stat.max = ColumnBuilder::from_column(maxs);

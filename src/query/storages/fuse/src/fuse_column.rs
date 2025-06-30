@@ -36,12 +36,14 @@ impl FuseTableColumnStatisticsProvider {
         column_distinct_values: Option<HashMap<ColumnId, u64>>,
         row_count: u64,
     ) -> Self {
+        let distinct_map = column_distinct_values.as_ref();
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = column_distinct_values.as_ref().map_or(row_count, |map| {
-                    map.get(&column_id).map_or(row_count, |v| *v)
-                });
+                let ndv = distinct_map
+                    .and_then(|map| map.get(&column_id).cloned())
+                    .or(stat.distinct_of_values)
+                    .unwrap_or(row_count);
                 let stat = BasicColumnStatistics {
                     min: Datum::from_scalar(stat.min),
                     max: Datum::from_scalar(stat.max),

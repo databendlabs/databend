@@ -868,6 +868,8 @@ pub enum TokenKind {
     NO_PASSWORD,
     #[token("NONE", ignore(ascii_case))]
     NONE,
+    #[token("NOSCAN", ignore(ascii_case))]
+    NOSCAN,
     #[token("NOT", ignore(ascii_case))]
     NOT,
     #[token("NOTENANTSETTING", ignore(ascii_case))]
