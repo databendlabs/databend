@@ -70,7 +70,7 @@ impl FuseTable {
             return Ok(());
         }
 
-        segment_compactor.try_commit(Arc::new(self.clone())).await
+        segment_compactor.try_commit(self).await
     }
 
     #[async_backtrace::framed]
