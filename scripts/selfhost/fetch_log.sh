@@ -43,7 +43,7 @@ OPTIONS:
     -h, --help             Show this help message
 
 ARGUMENTS:
-    YYYYMMDD              Date in YYYYMMDD format (e.g., 20231225)
+    YYYYMMDD              Date in YYYYMMDD format (e.g., 20250701)
 
 ENVIRONMENT VARIABLES:
     BENDSQL_DSN           Default database connection string
