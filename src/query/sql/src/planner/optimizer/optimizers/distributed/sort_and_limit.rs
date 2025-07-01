@@ -23,18 +23,15 @@ use crate::plans::Limit;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Sort;
-use crate::plans::SortStep;
 
 pub struct SortAndLimitPushDownOptimizer {
-    range_shuffle: bool,
     sort_matcher: Matcher,
     limit_matcher: Matcher,
 }
 
 impl SortAndLimitPushDownOptimizer {
-    pub fn create(range_shuffle: bool) -> Self {
+    pub fn create() -> Self {
         Self {
-            range_shuffle,
             sort_matcher: Self::sort_matcher(),
             limit_matcher: Self::limit_matcher(),
         }
@@ -49,6 +46,14 @@ impl SortAndLimitPushDownOptimizer {
         //     Exchange
         //      \
         //       *
+        // Output:
+        //   Sort (after_exchange = true)
+        //    \
+        //     Exchange
+        //      \
+        //       Sort (after_exchange = false)
+        //        \
+        //         *
         Matcher::MatchOp {
             op_type: RelOp::Sort,
             children: vec![Matcher::MatchOp {
@@ -90,24 +95,11 @@ impl SortAndLimitPushDownOptimizer {
             replaced_children.push(Arc::new(new_child));
         }
         let new_sexpr = s_expr.replace_children(replaced_children);
-
-        let apply_topn_res = if self.range_shuffle {
-            self.apply_shuffle_sort(&new_sexpr)?
-        } else {
-            self.apply_dist_sort(&new_sexpr)?
-        };
+        let apply_topn_res = self.apply_sort(&new_sexpr)?;
         self.apply_limit(&apply_topn_res)
     }
 
-    fn apply_dist_sort(&self, s_expr: &SExpr) -> Result<SExpr> {
-        // Output:
-        //   Sort (FinalMerge)
-        //    \
-        //     Exchange
-        //      \
-        //       Sort (Partial)
-        //        \
-        //         *
+    fn apply_sort(&self, s_expr: &SExpr) -> Result<SExpr> {
         if !self.sort_matcher.matches(s_expr) {
             return Ok(s_expr.clone());
         }
@@ -131,7 +123,7 @@ impl SortAndLimitPushDownOptimizer {
             SExpr::create_unary(
                 Arc::new(
                     Sort {
-                        step: SortStep::Partial,
+                        after_exchange: Some(false),
                         ..sort.clone()
                     }
                     .into(),
@@ -142,78 +134,12 @@ impl SortAndLimitPushDownOptimizer {
         Ok(SExpr::create_unary(
             Arc::new(
                 Sort {
-                    step: SortStep::FinalMerge,
+                    after_exchange: Some(true),
                     ..sort.clone()
                 }
                 .into(),
             ),
             Arc::new(new_exchange),
-        ))
-    }
-
-    fn apply_shuffle_sort(&self, s_expr: &SExpr) -> Result<SExpr> {
-        // Output:
-        //   Sort (Route)
-        //    \
-        //     Exchange
-        //      \
-        //       Sort (RangeSort)
-        //        \
-        //         Exchange
-        //          \
-        //           Sort (Sample)
-        //            \
-        //             *
-        if !self.sort_matcher.matches(s_expr) {
-            return Ok(s_expr.clone());
-        }
-
-        let exchange_sexpr = s_expr.unary_child();
-        match exchange_sexpr.plan() {
-            RelOperator::Exchange(exchange) => match exchange {
-                // this is window shuffle sort
-                Exchange::Hash(_) => return Ok(s_expr.clone()),
-                Exchange::Merge | Exchange::MergeSort => {}
-                Exchange::Broadcast => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
-
-        let sort = s_expr.plan.as_sort().unwrap();
-
-        let input = exchange_sexpr.unary_child_arc();
-
-        let sort_simple = SExpr::create_unary(
-            Arc::new(
-                Sort {
-                    step: SortStep::Sample,
-                    ..sort.clone()
-                }
-                .into(),
-            ),
-            input,
-        );
-        let exchange1 = SExpr::create_unary(Arc::new(Exchange::MergeSort.into()), sort_simple);
-        let sort_range = SExpr::create_unary(
-            Arc::new(
-                Sort {
-                    step: SortStep::RangeSort,
-                    ..sort.clone()
-                }
-                .into(),
-            ),
-            exchange1,
-        );
-        let exchange2 = SExpr::create_unary(Arc::new(Exchange::MergeSort.into()), sort_range);
-        Ok(SExpr::create_unary(
-            Arc::new(
-                Sort {
-                    step: SortStep::Route,
-                    ..sort.clone()
-                }
-                .into(),
-            ),
-            exchange2,
         ))
     }
 

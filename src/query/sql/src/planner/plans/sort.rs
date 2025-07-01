@@ -34,7 +34,7 @@ pub struct Sort {
     pub items: Vec<SortItem>,
     pub limit: Option<usize>,
 
-    pub step: SortStep,
+    pub after_exchange: Option<bool>,
 
     /// The columns needed by the plan after the sort plan.
     /// It's used to build a projection operation before building the sort operator.
@@ -42,21 +42,6 @@ pub struct Sort {
 
     /// If sort is for window clause, we need the input to exchange by partitions
     pub window_partition: Option<WindowPartition>,
-}
-
-#[derive(Debug, Hash, Clone, Copy, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-pub enum SortStep {
-    // single node mode
-    Single,
-
-    // cluster mode
-    Partial,    // before the exchange plan
-    FinalMerge, // after the exchange plan
-
-    // range shuffle mode
-    Sample,
-    RangeSort,
-    Route,
 }
 
 impl Sort {

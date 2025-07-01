@@ -26,7 +26,6 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::plans::SortItem;
-use crate::plans::SortStep;
 
 /// Input:  Limit | Sort
 ///           \
@@ -111,7 +110,7 @@ impl RulePushDownRankLimitAggregate {
         let sort = Sort {
             items: sort_items.clone(),
             limit: Some(count),
-            step: SortStep::Single,
+            after_exchange: None,
             pre_projection: None,
             window_partition: None,
         };
