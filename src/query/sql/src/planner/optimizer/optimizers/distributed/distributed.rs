@@ -40,7 +40,9 @@ impl DistributedOptimizer {
     pub fn new(opt_ctx: Arc<OptimizerContext>) -> Self {
         Self {
             ctx: opt_ctx.get_table_ctx(),
-            sort_limit_optimizer: SortAndLimitPushDownOptimizer::create(),
+            sort_limit_optimizer: SortAndLimitPushDownOptimizer::create(
+                opt_ctx.get_enable_range_shuffle_sort(),
+            ),
         }
     }
 

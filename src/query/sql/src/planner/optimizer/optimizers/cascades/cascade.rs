@@ -95,7 +95,9 @@ impl CascadesOptimizer {
             Ok(expr) => {
                 // After successful optimization, apply sort and limit push down if distributed optimization is enabled
                 if opt_ctx.get_enable_distributed_optimization() {
-                    let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create();
+                    let sort_and_limit_optimizer = SortAndLimitPushDownOptimizer::create(
+                        opt_ctx.get_enable_range_shuffle_sort(),
+                    );
                     sort_and_limit_optimizer.optimize(&expr)?
                 } else {
                     expr

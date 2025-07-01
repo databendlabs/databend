@@ -106,7 +106,7 @@ pub use physical_replace_async_source::ReplaceAsyncSourcer;
 pub use physical_replace_deduplicate::*;
 pub use physical_replace_into::ReplaceInto;
 pub use physical_row_fetch::RowFetch;
-pub use physical_sort::*;
+pub use physical_sort::Sort;
 pub use physical_table_scan::TableScan;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;

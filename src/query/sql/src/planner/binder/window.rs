@@ -38,6 +38,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::plans::SortStep;
 use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 use crate::plans::Window;
@@ -655,7 +656,7 @@ pub fn bind_window_function_info(
         let sort_plan = Sort {
             items: sort_items,
             limit: None,
-            after_exchange: None,
+            step: SortStep::Single,
             pre_projection: None,
             window_partition: if window_plan.partition_by.is_empty() {
                 None

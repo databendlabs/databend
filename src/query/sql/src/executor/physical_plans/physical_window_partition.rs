@@ -16,9 +16,9 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plans::physical_sort::SortStep;
 use crate::executor::physical_plans::SortDesc;
 use crate::executor::PhysicalPlan;
+use crate::plans::SortStep;
 use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

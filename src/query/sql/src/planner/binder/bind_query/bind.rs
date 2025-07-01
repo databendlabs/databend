@@ -48,6 +48,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::plans::SortStep;
 use crate::NameResolutionContext;
 
 #[derive(Debug, Default, Visitor)]
@@ -234,7 +235,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
-            after_exchange: None,
+            step: SortStep::Single,
             pre_projection: None,
             window_partition: None,
         };

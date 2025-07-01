@@ -33,6 +33,7 @@ pub struct OptimizerContext {
 
     // Optimizer configurations
     enable_distributed_optimization: RwLock<bool>,
+    enable_range_shuffle_sort: RwLock<bool>,
     enable_join_reorder: RwLock<bool>,
     enable_dphyp: RwLock<bool>,
     max_push_down_limit: RwLock<usize>,
@@ -56,6 +57,7 @@ impl OptimizerContext {
             metadata,
 
             enable_distributed_optimization: RwLock::new(false),
+            enable_range_shuffle_sort: RwLock::new(false),
             enable_join_reorder: RwLock::new(true),
             enable_dphyp: RwLock::new(true),
             max_push_down_limit: RwLock::new(10000),
@@ -71,6 +73,7 @@ impl OptimizerContext {
         *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
         *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
         *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
+        *self.enable_range_shuffle_sort.write() = settings.get_enable_range_shuffle_sort()?;
 
         Ok(self)
     }
@@ -95,6 +98,10 @@ impl OptimizerContext {
     fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
         *self.enable_join_reorder.write() = enable;
         self
+    }
+
+    pub fn get_enable_range_shuffle_sort(&self) -> bool {
+        *self.enable_range_shuffle_sort.read()
     }
 
     pub fn get_enable_join_reorder(&self) -> bool {

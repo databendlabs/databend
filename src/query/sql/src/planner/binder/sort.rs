@@ -38,6 +38,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::plans::SortStep;
 use crate::plans::UDFCall;
 use crate::plans::VisitorMut as _;
 use crate::BindContext;
@@ -221,7 +222,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
-            after_exchange: None,
+            step: SortStep::Single,
             pre_projection: None,
             window_partition: None,
         };

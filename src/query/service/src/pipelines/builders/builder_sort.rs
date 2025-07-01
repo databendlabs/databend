@@ -29,7 +29,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Sort;
-use databend_common_sql::executor::physical_plans::SortStep;
+use databend_common_sql::plans::SortStep;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
