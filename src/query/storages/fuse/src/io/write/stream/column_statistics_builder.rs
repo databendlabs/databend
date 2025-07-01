@@ -212,15 +212,23 @@ where
 {
     fn update_column(&mut self, column: &Column) {
         self.in_memory_size += column.memory_size();
-        let (column, validity) = if let Column::Nullable(box inner) = column {
-            let validity = if inner.validity.null_count() == 0 {
-                None
-            } else {
-                Some(&inner.validity)
-            };
-            (&inner.column, validity)
-        } else {
-            (column, None)
+        if column.len() == 0 {
+            return;
+        }
+        let (column, validity) = match column {
+            Column::Nullable(box inner) => {
+                let validity = if inner.validity.null_count() == 0 {
+                    None
+                } else {
+                    Some(&inner.validity)
+                };
+                (&inner.column, validity)
+            }
+            Column::Null { len } => {
+                self.null_count += *len;
+                return;
+            }
+            col => (col, None),
         };
         self.null_count += validity.map_or(0, |v| v.null_count());
 

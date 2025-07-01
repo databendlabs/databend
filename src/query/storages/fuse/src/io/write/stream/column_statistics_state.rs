@@ -92,9 +92,22 @@ impl ColumnStatisticsState {
         for (id, stats) in self.col_stats {
             let mut col_stats = stats.finalize()?;
             if let Some(count) = column_distinct_count.get(&id) {
-                col_stats.distinct_of_values = Some(*count as u64);
+                // value calculated by xor hash function include NULL, need to subtract one.
+                let distinct_of_values = if col_stats.null_count > 0 {
+                    *count as u64 - 1
+                } else {
+                    *count as u64
+                };
+                col_stats.distinct_of_values = Some(distinct_of_values);
             } else if let Some(estimator) = self.distinct_columns.get(&id) {
                 col_stats.distinct_of_values = Some(estimator.finalize());
+            } else {
+                assert_eq!(col_stats.min, col_stats.max);
+                if col_stats.min.is_null() {
+                    col_stats.distinct_of_values = Some(0);
+                } else {
+                    col_stats.distinct_of_values = Some(1);
+                }
             }
             statistics.insert(id, col_stats);
         }
