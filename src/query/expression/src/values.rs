@@ -104,6 +104,8 @@ pub enum Value<T: AccessType> {
     Column(T::Column),
 }
 
+/// Note:
+/// We must modify IndexScalar if we modify Scalar
 #[derive(
     Debug, Clone, EnumAsInner, Eq, Serialize, Deserialize, BorshSerialize, BorshDeserialize,
 )]
