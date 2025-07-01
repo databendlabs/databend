@@ -64,6 +64,7 @@ watcher = { workspace = true }
 
 [dev-dependencies]
 databend-common-meta-cache = { workspace = true }
+databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }

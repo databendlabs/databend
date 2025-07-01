@@ -112,9 +112,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         // V1 sequence stores the value in a separate key.
 
         let storage_ident = SequenceStorageIdent::new_from(name_ident.clone());
-        let x = self.get_pb(&storage_ident).await?;
+        let storage_value = self.get_pb(&storage_ident).await?;
 
-        let next_available = x.map(|seqv| *seqv.data.deref()).unwrap_or(0);
+        // If the storage value is removed, the sequence meta must also be removed.
+        let Some(storage_value) = storage_value else {
+            return Ok(None);
+        };
+
+        let next_available = *storage_value.data.deref();
 
         seq_meta.data.current = next_available;
         Ok(Some(seq_meta))
@@ -216,7 +221,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                     });
                 }
                 Err(_e) => {
-                    // continue
+                    // conflict, continue
                 }
             }
         }

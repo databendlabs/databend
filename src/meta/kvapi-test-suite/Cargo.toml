@@ -1,5 +1,5 @@
 [package]
-name = "databend-common-meta-kvapi"
+name = "databend-common-meta-kvapi-test-suite"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -10,13 +10,12 @@ edition = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-async-trait = { workspace = true }
-databend-common-meta-app-types = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
-futures-util = { workspace = true }
+display-more = { workspace = true }
+fastrace = { workspace = true }
 log = { workspace = true }
-serde = { workspace = true }
-thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true

@@ -12,22 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-use std::sync::Mutex;
+#![allow(clippy::uninlined_format_args)]
 
-use test_harness::test;
-
-use crate::testing::meta_service_test_harness;
-use crate::tests::service::MetaSrvBuilder;
-
-#[test(harness = meta_service_test_harness)]
-#[fastrace::trace]
-async fn test_metasrv_kv_api() -> anyhow::Result<()> {
-    let builder = MetaSrvBuilder {
-        test_contexts: Arc::new(Mutex::new(vec![])),
-    };
-
-    databend_common_meta_kvapi_test_suite::TestSuite {}
-        .test_all(builder)
-        .await
-}
+mod test_suite;
+pub use test_suite::TestSuite;

@@ -35,5 +35,7 @@ impl kvapi::ApiBuilder<LocalMetaService> for MetaNodeUnitTestBuilder {
 async fn test_meta_node_kv_api() -> anyhow::Result<()> {
     let builder = MetaNodeUnitTestBuilder {};
 
-    kvapi::TestSuite {}.test_single_node(&builder).await
+    databend_common_meta_kvapi_test_suite::TestSuite {}
+        .test_single_node(&builder)
+        .await
 }
