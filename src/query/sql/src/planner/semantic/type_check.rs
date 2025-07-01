@@ -4376,7 +4376,15 @@ impl<'a> TypeChecker<'a> {
         } else {
             Cow::Borrowed(like_str)
         };
-        if check_const(&new_like_str) {
+        if check_percent(&new_like_str) {
+            // Convert to `a is not null`
+            let is_not_null = Expr::IsNull {
+                span: None,
+                expr: Box::new(left.clone()),
+                not: true,
+            };
+            self.resolve(&is_not_null)
+        } else if check_const(&new_like_str) {
             // Convert to equal comparison
             self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
         } else if check_prefix(&new_like_str) {
@@ -5702,6 +5710,11 @@ pub fn validate_function_arg(
             }
         }
     }
+}
+
+// optimize special cases for like expression
+fn check_percent(like_str: &str) -> bool {
+    !like_str.is_empty() && like_str.chars().all(|c| c == '%')
 }
 
 // Some check functions for like expression
