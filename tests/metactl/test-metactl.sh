@@ -6,7 +6,6 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
-meta_json_v002="$SCRIPT_PATH/meta_v002.txt"
 meta_json_v003="$SCRIPT_PATH/meta_v003.txt"
 meta_json_v004="$SCRIPT_PATH/meta_v004.txt"
 want_exported_v004="$SCRIPT_PATH/want_exported_v004"
@@ -85,7 +84,6 @@ metactl_import_export () {
     sleep 1
 }
 
-metactl_import_export 'V002' "$meta_json_v002" "$want_exported_v004" "$want_snapshot_v004"
 metactl_import_export 'V003' "$meta_json_v003" "$want_exported_v004" "$want_snapshot_v004"
 metactl_import_export 'V004' "$meta_json_v004" "$want_exported_v004" "$want_snapshot_v004"
 
