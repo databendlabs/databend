@@ -101,13 +101,12 @@ impl ColumnStatisticsState {
                 col_stats.distinct_of_values = Some(distinct_of_values);
             } else if let Some(estimator) = self.distinct_columns.get(&id) {
                 col_stats.distinct_of_values = Some(estimator.finalize());
-            } else {
-                if col_stats.min == col_stats.max {
-                    if col_stats.min.is_null() {
-                        col_stats.distinct_of_values = Some(0);
-                    } else {
-                        col_stats.distinct_of_values = Some(1);
-                    }
+            } else if col_stats.min == col_stats.max {
+                // Bloom index will skip the large string column, it also no need to calc distinct values.
+                if col_stats.min.is_null() {
+                    col_stats.distinct_of_values = Some(0);
+                } else {
+                    col_stats.distinct_of_values = Some(1);
                 }
             }
             statistics.insert(id, col_stats);
