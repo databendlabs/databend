@@ -57,8 +57,6 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
     ) -> Result<Result<(u64, u64), &'static str>, KVAppError> {
         debug!("{}", func_name!());
 
-        let sequence_seq = self.sequence_meta.seq;
-
         let start = self.sequence_meta.current;
         if u64::MAX - start < count {
             return Err(KVAppError::AppError(AppError::SequenceError(
@@ -77,7 +75,7 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         // update meta
         self.sequence_meta.current += count;
 
-        let condition = vec![txn_cond_eq_seq(&self.ident, sequence_seq)];
+        let condition = vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)];
         let if_then = vec![
             txn_op_put_pb(&self.ident, &self.sequence_meta.data, None)?, // name -> meta
         ];
@@ -111,14 +109,14 @@ where KV: kvapi::KVApi<Error = MetaError> + ?Sized
         let storage_ident = SequenceStorageIdent::new_from(self.ident.clone());
         let storage_key = storage_ident.to_string_key();
 
-        let sequence_seq = self.sequence_meta.seq;
-        let sequence_meta = self.sequence_meta.data.clone();
+        let sequence_meta = &self.sequence_meta.data;
 
         let delta = count * (self.sequence_meta.step as u64);
 
-        let txn = TxnRequest::new(vec![txn_cond_eq_seq(&self.ident, sequence_seq)], vec![
-            TxnOp::fetch_add_u64(&storage_key, delta as i64),
-        ]);
+        let txn = TxnRequest::new(
+            vec![txn_cond_eq_seq(&self.ident, self.sequence_meta.seq)],
+            vec![TxnOp::fetch_add_u64(&storage_key, delta as i64)],
+        );
 
         let (succ, responses) = send_txn(self.kv_api, txn).await?;
 
