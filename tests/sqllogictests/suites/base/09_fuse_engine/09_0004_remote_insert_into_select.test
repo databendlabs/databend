@@ -8,9 +8,6 @@ statement ok
 USE db_09_004
 
 statement ok
-set enable_block_stream_write = 1
-
-statement ok
 CREATE TABLE IF NOT EXISTS t1(a UInt8 not null, b UInt64 not null, c Int8 not null, d Int64 not null, e Date not null, f Date not null, g DateTime not null, h String not null) Engine = Fuse
 
 statement ok

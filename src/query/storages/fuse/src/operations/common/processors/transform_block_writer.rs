@@ -63,7 +63,7 @@ pub struct TransformBlockBuilder {
     input_data_size: usize,
     input_num_rows: usize,
 
-    input_data: VecDeque<DataBlock>,
+    input_data: VecDeque<(usize, DataBlock)>,
     output_data: Option<DataBlock>,
 }
 
@@ -97,14 +97,15 @@ impl TransformBlockBuilder {
     }
 
     fn split_input(&self, input: DataBlock) -> Vec<DataBlock> {
-        let min_bytes_per_block = self.properties.block_thresholds.min_bytes_per_block;
         let block_size = input.estimate_block_size();
-        if block_size <= min_bytes_per_block {
-            return vec![input];
-        }
         let num_rows = input.num_rows();
         let average_row_size = block_size.div_ceil(num_rows);
-        let max_rows = min_bytes_per_block.div_ceil(average_row_size);
+        let max_rows = self
+            .properties
+            .block_thresholds
+            .min_bytes_per_block
+            .div_ceil(average_row_size)
+            .min(self.properties.block_thresholds.max_rows_per_block);
         input.split_by_rows_no_tail(max_rows)
     }
 }
@@ -181,14 +182,16 @@ impl Processor for TransformBlockBuilder {
             State::Collect(block) => {
                 // Check if the datablock is valid, this is needed to ensure data is correct
                 block.check_valid()?;
-                self.input_data_size += block.estimate_block_size();
                 self.input_num_rows += block.num_rows();
-                let blocks = self.split_input(block);
-                self.input_data.extend(blocks);
+                for block in self.split_input(block) {
+                    let block_size = block.estimate_block_size();
+                    self.input_data_size += block_size;
+                    self.input_data.push_back((block_size, block));
+                }
             }
             State::Serialize => {
-                while let Some(b) = self.input_data.pop_front() {
-                    self.input_data_size -= b.estimate_block_size();
+                while let Some((block_size, b)) = self.input_data.pop_front() {
+                    self.input_data_size -= block_size;
                     self.input_num_rows -= b.num_rows();
 
                     let builder = self.get_or_create_builder()?;
@@ -201,7 +204,7 @@ impl Processor for TransformBlockBuilder {
                 }
             }
             State::Finalize => {
-                while let Some(b) = self.input_data.pop_front() {
+                while let Some((_, b)) = self.input_data.pop_front() {
                     let builder = self.get_or_create_builder()?;
                     builder.write(b)?;
                 }

@@ -102,11 +102,12 @@ impl ColumnStatisticsState {
             } else if let Some(estimator) = self.distinct_columns.get(&id) {
                 col_stats.distinct_of_values = Some(estimator.finalize());
             } else {
-                assert_eq!(col_stats.min, col_stats.max);
-                if col_stats.min.is_null() {
-                    col_stats.distinct_of_values = Some(0);
-                } else {
-                    col_stats.distinct_of_values = Some(1);
+                if col_stats.min == col_stats.max {
+                    if col_stats.min.is_null() {
+                        col_stats.distinct_of_values = Some(0);
+                    } else {
+                        col_stats.distinct_of_values = Some(1);
+                    }
                 }
             }
             statistics.insert(id, col_stats);
