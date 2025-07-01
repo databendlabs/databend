@@ -23,7 +23,6 @@ futures-util = { workspace = true }
 msql-srv = "0.11.0"
 mysql_async = { workspace = true }
 mysql_common = "0.32.4"
-proc-macro2 = { version = "=1.0.83" }
 rand = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
