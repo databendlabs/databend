@@ -14,10 +14,16 @@
 
 use std::hash::Hash;
 
+use crate::optimizer::ir::RelExpr;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::ColumnSet;
+use std::sync::Arc;
 
+use databend_common_exception::Result;
+use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::StatInfo;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
@@ -33,5 +39,25 @@ impl MaterializedCTE {
 impl Operator for MaterializedCTE {
     fn rel_op(&self) -> RelOp {
         RelOp::MaterializedCTE
+    }
+
+    /// Get arity of this operator
+    fn arity(&self) -> usize {
+        2
+    }
+
+    /// Derive relational property
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        rel_expr.derive_relational_prop_child(1)
+    }
+
+    /// Derive physical property
+    fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        rel_expr.derive_physical_prop_child(1)
+    }
+
+    /// Derive statistics information
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(1)
     }
 }

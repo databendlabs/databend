@@ -16,6 +16,7 @@ use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::hash::Hash;
+use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
@@ -47,6 +48,8 @@ use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use std::sync::Mutex;
+use crate::optimizer::ir::StatInfo;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
@@ -160,7 +163,6 @@ pub struct CteContext {
     /// If the `BindContext` is created from a CTE, record the cte name
     pub cte_name: Option<String>,
     pub cte_map: Box<IndexMap<String, CteInfo>>,
-    pub is_binding_materialized_cte: bool,
 }
 
 impl CteContext {
@@ -199,6 +201,7 @@ pub struct CteInfo {
     pub recursive: bool,
     // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
+    pub stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
 }
 
 impl BindContext {

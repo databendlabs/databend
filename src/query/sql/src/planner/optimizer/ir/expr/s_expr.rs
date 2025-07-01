@@ -83,6 +83,23 @@ impl SExpr {
         }
     }
 
+    pub fn create_with_shared_stat_info(
+        plan: Arc<RelOperator>,
+        children: impl Into<Vec<Arc<SExpr>>>,
+        original_group: Option<IndexType>,
+        rel_prop: Option<Arc<RelationalProperty>>,
+        stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
+    ) -> Self {
+        SExpr {
+            plan,
+            children: children.into(),
+            original_group,
+            rel_prop: Arc::new(Mutex::new(rel_prop)),
+            stat_info,
+            applied_rules: AppliedRules::default(),
+        }
+    }
+
     pub fn create_unary(plan: Arc<RelOperator>, child: impl Into<Arc<SExpr>>) -> Self {
         Self::create(plan, [child.into()], None, None, None)
     }

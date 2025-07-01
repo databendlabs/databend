@@ -17,8 +17,13 @@ use std::hash::Hasher;
 
 use databend_common_expression::DataSchemaRef;
 
+use crate::optimizer::ir::RelExpr;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use std::sync::Arc;
+
+use databend_common_exception::Result;
+use crate::optimizer::ir::StatInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTEConsumer {
@@ -37,35 +42,13 @@ impl Operator for CTEConsumer {
         RelOp::CTEConsumer
     }
 
-    // fn arity(&self) -> usize {
-    //     0
-    // }
+    /// Get arity of this operator
+    fn arity(&self) -> usize {
+        0
+    }
 
-    // fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-    //     Ok(Arc::new(RelationalProperty {
-    //         output_columns: self.used_columns()?,
-    //         outer_columns: ColumnSet::new(),
-    //         used_columns: self.used_columns()?,
-    //         orderings: vec![],
-    //         partition_orderings: None,
-    //     }))
-    // }
-
-    // fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-    //     Ok(PhysicalProperty {
-    //         distribution: Distribution::Serial,
-    //     })
-    // }
-
-    // fn compute_required_prop_child(
-    //     &self,
-    //     _ctx: Arc<dyn TableContext>,
-    //     _rel_expr: &RelExpr,
-    //     _child_index: usize,
-    //     _required: &RequiredProperty,
-    // ) -> Result<RequiredProperty> {
-    //     Err(ErrorCode::Internal(
-    //         "Cannot compute required property for CTEConsumer".to_string(),
-    //     ))
-    // }
+    /// Derive statistics information
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality()
+    }
 }

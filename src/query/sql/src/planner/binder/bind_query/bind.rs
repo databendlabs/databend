@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Query;
@@ -27,6 +28,7 @@ use derive_visitor::Visitor;
 
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -154,6 +156,7 @@ impl Binder {
                 recursive: with.recursive,
                 columns: vec![],
                 materialized: cte.materialized,
+                stat_info: Arc::new(Mutex::new(None)),
             };
             bind_context
                 .cte_context
@@ -236,10 +239,9 @@ impl Binder {
         &mut self,
         with: &With,
         main_query_expr: SExpr,
-        mut cte_context: CteContext,
+        cte_context: CteContext,
     ) -> Result<SExpr> {
         let mut current_expr = main_query_expr;
-        cte_context.is_binding_materialized_cte = true;
 
         for cte in with.ctes.iter().rev() {
             if cte.materialized {
@@ -247,6 +249,7 @@ impl Binder {
 
                 let mut cte_context = cte_context.clone();
                 cte_context.cte_name = Some(cte_name.clone());
+                let shared_stat_info = cte_context.cte_map.get(&cte_name).unwrap().stat_info.clone();
 
                 // Create a new bind context for the CTE definition
                 let mut cte_bind_context = BindContext {
@@ -265,6 +268,10 @@ impl Binder {
                     Arc::new(cte_definition_expr),
                     Arc::new(current_expr),
                 );
+
+                // Derive cardinality statistics and share with consumer
+                let stats = RelExpr::with_s_expr(&current_expr).derive_cardinality()?;
+                *shared_stat_info.lock().unwrap() = Some(stats);
             }
         }
 

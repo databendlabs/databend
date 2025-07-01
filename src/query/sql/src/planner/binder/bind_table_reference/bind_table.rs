@@ -177,10 +177,15 @@ impl Binder {
                     new_bind_context.add_column_binding(column);
                 }
 
-                let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
+                let s_expr = SExpr::create_with_shared_stat_info(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
                     cte_name: table_name,
                     cte_schema,
-                })));
+                })),
+                vec![],
+                None,
+                None,
+                cte_info.stat_info.clone(),
+            );
                 return Ok((s_expr, new_bind_context));
             } else {
                 if self
