@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use chrono::DateTime;
 use chrono::Utc;
 pub use kvapi_impl::SequenceRsc;
@@ -28,9 +30,24 @@ pub struct SequenceMeta {
     pub create_on: DateTime<Utc>,
     pub update_on: DateTime<Utc>,
     pub comment: Option<String>,
-    pub start: u64,
     pub step: i64,
     pub current: u64,
+
+    /// Storage version:
+    ///
+    /// - By default the version is 0, which stores the value in `current` field.
+    /// - With version == 1, it stores the value of the sequence in standalone key that support `FetchAddU64`.
+    pub storage_version: u64,
+}
+
+impl fmt::Display for SequenceMeta {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SequenceMeta{{ create_on={:?} update_on={:?} comment={:?} step={} current={} }}",
+            self.create_on, self.update_on, self.comment, self.step, self.current
+        )
+    }
 }
 
 impl From<CreateSequenceReq> for SequenceMeta {
@@ -39,9 +56,9 @@ impl From<CreateSequenceReq> for SequenceMeta {
             comment: p.comment.clone(),
             create_on: p.create_on,
             update_on: p.create_on,
-            start: 1,
             step: 1,
             current: 1,
+            storage_version: p.storage_version,
         }
     }
 }
@@ -52,6 +69,9 @@ pub struct CreateSequenceReq {
     pub ident: SequenceIdent,
     pub create_on: DateTime<Utc>,
     pub comment: Option<String>,
+
+    /// See: [`SequenceMeta::storage_version`]
+    pub storage_version: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -63,11 +83,16 @@ pub struct GetSequenceNextValueReq {
     pub count: u64,
 }
 
+/// The collection of sequence value in range `[start, end)`, e.g.:
+/// `start + i * step` where `start + i + step < end`,
+/// or `[start + 0 * step, start + 1 * step, ...)`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetSequenceNextValueReply {
+    /// The first value in the sequence, inclusive.
     pub start: u64,
     // step has no use until now
     pub step: i64,
+    /// The right bound, exclusive.
     pub end: u64,
 }
 
@@ -99,8 +124,8 @@ pub struct DropSequenceReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSequenceReply {
-    // return prev seq if drop success
-    pub prev: Option<u64>,
+    // Whether it is dropped
+    pub success: bool,
 }
 
 mod kvapi_impl {

@@ -99,6 +99,9 @@ async fn test_features() -> anyhow::Result<()> {
     let features: FeatureResponse = serde_json::from_str(&text).unwrap();
     assert_eq!(features.enabled, vec!["dummy".to_string()]);
 
+    // Wait for node-1 to catch up
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
     // node-1 list features
     let resp = client.get(list_features_url(1)).send().await;
     println!("node-1 features resp: {:?}", resp);

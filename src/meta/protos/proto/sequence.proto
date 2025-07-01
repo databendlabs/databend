@@ -23,7 +23,20 @@ message SequenceMeta {
   string create_on = 1;
   string update_on = 2;
   optional string comment = 3;
-  uint64 start = 4;
+
+  // reserved: start is not used and is removed.
+  //  uint64 start = 4;
+  reserved 4;
+
   int64 step = 5;
+
+  // Not used for storage_version==1, use externally stored sequence with FetchAddU64
+  // 2025-06-26
   uint64 current = 6;
+
+  // Storage version:
+  //
+  // - By default the version is 0, which stores the value in `current` field.
+  // - With version == 1, it stores the value of the sequence in standalone key that support `FetchAddU64`.
+  uint64 storage_version = 7;
 }

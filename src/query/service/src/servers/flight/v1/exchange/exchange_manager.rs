@@ -26,6 +26,7 @@ use arrow_flight::FlightData;
 use async_channel::Receiver;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
@@ -146,6 +147,12 @@ impl DataExchangeManager {
                 source: String,
                 exchange: FlightExchange,
             },
+        }
+
+        if env.perf_flag {
+            if let Some(ctx) = ctx.as_ref() {
+                ctx.set_perf_flag(env.perf_flag)
+            }
         }
 
         let config = GlobalConfig::instance();
@@ -846,6 +853,12 @@ impl QueryCoordinator {
     pub fn execute_pipeline(&mut self) -> Result<()> {
         let info = self.info.as_mut().expect("Query info is None");
 
+        let perf_guard = if info.query_ctx.get_perf_flag() {
+            Some(QueryPerf::start(99)?)
+        } else {
+            None
+        };
+
         if !info.started.swap(true, Ordering::SeqCst) {
             if let Some(leak_worker) = info.remove_leak_query_worker.take() {
                 leak_worker.abort();
@@ -927,6 +940,7 @@ impl QueryCoordinator {
             ctx,
             request_server_exchange,
             executor.get_inner(),
+            perf_guard,
         );
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
@@ -934,7 +948,6 @@ impl QueryCoordinator {
         } else {
             Span::noop()
         };
-
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             let error = executor.execute().err();

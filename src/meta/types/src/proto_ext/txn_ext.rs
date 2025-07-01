@@ -317,9 +317,30 @@ impl pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::FetchAddU64(pb::FetchAddU64 {
                 key: key.to_string(),
+                match_seq: None,
                 delta,
             })),
         }
+    }
+
+    /// Add a match-sequence-number condition to the operation.
+    ///
+    /// If the sequence number does not match, the operation won't be take place.
+    pub fn match_seq(mut self, seq: Option<u64>) -> Self {
+        let req = self
+            .request
+            .as_mut()
+            .expect("TxnOp must have a non-None request field");
+
+        match req {
+            pb::txn_op::Request::Delete(p) => p.match_seq = seq,
+            pb::txn_op::Request::FetchAddU64(d) => d.match_seq = seq,
+            _ => {
+                unreachable!("Not support match_seq for: {}", req)
+            }
+        }
+
+        self
     }
 }
 
@@ -350,6 +371,10 @@ impl pb::TxnOpResponse {
                 current,
             })),
         }
+    }
+
+    pub fn unchanged_fetch_add_u64(key: impl ToString, seq: u64, value: u64) -> Self {
+        Self::fetch_add_u64(key, seq, value, seq, value)
     }
 
     pub fn fetch_add_u64(
@@ -430,9 +455,16 @@ impl pb::ConditionalOperation {
     }
 }
 
+impl pb::FetchAddU64Response {
+    pub fn delta(&self) -> u64 {
+        self.after.saturating_sub(self.before)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::protobuf::BooleanExpression;
+    use crate::protobuf::FetchAddU64Response;
     use crate::TxnCondition;
 
     #[test]
@@ -534,5 +566,18 @@ mod tests {
                 "((a == seq(1) OR b == seq(2)) AND (c == seq(3) OR d == seq(4))) OR ((e == seq(5) OR f == seq(6)) AND (g == seq(7) OR h == seq(8)))"
             );
         }
+    }
+
+    #[test]
+    fn test_fetch_add_u64_response() {
+        let resp = FetchAddU64Response {
+            key: "test_key".to_string(),
+            before_seq: 10,
+            before: 100,
+            after_seq: 20,
+            after: 200,
+        };
+
+        assert_eq!(resp.delta(), 100);
     }
 }

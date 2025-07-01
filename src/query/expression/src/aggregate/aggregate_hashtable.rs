@@ -27,13 +27,14 @@ use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
 use crate::new_sel;
 use crate::read;
+use crate::types::BinaryType;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
-use crate::Column;
+use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::HashTableConfig;
-use crate::InputColumns;
 use crate::Payload;
+use crate::ProjectedBlock;
 use crate::StateAddr;
 use crate::BATCH_SIZE;
 use crate::LOAD_FACTOR;
@@ -129,9 +130,9 @@ impl AggregateHashTable {
     pub fn add_groups(
         &mut self,
         state: &mut ProbeState,
-        group_columns: InputColumns,
-        params: &[InputColumns],
-        agg_states: InputColumns,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
         if row_count <= BATCH_ADD_SIZE {
@@ -142,13 +143,13 @@ impl AggregateHashTable {
                 let end = (start + BATCH_ADD_SIZE).min(row_count);
                 let step_group_columns = group_columns
                     .iter()
-                    .map(|c| c.slice(start..end))
+                    .map(|entry| entry.slice(start..end))
                     .collect::<Vec<_>>();
 
-                let step_params: Vec<Vec<Column>> = params
+                let step_params: Vec<Vec<BlockEntry>> = params
                     .iter()
                     .map(|c| c.iter().map(|x| x.slice(start..end)).collect())
-                    .collect::<Vec<_>>();
+                    .collect();
                 let step_params = step_params.iter().map(|v| v.into()).collect::<Vec<_>>();
                 let agg_states = agg_states
                     .iter()
@@ -171,9 +172,9 @@ impl AggregateHashTable {
     fn add_groups_inner(
         &mut self,
         state: &mut ProbeState,
-        group_columns: InputColumns,
-        params: &[InputColumns],
-        agg_states: InputColumns,
+        group_columns: ProjectedBlock,
+        params: &[ProjectedBlock],
+        agg_states: ProjectedBlock,
         row_count: usize,
     ) -> Result<usize> {
         state.row_count = row_count;
@@ -218,7 +219,7 @@ impl AggregateHashTable {
                     .zip(agg_states.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.batch_merge(state_places, loc, state.as_binary().unwrap())?;
+                    func.batch_merge(state_places, loc, &state.downcast::<BinaryType>().unwrap())?;
                 }
             }
         }
@@ -245,7 +246,7 @@ impl AggregateHashTable {
     fn probe_and_create(
         &mut self,
         state: &mut ProbeState,
-        group_columns: InputColumns,
+        group_columns: ProjectedBlock,
         row_count: usize,
     ) -> usize {
         // exceed capacity or should resize
@@ -444,7 +445,7 @@ impl AggregateHashTable {
                     loc,
                     &mut builder,
                 )?;
-                flush_state.aggregate_results.push(builder.build());
+                flush_state.aggregate_results.push(builder.build().into());
             }
         }
         Ok(true)

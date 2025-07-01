@@ -54,19 +54,23 @@ impl FuseTable {
             return Ok(());
         };
 
-        let mut segment_mutator = SegmentCompactMutator::try_create(
+        let table_meta_timestamps =
+            ctx.get_table_meta_timestamps(self, Some(compact_options.base_snapshot.clone()))?;
+
+        let mut segment_compactor = SegmentCompactMutator::try_create(
             ctx.clone(),
             compact_options,
             self.meta_location_generator().clone(),
             self.operator.clone(),
             self.cluster_key_id(),
+            table_meta_timestamps,
         )?;
 
-        if !segment_mutator.target_select().await? {
+        if !segment_compactor.target_select().await? {
             return Ok(());
         }
 
-        segment_mutator.try_commit(Arc::new(self.clone())).await
+        segment_compactor.try_commit(self).await
     }
 
     #[async_backtrace::framed]

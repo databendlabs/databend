@@ -360,8 +360,6 @@ pub trait TableContext: Send + Sync {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
 
-    fn clear_table_meta_timestamps_cache(&self);
-
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 
@@ -435,6 +433,18 @@ pub trait TableContext: Send + Sync {
         unimplemented!()
     }
     fn get_session_type(&self) -> SessionType {
+        unimplemented!()
+    }
+    fn get_perf_flag(&self) -> bool {
+        unimplemented!()
+    }
+    fn set_perf_flag(&self, _flag: bool) {
+        unimplemented!()
+    }
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        unimplemented!()
+    }
+    fn set_nodes_perf(&self, _node: String, _perf: String) {
         unimplemented!()
     }
 }

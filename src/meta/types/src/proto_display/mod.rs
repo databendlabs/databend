@@ -349,7 +349,11 @@ impl Display for ConditionalOperation {
 
 impl Display for FetchAddU64 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FetchAddU64 key={} delta={}", self.key, self.delta)
+        write!(f, "FetchAddU64 key={} delta={}", self.key, self.delta)?;
+        if let Some(match_seq) = self.match_seq {
+            write!(f, " match_seq: {}", match_seq)?;
+        }
+        Ok(())
     }
 }
 
@@ -357,8 +361,13 @@ impl Display for FetchAddU64Response {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "FetchAddU64Response key={} before=(seq={} {}), after=(seq={} {})",
-            self.key, self.before_seq, self.before, self.after_seq, self.after
+            "FetchAddU64Response{{ key={} before=(seq={} {}), after=(seq={} {}), delta={} }}",
+            self.key,
+            self.before_seq,
+            self.before,
+            self.after_seq,
+            self.after,
+            self.delta()
         )
     }
 }
@@ -466,9 +475,20 @@ mod tests {
     fn test_display_fetch_add_u64() {
         let req = FetchAddU64 {
             key: "k1".to_string(),
+            match_seq: None,
             delta: 1,
         };
         assert_eq!(req.to_string(), "FetchAddU64 key=k1 delta=1");
+
+        let req_with_seq = FetchAddU64 {
+            key: "k1".to_string(),
+            match_seq: Some(10),
+            delta: 1,
+        };
+        assert_eq!(
+            req_with_seq.to_string(),
+            "FetchAddU64 key=k1 delta=1 match_seq: 10"
+        );
     }
 
     #[test]
@@ -482,7 +502,7 @@ mod tests {
         };
         assert_eq!(
             resp.to_string(),
-            "FetchAddU64Response key=k1 before=(seq=1 3), after=(seq=2 4)"
+            "FetchAddU64Response{ key=k1 before=(seq=1 3), after=(seq=2 4), delta=1 }"
         );
     }
 }

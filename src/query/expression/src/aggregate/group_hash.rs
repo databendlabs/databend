@@ -51,20 +51,20 @@ use crate::with_decimal_mapped_type;
 use crate::with_number_mapped_type;
 use crate::with_number_type;
 use crate::Column;
-use crate::InputColumns;
+use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::Value;
 
 const NULL_HASH_VAL: u64 = 0xd1cefa08eb382d69;
 
-pub fn group_hash_columns(cols: InputColumns, values: &mut [u64]) {
+pub fn group_hash_columns(cols: ProjectedBlock, values: &mut [u64]) {
     debug_assert!(!cols.is_empty());
-    for (i, col) in cols.iter().enumerate() {
+    for (i, entry) in cols.iter().enumerate() {
         if i == 0 {
-            combine_group_hash_column::<true>(col, values);
+            combine_group_hash_column::<true>(&entry.to_column(), values);
         } else {
-            combine_group_hash_column::<false>(col, values);
+            combine_group_hash_column::<false>(&entry.to_column(), values);
         }
     }
 }

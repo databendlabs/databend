@@ -20,21 +20,20 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::EvaluateOptions;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::Value;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_partial_deserialize;
@@ -80,26 +79,28 @@ impl AggregateFunction for AggregateStringAggFunction {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        entries: ProjectedBlock,
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let column = if self.value_type != DataType::String {
-            let block = DataBlock::new_from_columns(vec![columns[0].clone()]);
+            let block = DataBlock::new(vec![entries[0].clone()], entries[0].len());
             let func_ctx = &FunctionContext::default();
             let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
             let value = evaluator.run_cast(
                 None,
                 &self.value_type,
                 &DataType::String,
-                Value::Column(columns[0].clone()),
+                entries[0].value(),
                 None,
                 &|| "(string_aggr)".to_string(),
                 &mut EvaluateOptions::default(),
             )?;
-            StringType::try_downcast_column(value.as_column().unwrap()).unwrap()
+            BlockEntry::new(value, || (DataType::String, block.num_rows()))
+                .downcast::<StringType>()
+                .unwrap()
         } else {
-            StringType::try_downcast_column(&columns[0]).unwrap()
+            entries[0].downcast::<StringType>().unwrap()
         };
         let state = place.get::<StringAggState>();
         match validity {
@@ -125,12 +126,11 @@ impl AggregateFunction for AggregateStringAggFunction {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
-        let column_iter = StringType::iter_column(&column);
-        column_iter.zip(places.iter()).for_each(|(v, place)| {
+        let view = columns[0].downcast::<StringType>().unwrap();
+        view.iter().zip(places.iter()).for_each(|(v, place)| {
             let state = AggrState::new(*place, loc).get::<StringAggState>();
             state.values.push_str(v);
             state.values.push_str(&self.delimiter);
@@ -138,14 +138,12 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
-        let v = StringType::index_column(&column, row);
-        if let Some(v) = v {
-            let state = place.get::<StringAggState>();
-            state.values.push_str(v);
-            state.values.push_str(&self.delimiter);
-        }
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
+        let view = columns[0].downcast::<StringType>().unwrap();
+        let v = view.index(row).unwrap();
+        let state = place.get::<StringAggState>();
+        state.values.push_str(v);
+        state.values.push_str(&self.delimiter);
         Ok(())
     }
 

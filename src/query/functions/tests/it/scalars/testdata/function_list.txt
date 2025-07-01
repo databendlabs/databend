@@ -31,6 +31,8 @@ hex -> to_hex
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
+is_double -> is_float
+is_real -> is_float
 json_array -> array_construct
 json_array_distinct -> array_distinct
 json_array_except -> array_except
@@ -2246,6 +2248,8 @@ Functions overloads:
 1 is_boolean(Variant NULL) :: Boolean NULL
 0 is_date(Variant) :: Boolean
 1 is_date(Variant NULL) :: Boolean NULL
+0 is_decimal(Variant) :: Boolean
+1 is_decimal(Variant NULL) :: Boolean NULL
 0 is_float(Variant) :: Boolean
 1 is_float(Variant NULL) :: Boolean NULL
 0 is_integer(Variant) :: Boolean

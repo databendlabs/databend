@@ -234,7 +234,7 @@ impl ReplaceIntoMutator {
     }
 
     fn eval(column: Column, num_rows: usize, aggr_func_name: &str) -> Result<Scalar> {
-        let (state, _) = eval_aggr(aggr_func_name, vec![], &[column], num_rows, vec![])?;
+        let (state, _) = eval_aggr(aggr_func_name, vec![], &[column.into()], num_rows, vec![])?;
         if state.len() > 0 {
             if let Some(v) = state.index(0) {
                 return Ok(v.to_owned());

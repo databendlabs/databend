@@ -240,15 +240,8 @@ impl DataBlock {
 
         let arrow_schema = Schema::from(table_schema);
         let mut arrays = Vec::with_capacity(self.columns().len());
-        for (entry, arrow_field) in self
-            .consume_convert_to_full()
-            .take_columns()
-            .into_iter()
-            .zip(arrow_schema.fields())
-        {
-            let column = entry.into_column().unwrap();
-            let column = column.maybe_gc();
-            let array = column.into_arrow_rs();
+        for (entry, arrow_field) in self.take_columns().into_iter().zip(arrow_schema.fields()) {
+            let array = entry.to_column().maybe_gc().into_arrow_rs();
 
             // Adjust struct array names
             arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));

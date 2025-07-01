@@ -21,7 +21,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
 
@@ -102,7 +102,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
@@ -139,7 +139,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         input_rows: usize,
     ) -> Result<()> {
         self.inner
@@ -170,7 +170,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         self.inner
             .accumulate_row(place.remove_last_loc(), columns, row)?;
         set_flag(place, true);

@@ -172,7 +172,6 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
     ├── estimated rows: 250.00
     ├── Exchange(Build)
     │   ├── output columns: [table2.value (#1)]
@@ -219,7 +218,7 @@ Exchange
     ├── probe keys: [table1.value (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
-    ├── build join filters:
+    ├── build join filters(distributed):
     │   └── filter id:0, build key:table2.value (#1), probe key:table1.value (#0), filter type:inlist,min_max
     ├── estimated rows: 250.00
     ├── Exchange(Build)

@@ -321,7 +321,12 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
-        let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
+        let block_writer = BlockWriter::new(
+            &operator,
+            &loc_generator,
+            TestFixture::default_table_meta_timestamps(),
+            true,
+        );
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
@@ -523,8 +528,9 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval(
         );
         let block = DataBlock::new_from_columns(vec![data_col.clone()]);
 
-        let min_col = eval_aggr("min", vec![], &[data_col.clone()], rows, vec![])?;
-        let max_col = eval_aggr("max", vec![], &[data_col], rows, vec![])?;
+        let entries = [data_col.into()];
+        let min_col = eval_aggr("min", vec![], &entries, rows, vec![])?;
+        let max_col = eval_aggr("max", vec![], &entries, rows, vec![])?;
 
         let min_expr = min_col.0.index(0).unwrap();
         let max_expr = max_col.0.index(0).unwrap();

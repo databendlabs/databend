@@ -16,7 +16,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::KeyAccessor;
@@ -124,15 +123,12 @@ impl HashJoinProbeState {
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
         let input_num_rows = process_state.input.num_rows();
-        let cols = process_state
-            .input
-            .columns()
-            .iter()
-            .map(BlockEntry::to_column)
-            .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
-        self.hash_join_state
-            .init_markers((&cols).into(), input_num_rows, markers);
+        self.hash_join_state.init_markers(
+            process_state.input.columns().into(),
+            input_num_rows,
+            markers,
+        );
 
         // Build states.
         let build_state = unsafe { &*self.hash_join_state.build_state.get() };

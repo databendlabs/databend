@@ -153,6 +153,11 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2025-06-24: since TODO: add when merge
 ///   🖥 server: add `FetchAddU64` operation to the `TxnOp`
 ///
+/// - 2025-06-26: since TODO: add when merge
+///   🖥 server: add `FetchAddU64.match_seq`
+///
+/// - 2025-07-01: since TODO: add when enables sequence v1
+///   👥 client: new sequence API depends on `FetchAddU64`.
 ///
 /// Server feature set:
 /// ```yaml

@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::Utc;
+use std::ops::Deref;
+
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::OutofSequenceRange;
 use databend_common_meta_app::app_error::SequenceError;
+use databend_common_meta_app::app_error::UnsupportedSequenceStorageVersion;
 use databend_common_meta_app::app_error::WrongSequenceCount;
+use databend_common_meta_app::primitive::Id;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageValue;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
@@ -29,7 +33,7 @@ use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
@@ -37,14 +41,15 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
-use crate::databend_common_meta_types::With;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
-use crate::kv_pb_api::UpsertPB;
 use crate::send_txn;
+use crate::sequence_nextval_impl::NextVal;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_cond_eq_seq;
-use crate::util::txn_op_put_pb;
+use crate::txn_cond_seq;
+use crate::txn_op_del;
+use crate::util::txn_put_pb;
 use crate::SequenceApi;
 
 #[async_trait::async_trait]
@@ -58,31 +63,34 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
 
         let meta: SequenceMeta = req.clone().into();
 
-        let seq = MatchSeq::from(req.create_option);
-        let key = req.ident.clone();
-        let reply = self
-            .upsert_pb(&UpsertPB::update(key, meta).with(seq))
-            .await?;
+        let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
+        let storage_value = Id::new_typed(SequenceStorageValue(1));
 
-        debug!(
-            ident :?= (req.ident),
-            prev :? = (reply.prev),
-            is_changed = reply.is_changed();
-            "create_sequence"
-        );
-
-        if !reply.is_changed() {
-            match req.create_option {
-                CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
-                    SequenceError::SequenceAlreadyExists(req.ident.exist_error(func_name!())),
-                ))),
-                CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
-                CreateOption::CreateOrReplace => {
-                    unreachable!("CreateOrReplace should always success")
-                }
-            }
+        let conditions = if req.create_option == CreateOption::CreateOrReplace {
+            vec![]
         } else {
-            Ok(CreateSequenceReply {})
+            vec![txn_cond_eq_seq(&req.ident, 0)]
+        };
+
+        let txn = TxnRequest::new(conditions, vec![
+            txn_put_pb(&req.ident, &meta)?,
+            txn_put_pb(&storage_ident, &storage_value)?,
+        ]);
+
+        let (succ, _response) = send_txn(self, txn).await?;
+
+        if succ {
+            return Ok(CreateSequenceReply {});
+        }
+
+        match req.create_option {
+            CreateOption::Create => Err(KVAppError::AppError(AppError::SequenceError(
+                SequenceError::SequenceAlreadyExists(req.ident.exist_error(func_name!())),
+            ))),
+            CreateOption::CreateIfNotExists => Ok(CreateSequenceReply {}),
+            CreateOption::CreateOrReplace => {
+                unreachable!("CreateOrReplace should always success")
+            }
         }
     }
 
@@ -92,7 +100,29 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     ) -> Result<Option<SeqV<SequenceMeta>>, MetaError> {
         debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
         let seq_meta = self.get_pb(name_ident).await?;
-        Ok(seq_meta)
+
+        let Some(mut seq_meta) = seq_meta else {
+            return Ok(None);
+        };
+
+        if seq_meta.data.storage_version == 0 {
+            return Ok(Some(seq_meta));
+        }
+
+        // V1 sequence stores the value in a separate key.
+
+        let storage_ident = SequenceStorageIdent::new_from(name_ident.clone());
+        let storage_value = self.get_pb(&storage_ident).await?;
+
+        // If the storage value is removed, the sequence meta must also be removed.
+        let Some(storage_value) = storage_value else {
+            return Ok(None);
+        };
+
+        let next_available = *storage_value.data.deref();
+
+        seq_meta.data.current = next_available;
+        Ok(Some(seq_meta))
     }
 
     #[logcall::logcall]
@@ -102,11 +132,40 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
         tenant: &Tenant,
     ) -> Result<Vec<(String, SequenceMeta)>, MetaError> {
         let dir_name = DirName::new(SequenceIdent::new(tenant, "dummy"));
-        self.list_pb(&dir_name)
+
+        let ident_metas = self
+            .list_pb(&dir_name)
             .await?
-            .map_ok(|itm| (itm.key.name().to_string(), itm.seqv.data))
+            .map_ok(|itm| (itm.key, itm.seqv.data))
             .try_collect::<Vec<_>>()
-            .await
+            .await?;
+
+        let storage_idents = ident_metas
+            .iter()
+            .map(|(ident, _)| SequenceStorageIdent::new_from(ident.clone()));
+
+        let storage_values = self
+            .get_pb_values(storage_idents)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+
+        let key_metas = ident_metas
+            .into_iter()
+            .zip(storage_values)
+            .map(|((k, mut meta), sto)| {
+                // For version==1  sequence, load the current value from the external storage.
+                if meta.storage_version == 1 {
+                    if let Some(seq_storage_value) = sto {
+                        meta.current = seq_storage_value.data.into_inner().0;
+                    }
+                }
+
+                (k.name().to_string(), meta)
+            })
+            .collect::<Vec<_>>();
+
+        Ok(key_metas)
     }
 
     async fn get_sequence_next_value(
@@ -133,48 +192,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
                 ))
                 .into());
             };
-            let sequence_seq = seq_meta.seq;
-            let mut sequence_meta = seq_meta.data;
+            let sequence_meta = seq_meta.data.clone();
 
-            let start = sequence_meta.current;
-            let count = req.count;
-            if u64::MAX - sequence_meta.current < count {
-                return Err(KVAppError::AppError(AppError::SequenceError(
-                    SequenceError::OutofSequenceRange(OutofSequenceRange::new(
-                        sequence_name,
-                        format!(
-                            "{:?}: current: {}, count: {}",
-                            sequence_name, sequence_meta.current, count
+            let next_val = NextVal {
+                kv_api: self,
+                ident: req.ident.clone(),
+                sequence_meta: seq_meta.clone(),
+            };
+
+            let response = match sequence_meta.storage_version {
+                0 => next_val.next_val_v0(req.count).await?,
+                1 => next_val.next_val_v1(req.count).await?,
+                _ => {
+                    return Err(KVAppError::AppError(AppError::SequenceError(
+                        SequenceError::UnsupportedSequenceStorageVersion(
+                            UnsupportedSequenceStorageVersion::new(sequence_meta.storage_version),
                         ),
-                    )),
-                )));
-            }
+                    )));
+                }
+            };
 
-            // update meta
-            sequence_meta.current += count;
-            sequence_meta.update_on = Utc::now();
-
-            let condition = vec![txn_cond_eq_seq(&ident, sequence_seq)];
-            let if_then = vec![
-                txn_op_put_pb(&ident, &sequence_meta, None)?, // name -> meta
-            ];
-
-            let txn_req = TxnRequest::new(condition, if_then);
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                current :? =(&sequence_meta.current),
-                ident :?= (req.ident),
-                succ = succ;
-                "get_sequence_next_values"
-            );
-            if succ {
-                return Ok(GetSequenceNextValueReply {
-                    start,
-                    step: sequence_meta.step,
-                    end: sequence_meta.current - 1,
-                });
+            match response {
+                Ok((start, end)) => {
+                    return Ok(GetSequenceNextValueReply {
+                        start,
+                        step: sequence_meta.step,
+                        end,
+                    });
+                }
+                Err(_e) => {
+                    // conflict, continue
+                }
             }
         }
     }
@@ -182,19 +230,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SequenceApi for KV {
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
-        let key = req.ident.clone();
-        let reply = self.upsert_pb(&UpsertPB::delete(key)).await?;
-
-        debug!(
-            ident :?= (req.ident),
-            prev :? = (reply.prev),
-            is_changed = reply.is_changed();
-            "drop_sequence"
+        let storage_ident = SequenceStorageIdent::new_from(req.ident.clone());
+        let txn = TxnRequest::new(
+            vec![txn_cond_seq(&req.ident, ConditionResult::Gt, 0)],
+            vec![txn_op_del(&req.ident), txn_op_del(&storage_ident)],
         );
+        let (success, _response) = send_txn(self, txn).await?;
 
-        // return prev if drop success
-        let prev = reply.prev.map(|prev| prev.seq);
-
-        Ok(DropSequenceReply { prev })
+        Ok(DropSequenceReply { success })
     }
 }

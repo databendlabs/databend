@@ -39,7 +39,6 @@ mod http_client;
 pub use http_client::StorageHttpClient;
 
 mod operator;
-pub use operator::build_operator;
 pub use operator::check_operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;

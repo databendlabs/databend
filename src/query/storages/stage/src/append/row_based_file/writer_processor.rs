@@ -155,7 +155,11 @@ impl Processor for RowBasedFileWriter {
         }
         let input_bytes = output.len();
         if let Some(compression) = self.compression {
-            output = CompressCodec::from(compression).compress_all(&output)?;
+            output = if compression == CompressAlgorithm::Zip {
+                CompressCodec::compress_all_zip(&output)?
+            } else {
+                CompressCodec::from(compression).compress_all(&output)?
+            };
         }
         let output_bytes = output.len();
         let summary = DataSummary {

@@ -100,7 +100,7 @@ impl<'a> JoinRuntimeFilterPacketBuilder<'a> {
         let num_rows = self.build_key_column.len();
         let method = DataBlock::choose_hash_method_with_types(&[data_type.clone()])?;
         let mut hashes = HashSet::with_capacity(num_rows);
-        let key_columns = &[self.build_key_column.clone()];
+        let key_columns = &[self.build_key_column.clone().into()];
         hash_by_method(&method, key_columns.into(), num_rows, &mut hashes)?;
         Ok(hashes)
     }

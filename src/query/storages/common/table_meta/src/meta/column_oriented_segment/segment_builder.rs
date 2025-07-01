@@ -325,23 +325,37 @@ impl ColumnOrientedSegmentBuilder {
         for (col_id, mut col_stat) in std::mem::take(&mut self.column_stats).into_iter() {
             let mins = col_stat.min.build();
             let maxs = col_stat.max.build();
-            let (mins_of_mins, _) =
-                eval_aggr("min", vec![], &[mins.clone()], block_count as usize, vec![])?;
+            let (mins_of_mins, _) = eval_aggr(
+                "min",
+                vec![],
+                &[mins.clone().into()],
+                block_count as usize,
+                vec![],
+            )?;
             let min = mins_of_mins
                 .index(0)
                 .map(|x| x.to_owned())
                 .unwrap_or(Scalar::Null);
-            let (maxs_of_maxs, _) =
-                eval_aggr("max", vec![], &[maxs.clone()], block_count as usize, vec![])?;
+            let (maxs_of_maxs, _) = eval_aggr(
+                "max",
+                vec![],
+                &[maxs.clone().into()],
+                block_count as usize,
+                vec![],
+            )?;
             let max = maxs_of_maxs
                 .index(0)
                 .map(|x| x.to_owned())
                 .unwrap_or(Scalar::Null);
             let null_count = col_stat.null_count.iter().sum();
             let in_memory_size = col_stat.in_memory_size.iter().sum();
+            let distinct_of_values = col_stat
+                .distinct_of_values
+                .iter()
+                .try_fold(0, |acc, ndv| ndv.map(|v| acc + v));
             col_stats.insert(
                 col_id,
-                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+                ColumnStatistics::new(min, max, null_count, in_memory_size, distinct_of_values),
             );
             col_stat.min = ColumnBuilder::from_column(mins);
             col_stat.max = ColumnBuilder::from_column(maxs);

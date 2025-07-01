@@ -146,10 +146,7 @@ pub(crate) fn init_operator_uncached(cfg: &StorageParams) -> Result<Operator> {
 /// ```
 ///
 /// Please balance the performance and compile time.
-pub fn build_operator<B: Builder>(
-    builder: B,
-    cfg: Option<&StorageNetworkParams>,
-) -> Result<Operator> {
+fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) -> Result<Operator> {
     let ob = Operator::new(builder)?
         // Timeout layer is required to be the first layer so that internal
         // futures can be cancelled safely when the timeout is reached.
@@ -558,24 +555,8 @@ impl DataOperator {
         Ok(())
     }
 
-    /// Create a new data operator without check.
-    pub fn try_new(
-        conf: &StorageConfig,
-        spill_params: Option<StorageParams>,
-    ) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(&conf.params)?;
-        let spill_operator = spill_params.as_ref().map(init_operator).transpose()?;
-
-        Ok(DataOperator {
-            operator,
-            params: conf.params.clone(),
-            spill_operator,
-            spill_params,
-        })
-    }
-
     #[async_backtrace::framed]
-    pub async fn try_create(
+    async fn try_create(
         conf: &StorageConfig,
         spill_params: Option<StorageParams>,
     ) -> databend_common_exception::Result<DataOperator> {

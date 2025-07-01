@@ -112,12 +112,11 @@ impl TransformFinalAggregate {
 
             loop {
                 if ht.merge_result(&mut self.flush_state)? {
-                    let mut cols = self.flush_state.take_aggregate_results();
-                    cols.extend_from_slice(&self.flush_state.take_group_columns());
-
-                    let block = DataBlock::new_from_columns(cols);
-
-                    blocks.push(block);
+                    let mut entries = self.flush_state.take_aggregate_results();
+                    let group_columns = self.flush_state.take_group_columns();
+                    entries.extend_from_slice(&group_columns);
+                    let num_rows = entries[0].len();
+                    blocks.push(DataBlock::new(entries, num_rows));
                 } else {
                     break;
                 }

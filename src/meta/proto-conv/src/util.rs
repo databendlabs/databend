@@ -161,6 +161,9 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (129, "2025-05-30: Add: New DataType Vector"),
     (130, "2025-06-19: Add: New UDF imports and packages in udf definition"),
     (131, "2025-06-24: Add: add use_logic_type in ParquetFileFormatParam and AvroFileFormatParam"),
+    (132, "2025-06-25: Remove: SequenceMeta.start"),
+    (133, "2025-06-25: Add: Add new StageFileCompression Zip"),
+    (134, "2025-06-27: Add: SequenceMeta.storage_version"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

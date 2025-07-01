@@ -90,7 +90,7 @@ impl ColumnStatisticsState {
                     let mut min = Scalar::Null;
                     let mut max = Scalar::Null;
 
-                    let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows, vec![])?;
+                    let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
                     if mins.len() > 0 {
                         min = if let Some(v) = mins.index(0) {
                             // safe upwrap.
@@ -101,7 +101,7 @@ impl ColumnStatisticsState {
                         }
                     }
 
-                    let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows, vec![])?;
+                    let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
                     if maxs.len() > 0 {
                         max = if let Some(v) = maxs.index(0) {
                             if let Some(v) = v.to_owned().trim_max() {
@@ -237,6 +237,7 @@ fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut Co
         }
         DataType::Decimal(_) => {
             match scalar {
+                ScalarRef::Decimal(DecimalScalar::Decimal64(v, _)) => hll.add_object(&v),
                 ScalarRef::Decimal(DecimalScalar::Decimal128(v, _)) => hll.add_object(&v),
                 ScalarRef::Decimal(DecimalScalar::Decimal256(v, _)) => hll.add_object(&v),
                 _ => unreachable!(),

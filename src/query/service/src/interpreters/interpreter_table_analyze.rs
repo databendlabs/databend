@@ -35,6 +35,7 @@ use databend_common_sql::Planner;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storages_factory::NavigationPoint;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::AnalyzeLightMutator;
 use databend_common_storages_fuse::operations::HistogramInfoSink;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_index::Index;
@@ -109,66 +110,77 @@ impl Interpreter for AnalyzeTableInterpreter {
             Err(_) => return Ok(PipelineBuildResult::create()),
         };
 
-        let r = table.read_table_snapshot().await;
-        let snapshot_opt = match r {
-            Err(e) => return Err(e),
-            Ok(v) => v,
+        let Some(snapshot) = table.read_table_snapshot().await? else {
+            return Ok(PipelineBuildResult::create());
         };
 
-        if let Some(snapshot) = snapshot_opt {
-            // plan sql
-            let _table_info = table.get_table_info();
+        if self.plan.no_scan {
+            let operator = table.get_operator();
+            let cluster_key_id = table.cluster_key_id();
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(table, Some(snapshot.clone()))?;
+            let mut mutator = AnalyzeLightMutator::create(
+                self.ctx.clone(),
+                operator,
+                snapshot,
+                cluster_key_id,
+                table_meta_timestamps,
+            );
+            mutator.target_select().await?;
+            mutator.try_commit(table).await?;
+            return Ok(PipelineBuildResult::create());
+        }
 
-            let table_statistics = table
-                .read_table_snapshot_statistics(Some(&snapshot))
-                .await?;
+        let table_statistics = table
+            .read_table_snapshot_statistics(Some(&snapshot))
+            .await?;
 
-            let (is_full, temporal_str) = if let Some(table_statistics) = &table_statistics {
-                let is_full = match table
-                    .navigate_to_point(
-                        &NavigationPoint::SnapshotID(
-                            table_statistics.snapshot_id.simple().to_string(),
-                        ),
-                        self.ctx.clone().get_abort_checker(),
-                    )
+        // plan sql
+        let (is_full, temporal_str) = if let Some(table_statistics) = &table_statistics {
+            let is_full = match table
+                .navigate_to_point(
+                    &NavigationPoint::SnapshotID(table_statistics.snapshot_id.simple().to_string()),
+                    self.ctx.clone().get_abort_checker(),
+                )
+                .await
+            {
+                Ok(t) => !t
+                    .read_table_snapshot()
                     .await
-                {
-                    Ok(t) => !t
-                        .read_table_snapshot()
-                        .await
-                        .is_ok_and(|s| s.is_some_and(|s| s.prev_table_seq.is_some())),
-                    Err(_) => true,
-                };
+                    .is_ok_and(|s| s.is_some_and(|s| s.prev_table_seq.is_some())),
+                Err(_) => true,
+            };
 
-                let temporal_str = if is_full {
-                    format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple())
-                } else {
-                    // analyze only need to collect the added blocks.
-                    let table_alias = format!("_change_insert${:08x}", Utc::now().timestamp());
-                    format!(
+            let temporal_str = if is_full {
+                format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple())
+            } else {
+                // analyze only need to collect the added blocks.
+                let table_alias = format!("_change_insert${:08x}", Utc::now().timestamp());
+                format!(
                         "CHANGES(INFORMATION => DEFAULT) AT (snapshot => '{}') END (snapshot => '{}') AS {table_alias}",
                         table_statistics.snapshot_id.simple(),
                         snapshot.snapshot_id.simple(),
                     )
-                };
-                (is_full, temporal_str)
-            } else {
-                (
-                    true,
-                    format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple()),
-                )
             };
+            (is_full, temporal_str)
+        } else {
+            (
+                true,
+                format!("AT (snapshot => '{}')", snapshot.snapshot_id.simple()),
+            )
+        };
 
-            let quote = self
-                .ctx
-                .get_settings()
-                .get_sql_dialect()?
-                .default_ident_quote();
+        let quote = self
+            .ctx
+            .get_settings()
+            .get_sql_dialect()?
+            .default_ident_quote();
 
-            // 0.01625 --> 12 buckets --> 4K size per column
-            // 1.04 / math.sqrt(1<<12) --> 0.01625
-            const DISTINCT_ERROR_RATE: f64 = 0.01625;
-            let ndv_select_expr = snapshot
+        // 0.01625 --> 12 buckets --> 4K size per column
+        // 1.04 / math.sqrt(1<<12) --> 0.01625
+        const DISTINCT_ERROR_RATE: f64 = 0.01625;
+        let ndv_select_expr = snapshot
                 .schema
                 .fields()
                 .iter()
@@ -182,22 +194,22 @@ impl Interpreter for AnalyzeTableInterpreter {
                 })
                 .join(", ");
 
-            let sql = format!(
-                "SELECT {ndv_select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
-                plan.database, plan.table,
-            );
+        let sql = format!(
+            "SELECT {ndv_select_expr}, {is_full} as is_full from {}.{} {temporal_str}",
+            plan.database, plan.table,
+        );
 
-            info!("Analyze via sql: {sql}");
+        info!("Analyze via sql: {sql}");
 
-            let (physical_plan, bind_context) = self.plan_sql(sql).await?;
-            let mut build_res =
-                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-            // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
-            // It's possible to OOM if the table is too large and spilling isn't enabled.
-            // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
-            let mut histogram_info_receivers = HashMap::new();
-            if self.ctx.get_settings().get_enable_analyze_histogram()? {
-                let histogram_sqls = table
+        let (physical_plan, bind_context) = self.plan_sql(sql).await?;
+        let mut build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
+        // It's possible to OOM if the table is too large and spilling isn't enabled.
+        // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
+        let mut histogram_info_receivers = HashMap::new();
+        if self.ctx.get_settings().get_enable_analyze_histogram()? {
+            let histogram_sqls = table
                     .schema()
                     .fields()
                     .iter()
@@ -222,50 +234,47 @@ impl Interpreter for AnalyzeTableInterpreter {
                         )
                     })
                     .collect::<Vec<_>>();
-                for (sql, col_id) in histogram_sqls.into_iter() {
-                    info!("Analyze histogram via sql: {sql}");
-                    let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
-                    if !self.ctx.get_cluster().is_empty() {
-                        histogram_plan = remove_exchange(histogram_plan);
-                    }
-                    let mut histogram_build_res = build_query_pipeline(
-                        &QueryContext::create_from(self.ctx.as_ref()),
-                        &bind_context.columns,
-                        &histogram_plan,
-                        false,
-                    )
-                    .await?;
-                    let (tx, rx) = async_channel::unbounded();
-                    histogram_build_res.main_pipeline.add_sink(|input_port| {
-                        Ok(ProcessorPtr::create(HistogramInfoSink::create(
-                            Some(tx.clone()),
-                            input_port.clone(),
-                        )))
-                    })?;
-
-                    build_res
-                        .sources_pipelines
-                        .push(histogram_build_res.main_pipeline.finalize(None));
-                    build_res
-                        .sources_pipelines
-                        .extend(histogram_build_res.sources_pipelines);
-                    histogram_info_receivers.insert(col_id, rx);
+            for (sql, col_id) in histogram_sqls.into_iter() {
+                info!("Analyze histogram via sql: {sql}");
+                let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
+                if !self.ctx.get_cluster().is_empty() {
+                    histogram_plan = remove_exchange(histogram_plan);
                 }
-            }
-            FuseTable::do_analyze(
-                self.ctx.clone(),
-                bind_context.output_schema(),
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-                snapshot.snapshot_id,
-                &mut build_res.main_pipeline,
-                histogram_info_receivers,
-            )?;
-            return Ok(build_res);
-        }
+                let mut histogram_build_res = build_query_pipeline(
+                    &QueryContext::create_from(self.ctx.as_ref()),
+                    &bind_context.columns,
+                    &histogram_plan,
+                    false,
+                )
+                .await?;
+                let (tx, rx) = async_channel::unbounded();
+                histogram_build_res.main_pipeline.add_sink(|input_port| {
+                    Ok(ProcessorPtr::create(HistogramInfoSink::create(
+                        Some(tx.clone()),
+                        input_port.clone(),
+                    )))
+                })?;
 
-        return Ok(PipelineBuildResult::create());
+                build_res
+                    .sources_pipelines
+                    .push(histogram_build_res.main_pipeline.finalize(None));
+                build_res
+                    .sources_pipelines
+                    .extend(histogram_build_res.sources_pipelines);
+                histogram_info_receivers.insert(col_id, rx);
+            }
+        }
+        FuseTable::do_analyze(
+            self.ctx.clone(),
+            bind_context.output_schema(),
+            &self.plan.catalog,
+            &self.plan.database,
+            &self.plan.table,
+            snapshot.snapshot_id,
+            &mut build_res.main_pipeline,
+            histogram_info_receivers,
+        )?;
+        Ok(build_res)
     }
 }
 

@@ -23,6 +23,7 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::F64;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Constant;
@@ -160,30 +161,30 @@ impl Drop for EvalAggr {
 pub fn eval_aggr(
     name: &str,
     params: Vec<Scalar>,
-    columns: &[Column],
+    entries: &[BlockEntry],
     rows: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_for_test(name, params, columns, rows, false, sort_descs)
+    eval_aggr_for_test(name, params, entries, rows, false, sort_descs)
 }
 
 pub fn eval_aggr_for_test(
     name: &str,
     params: Vec<Scalar>,
-    columns: &[Column],
+    entries: &[BlockEntry],
     rows: usize,
     with_serialize: bool,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
-    let arguments = columns.iter().map(|x| x.data_type()).collect();
+    let arguments = entries.iter().map(BlockEntry::data_type).collect();
 
     let func = factory.get(name, params, arguments, sort_descs)?;
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
     let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
-    func.accumulate(state, columns.into(), None, rows)?;
+    func.accumulate(state, entries.into(), None, rows)?;
     if with_serialize {
         let mut buf = vec![];
         func.serialize(state, &mut buf)?;
