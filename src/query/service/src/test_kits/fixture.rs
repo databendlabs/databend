@@ -147,6 +147,28 @@ impl TestFixture {
         Self::setup_with_custom(OSSSetup { config }).await
     }
 
+    /// Create a new TestFixture with default config.
+    pub async fn setup_with_history_log() -> Result<TestFixture> {
+        let config = ConfigBuilder::create().config();
+        let conf = OSSSetup { config }.setup().await?;
+
+        use crate::history_tables::session::create_session;
+        let default_session =
+            create_session(conf.query.tenant_id.tenant_name(), &conf.query.cluster_id).await?;
+        let default_ctx = default_session.create_query_context().await?;
+
+        let random_prefix: String = Uuid::new_v4().simple().to_string();
+        let thread_name = std::thread::current().name().unwrap().to_string();
+        let guard = TestGuard::new(thread_name.clone());
+        Ok(Self {
+            default_ctx,
+            default_session,
+            conf,
+            prefix: random_prefix,
+            _guard: guard,
+        })
+    }
+
     pub async fn setup_with_segment_cache_bytes(segment_bytes: u64) -> Result<TestFixture> {
         let config = ConfigBuilder::create()
             .enable_table_meta_cache()
