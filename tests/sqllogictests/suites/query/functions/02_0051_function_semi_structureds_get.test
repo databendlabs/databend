@@ -92,7 +92,7 @@ NULL
 query T
 select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->>'aa'
 ----
-null
+NULL
 
 query T
 select parse_json(null)->>'aa'
@@ -305,7 +305,7 @@ select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>>'{1
 query T
 select '[1, 2, 3, null]'::json#>>'{3}'
 ----
-null
+NULL
 
 query T
 select [][0]

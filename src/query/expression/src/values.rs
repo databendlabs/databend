@@ -31,12 +31,12 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::prelude::BinaryRead;
 use enum_as_inner::EnumAsInner;
-use ethnum::i256;
 use geo::Geometry;
 use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
 use itertools::Itertools;
+use jsonb::RawJsonb;
 use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
@@ -65,6 +65,7 @@ use crate::types::geography::GeographyColumn;
 use crate::types::geography::GeographyRef;
 use crate::types::geometry::compare_geometry;
 use crate::types::geometry::GeometryType;
+use crate::types::i256;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -314,6 +315,21 @@ impl<T: Decimal> Value<DecimalType<T>> {
     }
 }
 
+impl<T: Decimal> Value<NullableType<DecimalType<T>>> {
+    pub fn upcast_nullable_decimal(self, size: DecimalSize) -> Value<AnyType> {
+        match self {
+            Value::Scalar(scalar) => match scalar {
+                Some(scalar) => Value::Scalar(T::upcast_scalar(scalar, size)),
+                None => Value::Scalar(Scalar::Null),
+            },
+            Value::Column(col) => Value::Column(Column::Nullable(Box::new(NullableColumn {
+                column: T::upcast_column(col.column, size),
+                validity: col.validity.clone(),
+            }))),
+        }
+    }
+}
+
 impl Value<AnyType> {
     pub fn convert_to_full_column(&self, ty: &DataType, num_rows: usize) -> Column {
         match self {
@@ -333,6 +349,17 @@ impl Value<AnyType> {
         match self {
             Value::Column(c) => Value::Column(c.wrap_nullable(validity)),
             scalar => scalar,
+        }
+    }
+
+    pub fn remove_nullable(self) -> (Self, bool) {
+        match self {
+            Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
+            Value::Column(Column::Nullable(box nullable_column)) => (
+                Value::Column(nullable_column.column),
+                nullable_column.validity.unset_bits() > 0,
+            ),
+            other => (other, false),
         }
     }
 }
@@ -743,7 +770,9 @@ impl PartialOrd for Scalar {
             (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
             }
             (Scalar::Geometry(g1), Scalar::Geometry(g2)) => compare_geometry(g1, g2),
             (Scalar::Geography(g1), Scalar::Geography(g2)) => g1.partial_cmp(g2),
@@ -781,7 +810,11 @@ impl<'a, 'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'a> {
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => {
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
+            }
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
             (ScalarRef::Geography(g1), ScalarRef::Geography(g2)) => g1.partial_cmp(g2),
 
@@ -875,9 +908,13 @@ impl PartialOrd for Column {
                 col1.iter().partial_cmp(col2.iter())
             }
             (Column::Tuple(fields1), Column::Tuple(fields2)) => fields1.partial_cmp(fields2),
-            (Column::Variant(col1), Column::Variant(col2)) => col1
-                .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
+            (Column::Variant(col1), Column::Variant(col2)) => {
+                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
+                    let left_jsonb = RawJsonb::new(v1);
+                    let right_jsonb = RawJsonb::new(v2);
+                    left_jsonb.partial_cmp(&right_jsonb)
+                })
+            }
             (Column::Geometry(col1), Column::Geometry(col2)) => {
                 col1.iter().partial_cmp_by(col2.iter(), compare_geometry)
             }
@@ -1315,7 +1352,7 @@ impl Column {
             DataType::Variant => {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let val = jsonb::rand_value();
+                    let val = jsonb::Value::rand_value();
                     data.push(val.to_vec());
                 }
                 VariantType::from_data(data)

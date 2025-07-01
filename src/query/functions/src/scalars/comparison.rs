@@ -48,6 +48,7 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::ValueRef;
+use jsonb::RawJsonb;
 use memchr::memmem;
 use regex::Regex;
 
@@ -83,42 +84,54 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         "eq",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) == Ordering::Equal
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "noteq",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) != Ordering::Equal
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gt",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Greater
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) == Ordering::Greater
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "gte",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) != Ordering::Less
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lt",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) == Ordering::Less
         },
     );
     registry.register_2_arg::<VariantType, VariantType, BooleanType, _, _>(
         "lte",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Greater
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) != Ordering::Greater
         },
     );
 }
@@ -448,7 +461,8 @@ fn register_like(registry: &mut FunctionRegistry) {
         variant_vectorize_like(|val, pat, _, pattern_type| {
             match &pattern_type {
                 LikePattern::OrdinalStr => {
-                    if let Some(s) = jsonb::as_str(val) {
+                    let raw_jsonb = RawJsonb::new(val);
+                    if let Ok(Some(s)) = raw_jsonb.as_str() {
                         LikePattern::ordinal_str(s.as_bytes(), pat)
                     } else {
                         false
@@ -456,7 +470,8 @@ fn register_like(registry: &mut FunctionRegistry) {
                 }
                 LikePattern::EndOfPercent => {
                     // fast path, can use starts_with
-                    if let Some(s) = jsonb::as_str(val) {
+                    let raw_jsonb = RawJsonb::new(val);
+                    if let Ok(Some(s)) = raw_jsonb.as_str() {
                         LikePattern::end_of_percent(s.as_bytes(), pat)
                     } else {
                         false
@@ -464,27 +479,57 @@ fn register_like(registry: &mut FunctionRegistry) {
                 }
                 LikePattern::StartOfPercent => {
                     // fast path, can use ends_with
-                    if let Some(s) = jsonb::as_str(val) {
+                    let raw_jsonb = RawJsonb::new(val);
+                    if let Ok(Some(s)) = raw_jsonb.as_str() {
                         LikePattern::start_of_percent(s.as_bytes(), pat)
                     } else {
                         false
                     }
                 }
                 LikePattern::SurroundByPercent => {
-                    jsonb::traverse_check_string(val, |v| LikePattern::surround_by_percent(v, pat))
+                    let raw_jsonb = RawJsonb::new(val);
+                    match raw_jsonb
+                        .traverse_check_string(|v| LikePattern::surround_by_percent(v, pat))
+                    {
+                        Ok(res) => res,
+                        Err(_) => {
+                            let s = raw_jsonb.to_string();
+                            LikePattern::surround_by_percent(s.as_bytes(), pat)
+                        }
+                    }
                 }
                 LikePattern::SimplePattern(simple_pattern) => {
-                    jsonb::traverse_check_string(val, |v| {
+                    let raw_jsonb = RawJsonb::new(val);
+                    match raw_jsonb.traverse_check_string(|v| {
                         LikePattern::simple_pattern(
                             v,
                             simple_pattern.0,
                             simple_pattern.1,
                             &simple_pattern.2,
                         )
-                    })
+                    }) {
+                        Ok(res) => res,
+                        Err(_) => {
+                            let s = raw_jsonb.to_string();
+                            LikePattern::simple_pattern(
+                                s.as_bytes(),
+                                simple_pattern.0,
+                                simple_pattern.1,
+                                &simple_pattern.2,
+                            )
+                        }
+                    }
                 }
                 LikePattern::ComplexPattern => {
-                    jsonb::traverse_check_string(val, |v| LikePattern::complex_pattern(v, pat))
+                    let raw_jsonb = RawJsonb::new(val);
+                    match raw_jsonb.traverse_check_string(|v| LikePattern::complex_pattern(v, pat))
+                    {
+                        Ok(res) => res,
+                        Err(_) => {
+                            let s = raw_jsonb.to_string();
+                            LikePattern::complex_pattern(s.as_bytes(), pat)
+                        }
+                    }
                 }
             }
         }),

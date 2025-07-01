@@ -19,6 +19,8 @@ use std::ops::Range;
 use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
@@ -28,6 +30,7 @@ use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use crate::date_helper::TzLUT;
 use crate::property::Domain;
+use crate::types::decimal::DecimalScalar;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -180,7 +183,9 @@ impl ValueType for VariantType {
 
     #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Option<Ordering> {
-        Some(jsonb::compare(lhs, rhs).expect("unable to parse jsonb value"))
+        let left_jsonb = RawJsonb::new(lhs);
+        let right_jsonb = RawJsonb::new(rhs);
+        left_jsonb.partial_cmp(&right_jsonb)
     }
 }
 
@@ -214,7 +219,22 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
-        ScalarRef::Decimal(x) => x.to_float64().into(),
+        ScalarRef::Decimal(x) => match x {
+            DecimalScalar::Decimal128(value, size) => {
+                let dec = jsonb::Decimal128 {
+                    scale: size.scale,
+                    value,
+                };
+                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+            }
+            DecimalScalar::Decimal256(value, size) => {
+                let dec = jsonb::Decimal256 {
+                    scale: size.scale,
+                    value: value.0,
+                };
+                jsonb::Value::Number(jsonb::Number::Decimal256(dec))
+            }
+        },
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
         ScalarRef::Binary(s) => jsonb::Value::String(hex::encode_upper(s).into()),
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
@@ -222,7 +242,9 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         ScalarRef::Date(d) => date_to_string(d, inner_tz).to_string().into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
-            jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
+            let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
+                .expect("failed to build jsonb array");
+            buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Map(col) => {
@@ -242,8 +264,10 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 cast_scalar_to_variant(v, tz, &mut val);
                 kvs.insert(key, val);
             }
-            jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
-                .expect("failed to build jsonb object from map");
+            let owned_jsonb =
+                OwnedJsonb::build_object(kvs.iter().map(|(k, v)| (k, RawJsonb::new(&v[..]))))
+                    .expect("failed to build jsonb object from map");
+            buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Bitmap(b) => {
@@ -259,14 +283,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
         }
         ScalarRef::Tuple(fields) => {
             let values = cast_scalars_to_variants(fields, tz);
-            jsonb::build_object(
+            let owned_jsonb = OwnedJsonb::build_object(
                 values
                     .iter()
                     .enumerate()
-                    .map(|(i, bytes)| (format!("{}", i + 1), bytes)),
-                buf,
+                    .map(|(i, bytes)| (format!("{}", i + 1), RawJsonb::new(bytes))),
             )
             .expect("failed to build jsonb object from tuple");
+            buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Variant(bytes) => {

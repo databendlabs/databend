@@ -233,7 +233,7 @@ deltalake = "0.18"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = "0.99.17"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
-ethnum = { version = "1.5.0" }
+ethnum = { version = "1.5.1" }
 feature-set = { version = "0.1.1" }
 flatbuffers = "24" # Must use the same version with arrow-ipc
 futures = "0.3.24"
@@ -245,8 +245,8 @@ geozero = { version = "0.13.0", features = ["default", "with-wkb", "with-geos", 
 hashbrown = { version = "0.14.3", default-features = false }
 http = "1"
 itertools = "0.10.5"
-jsonb = "0.4.1"
-jwt-simple = "0.11.0"
+jsonb = "0.5.2"
+jwt-simple = { version = "0.12.12", default-features = false, features = ["pure-rust"] }
 match-template = "0.0.1"
 mysql_async = { version = "0.34", default-features = false, features = ["native-tls-tls"] }
 object_store_opendal = "0.46"
@@ -271,7 +271,7 @@ opendal = { version = "0.49.0", features = [
     "services-huggingface",
     "services-redis",
 ] }
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.10.0-alpha.6", features = [
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7", features = [
     "serde",
     "tracing-log",
     "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
@@ -414,7 +414,7 @@ async-recursion = { git = "https://github.com/zhang2014/async-recursion.git", re
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
-ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
+jsonb = { git = "https://github.com/databendlabs/jsonb.git", rev = "edd714b" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 # patched opendal which categories the XML dersierialization errors as recoverable
 opendal = { git = "https://github.com/datafuse-extras/opendal-for-release-v1.2.636", tag = "v0.49.0-xml-deser-retry" }

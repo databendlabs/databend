@@ -244,7 +244,7 @@ impl Client for ScriptClient {
             Scalar::Decimal(DecimalScalar::Decimal256(v, size)) => Expr::Literal {
                 span: None,
                 value: Literal::Decimal256 {
-                    value: *v,
+                    value: v.0,
                     precision: size.precision,
                     scale: size.scale,
                 },

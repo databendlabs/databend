@@ -20,6 +20,7 @@ use bumpalo::Bump;
 use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -384,9 +385,8 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
                     "Illegal data type for LargeFixedKeysColumnIter<u128>".to_string(),
                 )
             })?;
-        let buffer = unsafe {
-            std::mem::transmute::<Buffer<ethnum::I256>, Buffer<ethnum::U256>>(buffer.0.clone())
-        };
+        let buffer =
+            unsafe { std::mem::transmute::<Buffer<i256>, Buffer<ethnum::U256>>(buffer.0.clone()) };
 
         LargeFixedKeysColumnIter::create(buffer)
     }

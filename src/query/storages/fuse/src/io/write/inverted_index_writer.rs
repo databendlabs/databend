@@ -25,6 +25,8 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use jsonb::from_raw_jsonb;
+use jsonb::RawJsonb;
 use tantivy::indexer::UserOperation;
 use tantivy::schema::Field;
 use tantivy::schema::IndexRecordOption;
@@ -104,7 +106,10 @@ impl InvertedIndexWriter {
                     ScalarRef::String(text) => doc.add_text(field, text),
                     ScalarRef::Variant(jsonb_val) => {
                         // only support object JSON, other JSON type will not add index.
-                        if let Ok(Some(obj_val)) = jsonb::to_serde_json_object(jsonb_val) {
+                        let raw_jsonb = RawJsonb::new(jsonb_val);
+                        if let Ok(obj_val) =
+                            from_raw_jsonb::<serde_json::Map<String, serde_json::Value>>(&raw_jsonb)
+                        {
                             let object: BTreeMap<String, OwnedValue> = obj_val
                                 .into_iter()
                                 .map(|(key, value)| (key, OwnedValue::from(value)))

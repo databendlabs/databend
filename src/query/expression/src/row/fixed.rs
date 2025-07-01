@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use databend_common_arrow::arrow::bitmap::Bitmap;
-use ethnum::i256;
 
 use super::row_converter::null_sentinel;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::i256;
 use crate::types::F32;
 use crate::types::F64;
 

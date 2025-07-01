@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::OrderedFloat;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::vectorize_1_arg;
@@ -38,8 +39,9 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::ValueRef;
-use ethnum::i256;
 use num_traits::AsPrimitive;
+
+use crate::scalars::decimal::cast_from_jsonb::variant_to_decimal;
 
 // int float to decimal
 pub fn register_to_decimal(registry: &mut FunctionRegistry) {
@@ -55,7 +57,11 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
 
         if !matches!(
             from_type,
-            DataType::Boolean | DataType::Number(_) | DataType::Decimal(_) | DataType::String
+            DataType::Boolean
+                | DataType::Number(_)
+                | DataType::Decimal(_)
+                | DataType::String
+                | DataType::Variant
         ) {
             return None;
         }
@@ -380,6 +386,11 @@ pub fn convert_to_decimal(
                     let arg = arg.try_downcast().unwrap();
                     string_to_decimal::<T>(arg, ctx, size)
                 }
+                DataType::Variant => {
+                    let arg = arg.try_downcast().unwrap();
+                    let result = variant_to_decimal::<T>(arg.to_owned(), ctx, dest_type, false);
+                    return result.upcast_nullable_decimal(size);
+                }
                 _ => unreachable!("to_decimal not support this DataType"),
             };
             result.upcast_decimal(size)
@@ -558,9 +569,9 @@ where
 }
 
 #[inline]
-fn get_round_val<T: Decimal>(x: T, scale: u32, ctx: &mut EvalContext) -> Option<T> {
+pub(super) fn get_round_val<T: Decimal>(x: T, scale: u32, rounding_mode: bool) -> Option<T> {
     let mut round_val = None;
-    if ctx.func_ctx.rounding_mode && scale > 0 {
+    if rounding_mode && scale > 0 {
         // Checking whether numbers need to be added or subtracted to calculate rounding
         if let Some(r) = x.checked_rem(T::e(scale)) {
             if let Some(m) = r.checked_div(T::e(scale - 1)) {
@@ -607,7 +618,7 @@ fn decimal_256_to_128(
 
         vectorize_with_builder_1_arg::<DecimalType<i256>, DecimalType<i128>>(
             |x: i256, builder: &mut Vec<i128>, ctx: &mut EvalContext| {
-                let round_val = get_round_val::<i256>(x, scale_diff, ctx);
+                let round_val = get_round_val::<i256>(x, scale_diff, ctx.func_ctx.rounding_mode);
                 let y = match (x.checked_div(factor), round_val) {
                     (Some(x), Some(round_val)) => x.checked_add(round_val),
                     (Some(x), None) => Some(x),
@@ -657,12 +668,12 @@ macro_rules! m_decimal_to_decimal {
             let max = T::max_for_precision($dest_size.precision);
             let min = T::min_for_precision($dest_size.precision);
 
-            let source_factor = F::e($from_size.scale as u32);
+            let source_factor = T::e($from_size.scale as u32);
 
             vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
                 |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
                     let x = T::from(x);
-                    let round_val = get_round_val::<T>(x, scale_diff, ctx);
+                    let round_val = get_round_val::<T>(x, scale_diff, ctx.func_ctx.rounding_mode);
                     let y = match (x.checked_div(factor), round_val) {
                         (Some(x), Some(round_val)) => x.checked_add(round_val),
                         (Some(x), None) => Some(x),

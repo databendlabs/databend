@@ -130,7 +130,7 @@ humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = { workspace = true }
 jsonb = { workspace = true }
-jwt-simple = "0.11.0"
+jwt-simple = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
@@ -181,7 +181,7 @@ arrow-cast = { workspace = true }
 criterion = { workspace = true }
 goldenfile = "1.4"
 hex = "0.4.3"
-jwt-simple = "0.12"
+jwt-simple = { workspace = true }
 maplit = "1.0.2"
 mysql_async = { workspace = true }
 num = "0.4.0"

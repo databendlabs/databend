@@ -25,6 +25,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::decimal::*;
+use databend_common_expression::types::i256;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
@@ -44,7 +45,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
-use ethnum::i256;
 use num_traits::AsPrimitive;
 
 use super::aggregate_function::AggregateFunction;

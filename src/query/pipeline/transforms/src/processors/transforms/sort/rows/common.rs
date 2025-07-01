@@ -27,7 +27,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::SortField;
 use databend_common_expression::Value;
-use jsonb::convert_to_comparable;
+use jsonb::RawJsonb;
 
 use super::RowConverter;
 use super::Rows;
@@ -77,8 +77,8 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                 Value::Scalar(s) => match s {
                     Scalar::Variant(val) => {
                         // convert variant value to comparable format.
-                        let mut buf = Vec::new();
-                        convert_to_comparable(val, &mut buf);
+                        let raw_jsonb = RawJsonb::new(val);
+                        let buf = raw_jsonb.convert_to_comparable();
                         let s = Scalar::Variant(buf);
                         ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
                     }
@@ -88,12 +88,11 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                     let data_type = c.data_type();
                     match data_type.remove_nullable() {
                         DataType::Variant => {
-                            // convert variant value to comparable format.
                             let (_, validity) = c.validity();
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
                             let mut builder =
-                                BinaryColumnBuilder::with_capacity(col.len(), col.data().len());
+                                BinaryColumnBuilder::with_capacity(col.len(), col.memory_size());
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {
                                     if unsafe { !validity.get_bit_unchecked(i) } {
@@ -101,7 +100,9 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                                         continue;
                                     }
                                 }
-                                convert_to_comparable(val, &mut builder.data);
+                                let raw_jsonb = RawJsonb::new(val);
+                                let buf = raw_jsonb.convert_to_comparable();
+                                builder.put_slice(buf.as_ref());
                                 builder.commit_row();
                             }
                             if data_type.is_nullable() {

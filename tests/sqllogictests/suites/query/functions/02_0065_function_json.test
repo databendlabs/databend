@@ -26,32 +26,32 @@ NULL
 query T
 SELECT json_typeof(parse_json('null'))
 ----
-null
+NULL_VALUE
 
 query T
 SELECT json_typeof(parse_json('true'))
 ----
-boolean
+BOOLEAN
 
 query T
 SELECT json_typeof(parse_json('"test"'))
 ----
-string
+STRING
 
 query T
 SELECT json_typeof(parse_json('-1.12'))
 ----
-number
+DECIMAL
 
 query T
 SELECT json_typeof(parse_json('[1,2,3]'))
 ----
-array
+ARRAY
 
 query T
 SELECT json_typeof(parse_json('{"a":1,"b":2}'))
 ----
-object
+OBJECT
 
 query T
 SELECT json_array()
@@ -558,8 +558,8 @@ select id, v @? '$.b' from t2 order by id
 query T
 select id, v @@ '$[*] == "b"' from t2 order by id
 ----
-1 0
-2 0
+1 NULL
+2 NULL
 3 1
 4 NULL
 

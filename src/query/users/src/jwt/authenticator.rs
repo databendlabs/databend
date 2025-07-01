@@ -25,6 +25,7 @@ use serde::Serialize;
 
 use super::jwk;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum PubKey {
     RSA256(RS256PublicKey),
