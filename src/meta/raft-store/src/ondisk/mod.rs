@@ -16,7 +16,6 @@
 
 mod data_version;
 mod header;
-pub(crate) mod upgrade_to_v003;
 pub(crate) mod upgrade_to_v004;
 pub(crate) mod version_info;
 
@@ -268,7 +267,9 @@ impl OnDisk {
                     );
                 }
                 DataVersion::V003 => {
-                    self.clean_in_progress_v002_to_v003().await?;
+                    unreachable!(
+                        "Upgrading V002 to V003 is not supported since 2025-07-01, TODO version"
+                    );
                 }
                 DataVersion::V004 => {
                     self.clean_in_progress_v003_to_v004().await?;
@@ -297,7 +298,10 @@ impl OnDisk {
                     )
                 }
                 DataVersion::V002 => {
-                    self.upgrade_v002_to_v003().await?;
+                    unreachable!(
+                        "{} is no longer supported, since 2025-07-01, TODO version",
+                        self.header.version
+                    )
                 }
                 DataVersion::V003 => {
                     self.upgrade_v003_to_v004().await?;
