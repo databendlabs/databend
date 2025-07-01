@@ -94,15 +94,17 @@ where
     for<'a> T::ScalarRef<'a>: Hash,
 {
     fn update_column(&mut self, column: &Column) {
-        let (column, validity) = if let Column::Nullable(box inner) = column {
-            let validity = if inner.validity.null_count() == 0 {
-                None
-            } else {
-                Some(&inner.validity)
-            };
-            (&inner.column, validity)
-        } else {
-            (column, None)
+        let (column, validity) = match column {
+            Column::Nullable(box inner) => {
+                let validity = if inner.validity.null_count() == 0 {
+                    None
+                } else {
+                    Some(&inner.validity)
+                };
+                (&inner.column, validity)
+            }
+            Column::Null { .. } => return,
+            column => (column, None),
         };
 
         let column = T::try_downcast_column(column).unwrap();
