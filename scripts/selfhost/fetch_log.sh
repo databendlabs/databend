@@ -28,6 +28,42 @@ log() {
     esac
 }
 
+# Show help information
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS] YYYYMMDD
+
+Download Databend system data for the specified date.
+
+OPTIONS:
+    --dsn DSN              Database connection string (overrides BENDSQL_DSN env var)
+    --output_dir PATH      Output directory (default: current directory)
+    -v                     Verbose output
+    -vv                    Debug output (very verbose)
+    -h, --help             Show this help message
+
+ARGUMENTS:
+    YYYYMMDD              Date in YYYYMMDD format (e.g., 20231225)
+
+ENVIRONMENT VARIABLES:
+    BENDSQL_DSN           Default database connection string
+
+EXAMPLES:
+    # Use environment variable for DSN
+    export BENDSQL_DSN="http://username:password@localhost:8000/database?sslmode=enable"
+    $0 20250701
+
+    # Override DSN with command line
+    $0 --dsn "http://username:password@localhost:8000/database?sslmode=enable" 20250701
+
+    # Specify custom output directory
+    $0 --output_dir /tmp/databend_export 20250701
+
+    # Enable verbose logging
+    $0 -v 20250701
+EOF
+}
+
 # Convert YYYYMMDD to YYYY-MM-DD
 format_date() {
     local input_date="$1"
@@ -38,6 +74,10 @@ format_date() {
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
             --dsn)
                 DSN="$2"
                 shift 2
@@ -60,25 +100,42 @@ parse_arguments() {
                     shift
                 else
                     log ERROR "Unexpected argument: $1"
+                    echo "Use -h or --help for usage information." >&2
                     exit 1
                 fi
                 ;;
         esac
     done
 
+    # Set DSN from environment variable if not provided via command line
+    if [[ -z "$DSN" && -n "$BENDSQL_DSN" ]]; then
+        DSN="$BENDSQL_DSN"
+        log DEBUG "Using DSN from environment variable BENDSQL_DSN"
+    fi
+
     OUTPUT_DIR="${OUTPUT_DIR:-$DEFAULT_OUTPUT_DIR}"
-    format_date "$DATE"
+    
+    if [[ -n "$DATE" ]]; then
+        format_date "$DATE"
+    fi
 }
 
 validate_arguments() {
     if [[ -z "$DATE" ]]; then
         log ERROR "Missing required date parameter"
-        echo "Usage: $0 [--dsn \"http://...\"] [--output_dir \"path\"] [-v|-vv] YYYYMMDD" >&2
+        echo "Use -h or --help for usage information." >&2
         exit 1
     fi
 
     if [[ ! "$DATE" =~ ^[0-9]{8}$ ]]; then
         log ERROR "Invalid date format: $DATE (expected YYYYMMDD)"
+        echo "Use -h or --help for usage information." >&2
+        exit 1
+    fi
+
+    if [[ -z "$DSN" ]]; then
+        log ERROR "No DSN provided. Set BENDSQL_DSN environment variable or use --dsn option."
+        echo "Use -h or --help for usage information." >&2
         exit 1
     fi
 }
@@ -183,7 +240,6 @@ extract_first_column() {
         -e 's/"//g' | \
     awk -F '\t' 'NF>0 {print $1}'
 }
-
 
 main() {
     parse_arguments "$@"
