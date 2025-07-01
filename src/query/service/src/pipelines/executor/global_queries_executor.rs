@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::OnceLock;
 
-use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use databend_common_exception::Result;
 use log::info;
@@ -23,19 +23,29 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 
 pub struct GlobalQueriesExecutor(pub QueriesPipelineExecutor);
 
+static GLOBAL_QUERIES_EXECUTOR: OnceLock<Arc<QueriesPipelineExecutor>> = OnceLock::new();
+
 impl GlobalQueriesExecutor {
-    pub fn init() -> Result<()> {
+    fn init_once() -> Result<Arc<QueriesPipelineExecutor>> {
         let num_cpus = num_cpus::get();
-        GlobalInstance::set(QueriesPipelineExecutor::create(num_cpus)?);
-        Thread::spawn(|| {
-            if let Err(e) = Self::instance().execute() {
+        let executor = QueriesPipelineExecutor::create(num_cpus)?;
+        let executor_clone = executor.clone();
+        Thread::named_spawn(Some("GlobalQueriesExecutor".to_string()), move || {
+            if let Err(e) = executor.execute() {
                 info!("Executor finished with error: {:?}", e);
             }
         });
-        Ok(())
+        Ok(executor_clone)
     }
 
     pub fn instance() -> Arc<QueriesPipelineExecutor> {
-        GlobalInstance::get()
+        GLOBAL_QUERIES_EXECUTOR
+            .get_or_init(|| match Self::init_once() {
+                Ok(executor) => executor,
+                Err(e) => {
+                    panic!("Failed to initialize GlobalQueriesExecutor: {:?}", e);
+                }
+            })
+            .clone()
     }
 }

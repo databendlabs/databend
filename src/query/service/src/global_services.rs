@@ -50,8 +50,6 @@ use crate::catalogs::IcebergCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
 use crate::locks::LockManager;
-#[cfg(feature = "enable_queries_executor")]
-use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
@@ -161,11 +159,6 @@ impl GlobalServices {
 
         if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
             CloudControlApiProvider::init(addr, config.query.cloud_control_grpc_timeout).await?;
-        }
-
-        #[cfg(feature = "enable_queries_executor")]
-        {
-            GlobalQueriesExecutor::init()?;
         }
 
         if !ee_mode {
