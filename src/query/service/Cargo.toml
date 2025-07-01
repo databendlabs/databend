@@ -130,7 +130,7 @@ humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = { workspace = true }
 jsonb = { workspace = true }
-jwt-simple  = { workspace = true }
+jwt-simple = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = { workspace = true }
