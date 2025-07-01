@@ -14,6 +14,7 @@
 
 use std::time::Duration;
 
+use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
@@ -48,11 +49,9 @@ use fastrace::func_path;
 use log::debug;
 use log::info;
 
-use crate::kvapi;
-
 pub struct TestSuite {}
 
-impl kvapi::TestSuite {
+impl TestSuite {
     #[fastrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
@@ -115,7 +114,7 @@ impl kvapi::TestSuite {
     }
 }
 
-impl kvapi::TestSuite {
+impl TestSuite {
     #[fastrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
@@ -1601,7 +1600,7 @@ impl kvapi::TestSuite {
 }
 
 /// Test that write and read should be forwarded to leader
-impl kvapi::TestSuite {
+impl TestSuite {
     #[fastrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,

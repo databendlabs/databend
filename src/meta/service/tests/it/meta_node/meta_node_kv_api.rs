@@ -75,5 +75,7 @@ async fn test_meta_node_kv_api() -> anyhow::Result<()> {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    kvapi::TestSuite {}.test_all(builder).await
+    databend_common_meta_kvapi_test_suite::TestSuite {}
+        .test_all(builder)
+        .await
 }

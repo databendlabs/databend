@@ -3770,12 +3770,22 @@ dependencies = [
  "async-trait",
  "databend-common-meta-app-types",
  "databend-common-meta-types",
- "display-more",
- "fastrace",
  "futures-util",
  "log",
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "databend-common-meta-kvapi-test-suite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "databend-common-meta-kvapi",
+ "databend-common-meta-types",
+ "display-more",
+ "fastrace",
+ "log",
  "tokio",
 ]
 
@@ -3906,6 +3916,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
+ "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
  "databend-meta",
@@ -5111,6 +5122,7 @@ dependencies = [
  "databend-common-meta-cache",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
+ "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
