@@ -745,6 +745,13 @@ impl FuseTable {
                 )
             })
     }
+
+    pub fn enable_stream_block_write(&self) -> bool {
+        matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && self
+                .cluster_type()
+                .is_none_or(|v| matches!(v, ClusterType::Hilbert))
+    }
 }
 
 #[async_trait::async_trait]
