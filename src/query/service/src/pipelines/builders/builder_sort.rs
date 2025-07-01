@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::assert_matches::debug_assert_matches;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -54,28 +55,29 @@ impl PipelineBuilder {
 
         let input_schema = sort.input.output_schema()?;
 
-        if sort.step == SortStep::FinalMerge {
-            // If the Sort plan is after exchange, we don't need to do a projection,
-            // because the data is already projected in each cluster node.
-            if let Some(proj) = &sort.pre_projection {
-                // Do projection to reduce useless data copying during sorting.
-                let projection = proj
-                    .iter()
-                    .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
-                    .collect::<Vec<_>>();
+        if let Some(proj) = &sort.pre_projection {
+            debug_assert_matches!(
+                sort.step,
+                SortStep::Single | SortStep::Partial | SortStep::Sample
+            );
 
-                if projection.len() < input_schema.fields().len() {
-                    // Only if the projection is not a full projection, we need to add a projection transform.
-                    self.main_pipeline.add_transformer(|| {
-                        CompoundBlockOperator::new(
-                            vec![BlockOperator::Project {
-                                projection: projection.clone(),
-                            }],
-                            self.func_ctx.clone(),
-                            input_schema.num_fields(),
-                        )
-                    });
-                }
+            // Do projection to reduce useless data copying during sorting.
+            let projection = proj
+                .iter()
+                .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
+                .collect::<Vec<_>>();
+
+            if projection.len() < input_schema.fields().len() {
+                // Only if the projection is not a full projection, we need to add a projection transform.
+                self.main_pipeline.add_transformer(|| {
+                    CompoundBlockOperator::new(
+                        vec![BlockOperator::Project {
+                            projection: projection.clone(),
+                        }],
+                        self.func_ctx.clone(),
+                        input_schema.num_fields(),
+                    )
+                });
             }
         }
 
@@ -140,19 +142,18 @@ impl PipelineBuilder {
             SortStep::Single => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
-                if self.settings.get_enable_range_shuffle_sort()?
-                    && self.main_pipeline.output_len() > 1
-                {
-                    builder
-                        .remove_order_col_at_last()
-                        .build_range_shuffle_sort_pipeline(&mut self.main_pipeline)
-                } else {
-                    builder
-                        .remove_order_col_at_last()
-                        .build_full_sort_pipeline(&mut self.main_pipeline)
-                }
+                builder
+                    .remove_order_col_at_last()
+                    .build_full_sort_pipeline(&mut self.main_pipeline)
             }
-            _ => unimplemented!(),
+            SortStep::Sample => {
+                builder
+                    .remove_order_col_at_last()
+                    .build_range_shuffle_sort_pipeline(&mut self.main_pipeline);
+                todo!()
+            }
+            SortStep::RangeSort => todo!(),
+            SortStep::Route => todo!(),
         }
     }
 }

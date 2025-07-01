@@ -14,17 +14,9 @@
 
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::DataBlock;
-use databend_common_expression::PartitionedPayload;
-use databend_common_expression::Payload;
-use databend_common_expression::PayloadFlushState;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::FlightCompression;
-use databend_common_storage::DataOperator;
 
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;

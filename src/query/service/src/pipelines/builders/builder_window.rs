@@ -24,6 +24,7 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_sql::executor::physical_plans::SortStep;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
