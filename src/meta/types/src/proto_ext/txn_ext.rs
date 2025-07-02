@@ -21,36 +21,6 @@ use pb::txn_condition::Target;
 use crate::protobuf as pb;
 use crate::seq_value::SeqV;
 
-impl pb::TxnReply {
-    pub fn new(execution_path: impl ToString) -> Self {
-        let execution_path = execution_path.to_string();
-        Self {
-            success: execution_path != "else",
-            responses: vec![],
-            execution_path,
-        }
-    }
-
-    /// Return the index of the branch that was executed in [`pb::TxnRequest::operations`].
-    ///
-    /// If none of the branches were executed, return `None`,
-    /// i.e., the `condition` is met and `if_then` is executed, or `else_then` is executed.
-    /// In such case, the caller should then compare `execution_path` against "then" or "else` to determine which branch was executed.
-    ///
-    /// If there is an error parsing the index, return the original `execution_path`.
-    pub fn executed_branch_index(&self) -> Result<Option<usize>, &str> {
-        // if self.execution_path is in form "operation:<index>", return the index.
-        if let Some(index) = self.execution_path.strip_prefix("operation:") {
-            index
-                .parse()
-                .map(Some)
-                .map_err(|_| self.execution_path.as_str())
-        } else {
-            Ok(None)
-        }
-    }
-}
-
 #[derive(derive_more::From)]
 pub enum ExpressionOrCondition {
     Expression(#[from] pb::BooleanExpression),

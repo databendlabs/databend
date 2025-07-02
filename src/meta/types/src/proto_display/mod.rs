@@ -45,7 +45,6 @@ use crate::TxnOp;
 use crate::TxnOpResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
-use crate::TxnReply;
 
 impl Display for TxnCondition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -145,17 +144,6 @@ impl Display for Target {
                 write!(f, "keys_with_prefix({})", n)
             }
         }
-    }
-}
-
-impl Display for TxnReply {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "TxnReply{{ success: {}, responses: {}}}",
-            self.success,
-            self.responses.display()
-        )
     }
 }
 
