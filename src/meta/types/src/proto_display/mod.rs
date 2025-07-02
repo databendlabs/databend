@@ -22,7 +22,6 @@ use std::time::Duration;
 use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use display_more::DisplayUnixTimeStampExt;
-use num_traits::FromPrimitive;
 
 use crate::protobuf::boolean_expression::CombiningOperator;
 use crate::protobuf::BooleanExpression;
@@ -32,7 +31,6 @@ use crate::txn_op;
 use crate::txn_op::Request;
 use crate::txn_op_response::Response;
 use crate::ConditionResult;
-use crate::TxnCondition;
 use crate::TxnDeleteByPrefixRequest;
 use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
@@ -40,14 +38,6 @@ use crate::TxnDeleteResponse;
 use crate::TxnOpResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
-
-impl Display for TxnCondition {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let expect: ConditionResult = FromPrimitive::from_i32(self.expected).unwrap();
-
-        write!(f, "{} {} {}", self.key, expect, self.target.display())
-    }
-}
 
 impl Display for ConditionResult {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
