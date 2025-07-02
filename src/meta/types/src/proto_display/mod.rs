@@ -27,7 +27,6 @@ use num_traits::FromPrimitive;
 use crate::protobuf::boolean_expression::CombiningOperator;
 use crate::protobuf::BooleanExpression;
 use crate::protobuf::ConditionalOperation;
-use crate::protobuf::FetchAddU64;
 use crate::txn_condition::Target;
 use crate::txn_op;
 use crate::txn_op::Request;
@@ -246,20 +245,9 @@ impl Display for ConditionalOperation {
     }
 }
 
-impl Display for FetchAddU64 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FetchAddU64 key={} delta={}", self.key, self.delta)?;
-        if let Some(match_seq) = self.match_seq {
-            write!(f, " match_seq: {}", match_seq)?;
-        }
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::protobuf::BooleanExpression;
-    use crate::protobuf::FetchAddU64;
     use crate::protobuf::TxnCondition;
     use crate::TxnOp;
 
@@ -298,26 +286,6 @@ mod tests {
         assert_eq!(
             format!("{}", op),
             "if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)]"
-        );
-    }
-
-    #[test]
-    fn test_display_fetch_add_u64() {
-        let req = FetchAddU64 {
-            key: "k1".to_string(),
-            match_seq: None,
-            delta: 1,
-        };
-        assert_eq!(req.to_string(), "FetchAddU64 key=k1 delta=1");
-
-        let req_with_seq = FetchAddU64 {
-            key: "k1".to_string(),
-            match_seq: Some(10),
-            delta: 1,
-        };
-        assert_eq!(
-            req_with_seq.to_string(),
-            "FetchAddU64 key=k1 delta=1 match_seq: 10"
         );
     }
 }

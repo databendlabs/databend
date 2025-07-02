@@ -14,6 +14,7 @@
 
 //! Extend protobuf generated code with some useful methods.
 
+mod fetch_add_u64;
 mod fetch_add_u64_response_ext;
 mod raft_types_ext;
 mod seq_v_ext;
