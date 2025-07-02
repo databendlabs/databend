@@ -37,7 +37,6 @@ use crate::TxnDeleteByPrefixRequest;
 use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
-use crate::TxnGetRequest;
 use crate::TxnOp;
 use crate::TxnOpResponse;
 use crate::TxnPutRequest;
@@ -90,12 +89,6 @@ impl Display for txn_op::Request {
                 write!(f, "FetchAddU64({})", r)
             }
         }
-    }
-}
-
-impl Display for TxnGetRequest {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "Get key={}", self.key)
     }
 }
 

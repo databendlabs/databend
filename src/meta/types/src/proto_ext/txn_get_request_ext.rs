@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Extend protobuf generated code with some useful methods.
+use crate::protobuf as pb;
 
-mod fetch_add_u64;
-mod fetch_add_u64_response_ext;
-mod raft_types_ext;
-mod seq_v_ext;
-mod snapshot_chunk_request_ext;
-mod stream_item_ext;
-mod transfer_leader_request_ext;
-mod txn_ext;
-mod txn_get_request_ext;
-mod txn_get_response_ext;
-mod txn_reply_ext;
-mod txn_request_ext;
-mod watch_ext;
+use std::fmt;
+
+impl fmt::Display for pb::TxnGetRequest {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Get key={}", self.key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_txn_get_request() {
+        let req = pb::TxnGetRequest {
+            key: "k1".to_string(),
+        };
+        assert_eq!(format!("{}", req), "Get key=k1");
+    }
+}
