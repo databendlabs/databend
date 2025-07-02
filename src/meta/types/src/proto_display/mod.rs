@@ -23,8 +23,6 @@ use display_more::DisplayOptionExt;
 use display_more::DisplaySliceExt;
 use display_more::DisplayUnixTimeStampExt;
 
-use crate::protobuf::boolean_expression::CombiningOperator;
-use crate::protobuf::BooleanExpression;
 use crate::protobuf::ConditionalOperation;
 use crate::txn_condition::Target;
 use crate::txn_op;
@@ -151,35 +149,6 @@ impl Display for TxnDeleteByPrefixResponse {
     }
 }
 
-impl Display for BooleanExpression {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let op = self.operator();
-        let op = match op {
-            CombiningOperator::And => "AND",
-            CombiningOperator::Or => "OR",
-        };
-
-        let mut printed = false;
-
-        for expr in self.sub_expressions.iter() {
-            if printed {
-                write!(f, " {} ", op)?;
-            }
-            write!(f, "({})", expr)?;
-            printed = true;
-        }
-
-        for cond in self.conditions.iter() {
-            if printed {
-                write!(f, " {} ", op)?;
-            }
-            write!(f, "{}", cond)?;
-            printed = true;
-        }
-        Ok(())
-    }
-}
-
 impl Display for ConditionalOperation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -196,24 +165,6 @@ mod tests {
     use crate::protobuf::BooleanExpression;
     use crate::protobuf::TxnCondition;
     use crate::TxnOp;
-
-    #[test]
-    fn test_tx_display_with_bool_expression() {
-        let expr = BooleanExpression::from_conditions_and([
-            TxnCondition::eq_seq("k1", 1),
-            TxnCondition::eq_seq("k2", 2),
-        ])
-        .and(BooleanExpression::from_conditions_or([
-            TxnCondition::eq_seq("k3", 3),
-            TxnCondition::eq_seq("k4", 4),
-            TxnCondition::keys_with_prefix("k5", 10),
-        ]));
-
-        assert_eq!(
-            format!("{}", expr),
-            "(k3 == seq(3) OR k4 == seq(4) OR k5 == keys_with_prefix(10)) AND k1 == seq(1) AND k2 == seq(2)"
-        );
-    }
 
     #[test]
     fn test_display_conditional_operation() {
