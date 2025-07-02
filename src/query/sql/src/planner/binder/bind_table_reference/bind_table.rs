@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -38,7 +36,6 @@ use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::binder::ExprContext;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::CTEConsumer;
@@ -90,38 +87,7 @@ impl Binder {
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                // For materialized CTE, we need to add column bindings to the bind_context
-                // so that column references can be resolved correctly
-                let mut new_bind_context = bind_context.clone();
-
-                // We need to bind the CTE definition to get the columns
-                // This is similar to how non-materialized CTEs are handled
-                let mut cte_bind_context = BindContext {
-                    parent: Some(Box::new(bind_context.clone())),
-                    bound_internal_columns: BTreeMap::new(),
-                    columns: vec![],
-                    aggregate_info: Default::default(),
-                    windows: Default::default(),
-                    srf_info: Default::default(),
-                    cte_context: bind_context.cte_context.clone(),
-                    in_grouping: false,
-                    view_info: None,
-                    have_async_func: false,
-                    have_udf_script: false,
-                    have_udf_server: false,
-                    inverted_index_map: Box::default(),
-                    allow_virtual_column: false,
-                    expr_context: ExprContext::default(),
-                    planning_agg_index: false,
-                    window_definitions: DashMap::new(),
-                };
-
-                cte_bind_context.cte_context.cte_name = Some(table_name.to_string());
-
-                // Bind the CTE definition to get the columns
-                let (_, mut res_bind_context) =
-                    self.bind_query(&mut cte_bind_context, &cte_info.query)?;
-
+                let mut cte_bind_context = cte_info.bind_result.bind_context.clone();
                 // Apply column aliases
                 let mut cols_alias = cte_info.columns_alias.clone();
                 if let Some(alias) = alias {
@@ -139,26 +105,26 @@ impl Binder {
                     .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
                     .unwrap_or_else(|| table_name.to_string());
 
-                for column in res_bind_context.columns.iter_mut() {
+                for column in cte_bind_context.columns.iter_mut() {
                     column.database_name = None;
                     column.table_name = Some(alias_table_name.clone());
                 }
 
-                if cols_alias.len() > res_bind_context.columns.len() {
+                if cols_alias.len() > cte_bind_context.columns.len() {
                     return Err(ErrorCode::SemanticError(format!(
                             "The CTE '{}' has {} columns, but {} aliases were provided. Ensure the number of aliases matches the number of columns in the CTE.",
                             table_name,
-                            res_bind_context.columns.len(),
+                            cte_bind_context.columns.len(),
                             cols_alias.len()
                         ))
                             .set_span(*span));
                 }
 
                 for (index, column_name) in cols_alias.iter().enumerate() {
-                    res_bind_context.columns[index].column_name = column_name.clone();
+                    cte_bind_context.columns[index].column_name = column_name.clone();
                 }
 
-                let fields = res_bind_context
+                let fields = cte_bind_context
                     .columns
                     .iter()
                     .map(|column_binding| {
@@ -170,22 +136,22 @@ impl Binder {
                     .collect();
                 let cte_schema = DataSchemaRefExt::create(fields);
 
-                log::info!("[CTE] columns: {:?}", res_bind_context.columns);
-
                 // Add the columns to the new bind context
-                for column in res_bind_context.columns {
+                let mut new_bind_context = bind_context.clone();
+                for column in cte_bind_context.columns {
                     new_bind_context.add_column_binding(column);
                 }
 
-                let s_expr = SExpr::create_with_shared_stat_info(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
-                    cte_name: table_name,
-                    cte_schema,
-                })),
-                vec![],
-                None,
-                None,
-                cte_info.stat_info.clone(),
-            );
+                let s_expr = SExpr::create(
+                    Arc::new(RelOperator::CTEConsumer(CTEConsumer {
+                        cte_name: table_name,
+                        cte_schema,
+                    })),
+                    vec![],
+                    None,
+                    None,
+                    Some(cte_info.bind_result.stat_info.clone()),
+                );
                 return Ok((s_expr, new_bind_context));
             } else {
                 if self

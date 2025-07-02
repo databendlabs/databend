@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Query;
@@ -26,6 +25,7 @@ use databend_common_exception::Result;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
+use crate::binder::CteBindResult;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::RelExpr;
@@ -73,8 +73,9 @@ impl Binder {
                 }
             }
         }
-        // Initialize cte map.
-        self.init_cte(bind_context, &with)?;
+
+        // Bind cte definition.
+        self.bind_cte_def(bind_context, &with)?;
 
         // Extract limit and offset from query.
         let (limit, offset) = self.extract_limit_and_offset(query)?;
@@ -125,43 +126,53 @@ impl Binder {
         Ok(())
     }
 
-    // Initialize cte map.
-    pub(crate) fn init_cte(
+    pub(crate) fn bind_cte_def(
         &mut self,
         bind_context: &mut BindContext,
         with: &Option<With>,
     ) -> Result<()> {
-        let with = if let Some(with) = with {
-            with
-        } else {
+        let Some(with) = with else {
             return Ok(());
         };
-
         for cte in with.ctes.iter() {
-            let table_name = self.normalize_identifier(&cte.alias.name).name;
-            if bind_context.cte_context.cte_map.contains_key(&table_name) {
+            let cte_name = self.normalize_identifier(&cte.alias.name).name;
+            if bind_context.cte_context.cte_map.contains_key(&cte_name) {
                 return Err(ErrorCode::SemanticError(format!(
-                    "Duplicate common table expression: {table_name}"
+                    "Duplicate common table expression: {cte_name}"
                 )));
             }
+
             let column_name = cte
                 .alias
                 .columns
                 .iter()
                 .map(|ident| self.normalize_identifier(ident).name)
                 .collect();
+
+            let mut cte_bind_context = BindContext {
+                cte_context: CteContext {
+                    cte_name: Some(cte_name.clone()),
+                    cte_map: bind_context.cte_context.cte_map.clone(),
+                },
+                ..Default::default()
+            };
+            let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, &cte.query)?;
+            let stat_info = RelExpr::with_s_expr(&s_expr).derive_cardinality()?;
+            let bind_result = CteBindResult {
+                s_expr,
+                bind_context: cte_bind_context,
+                stat_info,
+            };
+
             let cte_info = CteInfo {
                 columns_alias: column_name,
                 query: *cte.query.clone(),
                 recursive: with.recursive,
-                columns: vec![],
                 materialized: cte.materialized,
-                stat_info: Arc::new(Mutex::new(None)),
+                columns: vec![],
+                bind_result,
             };
-            bind_context
-                .cte_context
-                .cte_map
-                .insert(table_name, cte_info);
+            bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
 
         Ok(())
@@ -246,32 +257,25 @@ impl Binder {
         for cte in with.ctes.iter().rev() {
             if cte.materialized {
                 let cte_name = self.normalize_identifier(&cte.alias.name).name;
+                let CteBindResult {
+                    s_expr,
+                    bind_context,
+                    stat_info,
+                } = cte_context
+                    .cte_map
+                    .get(&cte_name)
+                    .unwrap()
+                    .bind_result
+                    .clone();
 
-                let mut cte_context = cte_context.clone();
-                cte_context.cte_name = Some(cte_name.clone());
-                let shared_stat_info = cte_context.cte_map.get(&cte_name).unwrap().stat_info.clone();
-
-                // Create a new bind context for the CTE definition
-                let mut cte_bind_context = BindContext {
-                    cte_context,
-                    ..Default::default()
-                };
-
-                // Bind the CTE definition
-                let (cte_definition_expr, bind_context) =
-                    self.bind_query(&mut cte_bind_context, &cte.query)?;
-
-                // Create the MaterializedCTE operator
                 let materialized_cte = MaterializedCTE::new(cte_name, bind_context.column_set());
-                current_expr = SExpr::create_binary(
+                current_expr = SExpr::create(
                     Arc::new(materialized_cte.into()),
-                    Arc::new(cte_definition_expr),
-                    Arc::new(current_expr),
+                    vec![Arc::new(s_expr), Arc::new(current_expr)],
+                    None,
+                    None,
+                    Some(stat_info),
                 );
-
-                // Derive cardinality statistics and share with consumer
-                let stats = RelExpr::with_s_expr(&current_expr).derive_cardinality()?;
-                *shared_stat_info.lock().unwrap() = Some(stats);
             }
         }
 

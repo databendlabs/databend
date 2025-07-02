@@ -14,16 +14,15 @@
 
 use std::hash::Hash;
 use std::hash::Hasher;
-
-use databend_common_expression::DataSchemaRef;
-
-use crate::optimizer::ir::RelExpr;
-use crate::plans::Operator;
-use crate::plans::RelOp;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::StatInfo;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTEConsumer {

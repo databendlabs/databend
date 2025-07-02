@@ -43,13 +43,13 @@ use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::StatInfo;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
-use std::sync::Mutex;
-use crate::optimizer::ir::StatInfo;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
@@ -197,11 +197,17 @@ impl CteContext {
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
+    pub bind_result: CteBindResult,
     pub materialized: bool,
     pub recursive: bool,
-    // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
-    pub stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CteBindResult {
+    pub s_expr: SExpr,
+    pub bind_context: BindContext,
+    pub stat_info: Arc<StatInfo>,
 }
 
 impl BindContext {

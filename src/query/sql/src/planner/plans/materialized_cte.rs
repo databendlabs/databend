@@ -13,17 +13,17 @@
 // limitations under the License.
 
 use std::hash::Hash;
-
-use crate::optimizer::ir::RelExpr;
-use crate::plans::Operator;
-use crate::plans::RelOp;
-use crate::ColumnSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+
 use crate::optimizer::ir::PhysicalProperty;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
+use crate::plans::Operator;
+use crate::plans::RelOp;
+use crate::ColumnSet;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
