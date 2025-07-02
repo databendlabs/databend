@@ -155,6 +155,12 @@ check_system_history_permissions() {
         "root:" \
         '{"sql": "grant ownership on system_history.query_history to role ra"}' \
         '.state == "Failed"'
+    # Command 6: User 'a:123' attempts to select 'system_history.query_history' table (expected to succeed)
+        execute_and_verify \
+            "User 'a:123' attempts to query 'system_history.query_history' table" \
+            "a:123" \
+            '{"sql": "select count() from system_history.query_history"}' \
+            '.state == "Succeeded"'
 }
 
 check_system_history_permissions
