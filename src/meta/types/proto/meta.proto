@@ -312,24 +312,6 @@ message StreamItem {
   optional SeqV value = 2;
 }
 
-message SnapshotChunkRequest {
-  uint64 ver = 100;
-
-  // json serialized meta data, including vote and snapshot_meta.
-  // ```text
-  // (Vote, SnapshotMeta)
-  // ```
-  string rpc_meta = 10;
-
-  SnapshotChunkV1 chunk = 20;
-}
-
-message SnapshotChunkV1 {
-  uint64 offset = 10;
-  bool done = 11;
-  bytes data = 12;
-}
-
 // The item of snapshot chunk stream.
 //
 // The first item contains `rpc_meta`,
@@ -367,7 +349,7 @@ service RaftService {
   // raft RPC
 
   rpc AppendEntries(RaftRequest) returns (RaftReply);
-  rpc InstallSnapshotV1(SnapshotChunkRequest) returns (RaftReply);
+  // Added in 1.2.547, 2024-06-27
   rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (SnapshotResponseV003);
   rpc Vote(RaftRequest) returns (RaftReply);
   rpc TransferLeader(TransferLeaderRequest) returns (Empty);
