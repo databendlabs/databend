@@ -28,7 +28,6 @@ use crate::protobuf::boolean_expression::CombiningOperator;
 use crate::protobuf::BooleanExpression;
 use crate::protobuf::ConditionalOperation;
 use crate::protobuf::FetchAddU64;
-use crate::protobuf::FetchAddU64Response;
 use crate::txn_condition::Target;
 use crate::txn_op;
 use crate::txn_op::Request;
@@ -268,26 +267,10 @@ impl Display for FetchAddU64 {
     }
 }
 
-impl Display for FetchAddU64Response {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "FetchAddU64Response{{ key={} before=(seq={} {}), after=(seq={} {}), delta={} }}",
-            self.key,
-            self.before_seq,
-            self.before,
-            self.after_seq,
-            self.after,
-            self.delta()
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::protobuf::BooleanExpression;
     use crate::protobuf::FetchAddU64;
-    use crate::protobuf::FetchAddU64Response;
     use crate::protobuf::TxnCondition;
     use crate::TxnOp;
 
@@ -346,21 +329,6 @@ mod tests {
         assert_eq!(
             req_with_seq.to_string(),
             "FetchAddU64 key=k1 delta=1 match_seq: 10"
-        );
-    }
-
-    #[test]
-    fn test_display_fetch_add_u64_response() {
-        let resp = FetchAddU64Response {
-            key: "k1".to_string(),
-            before_seq: 1,
-            before: 3,
-            after_seq: 2,
-            after: 4,
-        };
-        assert_eq!(
-            resp.to_string(),
-            "FetchAddU64Response{ key=k1 before=(seq=1 3), after=(seq=2 4), delta=1 }"
         );
     }
 }
