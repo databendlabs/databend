@@ -114,7 +114,7 @@ impl PipelineBuilder {
             self.main_pipeline.try_resize(max_threads)?;
         }
 
-        let builder = SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc)?
+        let builder = SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc, None)?
             .with_limit(limit);
 
         match sort_step {
@@ -149,7 +149,7 @@ impl PipelineBuilder {
             SortStep::Sample => {
                 builder
                     .remove_order_col_at_last()
-                    .build_range_shuffle_sort_pipeline(&mut self.main_pipeline);
+                    .build_range_shuffle_sort_pipeline(&mut self.main_pipeline)?;
                 todo!()
             }
             SortStep::RangeSort => todo!(),
@@ -166,6 +166,7 @@ pub struct SortPipelineBuilder {
     block_size: usize,
     remove_order_col_at_last: bool,
     enable_loser_tree: bool,
+    broadcast_id: Option<u32>,
 }
 
 impl SortPipelineBuilder {
@@ -173,6 +174,7 @@ impl SortPipelineBuilder {
         ctx: Arc<QueryContext>,
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
+        broadcast_id: Option<u32>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let block_size = settings.get_max_block_size()? as usize;
@@ -185,6 +187,7 @@ impl SortPipelineBuilder {
             block_size,
             remove_order_col_at_last: false,
             enable_loser_tree,
+            broadcast_id,
         })
     }
 
@@ -261,9 +264,16 @@ impl SortPipelineBuilder {
             Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
         })?;
 
-        let state = SortSampleState::new(inputs, num_exec, builder.inner_schema(), max_block_size);
+        let state = SortSampleState::new(
+            inputs,
+            num_exec,
+            builder.inner_schema(),
+            max_block_size,
+            self.ctx.clone(),
+            self.broadcast_id.unwrap(),
+        );
 
-        builder.add_shuffle(pipeline, state.clone())?;
+        builder.add_shuffle(pipeline, state)?;
 
         pipeline.exchange(num_exec, Arc::new(SortRangeExchange));
 
@@ -284,6 +294,67 @@ impl SortPipelineBuilder {
         pipeline.add_transform(|input, output| {
             TransformLimit::try_create(self.limit, 0, input, output).map(ProcessorPtr::create)
         })
+    }
+
+    fn build_sort_part(self, pipeline: &mut Pipeline) -> Result<()> {
+        let inputs = pipeline.output_len();
+        let settings = self.ctx.get_settings();
+        let num_exec = inputs;
+        let max_block_size = settings.get_max_block_size()? as usize;
+
+        // Partial sort
+        pipeline.add_transformer(|| {
+            TransformSortPartial::new(
+                LimitType::from_limit_rows(self.limit),
+                self.sort_desc.clone(),
+            )
+        });
+
+        let spiller = {
+            let location_prefix = self.ctx.query_id_spill_prefix();
+            let config = SpillerConfig {
+                spiller_type: SpillerType::OrderBy,
+                location_prefix,
+                disk_spill: None,
+                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            };
+            let op = DataOperator::instance().spill_operator();
+            Arc::new(Spiller::create(self.ctx.clone(), op, config)?)
+        };
+
+        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
+        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
+
+        let builder = TransformSortBuilder::create(
+            self.schema.clone(),
+            self.sort_desc.clone(),
+            max_block_size,
+            spiller,
+        )
+        .with_limit(self.limit)
+        .with_order_col_generated(false)
+        .with_output_order_col(false)
+        .with_memory_settings(memory_settings)
+        .with_enable_loser_tree(enable_loser_tree);
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
+        })?;
+
+        let state = SortSampleState::new(
+            inputs,
+            num_exec,
+            builder.inner_schema(),
+            max_block_size,
+            self.ctx.clone(),
+            self.broadcast_id.unwrap(),
+        );
+
+        builder.add_shuffle(pipeline, state.clone())?;
+
+        // pipeline.exchange(num_exec, Arc::new(SortRangeExchange));
+
+        Ok(())
     }
 
     fn build_merge_sort(&self, pipeline: &mut Pipeline, order_col_generated: bool) -> Result<()> {

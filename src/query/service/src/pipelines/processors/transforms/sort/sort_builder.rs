@@ -120,7 +120,6 @@ impl TransformSortBuilder {
             input,
             output,
             typ: SortType::Sort,
-            id: 0,
             state: None,
         };
 
@@ -139,7 +138,6 @@ impl TransformSortBuilder {
             input,
             output,
             typ: SortType::Collect,
-            id: 0,
             state: None,
         };
 
@@ -158,7 +156,6 @@ impl TransformSortBuilder {
             input,
             output,
             typ: SortType::Execute,
-            id: 0,
             state: None,
         };
 
@@ -170,7 +167,7 @@ impl TransformSortBuilder {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         id: usize,
-        state: Arc<SortSampleState>,
+        state: SortSampleState,
     ) -> Result<Box<dyn Processor>> {
         self.check();
 
@@ -179,7 +176,6 @@ impl TransformSortBuilder {
             input,
             output,
             typ: SortType::Shuffle,
-            id,
             state: Some(state),
         };
 
@@ -198,7 +194,6 @@ impl TransformSortBuilder {
             input,
             output,
             typ: SortType::Combine,
-            id: 0,
             state: None,
         };
 
@@ -232,7 +227,7 @@ impl TransformSortBuilder {
         add_order_field(self.schema.clone(), &self.sort_desc)
     }
 
-    pub fn add_shuffle(&self, pipeline: &mut Pipeline, state: Arc<SortSampleState>) -> Result<()> {
+    pub fn add_shuffle(&self, pipeline: &mut Pipeline, state: SortSampleState) -> Result<()> {
         use std::sync::atomic;
         let i = atomic::AtomicUsize::new(0);
         pipeline.add_transform(|input, output| {
@@ -252,8 +247,7 @@ struct Build<'a> {
     typ: SortType,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    id: usize,
-    state: Option<Arc<SortSampleState>>,
+    state: Option<SortSampleState>,
 }
 
 impl Build<'_> {
@@ -309,7 +303,6 @@ impl Build<'_> {
         Ok(Box::new(TransformSortShuffle::<R>::new(
             self.input.clone(),
             self.output.clone(),
-            self.id,
             self.state.clone().unwrap(),
             self.params.spiller.clone(),
         )))

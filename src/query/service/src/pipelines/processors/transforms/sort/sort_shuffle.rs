@@ -16,9 +16,8 @@ use std::any::Any;
 use std::assert_matches::assert_matches;
 use std::marker::PhantomData;
 use std::sync::Arc;
-use std::sync::RwLock;
 
-use databend_common_base::base::WatchNotify;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -33,6 +32,7 @@ use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::processors::Processor;
+use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 
 #[derive(Debug)]
@@ -45,9 +45,8 @@ enum Step {
 pub struct TransformSortShuffle<R: Rows> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    id: usize,
     step: Step,
-    state: Arc<SortSampleState>,
+    state: SortSampleState,
     spiller: Arc<Spiller>,
     _r: PhantomData<R>,
 }
@@ -56,14 +55,12 @@ impl<R: Rows> TransformSortShuffle<R> {
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        id: usize,
-        state: Arc<SortSampleState>,
+        state: SortSampleState,
         spiller: Arc<Spiller>,
     ) -> Self {
         Self {
             input,
             output,
-            id,
             state,
             spiller,
             step: Step::None,
@@ -94,7 +91,7 @@ impl<R: Rows> TransformSortShuffle<R> {
         }
 
         let base = {
-            let inner = self.state.inner.read().unwrap();
+            let inner = &self.state.inner;
             Base {
                 schema: inner.schema.clone(),
                 spiller: self.spiller.clone(),
@@ -175,7 +172,7 @@ impl<R: Rows + 'static> Processor for TransformSortShuffle<R> {
         }
 
         if self.input.is_finished() {
-            if self.state.done.has_notified() {
+            if self.state.inner.bounds.is_some() {
                 self.output.finish();
                 Ok(Event::Finished)
             } else {
@@ -194,8 +191,8 @@ impl<R: Rows + 'static> Processor for TransformSortShuffle<R> {
             Step::Meta(meta) => meta.generate_bounds(),
             _ => unreachable!(),
         };
-        self.state.commit_sample::<R>(self.id, bounds)?;
-        self.state.done.notified().await;
+
+        self.state.commit_sample::<R>(bounds).await?;
         self.step = Step::Scattered(self.scatter().await?);
         Ok(())
     }
@@ -222,9 +219,11 @@ impl SortCollectedMeta {
     }
 }
 
+#[derive(Clone)]
 pub struct SortSampleState {
-    inner: RwLock<StateInner>,
-    pub(super) done: WatchNotify,
+    inner: StateInner,
+    ctx: Arc<QueryContext>,
+    broadcast_id: u32,
 }
 
 impl SortSampleState {
@@ -233,55 +232,58 @@ impl SortSampleState {
         partitions: usize,
         schema: DataSchemaRef,
         batch_rows: usize,
-    ) -> Arc<SortSampleState> {
-        Arc::new(SortSampleState {
-            inner: RwLock::new(StateInner {
+        ctx: Arc<QueryContext>,
+        broadcast_id: u32,
+    ) -> SortSampleState {
+        SortSampleState {
+            inner: StateInner {
                 partitions,
                 schema,
-                partial: vec![None; inputs],
+                partial: vec![],
                 bounds: None,
                 batch_rows,
-            }),
-            done: WatchNotify::new(),
-        })
+            },
+            ctx,
+            broadcast_id,
+        }
     }
 
-    pub fn commit_sample<R: Rows>(&self, id: usize, bounds: Bounds) -> Result<bool> {
-        let mut inner = self.inner.write().unwrap();
+    pub async fn commit_sample<R: Rows>(&mut self, bounds: Bounds) -> Result<()> {
+        let sender = self.ctx.broadcast_source_sender(self.broadcast_id);
+        sender
+            .send(Box::new(bounds))
+            .await
+            .map_err(|_| ErrorCode::TokioError("send sort bounds failed"))?;
+        sender.close();
 
-        let x = inner.partial[id].replace(bounds);
-        assert!(x.is_none());
-        let done = inner.partial.iter().all(Option::is_some);
-        if done {
-            inner.determine_bounds::<R>()?;
-            self.done.notify_waiters();
+        let receiver = self.ctx.broadcast_sink_receiver(self.broadcast_id);
+        while let Ok(r) = receiver.recv().await {
+            self.inner.partial.push(Bounds::downcast_from(r).unwrap());
         }
-        Ok(done)
+
+        self.inner.determine_bounds::<R>()?;
+        Ok(())
     }
 
     pub fn bounds(&self) -> Bounds {
-        self.inner
-            .read()
-            .unwrap()
-            .bounds
-            .clone()
-            .unwrap_or_default()
+        self.inner.bounds.clone().unwrap_or_default()
     }
 }
+
+#[derive(Clone)]
 
 struct StateInner {
     // target partitions
     partitions: usize,
     schema: DataSchemaRef,
-    partial: Vec<Option<Bounds>>,
+    partial: Vec<Bounds>,
     bounds: Option<Bounds>,
     batch_rows: usize,
 }
 
 impl StateInner {
     fn determine_bounds<R: Rows>(&mut self) -> Result<()> {
-        let v = self.partial.drain(..).map(Option::unwrap).collect();
-        let bounds = Bounds::merge::<R>(v, self.batch_rows)?;
+        let bounds = Bounds::merge::<R>(std::mem::take(&mut self.partial), self.batch_rows)?;
 
         let n = self.partitions - 1;
         let bounds = if bounds.len() < n {
