@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Weak;
 
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
@@ -43,7 +45,7 @@ pub struct QueriesPipelineExecutor {
     pub global_tasks_queue: Arc<QueriesExecutorTasksQueue>,
     finished_notify: Arc<WatchNotify>,
     finished_error: Mutex<Option<ErrorCode>>,
-
+    running_graph: Mutex<BTreeMap<String, Weak<RunningGraph>>>,
     pub epoch: AtomicU32,
 }
 
@@ -59,6 +61,7 @@ impl QueriesPipelineExecutor {
             async_runtime: GlobalIORuntime::instance(),
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
+            running_graph: Mutex::new(BTreeMap::new()),
             epoch: AtomicU32::new(0),
         }))
     }
@@ -89,6 +92,9 @@ impl QueriesPipelineExecutor {
     }
 
     pub fn send_graph(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
+        self.running_graph
+            .lock()
+            .insert(graph.get_query_id().to_string(), Arc::downgrade(&graph));
         unsafe {
             let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
 
@@ -234,8 +240,25 @@ impl QueriesPipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
-    #[inline]
     pub(crate) fn increase_global_epoch(&self) {
+        let mut query_scheduled_rows = vec![];
+        let mut to_remove = vec![];
+        let mut graphs = self.running_graph.lock();
+        for (query_id, graph) in graphs.iter() {
+            // If the graph has been dropped, we remove it from the running graphs.
+            if let Some(graph) = graph.upgrade() {
+                let scheduled_rows = graph.get_scheduled_rows();
+                query_scheduled_rows
+                    .push((query_id.clone(), scheduled_rows.load(Ordering::SeqCst)));
+                scheduled_rows.store(0, Ordering::SeqCst);
+            } else {
+                to_remove.push(query_id.clone());
+            }
+        }
+        for query_id in to_remove {
+            graphs.remove(&query_id);
+        }
+        // dbg!(query_scheduled_rows);
         self.epoch.fetch_add(1, Ordering::SeqCst);
     }
 }

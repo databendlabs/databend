@@ -101,6 +101,7 @@ impl Node {
         inputs_port: &[Arc<InputPort>],
         outputs_port: &[Arc<OutputPort>],
         time_series_profile: Option<Arc<TimeSeriesProfiles>>,
+        scheduled_rows: Arc<AtomicU64>,
     ) -> Arc<Node> {
         let p_name = unsafe { processor.name() };
         let tracking_payload = {
@@ -128,6 +129,8 @@ impl Node {
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
             tracking_payload.local_time_series_profile = time_series_profile;
+
+            tracking_payload.scheduled_rows = Some(scheduled_rows);
 
             tracking_payload
         };
@@ -173,6 +176,7 @@ struct ExecutingGraph {
     /// - the low 32 bit store this points belong to which epoch
     points: AtomicU64,
     max_points: AtomicU64,
+    scheduled_rows: Arc<AtomicU64>,
     query_id: Arc<String>,
     should_finish: AtomicBool,
     finished_notify: Arc<WatchNotify>,
@@ -192,12 +196,19 @@ impl ExecutingGraph {
         let mut graph = StableGraph::new();
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
-        Self::init_graph(&mut pipeline, &mut graph, &mut time_series_profile_builder);
+        let scheduled_rows = Arc::new(AtomicU64::new(0));
+        Self::init_graph(
+            &mut pipeline,
+            &mut graph,
+            &mut time_series_profile_builder,
+            scheduled_rows.clone(),
+        );
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
+            scheduled_rows,
             query_id,
             should_finish: AtomicBool::new(false),
             finished_notify: Arc::new(WatchNotify::new()),
@@ -213,10 +224,16 @@ impl ExecutingGraph {
         finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     ) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
+        let scheduled_rows = Arc::new(AtomicU64::new(0));
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         for pipeline in &mut pipelines {
-            Self::init_graph(pipeline, &mut graph, &mut time_series_profile_builder);
+            Self::init_graph(
+                pipeline,
+                &mut graph,
+                &mut time_series_profile_builder,
+                scheduled_rows.clone(),
+            );
         }
 
         Ok(ExecutingGraph {
@@ -224,6 +241,7 @@ impl ExecutingGraph {
             graph,
             points: AtomicU64::new((DEFAULT_POINTS << 32) | init_epoch as u64),
             max_points: AtomicU64::new(DEFAULT_POINTS),
+            scheduled_rows,
             query_id,
             should_finish: AtomicBool::new(false),
             finished_notify: Arc::new(WatchNotify::new()),
@@ -236,6 +254,7 @@ impl ExecutingGraph {
         pipeline: &mut Pipeline,
         graph: &mut StableGraph<Arc<Node>, EdgeInfo>,
         time_series_profile_builder: &mut QueryTimeSeriesProfileBuilder,
+        scheduled_rows: Arc<AtomicU64>,
     ) {
         let offset = graph.node_count();
         for node in pipeline.graph.node_weights() {
@@ -255,6 +274,7 @@ impl ExecutingGraph {
                 &node.inputs,
                 &node.outputs,
                 time_series_profile,
+                scheduled_rows.clone(),
             ));
 
             unsafe {
@@ -969,6 +989,10 @@ impl RunningGraph {
     /// Change the priority
     pub fn change_priority(&self, priority: u64) {
         self.0.max_points.store(priority, Ordering::SeqCst);
+    }
+
+    pub fn get_scheduled_rows(&self) -> Arc<AtomicU64> {
+        self.0.scheduled_rows.clone()
     }
 }
 

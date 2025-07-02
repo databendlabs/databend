@@ -47,7 +47,7 @@ pub type BlockMetaInfoPtr = Box<dyn BlockMetaInfo>;
 #[derive(Clone)]
 pub struct DataBlock {
     entries: Vec<BlockEntry>,
-    num_rows: usize,
+    pub num_rows: usize,
     meta: Option<BlockMetaInfoPtr>,
 }
 

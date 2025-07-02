@@ -24,6 +24,7 @@ pub mod profile;
 #[allow(clippy::module_inception)]
 mod runtime;
 mod runtime_tracker;
+mod schedule_profile;
 mod thread;
 mod time_series;
 pub mod workload_group;
@@ -66,6 +67,7 @@ pub use runtime_tracker::ThreadTracker;
 pub use runtime_tracker::TrackingGuard;
 pub use runtime_tracker::TrackingPayload;
 pub use runtime_tracker::UnlimitedFuture;
+pub use schedule_profile::ScheduleProfile;
 pub use thread::Thread;
 pub use thread::ThreadJoinHandle;
 pub use time_series::compress_time_point;
