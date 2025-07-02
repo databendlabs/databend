@@ -12,5 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod seqv_display;
-mod watch_display;
+use std::fmt;
+
+use crate::protobuf as pb;
+
+impl fmt::Display for pb::TxnGetRequest {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Get key={}", self.key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display_txn_get_request() {
+        let req = pb::TxnGetRequest {
+            key: "k1".to_string(),
+        };
+        assert_eq!(format!("{}", req), "Get key=k1");
+    }
+}
