@@ -48,64 +48,6 @@ use crate::TxnPutResponse;
 use crate::TxnReply;
 use crate::TxnRequest;
 
-struct OptionDisplay<'a, T: Display> {
-    t: &'a Option<T>,
-}
-
-impl<T: Display> Display for OptionDisplay<'_, T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match &self.t {
-            None => {
-                write!(f, "None")
-            }
-            Some(x) => x.fmt(f),
-        }
-    }
-}
-
-pub struct VecDisplay<'a, T: Display> {
-    at_most: Option<usize>,
-    vec: &'a Vec<T>,
-}
-
-impl<'a, T> VecDisplay<'a, T>
-where T: Display
-{
-    pub fn new(vec: &'a Vec<T>) -> Self {
-        VecDisplay { at_most: None, vec }
-    }
-
-    pub fn new_at_most(vec: &'a Vec<T>, at_most: usize) -> Self {
-        VecDisplay {
-            at_most: Some(at_most),
-            vec,
-        }
-    }
-}
-
-impl<T: Display> Display for VecDisplay<'_, T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "[")?;
-
-        for (i, t) in self.vec.iter().enumerate() {
-            if i > 0 {
-                write!(f, ",")?;
-            }
-
-            if let Some(at_most) = self.at_most {
-                if i >= at_most {
-                    write!(f, "...")?;
-                    break;
-                }
-            }
-
-            write!(f, "{}", t)?;
-        }
-
-        write!(f, "]")
-    }
-}
-
 impl Display for TxnRequest {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TxnRequest{{",)?;
@@ -114,9 +56,9 @@ impl Display for TxnRequest {
             write!(f, "{{ {} }}, ", op)?;
         }
 
-        write!(f, "if:{} ", VecDisplay::new_at_most(&self.condition, 10),)?;
-        write!(f, "then:{} ", VecDisplay::new_at_most(&self.if_then, 10),)?;
-        write!(f, "else:{}", VecDisplay::new_at_most(&self.else_then, 10),)?;
+        write!(f, "if:{} ", self.condition.display_n(10),)?;
+        write!(f, "then:{} ", self.if_then.display_n(10),)?;
+        write!(f, "else:{}", self.else_then.display_n(10),)?;
 
         write!(f, "}}",)
     }
@@ -126,9 +68,7 @@ impl Display for TxnCondition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         let expect: ConditionResult = FromPrimitive::from_i32(self.expected).unwrap();
 
-        write!(f, "{} {} {}", self.key, expect, OptionDisplay {
-            t: &self.target
-        })
+        write!(f, "{} {} {}", self.key, expect, self.target.display())
     }
 }
 
@@ -148,7 +88,7 @@ impl Display for ConditionResult {
 
 impl Display for TxnOp {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", OptionDisplay { t: &self.request })
+        write!(f, "{}", self.request.display())
     }
 }
 
@@ -231,14 +171,14 @@ impl Display for TxnReply {
             f,
             "TxnReply{{ success: {}, responses: {}}}",
             self.success,
-            VecDisplay::new_at_most(&self.responses, 5),
+            self.responses.display()
         )
     }
 }
 
 impl Display for TxnOpResponse {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "TxnOpResponse: {}", OptionDisplay { t: &self.response })
+        write!(f, "TxnOpResponse: {}", self.response.display())
     }
 }
 
@@ -342,7 +282,7 @@ impl Display for ConditionalOperation {
             f,
             "if:({}) then:{}",
             self.predicate.display(),
-            self.operations.display_n::<10>()
+            self.operations.display_n(10)
         )
     }
 }
@@ -379,29 +319,6 @@ mod tests {
     use crate::protobuf::FetchAddU64Response;
     use crate::protobuf::TxnCondition;
     use crate::TxnOp;
-
-    #[test]
-    fn test_vec_display() {
-        assert_eq!(
-            format!("{}", super::VecDisplay::new(&vec![1, 2, 3])),
-            "[1,2,3]"
-        );
-
-        assert_eq!(
-            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3], 3)),
-            "[1,2,3]"
-        );
-
-        assert_eq!(
-            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 3)),
-            "[1,2,3,...]"
-        );
-
-        assert_eq!(
-            format!("{}", super::VecDisplay::new_at_most(&vec![1, 2, 3, 4], 0)),
-            "[...]"
-        );
-    }
 
     #[test]
     fn test_tx_display_with_bool_expression() {

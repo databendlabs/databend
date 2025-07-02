@@ -73,8 +73,8 @@ impl Display for ProcedureMeta {
             f,
             "Lanuage: {:?}, args {} return_type: {}, CreatedOn: {:?}, Script: {}, Comment: {:?}",
             self.procedure_language,
-            self.arg_names.display_n::<1000>(),
-            self.return_types.display_n::<1000>(),
+            self.arg_names.display_n(1000),
+            self.return_types.display_n(1000),
             self.created_on,
             self.script,
             self.comment
