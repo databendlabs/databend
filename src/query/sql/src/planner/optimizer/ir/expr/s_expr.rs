@@ -29,7 +29,7 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::OperatorRef;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::Scan;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
@@ -67,13 +67,14 @@ pub struct SExpr {
 }
 
 impl SExpr {
-    pub fn create(
-        plan: OperatorRef,
+    pub fn create<P: Operator>(
+        plan: P,
         children: impl Into<Vec<Arc<SExpr>>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
         stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
+        let plan = Arc::new(plan) as OperatorRef;
         SExpr {
             plan,
             children: children.into(),
@@ -84,12 +85,12 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: OperatorRef, child: impl Into<Arc<SExpr>>) -> Self {
+    pub fn create_unary<P: Operator>(plan: P, child: impl Into<Arc<SExpr>>) -> Self {
         Self::create(plan, [child.into()], None, None, None)
     }
 
-    pub fn create_binary(
-        plan: OperatorRef,
+    pub fn create_binary<P: Operator>(
+        plan: P,
         left_child: impl Into<Arc<SExpr>>,
         right_child: impl Into<Arc<SExpr>>,
     ) -> Self {
@@ -106,14 +107,14 @@ impl SExpr {
         Self::create(plan, [], None, None, None)
     }
 
-    pub fn build_unary(self, plan: Arc<RelOperator>) -> Self {
+    pub fn build_unary<P: Operator>(self, plan: P) -> Self {
         debug_assert_eq!(plan.arity(), 1);
-        Self::create(plan, [self.into()], None, None, None)
+        Self::create_unary(plan, self)
     }
 
-    pub fn ref_build_unary(self: &Arc<SExpr>, plan: Arc<RelOperator>) -> Self {
+    pub fn ref_build_unary<P: Operator>(self: &Arc<SExpr>, plan: P) -> Self {
         debug_assert_eq!(plan.arity(), 1);
-        Self::create(plan, [self.clone()], None, None, None)
+        Self::create_unary(plan, self.clone())
     }
 
     pub fn plan(&self) -> &OperatorRef {

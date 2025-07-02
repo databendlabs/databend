@@ -41,7 +41,6 @@ use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;

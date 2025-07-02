@@ -28,7 +28,7 @@ use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;

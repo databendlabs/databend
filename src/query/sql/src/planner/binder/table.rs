@@ -67,7 +67,7 @@ use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;

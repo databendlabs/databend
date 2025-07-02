@@ -25,7 +25,7 @@ use databend_common_expression::types::DataType;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Operator;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::Binder;
 use crate::NameResolutionContext;
 use crate::NameResolutionSuggest;

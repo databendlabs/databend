@@ -699,7 +699,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
-            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
+            new_expr = SExpr::create_unary(eval_scalar, Arc::new(new_expr));
         }
 
         let aggregate_plan = Aggregate {
@@ -715,7 +715,7 @@ impl Binder {
                 dup_group_items: g.dup_group_items.clone(),
             }),
         };
-        new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
+        new_expr = SExpr::create_unary(aggregate_plan, new_expr);
 
         Ok(new_expr)
     }

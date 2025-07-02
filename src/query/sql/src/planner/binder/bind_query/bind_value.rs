@@ -41,7 +41,7 @@ use crate::plans::CacheSource;
 use crate::plans::ConstantTableScan;
 use crate::plans::ExpressionScan;
 use crate::plans::HashJoinBuildCacheInfo;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::Binder;

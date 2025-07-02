@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 
 // The SingleToInnerOptimizer will convert some single join to inner join.
 pub struct SingleToInnerOptimizer {}

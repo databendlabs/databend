@@ -21,7 +21,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 pub struct BroadcastToShuffleOptimizer {
     pub matcher: Matcher,
 }

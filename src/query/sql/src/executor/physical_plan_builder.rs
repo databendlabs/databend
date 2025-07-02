@@ -28,7 +28,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::ColumnSet;
 use crate::MetadataRef;
 

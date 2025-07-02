@@ -27,8 +27,8 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::ScalarExpr;
 
 const NULL_THRESHOLD_RATIO: f64 = 0.2;
@@ -141,20 +141,14 @@ impl Rule for RuleFilterNulls {
             let left_null_filter = Filter {
                 predicates: left_null_predicates,
             };
-            left_child = SExpr::create_unary(
-                Arc::new(RelOperator::Filter(left_null_filter)),
-                Arc::new(left_child.clone()),
-            );
+            left_child = SExpr::create_unary(left_null_filter, left_child.clone());
         }
 
         if !right_null_predicates.is_empty() {
             let right_null_filter = Filter {
                 predicates: right_null_predicates,
             };
-            right_child = SExpr::create_unary(
-                Arc::new(RelOperator::Filter(right_null_filter)),
-                Arc::new(right_child.clone()),
-            );
+            right_child = SExpr::create_unary(right_null_filter, right_child.clone());
         }
 
         let mut res = s_expr.replace_children(vec![Arc::new(left_child), Arc::new(right_child)]);

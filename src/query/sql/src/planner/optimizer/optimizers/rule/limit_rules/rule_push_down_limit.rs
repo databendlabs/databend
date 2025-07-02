@@ -28,7 +28,7 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::MetadataRef;
 
 pub struct RulePushDownLimit {

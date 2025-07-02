@@ -22,7 +22,7 @@ use crate::optimizer::optimizers::hyper_dp::JoinRelation;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::IndexType;
 use crate::ScalarExpr;
 

@@ -23,7 +23,10 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::RelOperator;
+use crate::plans::Filter;
+use crate::plans::Mutation;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UDFCall;
@@ -73,8 +76,9 @@ impl UdfRewriter {
         }
 
         // Rewrite Udf and its arguments as derived column.
-        match (*s_expr.plan).clone() {
-            RelOperator::EvalScalar(mut plan) => {
+        match s_expr.plan.rel_op() {
+            RelOp::EvalScalar => {
+                let plan = s_expr.plan.as_any().downcast_mut::<EvalScalar>().unwrap();
                 for item in &plan.items {
                     // The index of Udf item can be reused.
                     if let ScalarExpr::UDFCall(udf) = &item.scalar {
@@ -82,22 +86,25 @@ impl UdfRewriter {
                             .insert(udf.display_name.clone(), item.index);
                     }
                 }
+
                 for item in &mut plan.items {
                     self.visit(&mut item.scalar)?;
                 }
                 let child_expr = self.create_udf_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                let new_expr = SExpr::create_unary(plan, child_expr);
                 Ok(new_expr)
             }
-            RelOperator::Filter(mut plan) => {
+            RelOp::Filter => {
+                let plan = s_expr.plan.as_any().downcast_mut::<Filter>().unwrap();
                 for scalar in &mut plan.predicates {
                     self.visit(scalar)?;
                 }
                 let child_expr = self.create_udf_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                let new_expr = SExpr::create_unary(plan, child_expr);
                 Ok(new_expr)
             }
-            RelOperator::Mutation(mut plan) => {
+            RelOp::Mutation => {
+                let plan = s_expr.plan.as_any().downcast_mut::<Mutation>().unwrap();
                 for matched_evaluator in plan.matched_evaluators.iter_mut() {
                     if let Some(condition) = matched_evaluator.condition.as_mut() {
                         self.visit(condition)?;
@@ -109,7 +116,7 @@ impl UdfRewriter {
                     }
                 }
                 let child_expr = self.create_udf_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                let new_expr = SExpr::create_unary(plan, child_expr);
                 Ok(new_expr)
             }
             _ => Ok(s_expr),
@@ -127,10 +134,7 @@ impl UdfRewriter {
                     items: scalar_items,
                 };
 
-                child_expr = Arc::new(SExpr::create_unary(
-                    Arc::new(eval_scalar.into()),
-                    child_expr,
-                ));
+                child_expr = Arc::new(SExpr::create_unary(eval_scalar, child_expr));
             }
 
             let udf_functions = self.udf_functions.pop_front().unwrap();
@@ -138,7 +142,7 @@ impl UdfRewriter {
                 items: udf_functions,
                 script_udf: self.script_udf,
             };
-            child_expr = Arc::new(SExpr::create_unary(Arc::new(udf_plan.into()), child_expr));
+            child_expr = Arc::new(SExpr::create_unary(udf_plan, child_expr));
         }
         child_expr
     }

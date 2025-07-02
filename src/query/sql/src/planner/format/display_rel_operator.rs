@@ -28,7 +28,7 @@ use crate::plans::Join;
 use crate::plans::Limit;
 use crate::plans::Mutation;
 use crate::plans::Operator;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;

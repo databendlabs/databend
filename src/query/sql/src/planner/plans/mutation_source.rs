@@ -108,4 +108,8 @@ impl Operator for MutationSource {
             "Cannot compute required property for children of MutationSource".to_string(),
         ))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

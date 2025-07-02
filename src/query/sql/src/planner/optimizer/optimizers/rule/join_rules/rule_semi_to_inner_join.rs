@@ -27,7 +27,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::IndexType;
 use crate::ScalarExpr;
 

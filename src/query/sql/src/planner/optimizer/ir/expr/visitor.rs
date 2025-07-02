@@ -59,7 +59,7 @@
 //! use crate::optimizer::ir::expr::AsyncSExprVisitor;
 //! use crate::optimizer::ir::expr::SExpr;
 //! use crate::optimizer::ir::expr::VisitAction;
-//! use crate::plans::RelOperator;
+//! use crate::plans::Operator;
 //!
 //! // Visitor that eliminates unnecessary Sort operations with empty sort keys
 //! struct EmptySortEliminator;
@@ -91,7 +91,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::expr::SExpr;
-// use crate::plans::RelOperator;
+// use crate::plans::Operator;
 
 /// Action to take after visiting a node
 #[derive(Clone)]

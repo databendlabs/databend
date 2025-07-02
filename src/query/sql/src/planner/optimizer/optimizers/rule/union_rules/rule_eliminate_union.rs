@@ -27,7 +27,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::ConstantTableScan;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::UnionAll;
 use crate::MetadataRef;
 

@@ -25,7 +25,7 @@ use crate::optimizer::ir::property::RelationalProperty;
 use crate::optimizer::ir::property::StatInfo;
 use crate::optimizer::ir::Group;
 use crate::optimizer::ir::GroupState;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.

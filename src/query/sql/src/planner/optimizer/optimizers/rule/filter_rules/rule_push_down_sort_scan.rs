@@ -22,8 +22,8 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 
 /// Input:  Sort

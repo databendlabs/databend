@@ -34,7 +34,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::ProjectSet;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Visitor;
@@ -242,8 +242,7 @@ impl PhysicalPlanBuilder {
             };
             let mut new_child = child.clone();
             new_child.plan = Arc::new(new_project_set.into());
-            let new_filter =
-                SExpr::create_unary(Arc::new(s_expr.plan().clone()), Arc::new(new_child));
+            let new_filter = SExpr::create_unary(s_expr.plan().clone(), new_child);
             Ok(Some(new_filter))
         } else {
             let project_set: ProjectSet = s_expr.plan().clone().try_into()?;

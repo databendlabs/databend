@@ -15,7 +15,9 @@
 use databend_common_catalog::table::DistributionLevel;
 
 use crate::optimizer::ir::SExpr;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
+use crate::plans::RelOp;
+use crate::plans::Scan;
 use crate::MetadataRef;
 
 /// Check if a query will read data from local tables(e.g. system tables).
@@ -23,11 +25,11 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
     s_expr
         .children()
         .any(|s_expr| contains_local_table_scan(s_expr, metadata))
-        || if let RelOperator::Scan(get) = s_expr.plan() {
+        || if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
             matches!(
                 metadata
                     .read()
-                    .table(get.table_index)
+                    .table(scan.table_index)
                     .table()
                     .distribution_level(),
                 DistributionLevel::Local
@@ -35,7 +37,7 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
         } else {
             false
         }
-        || matches!(s_expr.plan(), RelOperator::RecursiveCteScan { .. })
+        || matches!(s_expr.plan().rel_op(), RelOp::RecursiveCteScan)
 }
 
 pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {

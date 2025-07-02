@@ -69,7 +69,7 @@ impl DistributedOptimizer {
         // Step 5: If not satisfied, manually enforce serial distribution
         if !root_required.satisfied_by(&physical_prop) {
             // Add an Exchange::Merge operator
-            result = SExpr::create_unary(Arc::new(Exchange::Merge.into()), Arc::new(result));
+            result = SExpr::create_unary(Exchange::Merge, result);
         }
 
         Ok(result)

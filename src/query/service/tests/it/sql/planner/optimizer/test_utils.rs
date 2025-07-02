@@ -563,7 +563,7 @@ impl ExprBuilder {
             from_distinct: false,
             rank_limit: None,
         };
-        SExpr::create_unary(Arc::new(RelOperator::Aggregate(agg)), Arc::new(input))
+        SExpr::create_unary(agg, Arc::new(input))
     }
 
     /// Create a limit

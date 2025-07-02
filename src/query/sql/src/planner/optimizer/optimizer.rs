@@ -49,7 +49,6 @@ use crate::plans::Mutation;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
 

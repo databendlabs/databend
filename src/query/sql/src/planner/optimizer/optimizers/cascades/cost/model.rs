@@ -26,7 +26,7 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::Scan;
 
 #[derive(Default)]

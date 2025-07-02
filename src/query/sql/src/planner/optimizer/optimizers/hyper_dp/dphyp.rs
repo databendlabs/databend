@@ -36,7 +36,7 @@ use crate::optimizer::OptimizerContext;
 use crate::planner::QueryExecutor;
 use crate::plans::Filter;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;

@@ -42,7 +42,8 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MutationSource;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
+use crate::plans::Operator;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
 use crate::BindContext;
@@ -255,10 +256,7 @@ impl MutationExpression {
                         SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation_source)));
 
                     if !predicates.is_empty() {
-                        s_expr = SExpr::create_unary(
-                            Arc::new(Filter { predicates }.into()),
-                            Arc::new(s_expr),
-                        );
+                        s_expr = SExpr::create_unary(Filter { predicates }, s_expr);
                     }
 
                     for column_index in bind_context.column_set().iter() {
@@ -304,17 +302,10 @@ impl MutationExpression {
                             single_to_inner: None,
                             build_side_cache_info: None,
                         };
-                        s_expr = SExpr::create_binary(
-                            Arc::new(join_plan.into()),
-                            Arc::new(s_expr.clone()),
-                            Arc::new(from_s_expr),
-                        );
+                        s_expr = SExpr::create_binary(join_plan, s_expr.clone(), from_s_expr);
                     }
 
-                    s_expr = SExpr::create_unary(
-                        Arc::new(Filter { predicates }.into()),
-                        Arc::new(s_expr),
-                    );
+                    s_expr = SExpr::create_unary(Filter { predicates }, s_expr);
 
                     let opt_ctx =
                         OptimizerContext::new(binder.ctx.clone(), binder.metadata.clone());

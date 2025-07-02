@@ -27,7 +27,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFuncType;
 use crate::MetadataRef;

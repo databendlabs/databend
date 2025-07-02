@@ -25,8 +25,8 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
 use crate::plans::MutationSource;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::MetadataRef;
 
 pub struct RuleMergeFilterIntoMutation {
@@ -76,7 +76,7 @@ impl Rule for RuleMergeFilterIntoMutation {
             mutation.predicate_column_index = Some(column_index);
         }
 
-        let new_expr = SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation)));
+        let new_expr = SExpr::create_leaf(mutation);
         state.add_result(new_expr);
         Ok(())
     }

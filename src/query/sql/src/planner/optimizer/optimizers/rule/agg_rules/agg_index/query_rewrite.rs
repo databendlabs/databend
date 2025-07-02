@@ -35,9 +35,14 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
+use crate::plans::Filter;
 use crate::plans::FunctionCall;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::plans::Scan;
+use crate::plans::Sort;
 use crate::plans::SortItem;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -89,28 +94,28 @@ impl QueryInfo {
         base_columns: &[ColumnEntry],
         s_expr: &SExpr,
     ) -> Result<QueryInfo> {
-        if let RelOperator::EvalScalar(eval) = s_expr.plan() {
-            let selection = eval;
-
+        if let Some(selection) = s_expr.plan().as_any().downcast_ref::<EvalScalar>() {
             let mut predicates: std::option::Option<&[ScalarExpr]> = None;
             let mut sort_items = None;
             let mut aggregate = None;
             let mut column_map = HashMap::new();
 
-            for item in &eval.items {
+            for item in &selection.items {
                 column_map.insert(item.index, item.scalar.clone());
             }
 
             // collect query info from the plan
             let mut s_expr = s_expr.child(0)?;
             loop {
-                match s_expr.plan() {
-                    RelOperator::EvalScalar(eval) => {
+                match s_expr.plan().rel_op() {
+                    RelOp::EvalScalar => {
+                        let eval = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
                         for item in &eval.items {
                             column_map.insert(item.index, item.scalar.clone());
                         }
                     }
-                    RelOperator::Aggregate(agg) => {
+                    RelOp::Aggregate => {
+                        let agg = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
                         if agg.grouping_sets.is_some() {
                             return Err(ErrorCode::Internal("Grouping sets is not supported"));
                         }
@@ -123,7 +128,7 @@ impl QueryInfo {
                             column_map.insert(item.index, item.scalar.clone());
                         }
                         let child = s_expr.child(0)?;
-                        if let RelOperator::EvalScalar(eval) = child.plan() {
+                        if let Some(eval) = child.plan().as_any().downcast_ref::<EvalScalar>() {
                             for item in &eval.items {
                                 column_map.insert(item.index, item.scalar.clone());
                             }
@@ -131,13 +136,16 @@ impl QueryInfo {
                             continue;
                         }
                     }
-                    RelOperator::Sort(sort) => {
+                    RelOp::Sort => {
+                        let sort = s_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
                         sort_items = Some(sort.items.clone());
                     }
-                    RelOperator::Filter(filter) => {
+                    RelOp::Filter => {
+                        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
                         predicates = Some(filter.predicates.as_ref());
                     }
-                    RelOperator::Scan(scan) => {
+                    RelOp::Scan => {
+                        let scan = s_expr.plan().as_any().downcast_ref::<Scan>().unwrap();
                         if let Some(prewhere) = &scan.prewhere {
                             debug_assert!(predicates.is_none());
                             predicates = Some(prewhere.predicates.as_ref());
@@ -1338,15 +1346,11 @@ fn format_sort_desc(
 }
 
 fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr> {
-    Ok(match s_expr.plan() {
-        RelOperator::Scan(scan) => {
-            let mut new_scan = scan.clone();
-            new_scan.agg_index = Some(agg_info);
-            s_expr.replace_plan(Arc::new(new_scan.into()))
-        }
-        _ => {
-            let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;
-            s_expr.replace_children(vec![Arc::new(child)])
-        }
-    })
+    if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
+        let mut new_scan = scan.clone();
+        new_scan.agg_index = Some(agg_info);
+        return Ok(s_expr.replace_plan(Arc::new(new_scan.into())));
+    }
+    let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;
+    Ok(s_expr.replace_children(vec![Arc::new(child)]))
 }

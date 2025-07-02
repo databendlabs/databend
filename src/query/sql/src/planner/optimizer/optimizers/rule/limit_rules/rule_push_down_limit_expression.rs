@@ -22,7 +22,7 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
 use crate::plans::Limit;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 
 /// Input:  Limit
 ///           \

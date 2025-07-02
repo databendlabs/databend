@@ -23,7 +23,6 @@ use crate::plans::Aggregate;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 
@@ -115,11 +114,8 @@ impl RulePushDownRankLimitAggregate {
             window_partition: None,
         };
 
-        let agg = SExpr::create_unary(
-            Arc::new(RelOperator::Aggregate(agg_limit)),
-            Arc::new(agg.child(0)?.clone()),
-        );
-        let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg);
+        let agg = SExpr::create_unary(agg_limit, Arc::new(agg.child(0)?.clone()));
+        let sort = SExpr::create_unary(sort, agg);
         let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
 
         result.set_applied_rule(&self.id);
@@ -179,10 +175,7 @@ impl RulePushDownRankLimitAggregate {
 
         agg_limit.rank_limit = Some((sort_items, limit));
 
-        let agg = SExpr::create_unary(
-            Arc::new(RelOperator::Aggregate(agg_limit)),
-            Arc::new(agg_limit_expr.child(0)?.clone()),
-        );
+        let agg = SExpr::create_unary(agg_limit, Arc::new(agg_limit_expr.child(0)?.clone()));
 
         let mut result = if has_eval_scalar {
             let eval_scalar = s_expr.child(0)?.replace_children(vec![Arc::new(agg)]);

@@ -32,7 +32,6 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::Window;
@@ -116,7 +115,7 @@ impl Rule for RulePushDownFilterWindowTopN {
                 .collect::<Vec<_>>();
             let empty_scan =
                 ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
-            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            let result = SExpr::create_leaf(empty_scan);
             state.add_result(result);
             return Ok(());
         }

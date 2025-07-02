@@ -51,7 +51,7 @@ use crate::ScalarExpr;
 
 pub type OperatorRef = Arc<dyn Operator>;
 
-pub trait Operator {
+pub trait Operator: Send + Sync + 'static {
     /// Get relational operator kind
     fn rel_op(&self) -> RelOp;
 

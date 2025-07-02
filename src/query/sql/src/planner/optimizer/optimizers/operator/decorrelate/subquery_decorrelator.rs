@@ -43,7 +43,7 @@ use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -183,7 +183,7 @@ impl SubqueryDecorrelatorOptimizer {
                 for item in eval.items.iter_mut() {
                     (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-                Ok(SExpr::create_unary(Arc::new(eval.into()), Arc::new(outer)))
+                Ok(SExpr::create_unary(eval, outer))
             }
 
             RelOperator::Filter(plan) => {
@@ -192,7 +192,7 @@ impl SubqueryDecorrelatorOptimizer {
                 for pred in plan.predicates.iter_mut() {
                     (*pred, outer) = self.try_rewrite_subquery(pred, outer, true)?;
                 }
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
+                Ok(SExpr::create_unary(plan, outer))
             }
 
             RelOperator::ProjectSet(plan) => {
@@ -201,7 +201,7 @@ impl SubqueryDecorrelatorOptimizer {
                 for item in plan.srfs.iter_mut() {
                     (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
+                Ok(SExpr::create_unary(plan, outer))
             }
 
             RelOperator::Aggregate(plan) => {
@@ -213,7 +213,7 @@ impl SubqueryDecorrelatorOptimizer {
                 for item in plan.aggregate_functions.iter_mut() {
                     (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
                 }
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
+                Ok(SExpr::create_unary(plan, outer))
             }
 
             RelOperator::Window(plan) => {
@@ -235,7 +235,7 @@ impl SubqueryDecorrelatorOptimizer {
                     }
                 }
 
-                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(outer)))
+                Ok(SExpr::create_unary(plan, outer))
             }
 
             RelOperator::Sort(sort) => {
@@ -253,18 +253,14 @@ impl SubqueryDecorrelatorOptimizer {
                     ..sort.clone()
                 };
 
-                Ok(SExpr::create_unary(Arc::new(sort.into()), Arc::new(outer)))
+                Ok(SExpr::create_unary(sort, outer))
             }
 
             RelOperator::Join(join) => {
                 let mut left = self.optimize_sync(s_expr.left_child())?;
                 let mut right = self.optimize_sync(s_expr.right_child())?;
                 if !join.has_subquery() {
-                    return Ok(SExpr::create_binary(
-                        s_expr.plan.clone(),
-                        Arc::new(left),
-                        Arc::new(right),
-                    ));
+                    return Ok(SExpr::create_binary(join, left, right));
                 }
 
                 let mut equi_conditions = join.equi_conditions.clone();
@@ -585,8 +581,7 @@ impl SubqueryDecorrelatorOptimizer {
                     offset: 0,
                     before_exchange: false,
                 };
-                subquery_expr =
-                    SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr));
+                subquery_expr = SExpr::create_unary(limit, subquery_expr);
 
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
@@ -656,7 +651,7 @@ impl SubqueryDecorrelatorOptimizer {
                     };
                     // Filter: COUNT(*) = 1 or COUNT(*) != 1
                     // └── Aggregate: COUNT(*)
-                    SExpr::create_unary(Arc::new(filter.into()), agg_s_expr)
+                    SExpr::create_unary(filter, agg_s_expr)
                 } else {
                     let column_index = self.metadata.write().add_derived_column(
                         "_exists_scalar_subquery".to_string(),
@@ -670,7 +665,7 @@ impl SubqueryDecorrelatorOptimizer {
                             index: column_index,
                         }],
                     };
-                    SExpr::create_unary(Arc::new(eval_scalar.into()), agg_s_expr)
+                    SExpr::create_unary(eval_scalar, agg_s_expr)
                 };
 
                 let cross_join = Join {

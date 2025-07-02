@@ -21,7 +21,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::ScalarExpr;
 
 // The DeduplicateJoinConditionOptimizer uses the Union-Find algorithm to remove duplicate join conditions.

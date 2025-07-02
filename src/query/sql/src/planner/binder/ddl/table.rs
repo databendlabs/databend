@@ -132,7 +132,7 @@ use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshTableCachePlan;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;

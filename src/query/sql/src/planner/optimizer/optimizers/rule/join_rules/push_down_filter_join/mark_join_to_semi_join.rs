@@ -72,13 +72,13 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
 
     let s_join_expr = s_expr.child(0)?;
     let mut result = SExpr::create_binary(
-        Arc::new(join.into()),
-        Arc::new(s_join_expr.child(0)?.clone()),
-        Arc::new(s_join_expr.child(1)?.clone()),
+        join,
+        s_join_expr.child(0)?.clone(),
+        s_join_expr.child(1)?.clone(),
     );
 
     if !filter.predicates.is_empty() {
-        result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
+        result = SExpr::create_unary(filter, result);
     }
     Ok((result, true))
 }

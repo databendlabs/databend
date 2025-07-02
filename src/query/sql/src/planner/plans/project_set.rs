@@ -23,6 +23,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::ScalarExpr;
 
 /// `ProjectSet` is a plan that evaluate a series of
 /// set-returning functions, zip the result together,
@@ -92,5 +93,9 @@ impl Operator for ProjectSet {
     fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
         let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
         self.derive_project_set_stats(&mut input_stat)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

@@ -114,16 +114,16 @@ impl Rule for RulePushDownFilterEvalScalar {
             let pushed_down_filter = Filter {
                 predicates: pushed_down_predicates,
             };
-            result = SExpr::create_unary(Arc::new(pushed_down_filter.into()), Arc::new(result));
+            result = SExpr::create_unary(pushed_down_filter, result);
         }
 
-        result = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(result));
+        result = SExpr::create_unary(eval_scalar, result);
 
         if !remaining_predicates.is_empty() {
             let remaining_filter = Filter {
                 predicates: remaining_predicates,
             };
-            result = SExpr::create_unary(Arc::new(remaining_filter.into()), Arc::new(result));
+            result = SExpr::create_unary(remaining_filter, result);
             result.set_applied_rule(&self.id);
         }
 

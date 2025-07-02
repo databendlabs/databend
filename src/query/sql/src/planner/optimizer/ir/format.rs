@@ -21,7 +21,7 @@ use crate::optimizer::ir::Group;
 use crate::optimizer::ir::MExpr;
 use crate::optimizer::ir::Memo;
 use crate::plans::Exchange;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 
 impl Memo {
     /// Format the memo structure for display

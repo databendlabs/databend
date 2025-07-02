@@ -23,7 +23,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 
 /// Input:      Limit
 ///               |

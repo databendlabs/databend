@@ -25,7 +25,10 @@ use crate::plans::AsyncFunction;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::RelOperator;
+use crate::plans::Filter;
+use crate::plans::Mutation;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
@@ -71,8 +74,9 @@ impl AsyncFunctionRewriter {
         }
 
         // Rewrite async function and its arguments as derived column.
-        match (*s_expr.plan).clone() {
-            RelOperator::EvalScalar(mut plan) => {
+        match s_expr.plan.rel_op() {
+            RelOp::EvalScalar => {
+                let plan = s_expr.plan.as_any().downcast_mut::<EvalScalar>().unwrap();
                 for item in &plan.items {
                     // The index of async function item can be reused.
                     if let ScalarExpr::AsyncFunctionCall(async_func) = &item.scalar {
@@ -84,18 +88,20 @@ impl AsyncFunctionRewriter {
                     self.visit(&mut item.scalar)?;
                 }
                 let child_expr = self.create_async_func_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                let new_expr = SExpr::create_unary(plan, child_expr);
                 Ok(new_expr)
             }
-            RelOperator::Filter(mut plan) => {
+            RelOp::Filter => {
+                let plan = s_expr.plan.as_any().downcast_mut::<Filter>().unwrap();
                 for scalar in &mut plan.predicates {
                     self.visit(scalar)?;
                 }
                 let child_expr = self.create_async_func_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                let new_expr = SExpr::create_unary(plan, child_expr);
                 Ok(new_expr)
             }
-            RelOperator::Mutation(mut plan) => {
+            RelOp::Mutation => {
+                let plan = s_expr.plan.as_any().downcast_mut::<Mutation>().unwrap();
                 for matched_evaluator in plan.matched_evaluators.iter_mut() {
                     if let Some(condition) = matched_evaluator.condition.as_mut() {
                         self.visit(condition)?;
@@ -107,7 +113,7 @@ impl AsyncFunctionRewriter {
                     }
                 }
                 let child_expr = self.create_async_func_expr(s_expr.children[0].clone());
-                let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
+                let new_expr = SExpr::create_unary(plan, child_expr);
                 Ok(new_expr)
             }
             _ => Ok(s_expr),
