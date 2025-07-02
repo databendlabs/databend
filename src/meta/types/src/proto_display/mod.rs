@@ -149,16 +149,6 @@ impl Display for TxnDeleteByPrefixResponse {
     }
 }
 
-impl Display for ConditionalOperation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "if:({}) then:{}",
-            self.predicate.display(),
-            self.operations.display_n(10)
-        )
-    }
-}
 
 #[cfg(test)]
 mod tests {

@@ -15,6 +15,7 @@
 //! Extend protobuf generated code with some useful methods.
 
 mod boolean_expression_ext;
+mod conditional_operation_ext;
 mod fetch_add_u64;
 mod fetch_add_u64_response_ext;
 mod raft_types_ext;
@@ -23,7 +24,6 @@ mod snapshot_chunk_request_ext;
 mod stream_item_ext;
 mod transfer_leader_request_ext;
 mod txn_condition_ext;
-mod txn_ext;
 mod txn_get_request_ext;
 mod txn_get_response_ext;
 mod txn_op_ext;
