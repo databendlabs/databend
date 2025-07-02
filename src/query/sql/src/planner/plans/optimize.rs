@@ -44,6 +44,9 @@ pub struct OptimizeCompactBlock {
 }
 
 impl Operator for OptimizeCompactBlock {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::CompactBlock
     }

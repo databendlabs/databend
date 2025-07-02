@@ -22,8 +22,8 @@ use crate::optimizer::ir::expr::SExpr;
 use crate::optimizer::ir::Group;
 use crate::optimizer::ir::Memo;
 use crate::plans::Operator;
+use crate::plans::OperatorRef;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 
 /// A matcher used to describe a pattern to be matched.
 pub enum Matcher {
@@ -36,7 +36,7 @@ pub enum Matcher {
     /// A pattern to match an operator with a predicate.
     MatchFn {
         /// The function to match the operator.
-        predicate: Box<dyn Fn(&RelOperator) -> bool + 'static>,
+        predicate: Box<dyn Fn(&OperatorRef) -> bool + 'static>,
         children: Vec<Self>,
     },
     /// A leaf pattern to match any node.
@@ -91,8 +91,8 @@ impl Matcher {
         }
     }
 
-    /// Check if the `RelOperator` can be matched by the `Matcher`.
-    pub fn matches_op(&self, op: &RelOperator) -> bool {
+    /// Check if the `OperatorRef` can be matched by the `Matcher`.
+    pub fn matches_op(&self, op: &OperatorRef) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
                 op.rel_op() == *op_type && op.arity() == children.len()

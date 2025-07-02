@@ -28,6 +28,7 @@ use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
+use crate::plans::OperatorRef;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::WindowFuncType;
@@ -43,7 +44,7 @@ use crate::IndexType;
     Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
 pub struct SExpr {
-    pub plan: Arc<RelOperator>,
+    pub plan: OperatorRef,
     pub(crate) children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
@@ -67,7 +68,7 @@ pub struct SExpr {
 
 impl SExpr {
     pub fn create(
-        plan: Arc<RelOperator>,
+        plan: OperatorRef,
         children: impl Into<Vec<Arc<SExpr>>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
@@ -83,12 +84,12 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: Arc<RelOperator>, child: impl Into<Arc<SExpr>>) -> Self {
+    pub fn create_unary(plan: OperatorRef, child: impl Into<Arc<SExpr>>) -> Self {
         Self::create(plan, [child.into()], None, None, None)
     }
 
     pub fn create_binary(
-        plan: Arc<RelOperator>,
+        plan: OperatorRef,
         left_child: impl Into<Arc<SExpr>>,
         right_child: impl Into<Arc<SExpr>>,
     ) -> Self {
@@ -115,7 +116,7 @@ impl SExpr {
         Self::create(plan, [self.clone()], None, None, None)
     }
 
-    pub fn plan(&self) -> &RelOperator {
+    pub fn plan(&self) -> &OperatorRef {
         &self.plan
     }
 

@@ -195,4 +195,8 @@ impl Operator for UnionAll {
 
         Ok(children_required)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

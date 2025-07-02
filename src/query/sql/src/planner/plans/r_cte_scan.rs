@@ -56,6 +56,9 @@ impl Hash for RecursiveCteScan {
 }
 
 impl Operator for RecursiveCteScan {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::RecursiveCteScan
     }

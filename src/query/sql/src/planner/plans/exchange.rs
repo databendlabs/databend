@@ -34,6 +34,9 @@ pub enum Exchange {
 }
 
 impl Operator for Exchange {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Exchange
     }

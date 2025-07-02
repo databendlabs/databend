@@ -46,6 +46,10 @@ impl Operator for DummyTableScan {
     fn arity(&self) -> usize {
         0
     }
+    
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {

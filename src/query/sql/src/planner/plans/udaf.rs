@@ -45,6 +45,9 @@ impl Udaf {
 }
 
 impl Operator for Udaf {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Udaf
     }

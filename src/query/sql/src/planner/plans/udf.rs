@@ -45,8 +45,15 @@ impl Udf {
 }
 
 impl Operator for Udf {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Udf
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+        Box::new(self.items.iter().map(|expr| &expr.scalar))
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {

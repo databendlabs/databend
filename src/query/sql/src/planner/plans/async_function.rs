@@ -98,4 +98,8 @@ impl Operator for AsyncFunction {
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         Ok(vec![vec![required.clone()]])
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

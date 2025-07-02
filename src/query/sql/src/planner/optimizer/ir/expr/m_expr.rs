@@ -23,7 +23,7 @@ use crate::optimizer::ir::Memo;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RulePtr;
 use crate::optimizer::optimizers::rule::TransformResult;
-use crate::plans::RelOperator;
+use crate::plans::OperatorRef;
 use crate::IndexType;
 
 /// `MExpr` is abbreviation of multiple expression, which is the representation of relational
@@ -35,7 +35,7 @@ pub struct MExpr {
     // index of current `MExpr` within a `Group`
     pub(crate) index: IndexType,
 
-    pub(crate) plan: Arc<RelOperator>,
+    pub(crate) plan: OperatorRef,
     pub(crate) children: Vec<IndexType>,
 
     // Disable rules for current `MExpr`
@@ -46,7 +46,7 @@ impl MExpr {
     pub fn new(
         group_index: IndexType,
         index: IndexType,
-        plan: Arc<RelOperator>,
+        plan: OperatorRef,
         children: Vec<IndexType>,
         applied_rules: AppliedRules,
     ) -> Self {

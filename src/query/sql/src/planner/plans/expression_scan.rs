@@ -75,6 +75,9 @@ impl std::hash::Hash for ExpressionScan {
 }
 
 impl Operator for ExpressionScan {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::ExpressionScan
     }

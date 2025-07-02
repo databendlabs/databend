@@ -94,6 +94,9 @@ pub struct SortItem {
 }
 
 impl Operator for Sort {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Sort
     }

@@ -47,6 +47,10 @@ impl Operator for ProjectSet {
         RelOp::ProjectSet
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+        Box::new(self.srfs.iter().map(|expr| &expr.scalar))
+    }
+
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,

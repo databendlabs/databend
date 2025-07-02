@@ -502,16 +502,6 @@ impl Join {
 
         Ok(())
     }
-
-    pub fn has_subquery(&self) -> bool {
-        self.equi_conditions
-            .iter()
-            .any(|condition| condition.left.has_subquery() || condition.right.has_subquery())
-            || self
-                .non_equi_conditions
-                .iter()
-                .any(|expr| expr.has_subquery())
-    }
 }
 
 impl Operator for Join {
@@ -521,6 +511,17 @@ impl Operator for Join {
 
     fn arity(&self) -> usize {
         2
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+        let iter = self.equi_conditions.iter().map(|condition| &condition.left);
+        let iter = iter.chain(
+            self.equi_conditions
+                .iter()
+                .map(|condition| &condition.right),
+        );
+        let iter = iter.chain(self.non_equi_conditions.iter());
+        Box::new(iter)
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -797,6 +798,10 @@ impl Operator for Join {
         }
 
         Ok(children_required)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

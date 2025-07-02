@@ -57,6 +57,9 @@ impl Limit {
 }
 
 impl Operator for Limit {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Limit
     }
