@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod request_ext;
+
 use std::fmt;
 use std::time::Duration;
 

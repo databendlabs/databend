@@ -23,36 +23,12 @@ use display_more::DisplayOptionExt;
 use display_more::DisplayUnixTimeStampExt;
 
 use crate::txn_condition::Target;
-use crate::txn_op;
-use crate::txn_op::Request;
 use crate::TxnDeleteByPrefixRequest;
 use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
-
-impl Display for txn_op::Request {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Request::Get(r) => {
-                write!(f, "Get({})", r)
-            }
-            Request::Put(r) => {
-                write!(f, "Put({})", r)
-            }
-            Request::Delete(r) => {
-                write!(f, "Delete({})", r)
-            }
-            Request::DeleteByPrefix(r) => {
-                write!(f, "DeleteByPrefix({})", r)
-            }
-            Request::FetchAddU64(r) => {
-                write!(f, "FetchAddU64({})", r)
-            }
-        }
-    }
-}
 
 impl Display for TxnPutRequest {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
