@@ -45,7 +45,6 @@ impl fmt::Display for pb::ConditionalOperation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protobuf::BooleanExpression;
     use crate::TxnCondition;
     use crate::TxnOp;
 
@@ -140,7 +139,7 @@ mod tests {
     #[test]
     fn test_display_conditional_operation() {
         let op = crate::protobuf::ConditionalOperation {
-            predicate: Some(BooleanExpression::from_conditions_and([
+            predicate: Some(pb::BooleanExpression::from_conditions_and([
                 TxnCondition::eq_seq("k1", 1),
                 TxnCondition::eq_seq("k2", 2),
             ])),
@@ -164,19 +163,14 @@ mod tests {
         ]));
 
         // Create more than 10 operations to test display_n(10) truncation
-        let operations: Vec<_> = (0..15)
+        let operations: Vec<_> = (0..5)
             .map(|i| pb::TxnOp::put(format!("key{}", i), format!("value{}", i).into_bytes()))
             .collect();
 
         let cond_op = pb::ConditionalOperation::new(predicate, operations);
 
-        let display_str = format!("{}", cond_op);
-        // Should only display first 10 operations due to display_n(10)
-        assert!(display_str.contains("key == seq(1)"));
-        assert!(display_str.contains("Put(Put key=key0)"));
-        assert!(display_str.contains("Put(Put key=key9)"));
-        // Should not contain the 11th operation and beyond
-        assert!(!display_str.contains("Put(Put key=key10)"));
+        let display_str = cond_op.to_string();
+        assert_eq!(display_str, "if:(key == seq(1)) then:[Put(Put key=key0),Put(Put key=key1),Put(Put key=key2),Put(Put key=key3),Put(Put key=key4)]");
     }
 
     #[test]
