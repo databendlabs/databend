@@ -87,7 +87,7 @@ impl Binder {
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                let mut cte_bind_context = cte_info.bind_result.bind_context.clone();
+                let mut cte_bind_context = cte_info.bind_result.as_ref().unwrap().bind_context.clone();
                 // Apply column aliases
                 let mut cols_alias = cte_info.columns_alias.clone();
                 if let Some(alias) = alias {
@@ -145,7 +145,7 @@ impl Binder {
                 let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
                     cte_name: table_name,
                     cte_schema,
-                    def: cte_info.bind_result.s_expr.clone(),
+                    def: cte_info.bind_result.as_ref().unwrap().s_expr.clone(),
                 })));
                 return Ok((s_expr, new_bind_context));
             } else {

@@ -148,17 +148,22 @@ impl Binder {
                 .map(|ident| self.normalize_identifier(ident).name)
                 .collect();
 
-            let mut cte_bind_context = BindContext {
-                cte_context: CteContext {
-                    cte_name: Some(cte_name.clone()),
-                    cte_map: bind_context.cte_context.cte_map.clone(),
-                },
-                ..Default::default()
-            };
-            let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, &cte.query)?;
-            let bind_result = CteBindResult {
-                s_expr,
-                bind_context: cte_bind_context,
+            let bind_result = if with.recursive {
+                None
+            } else {
+                let mut cte_bind_context = BindContext {
+                    cte_context: CteContext {
+                        cte_name: Some(cte_name.clone()),
+                        cte_map: bind_context.cte_context.cte_map.clone(),
+                    },
+                    ..Default::default()
+                };
+                let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, &cte.query)?;
+                let bind_result = CteBindResult {
+                    s_expr,
+                    bind_context: cte_bind_context,
+                };
+                Some(bind_result)
             };
 
             let cte_info = CteInfo {
@@ -262,7 +267,8 @@ impl Binder {
                     .get(&cte_name)
                     .unwrap()
                     .bind_result
-                    .clone();
+                    .clone()
+                    .unwrap();
 
                 let materialized_cte = MaterializedCTE::new(cte_name, bind_context.column_set());
                 current_expr = SExpr::create_binary(
