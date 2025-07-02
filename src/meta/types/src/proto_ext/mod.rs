@@ -20,4 +20,5 @@ mod snapshot_chunk_request_ext;
 mod stream_item_ext;
 mod transfer_leader_request_ext;
 mod txn_ext;
+mod txn_request_ext;
 mod watch_ext;

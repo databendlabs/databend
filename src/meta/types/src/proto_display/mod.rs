@@ -46,23 +46,6 @@ use crate::TxnOpResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
 use crate::TxnReply;
-use crate::TxnRequest;
-
-impl Display for TxnRequest {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "TxnRequest{{",)?;
-
-        for op in self.operations.iter() {
-            write!(f, "{{ {} }}, ", op)?;
-        }
-
-        write!(f, "if:{} ", self.condition.display_n(10),)?;
-        write!(f, "then:{} ", self.if_then.display_n(10),)?;
-        write!(f, "else:{}", self.else_then.display_n(10),)?;
-
-        write!(f, "}}",)
-    }
-}
 
 impl Display for TxnCondition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -355,36 +338,6 @@ mod tests {
         assert_eq!(
             format!("{}", op),
             "if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)]"
-        );
-    }
-
-    #[test]
-    fn test_display_txn_request() {
-        let op = crate::protobuf::ConditionalOperation {
-            predicate: Some(BooleanExpression::from_conditions_and([
-                TxnCondition::eq_seq("k1", 1),
-                TxnCondition::eq_seq("k2", 2),
-            ])),
-            operations: vec![
-                //
-                TxnOp::put("k1", b"v1".to_vec()),
-                TxnOp::put("k2", b"v2".to_vec()),
-            ],
-        };
-
-        let req = crate::TxnRequest {
-            operations: vec![op],
-            condition: vec![TxnCondition::eq_seq("k1", 1), TxnCondition::eq_seq("k2", 2)],
-            if_then: vec![
-                TxnOp::put("k1", b"v1".to_vec()),
-                TxnOp::put("k2", b"v2".to_vec()),
-            ],
-            else_then: vec![TxnOp::put("k3", b"v1".to_vec())],
-        };
-
-        assert_eq!(
-            format!("{}", req),
-           "TxnRequest{{ if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)] }, if:[k1 == seq(1),k2 == seq(2)] then:[Put(Put key=k1),Put(Put key=k2)] else:[Put(Put key=k3)]}",
         );
     }
 

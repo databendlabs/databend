@@ -21,62 +21,6 @@ use pb::txn_condition::Target;
 use crate::protobuf as pb;
 use crate::seq_value::SeqV;
 
-impl pb::TxnRequest {
-    /// Push a new conditional operation branch to the transaction.
-    ///
-    /// A branch is just like a `if (condition1 [and|or] condition2 ... ) { then; return; }` block.
-    pub fn push_branch(
-        mut self,
-        expr: Option<pb::BooleanExpression>,
-        ops: impl IntoIterator<Item = pb::TxnOp>,
-    ) -> Self {
-        self.operations
-            .push(pb::ConditionalOperation::new(expr, ops));
-        self
-    }
-
-    /// Push the old version of `condition` and `if_then` to the transaction.
-    ///
-    /// It is just like a `if (condition) { then; return; }` block.
-    pub fn push_if_then(
-        mut self,
-        conditions: impl IntoIterator<Item = pb::TxnCondition>,
-        ops: impl IntoIterator<Item = pb::TxnOp>,
-    ) -> Self {
-        assert!(self.condition.is_empty());
-        assert!(self.if_then.is_empty());
-        self.condition.extend(conditions);
-        self.if_then.extend(ops);
-        self
-    }
-
-    pub fn new(conditions: Vec<pb::TxnCondition>, ops: Vec<pb::TxnOp>) -> Self {
-        Self {
-            operations: vec![],
-            condition: conditions,
-            if_then: ops,
-            else_then: vec![],
-        }
-    }
-
-    /// Adds operations to execute when the conditions are not met.
-    pub fn with_else(mut self, ops: Vec<pb::TxnOp>) -> Self {
-        self.else_then = ops;
-        self
-    }
-
-    /// Creates a transaction request that performs the specified operations
-    /// unconditionally.
-    pub fn unconditional(ops: Vec<pb::TxnOp>) -> Self {
-        Self {
-            operations: vec![],
-            condition: vec![],
-            if_then: ops,
-            else_then: vec![],
-        }
-    }
-}
-
 impl pb::TxnReply {
     pub fn new(execution_path: impl ToString) -> Self {
         let execution_path = execution_path.to_string();
