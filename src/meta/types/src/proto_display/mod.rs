@@ -20,34 +20,17 @@ use std::fmt::Formatter;
 use std::time::Duration;
 
 use display_more::DisplayOptionExt;
-use display_more::DisplaySliceExt;
 use display_more::DisplayUnixTimeStampExt;
 
-use crate::protobuf::ConditionalOperation;
 use crate::txn_condition::Target;
 use crate::txn_op;
 use crate::txn_op::Request;
-use crate::ConditionResult;
 use crate::TxnDeleteByPrefixRequest;
 use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
-
-impl Display for ConditionResult {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let x = match self {
-            ConditionResult::Eq => "==",
-            ConditionResult::Gt => ">",
-            ConditionResult::Ge => ">=",
-            ConditionResult::Lt => "<",
-            ConditionResult::Le => "<=",
-            ConditionResult::Ne => "!=",
-        };
-        write!(f, "{}", x)
-    }
-}
 
 impl Display for txn_op::Request {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -148,7 +131,6 @@ impl Display for TxnDeleteByPrefixResponse {
         )
     }
 }
-
 
 #[cfg(test)]
 mod tests {
