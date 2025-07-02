@@ -12,5 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod seqv_display;
-mod watch_display;
+use std::fmt;
+
+use crate::protobuf as pb;
+use pb::txn_condition::Target;
+
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Target::Value(_) => {
+                write!(f, "value(...)",)
+            }
+            Target::Seq(seq) => {
+                write!(f, "seq({})", seq)
+            }
+            Target::KeysWithPrefix(n) => {
+                write!(f, "keys_with_prefix({})", n)
+            }
+        }
+    }
+}

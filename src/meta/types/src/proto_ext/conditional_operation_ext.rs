@@ -45,6 +45,9 @@ impl fmt::Display for pb::ConditionalOperation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protobuf::BooleanExpression;
+    use crate::TxnCondition;
+    use crate::TxnOp;
 
     #[test]
     fn test_new_with_predicate_and_operations() {
@@ -132,6 +135,26 @@ mod tests {
         assert!(display_str.contains(") then:["));
         assert!(display_str.contains("Put(Put key=key1)"));
         assert!(display_str.ends_with("]"));
+    }
+
+    #[test]
+    fn test_display_conditional_operation() {
+        let op = crate::protobuf::ConditionalOperation {
+            predicate: Some(BooleanExpression::from_conditions_and([
+                TxnCondition::eq_seq("k1", 1),
+                TxnCondition::eq_seq("k2", 2),
+            ])),
+            operations: vec![
+                //
+                TxnOp::put("k1", b"v1".to_vec()),
+                TxnOp::put("k2", b"v2".to_vec()),
+            ],
+        };
+
+        assert_eq!(
+            format!("{}", op),
+            "if:(k1 == seq(1) AND k2 == seq(2)) then:[Put(Put key=k1),Put(Put key=k2)]"
+        );
     }
 
     #[test]

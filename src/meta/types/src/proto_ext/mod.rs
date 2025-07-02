@@ -31,3 +31,10 @@ mod txn_op_response_ext;
 mod txn_reply_ext;
 mod txn_request_ext;
 mod watch_ext;
+
+mod txn_delete_by_prefix_request_ext;
+mod txn_delete_by_prefix_response_ext;
+mod txn_delete_request_ext;
+mod txn_delete_response_ext;
+mod txn_put_request_ext;
+mod txn_put_response_ext;

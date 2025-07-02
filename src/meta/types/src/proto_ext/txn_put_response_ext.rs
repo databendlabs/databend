@@ -12,5 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod seqv_display;
-mod watch_display;
+use std::fmt::Display;
+use std::fmt::Formatter;
+
+use crate::TxnPutResponse;
+
+impl Display for TxnPutResponse {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "Put-resp: key={}, prev_seq={}, current_seq={}",
+            self.key,
+            self.prev_value.as_ref().map(|x| x.seq).display(),
+            self.current.as_ref().map(|x| x.seq).display()
+        )
+    }
+}
