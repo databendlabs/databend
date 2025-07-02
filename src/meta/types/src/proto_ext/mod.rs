@@ -22,6 +22,7 @@ mod snapshot_chunk_request_ext;
 mod stream_item_ext;
 mod transfer_leader_request_ext;
 mod txn_ext;
+mod txn_op_ext;
 mod txn_get_request_ext;
 mod txn_get_response_ext;
 mod txn_reply_ext;

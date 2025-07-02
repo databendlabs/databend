@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use pb::boolean_expression::CombiningOperator;
 use pb::txn_condition::ConditionResult;
 use pb::txn_condition::Target;
@@ -166,98 +164,6 @@ impl pb::TxnCondition {
     }
 }
 
-impl pb::TxnOp {
-    /// Create a txn operation that puts a record.
-    pub fn put(key: impl ToString, value: Vec<u8>) -> pb::TxnOp {
-        pb::TxnOp {
-            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
-                key: key.to_string(),
-                value,
-                prev_value: true,
-                expire_at: None,
-                ttl_ms: None,
-            })),
-        }
-    }
-
-    /// Create a txn operation that puts a record with ttl.
-    ///
-    /// `ttl` is relative expire time while `expire_at` is absolute expire time.
-    pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl: Option<Duration>) -> pb::TxnOp {
-        pb::TxnOp {
-            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
-                key: key.to_string(),
-                value,
-                prev_value: true,
-                expire_at: None,
-                ttl_ms: ttl.map(|d| d.as_millis() as u64),
-            })),
-        }
-    }
-
-    pub fn with_ttl(mut self, ttl_ms: Option<u64>) -> Self {
-        if let Some(pb::txn_op::Request::Put(p)) = &mut self.request {
-            p.ttl_ms = ttl_ms;
-        }
-        self
-    }
-
-    /// Create a new `TxnOp` with a `Delete` operation.
-    pub fn delete(key: impl ToString) -> Self {
-        Self::delete_exact(key, None)
-    }
-
-    /// Create a new `TxnOp` with a `Delete` operation that will be executed only when the `seq` matches.
-    pub fn delete_exact(key: impl ToString, seq: Option<u64>) -> Self {
-        pb::TxnOp {
-            request: Some(pb::txn_op::Request::Delete(pb::TxnDeleteRequest {
-                key: key.to_string(),
-                prev_value: true,
-                match_seq: seq,
-            })),
-        }
-    }
-
-    /// Create a new `TxnOp` with a `Get` operation.
-    pub fn get(key: impl ToString) -> Self {
-        pb::TxnOp {
-            request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
-                key: key.to_string(),
-            })),
-        }
-    }
-
-    pub fn fetch_add_u64(key: impl ToString, delta: i64) -> Self {
-        pb::TxnOp {
-            request: Some(pb::txn_op::Request::FetchAddU64(pb::FetchAddU64 {
-                key: key.to_string(),
-                match_seq: None,
-                delta,
-            })),
-        }
-    }
-
-    /// Add a match-sequence-number condition to the operation.
-    ///
-    /// If the sequence number does not match, the operation won't be take place.
-    pub fn match_seq(mut self, seq: Option<u64>) -> Self {
-        let req = self
-            .request
-            .as_mut()
-            .expect("TxnOp must have a non-None request field");
-
-        match req {
-            pb::txn_op::Request::Delete(p) => p.match_seq = seq,
-            pb::txn_op::Request::FetchAddU64(d) => d.match_seq = seq,
-            _ => {
-                unreachable!("Not support match_seq for: {}", req)
-            }
-        }
-
-        self
-    }
-}
-
 impl pb::TxnOpResponse {
     /// Create a new `TxnOpResponse` of a `Delete` operation.
     pub fn delete(key: impl ToString, success: bool, prev_value: Option<pb::SeqV>) -> Self {
@@ -347,7 +253,6 @@ impl pb::TxnOpResponse {
         }
     }
 }
-
 
 impl pb::ConditionalOperation {
     pub fn new(

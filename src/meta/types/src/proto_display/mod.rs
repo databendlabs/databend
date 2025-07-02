@@ -37,7 +37,6 @@ use crate::TxnDeleteByPrefixRequest;
 use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
-use crate::TxnOp;
 use crate::TxnOpResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
@@ -61,12 +60,6 @@ impl Display for ConditionResult {
             ConditionResult::Ne => "!=",
         };
         write!(f, "{}", x)
-    }
-}
-
-impl Display for TxnOp {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.request.display())
     }
 }
 
