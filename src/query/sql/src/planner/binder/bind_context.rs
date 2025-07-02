@@ -16,7 +16,6 @@ use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::hash::Hash;
-use std::sync::Arc;
 
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
@@ -44,7 +43,6 @@ use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::ir::StatInfo;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -207,7 +205,6 @@ pub struct CteInfo {
 pub struct CteBindResult {
     pub s_expr: SExpr,
     pub bind_context: BindContext,
-    pub stat_info: Arc<StatInfo>,
 }
 
 impl BindContext {

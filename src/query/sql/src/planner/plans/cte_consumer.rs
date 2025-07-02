@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
@@ -28,6 +29,7 @@ use crate::plans::RelOp;
 pub struct CTEConsumer {
     pub cte_name: String,
     pub cte_schema: DataSchemaRef,
+    pub def: SExpr,
 }
 
 impl Hash for CTEConsumer {
@@ -47,7 +49,7 @@ impl Operator for CTEConsumer {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality()
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        RelExpr::with_s_expr(&self.def).derive_cardinality()
     }
 }

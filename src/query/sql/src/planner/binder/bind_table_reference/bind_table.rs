@@ -142,16 +142,11 @@ impl Binder {
                     new_bind_context.add_column_binding(column);
                 }
 
-                let s_expr = SExpr::create(
-                    Arc::new(RelOperator::CTEConsumer(CTEConsumer {
-                        cte_name: table_name,
-                        cte_schema,
-                    })),
-                    vec![],
-                    None,
-                    None,
-                    Some(cte_info.bind_result.stat_info.clone()),
-                );
+                let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
+                    cte_name: table_name,
+                    cte_schema,
+                    def: cte_info.bind_result.s_expr.clone(),
+                })));
                 return Ok((s_expr, new_bind_context));
             } else {
                 if self

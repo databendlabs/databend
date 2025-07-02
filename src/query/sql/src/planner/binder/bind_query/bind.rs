@@ -28,7 +28,6 @@ use derive_visitor::Visitor;
 use crate::binder::CteBindResult;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -157,11 +156,9 @@ impl Binder {
                 ..Default::default()
             };
             let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, &cte.query)?;
-            let stat_info = RelExpr::with_s_expr(&s_expr).derive_cardinality()?;
             let bind_result = CteBindResult {
                 s_expr,
                 bind_context: cte_bind_context,
-                stat_info,
             };
 
             let cte_info = CteInfo {
@@ -260,7 +257,6 @@ impl Binder {
                 let CteBindResult {
                     s_expr,
                     bind_context,
-                    stat_info,
                 } = cte_context
                     .cte_map
                     .get(&cte_name)
@@ -269,12 +265,10 @@ impl Binder {
                     .clone();
 
                 let materialized_cte = MaterializedCTE::new(cte_name, bind_context.column_set());
-                current_expr = SExpr::create(
+                current_expr = SExpr::create_binary(
                     Arc::new(materialized_cte.into()),
-                    vec![Arc::new(s_expr), Arc::new(current_expr)],
-                    None,
-                    None,
-                    Some(stat_info),
+                    Arc::new(s_expr),
+                    Arc::new(current_expr),
                 );
             }
         }
