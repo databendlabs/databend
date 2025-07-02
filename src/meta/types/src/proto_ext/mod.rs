@@ -26,6 +26,7 @@ mod txn_ext;
 mod txn_get_request_ext;
 mod txn_get_response_ext;
 mod txn_op_ext;
+mod txn_op_response_ext;
 mod txn_reply_ext;
 mod txn_request_ext;
 mod watch_ext;

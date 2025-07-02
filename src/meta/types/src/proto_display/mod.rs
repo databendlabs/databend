@@ -29,13 +29,11 @@ use crate::protobuf::ConditionalOperation;
 use crate::txn_condition::Target;
 use crate::txn_op;
 use crate::txn_op::Request;
-use crate::txn_op_response::Response;
 use crate::ConditionResult;
 use crate::TxnDeleteByPrefixRequest;
 use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
-use crate::TxnOpResponse;
 use crate::TxnPutRequest;
 use crate::TxnPutResponse;
 
@@ -115,34 +113,6 @@ impl Display for Target {
             }
             Target::KeysWithPrefix(n) => {
                 write!(f, "keys_with_prefix({})", n)
-            }
-        }
-    }
-}
-
-impl Display for TxnOpResponse {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "TxnOpResponse: {}", self.response.display())
-    }
-}
-
-impl Display for Response {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            Response::Get(r) => {
-                write!(f, "Get: {}", r)
-            }
-            Response::Put(r) => {
-                write!(f, "Put: {}", r)
-            }
-            Response::Delete(r) => {
-                write!(f, "Delete: {}", r)
-            }
-            Response::DeleteByPrefix(r) => {
-                write!(f, "DeleteByPrefix: {}", r)
-            }
-            Response::FetchAddU64(r) => {
-                write!(f, "FetchAddU64: {}", r)
             }
         }
     }

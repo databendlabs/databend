@@ -15,7 +15,6 @@
 use pb::boolean_expression::CombiningOperator;
 
 use crate::protobuf as pb;
-use crate::seq_value::SeqV;
 
 #[derive(derive_more::From)]
 pub enum ExpressionOrCondition {
@@ -104,96 +103,6 @@ impl pb::BooleanExpression {
                 operator: op as i32,
                 sub_expressions: expressions,
             }
-        }
-    }
-}
-
-impl pb::TxnOpResponse {
-    /// Create a new `TxnOpResponse` of a `Delete` operation.
-    pub fn delete(key: impl ToString, success: bool, prev_value: Option<pb::SeqV>) -> Self {
-        pb::TxnOpResponse {
-            response: Some(pb::txn_op_response::Response::Delete(
-                pb::TxnDeleteResponse {
-                    key: key.to_string(),
-                    success,
-                    prev_value,
-                },
-            )),
-        }
-    }
-
-    /// Create a new `TxnOpResponse` of a `Put` operation.
-    pub fn put(
-        key: impl ToString,
-        prev_value: Option<pb::SeqV>,
-        current: Option<pb::SeqV>,
-    ) -> Self {
-        pb::TxnOpResponse {
-            response: Some(pb::txn_op_response::Response::Put(pb::TxnPutResponse {
-                key: key.to_string(),
-                prev_value,
-                current,
-            })),
-        }
-    }
-
-    pub fn unchanged_fetch_add_u64(key: impl ToString, seq: u64, value: u64) -> Self {
-        Self::fetch_add_u64(key, seq, value, seq, value)
-    }
-
-    pub fn fetch_add_u64(
-        key: impl ToString,
-        before_seq: u64,
-        before: u64,
-        after_seq: u64,
-        after: u64,
-    ) -> Self {
-        pb::TxnOpResponse {
-            response: Some(pb::txn_op_response::Response::FetchAddU64(
-                pb::FetchAddU64Response {
-                    key: key.to_string(),
-                    before_seq,
-                    before,
-                    after_seq,
-                    after,
-                },
-            )),
-        }
-    }
-
-    pub fn get(key: impl ToString, value: Option<SeqV>) -> Self {
-        pb::TxnOpResponse {
-            response: Some(pb::txn_op_response::Response::Get(pb::TxnGetResponse {
-                key: key.to_string(),
-                value: value.map(pb::SeqV::from),
-            })),
-        }
-    }
-
-    /// Consumes and returns the response as a `Get` response if it is one.
-    pub fn into_get(self) -> Option<pb::TxnGetResponse> {
-        match self.response {
-            Some(pb::txn_op_response::Response::Get(resp)) => Some(resp),
-            _ => None,
-        }
-    }
-
-    pub fn as_get(&self) -> &pb::TxnGetResponse {
-        self.try_as_get().unwrap()
-    }
-
-    /// Returns the response as a `Get` response if it is one.
-    pub fn try_as_get(&self) -> Option<&pb::TxnGetResponse> {
-        match &self.response {
-            Some(pb::txn_op_response::Response::Get(resp)) => Some(resp),
-            _ => None,
-        }
-    }
-
-    pub fn try_as_fetch_add_u64(&self) -> Option<&pb::FetchAddU64Response> {
-        match &self.response {
-            Some(pb::txn_op_response::Response::FetchAddU64(resp)) => Some(resp),
-            _ => None,
         }
     }
 }
