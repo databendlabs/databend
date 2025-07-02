@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 mod condition_result_ext;
 mod target_ext;
 
@@ -259,7 +258,7 @@ mod tests {
         let cond1 = pb::TxnCondition::eq_seq("static_str", 1);
         let cond2 = pb::TxnCondition::eq_seq(String::from("owned_string"), 2);
         let key_ref = "string_ref";
-        let cond3 = pb::TxnCondition::eq_seq(&key_ref, 3);
+        let cond3 = pb::TxnCondition::eq_seq(key_ref, 3);
 
         assert_eq!(cond1.key, "static_str");
         assert_eq!(cond2.key, "owned_string");

@@ -372,8 +372,8 @@ mod tests {
         let resp1 = pb::TxnOpResponse::delete("static_str", true, None);
         let resp2 = pb::TxnOpResponse::put(String::from("owned_string"), None, None);
         let key_ref = "string_ref";
-        let resp3 = pb::TxnOpResponse::get(&key_ref, None);
-        let resp4 = pb::TxnOpResponse::fetch_add_u64(&key_ref, 1, 1, 1, 1);
+        let resp3 = pb::TxnOpResponse::get(key_ref, None);
+        let resp4 = pb::TxnOpResponse::fetch_add_u64(key_ref, 1, 1, 1, 1);
 
         // Extract keys and verify
         assert_eq!(resp1.try_as_delete().unwrap().key, "static_str");

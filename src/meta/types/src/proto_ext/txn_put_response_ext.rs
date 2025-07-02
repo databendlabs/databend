@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use display_more::DisplayOptionExt;
+
 use crate::TxnPutResponse;
 
 impl Display for TxnPutResponse {

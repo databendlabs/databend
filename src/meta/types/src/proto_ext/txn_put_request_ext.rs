@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use display_more::DisplayUnixTimeStampExt;
+
 use crate::TxnPutRequest;
 
 impl Display for TxnPutRequest {

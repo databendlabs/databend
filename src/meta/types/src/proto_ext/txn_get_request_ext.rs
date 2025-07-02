@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::protobuf as pb;
-
 use std::fmt;
+
+use crate::protobuf as pb;
 
 impl fmt::Display for pb::TxnGetRequest {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

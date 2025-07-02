@@ -14,8 +14,9 @@
 
 use std::fmt;
 
-use crate::protobuf as pb;
 use pb::txn_condition::Target;
+
+use crate::protobuf as pb;
 
 impl fmt::Display for Target {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
