@@ -28,6 +28,8 @@ use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationType;
 use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
@@ -48,6 +50,23 @@ pub struct MutationSource {
 
     pub partitions: Partitions,
     pub statistics: PartStatistics,
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for MutationSource {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        _required: ColumnSet,
+        _stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::MutationSource>()
+            .unwrap();
+        builder.build_mutation_source(plan).await
+    }
 }
 
 impl MutationSource {

@@ -80,6 +80,25 @@ impl EvalScalar {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for EvalScalar {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::EvalScalar>()
+            .unwrap();
+        builder
+            .build_eval_scalar(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_eval_scalar(
         &mut self,

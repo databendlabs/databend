@@ -40,6 +40,7 @@ databend-storages-common-table-meta = { workspace = true }
 ahash = { workspace = true, features = ["no-rng"] }
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
+match-template = { workspace = true }
 async-recursion = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }

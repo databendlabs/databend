@@ -77,59 +77,10 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
-        match s_expr.plan() {
-            RelOperator::Scan(scan) => self.build_table_scan(scan, required, stat_info).await,
-            RelOperator::DummyTableScan(_) => self.build_dummy_table_scan().await,
-            RelOperator::Join(join) => self.build_join(s_expr, join, required, stat_info).await,
-            RelOperator::EvalScalar(eval_scalar) => {
-                self.build_eval_scalar(s_expr, eval_scalar, required, stat_info)
-                    .await
-            }
-            RelOperator::Filter(filter) => {
-                self.build_filter(s_expr, filter, required, stat_info).await
-            }
-            RelOperator::Aggregate(agg) => {
-                self.build_aggregate(s_expr, agg, required, stat_info).await
-            }
-            RelOperator::Window(window) => {
-                self.build_window(s_expr, window, required, stat_info).await
-            }
-            RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
-            RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
-            RelOperator::Exchange(exchange) => {
-                self.build_exchange(s_expr, exchange, required).await
-            }
-            RelOperator::UnionAll(union_all) => {
-                self.build_union_all(s_expr, union_all, required, stat_info)
-                    .await
-            }
-            RelOperator::ProjectSet(project_set) => {
-                self.build_project_set(s_expr, project_set, required, stat_info)
-                    .await
-            }
-            RelOperator::ConstantTableScan(scan) => {
-                self.build_constant_table_scan(scan, required).await
-            }
-            RelOperator::ExpressionScan(scan) => {
-                self.build_expression_scan(s_expr, scan, required).await
-            }
-            RelOperator::CacheScan(scan) => self.build_cache_scan(scan, required).await,
-            RelOperator::Udf(udf) => self.build_udf(s_expr, udf, required, stat_info).await,
-            RelOperator::RecursiveCteScan(scan) => {
-                self.build_recursive_cte_scan(scan, stat_info).await
-            }
-            RelOperator::AsyncFunction(async_func) => {
-                self.build_async_func(s_expr, async_func, required, stat_info)
-                    .await
-            }
-            RelOperator::Mutation(mutation) => {
-                self.build_mutation(s_expr, mutation, required).await
-            }
-            RelOperator::MutationSource(mutation_source) => {
-                self.build_mutation_source(mutation_source).await
-            }
-            RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
-        }
+        with_match_rel_op!(|TY| match s_expr.plan().rel_op() {
+            crate::plans::RelOp::TY => TY::build(self, s_expr, required, stat_info).await,
+            _ => Err(ErrorCode::Internal("Unsupported operator")),
+        })
     }
 
     pub fn set_mutation_build_info(&mut self, mutation_build_info: MutationBuildInfo) {
@@ -149,4 +100,46 @@ pub struct MutationBuildInfo {
     pub partitions: Partitions,
     pub statistics: PartStatistics,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+#[async_trait::async_trait]
+pub trait BuildPhysicalPlan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan>;
+}
+
+#[macro_export]
+macro_rules! with_match_rel_op {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                Scan => TableScan,
+                DummyTableScan => DummyTableScan,
+                ConstantTableScan => ConstantTableScan,
+                ExpressionScan => ExpressionScan,
+                CacheScan => CacheScan,
+                Join => Join,
+                EvalScalar => EvalScalar,
+                Filter => Filter,
+                Aggregate => Aggregate,
+                Sort => Sort,
+                Limit => Limit,
+                Exchange => Exchange,
+                UnionAll => UnionAll,
+                Window => Window,
+                ProjectSet => ProjectSet,
+                Udf => Udf,
+                AsyncFunction => AsyncFunction,
+                RecursiveCteScan => RecursiveCteScan,
+                MergeInto => MergeInto,
+                CompactBlock => CompactBlock,
+                MutationSource => MutationSource,
+            ],
+            $($tail)*
+        }
+    }
 }

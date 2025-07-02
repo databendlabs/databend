@@ -23,6 +23,8 @@ use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::Exchange;
@@ -30,6 +32,9 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::ColumnSet;
+
+pub struct CompactBlock;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CompactSource {
@@ -38,6 +43,23 @@ pub struct CompactSource {
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for CompactBlock {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        _required: ColumnSet,
+        _stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::OptimizeCompactBlock>()
+            .unwrap();
+        builder.build_compact_source(plan).await
+    }
 }
 
 impl PhysicalPlanBuilder {

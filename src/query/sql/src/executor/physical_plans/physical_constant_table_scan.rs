@@ -44,11 +44,31 @@ impl ConstantTableScan {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for ConstantTableScan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::ConstantTableScan>()
+            .unwrap();
+        builder
+            .build_constant_table_scan(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_constant_table_scan(
         &mut self,
         scan: &crate::plans::ConstantTableScan,
         required: ColumnSet,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         debug_assert!(scan
             .schema

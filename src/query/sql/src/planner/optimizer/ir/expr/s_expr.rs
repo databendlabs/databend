@@ -503,7 +503,6 @@ impl SExpr {
             | crate::plans::RelOp::Window
             | crate::plans::RelOp::ProjectSet
             | crate::plans::RelOp::Udf
-            | crate::plans::RelOp::Udaf
             | crate::plans::RelOp::AsyncFunction
             | crate::plans::RelOp::MergeInto
             | crate::plans::RelOp::CompactBlock

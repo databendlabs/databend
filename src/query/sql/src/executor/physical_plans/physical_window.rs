@@ -149,6 +149,25 @@ pub struct NtileFunctionDesc {
     pub return_type: DataType,
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Window {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Window>()
+            .unwrap();
+        builder
+            .build_window(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_window(
         &mut self,

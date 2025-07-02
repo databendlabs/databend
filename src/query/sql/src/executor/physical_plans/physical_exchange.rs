@@ -43,12 +43,32 @@ impl Exchange {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Exchange {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Exchange>()
+            .unwrap();
+        builder
+            .build_exchange(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_exchange(
         &mut self,
         s_expr: &SExpr,
         exchange: &crate::plans::Exchange,
         mut required: ColumnSet,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         if let crate::plans::Exchange::Hash(exprs) = exchange {

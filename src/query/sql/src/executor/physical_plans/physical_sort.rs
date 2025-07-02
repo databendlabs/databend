@@ -102,6 +102,23 @@ impl Sort {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Sort {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Sort>()
+            .unwrap();
+        builder.build_sort(s_expr, plan, required, stat_info).await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_sort(
         &mut self,

@@ -19,6 +19,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -41,6 +42,23 @@ pub struct Limit {
 impl Limit {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.input.output_schema()
+    }
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Limit {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Limit>()
+            .unwrap();
+        builder.build_limit(s_expr, plan, required, stat_info).await
     }
 }
 
