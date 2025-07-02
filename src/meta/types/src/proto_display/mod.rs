@@ -39,7 +39,6 @@ use crate::TxnDeleteByPrefixResponse;
 use crate::TxnDeleteRequest;
 use crate::TxnDeleteResponse;
 use crate::TxnGetRequest;
-use crate::TxnGetResponse;
 use crate::TxnOp;
 use crate::TxnOpResponse;
 use crate::TxnPutRequest;
@@ -174,16 +173,6 @@ impl Display for Response {
     }
 }
 
-impl Display for TxnGetResponse {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "Get-resp: key={}, prev_seq={:?}",
-            self.key,
-            self.value.as_ref().map(|x| x.seq)
-        )
-    }
-}
 impl Display for TxnPutResponse {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(

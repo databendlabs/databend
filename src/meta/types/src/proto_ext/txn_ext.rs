@@ -348,14 +348,6 @@ impl pb::TxnOpResponse {
     }
 }
 
-impl pb::TxnGetResponse {
-    pub fn new(key: impl ToString, value: Option<pb::SeqV>) -> Self {
-        Self {
-            key: key.to_string(),
-            value,
-        }
-    }
-}
 
 impl pb::ConditionalOperation {
     pub fn new(
