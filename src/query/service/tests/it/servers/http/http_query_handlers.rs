@@ -1670,18 +1670,17 @@ async fn test_txn_error() -> Result<()> {
 
     {
         let mut session = session.clone();
-        session.last_server_info = None;
+        if let Some(info) = &mut session.last_server_info {
+            info.id = "abc".to_string();
+        }
         let json = serde_json::json!({
             "sql": "select 1",
             "session": session,
             "pagination": {"wait_time_secs": wait_time_secs}
         });
         let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
-        assert_eq!(reply.last().1.error.unwrap().code, 4004u16);
-        assert_eq!(
-            &reply.last().1.error.unwrap().message,
-            "[HTTP-QUERY] Transaction is active but missing server_info"
-        );
+        assert_eq!(reply.last().1.error.unwrap().code, 5111u16);
+        assert!(reply.last().1.error.unwrap().message.contains("restart"),);
     }
 
     {

@@ -38,6 +38,7 @@ pub use query::ExpiringState;
 pub use query::HttpQueryContext;
 pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
+pub use query::HttpSessionStateInternal;
 pub use roles::list_roles_handler;
 pub use session::login_handler::login_handler;
 pub use session::login_handler::LoginResponse;
