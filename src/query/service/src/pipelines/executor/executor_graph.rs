@@ -442,12 +442,10 @@ impl ExecutingGraph {
 
     /// Checks if a task can be performed in the current epoch, consuming a point if possible.
     pub fn can_perform_task(&self, global_epoch: u32) -> bool {
-        // Load the maximum points this query can have per epoch
         let max_points = self.max_points.load(Ordering::SeqCst);
         let mut expected_value = 0;
         let mut desired_value = 0;
 
-        // Use compare-and-swap loop to atomically update points and epoch
         loop {
             match self.points.compare_exchange_weak(
                 expected_value,
@@ -456,30 +454,21 @@ impl ExecutingGraph {
                 Ordering::Relaxed,
             ) {
                 Ok(_) => {
-                    // Successfully updated the atomic value. Check if the final epoch matches global epoch.
-                    // Return true only if we're executing in the correct epoch (task can proceed)
                     return (desired_value & EPOCH_MASK) as u32 == global_epoch;
                 }
                 Err(new_expected) => {
-                    // Extract points and epoch from the 64-bit atomic value
                     let remain_points = (new_expected & POINTS_MASK) >> 32;
                     let epoch = new_expected & EPOCH_MASK;
 
                     expected_value = new_expected;
 
                     if epoch > global_epoch as u64 {
-                        // Query epoch is ahead of global epoch - don't execute, keep current state
                         desired_value = new_expected;
                     } else if epoch < global_epoch as u64 {
-                        // Query epoch is behind global epoch - refill points and consume one
-                        // This happens when the query was idle and needs to catch up
                         desired_value = (max_points - 1) << 32 | global_epoch as u64;
                     } else if remain_points >= 1 {
-                        // Same epoch and have points available - consume one point
                         desired_value = (remain_points - 1) << 32 | epoch;
                     } else {
-                        // Same epoch but no points left - advance to next epoch with full points
-                        // Task will need to wait as it cannot execute in current epoch
                         desired_value = max_points << 32 | (epoch + 1);
                     }
                 }
