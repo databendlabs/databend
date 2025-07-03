@@ -159,6 +159,8 @@ databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
+databend-common-openai = { path = "src/common/openai" }
+databend-common-parquet-reader-experimental = { path = "src/common/experimental_parquet_reader" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
 databend-common-pipeline-sources = { path = "src/query/pipeline/sources" }
