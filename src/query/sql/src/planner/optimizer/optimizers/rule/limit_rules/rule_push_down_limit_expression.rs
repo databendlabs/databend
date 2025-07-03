@@ -21,8 +21,8 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 
 /// Input:  Limit
 ///           \
@@ -69,14 +69,8 @@ impl Rule for RulePushDownLimitEvalScalar {
         let eval_plan = s_expr.child(0)?;
         let eval_scalar: EvalScalar = eval_plan.plan().clone().try_into()?;
 
-        let limit_expr = SExpr::create_unary(
-            Arc::new(RelOperator::Limit(limit)),
-            Arc::new(eval_plan.child(0)?.clone()),
-        );
-        let mut result = SExpr::create_unary(
-            Arc::new(RelOperator::EvalScalar(eval_scalar)),
-            Arc::new(limit_expr),
-        );
+        let limit_expr = SExpr::create_unary(limit, eval_plan.child(0)?.clone());
+        let mut result = SExpr::create_unary(eval_scalar, limit_expr);
 
         result.set_applied_rule(&self.id);
         state.add_result(result);

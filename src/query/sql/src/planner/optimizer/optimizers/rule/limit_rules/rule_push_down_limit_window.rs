@@ -22,8 +22,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -88,10 +88,7 @@ impl Rule for RulePushDownLimitWindow {
         }
 
         window_limit.limit = Some(limit);
-        let sort = SExpr::create_unary(
-            Arc::new(RelOperator::Window(window_limit)),
-            Arc::new(window.child(0)?.clone()),
-        );
+        let sort = SExpr::create_unary(window_limit, window.child(0)?.clone());
         let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
@@ -128,9 +125,9 @@ fn is_valid_frame(frame: &WindowFuncFrame) -> bool {
 }
 
 fn child_has_window(child: &SExpr) -> bool {
-    match child.plan() {
-        RelOperator::Window(_) => true,
-        RelOperator::Scan(_) => false, // finish recursion
+    match child.plan().rel_op() {
+        RelOp::Window => true,
+        RelOp::Scan => false, // finish recursion
         _ => child.children().any(child_has_window),
     }
 }

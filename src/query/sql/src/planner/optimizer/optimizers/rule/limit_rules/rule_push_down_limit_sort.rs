@@ -21,8 +21,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::Sort;
 
 /// Input:  Limit
@@ -77,10 +77,7 @@ impl Rule for RulePushDownLimitSort {
 
             if limit <= self.max_limit {
                 sort_limit.limit = Some(limit);
-                let sort = SExpr::create_unary(
-                    Arc::new(RelOperator::Sort(sort_limit)),
-                    Arc::new(sort.child(0)?.clone()),
-                );
+                let sort = SExpr::create_unary(sort_limit, sort.child(0)?.clone());
 
                 let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
                 result.set_applied_rule(&self.id);

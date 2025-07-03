@@ -29,7 +29,6 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::OperatorRef;
-use crate::plans::Operator;
 use crate::plans::Scan;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
@@ -103,7 +102,7 @@ impl SExpr {
         )
     }
 
-    pub fn create_leaf(plan: Arc<RelOperator>) -> Self {
+    pub fn create_leaf<P: Operator>(plan: P) -> Self {
         Self::create(plan, [], None, None, None)
     }
 
@@ -507,8 +506,7 @@ impl SExpr {
             | crate::plans::RelOp::AsyncFunction
             | crate::plans::RelOp::MergeInto
             | crate::plans::RelOp::CompactBlock
-            | crate::plans::RelOp::MutationSource
-            | crate::plans::RelOp::Pattern => self.child(0)?.get_data_distribution(),
+            | crate::plans::RelOp::MutationSource => self.child(0)?.get_data_distribution(),
         }
     }
 }

@@ -140,9 +140,7 @@ pub enum RelOp {
     MergeInto,
     CompactBlock,
     MutationSource,
-
     // Pattern
-    Pattern,
 }
 
 #[macro_export]

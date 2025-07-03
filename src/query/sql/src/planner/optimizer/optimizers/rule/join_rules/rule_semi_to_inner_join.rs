@@ -24,10 +24,11 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::plans::Aggregate;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::IndexType;
 use crate::ScalarExpr;
 
@@ -126,33 +127,33 @@ fn find_group_by_keys(
     group_by_keys: &mut HashMap<IndexType, Box<DataType>>,
 ) -> Result<()> {
     match child.plan() {
-        RelOperator::EvalScalar(_) | RelOperator::Filter(_) | RelOperator::Window(_) => {
+        RelOp::EvalScalar | RelOp::Filter | RelOp::Window => {
             find_group_by_keys(child.child(0)?, group_by_keys)?;
         }
-        RelOperator::Aggregate(agg) => {
+        RelOp::Aggregate => {
+            let agg = child.plan().as_any().downcast_ref::<Aggregate>().unwrap();
             for item in agg.group_items.iter() {
                 if let ScalarExpr::BoundColumnRef(c) = &item.scalar {
                     group_by_keys.insert(c.column.index, c.column.data_type.clone());
                 }
             }
         }
-        RelOperator::Sort(_)
-        | RelOperator::Limit(_)
-        | RelOperator::Exchange(_)
-        | RelOperator::UnionAll(_)
-        | RelOperator::DummyTableScan(_)
-        | RelOperator::ProjectSet(_)
-        | RelOperator::ConstantTableScan(_)
-        | RelOperator::ExpressionScan(_)
-        | RelOperator::CacheScan(_)
-        | RelOperator::Udf(_)
-        | RelOperator::Scan(_)
-        | RelOperator::AsyncFunction(_)
-        | RelOperator::Join(_)
-        | RelOperator::RecursiveCteScan(_)
-        | RelOperator::Mutation(_)
-        | RelOperator::MutationSource(_)
-        | RelOperator::CompactBlock(_) => {}
+        RelOp::Sort
+        | RelOp::Limit
+        | RelOp::Exchange
+        | RelOp::UnionAll
+        | RelOp::DummyTableScan
+        | RelOp::ProjectSet
+        | RelOp::ConstantTableScan
+        | RelOp::ExpressionScan
+        | RelOp::CacheScan
+        | RelOp::Udf
+        | RelOp::Scan
+        | RelOp::AsyncFunction
+        | RelOp::Join
+        | RelOp::RecursiveCteScan
+        | RelOp::MutationSource
+        | RelOp::CompactBlock => {}
     }
     Ok(())
 }

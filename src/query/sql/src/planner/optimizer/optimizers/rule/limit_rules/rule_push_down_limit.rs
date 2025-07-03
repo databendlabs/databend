@@ -28,7 +28,6 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Operator;
 use crate::MetadataRef;
 
 pub struct RulePushDownLimit {
@@ -74,7 +73,7 @@ impl Rule for RulePushDownLimit {
             }
             let empty_scan =
                 ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
-            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            let result = SExpr::create_leaf(empty_scan);
             state.add_result(result);
         }
 

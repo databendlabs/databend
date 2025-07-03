@@ -27,7 +27,6 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::ConstantTableScan;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::Operator;
 use crate::plans::UnionAll;
 use crate::MetadataRef;
 
@@ -55,10 +54,9 @@ impl RuleEliminateUnion {
             return Ok(false);
         }
         if child_num == 0 {
-            Ok(matches!(
-                s_expr.plan(),
-                RelOperator::ConstantTableScan(ConstantTableScan { num_rows: 0, .. })
-            ))
+            if let Some(empty_scan) = s_expr.plan().as_any().downcast_ref::<ConstantTableScan>() {
+                return Ok(empty_scan.num_rows == 0);
+            }
         } else {
             Self::is_empty_scan(s_expr.child(0)?)
         }
@@ -108,7 +106,7 @@ impl Rule for RuleEliminateUnion {
                 DataSchemaRefExt::create(fields),
                 union_output_columns,
             );
-            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            let result = SExpr::create_leaf(empty_scan);
             state.add_result(result);
         } else if Self::is_empty_scan(right_child)? {
             // If right child is empty, use left child

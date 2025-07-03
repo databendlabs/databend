@@ -22,8 +22,8 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 
 /// Input:      Limit
 ///               |
@@ -76,18 +76,15 @@ impl Rule for RulePushDownLimitOuterJoin {
             match join.join_type {
                 JoinType::Left => {
                     let child = child.replace_children(vec![
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Limit(limit.clone())),
-                            Arc::new(child.child(0)?.clone()),
-                        )),
+                        Arc::new(SExpr::create_unary(limit, child.child(0)?.clone())),
                         Arc::new(child.child(1)?.clone()),
                     ]);
                     let mut result = SExpr::create_unary(
-                        Arc::new(RelOperator::Limit(Limit {
+                        Arc::new(Limit {
                             before_exchange: limit.before_exchange,
                             limit: limit.limit,
                             offset: 0,
-                        })),
+                        }),
                         Arc::new(child),
                     );
                     result.set_applied_rule(&self.id);
@@ -97,16 +94,20 @@ impl Rule for RulePushDownLimitOuterJoin {
                     let child = Arc::new(child.replace_children(vec![
                         Arc::new(child.child(0)?.clone()),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Limit(limit.clone())),
-                            Arc::new(child.child(1)?.clone()),
+                            Limit {
+                                before_exchange: limit.before_exchange,
+                                limit: limit.limit,
+                                offset: 0,
+                            },
+                            child.child(1)?.clone(),
                         )),
                     ]));
                     let mut result = SExpr::create_unary(
-                        Arc::new(RelOperator::Limit(Limit {
+                        Limit {
                             before_exchange: limit.before_exchange,
                             limit: limit.limit,
                             offset: 0,
-                        })),
+                        },
                         child,
                     );
                     result.set_applied_rule(&self.id);

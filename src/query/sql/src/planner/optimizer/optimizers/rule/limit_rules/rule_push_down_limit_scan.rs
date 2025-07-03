@@ -23,8 +23,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::Scan;
 
 /// Input:  Limit
@@ -70,7 +70,7 @@ impl Rule for RulePushDownLimitScan {
         let child = s_expr.child(0)?;
         let mut get: Scan = child.plan().clone().try_into()?;
         get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+        let get = SExpr::create_leaf(get);
 
         let mut result = s_expr.replace_children(vec![Arc::new(get)]);
         result.set_applied_rule(&self.id);

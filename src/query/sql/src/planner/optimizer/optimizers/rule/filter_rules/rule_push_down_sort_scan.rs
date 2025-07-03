@@ -24,6 +24,7 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::Scan;
 use crate::plans::Sort;
 
 /// Input:  Sort
@@ -74,14 +75,20 @@ impl Rule for RulePushDownSortScan {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
-        let mut get = match child.plan() {
-            RelOperator::Scan(scan) => scan.clone(),
-            RelOperator::EvalScalar(_) => {
+
+        let mut get = match child.plan().rel_op() {
+            RelOp::Scan => {
+                let s = child.plan().as_any().downcast_ref::<Scan>().unwrap();
+                s.clone()
+            }
+            RelOp::EvalScalar => {
                 let child = child.child(0)?;
-                child.plan().clone().try_into()?
+                let s = child.plan().as_any().downcast_ref::<Scan>().unwrap();
+                s.clone()
             }
             _ => unreachable!(),
         };
+
         if get.order_by.is_none() {
             get.order_by = Some(sort.items);
         }
@@ -89,11 +96,11 @@ impl Rule for RulePushDownSortScan {
             get.limit = Some(get.limit.map_or(limit, |c| cmp::max(c, limit)));
         }
 
-        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+        let get = SExpr::create_leaf(get);
 
-        let mut result = match child.plan() {
-            RelOperator::Scan(_) => s_expr.replace_children(vec![Arc::new(get)]),
-            RelOperator::EvalScalar(_) => {
+        let mut result = match child.plan().rel_op() {
+            RelOp::Scan => s_expr.replace_children(vec![Arc::new(get)]),
+            RelOp::EvalScalar => {
                 let child = child.replace_children(vec![Arc::new(get)]);
                 s_expr.replace_children(vec![Arc::new(child)])
             }
