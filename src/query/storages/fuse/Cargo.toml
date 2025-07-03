@@ -22,6 +22,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-native = { workspace = true }
+databend-common-parquet-reader-experimental = { workspace = true }
 databend-common-pipeline = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
 databend-common-sql = { workspace = true }
@@ -62,6 +63,9 @@ match-template = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
+
+# TODO move this out
+parquet2 = { version = "0.17.0", default-features = false, features = ["serde_types", "async", "zstd", "snappy", "lz4"] }
 paste = { workspace = true }
 rand = { workspace = true }
 roaring = { workspace = true }
@@ -69,6 +73,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 siphasher = { workspace = true }
+streaming-decompression = "0.1.2"
 tantivy = { workspace = true }
 tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
