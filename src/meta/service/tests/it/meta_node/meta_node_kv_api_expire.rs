@@ -70,7 +70,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     let seq = {
         let resp = leader.kv_api().get_kv(key).await?;
         let seq_v = resp.unwrap();
-        assert_eq!(Some(KVMeta::new_expire(now_sec + 3)), seq_v.meta);
+        assert_eq!(Some(KVMeta::new_expires_at(now_sec + 3)), seq_v.meta);
         seq_v.seq
     };
 
@@ -118,7 +118,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
         let sm = learner.raft_store.state_machine.read().await;
         let resp = sm.kv_api().get_kv(key).await.unwrap();
         let seq_v = resp.unwrap();
-        assert_eq!(Some(KVMeta::new_expire(now_sec + 1000)), seq_v.meta);
+        assert_eq!(Some(KVMeta::new_expires_at(now_sec + 1000)), seq_v.meta);
         assert_eq!(value2.to_string().into_bytes(), seq_v.data);
     }
 

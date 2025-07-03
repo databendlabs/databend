@@ -23,7 +23,7 @@ use crate::seq_value::SeqV;
 impl From<KVMeta> for pb::KvMeta {
     fn from(m: KVMeta) -> Self {
         Self {
-            expire_at: m.get_expire_at_ms().map(|x| x / 1000),
+            expire_at: m.expire_at,
         }
     }
 }
