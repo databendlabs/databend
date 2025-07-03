@@ -79,6 +79,19 @@ impl FileFormatParams {
         }
     }
 
+    pub fn suffix(&self) -> &str {
+        match self {
+            FileFormatParams::Csv(_) => ".csv",
+            FileFormatParams::Tsv(_) => ".tsv",
+            FileFormatParams::NdJson(_) => ".ndjson",
+            FileFormatParams::Json(_) => ".json",
+            FileFormatParams::Xml(_) => ".xml",
+            FileFormatParams::Parquet(_) => ".parquet",
+            FileFormatParams::Orc(_) => ".orc",
+            FileFormatParams::Avro(_) => ".avro",
+        }
+    }
+
     pub fn support_streaming_load(&self) -> bool {
         matches!(
             self,

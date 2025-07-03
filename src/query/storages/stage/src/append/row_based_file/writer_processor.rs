@@ -57,6 +57,7 @@ pub struct RowBasedFileWriter {
     batch_id: usize,
 
     compression: Option<CompressAlgorithm>,
+    suffix: String,
 }
 
 impl RowBasedFileWriter {
@@ -69,6 +70,7 @@ impl RowBasedFileWriter {
         query_id: String,
         group_id: usize,
         compression: Option<CompressAlgorithm>,
+        suffix: &str,
     ) -> Result<ProcessorPtr> {
         let unload_output = UnloadOutput::create(info.options.detailed_output);
         Ok(ProcessorPtr::create(Box::new(RowBasedFileWriter {
@@ -82,6 +84,7 @@ impl RowBasedFileWriter {
             batch_id: 0,
             file_to_write: None,
             compression,
+            suffix: suffix.to_string(),
             output,
             unload_output,
             unload_output_blocks: None,
@@ -156,7 +159,8 @@ impl Processor for RowBasedFileWriter {
         let input_bytes = output.len();
         if let Some(compression) = self.compression {
             output = if compression == CompressAlgorithm::Zip {
-                CompressCodec::compress_all_zip(&output)?
+                let name = format!("unload_{}{}", self.batch_id, self.suffix);
+                CompressCodec::compress_all_zip(&output, name.as_str())?
             } else {
                 CompressCodec::from(compression).compress_all(&output)?
             };
