@@ -10,8 +10,11 @@ display_help() {
 Usage: $0 [OPTIONS]
 
 Options:
-  --dsn <connection_string>  Specify the DSN connection string for bendsql
+  --dsn <connection_string>  Specify the DSN connection string for bendsql (overrides BENDSQL_DSN)
   --help                     Display this help message and exit
+
+Environment Variables:
+  BENDSQL_DSN                Default DSN connection string if --dsn is not specified
 
 This script performs the following operations:
 1. Lists all databases
@@ -21,7 +24,8 @@ This script performs the following operations:
 5. Reports any databases/tables where column queries fail
 
 Examples:
-  $0 --dsn "http://username:password@localhost:8000/database?sslmode=enable"
+  $0 --dsn "user:password@localhost:5432/dbname"
+  BENDSQL_DSN="user:password@localhost:5432/dbname" $0
   $0 --help
 EOF
 }
@@ -40,6 +44,11 @@ done
 if [ "$SHOW_HELP" = true ]; then
     display_help
     exit 0
+fi
+
+# Check for DSN in environment variable if not specified via command line
+if [ -z "$DSN" ] && [ -n "$BENDSQL_DSN" ]; then
+    DSN="$BENDSQL_DSN"
 fi
 
 # Function to execute bendsql query and handle errors
