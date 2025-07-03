@@ -12,29 +12,81 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
+use itertools::Itertools;
 
+use crate::executor::format::format_output_columns;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::ColumnSet;
 use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ConstantTableScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub values: Vec<Column>,
     pub num_rows: usize,
     pub output_schema: DataSchemaRef,
 }
 
-impl ConstantTableScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for ConstantTableScan {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.num_rows == 0 {
+            return Ok(FormatTreeNode::new(self.name().to_string()));
+        }
+
+        let mut children = Vec::with_capacity(self.values.len() + 1);
+        children.push(FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        )));
+        for (i, value) in self.values.iter().enumerate() {
+            let column = value.iter().map(|val| format!("{val}")).join(", ");
+            children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
+        }
+
+        Ok(FormatTreeNode::with_children(
+            self.name().to_string(),
+            children,
+        ))
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
+    }
+}
+
+impl ConstantTableScan {
     pub fn name(&self) -> &str {
         if self.num_rows == 0 {
             "EmptyResultScan"
@@ -49,7 +101,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         scan: &crate::plans::ConstantTableScan,
         required: ColumnSet,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         debug_assert!(scan
             .schema
             .fields
@@ -66,19 +118,19 @@ impl PhysicalPlanBuilder {
                 schema,
                 ..
             } = scan.prune_columns(used);
-            return Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
-                plan_id: 0,
+            return Ok(Box::new(ConstantTableScan {
                 values,
                 num_rows,
                 output_schema: schema,
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
             }));
         }
 
-        Ok(PhysicalPlan::ConstantTableScan(ConstantTableScan {
-            plan_id: 0,
+        Ok(Box::new(ConstantTableScan {
             values: scan.values.clone(),
             num_rows: scan.num_rows,
             output_schema: scan.schema.clone(),
+            meta: PhysicalPlanMeta::new("ConstantTableScan"),
         }))
     }
 }

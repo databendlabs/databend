@@ -12,22 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::common::OnConflictField;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceInto {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    pub plan_id: u32,
-
-    pub input: Box<PhysicalPlan>,
+    pub meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub block_thresholds: BlockThresholds,
     pub table_info: TableInfo,
     pub on_conflicts: Vec<OnConflictField>,
@@ -36,4 +42,39 @@ pub struct ReplaceInto {
     pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
+}
+
+#[typetag::serde]
+impl IPhysicalPlan for ReplaceInto {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
+    }
 }

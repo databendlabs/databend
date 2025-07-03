@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::fmt::Display;
 
 use databend_common_exception::Result;
@@ -19,21 +20,40 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub output_schema: DataSchemaRef,
     pub table_name: String,
     pub stat: PlanStatsInfo,
 }
 
-impl RecursiveCteScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for RecursiveCteScan {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 
@@ -42,9 +62,9 @@ impl PhysicalPlanBuilder {
         &mut self,
         recursive_cte_scan: &crate::plans::RecursiveCteScan,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::RecursiveCteScan(RecursiveCteScan {
-            plan_id: 0,
+    ) -> Result<Box<dyn IPhysicalPlan>> {
+        Ok(Box::new(RecursiveCteScan {
+            meta: PhysicalPlanMeta::new("RecursiveCteScan"),
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),
             table_name: recursive_cte_scan.table_name.clone(),
             stat: stat_info,

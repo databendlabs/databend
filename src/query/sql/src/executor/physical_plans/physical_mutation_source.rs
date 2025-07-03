@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -28,16 +32,21 @@ use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationType;
 use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::part_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    pub meta: PhysicalPlanMeta,
     pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
@@ -50,9 +59,68 @@ pub struct MutationSource {
     pub statistics: PartStatistics,
 }
 
-impl MutationSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for MutationSource {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let table = ctx.metadata.table(self.table_index);
+        let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+        let filters = self
+            .filters
+            .as_ref()
+            .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .unwrap_or_default();
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!("table: {table_name}")),
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, ctx.metadata, false)
+            )),
+            FormatTreeNode::new(format!("filters: [{filters}]")),
+        ];
+
+        let payload = match self.input_type {
+            MutationType::Update => "Update",
+            MutationType::Delete if self.truncate_table => "DeleteAll",
+            MutationType::Delete => "Delete",
+            MutationType::Merge => "Merge",
+        };
+
+        // Part stats.
+        node_children.extend(part_stats_info_to_format_tree(&self.statistics));
+        Ok(FormatTreeNode::with_children(
+            format!("MutationSource({})", payload),
+            node_children,
+        ))
+    }
+
+    fn try_find_mutation_source(&self) -> Option<MutationSource> {
+        Some(self.clone())
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 
@@ -60,7 +128,7 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_mutation_source(
         &mut self,
         mutation_source: &crate::plans::MutationSource,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let filters = if !mutation_source.predicates.is_empty() {
             Some(create_push_down_filters(
                 &self.ctx.get_function_context()?,
@@ -101,8 +169,7 @@ impl PhysicalPlanBuilder {
 
         let truncate_table =
             mutation_source.mutation_type == MutationType::Delete && filters.is_none();
-        Ok(PhysicalPlan::MutationSource(MutationSource {
-            plan_id: 0,
+        Ok(Box::new(MutationSource {
             table_index: mutation_source.table_index,
             output_schema,
             table_info: mutation_info.table_info.clone(),
@@ -110,6 +177,7 @@ impl PhysicalPlanBuilder {
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
             truncate_table,
+            meta: PhysicalPlanMeta::new("MutationSource"),
             partitions: mutation_info.partitions.clone(),
             statistics: mutation_info.statistics.clone(),
         }))

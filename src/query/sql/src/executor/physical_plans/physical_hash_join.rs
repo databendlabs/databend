@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -26,13 +28,21 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::physical_plan::PhysicalPlanDynExt;
 use crate::executor::physical_plans::Exchange;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -66,8 +76,7 @@ type MergedFieldsResult = (
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    pub meta: PhysicalPlanMeta,
     // After building the probe key and build key, we apply probe_projections to probe_datablock
     // and build_projections to build_datablock, which can help us reduce memory usage and calls
     // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
@@ -76,8 +85,8 @@ pub struct HashJoin {
     pub probe_projections: ColumnSet,
     pub build_projections: ColumnSet,
 
-    pub build: Box<PhysicalPlan>,
-    pub probe: Box<PhysicalPlan>,
+    pub build: Box<dyn IPhysicalPlan>,
+    pub probe: Box<dyn IPhysicalPlan>,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
     pub is_null_equal: Vec<bool>,
@@ -108,9 +117,208 @@ pub struct HashJoin {
     pub broadcast_id: Option<u32>,
 }
 
-impl HashJoin {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for HashJoin {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.probe).chain(std::iter::once(&self.build)))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        for rf in self.runtime_filter.filters.iter() {
+            ctx.scan_id_to_runtime_filters
+                .entry(rf.scan_id)
+                .or_default()
+                .push(rf.clone());
+        }
+
+        let build_keys = self
+            .build_keys
+            .iter()
+            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let probe_keys = self
+            .probe_keys
+            .iter()
+            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let is_null_equal = self.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
+
+        let filters = self
+            .non_equi_conditions
+            .iter()
+            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        assert_eq!(children.len(), 2);
+        children[0].payload = format!("{}(Build)", children[0].payload);
+        children[1].payload = format!("{}(Probe)", children[1].payload);
+
+        let mut build_runtime_filters = vec![];
+        for rf in self.runtime_filter.filters.iter() {
+            let mut s = format!(
+                "filter id:{}, build key:{}, probe key:{}, filter type:",
+                rf.id,
+                rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+            );
+            if rf.enable_bloom_runtime_filter {
+                s += "bloom,";
+            }
+            if rf.enable_inlist_runtime_filter {
+                s += "inlist,";
+            }
+            if rf.enable_min_max_runtime_filter {
+                s += "min_max,";
+            }
+            s = s.trim_end_matches(',').to_string();
+            build_runtime_filters.push(FormatTreeNode::new(s));
+        }
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("join type: {}", self.join_type)),
+            FormatTreeNode::new(format!("build keys: [{build_keys}]")),
+            FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
+            FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
+            FormatTreeNode::new(format!("filters: [{filters}]")),
+        ];
+
+        if !build_runtime_filters.is_empty() {
+            if self.broadcast_id.is_some() {
+                node_children.push(FormatTreeNode::with_children(
+                    format!("build join filters(distributed):"),
+                    build_runtime_filters,
+                ));
+            } else {
+                node_children.push(FormatTreeNode::with_children(
+                    format!("build join filters:"),
+                    build_runtime_filters,
+                ));
+            }
+        }
+
+        if let Some((cache_index, column_map)) = &self.build_side_cache_info {
+            let mut column_indexes = column_map.keys().collect::<Vec<_>>();
+            column_indexes.sort();
+            node_children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
+            node_children.push(FormatTreeNode::new(format!(
+                "cache columns: {:?}",
+                column_indexes
+            )));
+        }
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "HashJoin".to_string(),
+            node_children,
+        ))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let mut conditions = self
+            .build_keys
+            .iter()
+            .zip(self.probe_keys.iter())
+            .map(|(l, r)| {
+                format!(
+                    "({} = {})",
+                    l.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                    r.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                )
+            })
+            .collect::<Vec<_>>();
+
+        conditions.extend(
+            self.non_equi_conditions
+                .iter()
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
+        );
+
+        Ok(conditions.join(" AND "))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(4);
+        labels.insert(String::from("Join Type"), vec![self.join_type.to_string()]);
+
+        if !self.build_keys.is_empty() {
+            labels.insert(
+                String::from("Join Build Side Keys"),
+                self.build_keys
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            );
+        }
+
+        if !self.probe_keys.is_empty() {
+            labels.insert(
+                String::from("Join Probe Side Keys"),
+                self.probe_keys
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            );
+        }
+
+        if !self.non_equi_conditions.is_empty() {
+            labels.insert(
+                String::from("Join Conditions"),
+                self.non_equi_conditions
+                    .iter()
+                    .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                    .collect(),
+            );
+        }
+
+        Ok(labels)
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_hash_join = self.clone();
+        assert_eq!(children.len(), 2);
+        new_hash_join.build = children.pop().unwrap();
+        new_hash_join.probe = children.pop().unwrap();
+        Box::new(new_hash_join)
     }
 }
 
@@ -121,9 +329,9 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
-    ) -> Result<(Box<PhysicalPlan>, Box<PhysicalPlan>)> {
-        let probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
-        let build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
+    ) -> Result<(Box<dyn IPhysicalPlan>, Box<dyn IPhysicalPlan>)> {
+        let probe_side = self.build(s_expr.child(0)?, left_required).await?;
+        let build_side = self.build(s_expr.child(1)?, right_required).await?;
 
         Ok((probe_side, build_side))
     }
@@ -155,7 +363,7 @@ impl PhysicalPlanBuilder {
     pub(crate) fn prepare_build_schema(
         &self,
         join_type: &JoinType,
-        build_side: &PhysicalPlan,
+        build_side: &Box<dyn IPhysicalPlan>,
     ) -> Result<DataSchemaRef> {
         match join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
@@ -191,7 +399,7 @@ impl PhysicalPlanBuilder {
     pub(crate) fn prepare_probe_schema(
         &self,
         join_type: &JoinType,
-        probe_side: &PhysicalPlan,
+        probe_side: &Box<dyn IPhysicalPlan>,
     ) -> Result<DataSchemaRef> {
         match join_type {
             JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
@@ -219,51 +427,53 @@ impl PhysicalPlanBuilder {
     /// * `build_side` - The build side physical plan
     fn unify_keys(
         &self,
-        probe_side: &mut Box<PhysicalPlan>,
-        build_side: &mut Box<PhysicalPlan>,
+        probe_side: &mut Box<dyn IPhysicalPlan>,
+        build_side: &mut Box<dyn IPhysicalPlan>,
     ) -> Result<()> {
         // Unify the data types of the left and right exchange keys
-        if let (
-            PhysicalPlan::Exchange(Exchange {
-                keys: probe_keys, ..
-            }),
-            PhysicalPlan::Exchange(Exchange {
-                keys: build_keys, ..
-            }),
-        ) = (probe_side.as_mut(), build_side.as_mut())
+        let Some(probe_exchange) = probe_side.downcast_mut_ref::<Exchange>() else {
+            return Ok(());
+        };
+
+        let Some(build_exchange) = build_side.downcast_mut_ref::<Exchange>() else {
+            return Ok(());
+        };
+
+        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+        for (probe_key, build_key) in probe_exchange
+            .keys
+            .iter_mut()
+            .zip(build_exchange.keys.iter_mut())
         {
-            let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
-            for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
-                let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
-                let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
-                let common_ty = common_super_type(
-                    probe_expr.data_type().clone(),
-                    build_expr.data_type().clone(),
-                    cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for probe key {:?} and build key {:?}",
-                        &probe_expr, &build_expr
-                    ))
-                })?;
-                *probe_key = check_cast(
-                    probe_expr.span(),
-                    false,
-                    probe_expr,
-                    &common_ty,
-                    &BUILTIN_FUNCTIONS,
-                )?
-                .as_remote_expr();
-                *build_key = check_cast(
-                    build_expr.span(),
-                    false,
-                    build_expr,
-                    &common_ty,
-                    &BUILTIN_FUNCTIONS,
-                )?
-                .as_remote_expr();
-            }
+            let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+            let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
+            let common_ty = common_super_type(
+                probe_expr.data_type().clone(),
+                build_expr.data_type().clone(),
+                cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!(
+                    "Cannot find common type for probe key {:?} and build key {:?}",
+                    &probe_expr, &build_expr
+                ))
+            })?;
+            *probe_key = check_cast(
+                probe_expr.span(),
+                false,
+                probe_expr,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?
+            .as_remote_expr();
+            *build_key = check_cast(
+                build_expr.span(),
+                false,
+                build_expr,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?
+            .as_remote_expr();
         }
 
         Ok(())
@@ -790,8 +1000,8 @@ impl PhysicalPlanBuilder {
         &self,
         s_expr: &SExpr,
         join: &Join,
-        probe_side: Box<PhysicalPlan>,
-        build_side: Box<PhysicalPlan>,
+        probe_side: Box<dyn IPhysicalPlan>,
+        build_side: Box<dyn IPhysicalPlan>,
         projections: ColumnSet,
         probe_projections: ColumnSet,
         build_projections: ColumnSet,
@@ -804,7 +1014,7 @@ impl PhysicalPlanBuilder {
         build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
         let broadcast_id = if build_side_data_distribution
             .as_ref()
@@ -814,8 +1024,7 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-        Ok(PhysicalPlan::HashJoin(HashJoin {
-            plan_id: 0,
+        Ok(Box::new(HashJoin {
             projections,
             build_projections,
             probe_projections,
@@ -827,6 +1036,7 @@ impl PhysicalPlanBuilder {
             is_null_equal,
             non_equi_conditions,
             marker_index: join.marker_index,
+            meta: PhysicalPlanMeta::new("HashJoin"),
             from_correlated_subquery: join.from_correlated_subquery,
             probe_to_build,
             output_schema,
@@ -848,7 +1058,7 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // Step 1: Build probe and build sides
         let (mut probe_side, mut build_side) = self
             .build_join_sides(s_expr, left_required, right_required)

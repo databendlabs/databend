@@ -18,6 +18,7 @@ use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::executor::build_broadcast_plans;
+use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
@@ -61,7 +62,7 @@ pub async fn build_query_pipeline(
 #[async_backtrace::framed]
 pub async fn build_query_pipeline_without_render_result_set(
     ctx: &Arc<QueryContext>,
-    plan: &PhysicalPlan,
+    plan: &Box<dyn IPhysicalPlan>,
 ) -> Result<PipelineBuildResult> {
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
@@ -79,7 +80,7 @@ pub async fn build_query_pipeline_without_render_result_set(
 #[async_backtrace::framed]
 pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
-    plan: &PhysicalPlan,
+    plan: &Box<dyn IPhysicalPlan>,
 ) -> Result<PipelineBuildResult> {
     let pipeline =
         PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
@@ -94,7 +95,7 @@ pub async fn build_local_pipeline(
 #[async_backtrace::framed]
 pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
-    plan: &PhysicalPlan,
+    plan: &Box<dyn IPhysicalPlan>,
 ) -> Result<PipelineBuildResult> {
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     for plan in build_broadcast_plans(ctx.as_ref())?
@@ -138,7 +139,7 @@ impl ServiceQueryExecutor {
 impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_physical_plan(
         &self,
-        plan: &PhysicalPlan,
+        plan: &Box<dyn IPhysicalPlan>,
     ) -> Result<Vec<DataBlock>> {
         let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;

@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::PartStatistics;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
@@ -44,6 +50,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;
@@ -53,10 +60,17 @@ use rand::thread_rng;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::part_stats_info_to_format_tree;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::plans::FunctionCall;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
@@ -73,8 +87,7 @@ use crate::DUMMY_TABLE_INDEX;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub scan_id: usize,
     pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,
@@ -84,7 +97,258 @@ pub struct TableScan {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+#[typetag::serde]
+impl IPhysicalPlan for TableScan {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let schema = self.source.schema();
+        let mut fields = Vec::with_capacity(self.name_mapping.len());
+        let mut name_and_ids = self
+            .name_mapping
+            .iter()
+            .map(|(name, id)| {
+                let index = schema.index_of(name)?;
+                Ok((name, id, index))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        // Make the order of output fields the same as their indexes in te table schema.
+        name_and_ids.sort_by_key(|(_, _, index)| *index);
+
+        for (name, id, _) in name_and_ids {
+            let orig_field = schema.field_with_name(name)?;
+            let data_type = DataType::from(orig_field.data_type());
+            fields.push(DataField::new(&id.to_string(), data_type));
+        }
+
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.table_index == Some(DUMMY_TABLE_INDEX) {
+            return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+        }
+
+        let table_name = match self.table_index {
+            None => format!(
+                "{}.{}",
+                self.source.source_info.catalog_name(),
+                self.source.source_info.desc()
+            ),
+            Some(table_index) => {
+                let table = ctx.metadata.table(table_index).clone();
+                format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+            }
+        };
+        let filters = self
+            .source
+            .push_downs
+            .as_ref()
+            .and_then(|extras| {
+                extras
+                    .filters
+                    .as_ref()
+                    .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            })
+            .unwrap_or_default();
+
+        let limit = self
+            .source
+            .push_downs
+            .as_ref()
+            .map_or("NONE".to_string(), |extras| {
+                extras
+                    .limit
+                    .map_or("NONE".to_string(), |limit| limit.to_string())
+            });
+
+        let virtual_columns = self.source.push_downs.as_ref().and_then(|extras| {
+            extras.virtual_column.as_ref().map(|virtual_column| {
+                let mut names = virtual_column
+                    .virtual_column_fields
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect::<Vec<_>>();
+                names.sort();
+                names.iter().join(", ")
+            })
+        });
+
+        let agg_index = self
+            .source
+            .push_downs
+            .as_ref()
+            .and_then(|extras| extras.agg_index.as_ref());
+
+        let mut children = vec![
+            FormatTreeNode::new(format!("table: {table_name}")),
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, ctx.metadata, false)
+            )),
+        ];
+
+        // Part stats.
+        children.extend(part_stats_info_to_format_tree(&self.source.statistics));
+        // Push downs.
+        let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
+        children.push(FormatTreeNode::new(push_downs));
+
+        // runtime filters
+        let rf = ctx.scan_id_to_runtime_filters.get(&self.scan_id);
+        if let Some(rf) = rf {
+            let rf = rf.iter().map(|rf| format!("#{:?}", rf.id)).join(", ");
+            children.push(FormatTreeNode::new(format!("apply join filters: [{rf}]")));
+        }
+
+        // Virtual columns.
+        if let Some(virtual_columns) = virtual_columns {
+            if !virtual_columns.is_empty() {
+                let virtual_columns = format!("virtual columns: [{virtual_columns}]");
+                children.push(FormatTreeNode::new(virtual_columns));
+            }
+        }
+
+        // Aggregating index
+        if let Some(agg_index) = agg_index {
+            let (_, agg_index_sql, _) = ctx
+                .metadata
+                .get_agg_indexes(&table_name)
+                .unwrap()
+                .iter()
+                .find(|(index, _, _)| *index == agg_index.index_id)
+                .unwrap();
+
+            children.push(FormatTreeNode::new(format!(
+                "aggregating index: [{agg_index_sql}]"
+            )));
+
+            let agg_sel = agg_index
+                .selection
+                .iter()
+                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ");
+            let agg_filter = agg_index
+                .filter
+                .as_ref()
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).sql_display());
+            let text = if let Some(f) = agg_filter {
+                format!("rewritten query: [selection: [{agg_sel}], filter: {f}]")
+            } else {
+                format!("rewritten query: [selection: [{agg_sel}]]")
+            };
+            children.push(FormatTreeNode::new(text));
+        }
+
+        if let Some(info) = &self.stat_info {
+            children.extend(plan_stats_info_to_format_tree(info));
+        }
+
+        Ok(FormatTreeNode::with_children(
+            "TableScan".to_string(),
+            children,
+        ))
+    }
+
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        Some(&self.source)
+    }
+
+    fn get_all_data_source(&self, sources: &mut Vec<(u32, Box<DataSourcePlan>)>) {
+        sources.push((self.get_id(), self.source.clone()));
+    }
+
+    fn set_pruning_stats(&mut self, stats: &mut HashMap<u32, PartStatistics>) {
+        if let Some(stat) = stats.remove(&self.get_id()) {
+            self.source.statistics = stat;
+        }
+    }
+
+    fn is_warehouse_distributed_plan(&self) -> bool {
+        self.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(format!(
+            "{}.{}",
+            self.source.source_info.catalog_name(),
+            self.source.source_info.desc()
+        ))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(HashMap::from([
+            (String::from("Full table name"), vec![format!(
+                "{}.{}",
+                self.source.source_info.catalog_name(),
+                self.source.source_info.desc()
+            )]),
+            (
+                format!(
+                    "Columns ({} / {})",
+                    self.output_schema()?.num_fields(),
+                    std::cmp::max(
+                        self.output_schema()?.num_fields(),
+                        self.source.source_info.schema().num_fields(),
+                    )
+                ),
+                self.name_mapping.keys().cloned().collect(),
+            ),
+            (String::from("Total partitions"), vec![self
+                .source
+                .statistics
+                .partitions_total
+                .to_string()]),
+        ]))
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
+    }
+}
+
 impl TableScan {
+    pub fn new(
+        scan_id: usize,
+        name_mapping: BTreeMap<String, IndexType>,
+        source: Box<DataSourcePlan>,
+        table_index: Option<IndexType>,
+        stat_info: Option<PlanStatsInfo>,
+        internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
+    ) -> Box<dyn IPhysicalPlan> {
+        let name = match &source.source_info {
+            DataSourceInfo::TableSource(_) => "TableScan".to_string(),
+            DataSourceInfo::StageSource(_) => "StageScan".to_string(),
+            DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
+            DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
+            DataSourceInfo::ORCSource(_) => "OrcScan".to_string(),
+        };
+
+        Box::new(TableScan {
+            meta: PhysicalPlanMeta::new(name),
+            source,
+            scan_id,
+            name_mapping,
+            table_index,
+            stat_info,
+            internal_column,
+        })
+    }
+
     pub fn output_fields(
         schema: TableSchemaRef,
         name_mapping: &BTreeMap<String, IndexType>,
@@ -107,11 +371,6 @@ impl TableScan {
         }
         Ok(fields)
     }
-
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
-        Ok(DataSchemaRefExt::create(fields))
-    }
 }
 
 impl PhysicalPlanBuilder {
@@ -120,7 +379,7 @@ impl PhysicalPlanBuilder {
         scan: &crate::plans::Scan,
         required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         // Some table may not have any column,
         // e.g. `system.sync_crash_me`
@@ -308,30 +567,29 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
-        let mut plan = PhysicalPlan::TableScan(TableScan {
-            plan_id: 0,
-            scan_id: scan.scan_id,
+        let mut plan = TableScan::new(
+            scan.scan_id,
             name_mapping,
-            source: Box::new(source),
-            table_index: Some(scan.table_index),
-            stat_info: Some(stat_info),
+            Box::new(source),
+            Some(scan.table_index),
+            Some(stat_info),
             internal_column,
-        });
+        );
 
         // Update stream columns if needed.
         if scan.update_stream_columns {
-            plan = PhysicalPlan::AddStreamColumn(Box::new(AddStreamColumn::new(
+            plan = AddStreamColumn::new(
                 &self.metadata,
                 plan,
                 scan.table_index,
                 table.get_table_info().ident.seq,
-            )?));
+            )?;
         }
 
         Ok(plan)
     }
 
-    pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
+    pub(crate) async fn build_dummy_table_scan(&mut self) -> Result<Box<dyn IPhysicalPlan>> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.session_state())?
@@ -345,17 +603,17 @@ impl PhysicalPlanBuilder {
         let source = table
             .read_plan(self.ctx.clone(), None, None, false, self.dry_run)
             .await?;
-        Ok(PhysicalPlan::TableScan(TableScan {
-            plan_id: 0,
-            scan_id: DUMMY_TABLE_INDEX,
-            name_mapping: BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
-            source: Box::new(source),
-            table_index: Some(DUMMY_TABLE_INDEX),
-            stat_info: Some(PlanStatsInfo {
+
+        Ok(TableScan::new(
+            DUMMY_TABLE_INDEX,
+            BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
+            Box::new(source),
+            Some(DUMMY_TABLE_INDEX),
+            Some(PlanStatsInfo {
                 estimated_rows: 1.0,
             }),
-            internal_column: None,
-        }))
+            None,
+        ))
     }
 
     fn push_downs(

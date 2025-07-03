@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
+use databend_common_sql::executor::IPhysicalPlan;
 
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchange;
@@ -38,15 +39,15 @@ use crate::sql::executor::PhysicalPlan;
 // Query plan fragment with executor name
 #[derive(Debug)]
 pub struct QueryFragmentAction {
-    pub physical_plan: PhysicalPlan,
     pub executor: String,
+    pub physical_plan: Box<dyn IPhysicalPlan>,
 }
 
 impl QueryFragmentAction {
-    pub fn create(executor: String, physical_plan: PhysicalPlan) -> QueryFragmentAction {
+    pub fn create(executor: String, physical_plan: Box<dyn IPhysicalPlan>) -> QueryFragmentAction {
         QueryFragmentAction {
-            physical_plan,
             executor,
+            physical_plan,
         }
     }
 }
@@ -263,8 +264,8 @@ impl QueryFragmentsActions {
             for fragment_action in &fragment_actions.fragment_actions {
                 let query_fragment = QueryFragment::create(
                     fragment_actions.fragment_id,
-                    fragment_action.physical_plan.clone(),
                     fragment_actions.data_exchange.clone(),
+                    fragment_action.physical_plan.clone(),
                 );
 
                 match fragments_packets.entry(fragment_action.executor.clone()) {

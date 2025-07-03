@@ -12,16 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -30,10 +40,9 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    pub left: Box<PhysicalPlan>,
-    pub right: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub left: Box<dyn IPhysicalPlan>,
+    pub right: Box<dyn IPhysicalPlan>,
     pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub right_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
@@ -43,9 +52,73 @@ pub struct UnionAll {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl UnionAll {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for UnionAll {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        ))];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        let root = if !self.cte_scan_names.is_empty() {
+            "UnionAll(recursive cte)".to_string()
+        } else {
+            "UnionAll".to_string()
+        };
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(root, node_children))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .left_outputs
+            .iter()
+            .zip(self.right_outputs.iter())
+            .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
+            .join(", "))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_union_all = self.clone();
+        assert_eq!(children.len(), 2);
+        new_union_all.right = children.pop().unwrap();
+        new_union_all.left = children.pop().unwrap();
+        Box::new(new_union_all)
     }
 }
 
@@ -56,7 +129,7 @@ impl PhysicalPlanBuilder {
         union_all: &crate::plans::UnionAll,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let metadata = self.metadata.read().clone();
         let lazy_columns = metadata.lazy_columns();
@@ -128,14 +201,13 @@ impl PhysicalPlanBuilder {
         let right_outputs =
             process_outputs(&union_all.right_outputs, &right_required, &right_schema)?;
 
-        Ok(PhysicalPlan::UnionAll(UnionAll {
-            plan_id: 0,
-            left: Box::new(left_plan),
-            right: Box::new(right_plan),
+        Ok(Box::new(UnionAll {
+            left: left_plan,
+            right: right_plan,
             left_outputs,
             right_outputs,
             schema: DataSchemaRefExt::create(fields),
-
+            meta: PhysicalPlanMeta::new("UnionAll"),
             cte_scan_names: union_all.cte_scan_names.clone(),
             stat_info: Some(stat_info),
         }))

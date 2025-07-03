@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::fmt::Display;
 
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check;
@@ -32,11 +35,17 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::pretty_display_agg_desc;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::physical_plans::common::AggregateFunctionSignature;
 use crate::executor::physical_plans::common::SortDesc;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::SExpr;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -48,10 +57,9 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    pub meta: PhysicalPlanMeta,
     pub index: IndexType,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub func: WindowFunction,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
@@ -59,8 +67,20 @@ pub struct Window {
     pub limit: Option<usize>,
 }
 
-impl Window {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for Window {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut fields = Vec::with_capacity(input_schema.fields().len() + 1);
         fields.extend_from_slice(input_schema.fields());
@@ -69,6 +89,104 @@ impl Window {
             self.func.data_type()?,
         ));
         Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let partition_by = self
+            .partition_by
+            .iter()
+            .map(|&index| Ok(ctx.metadata.column(index).name()))
+            .collect::<Result<Vec<_>>>()?
+            .join(", ");
+
+        let order_by = self
+            .order_by
+            .iter()
+            .map(|v| v.display_name.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let frame = self.window_frame.to_string();
+
+        let func = match &self.func {
+            WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, &ctx.metadata),
+            func => format!("{}", func),
+        };
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("aggregate function: [{func}]")),
+            FormatTreeNode::new(format!("partition by: [{partition_by}]")),
+            FormatTreeNode::new(format!("order by: [{order_by}]")),
+            FormatTreeNode::new(format!("frame: [{frame}]")),
+        ];
+
+        if let Some(limit) = self.limit {
+            node_children.push(FormatTreeNode::new(format!("limit: [{limit}]")))
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "Window".to_string(),
+            node_children,
+        ))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let partition_by = self
+            .partition_by
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let order_by = self
+            .order_by
+            .iter()
+            .map(|x| {
+                format!(
+                    "{}{}{}",
+                    x.display_name,
+                    if x.asc { "" } else { " DESC" },
+                    if x.nulls_first { " NULLS FIRST" } else { "" },
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Ok(format!(
+            "partition by {}, order by {}",
+            partition_by, order_by
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -156,7 +274,7 @@ impl PhysicalPlanBuilder {
         window: &crate::plans::Window,
         mut required: ColumnSet,
         _stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. DO NOT Prune unused Columns cause window may not in required, eg:
         // select s1.a from ( select t1.a as a, dense_rank() over(order by t1.a desc) as rk
         // from (select 'a1' as a) t1 ) s1
@@ -360,15 +478,15 @@ impl PhysicalPlanBuilder {
             WindowFuncType::CumeDist => WindowFunction::CumeDist,
         };
 
-        Ok(PhysicalPlan::Window(Window {
-            plan_id: 0,
+        Ok(Box::new(Window {
+            input,
             index: w.index,
-            input: Box::new(input),
             func,
             partition_by: partition_items,
             order_by: order_by_items,
             window_frame: w.frame.clone(),
             limit: w.limit,
+            meta: PhysicalPlanMeta::new("Window"),
         }))
     }
 }

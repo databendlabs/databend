@@ -39,8 +39,10 @@ use databend_common_sql::executor::physical_plans::MultiInsertEvalScalar;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::SerializableTable;
 use databend_common_sql::executor::physical_plans::ShuffleStrategy;
+use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::executor::PhysicalPlanMeta;
 use databend_common_sql::plans::Else;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::InsertMultiTable;
@@ -130,7 +132,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 }
 
 impl InsertMultiTableInterpreter {
-    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+    pub async fn build_physical_plan(&self) -> Result<Box<dyn IPhysicalPlan>> {
         let (mut root, _) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let source_schema = root.output_schema()?;
@@ -174,69 +176,71 @@ impl InsertMultiTableInterpreter {
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
-        root = PhysicalPlan::Duplicate(Box::new(Duplicate {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(Duplicate {
+            input: root,
             n: branches.len(),
-        }));
+            meta: PhysicalPlanMeta::new("Duplicate"),
+        });
 
         let shuffle_strategy = ShuffleStrategy::Transpose(branches.len());
-        root = PhysicalPlan::Shuffle(Box::new(Shuffle {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(Shuffle {
+            input: root,
             strategy: shuffle_strategy,
-        }));
+            meta: PhysicalPlanMeta::new("Shuffle"),
+        });
 
-        root = PhysicalPlan::ChunkFilter(Box::new(ChunkFilter {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkFilter {
             predicates,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFilter"),
+        });
 
-        root = PhysicalPlan::ChunkEvalScalar(Box::new(ChunkEvalScalar {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkEvalScalar {
             eval_scalars,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkEvalScalar"),
+        });
 
-        root = PhysicalPlan::ChunkCastSchema(Box::new(ChunkCastSchema {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkCastSchema {
             cast_schemas,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkCastSchema"),
+        });
 
-        root = PhysicalPlan::ChunkFillAndReorder(Box::new(ChunkFillAndReorder {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkFillAndReorder {
             fill_and_reorders,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkFillAndReorder"),
+        });
 
-        root = PhysicalPlan::ChunkAppendData(Box::new(ChunkAppendData {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkAppendData {
+            input: root,
             target_tables: serializable_tables.clone(),
-        }));
+            meta: PhysicalPlanMeta::new("ChunkAppendData"),
+        });
 
-        root = PhysicalPlan::ChunkMerge(Box::new(ChunkMerge {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkMerge {
             group_ids,
-        }));
+            input: root,
+            meta: PhysicalPlanMeta::new("ChunkMerge"),
+        });
 
-        root = PhysicalPlan::ChunkCommitInsert(Box::new(ChunkCommitInsert {
-            plan_id: 0,
-            input: Box::new(root),
+        root = Box::new(ChunkCommitInsert {
             update_stream_meta,
+
+            input: root,
             overwrite: self.plan.overwrite,
             deduplicated_label: None,
             targets: deduplicated_serializable_tables,
-        }));
+            meta: PhysicalPlanMeta::new("ChunkCommitInsert"),
+        });
+
         let mut next_plan_id = 0;
         root.adjust_plan_id(&mut next_plan_id);
         Ok(root)
     }
 
-    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
+    async fn build_source_physical_plan(&self) -> Result<(Box<dyn IPhysicalPlan>, MetadataRef)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,

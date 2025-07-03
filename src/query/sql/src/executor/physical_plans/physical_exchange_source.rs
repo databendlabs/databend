@@ -12,13 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
+use crate::executor::format::format_output_columns;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    pub meta: PhysicalPlanMeta,
 
     // Output schema of exchanged data
     pub schema: DataSchemaRef,
@@ -28,8 +37,51 @@ pub struct ExchangeSource {
     pub query_id: String,
 }
 
-impl ExchangeSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for ExchangeSource {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        ))];
+
+        node_children.push(FormatTreeNode::new(format!(
+            "source fragment: [{}]",
+            self.source_fragment_id
+        )));
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "ExchangeSource".to_string(),
+            node_children,
+        ))
+    }
+
+    fn is_distributed_plan(&self) -> bool {
+        true
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }

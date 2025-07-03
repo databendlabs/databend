@@ -32,6 +32,7 @@ use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -167,7 +168,7 @@ impl MutationInterpreter {
         &self,
         mutation: &Mutation,
         dry_run: bool,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
         let mutation_build_info = build_mutation_info(self.ctx.clone(), mutation, dry_run).await?;
         // Build physical plan.

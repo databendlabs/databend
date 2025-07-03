@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -24,10 +28,17 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plan::PhysicalPlan;
 use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
+use crate::executor::IPhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
@@ -44,18 +55,29 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
+    meta: PhysicalPlanMeta,
     pub projections: ColumnSet,
-    pub input: Box<PhysicalPlan>,
+    pub input: Box<dyn IPhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl EvalScalar {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for EvalScalar {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         if self.exprs.is_empty() {
             return self.input.output_schema();
         }
@@ -78,6 +100,83 @@ impl EvalScalar {
         }
         Ok(DataSchemaRefExt::create(fields))
     }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.exprs.is_empty() {
+            assert_eq!(children.len(), 1);
+            return Ok(children.pop().unwrap());
+        }
+
+        let scalars = self
+            .exprs
+            .iter()
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("expressions: [{scalars}]")),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            node_children.extend(plan_stats_info_to_format_tree(info));
+        }
+
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "EvalScalar".to_string(),
+            node_children,
+        ))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(self
+            .exprs
+            .iter()
+            .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", "))
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        Ok(HashMap::from([(
+            String::from("List of Expressions"),
+            self.exprs
+                .iter()
+                .map(|(x, _)| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .collect(),
+        )]))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
+    }
 }
 
 impl PhysicalPlanBuilder {
@@ -87,7 +186,7 @@ impl PhysicalPlanBuilder {
         eval_scalar: &crate::plans::EvalScalar,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         let column_projections = required.clone();
         let mut used = vec![];
@@ -126,9 +225,9 @@ impl PhysicalPlanBuilder {
         &mut self,
         eval_scalar: &crate::plans::EvalScalar,
         column_projections: Vec<IndexType>,
-        input: PhysicalPlan,
+        input: Box<dyn IPhysicalPlan>,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let input_schema = input.output_schema()?;
         let exprs = eval_scalar
             .items
@@ -165,12 +264,12 @@ impl PhysicalPlanBuilder {
                 projections.insert(index + input_column_nums);
             }
         }
-        Ok(PhysicalPlan::EvalScalar(EvalScalar {
-            plan_id: 0,
-            projections,
-            input: Box::new(input),
+        Ok(Box::new(EvalScalar {
+            input,
             exprs,
+            projections,
             stat_info: Some(stat_info),
+            meta: PhysicalPlanMeta::new("EvalScalar"),
         }))
     }
 

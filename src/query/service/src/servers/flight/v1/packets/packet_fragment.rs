@@ -15,21 +15,23 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use databend_common_sql::executor::IPhysicalPlan;
+
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sql::executor::PhysicalPlan;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragment {
-    pub physical_plan: PhysicalPlan,
     pub fragment_id: usize,
+    pub physical_plan: Box<dyn IPhysicalPlan>,
     pub data_exchange: Option<DataExchange>,
 }
 
 impl QueryFragment {
     pub fn create(
         fragment_id: usize,
-        physical_plan: PhysicalPlan,
         data_exchange: Option<DataExchange>,
+        physical_plan: Box<dyn IPhysicalPlan>,
     ) -> QueryFragment {
         QueryFragment {
             physical_plan,

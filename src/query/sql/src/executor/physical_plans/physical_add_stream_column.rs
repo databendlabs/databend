@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::plan::StreamColumnType;
 use databend_common_exception::Result;
@@ -23,7 +25,11 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanMeta;
 use crate::planner::CURRENT_BLOCK_ID_COL_NAME;
 use crate::planner::CURRENT_BLOCK_ROW_NUM_COL_NAME;
 use crate::plans::BoundColumnRef;
@@ -37,20 +43,61 @@ use crate::Visibility;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AddStreamColumn {
-    pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    pub meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub exprs: Vec<RemoteExpr>,
     pub projections: Vec<usize>,
     pub stream_columns: Vec<StreamColumn>,
 }
 
+#[typetag::serde]
+impl IPhysicalPlan for AddStreamColumn {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn to_format_node(
+        &self,
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        // ignore self
+        assert_eq!(children.len(), 1);
+        Ok(children.pop().unwrap())
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
+    }
+}
+
 impl AddStreamColumn {
     pub fn new(
         metadata: &MetadataRef,
-        input: PhysicalPlan,
+        input: Box<dyn IPhysicalPlan>,
         table_index: usize,
         table_version: u64,
-    ) -> Result<Self> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let input_schema = input.output_schema()?;
         let num_fields = input_schema.fields().len();
         let column_entries = metadata.read().columns_by_table_index(table_index);
@@ -156,16 +203,12 @@ impl AddStreamColumn {
         // ORIGIN_BLOCK_ROW_NUM, ORIGIN_BLOCK_ID.
         let stream_columns = vec![stream_columns[2].clone(), stream_columns[1].clone()];
 
-        Ok(Self {
-            plan_id: 0,
-            input: Box::new(input),
+        Ok(Box::new(AddStreamColumn {
+            input,
             exprs,
             projections,
             stream_columns,
-        })
-    }
-
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+            meta: PhysicalPlanMeta::new("AddStreamColumn"),
+        }))
     }
 }

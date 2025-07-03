@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
@@ -26,8 +28,14 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
@@ -39,10 +47,9 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RangeJoin {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    pub left: Box<PhysicalPlan>,
-    pub right: Box<PhysicalPlan>,
+    pub meta: PhysicalPlanMeta,
+    pub left: Box<dyn IPhysicalPlan>,
+    pub right: Box<dyn IPhysicalPlan>,
     // The first two conditions: (>, >=, <, <=)
     // Condition's left/right side only contains one table's column
     pub conditions: Vec<RangeJoinCondition>,
@@ -57,9 +64,123 @@ pub struct RangeJoin {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl RangeJoin {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+#[typetag::serde]
+impl IPhysicalPlan for RangeJoin {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let range_join_conditions = self
+            .conditions
+            .iter()
+            .map(|condition| {
+                let left = condition
+                    .left_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                let right = condition
+                    .right_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                format!("{left} {:?} {right}", condition.operator)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let other_conditions = self
+            .other_conditions
+            .iter()
+            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        assert_eq!(children.len(), 2);
+        children[0].payload = format!("{}(Left)", children[0].payload);
+        children[1].payload = format!("{}(Right)", children[1].payload);
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("join type: {}", self.join_type)),
+            FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
+            FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            match self.range_join_type {
+                RangeJoinType::IEJoin => "IEJoin".to_string(),
+                RangeJoinType::Merge => "MergeJoin".to_string(),
+            },
+            node_children,
+        ))
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let mut condition = self
+            .conditions
+            .iter()
+            .map(|condition| {
+                let left = condition
+                    .left_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                let right = condition
+                    .right_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                format!("{left} {:?} {right}", condition.operator)
+            })
+            .collect::<Vec<_>>();
+
+        condition.extend(
+            self.other_conditions
+                .iter()
+                .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display()),
+        );
+
+        Ok(condition.join(" AND "))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_range_join = self.clone();
+        assert_eq!(children.len(), 2);
+        new_range_join.right = children.pop().unwrap();
+        new_range_join.left = children.pop().unwrap();
+        Box::new(new_range_join)
     }
 }
 
@@ -86,7 +207,7 @@ impl PhysicalPlanBuilder {
         right_required: ColumnSet,
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
 
@@ -122,10 +243,10 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>(),
         );
 
-        Ok(PhysicalPlan::RangeJoin(RangeJoin {
-            plan_id: 0,
+        Ok(Box::new(RangeJoin {
             left: left_side,
             right: right_side,
+            meta: PhysicalPlanMeta::new("RangeJoin"),
             conditions: range_conditions
                 .iter()
                 .map(|scalar| {

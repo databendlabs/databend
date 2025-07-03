@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::collections::HashMap;
+
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -19,18 +24,23 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
+use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::PhysicalPlanMeta;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnEntry;
 use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Limit {
-    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
-    pub plan_id: u32,
-    pub input: Box<PhysicalPlan>,
+    meta: PhysicalPlanMeta,
+    pub input: Box<dyn IPhysicalPlan>,
     pub limit: Option<usize>,
     pub offset: usize,
 
@@ -38,9 +48,86 @@ pub struct Limit {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl Limit {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+#[typetag::serde]
+impl IPhysicalPlan for Limit {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(
+        &'a mut self,
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!(
+                "limit: {}",
+                self.limit
+                    .map_or("NONE".to_string(), |limit| limit.to_string())
+            )),
+            FormatTreeNode::new(format!("offset: {}", self.offset)),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            node_children.extend(plan_stats_info_to_format_tree(info));
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "Limit".to_string(),
+            node_children,
+        ))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        Ok(match self.limit {
+            Some(limit) => format!("LIMIT {} OFFSET {}", limit, self.offset),
+            None => format!("OFFSET {}", self.offset),
+        })
+    }
+
+    fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        let mut labels = HashMap::with_capacity(2);
+        labels.insert(String::from("Offset"), vec![self.offset.to_string()]);
+
+        if let Some(limit) = self.limit {
+            labels.insert(String::from("Number of rows"), vec![limit.to_string()]);
+        }
+
+        Ok(labels)
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -51,7 +138,7 @@ impl PhysicalPlanBuilder {
         limit: &crate::plans::Limit,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<PhysicalPlan> {
+    ) -> Result<Box<dyn IPhysicalPlan>> {
         // 1. Prune unused Columns.
         // Apply lazy.
         let metadata = self.metadata.read().clone();
@@ -66,12 +153,12 @@ impl PhysicalPlanBuilder {
         let input_plan = self.build(s_expr.child(0)?, required).await?;
         let metadata = self.metadata.read().clone();
         if limit.before_exchange || metadata.lazy_columns().is_empty() {
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
-                input: Box::new(input_plan),
+            return Ok(Box::new(Limit {
+                input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Limit"),
             }));
         }
 
@@ -86,12 +173,12 @@ impl PhysicalPlanBuilder {
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
 
         if !input_schema.has_field(&row_id_col_index.to_string()) {
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
-                input: Box::new(input_plan),
+            return Ok(Box::new(Limit {
+                input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Limit"),
             }));
         }
 
@@ -109,12 +196,12 @@ impl PhysicalPlanBuilder {
 
         if limit.before_exchange || lazy_columns.is_empty() {
             // If there is no lazy column, we don't need to build a `RowFetch` plan.
-            return Ok(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
-                input: Box::new(input_plan),
+            return Ok(Box::new(Limit {
+                input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info),
+                meta: PhysicalPlanMeta::new("Limit"),
             }));
         }
 
@@ -146,15 +233,15 @@ impl PhysicalPlanBuilder {
             false,
         );
 
-        Ok(PhysicalPlan::RowFetch(RowFetch {
-            plan_id: 0,
-            input: Box::new(PhysicalPlan::Limit(Limit {
-                plan_id: 0,
-                input: Box::new(input_plan),
+        Ok(Box::new(RowFetch {
+            meta: PhysicalPlanMeta::new("RowFetch"),
+            input: Box::new(Limit {
+                meta: PhysicalPlanMeta::new("RowFetch"),
+                input: input_plan,
                 limit: limit.limit,
                 offset: limit.offset,
                 stat_info: Some(stat_info.clone()),
-            })),
+            }),
             source: Box::new(source_info),
             row_id_col_offset,
             cols_to_fetch,
