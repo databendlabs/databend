@@ -158,7 +158,8 @@ impl Binder {
                     },
                     ..Default::default()
                 };
-                let (s_expr, cte_bind_context) = self.bind_query(&mut cte_bind_context, &cte.query)?;
+                let (s_expr, cte_bind_context) =
+                    self.bind_query(&mut cte_bind_context, &cte.query)?;
                 let bind_result = CteBindResult {
                     s_expr,
                     bind_context: cte_bind_context,

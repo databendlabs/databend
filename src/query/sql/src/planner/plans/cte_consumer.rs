@@ -16,10 +16,15 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
+use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::RelationalProperty;
+use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
@@ -51,5 +56,40 @@ impl Operator for CTEConsumer {
     /// Derive statistics information
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         RelExpr::with_s_expr(&self.def).derive_cardinality()
+    }
+
+    /// Derive relational property
+    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        RelExpr::with_s_expr(&self.def).derive_relational_prop()
+    }
+
+    /// Derive physical property
+    fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
+        RelExpr::with_s_expr(&self.def).derive_physical_prop()
+    }
+
+    /// Compute required property for child with index `child_index`
+    fn compute_required_prop_child(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _child_index: usize,
+        _required: &RequiredProperty,
+    ) -> Result<RequiredProperty> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for children of cte_consumer".to_string(),
+        ))
+    }
+
+    /// Enumerate all possible combinations of required property for children
+    fn compute_required_prop_children(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _rel_expr: &RelExpr,
+        _required: &RequiredProperty,
+    ) -> Result<Vec<Vec<RequiredProperty>>> {
+        Err(ErrorCode::Internal(
+            "Cannot compute required property for children of cte_consumer".to_string(),
+        ))
     }
 }
