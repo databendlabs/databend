@@ -20,7 +20,7 @@ use databend_common_expression::infer_table_schema;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::physical_plans::CopyIntoLocation;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use log::debug;
 use log::info;
@@ -89,14 +89,14 @@ impl CopyIntoLocationInterpreter {
         let query_result_schema = query_interpreter.get_result_schema();
         let table_schema = infer_table_schema(&query_result_schema)?;
 
-        let mut physical_plan = PhysicalPlan::CopyIntoLocation(Box::new(CopyIntoLocation {
-            plan_id: 0,
-            input: Box::new(query_physical_plan),
+        let mut physical_plan: Box<dyn IPhysicalPlan> = Box::new(CopyIntoLocation {
+            input: query_physical_plan,
             project_columns: query_interpreter.get_result_columns(),
             input_data_schema: query_result_schema,
             input_table_schema: table_schema,
             info: info.clone(),
-        }));
+            meta: PhysicalPlanMeta::new("CopyIntoLocation"),
+        });
 
         let mut next_plan_id = 0;
         physical_plan.adjust_plan_id(&mut next_plan_id);

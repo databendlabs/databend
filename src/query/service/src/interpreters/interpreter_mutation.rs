@@ -32,7 +32,7 @@ use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::IPhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlanDynExt};
 use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -99,9 +99,10 @@ impl Interpreter for MutationInterpreter {
         // Build physical plan.
         let physical_plan = self.build_physical_plan(&mutation, false).await?;
 
-        let query_plan = physical_plan
-            .format(self.metadata.clone(), Default::default())?
-            .format_pretty()?;
+        let query_plan = {
+            let metadata = self.metadata.read();
+            physical_plan.format(&metadata, Default::default())?.format_pretty()?
+        };
 
         info!("Query physical plan: \n{}", query_plan);
 
@@ -231,7 +232,7 @@ pub async fn build_mutation_info(
         table_snapshot.clone(),
         dry_run,
     )
-    .await?;
+        .await?;
 
     let table_meta_timestamps =
         ctx.get_table_meta_timestamps(table.as_ref(), table_snapshot.clone())?;
@@ -283,8 +284,8 @@ async fn mutation_source_partitions(
         let cluster = ctx.get_cluster();
         let is_lazy = fuse_table.is_column_oriented()
             || (!dry_run
-                && !cluster.is_empty()
-                && table_snapshot.segments.len() >= cluster.nodes.len());
+            && !cluster.is_empty()
+            && table_snapshot.segments.len() >= cluster.nodes.len());
         (is_lazy, true)
     } else {
         (false, false)

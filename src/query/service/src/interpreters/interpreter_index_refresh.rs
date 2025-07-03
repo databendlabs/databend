@@ -35,7 +35,7 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::TableScan;
-use databend_common_sql::executor::DeriveHandle;
+use databend_common_sql::executor::{DeriveHandle, PhysicalPlanDynExt};
 use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
@@ -55,6 +55,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::test_kits::query_count;
 
 pub struct RefreshIndexInterpreter {
     ctx: Arc<QueryContext>,
@@ -121,32 +122,20 @@ impl RefreshIndexInterpreter {
     #[async_backtrace::framed]
     async fn get_read_source(
         &self,
-        query_plan: &PhysicalPlan,
+        query_plan: &Box<dyn IPhysicalPlan>,
         fuse_table: Arc<FuseTable>,
         segments: Option<Vec<Location>>,
     ) -> Result<Option<DataSourcePlan>> {
-        let mut source = vec![];
+        let mut sources = vec![];
+        query_plan.get_all_data_source(&mut sources);
 
-        let mut collect_read_source = |plan: &PhysicalPlan| {
-            if let PhysicalPlan::TableScan(scan) = plan {
-                source.push(*scan.source.clone())
-            }
-        };
-
-        PhysicalPlan::traverse(
-            query_plan,
-            &mut |_| true,
-            &mut collect_read_source,
-            &mut |_| {},
-        );
-
-        if source.len() != 1 {
+        if sources.len() != 1 {
             Err(ErrorCode::Internal(
                 "Invalid source with multiple table scan when do refresh aggregating index"
                     .to_string(),
             ))
         } else {
-            let mut source = source.remove(0);
+            let (_, mut source) = sources.remove(0);
             let partitions = match segments {
                 Some(segment_locs) if !segment_locs.is_empty() => {
                     let segment_locations = create_segment_location_vector(segment_locs, None);
@@ -188,7 +177,7 @@ impl RefreshIndexInterpreter {
             };
 
             if !source.parts.is_empty() {
-                Ok(Some(source))
+                Ok(Some(Box::into_inner(source)))
             } else {
                 Ok(None)
             }
@@ -279,10 +268,8 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let new_index_meta = self.update_index_meta(&new_read_source)?;
 
-        let mut replace_read_source = ReadSourceReplacer {
-            source: new_read_source,
-        };
-        query_plan = replace_read_source.replace(&query_plan)?;
+        let mut handle = ReadSourceDeriveHandle::new(new_read_source);
+        query_plan = query_plan.derive_with(&mut handle);
 
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &query_plan).await?;
@@ -380,6 +367,12 @@ async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Resu
 
 struct ReadSourceDeriveHandle {
     source: DataSourcePlan,
+}
+
+impl ReadSourceDeriveHandle {
+    pub fn new(source:DataSourcePlan) -> Box<dyn DeriveHandle> {
+        Box::new(ReadSourceDeriveHandle { source })
+    }
 }
 
 impl DeriveHandle for ReadSourceDeriveHandle {

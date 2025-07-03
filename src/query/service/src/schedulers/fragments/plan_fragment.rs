@@ -492,26 +492,22 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
         if let Some(table_scan) = v.downcast_ref::<TableScan>() {
-            let source = self.sources.remove(&table_scan.get_id()).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Cannot find data source for table scan plan {}",
-                    table_scan.get_id()
-                ))
-            })?;
+            let Some(source) = self.sources.remove(&table_scan.get_id()) else {
+                unreachable!("Cannot find data source for table scan plan {}", table_scan.get_id())
+            };
 
             return Ok(Box::new(TableScan {
                 source: Box::new(DataSourcePlan::try_from(source)?),
                 ..table_scan.clone()
             }));
         } else if let Some(table_scan) = v.downcast_ref::<ConstantTableScan>() {
-            let source = self.sources.remove(&table_scan.get_id()).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Cannot find data source for constant table scan plan {}",
-                    table_scan.get_id()
-                ))
-            })?;
+            let Some(source) = self.sources.remove(&table_scan.get_id()) else {
+                unreachable!("Cannot find data source for constant table scan plan {}", table_scan.get_id())
+            };
 
-            let const_table_columns = ConstTableColumn::try_from(source)?;
+            let Ok(const_table_columns) = ConstTableColumn::try_from(source) else {
+                unreachable!("Cannot convert Table to Vec<Column>")
+            };
 
             return Ok(Box::new(ConstantTableScan {
                 values: const_table_columns.columns,
@@ -651,6 +647,6 @@ impl DeriveHandle for ReplaceDeriveHandle {
             }));
         }
 
-        None
+        Err(children)
     }
 }

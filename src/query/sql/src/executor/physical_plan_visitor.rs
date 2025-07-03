@@ -12,65 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
-
-use super::physical_plans::AddStreamColumn;
-use super::physical_plans::BroadcastSink;
-use super::physical_plans::BroadcastSource;
-use super::physical_plans::CacheScan;
-use super::physical_plans::ExpressionScan;
-use super::physical_plans::HilbertPartition;
-use super::physical_plans::MutationManipulate;
-use super::physical_plans::MutationOrganize;
-use super::physical_plans::MutationSplit;
-use super::physical_plans::RecursiveCteScan;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plan::PhysicalPlanExt;
-use crate::executor::physical_plans::AggregateExpand;
-use crate::executor::physical_plans::AggregateFinal;
-use crate::executor::physical_plans::AggregatePartial;
-use crate::executor::physical_plans::AsyncFunction;
-use crate::executor::physical_plans::ChunkAppendData;
-use crate::executor::physical_plans::ChunkCastSchema;
-use crate::executor::physical_plans::ChunkCommitInsert;
-use crate::executor::physical_plans::ChunkEvalScalar;
-use crate::executor::physical_plans::ChunkFillAndReorder;
-use crate::executor::physical_plans::ChunkFilter;
-use crate::executor::physical_plans::ChunkMerge;
-use crate::executor::physical_plans::ColumnMutation;
-use crate::executor::physical_plans::CommitSink;
-use crate::executor::physical_plans::CompactSource;
-use crate::executor::physical_plans::ConstantTableScan;
-use crate::executor::physical_plans::CopyIntoLocation;
-use crate::executor::physical_plans::CopyIntoTable;
-use crate::executor::physical_plans::CopyIntoTableSource;
-use crate::executor::physical_plans::DistributedInsertSelect;
-use crate::executor::physical_plans::Duplicate;
-use crate::executor::physical_plans::EvalScalar;
-use crate::executor::physical_plans::Exchange;
-use crate::executor::physical_plans::ExchangeSink;
-use crate::executor::physical_plans::ExchangeSource;
-use crate::executor::physical_plans::Filter;
-use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Limit;
-use crate::executor::physical_plans::Mutation;
-use crate::executor::physical_plans::MutationSource;
-use crate::executor::physical_plans::ProjectSet;
-use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::Recluster;
-use crate::executor::physical_plans::ReplaceAsyncSourcer;
-use crate::executor::physical_plans::ReplaceDeduplicate;
-use crate::executor::physical_plans::ReplaceInto;
-use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::Shuffle;
-use crate::executor::physical_plans::Sort;
-use crate::executor::physical_plans::TableScan;
-use crate::executor::physical_plans::Udf;
-use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::Window;
-use crate::executor::physical_plans::WindowPartition;
 use crate::executor::IPhysicalPlan;
-use crate::executor::PhysicalPlanMeta;
+
 // pub trait PhysicalPlanReplacer {
 //     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
 //         match plan {

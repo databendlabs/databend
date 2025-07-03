@@ -39,7 +39,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
@@ -227,7 +227,7 @@ impl ModifyTableColumnInterpreter {
                         for (index_name, index) in &table_info.meta.indexes {
                             if index.column_ids.contains(&old_field.column_id)
                                 && old_field.data_type.remove_nullable()
-                                    != field.data_type.remove_nullable()
+                                != field.data_type.remove_nullable()
                             {
                                 return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
                                     "column `{}` is referenced by inverted index, drop inverted index `{}` first",
@@ -289,7 +289,7 @@ impl ModifyTableColumnInterpreter {
                 table_info.meta.clone(),
                 catalog,
             )
-            .await?;
+                .await?;
 
             return Ok(PipelineBuildResult::create());
         }
@@ -452,7 +452,7 @@ impl ModifyTableColumnInterpreter {
             prev_snapshot_id,
             table_meta_timestamps,
         )
-        .await
+            .await
     }
 
     // Set column comment.
@@ -492,7 +492,7 @@ impl ModifyTableColumnInterpreter {
                 table_info.meta.clone(),
                 catalog,
             )
-            .await?;
+                .await?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -650,7 +650,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
                     table_meta,
                     column.to_string(),
                 )
-                .await?
+                    .await?
             }
         };
 
@@ -685,9 +685,9 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
         ) => {
             old_tys.len() == new_tys.len()
                 && old_tys
-                    .iter()
-                    .zip(new_tys)
-                    .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
+                .iter()
+                .zip(new_tys)
+                .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
         }
         _ => false,
     }
@@ -727,16 +727,19 @@ pub(crate) async fn build_select_insert_plan(
     let new_table = FuseTable::try_create(table_info)?;
 
     // 4. build DistributedInsertSelect plan
-    let insert_plan = PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-        plan_id: select_plan.get_id(),
-        input: Box::new(select_plan),
+    let mut insert_plan: Box<dyn IPhysicalPlan> = Box::new(DistributedInsertSelect {
+        input: select_plan,
         table_info: new_table.get_table_info().clone(),
         select_schema,
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),
         cast_needed: true,
         table_meta_timestamps,
-    }));
+        meta: PhysicalPlanMeta::new("DistributedInsertSelect"),
+    });
+
+    let mut index = 0;
+    insert_plan.adjust_plan_id(&mut index);
     let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
 
     // 5. commit new meta schema and snapshots

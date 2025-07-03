@@ -87,7 +87,7 @@ use crate::DUMMY_TABLE_INDEX;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub scan_id: usize,
     pub name_mapping: BTreeMap<String, IndexType>,
     pub source: Box<DataSourcePlan>,

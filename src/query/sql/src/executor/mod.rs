@@ -32,4 +32,5 @@ pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plans::build_broadcast_plans;
 pub use physical_plans::PhysicalRuntimeFilter;
 pub use physical_plans::PhysicalRuntimeFilters;
+pub use physical_plan::PhysicalPlanVisitor;
 pub use util::*;

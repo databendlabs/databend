@@ -34,7 +34,6 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::ExplainConfig;
-use databend_common_sql::executor::format_partial_tree;
 use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::plans::Mutation;
@@ -69,6 +68,7 @@ use crate::sql::executor::PhysicalPlan;
 use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
+use databend_common_sql::executor::PhysicalPlanDynExt;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
@@ -565,7 +565,7 @@ impl ExplainInterpreter {
 
     fn inject_pruned_partitions_stats(
         &self,
-        plan: &mut PhysicalPlan,
+        plan: &mut Box<dyn IPhysicalPlan>,
         metadata: &MetadataRef,
     ) -> Result<()> {
         let mut sources = vec![];

@@ -23,8 +23,8 @@ use crate::sql::executor::PhysicalPlan;
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragment {
     pub fragment_id: usize,
-    pub physical_plan: Box<dyn IPhysicalPlan>,
     pub data_exchange: Option<DataExchange>,
+    pub physical_plan: Box<dyn IPhysicalPlan>,
 }
 
 impl QueryFragment {

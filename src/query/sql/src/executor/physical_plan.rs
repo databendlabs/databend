@@ -23,7 +23,7 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::PartitionsShuffleKind;
-use databend_common_exception::Result;
+use databend_common_exception::{ErrorCode, Result};
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::PlanProfile;
@@ -95,14 +95,18 @@ pub struct PhysicalPlanMeta {
 
 impl PhysicalPlanMeta {
     pub fn new(name: impl Into<String>) -> PhysicalPlanMeta {
+        PhysicalPlanMeta::with_plan_id(name, 0)
+    }
+
+    pub fn with_plan_id(name: impl Into<String>, plan_id: u32) -> PhysicalPlanMeta {
         PhysicalPlanMeta {
-            plan_id: 0,
+            plan_id,
             name: name.into(),
         }
     }
 }
 
-pub trait DeriveHandle {
+pub trait DeriveHandle: Send + Sync + 'static {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -147,11 +151,11 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         }
     }
 
-    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
+    fn children(&self) -> Box<dyn Iterator<Item=&'_ Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
-    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item=&'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
@@ -215,14 +219,8 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan>;
 }
 
-pub trait PhysicalPlanExt {
-    fn clone_box(&self) -> Box<dyn IPhysicalPlan>;
-}
-
-impl<T: 'static + IPhysicalPlan + Clone> PhysicalPlanExt for T {
-    fn clone_box(&self) -> Box<dyn IPhysicalPlan> {
-        Box::new(self.clone())
-    }
+pub trait PhysicalPlanVisitor {
+    fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()>;
 }
 
 pub trait PhysicalPlanDynExt {
@@ -250,6 +248,8 @@ pub trait PhysicalPlanDynExt {
     fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To>;
 
     fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> Box<dyn IPhysicalPlan>;
+
+    fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()>;
 }
 
 impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
@@ -305,24 +305,24 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
 
         self.derive(children)
     }
-}
 
-struct DummyDeriveHandle;
+    fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
+        for child in self.children() {
+            child.visit(visitor)?;
+        }
 
-impl DeriveHandle for DummyDeriveHandle {
-    fn derive(
-        &mut self,
-        _: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        Err(children)
+        visitor.visit(self)
     }
 }
 
 impl Clone for Box<dyn IPhysicalPlan> {
     fn clone(&self) -> Self {
-        let mut handle: Box<dyn DeriveHandle> = Box::new(DummyDeriveHandle);
-        self.derive_with(&mut handle)
+        let mut children = vec![];
+        for child in self.children() {
+            children.push(child.clone());
+        }
+
+        self.derive(children)
     }
 }
 

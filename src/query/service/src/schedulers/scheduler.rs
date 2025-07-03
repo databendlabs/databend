@@ -43,7 +43,7 @@ use crate::stream::PullingExecutorStream;
 pub async fn build_query_pipeline(
     ctx: &Arc<QueryContext>,
     result_columns: &[ColumnBinding],
-    plan: &PhysicalPlan,
+    plan: &Box<dyn IPhysicalPlan>,
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
@@ -84,11 +84,12 @@ pub async fn build_local_pipeline(
 ) -> Result<PipelineBuildResult> {
     let pipeline =
         PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
-    let mut build_res = pipeline.finalize(plan)?;
+    // let mut build_res = pipeline.finalize(plan)?;
 
-    let settings = ctx.get_settings();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-    Ok(build_res)
+    // let settings = ctx.get_settings();
+    // build_res.set_max_threads(settings.get_max_threads()? as usize);
+    // Ok(build_res)
+    unimplemented!()
 }
 
 /// Build distributed pipeline via fragment and actions.

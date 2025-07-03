@@ -314,8 +314,7 @@ async fn create_memory_table_for_cte_scan(
                 table_indexes: None,
                 attached_columns: None,
             };
-            let create_table_interpreter =
-                CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+            let create_table_interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
             let _ = create_table_interpreter.execute(ctx.clone()).await?;
         }
         PhysicalPlan::Shuffle(plan) => {

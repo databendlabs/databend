@@ -24,8 +24,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
-use databend_common_sql::executor::IPhysicalPlan;
-
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlanDynExt};
+use databend_common_sql::executor::physical_plans::ExchangeSink;
 use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
@@ -132,7 +132,7 @@ impl QueryFragmentsActions {
         let mut fragment_ids = Vec::new();
         for fragment_actions in &self.fragments_actions {
             let plan = &fragment_actions.fragment_actions[0].physical_plan;
-            if !matches!(plan, PhysicalPlan::ExchangeSink(_)) {
+            if plan.downcast_ref::<ExchangeSink>().is_none() {
                 fragment_ids.push(fragment_actions.fragment_id);
             }
         }

@@ -18,7 +18,7 @@ use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan};
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
@@ -42,7 +42,7 @@ async fn execute_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<SendableDataBl
     it.execute(ctx).await
 }
 
-async fn physical_plan(ctx: Arc<QueryContext>, sql: &str) -> Result<PhysicalPlan> {
+async fn physical_plan(ctx: Arc<QueryContext>, sql: &str) -> Result<Box<dyn IPhysicalPlan>> {
     let plan = plan_sql(ctx.clone(), sql).await?;
     match plan {
         Plan::Query {

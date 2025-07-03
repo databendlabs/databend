@@ -37,6 +37,7 @@
 #![feature(variant_count)]
 #![feature(duration_constructors)]
 #![feature(get_mut_unchecked)]
+#![feature(box_into_inner)]
 #![allow(clippy::diverging_sub_expression)]
 #![allow(clippy::arc_with_non_send_sync)]
 

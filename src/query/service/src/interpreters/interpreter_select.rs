@@ -32,8 +32,8 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
-use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::IPhysicalPlan;
+use databend_common_sql::executor::physical_plans::{Exchange, FragmentKind};
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlanDynExt};
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::parse_result_scan_args;
 use databend_common_sql::ColumnBinding;
@@ -123,9 +123,9 @@ impl SelectInterpreter {
     #[async_backtrace::framed]
     pub async fn build_pipeline(
         &self,
-        mut physical_plan: PhysicalPlan,
+        mut physical_plan: Box<dyn IPhysicalPlan>,
     ) -> Result<PipelineBuildResult> {
-        if let PhysicalPlan::Exchange(exchange) = &mut physical_plan {
+        if let Some(exchange) = physical_plan.downcast_mut_ref::<Exchange>() {
             if exchange.kind == FragmentKind::Merge && self.ignore_result {
                 exchange.ignore_exchange = self.ignore_result;
             }
@@ -137,7 +137,7 @@ impl SelectInterpreter {
             &physical_plan,
             self.ignore_result,
         )
-        .await?;
+            .await?;
 
         // consume stream
         let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
@@ -286,9 +286,11 @@ impl Interpreter for SelectInterpreter {
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
-        let query_plan = physical_plan
-            .format(self.metadata.clone(), Default::default())?
-            .format_pretty()?;
+
+        let query_plan = {
+            let metadata = self.metadata.read();
+            physical_plan.format(&metadata, Default::default())?.format_pretty()?
+        };
 
         info!("[SELECT-INTERP] Query physical plan:\n{}", query_plan);
 

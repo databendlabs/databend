@@ -26,7 +26,7 @@ use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan};
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
@@ -81,8 +81,8 @@ impl PipelineBuilder {
         }
     }
 
-    pub fn finalize(mut self, plan: &PhysicalPlan) -> Result<PipelineBuildResult> {
-        self.build_pipeline(plan)?;
+    pub fn finalize(mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<PipelineBuildResult> {
+        // self.build_pipeline(plan)?;
 
         for source_pipeline in &self.pipelines {
             if !source_pipeline.is_complete_pipeline()? {
@@ -136,7 +136,7 @@ impl PipelineBuilder {
 
                 let scope = PlanScope::create(
                     plan.get_id(),
-                    plan.name(),
+                    plan.get_name(),
                     Arc::new(desc),
                     Arc::new(profile_labels),
                 );

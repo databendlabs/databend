@@ -37,7 +37,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::bind_table;
-use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanDynExt, PhysicalPlanMeta};
 use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
@@ -299,7 +299,7 @@ impl ReclusterTableInterpreter {
         tbl: &Arc<dyn Table>,
         push_downs: &mut Option<PushDownInfo>,
         hilbert_info: &mut Option<HilbertBuildInfo>,
-    ) -> Result<Option<PhysicalPlan>> {
+    ) -> Result<Option<Box<dyn IPhysicalPlan>>> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
         let handler = get_hilbert_clustering_handler();
@@ -330,11 +330,11 @@ impl ReclusterTableInterpreter {
         // Adjust number of partitions according to the block size thresholds
         if total_partitions < block_thresholds.block_per_segment
             && block_thresholds.check_perfect_segment(
-                block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
-                total_rows,
-                total_bytes,
-                total_compressed,
-            )
+            block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
+            total_rows,
+            total_bytes,
+            total_compressed,
+        )
         {
             total_partitions = block_thresholds.block_per_segment;
         }
@@ -419,18 +419,13 @@ impl ReclusterTableInterpreter {
 
         metadata.write().replace_all_tables(tbl.clone());
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-        let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
+        let mut plan = builder.build(&s_expr, bind_context.column_set()).await?;
 
         // Check if the plan already has an exchange operator
         let mut is_exchange = false;
-        if let PhysicalPlan::Exchange(Exchange {
-            input,
-            kind: FragmentKind::Merge,
-            ..
-        }) = plan.as_ref()
-        {
+        if let Some(exchange) = plan.downcast_ref::<Exchange>() && exchange.kind == FragmentKind::Merge {
             is_exchange = true;
-            plan = input.clone();
+            plan = exchange.input.clone();
         }
 
         // Determine if we need distributed execution
@@ -451,14 +446,14 @@ impl ReclusterTableInterpreter {
 
             // Add exchange operator for data distribution,
             // shuffling data based on the hash of range partition IDs derived from the Hilbert index.
-            plan = Box::new(PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
+            plan = Box::new(Exchange {
                 input: plan,
                 kind: FragmentKind::Normal,
                 keys: vec![expr],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            }));
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
         }
 
         let table_meta_timestamps = self
@@ -467,14 +462,15 @@ impl ReclusterTableInterpreter {
 
         // Create the Hilbert partition physical plan,
         // collecting data into partitions and persist them
-        let plan = PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
-            plan_id: 0,
+        plan = Box::new(HilbertPartition {
+            rows_per_block,
+            table_meta_timestamps,
+
             input: plan,
             table_info: table_info.clone(),
             num_partitions: total_partitions,
-            table_meta_timestamps,
-            rows_per_block,
-        }));
+            meta: PhysicalPlanMeta::new("HilbertPartition"),
+        });
 
         // Finally, commit the newly clustered table
         Ok(Some(Self::add_commit_sink(
@@ -493,7 +489,7 @@ impl ReclusterTableInterpreter {
         tbl: &Arc<dyn Table>,
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
-    ) -> Result<Option<PhysicalPlan>> {
+    ) -> Result<Option<Box<dyn IPhysicalPlan>>> {
         let Some((parts, snapshot)) = tbl
             .recluster(self.ctx.clone(), push_downs.clone(), limit)
             .await?
@@ -516,12 +512,13 @@ impl ReclusterTableInterpreter {
                 removed_segment_indexes,
                 removed_segment_summary,
             } => {
-                let root = PhysicalPlan::Recluster(Box::new(Recluster {
+                let root = Box::new(Recluster {
                     tasks,
-                    table_info: table_info.clone(),
-                    plan_id: u32::MAX,
                     table_meta_timestamps,
-                }));
+
+                    table_info: table_info.clone(),
+                    meta: PhysicalPlanMeta::new("Recluster"),
+                });
 
                 Self::add_commit_sink(
                     root,
@@ -539,13 +536,13 @@ impl ReclusterTableInterpreter {
             }
             ReclusterParts::Compact(parts) => {
                 let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+                let root = Box::new(CompactSource {
                     parts,
                     table_info: table_info.clone(),
                     column_ids: snapshot.schema.to_leaf_column_id_set(),
-                    plan_id: u32::MAX,
                     table_meta_timestamps,
-                }));
+                    meta: PhysicalPlanMeta::new("CompactSource"),
+                });
 
                 Self::add_commit_sink(
                     root,
@@ -704,43 +701,42 @@ impl ReclusterTableInterpreter {
     }
 
     fn add_commit_sink(
-        input: PhysicalPlan,
+        mut input: Box<dyn IPhysicalPlan>,
         is_distributed: bool,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
         merge_meta: bool,
         recluster_info: Option<ReclusterInfoSideCar>,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> PhysicalPlan {
-        let plan = if is_distributed {
-            PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(input),
+    ) -> Box<dyn IPhysicalPlan> {
+        if is_distributed {
+            input = Box::new(Exchange {
+                input,
                 kind: FragmentKind::Merge,
                 keys: vec![],
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
-            })
-        } else {
-            input
-        };
+                meta: PhysicalPlanMeta::new("Exchange"),
+            });
+        }
 
-        let kind = if recluster_info.is_some() {
-            MutationKind::Recluster
-        } else {
-            MutationKind::Compact
-        };
-        PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(plan),
+        let mut kind = MutationKind::Compact;
+
+        if recluster_info.is_some() {
+            kind = MutationKind::Recluster
+        }
+
+        Box::new(CommitSink {
+            input,
             table_info,
             snapshot: Some(snapshot),
             commit_type: CommitType::Mutation { kind, merge_meta },
             update_stream_meta: vec![],
             deduplicated_label: None,
             table_meta_timestamps,
-            plan_id: u32::MAX,
             recluster_info,
-        }))
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        })
     }
 }
 

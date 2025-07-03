@@ -36,7 +36,7 @@ use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan};
 use fastrace::prelude::*;
 use log::warn;
 use parking_lot::Mutex;
@@ -964,7 +964,7 @@ impl QueryCoordinator {
 struct FragmentCoordinator {
     initialized: bool,
     fragment_id: usize,
-    physical_plan: PhysicalPlan,
+    physical_plan: Box<dyn IPhysicalPlan>,
     data_exchange: Option<DataExchange>,
     pipeline_build_res: Option<PipelineBuildResult>,
 }

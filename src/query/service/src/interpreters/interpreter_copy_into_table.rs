@@ -33,7 +33,7 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stage::StageTable;
@@ -100,7 +100,7 @@ impl CopyIntoTableInterpreter {
         &self,
         table_info: TableInfo,
         plan: &CopyIntoTablePlan,
-    ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(Box<dyn IPhysicalPlan>, Vec<UpdateStreamMetaReq>)> {
         let to_table = self
             .ctx
             .get_table(
@@ -125,7 +125,7 @@ impl CopyIntoTableInterpreter {
 
             let (query_interpreter, update_stream_meta) = self.build_query(&query).await?;
             update_stream_meta_reqs = update_stream_meta;
-            let query_physical_plan = Box::new(query_interpreter.build_physical_plan().await?);
+            let query_physical_plan = query_interpreter.build_physical_plan().await?;
 
             let result_columns = query_interpreter.get_result_columns();
             (
@@ -145,21 +145,20 @@ impl CopyIntoTableInterpreter {
             }
 
             (
-                CopyIntoTableSource::Stage(Box::new(PhysicalPlan::TableScan(TableScan {
-                    plan_id: 0,
+                CopyIntoTableSource::Stage(Box::new(TableScan {
                     scan_id: 0,
                     name_mapping,
                     stat_info: None,
                     table_index: None,
                     internal_column: None,
                     source: Box::new(data_source_plan),
-                }))),
+                    meta: PhysicalPlanMeta::new("TableScan"),
+                })),
                 None,
             )
         };
 
-        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-            plan_id: 0,
+        let mut root: Box<dyn IPhysicalPlan> = Box::new(CopyIntoTable {
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
@@ -171,16 +170,17 @@ impl CopyIntoTableInterpreter {
             source,
             is_transform: plan.is_transform,
             table_meta_timestamps,
-        }));
+            meta: PhysicalPlanMeta::new("CopyIntoTable"),
+        });
 
         if plan.enable_distributed {
-            root = PhysicalPlan::Exchange(Exchange {
-                plan_id: 0,
-                input: Box::new(root),
+            root = Box::new(Exchange {
+                input: root,
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
                 allow_adjust_parallelism: true,
                 ignore_exchange: false,
+                meta: PhysicalPlanMeta::new("Exchange"),
             });
         }
 
@@ -318,14 +318,14 @@ impl CopyIntoTableInterpreter {
 
         if self.plan.stage_table_info.copy_into_table_options.purge
             && !self
-                .plan
-                .stage_table_info
-                .duplicated_files_detected
-                .is_empty()
+            .plan
+            .stage_table_info
+            .duplicated_files_detected
+            .is_empty()
             && self
-                .ctx
-                .get_settings()
-                .get_enable_purge_duplicated_files_in_copy()?
+            .ctx
+            .get_settings()
+            .get_enable_purge_duplicated_files_in_copy()?
         {
             info!(
                 "purge_duplicated_files_in_copy enabled, number of duplicated files: {}",
@@ -337,7 +337,7 @@ impl CopyIntoTableInterpreter {
                 self.plan.stage_table_info.duplicated_files_detected.clone(),
                 self.plan.stage_table_info.stage_info.clone(),
             )
-            .await?;
+                .await?;
         }
         Ok(PipelineBuildResult::create())
     }
@@ -406,7 +406,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 self.plan.path_prefix.clone(),
             )
-            .await?;
+                .await?;
         }
 
         // Execute hook.
