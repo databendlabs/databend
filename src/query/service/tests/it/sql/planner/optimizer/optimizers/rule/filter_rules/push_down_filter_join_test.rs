@@ -132,50 +132,46 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
     }
 
     fn format_operator(s_expr: &SExpr) -> String {
-        match s_expr.plan() {
-            RelOperator::Filter(filter) => {
-                let preds: Vec<String> = filter.predicates.iter().map(format_scalar_expr).collect();
-                format!("Filter [{}]", preds.join(", "))
-            }
-            RelOperator::Join(join) => {
-                let join_type = match join.join_type {
-                    JoinType::Inner => "Inner",
-                    JoinType::Left => "Left",
-                    JoinType::Right => "Right",
-                    JoinType::Full => "Full",
-                    JoinType::Cross => "Cross",
-                    JoinType::LeftSemi => "LeftSemi",
-                    JoinType::RightSemi => "RightSemi",
-                    JoinType::LeftAnti => "LeftAnti",
-                    JoinType::RightAnti => "RightAnti",
-                    JoinType::LeftMark => "LeftMark",
-                    JoinType::RightMark => "RightMark",
-                    JoinType::LeftSingle => "LeftSingle",
-                    JoinType::RightSingle => "RightSingle",
-                    JoinType::Asof => "Asof",
-                    JoinType::LeftAsof => "LeftAsof",
-                    JoinType::RightAsof => "RightAsof",
-                };
-
-                let conditions: Vec<String> = join
-                    .equi_conditions
-                    .iter()
-                    .map(|cond| {
-                        format!(
-                            "{} = {}",
-                            format_scalar_expr(&cond.left),
-                            format_scalar_expr(&cond.right)
-                        )
-                    })
-                    .collect();
-
-                format!("{} Join [{}]", join_type, conditions.join(", "))
-            }
-            RelOperator::Scan(scan) => {
-                format!("Table {}", scan.table_index)
-            }
-            _ => format!("Unknown operator"),
+        if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
+            return format!("Table {}", scan.table_index);
         }
+        if let Some(filter) = s_expr.plan().as_any().downcast_ref::<Filter>() {
+            let preds: Vec<String> = filter.predicates.iter().map(format_scalar_expr).collect();
+            return format!("Filter [{}]", preds.join(", "));
+        }
+        if let Some(join) = s_expr.plan().as_any().downcast_ref::<Join>() {
+            let join_type = match join.join_type {
+                JoinType::Inner => "Inner",
+                JoinType::Left => "Left",
+                JoinType::Right => "Right",
+                JoinType::Full => "Full",
+                JoinType::Cross => "Cross",
+                JoinType::LeftSemi => "LeftSemi",
+                JoinType::RightSemi => "RightSemi",
+                JoinType::LeftAnti => "LeftAnti",
+                JoinType::RightAnti => "RightAnti",
+                JoinType::LeftMark => "LeftMark",
+                JoinType::RightMark => "RightMark",
+                JoinType::LeftSingle => "LeftSingle",
+                JoinType::RightSingle => "RightSingle",
+                JoinType::Asof => "Asof",
+                JoinType::LeftAsof => "LeftAsof",
+                JoinType::RightAsof => "RightAsof",
+            };
+            let conditions: Vec<String> = join
+                .equi_conditions
+                .iter()
+                .map(|cond| {
+                    format!(
+                        "{} = {}",
+                        format_scalar_expr(&cond.left),
+                        format_scalar_expr(&cond.right)
+                    )
+                })
+                .collect();
+            return format!("{} Join [{}]", join_type, conditions.join(", "));
+        }
+        format!("Unknown operator")
     }
 
     fn build_tree(s_expr: &SExpr, depth: usize) -> String {

@@ -20,8 +20,11 @@ use itertools::Itertools;
 use crate::optimizer::ir::Group;
 use crate::optimizer::ir::MExpr;
 use crate::optimizer::ir::Memo;
+use crate::plans::ConstantTableScan;
 use crate::plans::Exchange;
 use crate::plans::Operator;
+use crate::plans::OperatorRef;
+use crate::plans::RelOp;
 
 impl Memo {
     /// Format the memo structure for display
@@ -43,18 +46,24 @@ impl Memo {
     }
 }
 
-fn display_rel_op(rel_op: &RelOperator) -> String {
+fn display_rel_op(rel_op: &OperatorRef) -> String {
     match rel_op {
-        RelOperator::Scan(_) => "Scan".to_string(),
-        RelOperator::Join(_) => "Join".to_string(),
-        RelOperator::EvalScalar(_) => "EvalScalar".to_string(),
-        RelOperator::Filter(_) => "Filter".to_string(),
-        RelOperator::Aggregate(_) => "Aggregate".to_string(),
-        RelOperator::Sort(_) => "Sort".to_string(),
-        RelOperator::Limit(_) => "Limit".to_string(),
-        RelOperator::UnionAll(_) => "UnionAll".to_string(),
-        RelOperator::Exchange(op) => {
-            format!("Exchange: ({})", match op {
+        RelOp::Scan => "Scan".to_string(),
+        RelOp::Join => "Join".to_string(),
+        RelOp::EvalScalar => "EvalScalar".to_string(),
+        RelOp::Filter => "Filter".to_string(),
+        RelOp::Aggregate => "Aggregate".to_string(),
+        RelOp::Sort => "Sort".to_string(),
+        RelOp::Limit => "Limit".to_string(),
+        RelOp::UnionAll => "UnionAll".to_string(),
+        RelOp::ConstantTableScan => {
+            let s = ConstantTableScan::try_downcast_ref(rel_op).unwrap();
+            s.name().to_string()
+        }
+
+        RelOp::Exchange => {
+            let rel_op = Exchange::try_downcast_ref(rel_op).unwrap();
+            format!("Exchange: ({})", match rel_op {
                 Exchange::Hash(scalars) => format!(
                     "Hash({})",
                     scalars
@@ -68,18 +77,17 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
                 Exchange::MergeSort => "MergeSort".to_string(),
             })
         }
-        RelOperator::DummyTableScan(_) => "DummyTableScan".to_string(),
-        RelOperator::ProjectSet(_) => "ProjectSet".to_string(),
-        RelOperator::Window(_) => "WindowFunc".to_string(),
-        RelOperator::ConstantTableScan(s) => s.name().to_string(),
-        RelOperator::ExpressionScan(_) => "ExpressionScan".to_string(),
-        RelOperator::CacheScan(_) => "CacheScan".to_string(),
-        RelOperator::Udf(_) => "Udf".to_string(),
-        RelOperator::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
-        RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
-        RelOperator::Mutation(_) => "MergeInto".to_string(),
-        RelOperator::MutationSource(_) => "MutationSource".to_string(),
-        RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
+        RelOp::DummyTableScan => "DummyTableScan".to_string(),
+        RelOp::ProjectSet => "ProjectSet".to_string(),
+        RelOp::Window => "WindowFunc".to_string(),
+        RelOp::ExpressionScan => "ExpressionScan".to_string(),
+        RelOp::CacheScan => "CacheScan".to_string(),
+        RelOp::Udf => "Udf".to_string(),
+        RelOp::RecursiveCteScan => "RecursiveCteScan".to_string(),
+        RelOp::AsyncFunction => "AsyncFunction".to_string(),
+        RelOp::Mutation => "MergeInto".to_string(),
+        RelOp::MutationSource => "MutationSource".to_string(),
+        RelOp::CompactBlock => "CompactBlock".to_string(),
     }
 }
 

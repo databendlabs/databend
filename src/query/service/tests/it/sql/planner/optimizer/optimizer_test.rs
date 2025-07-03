@@ -40,6 +40,7 @@ use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Scan;
 use databend_common_sql::plans::Statistics;
 use databend_common_sql::BaseTableColumn;
 use databend_common_sql::ColumnEntry;
@@ -364,7 +365,7 @@ struct StatsApplier<'a> {
 
 impl<'a> SExprVisitor for StatsApplier<'a> {
     fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        if let RelOperator::Scan(scan) = expr.plan() {
+        if let Some(scan) = expr.plan().as_any().downcast_ref::<Scan>() {
             let metadata = self.metadata.read();
             let table = metadata.table(scan.table_index);
 
@@ -387,9 +388,7 @@ impl<'a> SExprVisitor for StatsApplier<'a> {
                     histograms: HashMap::new(),
                 });
 
-                return Ok(VisitAction::Replace(
-                    expr.replace_plan(Arc::new(RelOperator::Scan(new_scan))),
-                ));
+                return Ok(VisitAction::Replace(expr.replace_plan(new_scan)));
             }
         }
         Ok(VisitAction::Continue)

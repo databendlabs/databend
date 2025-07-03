@@ -150,10 +150,9 @@ impl DeduplicateJoinConditionOptimizer {
         }
 
         // Create new expression
-        let new_plan = Arc::new(RelOperator::Join(join));
         let new_children = vec![Arc::new(left), Arc::new(right)];
 
-        Ok(s_expr.replace_plan(new_plan).replace_children(new_children))
+        Ok(s_expr.replace_plan(join).replace_children(new_children))
     }
 
     /// Recursively process children nodes

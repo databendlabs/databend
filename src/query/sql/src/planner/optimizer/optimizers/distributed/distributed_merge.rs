@@ -20,8 +20,8 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 use crate::plans::Join;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 pub struct BroadcastToShuffleOptimizer {
     pub matcher: Matcher,
 }
@@ -67,7 +67,7 @@ impl BroadcastToShuffleOptimizer {
                 Arc::new(right_exchange_input.clone()),
             )),
         ];
-        let mut join_s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+        let mut join_s_expr = s_expr.replace_plan(join);
         join_s_expr = join_s_expr.replace_children(new_join_children);
         Ok(join_s_expr)
     }

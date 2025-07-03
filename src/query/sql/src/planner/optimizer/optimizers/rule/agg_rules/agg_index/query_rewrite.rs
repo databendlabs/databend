@@ -1349,7 +1349,7 @@ fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr>
     if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
         let mut new_scan = scan.clone();
         new_scan.agg_index = Some(agg_info);
-        return Ok(s_expr.replace_plan(Arc::new(new_scan.into())));
+        return Ok(s_expr.replace_plan(new_scan));
     }
     let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;
     Ok(s_expr.replace_children(vec![Arc::new(child)]))

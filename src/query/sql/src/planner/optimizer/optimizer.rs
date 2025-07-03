@@ -42,10 +42,12 @@ use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
+use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
@@ -315,7 +317,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
         .optimize_sync(&input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
-    if let &RelOperator::Exchange(_) = input_s_expr.plan() {
+    if let Some(exchange) = input_s_expr.plan().as_any().downcast_ref::<Exchange>() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }
     // If there still exists an Exchange::Merge operator, we should disable distributed optimization and
@@ -394,7 +396,11 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
             }
         }
         MutationType::Update | MutationType::Delete => {
-            if let RelOperator::MutationSource(rel) = input_s_expr.plan() {
+            if let Some(rel) = input_s_expr
+                .plan()
+                .as_any()
+                .downcast_ref::<MutationSource>()
+            {
                 if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
                     mutation.truncate_table = true;
                 }
@@ -410,10 +416,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
 
     Ok(Plan::DataMutation {
         schema,
-        s_expr: Box::new(SExpr::create_unary(
-            Arc::new(RelOperator::Mutation(mutation)),
-            Arc::new(input_s_expr),
-        )),
+        s_expr: Box::new(SExpr::create_unary(mutation, input_s_expr)),
         metadata: opt_ctx.get_metadata(),
     })
 }

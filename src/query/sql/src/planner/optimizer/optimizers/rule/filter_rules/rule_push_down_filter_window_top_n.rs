@@ -124,10 +124,7 @@ impl Rule for RulePushDownFilterWindowTopN {
 
         let mut result = SExpr::create_unary(
             s_expr.plan.clone(),
-            SExpr::create_unary(
-                window_expr.plan.clone(),
-                sort_expr.replace_plan(Arc::new(sort.into())),
-            ),
+            SExpr::create_unary(window_expr.plan.clone(), sort_expr.replace_plan(sort)),
         );
         result.set_applied_rule(&self.id);
 

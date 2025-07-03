@@ -178,9 +178,9 @@ impl SExpr {
         }
     }
 
-    pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
+    pub fn replace_plan<P: Operator>(&self, plan: P) -> Self {
         Self {
-            plan,
+            plan: Arc::new(plan) as OperatorRef,
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),

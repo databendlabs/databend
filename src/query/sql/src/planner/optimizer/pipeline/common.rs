@@ -48,7 +48,7 @@ pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> 
         return true;
     }
 
-    if let RelOperator::Scan(scan) = s_expr.plan() {
+    if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
         return matches!(
             metadata
                 .read()

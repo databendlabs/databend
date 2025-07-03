@@ -20,8 +20,8 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::Sort;
 
 pub struct SortAndLimitPushDownOptimizer {
@@ -122,7 +122,7 @@ impl SortAndLimitPushDownOptimizer {
         ));
 
         debug_assert!(exchange_sexpr.children.len() == 1);
-        let exchange_sexpr = exchange_sexpr.replace_plan(Arc::new(Exchange::MergeSort.into()));
+        let exchange_sexpr = exchange_sexpr.replace_plan(Exchange::MergeSort);
 
         let child = exchange_sexpr.child(0)?.clone();
         let before_exchange_sort = SExpr::create_unary(sort.clone(), child);

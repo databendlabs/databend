@@ -36,6 +36,7 @@ use databend_common_sql::plans::AggIndexInfo;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RelOperator;
+use databend_common_sql::plans::Scan;
 use databend_common_sql::BindContext;
 use databend_common_sql::Binder;
 use databend_common_sql::Metadata;
@@ -463,10 +464,10 @@ async fn plan_sql(
 }
 
 fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {
-    match s_expr.plan() {
-        RelOperator::Scan(scan) => Ok(&scan.agg_index),
-        _ => find_push_down_index_info(s_expr.child(0)?),
+    if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
+        return Ok(&scan.agg_index);
     }
+    find_push_down_index_info(s_expr.child(0)?)
 }
 
 fn format_selection(info: &AggIndexInfo) -> Vec<String> {

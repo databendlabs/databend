@@ -114,6 +114,10 @@ pub trait Operator: Send + Sync + 'static {
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         Ok(vec![vec![RequiredProperty::default(); self.arity()]])
     }
+
+    fn try_downcast_ref(&self) -> Option<&Self> {
+        self.as_any().downcast_ref::<Self>()
+    }
 }
 
 /// Relational operator

@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
 
@@ -35,12 +36,12 @@ impl SingleToInnerOptimizer {
 
     #[recursive::recursive]
     fn single_to_inner(s_expr: &SExpr) -> Result<SExpr> {
-        let mut s_expr = if let RelOperator::Join(join) = s_expr.plan.as_ref()
+        let mut s_expr = if let Some(join) = s_expr.plan().as_any().downcast_ref::<Join>()
             && join.single_to_inner.is_some()
         {
             let mut join = join.clone();
             join.join_type = JoinType::Inner;
-            s_expr.replace_plan(Arc::new(RelOperator::Join(join)))
+            s_expr.replace_plan(join)
         } else {
             s_expr.clone()
         };
