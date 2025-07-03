@@ -141,8 +141,8 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *plan.clone(),
                     )?
-                    .build_physical_plan()
-                    .await?;
+                        .build_physical_plan()
+                        .await?;
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
@@ -186,7 +186,7 @@ impl Interpreter for ExplainInterpreter {
                         None,
                         *ignore_result,
                     )
-                    .await?
+                        .await?
                 }
                 Plan::DataMutation { s_expr, .. } => {
                     let plan: Mutation = s_expr.plan().clone().try_into()?;
@@ -199,7 +199,7 @@ impl Interpreter for ExplainInterpreter {
                         Some(mutation_build_info),
                         true,
                     )
-                    .await?
+                        .await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
@@ -246,7 +246,7 @@ impl Interpreter for ExplainInterpreter {
                         metadata.clone(),
                         bind_context.column_set(),
                     )
-                    .await?
+                        .await?
                 }
                 Plan::DataMutation { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())
@@ -392,10 +392,14 @@ impl ExplainInterpreter {
             .build(&s_expr, required)
             .await?;
 
-        let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
+        let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-        root_fragment.get_actions(ctx, &mut fragments_actions)?;
+
+        Box::downcast()
+        for fragment in fragments {
+            fragment.get_actions(ctx, &mut fragments_actions)?;
+        }
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
         let line_split_result = display_string.lines().collect::<Vec<_>>();
@@ -549,10 +553,13 @@ impl ExplainInterpreter {
             mutation.metadata.clone(),
         )?;
         let plan = interpreter.build_physical_plan(&mutation, true).await?;
-        let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
+        let fragments = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
-        root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+
+        for fragment in fragments {
+            fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+        }
 
         let display_string = fragments_actions
             .display_indent(&mutation.metadata)

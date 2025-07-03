@@ -631,7 +631,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
         if let Some(replace_into) = v.downcast_ref::<ReplaceInto>() {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceInto {
-                input: children[0],
+                input: children.remove(0),
                 need_insert: self.need_insert,
                 segments: self.partitions.clone(),
                 block_slots: self.slot.clone(),
@@ -640,7 +640,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
         } else if let Some(replace_deduplicate) = v.downcast_ref::<ReplaceDeduplicate>() {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceDeduplicate {
-                input: children[0],
+                input: children.remove(0),
                 need_insert: self.need_insert,
                 table_is_empty: self.partitions.is_empty(),
                 ..replace_deduplicate.clone()

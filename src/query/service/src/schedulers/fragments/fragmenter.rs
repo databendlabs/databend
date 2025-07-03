@@ -146,7 +146,11 @@ impl Fragmenter {
         let edges = Self::collect_fragments_edge(fragments.values());
 
         for (source, target) in edges {
-            if let Some(exchange_sink) = fragments[&source].plan.downcast_mut_ref::<ExchangeSink>() {
+            let Some(fragment) = fragments.get_mut(&source) else {
+                continue;
+            };
+
+            if let Some(exchange_sink) = fragment.plan.downcast_mut_ref::<ExchangeSink>() {
                 exchange_sink.destination_fragment_id = target;
             }
         }

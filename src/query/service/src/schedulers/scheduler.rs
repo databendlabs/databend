@@ -104,8 +104,11 @@ pub async fn build_distributed_pipeline(
         .chain(std::iter::once(plan))
     {
         let fragmenter = Fragmenter::try_create(ctx.clone())?;
-        let root_fragment = fragmenter.build_fragment(plan)?;
-        root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+        let fragments = fragmenter.build_fragment(plan)?;
+
+        for fragment in fragments {
+            fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+        }
     }
 
     let exchange_manager = ctx.get_exchange_manager();

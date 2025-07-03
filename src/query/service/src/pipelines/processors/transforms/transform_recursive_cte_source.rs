@@ -37,8 +37,8 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
-use databend_common_sql::executor::physical_plans::UnionAll;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::physical_plans::{RecursiveCteScan, UnionAll};
+use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanDynExt, PhysicalPlanVisitor};
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::IndexType;
@@ -223,8 +223,67 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
 #[async_recursion::async_recursion(#[recursive::recursive])]
 async fn create_memory_table_for_cte_scan(
     ctx: &Arc<QueryContext>,
-    plan: &PhysicalPlan,
+    plan: &Box<dyn IPhysicalPlan>,
 ) -> Result<()> {
+    struct CollectMemoryTable {
+        ctx: Arc<QueryContext>,
+        plans: Vec<CreateTablePlan>,
+    }
+
+    impl CollectMemoryTable {
+        pub fn new(ctx: Arc<QueryContext>) -> Box<dyn PhysicalPlanVisitor> {
+            Box::new(CollectMemoryTable {
+                ctx,
+                plans: vec![],
+            })
+        }
+    }
+
+    impl PhysicalPlanVisitor for CollectMemoryTable {
+        fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+            if let Some(recursive_cte_scan) = plan.downcast_ref::<RecursiveCteScan>() {
+                let table_fields = recursive_cte_scan
+                    .output_schema
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        Ok(TableField::new(
+                            field.name(),
+                            infer_schema_type(field.data_type())?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let schema = TableSchemaRefExt::create(table_fields);
+
+                self.plans.push(CreateTablePlan {
+                    schema,
+                    create_option: CreateOption::CreateIfNotExists,
+                    tenant: Tenant {
+                        tenant: self.ctx.get_tenant().tenant,
+                    },
+                    catalog: self.ctx.get_current_catalog(),
+                    database: self.ctx.get_current_database(),
+                    table: recursive_cte_scan.table_name.clone(),
+                    engine: Engine::Memory,
+                    engine_options: Default::default(),
+                    table_properties: Default::default(),
+                    table_partition: None,
+                    storage_params: None,
+                    options: Default::default(),
+                    field_comments: vec![],
+                    cluster_key: None,
+                    as_select: None,
+                    table_indexes: None,
+                    attached_columns: None,
+                });
+            }
+
+            Ok(())
+        }
+    }
+
+    // let mut
+    plan.visit()
     match plan {
         PhysicalPlan::Filter(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
