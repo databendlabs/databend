@@ -141,10 +141,16 @@ impl TryFrom<&Field> for TableField {
                     )?))
                 }
                 ArrowDataType::Decimal128(precision, scale) if *scale >= 0 => {
-                    TableDataType::Decimal(DecimalDataType::Decimal128(DecimalSize::new(
-                        *precision,
-                        *scale as _,
-                    )?))
+                    let size = DecimalSize::new(*precision, *scale as _)?;
+                    match size.data_kind() {
+                        DecimalDataKind::Decimal64 => {
+                            TableDataType::Decimal(DecimalDataType::Decimal64(size))
+                        }
+                        DecimalDataKind::Decimal128 => {
+                            TableDataType::Decimal(DecimalDataType::Decimal128(size))
+                        }
+                        _ => unreachable!(),
+                    }
                 }
                 ArrowDataType::Decimal256(precision, scale) if *scale >= 0 => {
                     TableDataType::Decimal(DecimalDataType::Decimal256(DecimalSize::new(

@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use arrow_schema::Field;
 use arrow_schema::Schema;
-use arrow_schema::SchemaRef;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -37,14 +36,12 @@ use opendal::Operator;
 
 use crate::BlockReadResult;
 
-// TODO: make BlockReader as a trait.
 #[derive(Clone)]
 pub struct BlockReader {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
-    pub(crate) arrow_schema: SchemaRef,
     pub(crate) project_indices: BTreeMap<FieldIndex, (ColumnId, Field, DataType)>,
     pub(crate) project_column_nodes: Vec<ColumnNode>,
     pub(crate) default_vals: Vec<Scalar>,
@@ -55,6 +52,7 @@ pub struct BlockReader {
 
     pub original_schema: TableSchemaRef,
     pub native_columns_reader: NativeColumnsReader,
+    pub use_parquet2_to_read_parquet: bool,
 }
 
 fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) -> Result<Scalar> {
@@ -141,12 +139,13 @@ impl BlockReader {
 
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
+        let use_parquet2_to_read_parquet = ctx.get_settings().get_use_parquet2()?;
+
         Ok(Arc::new(BlockReader {
             ctx,
             operator,
             projection,
             projected_schema,
-            arrow_schema: arrow_schema.into(),
             project_indices,
             project_column_nodes,
             default_vals,
@@ -155,6 +154,7 @@ impl BlockReader {
             put_cache,
             original_schema: schema,
             native_columns_reader,
+            use_parquet2_to_read_parquet,
         }))
     }
 
@@ -189,10 +189,6 @@ impl BlockReader {
 
     pub fn schema(&self) -> TableSchemaRef {
         self.projected_schema.clone()
-    }
-
-    pub fn arrow_schema(&self) -> SchemaRef {
-        self.arrow_schema.clone()
     }
 
     pub fn data_fields(&self) -> Vec<DataField> {

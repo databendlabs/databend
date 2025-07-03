@@ -154,6 +154,7 @@ databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
+databend-common-parquet-reader-experimental = { path = "src/common/experimental_parquet_reader" }
 databend-common-pipeline = { path = "src/query/pipeline" }
 databend-common-pipeline-transforms = { path = "src/query/pipeline/transforms" }
 databend-common-proto-conv = { path = "src/meta/proto-conv" }
