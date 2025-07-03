@@ -137,7 +137,7 @@ mod tests {
         let e1 = pb::SeqV::with_meta(1, Some(pb::KvMeta::new_expire(1723102819)), b"".to_vec());
         let e2 = pb::SeqV::with_meta(
             1,
-            Some(pb::KvMeta::new_expire(1723102820_000)),
+            Some(pb::KvMeta::new_expire(1_723_102_820_000)),
             b"".to_vec(),
         );
 
