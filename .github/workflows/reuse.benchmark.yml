@@ -38,50 +38,50 @@ env:
   RUNNER_PROVIDER: github
 
 jobs:
-  local:
-    timeout-minutes: 60
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        dataset:
-          - internal
-          # - hits
-      fail-fast: true
-      max-parallel: 1
-    steps:
-      - uses: actions/checkout@v4
-        if: inputs.source == 'release'
-        with:
-          ref: ${{ inputs.sha }}
-      - uses: actions/checkout@v4
-        if: inputs.source == 'pr'
-        with:
-          ref: "refs/pull/${{ inputs.source_id }}/merge"
-      # - uses: ./.github/actions/setup_bendsql
-      # - uses: ./.github/actions/setup_test
-      # - name: Download artifact
-      #   uses: ./.github/actions/artifact_download
-      #   with:
-      #     sha: ${{ inputs.sha }}
-      #     target: x86_64-unknown-linux-gnu
-      #     category: full
-      #     artifacts: meta,query
-      # - name: Setup Databend Binary
-      #   shell: bash
-      #   run: |
-      #     sudo cp ./target/release/databend-* /usr/local/bin/
-      #     databend-query --version
-      #     databend-meta --version
-      # - uses: ./.github/actions/benchmark_local
-      #   if: inputs.target == 'local' || inputs.target == 'all'
-      #   timeout-minutes: 30
-      #   id: benchmark
-      #   with:
-      #     sha: ${{ inputs.sha }}
-      #     run_id: ${{ inputs.run_id }}
-      #     dataset: ${{ matrix.dataset }}
-      #     source: ${{ inputs.source }}
-      #     source_id: ${{ inputs.source_id }}
+  # local:
+  #   timeout-minutes: 60
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       dataset:
+  #         - internal
+  #         # - hits
+  #     fail-fast: true
+  #     max-parallel: 1
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       if: inputs.source == 'release'
+  #       with:
+  #         ref: ${{ inputs.sha }}
+  #     - uses: actions/checkout@v4
+  #       if: inputs.source == 'pr'
+  #       with:
+  #         ref: "refs/pull/${{ inputs.source_id }}/merge"
+  #     - uses: ./.github/actions/setup_bendsql
+  #     - uses: ./.github/actions/setup_test
+  #     - name: Download artifact
+  #       uses: ./.github/actions/artifact_download
+  #       with:
+  #         sha: ${{ inputs.sha }}
+  #         target: x86_64-unknown-linux-gnu
+  #         category: full
+  #         artifacts: meta,query
+  #     - name: Setup Databend Binary
+  #       shell: bash
+  #       run: |
+  #         sudo cp ./target/release/databend-* /usr/local/bin/
+  #         databend-query --version
+  #         databend-meta --version
+  #     - uses: ./.github/actions/benchmark_local
+  #       if: inputs.target == 'local' || inputs.target == 'all'
+  #       timeout-minutes: 30
+  #       id: benchmark
+  #       with:
+  #         sha: ${{ inputs.sha }}
+  #         run_id: ${{ inputs.run_id }}
+  #         dataset: ${{ matrix.dataset }}
+  #         source: ${{ inputs.source }}
+  #         source_id: ${{ inputs.source_id }}
 
   load:
     runs-on: ubuntu-latest
@@ -167,7 +167,7 @@ jobs:
           echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql -o table
 
   comment:
-    needs: [local, cloud]
+    needs: [cloud]
     if: inputs.source == 'pr'
     runs-on: ubuntu-latest
     steps:
@@ -215,7 +215,7 @@ jobs:
           number: ${{ inputs.source_id }}
 
   archive:
-    needs: [local, cloud]
+    needs: [cloud]
     if: inputs.source == 'release'
     runs-on: ubuntu-latest
     strategy:
