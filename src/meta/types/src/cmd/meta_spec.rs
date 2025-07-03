@@ -109,8 +109,6 @@ impl MetaSpec {
     pub fn to_kv_meta(&self, cmd_ctx: &CmdContext) -> KVMeta {
         // If `ttl` is set, override `expire_at`
         if let Some(ttl) = self.ttl {
-            // TODO: use `.millis()` when there is no direct access to KVMeta.expire_at
-            // return KVMeta::new_expires_at((cmd_ctx.time() + ttl).seconds());
             return KVMeta::new_expires_at((cmd_ctx.time() + ttl).millis());
         }
 
@@ -132,7 +130,7 @@ mod tests {
     fn test_serde() {
         let meta = MetaSpec::new_expire(1723102819);
         let s = serde_json::to_string(&meta).unwrap();
-        assert_eq!(r#"{"expire_at":100}"#, s);
+        assert_eq!(r#"{"expire_at":1723102819}"#, s);
 
         let got: KVMeta = serde_json::from_str(&s).unwrap();
         assert_eq!(Some(1723102819), got.expire_at);
@@ -144,16 +142,24 @@ mod tests {
 
     #[test]
     fn test_to_kv_meta() {
-        let cmd_ctx = CmdContext::new(Time::from_millis(2000));
+        let cmd_ctx = CmdContext::new(Time::from_millis(1_723_102_819_000));
 
         // ttl
-        let meta = MetaSpec::new_ttl(Duration::from_millis(1000));
-        let kv_meta = meta.to_kv_meta(&cmd_ctx);
-        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 3000);
+        let meta_spec = MetaSpec::new_ttl(Duration::from_millis(1000));
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
+        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
 
         // expire_at
-        let meta = MetaSpec::new_expire(5);
-        let kv_meta = meta.to_kv_meta(&cmd_ctx);
+        let meta_spec = MetaSpec::new_expire(5);
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
         assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 5_000);
+
+        let meta_spec = MetaSpec::new_expire(1_723_102_820);
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
+        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
+
+        let meta_spec = MetaSpec::new_expire(1_723_102_820_000);
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
+        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
     }
 }
