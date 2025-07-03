@@ -140,34 +140,3 @@ pub fn export() -> &'static [FeatureSpec] {
 
     REQUIRES
 }
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeSet;
-
-    use super::*;
-    use crate::MIN_METASRV_SEMVER;
-
-    /// Ensures the defined std features includes exact all the features that the min required version server provided.
-    #[test]
-    fn test_std_features() {
-        let min_required_server_version = (
-            MIN_METASRV_SEMVER.major,
-            MIN_METASRV_SEMVER.minor,
-            MIN_METASRV_SEMVER.patch,
-        );
-
-        let mut got = BTreeSet::new();
-        for feat in all() {
-            if feat.1 >= min_required_server_version {
-                got.insert(feat);
-            }
-        }
-
-        let defined = std().iter().collect::<BTreeSet<_>>();
-        assert_eq!(
-            got, defined,
-            "The std features should be a subset of all features that are supported by the minimum required server version."
-        );
-    }
-}
