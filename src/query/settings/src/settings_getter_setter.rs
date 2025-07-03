@@ -796,8 +796,8 @@ impl Settings {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
 
-    pub fn get_disable_queries_executor(&self) -> Result<bool> {
-        Ok(self.try_get_u64("disable_queries_executor")? == 1)
+    pub fn get_use_legacy_query_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_legacy_query_executor")? == 1)
     }
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {

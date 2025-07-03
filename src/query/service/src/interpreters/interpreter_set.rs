@@ -113,7 +113,7 @@ impl SetInterpreter {
                         .await?;
                     true
                 }
-                "disable_queries_executor" => {
+                "use_legacy_query_executor" => {
                     // This is a fallback setting, allowing user to fallback from **queries** executor
                     // to the **query** executor. So, if queries executor not enable in the config
                     // we will return an error.

@@ -36,10 +36,10 @@ impl ExecutorSettings {
         let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
 
         let config_enable_queries_executor = GlobalConfig::instance().query.enable_queries_executor;
-        let setting_disable_queries_executor = settings.get_disable_queries_executor()?;
-        // If `disable_queries_executor` is set to 1, we disable the queries executor
+        let setting_use_legacy_query_executor = settings.get_use_legacy_query_executor()?;
+        // If `use_legacy_query_executor` is set to 1, we disable the queries executor
         // Otherwise, we all follow configuration
-        let enable_queries_executor = if setting_disable_queries_executor {
+        let enable_queries_executor = if setting_use_legacy_query_executor {
             false
         } else {
             config_enable_queries_executor
