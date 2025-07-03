@@ -17,8 +17,10 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
@@ -31,6 +33,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
@@ -46,6 +49,7 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
+use crate::history_tables::session::get_history_log_user;
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
@@ -159,6 +163,36 @@ impl PrivilegeAccess {
         Ok(Some(object))
     }
 
+    fn access_system_history(
+        &self,
+        catalog_name: &str,
+        db_name: &str,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
+        if get_history_log_user(tenant_id.tenant_name(), &cluster_id).identity()
+            == self.ctx.get_current_user()?.identity()
+        {
+            return Ok(());
+        }
+        if catalog_name == CATALOG_DEFAULT
+            && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE)
+            && !matches!(
+                privilege,
+                UserPrivilegeType::Select | UserPrivilegeType::Drop
+            )
+        {
+            return Err(ErrorCode::PermissionDenied(
+                format!(
+                    "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
+                    privilege
+                ),
+            ));
+        }
+        Ok(())
+    }
+
     async fn validate_db_access(
         &self,
         catalog_name: &str,
@@ -166,6 +200,7 @@ impl PrivilegeAccess {
         privileges: UserPrivilegeType,
         if_exists: bool,
     ) -> Result<()> {
+        self.access_system_history(catalog_name, db_name, privileges)?;
         let tenant = self.ctx.get_tenant();
         let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
@@ -269,6 +304,8 @@ impl PrivilegeAccess {
         {
             return Ok(());
         }
+
+        self.access_system_history(catalog_name, db_name, privilege)?;
 
         if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());

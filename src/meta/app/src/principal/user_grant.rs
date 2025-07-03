@@ -48,6 +48,8 @@ pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
     "indexes",
 ];
 
+pub const SENSITIVE_SYSTEM_RESOURCE: &str = "system_history";
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
