@@ -37,6 +37,8 @@ impl ExecutorSettings {
 
         let config_enable_queries_executor = GlobalConfig::instance().query.enable_queries_executor;
         let setting_disable_queries_executor = settings.get_disable_queries_executor()?;
+        // If `disable_queries_executor` is set to 1, we disable the queries executor
+        // Otherwise, we all follow configuration
         let enable_queries_executor = if setting_disable_queries_executor {
             false
         } else {

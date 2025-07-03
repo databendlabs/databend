@@ -123,6 +123,11 @@ impl SetInterpreter {
                         return Err(
                             ErrorCode::InvalidArgument("This setting is not allowed when queries executor is not enabled in the configuration"));
                     }
+                    if scalar.as_str() == "0" {
+                        return Err(ErrorCode::InvalidArgument(
+                            "This setting is not allowed set to 0, if already enable in the configuration, please use unset to revert this",
+                        ));
+                    }
                     self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;
                     true
