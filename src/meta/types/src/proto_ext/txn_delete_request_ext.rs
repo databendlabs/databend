@@ -12,24 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod errors;
-mod forwarder;
-mod meta_node_kv_api_impl;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-pub use meta_node_kv_api_impl::MetaKVApi;
-pub use meta_node_kv_api_impl::MetaKVApiOwned;
+use crate::TxnDeleteRequest;
 
-pub mod meta_leader;
-pub mod meta_node;
-pub mod meta_node_status;
-pub mod raft_service_impl;
-pub mod watcher;
-
-pub use forwarder::MetaForwarder;
-pub use meta_node::MetaNode;
-pub use raft_service_impl::RaftServiceImpl;
-
-pub use crate::message::ForwardRequest;
-pub use crate::message::ForwardRequestBody;
-pub use crate::message::JoinRequest;
-pub use crate::message::LeaveRequest;
+impl Display for TxnDeleteRequest {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "Delete key={}", self.key)
+    }
+}

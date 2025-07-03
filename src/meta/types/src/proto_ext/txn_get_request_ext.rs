@@ -12,24 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod errors;
-mod forwarder;
-mod meta_node_kv_api_impl;
+use std::fmt;
 
-pub use meta_node_kv_api_impl::MetaKVApi;
-pub use meta_node_kv_api_impl::MetaKVApiOwned;
+use crate::protobuf as pb;
 
-pub mod meta_leader;
-pub mod meta_node;
-pub mod meta_node_status;
-pub mod raft_service_impl;
-pub mod watcher;
+impl fmt::Display for pb::TxnGetRequest {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Get key={}", self.key)
+    }
+}
 
-pub use forwarder::MetaForwarder;
-pub use meta_node::MetaNode;
-pub use raft_service_impl::RaftServiceImpl;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-pub use crate::message::ForwardRequest;
-pub use crate::message::ForwardRequestBody;
-pub use crate::message::JoinRequest;
-pub use crate::message::LeaveRequest;
+    #[test]
+    fn test_display_txn_get_request() {
+        let req = pb::TxnGetRequest {
+            key: "k1".to_string(),
+        };
+        assert_eq!(format!("{}", req), "Get key=k1");
+    }
+}

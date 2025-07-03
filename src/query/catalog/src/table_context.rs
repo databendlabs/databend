@@ -214,6 +214,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    fn get_secondary_roles(&self) -> Option<Vec<String>>;
     fn get_current_session_id(&self) -> String {
         unimplemented!()
     }

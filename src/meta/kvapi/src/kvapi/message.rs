@@ -17,7 +17,7 @@ use std::fmt::Formatter;
 
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::VecDisplay;
+use display_more::display_slice::DisplaySliceExt;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetKVReq {
@@ -47,7 +47,7 @@ impl MGetKVReq {
 
 impl fmt::Display for MGetKVReq {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", VecDisplay::new_at_most(&self.keys, 5))
+        write!(f, "{}", self.keys.display())
     }
 }
 

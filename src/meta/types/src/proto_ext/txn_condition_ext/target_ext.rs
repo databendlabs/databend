@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod errors;
-mod forwarder;
-mod meta_node_kv_api_impl;
+use std::fmt;
 
-pub use meta_node_kv_api_impl::MetaKVApi;
-pub use meta_node_kv_api_impl::MetaKVApiOwned;
+use pb::txn_condition::Target;
 
-pub mod meta_leader;
-pub mod meta_node;
-pub mod meta_node_status;
-pub mod raft_service_impl;
-pub mod watcher;
+use crate::protobuf as pb;
 
-pub use forwarder::MetaForwarder;
-pub use meta_node::MetaNode;
-pub use raft_service_impl::RaftServiceImpl;
-
-pub use crate::message::ForwardRequest;
-pub use crate::message::ForwardRequestBody;
-pub use crate::message::JoinRequest;
-pub use crate::message::LeaveRequest;
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Target::Value(_) => {
+                write!(f, "value(...)",)
+            }
+            Target::Seq(seq) => {
+                write!(f, "seq({})", seq)
+            }
+            Target::KeysWithPrefix(n) => {
+                write!(f, "keys_with_prefix({})", n)
+            }
+        }
+    }
+}

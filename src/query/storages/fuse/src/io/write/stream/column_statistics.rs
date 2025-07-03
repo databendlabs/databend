@@ -194,6 +194,11 @@ fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDi
         }
         DataType::Decimal(_) => {
             match col {
+                Column::Decimal(DecimalColumn::Decimal64(col, _)) => {
+                    for v in col.iter() {
+                        hll.add_object(v);
+                    }
+                }
                 Column::Decimal(DecimalColumn::Decimal128(col, _)) => {
                     for v in col.iter() {
                         hll.add_object(v);
