@@ -67,6 +67,7 @@ recursive = { workspace = true }
 regex = { workspace = true }
 roaring = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 similar = { workspace = true }
 simsearch = { workspace = true }

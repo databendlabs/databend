@@ -88,6 +88,7 @@ use databend_common_storage::init_operator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -742,6 +743,15 @@ impl Binder {
                     OPT_KEY_TABLE_COMPRESSION.to_owned(),
                     default_compression.to_owned(),
                 );
+            } else {
+                // validate the compression type
+                let _: TableCompression = options
+                    .get(OPT_KEY_TABLE_COMPRESSION)
+                    .ok_or_else(|| {
+                        ErrorCode::BadArguments("Table compression type is not specified")
+                    })?
+                    .as_str()
+                    .try_into()?;
             }
         } else if table_indexes.is_some() {
             return Err(ErrorCode::UnsupportedIndex(format!(
@@ -1386,6 +1396,7 @@ impl Binder {
             catalog,
             database,
             table,
+            no_scan,
         } = stmt;
 
         let (catalog, database, table) =
@@ -1395,6 +1406,7 @@ impl Binder {
             catalog,
             database,
             table,
+            no_scan: *no_scan,
         })))
     }
 

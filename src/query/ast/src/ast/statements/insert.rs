@@ -82,10 +82,13 @@ pub enum InsertSource {
     Select {
         query: Box<Query>,
     },
-    StreamingLoad {
+    LoadFile {
         format_options: FileFormatOptions,
-        on_error_mode: Option<String>,
         value: Option<Vec<Expr>>,
+
+        // '_databend_upload' => read from streaming upload handler body
+        // _ => read from stage
+        location: String,
     },
 }
 
@@ -106,22 +109,19 @@ impl Display for InsertSource {
             }
             InsertSource::RawValues { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
-            InsertSource::StreamingLoad {
+            InsertSource::LoadFile {
                 value,
                 format_options,
-                on_error_mode,
+                location,
             } => {
                 if let Some(value) = value {
                     write!(f, "(")?;
                     write_comma_separated_list(f, value)?;
                     write!(f, ")")?;
                 }
+                write!(f, " FROM @{location}",)?;
                 write!(f, " FILE_FORMAT = ({})", format_options)?;
-                write!(
-                    f,
-                    " ON_ERROR = '{}'",
-                    on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
-                )
+                Ok(())
             }
         }
     }

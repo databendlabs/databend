@@ -32,6 +32,7 @@ use log::error;
 use log::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
+use crate::interpreters::util::check_system_history;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -58,6 +59,7 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Database(_, db_name) => {
                 let catalog_name = catalog_name.unwrap();
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, db_name)?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
@@ -72,6 +74,7 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Table(_, db_name, table_name) => {
                 let catalog_name = catalog_name.unwrap();
                 let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, db_name)?;
                 let db_id = catalog
                     .get_database(tenant, db_name)
                     .await?
@@ -88,15 +91,25 @@ impl GrantPrivilegeInterpreter {
                     table_id,
                 })
             }
-            GrantObject::TableById(_, db_id, table_id) => Ok(OwnershipObject::Table {
-                catalog_name: catalog_name.unwrap(),
-                db_id: *db_id,
-                table_id: *table_id,
-            }),
-            GrantObject::DatabaseById(_, db_id) => Ok(OwnershipObject::Database {
-                catalog_name: catalog_name.unwrap(),
-                db_id: *db_id,
-            }),
+            GrantObject::TableById(_, db_id, table_id) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, &catalog.get_db_name_by_id(*db_id).await?)?;
+                Ok(OwnershipObject::Table {
+                    catalog_name,
+                    db_id: *db_id,
+                    table_id: *table_id,
+                })
+            },
+            GrantObject::DatabaseById(_, db_id) => {
+                let catalog_name = catalog_name.unwrap();
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                check_system_history(&catalog, &catalog.get_db_name_by_id(*db_id).await?)?;
+                Ok(OwnershipObject::Database {
+                    catalog_name,
+                    db_id: *db_id,
+                })
+            },
             GrantObject::Stage(name) => Ok(OwnershipObject::Stage {
                 name: name.to_string(),
             }),

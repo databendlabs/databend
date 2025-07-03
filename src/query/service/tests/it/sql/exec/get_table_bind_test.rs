@@ -661,6 +661,9 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        todo!()
+    }
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
@@ -977,10 +980,6 @@ impl TableContext for CtxDelegation {
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
         self.ctx.get_table_meta_timestamps(table, previous_snapshot)
-    }
-
-    fn clear_table_meta_timestamps_cache(&self) {
-        self.ctx.clear_table_meta_timestamps_cache();
     }
 
     fn get_temp_table_prefix(&self) -> Result<String> {

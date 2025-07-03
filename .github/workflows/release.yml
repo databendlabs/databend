@@ -565,7 +565,6 @@ jobs:
       - Linux
       - 4c16g
       - aws
-      - spot
     needs: [create_release, notify]
     steps:
       - uses: actions/checkout@v4
@@ -601,8 +600,6 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
-      runner_provider: aws
-      runner_capacity: spot
       target: all
 
   deb:

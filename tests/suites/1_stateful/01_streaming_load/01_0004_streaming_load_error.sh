@@ -10,7 +10,7 @@ function run() {
 	echo ">>>> load $2 with format ($1)"
   curl -sS \
   -H "x-databend-query-id:$2" \
-  -H "sql:insert into t1 values file_format = ($1)" \
+  -H "sql:insert into t1 values from @_databend_load  file_format = ($1)" \
   -F "upload=@/${TESTS_DATA_DIR}/$2" \
   -u root: -XPUT \
   "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" | jq .error.code

@@ -194,6 +194,11 @@ fn column_update_hll_cardinality(col: &Column, ty: &DataType, hll: &mut ColumnDi
         }
         DataType::Decimal(_) => {
             match col {
+                Column::Decimal(DecimalColumn::Decimal64(col, _)) => {
+                    for v in col.iter() {
+                        hll.add_object(v);
+                    }
+                }
                 Column::Decimal(DecimalColumn::Decimal128(col, _)) => {
                     for v in col.iter() {
                         hll.add_object(v);
@@ -237,6 +242,7 @@ fn scalar_update_hll_cardinality(scalar: &ScalarRef, ty: &DataType, hll: &mut Co
         }
         DataType::Decimal(_) => {
             match scalar {
+                ScalarRef::Decimal(DecimalScalar::Decimal64(v, _)) => hll.add_object(&v),
                 ScalarRef::Decimal(DecimalScalar::Decimal128(v, _)) => hll.add_object(&v),
                 ScalarRef::Decimal(DecimalScalar::Decimal256(v, _)) => hll.add_object(&v),
                 _ => unreachable!(),

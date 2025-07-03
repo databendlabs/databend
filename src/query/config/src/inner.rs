@@ -283,7 +283,7 @@ impl Default for QueryConfig {
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
             http_handler_result_timeout_secs: 60,
-            http_session_timeout_secs: 3600,
+            http_session_timeout_secs: 14400,
             flight_api_address: "127.0.0.1:9090".to_string(),
             flight_sql_handler_host: "127.0.0.1".to_string(),
             flight_sql_handler_port: 8900,

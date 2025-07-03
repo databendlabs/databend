@@ -214,6 +214,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    fn get_secondary_roles(&self) -> Option<Vec<String>>;
     fn get_current_session_id(&self) -> String {
         unimplemented!()
     }
@@ -359,8 +360,6 @@ pub trait TableContext: Send + Sync {
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
-
-    fn clear_table_meta_timestamps_cache(&self);
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
