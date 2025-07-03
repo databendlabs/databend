@@ -109,7 +109,8 @@ impl MetaSpec {
     pub fn to_kv_meta(&self, cmd_ctx: &CmdContext) -> KVMeta {
         // If `ttl` is set, override `expire_at`
         if let Some(ttl) = self.ttl {
-            return KVMeta::new_expires_at((cmd_ctx.time() + ttl).millis());
+            // TODO: use `.millis()` when there is no direct access to KVMeta.expire_at
+            return KVMeta::new_expires_at((cmd_ctx.time() + ttl).seconds());
         }
 
         // No `ttl`, check if absolute expire time `expire_at` is set.
