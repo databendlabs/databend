@@ -169,7 +169,7 @@ impl Sub for Time {
 ///
 /// To avoid overflow issues, use timestamps between `1973-03-03 17:46:40`
 /// and `5138-11-16 17:46:40` for reliable behavior across both interpretations.
-pub fn adaptable_timestamp_to_duration(timestamp: u64) -> Duration {
+pub fn flexible_timestamp_to_duration(timestamp: u64) -> Duration {
     if timestamp > 100_000_000_000 {
         // Milliseconds since epoch
         Duration::from_millis(timestamp)
@@ -220,11 +220,11 @@ mod tests {
     #[test]
     fn test_adaptable_timestamp_to_duration() {
         assert_eq!(
-            adaptable_timestamp_to_duration(100_000_000_001),
+            flexible_timestamp_to_duration(100_000_000_001),
             Duration::from_millis(100_000_000_001)
         );
         assert_eq!(
-            adaptable_timestamp_to_duration(100_000_000_000),
+            flexible_timestamp_to_duration(100_000_000_000),
             Duration::from_secs(100_000_000_000)
         );
     }

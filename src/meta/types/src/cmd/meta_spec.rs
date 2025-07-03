@@ -19,8 +19,8 @@ use std::time::Duration;
 use deepsize::Context;
 use display_more::DisplayUnixTimeStampExt;
 
-use crate::adaptable_timestamp_to_duration;
 use crate::cmd::CmdContext;
+use crate::flexible_timestamp_to_duration;
 use crate::seq_value::KVMeta;
 use crate::time::Interval;
 
@@ -66,7 +66,7 @@ impl fmt::Display for MetaSpec {
             write!(
                 f,
                 "expire_at: {} ",
-                adaptable_timestamp_to_duration(expires_at).display_unix_timestamp_short()
+                flexible_timestamp_to_duration(expires_at).display_unix_timestamp_short()
             )?;
         }
         if let Some(ttl) = &self.ttl {

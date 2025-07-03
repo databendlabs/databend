@@ -16,21 +16,8 @@ use std::fmt;
 
 use display_more::DisplayOptionExt;
 
-use crate::protobuf::Event;
 use crate::protobuf::WatchRequest;
 use crate::protobuf::WatchResponse;
-
-impl fmt::Display for Event {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "({}: {} -> {})",
-            self.key,
-            self.prev.display(),
-            self.current.display()
-        )
-    }
-}
 
 impl fmt::Display for WatchResponse {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -62,25 +49,6 @@ mod tests {
     use crate::protobuf::watch_request::FilterType;
     use crate::protobuf::KvMeta;
     use crate::protobuf::SeqV;
-    #[test]
-    fn test_event_display() {
-        let event = Event {
-            key: "test_key".to_string(),
-            prev: Some(SeqV {
-                seq: 1,
-                data: "test_prev".as_bytes().to_vec(),
-                meta: Some(KvMeta {
-                    expire_at: Some(1723102819),
-                }),
-            }),
-            current: Some(SeqV {
-                seq: 2,
-                data: "test_current".as_bytes().to_vec(),
-                meta: None,
-            }),
-        };
-        assert_eq!(event.to_string(), "(test_key: (seq=1 [expire=2024-08-08T07:40:19.000] 'test_prev') -> (seq=2 [] 'test_current'))");
-    }
 
     #[test]
     fn test_watch_response_display() {

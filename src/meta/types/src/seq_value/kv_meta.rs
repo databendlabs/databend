@@ -20,7 +20,7 @@ use map_api::expirable::Expirable;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::adaptable_timestamp_to_duration;
+use crate::flexible_timestamp_to_duration;
 
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -61,12 +61,12 @@ impl KVMeta {
 
     pub fn expires_at_sec_opt(&self) -> Option<u64> {
         self.expire_at
-            .map(|x| adaptable_timestamp_to_duration(x).as_secs())
+            .map(|x| flexible_timestamp_to_duration(x).as_secs())
     }
 
     /// Return the absolute expire time in since 1970-01-01 00:00:00.
     pub fn expires_at_duration_opt(&self) -> Option<Duration> {
-        self.expire_at.map(adaptable_timestamp_to_duration)
+        self.expire_at.map(flexible_timestamp_to_duration)
     }
 }
 

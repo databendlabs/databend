@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod event_ext;
+
 use crate::protobuf as pb;
 use crate::protobuf::watch_request::FilterType;
 use crate::protobuf::WatchRequest;

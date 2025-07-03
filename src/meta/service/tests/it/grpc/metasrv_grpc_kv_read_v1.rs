@@ -23,7 +23,6 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::protobuf::KvMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MetaSpec;

@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use std::fmt;
-use std::time::Duration;
 
 use display_more::DisplayUnixTimeStampExt;
 
-use crate::adaptable_timestamp_to_duration;
+use crate::flexible_timestamp_to_duration;
 use crate::protobuf::KvMeta;
 use crate::protobuf::SeqV;
 
@@ -31,7 +30,7 @@ impl fmt::Display for KvMeta {
                 write!(
                     f,
                     "[expire={}]",
-                    adaptable_timestamp_to_duration(e).display_unix_timestamp_short()
+                    flexible_timestamp_to_duration(e).display_unix_timestamp_short()
                 )
             }
         }
