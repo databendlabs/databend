@@ -92,4 +92,3 @@ RENAME TABLE t1 to t2
 
 statement error 1006
 RENAME TABLE t1 to system.t1
-

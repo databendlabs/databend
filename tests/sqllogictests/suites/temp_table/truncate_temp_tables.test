@@ -32,4 +32,3 @@ TRUNCATE TABLE t2
 
 statement ok
 SELECT * FROM t2
-
