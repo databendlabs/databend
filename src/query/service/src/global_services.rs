@@ -50,6 +50,7 @@ use crate::catalogs::IcebergCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
 use crate::locks::LockManager;
+use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
@@ -163,6 +164,10 @@ impl GlobalServices {
 
         if !ee_mode {
             DummyResourcesManagement::init()?;
+        }
+
+        if config.query.enable_queries_executor {
+            GlobalQueriesExecutor::init()?;
         }
 
         Self::init_workload_mgr(config).await?;
