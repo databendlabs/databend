@@ -45,7 +45,6 @@
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -144,7 +143,6 @@ pub struct TrackingPayload {
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub perf_enabled: bool,
-    pub scheduled_rows: Option<Arc<AtomicU64>>,
 }
 
 pub struct TrackingGuard {
@@ -224,7 +222,6 @@ impl ThreadTracker {
                 local_time_series_profile: None,
                 workload_group_resource: None,
                 perf_enabled: false,
-                scheduled_rows: None,
             }),
         }
     }
