@@ -434,6 +434,10 @@ impl QueryContextShared {
         self.session.get_current_role()
     }
 
+    pub fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.session.get_secondary_roles()
+    }
+
     /// Get all tables that already attached in this query.
     pub fn get_tables_refs(&self) -> Vec<Arc<dyn Table>> {
         let tables = self.tables_refs.lock();
