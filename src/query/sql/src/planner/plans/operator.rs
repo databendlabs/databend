@@ -118,10 +118,14 @@ pub trait Operator: Send + Sync + 'static {
     fn try_downcast_ref(&self) -> Option<&Self> {
         self.as_any().downcast_ref::<Self>()
     }
+
+    fn try_downcast_mut(&mut self) -> Option<&mut Self> {
+        self.as_any().downcast_mut::<Self>()
+    }
 }
 
 /// Relational operator
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum RelOp {
     Scan,
     Join,

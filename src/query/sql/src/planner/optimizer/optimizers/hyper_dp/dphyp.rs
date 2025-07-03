@@ -35,8 +35,11 @@ use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::planner::QueryExecutor;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
+use crate::plans::RelOp;
+use crate::plans::Scan;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -165,7 +168,7 @@ impl DPhpyOptimizer {
             JoinRelation::new(s_expr, self.sample_executor().clone())
         };
 
-        if let RelOperator::Scan(op) = s_expr.plan() {
+        if let Some(op) = Scan::try_downcast_ref(s_expr.plan()) {
             self.table_index_map
                 .insert(op.table_index, self.join_relations.len() as IndexType);
         }
@@ -175,16 +178,16 @@ impl DPhpyOptimizer {
     }
 
     /// Check if an operator represents a subquery
-    fn is_subquery_operator(op: &RelOperator) -> bool {
+    fn is_subquery_operator(op: RelOp) -> bool {
         matches!(
             op,
-            RelOperator::EvalScalar(_)
-                | RelOperator::Aggregate(_)
-                | RelOperator::Sort(_)
-                | RelOperator::Limit(_)
-                | RelOperator::ProjectSet(_)
-                | RelOperator::Window(_)
-                | RelOperator::Udf(_)
+            RelOp::EvalScalar
+                | RelOp::Aggregate
+                | RelOp::Sort
+                | RelOp::Limit
+                | RelOp::ProjectSet
+                | RelOp::Window
+                | RelOp::Udf
         )
     }
 
@@ -194,11 +197,7 @@ impl DPhpyOptimizer {
         s_expr: &SExpr,
         join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
     ) -> Result<(Arc<SExpr>, bool)> {
-        let op = match s_expr.plan() {
-            RelOperator::Join(op) => op,
-            _ => unreachable!(),
-        };
-
+        let op = Join::try_downcast_ref(s_expr.plan()).unwrap();
         // Skip if build side cache info is present
         if op.build_side_cache_info.is_some() {
             return Ok((Arc::new(s_expr.clone()), true));
@@ -209,8 +208,8 @@ impl DPhpyOptimizer {
             matches!(op.join_type, JoinType::Inner) || matches!(op.join_type, JoinType::Cross);
 
         // Check if children are subqueries
-        let left_op = s_expr.child(0)?.plan.as_ref();
-        let right_op = s_expr.child(1)?.plan.as_ref();
+        let left_op = s_expr.child(0)?.plan.rel_op();
+        let right_op = s_expr.child(1)?.plan.rel_op();
         let left_is_subquery = Self::is_subquery_operator(left_op);
         let right_is_subquery = Self::is_subquery_operator(right_op);
 
@@ -279,7 +278,7 @@ impl DPhpyOptimizer {
         join_relation: Option<&SExpr>,
     ) -> Result<(Arc<SExpr>, bool)> {
         // If plan is filter, save it
-        if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
+        if let Some(op) = Filter::try_downcast_ref(s_expr.plan()) {
             if join_child {
                 self.filters.insert(op.clone());
             }
@@ -327,38 +326,22 @@ impl DPhpyOptimizer {
             return self.process_subquery(s_expr).await;
         }
 
-        match s_expr.plan() {
-            RelOperator::Scan(_) => self.process_scan_node(s_expr, join_relation),
-
-            RelOperator::Join(_) => self.process_join_node(s_expr, join_conditions).await,
-
-            RelOperator::ProjectSet(_)
-            | RelOperator::Aggregate(_)
-            | RelOperator::Sort(_)
-            | RelOperator::Limit(_)
-            | RelOperator::EvalScalar(_)
-            | RelOperator::Window(_)
-            | RelOperator::Udf(_)
-            | RelOperator::Filter(_) => {
+        match s_expr.plan().rel_op() {
+            RelOp::Scan => self.process_scan_node(s_expr, join_relation),
+            RelOp::Join => self.process_join_node(s_expr, join_conditions).await,
+            RelOp::ProjectSet
+            | RelOp::Aggregate
+            | RelOp::Sort
+            | RelOp::Limit
+            | RelOp::EvalScalar
+            | RelOp::Window
+            | RelOp::Udf
+            | RelOp::Filter => {
                 self.process_unary_node(s_expr, join_conditions, join_child, join_relation)
                     .await
             }
-
-            RelOperator::UnionAll(_) => self.process_union_all_node(s_expr).await,
-
-            RelOperator::Exchange(_) => {
-                unreachable!()
-            }
-
-            RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::AsyncFunction(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::MutationSource(_)
-            | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
+            RelOp::UnionAll => self.process_union_all_node(s_expr).await,
+            _ => Ok((Arc::new(s_expr.clone()), true)),
         }
     }
 
@@ -971,16 +954,13 @@ impl DPhpyOptimizer {
             predicates.extend(filter.clone().predicates.iter().cloned())
         }
 
-        let mut new_s_expr = SExpr::create_unary(
-            Arc::new(RelOperator::Filter(Filter { predicates })),
-            Arc::new(s_expr.clone()),
-        );
+        let mut new_s_expr = SExpr::create_unary(Filter { predicates }, s_expr.clone());
 
         // Push down filters
         new_s_expr = self.push_down_filter(&new_s_expr)?;
 
         // Remove empty filter
-        if let RelOperator::Filter(filter) = new_s_expr.plan.as_ref() {
+        if let Some(filter) = Filter::try_downcast_ref(&new_s_expr.plan) {
             if filter.predicates.is_empty() {
                 new_s_expr = new_s_expr.child(0)?.clone();
             }
@@ -1006,8 +986,8 @@ impl DPhpyOptimizer {
     #[allow(clippy::only_used_in_recursion)]
     #[recursive::recursive]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
-        match s_expr.plan.as_ref() {
-            RelOperator::Join(_) => {
+        match s_expr.plan.rel_op() {
+            RelOp::Join => {
                 let mut new_s_expr = s_expr.clone();
                 new_s_expr.plan = join_expr.plan.clone();
                 new_s_expr.children = join_expr.children.clone();
@@ -1026,7 +1006,7 @@ impl DPhpyOptimizer {
 
     /// Check if a filter exists in the expression and remove it from filters set
     fn check_filter(&mut self, expr: &SExpr) {
-        if let RelOperator::Filter(filter) = expr.plan.as_ref() {
+        if let Some(filter) = Filter::try_downcast_ref(&expr.plan) {
             if self.filters.contains(filter) {
                 self.filters.remove(filter);
             }

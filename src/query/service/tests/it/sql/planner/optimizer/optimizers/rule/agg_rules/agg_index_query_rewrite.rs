@@ -35,7 +35,6 @@ use databend_common_sql::optimizer::OptimizerContext;
 use databend_common_sql::plans::AggIndexInfo;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Scan;
 use databend_common_sql::BindContext;
 use databend_common_sql::Binder;

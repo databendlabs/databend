@@ -31,7 +31,6 @@ use crate::plans::AggregateMode;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
-use crate::plans::Operator;
 use crate::plans::UnionAll;
 use crate::MetadataRef;
 

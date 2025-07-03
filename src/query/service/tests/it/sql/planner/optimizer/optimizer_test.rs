@@ -38,8 +38,8 @@ use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::SExprVisitor;
 use databend_common_sql::optimizer::ir::VisitAction;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::Scan;
 use databend_common_sql::plans::Statistics;
 use databend_common_sql::BaseTableColumn;
@@ -365,7 +365,7 @@ struct StatsApplier<'a> {
 
 impl<'a> SExprVisitor for StatsApplier<'a> {
     fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        if let Some(scan) = expr.plan().as_any().downcast_ref::<Scan>() {
+        if let Some(scan) = Scan::try_downcast_ref(&expr.plan) {
             let metadata = self.metadata.read();
             let table = metadata.table(scan.table_index);
 

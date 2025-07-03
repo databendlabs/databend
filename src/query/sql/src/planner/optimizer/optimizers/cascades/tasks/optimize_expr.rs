@@ -188,7 +188,7 @@ impl OptimizeExprTask {
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
 
-        if matches!(m_expr.plan.as_ref(), RelOperator::Exchange(_),)
+        if matches!(m_expr.plan.rel_op(), RelOp::Exchange)
             && matches!(self.required_prop.distribution, Distribution::Any)
         {
             return Ok(OptimizeExprEvent::OptimizedSelf);

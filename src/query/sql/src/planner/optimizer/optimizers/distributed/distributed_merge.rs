@@ -35,10 +35,10 @@ impl BroadcastToShuffleOptimizer {
 
     pub fn is_broadcast(&self, s_expr: &SExpr) -> Result<bool> {
         let right = s_expr.child(1)?;
-        Ok(matches!(
-            right.plan(),
-            RelOperator::Exchange(Exchange::Broadcast)
-        ))
+        if let Some(Exchange::Broadcast) = right.plan().as_any().downcast_ref::<Exchange>() {
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -59,12 +59,12 @@ impl BroadcastToShuffleOptimizer {
 
         let new_join_children = vec![
             Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::Hash(left_conditions))),
-                Arc::new(left_exchange_input.clone()),
+                Exchange::Hash(left_conditions),
+                left_exchange_input.into(),
             )),
             Arc::new(SExpr::create_unary(
-                Arc::new(RelOperator::Exchange(Exchange::Hash(right_conditions))),
-                Arc::new(right_exchange_input.clone()),
+                Exchange::Hash(right_conditions),
+                right_exchange_input.into(),
             )),
         ];
         let mut join_s_expr = s_expr.replace_plan(join);

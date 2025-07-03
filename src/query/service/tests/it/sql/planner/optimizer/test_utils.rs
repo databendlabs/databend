@@ -36,7 +36,6 @@ use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Limit;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;

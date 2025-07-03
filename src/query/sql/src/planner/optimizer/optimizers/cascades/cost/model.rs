@@ -77,24 +77,32 @@ impl DefaultCostModel {
     }
 
     fn compute_cost_impl(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-        match m_expr.plan.as_ref() {
-            RelOperator::Scan(plan) => self.compute_cost_scan(memo, m_expr, plan),
-            RelOperator::ConstantTableScan(plan) => self.compute_cost_constant_scan(plan),
-            RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
-            RelOperator::Join(plan) => self.compute_cost_join(memo, m_expr, plan),
-            RelOperator::UnionAll(_) => self.compute_cost_union_all(memo, m_expr),
-            RelOperator::Aggregate(_) => self.compute_aggregate(memo, m_expr),
+        match m_expr.plan.as_ref().rel_op() {
+            RelOp::Scan => {
+                let plan = Scan::try_downcast_ref(m_expr.plan()).unwrap();
+                self.compute_cost_scan(memo, m_expr, plan)
+            }
+            RelOp::ConstantTableScan => {
+                let plan = ConstantTableScan::try_downcast_ref(m_expr.plan()).unwrap();
+                self.compute_cost_constant_scan(plan)
+            }
+            RelOp::DummyTableScan => Ok(Cost(0.0)),
+            RelOp::Join => {
+                let plan = Join::try_downcast_ref(m_expr.plan()).unwrap();
+                self.compute_cost_join(memo, m_expr, plan)
+            }
+            RelOp::UnionAll => self.compute_cost_union_all(memo, m_expr),
+            RelOp::Aggregate => self.compute_aggregate(memo, m_expr),
 
-            RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_)
-            | RelOperator::Window(_)
-            | RelOperator::Sort(_)
-            | RelOperator::ProjectSet(_)
-            | RelOperator::Udf(_)
-            | RelOperator::Limit(_) => self.compute_cost_unary_common_operator(memo, m_expr),
+            RelOp::EvalScalar
+            | RelOp::Filter
+            | RelOp::Window
+            | RelOp::Sort
+            | RelOp::ProjectSet
+            | RelOp::Udf
+            | RelOp::Limit => self.compute_cost_unary_common_operator(memo, m_expr),
 
-            RelOperator::Exchange(_) => self.compute_cost_exchange(memo, m_expr),
-
+            RelOp::Exchange => self.compute_cost_exchange(memo, m_expr),
             _ => Err(ErrorCode::Internal("Cannot compute cost from logical plan")),
         }
     }

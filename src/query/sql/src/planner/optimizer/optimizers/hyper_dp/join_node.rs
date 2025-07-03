@@ -81,7 +81,19 @@ impl JoinNode {
             .iter()
             .map(|(_, r)| r.clone())
             .collect();
-        let rel_op = RelOperator::Join(Join {
+        let children = self
+            .children
+            .iter()
+            .map(|child| {
+                if let Some(s_expr) = &child.s_expr {
+                    Arc::new(s_expr.clone())
+                } else {
+                    Arc::new(child.s_expr(join_relations))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let rel_op = Join {
             equi_conditions: JoinEquiCondition::new_conditions(
                 left_conditions,
                 right_conditions,
@@ -95,18 +107,7 @@ impl JoinNode {
             is_lateral: false,
             single_to_inner: None,
             build_side_cache_info: None,
-        });
-        let children = self
-            .children
-            .iter()
-            .map(|child| {
-                if let Some(s_expr) = &child.s_expr {
-                    Arc::new(s_expr.clone())
-                } else {
-                    Arc::new(child.s_expr(join_relations))
-                }
-            })
-            .collect::<Vec<_>>();
-        SExpr::create(Arc::new(rel_op), children, None, None, None)
+        };
+        SExpr::create(rel_op, children, None, None, None)
     }
 }

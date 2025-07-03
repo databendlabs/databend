@@ -25,7 +25,6 @@ use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Limit;
 use databend_common_sql::plans::Operator;
-use databend_common_sql::plans::RelOperator;
 
 use crate::sql::planner::optimizer::test_utils::ExprBuilder;
 
