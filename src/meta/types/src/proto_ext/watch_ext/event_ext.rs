@@ -144,7 +144,7 @@ mod tests {
         ));
         let e2 = pb::Event::new("k1").with_prev(pb::SeqV::with_meta(
             1,
-            Some(pb::KvMeta::new_expire(1723102820_000)),
+            Some(pb::KvMeta::new_expire(1_723_102_820_000)),
             b"".to_vec(),
         ));
 
@@ -159,7 +159,7 @@ mod tests {
         ));
         let e2 = pb::Event::new("k1").with_current(pb::SeqV::with_meta(
             1,
-            Some(pb::KvMeta::new_expire(1723102820_000)),
+            Some(pb::KvMeta::new_expire(1_723_102_820_000)),
             b"".to_vec(),
         ));
 
@@ -186,7 +186,7 @@ mod tests {
             ))
             .with_current(pb::SeqV::with_meta(
                 1,
-                Some(pb::KvMeta::new_expire(1723102820_000)),
+                Some(pb::KvMeta::new_expire(1_723_102_820_000)),
                 b"".to_vec(),
             ));
 
