@@ -561,15 +561,25 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         fn tidy(mut ev: Event) -> Event {
             if let Some(ref mut prev) = ev.prev {
                 if let Some(ref mut meta) = prev.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
+                    meta.expire_at = meta.expire_at.map(tidy_timestamp);
                 }
             }
             if let Some(ref mut current) = ev.current {
                 if let Some(ref mut meta) = current.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
+                    meta.expire_at = meta.expire_at.map(tidy_timestamp);
                 }
             }
             ev
+        }
+
+        fn tidy_timestamp(x: u64) -> u64 {
+            if x > 100_000_000_000 {
+                // tidy the timestamp in millis
+                x / 10_000 * 10_000
+            } else {
+                // tidy the timestamp in seconds
+                x / 10 * 10
+            }
         }
 
         for ev in watch_events {

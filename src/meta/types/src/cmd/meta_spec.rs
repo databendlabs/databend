@@ -110,7 +110,8 @@ impl MetaSpec {
         // If `ttl` is set, override `expire_at`
         if let Some(ttl) = self.ttl {
             // TODO: use `.millis()` when there is no direct access to KVMeta.expire_at
-            return KVMeta::new_expires_at((cmd_ctx.time() + ttl).seconds());
+            // return KVMeta::new_expires_at((cmd_ctx.time() + ttl).seconds());
+            return KVMeta::new_expires_at((cmd_ctx.time() + ttl).millis());
         }
 
         // No `ttl`, check if absolute expire time `expire_at` is set.
@@ -129,12 +130,12 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        let meta = MetaSpec::new_expire(100);
+        let meta = MetaSpec::new_expire(1723102819);
         let s = serde_json::to_string(&meta).unwrap();
         assert_eq!(r#"{"expire_at":100}"#, s);
 
         let got: KVMeta = serde_json::from_str(&s).unwrap();
-        assert_eq!(Some(100), got.expire_at);
+        assert_eq!(Some(1723102819), got.expire_at);
 
         let meta = MetaSpec::new_ttl(Duration::from_millis(100));
         let s = serde_json::to_string(&meta).unwrap();

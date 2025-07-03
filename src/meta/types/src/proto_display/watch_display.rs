@@ -70,7 +70,7 @@ mod tests {
                 seq: 1,
                 data: "test_prev".as_bytes().to_vec(),
                 meta: Some(KvMeta {
-                    expire_at: Some(1000),
+                    expire_at: Some(1723102819),
                 }),
             }),
             current: Some(SeqV {
@@ -79,7 +79,7 @@ mod tests {
                 meta: None,
             }),
         };
-        assert_eq!(event.to_string(), "(test_key: (seq=1 [expire=1970-01-01T00:16:40.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(event.to_string(), "(test_key: (seq=1 [expire=2024-08-08T07:40:19.000] 'test_prev') -> (seq=2 [] 'test_current'))");
     }
 
     #[test]
@@ -91,7 +91,7 @@ mod tests {
                     seq: 1,
                     data: "test_prev".as_bytes().to_vec(),
                     meta: Some(KvMeta {
-                        expire_at: Some(1000),
+                        expire_at: Some(1723102819),
                     }),
                 }),
                 current: Some(SeqV {
@@ -102,10 +102,10 @@ mod tests {
             }),
             is_initialization: false,
         };
-        assert_eq!(watch_response.to_string(), "CHANGE:(test_key: (seq=1 [expire=1970-01-01T00:16:40.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(watch_response.to_string(), "CHANGE:(test_key: (seq=1 [expire=2024-08-08T07:40:19.000] 'test_prev') -> (seq=2 [] 'test_current'))");
 
         watch_response.is_initialization = true;
-        assert_eq!(watch_response.to_string(), "INIT:(test_key: (seq=1 [expire=1970-01-01T00:16:40.000] 'test_prev') -> (seq=2 [] 'test_current'))");
+        assert_eq!(watch_response.to_string(), "INIT:(test_key: (seq=1 [expire=2024-08-08T07:40:19.000] 'test_prev') -> (seq=2 [] 'test_current'))");
 
         let watch_response = WatchResponse {
             event: None,

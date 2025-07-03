@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use display_more::DisplayUnixTimeStampExt;
 
+use crate::adaptable_timestamp_to_duration;
 use crate::protobuf::KvMeta;
 use crate::protobuf::SeqV;
 
@@ -30,7 +31,7 @@ impl fmt::Display for KvMeta {
                 write!(
                     f,
                     "[expire={}]",
-                    Duration::from_secs(e).display_unix_timestamp_short()
+                    adaptable_timestamp_to_duration(e).display_unix_timestamp_short()
                 )
             }
         }
@@ -69,6 +70,11 @@ mod tests {
             expire_at: Some(1723102819),
         };
         assert_eq!(meta.to_string(), "[expire=2024-08-08T07:40:19.000]");
+
+        let meta = KvMeta {
+            expire_at: Some(1723102819_000),
+        };
+        assert_eq!(meta.to_string(), "[expire=2024-08-08T07:40:19.000]");
     }
 
     #[test]
@@ -95,7 +101,32 @@ mod tests {
         let seqv = SeqV {
             seq: 1,
             meta: Some(KvMeta {
+                expire_at: Some(1723102819_000),
+            }),
+            data: vec![65, 66, 67],
+        };
+        assert_eq!(
+            seqv.to_string(),
+            "(seq=1 [expire=2024-08-08T07:40:19.000] 'ABC')"
+        );
+
+        let seqv = SeqV {
+            seq: 1,
+            meta: Some(KvMeta {
                 expire_at: Some(1723102819),
+            }),
+            data: vec![0, 159, 146, 150],
+        };
+        assert_eq!(
+            seqv.to_string(),
+            "(seq=1 [expire=2024-08-08T07:40:19.000] [0, 159, 146, 150])"
+        );
+
+        let seqv = SeqV {
+            seq: 1,
+            meta: Some(KvMeta {
+                // in millis
+                expire_at: Some(1723102819_000),
             }),
             data: vec![0, 159, 146, 150],
         };
