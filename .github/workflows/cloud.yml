@@ -52,7 +52,6 @@ jobs:
       - Linux
       - 8c32g
       - aws
-      - spot
     strategy:
       matrix:
         include:
@@ -84,7 +83,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - spot
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
@@ -164,6 +162,4 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
-      runner_provider: aws
-      runner_capacity: spot
       target: ${{ needs.info.outputs.target }}

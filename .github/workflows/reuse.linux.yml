@@ -13,11 +13,6 @@ on:
         type: string
         required: true
         default: "aws"
-      runner_capacity:
-        description: "Self-hosted runner capacity, spot or on-demand"
-        type: string
-        required: true
-        default: "spot"
       license_type:
         description: "License type, enterprise or trial"
         type: string
@@ -36,7 +31,6 @@ jobs:
       - Linux
       - 8c32g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,7 +48,6 @@ jobs:
       - Linux
       - 16c64g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -90,7 +83,6 @@ jobs:
   #     - Linux
   #     - 8c32g
   #     - "${{ inputs.runner_provider }}"
-  #     - "${{ inputs.runner_capacity }}"
   #   strategy:
   #     fail-fast: false
   #     matrix:
@@ -114,7 +106,6 @@ jobs:
       - Linux
       - 16c64g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,8 +121,7 @@ jobs:
       - X64
       - Linux
       - 2c8g
-      - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
+      - "${{ inputs.runner_provider }}" 
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
@@ -145,7 +135,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_query
@@ -159,7 +148,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_fuse
@@ -173,7 +161,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat_meta_meta
@@ -187,7 +174,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -205,7 +191,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_cluster
@@ -219,7 +204,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
@@ -233,7 +217,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -251,7 +234,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
@@ -270,7 +252,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -294,7 +275,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_large_data
@@ -308,7 +288,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_iceberg_catalogs_standalone
@@ -327,7 +306,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_hive_standalone
@@ -346,7 +324,6 @@ jobs:
   #     - Linux
   #     - 2c8g
   #     - "${{ inputs.runner_provider }}"
-  #     - "${{ inputs.runner_capacity }}"
   #   steps:
   #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/test_fuzz_standalone_linux
@@ -361,7 +338,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -389,7 +365,6 @@ jobs:
   #      - Linux
   #      - 2c8g
   #      - "${{ inputs.runner_provider }}"
-  #      - "${{ inputs.runner_capacity }}"
   #    steps:
   #      - uses: actions/checkout@v4
   #      - uses: ./.github/actions/setup_license
@@ -412,7 +387,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
@@ -435,5 +409,4 @@ jobs:
     with:
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
-      runner_capacity: ${{ inputs.runner_capacity }}
       license_type: ${{ inputs.license_type }}
