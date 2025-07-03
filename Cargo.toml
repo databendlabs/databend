@@ -161,6 +161,7 @@ databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
 databend-common-openai = { path = "src/common/openai" }
+databend-common-parquet-reader-experimental = { path = "src/common/experimental_parquet_reader" }
 databend-common-pipeline-core = { path = "src/query/pipeline/core" }
 databend-common-pipeline-sinks = { path = "src/query/pipeline/sinks" }
 databend-common-pipeline-sources = { path = "src/query/pipeline/sources" }
@@ -232,16 +233,16 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
 approx = "0.5.1"
-arrow = { version = "55" }
-arrow-array = { version = "55" }
-arrow-buffer = { version = "55" }
-arrow-cast = { version = "55", features = ["prettyprint"] }
-arrow-data = { version = "55" }
-arrow-flight = { version = "55", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "55" }
-arrow-ord = { version = "55" }
-arrow-schema = { version = "55", features = ["serde"] }
-arrow-select = { version = "55" }
+arrow = { version = "55.2" }
+arrow-array = { version = "55.2" }
+arrow-buffer = { version = "55.2" }
+arrow-cast = { version = "55.2", features = ["prettyprint"] }
+arrow-data = { version = "55.2" }
+arrow-flight = { version = "55.2", features = ["flight-sql-experimental", "tls"] }
+arrow-ipc = { version = "55.2" }
+arrow-ord = { version = "55.2" }
+arrow-schema = { version = "55.2", features = ["serde"] }
+arrow-select = { version = "55.2" }
 arrow-udf-runtime = { version = "0.8.0", default-features = false }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
