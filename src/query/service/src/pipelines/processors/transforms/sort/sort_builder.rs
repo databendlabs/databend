@@ -39,16 +39,18 @@ use super::sort_collect::TransformSortCollect;
 use super::sort_combine::TransformSortCombine;
 use super::sort_execute::TransformSortExecute;
 use super::sort_shuffle::SortSampleState;
-use super::sort_shuffle::TransformSortShuffle;
+use super::sort_shuffle::TransformSortBoundBroadcast;
 use super::Base;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 
 enum SortType {
     Sort,
     Collect,
-    Execute,
-    Shuffle,
+    BoundBroadcast,
     Combine,
+    Execute,
 }
 
 pub struct TransformSortBuilder {
@@ -162,11 +164,10 @@ impl TransformSortBuilder {
         select_row_type(&mut build)
     }
 
-    pub fn build_shuffle(
+    pub fn build_bound_broadcast(
         &self,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        id: usize,
         state: SortSampleState,
     ) -> Result<Box<dyn Processor>> {
         self.check();
@@ -175,7 +176,7 @@ impl TransformSortBuilder {
             params: self,
             input,
             output,
-            typ: SortType::Shuffle,
+            typ: SortType::BoundBroadcast,
             state: Some(state),
         };
 
@@ -227,18 +228,26 @@ impl TransformSortBuilder {
         add_order_field(self.schema.clone(), &self.sort_desc)
     }
 
-    pub fn add_shuffle(&self, pipeline: &mut Pipeline, state: SortSampleState) -> Result<()> {
-        use std::sync::atomic;
-        let i = atomic::AtomicUsize::new(0);
+    pub fn add_bound_broadcast(
+        &self,
+        pipeline: &mut Pipeline,
+        schema: DataSchemaRef,
+        batch_rows: usize,
+        ctx: Arc<QueryContext>,
+        broadcast_id: u32,
+    ) -> Result<()> {
+        let state = SortSampleState::new(schema, batch_rows, ctx, broadcast_id);
         pipeline.add_transform(|input, output| {
-            let id = i.fetch_add(1, atomic::Ordering::AcqRel);
-            Ok(ProcessorPtr::create(self.build_shuffle(
+            Ok(ProcessorPtr::create(self.build_bound_broadcast(
                 input,
                 output,
-                id,
                 state.clone(),
             )?))
         })
+    }
+
+    pub fn exchange_injector(&self) -> Arc<dyn ExchangeInjector> {
+        todo!()
     }
 }
 
@@ -300,12 +309,11 @@ impl Build<'_> {
 
     fn build_sort_shuffle<R>(&mut self) -> Result<Box<dyn Processor>>
     where R: Rows + 'static {
-        Ok(Box::new(TransformSortShuffle::<R>::new(
+        Ok(TransformSortBoundBroadcast::<R>::create(
             self.input.clone(),
             self.output.clone(),
             self.state.clone().unwrap(),
-            self.params.spiller.clone(),
-        )))
+        ))
     }
 
     fn build_sort_combine<R>(&mut self) -> Result<Box<dyn Processor>>
@@ -347,7 +355,7 @@ impl RowsTypeVisitor for Build<'_> {
                 true => self.build_sort_exec::<LoserTreeSort<R>>(),
                 false => self.build_sort_exec::<HeapSort<R>>(),
             },
-            SortType::Shuffle => self.build_sort_shuffle::<R>(),
+            SortType::BoundBroadcast => self.build_sort_shuffle::<R>(),
             SortType::Combine => self.build_sort_combine::<R>(),
         }
     }

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-use std::assert_matches::assert_matches;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -22,179 +20,130 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::Rows;
+use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
+use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
 
 use super::bounds::Bounds;
-use super::Base;
 use super::SortCollectedMeta;
-use super::SortScatteredMeta;
-use crate::pipelines::processors::Event;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
-use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
-use crate::spillers::Spiller;
 
-#[derive(Debug)]
-enum Step {
-    None,
-    Meta(Box<SortCollectedMeta>),
-    Scattered(Vec<Option<SortCollectedMeta>>),
-}
-
-pub struct TransformSortShuffle<R: Rows> {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-    step: Step,
+pub struct TransformSortBoundBroadcast<R: Rows> {
+    buffer: Vec<SortCollectedMeta>,
     state: SortSampleState,
-    spiller: Arc<Spiller>,
     _r: PhantomData<R>,
 }
 
-impl<R: Rows> TransformSortShuffle<R> {
-    pub fn new(
+impl<R: Rows> TransformSortBoundBroadcast<R> {
+    pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         state: SortSampleState,
-        spiller: Arc<Spiller>,
-    ) -> Self {
-        Self {
-            input,
-            output,
+    ) -> Box<dyn Processor> {
+        AsyncAccumulatingTransformer::create(input, output, Self {
+            buffer: Vec::new(),
             state,
-            spiller,
-            step: Step::None,
             _r: PhantomData,
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct SortSampleState {
+    ctx: Arc<QueryContext>,
+    broadcast_id: u32,
+    schema: DataSchemaRef,
+    batch_rows: usize,
+}
+
+impl SortSampleState {
+    pub fn new(
+        schema: DataSchemaRef,
+        batch_rows: usize,
+        ctx: Arc<QueryContext>,
+        broadcast_id: u32,
+    ) -> SortSampleState {
+        SortSampleState {
+            ctx,
+            broadcast_id,
+            schema,
+            batch_rows,
         }
     }
 
-    async fn scatter(&mut self) -> Result<Vec<Option<SortCollectedMeta>>> {
-        let SortCollectedMeta {
-            params,
-            bounds,
-            blocks,
-        } = match std::mem::replace(&mut self.step, Step::None) {
-            Step::None => {
-                return Ok(vec![]);
-            }
-            Step::Meta(box meta) => meta,
-            _ => unreachable!(),
-        };
+    pub async fn commit_sample<R: Rows>(&mut self, bounds: Bounds) -> Result<Bounds> {
+        let sender = self.ctx.broadcast_source_sender(self.broadcast_id);
+        sender
+            .send(Box::new(bounds))
+            .await
+            .map_err(|_| ErrorCode::TokioError("send sort bounds failed"))?;
+        sender.close();
 
-        let scatter_bounds = self.state.bounds();
-        if scatter_bounds.is_empty() {
-            return Ok(vec![Some(SortCollectedMeta {
-                params,
-                bounds,
-                blocks,
-            })]);
+        let receiver = self.ctx.broadcast_sink_receiver(self.broadcast_id);
+        let mut partials = Vec::new();
+        while let Ok(r) = receiver.recv().await {
+            partials.push(Bounds::downcast_from(r).unwrap());
         }
 
-        let base = {
-            let inner = &self.state.inner;
-            Base {
-                schema: inner.schema.clone(),
-                spiller: self.spiller.clone(),
-                sort_row_offset: inner.schema.fields.len() - 1,
-                limit: None,
-            }
-        };
-
-        let mut scattered_blocks = std::iter::repeat_with(Vec::new)
-            .take(scatter_bounds.len() + 1)
-            .collect::<Vec<_>>();
-        for blocks in blocks {
-            let scattered = base
-                .scatter_stream::<R>(Vec::from(blocks).into(), scatter_bounds.clone())
-                .await?;
-            for (i, part) in scattered.into_iter().enumerate() {
-                if !part.is_empty() {
-                    scattered_blocks[i].push(part.into_boxed_slice());
-                }
-            }
-        }
-
-        let scattered_meta = scattered_blocks
-            .into_iter()
-            .map(|blocks| {
-                (!blocks.is_empty()).then_some(SortCollectedMeta {
-                    params,
-                    bounds: bounds.clone(),
-                    blocks,
-                })
-            })
-            .collect();
-        Ok(scattered_meta)
+        Bounds::merge::<R>(partials, self.batch_rows)
     }
 }
 
 #[async_trait::async_trait]
-impl<R: Rows + 'static> Processor for TransformSortShuffle<R> {
-    fn name(&self) -> String {
-        "TransformSortShuffle".to_string()
+impl<R: Rows + 'static> AsyncAccumulatingTransform for TransformSortBoundBroadcast<R> {
+    const NAME: &'static str = "TransformSortBoundBroadcast";
+
+    async fn transform(&mut self, mut data: DataBlock) -> Result<Option<DataBlock>> {
+        let meta = data
+            .take_meta()
+            .and_then(SortCollectedMeta::downcast_from)
+            .expect("require a SortCollectedMeta");
+        self.buffer.push(meta);
+        Ok(None)
     }
 
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
-            self.input.finish();
-            return Ok(Event::Finished);
+    async fn on_finish(&mut self, output: bool) -> Result<Option<DataBlock>> {
+        if !output {
+            return Ok(None);
         }
 
-        if !self.output.can_push() {
-            self.input.set_not_need_data();
-            return Ok(Event::NeedConsume);
-        }
-
-        if matches!(self.step, Step::Scattered(_)) {
-            let Step::Scattered(scattered) = std::mem::replace(&mut self.step, Step::None) else {
-                unreachable!()
-            };
-
-            let data = DataBlock::empty_with_meta(Box::new(SortScatteredMeta(scattered)));
-            self.output.push_data(Ok(data));
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
-        if let Some(mut block) = self.input.pull_data().transpose()? {
-            assert_matches!(self.step, Step::None);
-            let meta = block
-                .take_meta()
-                .and_then(SortCollectedMeta::downcast_from)
-                .expect("require a SortCollectedMeta");
-
-            self.step = Step::Meta(Box::new(meta));
-            return Ok(Event::Async);
-        }
-
-        if self.input.is_finished() {
-            if self.state.inner.bounds.is_some() {
-                self.output.finish();
-                Ok(Event::Finished)
-            } else {
-                Ok(Event::Async)
-            }
-        } else {
-            self.input.set_need_data();
-            Ok(Event::NeedData)
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        let bounds = match &self.step {
-            Step::None if self.input.is_finished() => Bounds::default(),
-            Step::Meta(meta) => meta.generate_bounds(),
-            _ => unreachable!(),
+        let Some(params) = self.buffer.first().map(|meta| meta.params.clone()) else {
+            return Ok(None);
         };
 
-        self.state.commit_sample::<R>(bounds).await?;
-        self.step = Step::Scattered(self.scatter().await?);
-        Ok(())
+        let bounds_vec = self
+            .buffer
+            .iter()
+            .map(|meta| meta.bounds.dedup::<R>())
+            .collect();
+        let bounds = Bounds::merge::<R>(bounds_vec, self.state.batch_rows)?;
+
+        let blocks = self
+            .buffer
+            .into_iter()
+            .flat_map(|meta| meta.blocks.into_iter())
+            .collect();
+
+        let local = SortCollectedMeta {
+            params,
+            bounds,
+            blocks,
+        };
+
+        let global_bounds = self
+            .state
+            .commit_sample::<R>(local.generate_bounds())
+            .await?;
+
+        Ok(Some(DataBlock::empty_with_meta(Box::new(
+            SortCollectedMeta {
+                bounds: global_bounds,
+                ..local
+            },
+        ))))
     }
 }
 
@@ -219,81 +168,72 @@ impl SortCollectedMeta {
     }
 }
 
-#[derive(Clone)]
-pub struct SortSampleState {
-    inner: StateInner,
-    ctx: Arc<QueryContext>,
-    broadcast_id: u32,
-}
+// fn determine_bounds(&self, bounds: Bounds) -> Bounds {
+//     let n = self.partitions - 1;
+//     let bounds = if bounds.len() < n {
+//         bounds
+//     } else {
+//         bounds.dedup_reduce::<R>(n)
+//     };
+//     assert!(bounds.len() < self.partitions);
+//     bounds
+// }
 
-impl SortSampleState {
-    pub fn new(
-        inputs: usize,
-        partitions: usize,
-        schema: DataSchemaRef,
-        batch_rows: usize,
-        ctx: Arc<QueryContext>,
-        broadcast_id: u32,
-    ) -> SortSampleState {
-        SortSampleState {
-            inner: StateInner {
-                partitions,
-                schema,
-                partial: vec![],
-                bounds: None,
-                batch_rows,
-            },
-            ctx,
-            broadcast_id,
-        }
-    }
+// async fn scatter(&mut self) -> Result<Vec<Option<SortCollectedMeta>>> {
+//     let SortCollectedMeta {
+//         params,
+//         bounds,
+//         blocks,
+//     } = match std::mem::replace(&mut self.step, Step::None) {
+//         Step::None => {
+//             return Ok(vec![]);
+//         }
+//         Step::Local(box meta) => meta,
+//         _ => unreachable!(),
+//     };
 
-    pub async fn commit_sample<R: Rows>(&mut self, bounds: Bounds) -> Result<()> {
-        let sender = self.ctx.broadcast_source_sender(self.broadcast_id);
-        sender
-            .send(Box::new(bounds))
-            .await
-            .map_err(|_| ErrorCode::TokioError("send sort bounds failed"))?;
-        sender.close();
+//     let scatter_bounds = self.state.bounds();
+//     if scatter_bounds.is_empty() {
+//         return Ok(vec![Some(SortCollectedMeta {
+//             params,
+//             bounds,
+//             blocks,
+//         })]);
+//     }
 
-        let receiver = self.ctx.broadcast_sink_receiver(self.broadcast_id);
-        while let Ok(r) = receiver.recv().await {
-            self.inner.partial.push(Bounds::downcast_from(r).unwrap());
-        }
+//     let base = {
+//         let inner = &self.state.inner;
+//         Base {
+//             schema: inner.schema.clone(),
+//             spiller: self.spiller.clone(),
+//             sort_row_offset: inner.schema.fields.len() - 1,
+//             limit: None,
+//         }
+//     };
 
-        self.inner.determine_bounds::<R>()?;
-        Ok(())
-    }
+//     let mut scattered_blocks = std::iter::repeat_with(Vec::new)
+//         .take(scatter_bounds.len() + 1)
+//         .collect::<Vec<_>>();
+//     for blocks in blocks {
+//         let scattered = base
+//             .scatter_stream::<R>(Vec::from(blocks).into(), scatter_bounds.clone())
+//             .await?;
+//         for (i, part) in scattered.into_iter().enumerate() {
+//             if !part.is_empty() {
+//                 scattered_blocks[i].push(part.into_boxed_slice());
+//             }
+//         }
+//     }
 
-    pub fn bounds(&self) -> Bounds {
-        self.inner.bounds.clone().unwrap_or_default()
-    }
-}
-
-#[derive(Clone)]
-
-struct StateInner {
-    // target partitions
-    partitions: usize,
-    schema: DataSchemaRef,
-    partial: Vec<Bounds>,
-    bounds: Option<Bounds>,
-    batch_rows: usize,
-}
-
-impl StateInner {
-    fn determine_bounds<R: Rows>(&mut self) -> Result<()> {
-        let bounds = Bounds::merge::<R>(std::mem::take(&mut self.partial), self.batch_rows)?;
-
-        let n = self.partitions - 1;
-        let bounds = if bounds.len() < n {
-            bounds
-        } else {
-            bounds.dedup_reduce::<R>(n)
-        };
-        assert!(bounds.len() < self.partitions);
-
-        self.bounds = Some(bounds);
-        Ok(())
-    }
-}
+//     let scattered_meta = scattered_blocks
+//         .into_iter()
+//         .map(|blocks| {
+//             (!blocks.is_empty()).then_some(SortCollectedMeta {
+//                 params,
+//                 bounds: bounds.clone(),
+//                 blocks,
+//             })
+//         })
+//         .collect();
+//     Ok(scattered_meta)
+// }

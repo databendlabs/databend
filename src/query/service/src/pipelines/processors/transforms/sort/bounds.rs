@@ -184,6 +184,10 @@ impl Bounds {
             indices.len(),
         )])
     }
+
+    pub fn dedup<R: Rows>(&self) -> Self {
+        self.dedup_reduce::<R>(self.len())
+    }
 }
 
 impl SortedStream for Bounds {

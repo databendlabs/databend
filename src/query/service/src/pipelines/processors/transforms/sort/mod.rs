@@ -38,6 +38,7 @@ mod sort_spill;
 
 pub use sort_builder::*;
 pub use sort_exchange::*;
+pub use sort_exchange_injector::*;
 pub use sort_route::*;
 pub use sort_shuffle::*;
 

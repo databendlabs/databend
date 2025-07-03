@@ -31,17 +31,19 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Sort;
 use databend_common_sql::executor::physical_plans::SortStep;
+use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::add_range_shuffle_route;
+use crate::pipelines::processors::transforms::SortInjector;
 use crate::pipelines::processors::transforms::SortRangeExchange;
-use crate::pipelines::processors::transforms::SortSampleState;
 use crate::pipelines::processors::transforms::TransformLimit;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -49,40 +51,8 @@ use crate::spillers::SpillerDiskConfig;
 use crate::spillers::SpillerType;
 
 impl PipelineBuilder {
-    // The pipeline graph of distributed sort can be found in https://github.com/datafuselabs/databend/pull/13881
     pub(crate) fn build_sort(&mut self, sort: &Sort) -> Result<()> {
-        self.build_pipeline(&sort.input)?;
-
-        let input_schema = sort.input.output_schema()?;
-
-        if let Some(proj) = &sort.pre_projection {
-            debug_assert_matches!(
-                sort.step,
-                SortStep::Single | SortStep::Partial | SortStep::Sample
-            );
-
-            // Do projection to reduce useless data copying during sorting.
-            let projection = proj
-                .iter()
-                .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
-                .collect::<Vec<_>>();
-
-            if projection.len() < input_schema.fields().len() {
-                // Only if the projection is not a full projection, we need to add a projection transform.
-                self.main_pipeline.add_transformer(|| {
-                    CompoundBlockOperator::new(
-                        vec![BlockOperator::Project {
-                            projection: projection.clone(),
-                        }],
-                        self.func_ctx.clone(),
-                        input_schema.num_fields(),
-                    )
-                });
-            }
-        }
-
         let plan_schema = sort.output_schema()?;
-
         let sort_desc = sort
             .order_by
             .iter()
@@ -95,19 +65,37 @@ impl PipelineBuilder {
                 })
             })
             .collect::<Result<Vec<_>>>()?;
-
-        self.build_sort_pipeline(plan_schema, sort_desc, sort.limit, sort.step)
-    }
-
-    fn build_sort_pipeline(
-        &mut self,
-        plan_schema: DataSchemaRef,
-        sort_desc: Vec<SortColumnDescription>,
-        limit: Option<usize>,
-        sort_step: SortStep,
-    ) -> Result<()> {
-        let max_threads = self.settings.get_max_threads()? as usize;
         let sort_desc = sort_desc.into();
+
+        if sort.step != SortStep::RangeSort {
+            self.build_pipeline(&sort.input)?;
+        }
+
+        if let Some(proj) = &sort.pre_projection {
+            debug_assert_matches!(
+                sort.step,
+                SortStep::Single | SortStep::Partial | SortStep::Sample
+            );
+
+            let input_schema = sort.input.output_schema()?;
+            // Do projection to reduce useless data copying during sorting.
+            let projection = proj
+                .iter()
+                .map(|i| input_schema.index_of(&i.to_string()).unwrap())
+                .collect::<Vec<_>>();
+
+            self.main_pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    vec![BlockOperator::Project {
+                        projection: projection.clone(),
+                    }],
+                    self.func_ctx.clone(),
+                    input_schema.num_fields(),
+                )
+            });
+        }
+
+        let max_threads = self.settings.get_max_threads()? as usize;
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
@@ -115,9 +103,9 @@ impl PipelineBuilder {
         }
 
         let builder = SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc, None)?
-            .with_limit(limit);
+            .with_limit(sort.limit);
 
-        match sort_step {
+        match sort.step {
             SortStep::FinalMerge => {
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
@@ -146,13 +134,18 @@ impl PipelineBuilder {
                     .remove_order_col_at_last()
                     .build_full_sort_pipeline(&mut self.main_pipeline)
             }
-            SortStep::Sample => {
-                builder
-                    .remove_order_col_at_last()
-                    .build_range_shuffle_sort_pipeline(&mut self.main_pipeline)?;
+            SortStep::Sample => builder.build_sort_part(&mut self.main_pipeline),
+            SortStep::RangeSort => {
+                if matches!(*sort.input, PhysicalPlan::ExchangeSource(_)) {
+                    let exchange = builder.exchange_injector();
+                    let old_inject = std::mem::replace(&mut self.exchange_injector, exchange);
+                    self.build_pipeline(&sort.input)?;
+                    self.exchange_injector = old_inject;
+                } else {
+                    self.build_pipeline(&sort.input)?;
+                }
                 todo!()
             }
-            SortStep::RangeSort => todo!(),
             SortStep::Route => todo!(),
         }
     }
@@ -264,16 +257,13 @@ impl SortPipelineBuilder {
             Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
         })?;
 
-        let state = SortSampleState::new(
-            inputs,
-            num_exec,
+        builder.add_bound_broadcast(
+            pipeline,
             builder.inner_schema(),
             max_block_size,
             self.ctx.clone(),
             self.broadcast_id.unwrap(),
-        );
-
-        builder.add_shuffle(pipeline, state)?;
+        )?;
 
         pipeline.exchange(num_exec, Arc::new(SortRangeExchange));
 
@@ -341,18 +331,13 @@ impl SortPipelineBuilder {
             Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
         })?;
 
-        let state = SortSampleState::new(
-            inputs,
-            num_exec,
+        builder.add_bound_broadcast(
+            pipeline,
             builder.inner_schema(),
             max_block_size,
             self.ctx.clone(),
             self.broadcast_id.unwrap(),
-        );
-
-        builder.add_shuffle(pipeline, state.clone())?;
-
-        // pipeline.exchange(num_exec, Arc::new(SortRangeExchange));
+        )?;
 
         Ok(())
     }
@@ -455,5 +440,9 @@ impl SortPipelineBuilder {
                 self.enable_loser_tree,
             )
         }
+    }
+
+    pub fn exchange_injector(self) -> Arc<dyn ExchangeInjector> {
+        Arc::new(SortInjector {})
     }
 }
