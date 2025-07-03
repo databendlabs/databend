@@ -14,16 +14,20 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use itertools::Itertools;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -56,21 +60,29 @@ impl IPhysicalPlan for Duplicate {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![FormatTreeNode::new(format!(
+            "Duplicate data to {} branch",
+            self.n
+        ))];
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_duplicate = self.clone();
-                assert_eq!(children.len(), 1);
-                new_duplicate.input = children[0];
-                Box::new(new_duplicate)
-            }
-        }
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "Duplicate".to_string(),
+            node_children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -101,21 +113,21 @@ impl IPhysicalPlan for Shuffle {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        // ignore self
+        assert_eq!(children.len(), 1);
+        Ok(children.pop().unwrap())
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_shuffle = self.clone();
-                assert_eq!(children.len(), 1);
-                new_shuffle.input = children[0];
-                Box::new(new_shuffle)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -173,21 +185,40 @@ impl IPhysicalPlan for ChunkFilter {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_filter = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_filter.input = children[0];
-                Box::new(new_chunk_filter)
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.predicates.iter().all(|x| x.is_none()) {
+            assert_eq!(children.len(), 1);
+            return Ok(children.pop().unwrap());
+        }
+        let mut node_children = Vec::new();
+        for (i, predicate) in self.predicates.iter().enumerate() {
+            if let Some(predicate) = predicate {
+                node_children.push(FormatTreeNode::new(format!(
+                    "branch {}: {}",
+                    i,
+                    predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                )));
+            } else {
+                node_children.push(FormatTreeNode::new(format!("branch {}: None", i)));
             }
         }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "Filter".to_string(),
+            node_children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -218,21 +249,45 @@ impl IPhysicalPlan for ChunkEvalScalar {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.eval_scalars.iter().all(|x| x.is_none()) {
+            assert_eq!(children.len(), 1);
+            return Ok(children.pop().unwrap());
+        }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_eval_scalar = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_eval_scalar.input = children[0];
-                Box::new(new_chunk_eval_scalar)
+        let mut node_children = Vec::new();
+        for (i, eval_scalar) in self.eval_scalars.iter().enumerate() {
+            if let Some(eval_scalar) = eval_scalar {
+                node_children.push(FormatTreeNode::new(format!(
+                    "branch {}: {}",
+                    i,
+                    eval_scalar
+                        .remote_exprs
+                        .iter()
+                        .map(|x| x.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(", ")
+                )));
+            } else {
+                node_children.push(FormatTreeNode::new(format!("branch {}: None", i)));
             }
         }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "EvalScalar".to_string(),
+            node_children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -269,21 +324,20 @@ impl IPhysicalPlan for ChunkCastSchema {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        assert_eq!(children.len(), 1);
+        Ok(children.pop().unwrap())
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_cast_schema = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_cast_schema.input = children[0];
-                Box::new(new_chunk_cast_schema)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -320,21 +374,21 @@ impl IPhysicalPlan for ChunkFillAndReorder {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        // ignore self
+        assert_eq!(children.len(), 1);
+        Ok(children.pop().unwrap())
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_fill_and_reorder = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_fill_and_reorder.input = children[0];
-                Box::new(new_chunk_fill_and_reorder)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -371,21 +425,22 @@ impl IPhysicalPlan for ChunkAppendData {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(
+            "WriteData".to_string(),
+            children,
+        ))
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_append_data = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_append_data.input = children[0];
-                Box::new(new_chunk_append_data)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -423,21 +478,21 @@ impl IPhysicalPlan for ChunkMerge {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        // ignore self
+        assert_eq!(children.len(), 1);
+        Ok(children.pop().unwrap())
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_merge = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_merge.input = children[0];
-                Box::new(new_chunk_merge)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -471,20 +526,10 @@ impl IPhysicalPlan for ChunkCommitInsert {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_chunk_commit_insert = self.clone();
-                assert_eq!(children.len(), 1);
-                new_chunk_commit_insert.input = children[0];
-                Box::new(new_chunk_commit_insert)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

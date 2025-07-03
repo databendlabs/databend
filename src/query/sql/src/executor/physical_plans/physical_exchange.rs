@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -19,7 +20,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::common::FragmentKind;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
@@ -49,11 +52,43 @@ impl IPhysicalPlan for Exchange {
         &mut self.meta
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("exchange type: {}", match self.kind {
+                FragmentKind::Init => "Init-Partition".to_string(),
+                FragmentKind::Normal => format!(
+                    "Hash({})",
+                    self.keys
+                        .iter()
+                        .map(|key| { key.as_expr(&BUILTIN_FUNCTIONS).sql_display() })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+                FragmentKind::Expansive => "Broadcast".to_string(),
+                FragmentKind::Merge => "Merge".to_string(),
+            })),
+        ];
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "Exchange".to_string(),
+            node_children,
+        ))
+    }
+
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -66,21 +101,11 @@ impl IPhysicalPlan for Exchange {
         true
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_exchange = self.clone();
-                assert_eq!(children.len(), 1);
-                new_exchange.input = children[0];
-                Box::new(new_exchange)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -99,7 +124,7 @@ impl PhysicalPlanBuilder {
         }
 
         // 2. Build physical plan.
-        let input = Box::new(self.build(s_expr.child(0)?, required).await?);
+        let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
         let mut keys = vec![];
         let mut allow_adjust_parallelism = true;

@@ -22,14 +22,12 @@ mod util;
 
 pub mod table_read_plan;
 
-pub use format::format_partial_tree;
+pub use physical_plan::DeriveHandle;
 pub use physical_plan::IPhysicalPlan;
 pub use physical_plan::PhysicalPlan;
-pub use physical_plan::PhysicalPlanDeriveHandle;
 pub use physical_plan::PhysicalPlanMeta;
 pub use physical_plan_builder::MutationBuildInfo;
 pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use physical_plans::build_broadcast_plans;
 pub use physical_plans::PhysicalRuntimeFilter;
 pub use physical_plans::PhysicalRuntimeFilters;

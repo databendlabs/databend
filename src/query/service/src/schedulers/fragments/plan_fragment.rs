@@ -28,13 +28,14 @@ use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
 use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
+use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::DeriveHandle;
 use databend_common_sql::executor::IPhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanDeriveHandle;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
@@ -227,12 +228,11 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let plan = match &self.plan {
-            PhysicalPlan::ExchangeSink(plan) => plan,
-            _ => unreachable!("logic error"),
+        let Some(plan) = self.plan.down_cast::<ExchangeSink>() else {
+            unreachable!("logic error");
         };
 
-        let plan = PhysicalPlan::ExchangeSink(plan.clone());
+        let plan: Box<dyn IPhysicalPlan> = Box::new(plan.clone());
         let mutation_source = plan.try_find_mutation_source().unwrap();
 
         let partitions: &Partitions = &mutation_source.partitions;
@@ -479,12 +479,12 @@ struct ReadSourceDeriveHandle {
 }
 
 impl ReadSourceDeriveHandle {
-    pub fn new(sources: HashMap<u32, DataSource>) -> Box<dyn PhysicalPlanDeriveHandle> {
+    pub fn new(sources: HashMap<u32, DataSource>) -> Box<dyn DeriveHandle> {
         Box::new(ReadSourceDeriveHandle { sources })
     }
 }
 
-impl PhysicalPlanDeriveHandle for ReadSourceDeriveHandle {
+impl DeriveHandle for ReadSourceDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -528,12 +528,12 @@ struct ReclusterDeriveHandle {
 }
 
 impl ReclusterDeriveHandle {
-    pub fn new(tasks: Vec<ReclusterTask>) -> Box<dyn PhysicalPlanDeriveHandle> {
+    pub fn new(tasks: Vec<ReclusterTask>) -> Box<dyn DeriveHandle> {
         Box::new(ReclusterDeriveHandle { tasks })
     }
 }
 
-impl PhysicalPlanDeriveHandle for ReclusterDeriveHandle {
+impl DeriveHandle for ReclusterDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -555,12 +555,12 @@ struct MutationSourceDeriveHandle {
 }
 
 impl MutationSourceDeriveHandle {
-    pub fn new(partitions: Partitions) -> Box<dyn PhysicalPlanDeriveHandle> {
+    pub fn new(partitions: Partitions) -> Box<dyn DeriveHandle> {
         Box::new(MutationSourceDeriveHandle { partitions })
     }
 }
 
-impl PhysicalPlanDeriveHandle for MutationSourceDeriveHandle {
+impl DeriveHandle for MutationSourceDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -582,12 +582,12 @@ struct CompactSourceDeriveHandle {
 }
 
 impl CompactSourceDeriveHandle {
-    pub fn new(partitions: Partitions) -> Box<dyn PhysicalPlanDeriveHandle> {
+    pub fn new(partitions: Partitions) -> Box<dyn DeriveHandle> {
         Box::new(CompactSourceDeriveHandle { partitions })
     }
 }
 
-impl PhysicalPlanDeriveHandle for CompactSourceDeriveHandle {
+impl DeriveHandle for CompactSourceDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -616,7 +616,7 @@ impl ReplaceDeriveHandle {
         partitions: Vec<(usize, Location)>,
         slot: Option<BlockSlotDescription>,
         need_insert: bool,
-    ) -> Box<dyn PhysicalPlanDeriveHandle> {
+    ) -> Box<dyn DeriveHandle> {
         Box::new(ReplaceDeriveHandle {
             partitions,
             slot,
@@ -625,7 +625,7 @@ impl ReplaceDeriveHandle {
     }
 }
 
-impl PhysicalPlanDeriveHandle for ReplaceDeriveHandle {
+impl DeriveHandle for ReplaceDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,

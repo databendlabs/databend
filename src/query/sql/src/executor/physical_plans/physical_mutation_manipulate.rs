@@ -14,15 +14,19 @@
 
 use std::collections::HashMap;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use itertools::Itertools;
 
 use crate::binder::MutationStrategy;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
 
@@ -44,6 +48,7 @@ pub struct MutationManipulate {
     pub row_id_idx: usize,
     pub can_try_update_column_only: bool,
     pub unmatched_schema: DataSchemaRef,
+    pub target_table_index: usize,
 }
 
 #[typetag::serde]
@@ -66,20 +71,104 @@ impl IPhysicalPlan for MutationManipulate {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let table_entry = ctx.metadata.table(self.target_table_index).clone();
+        let target_schema = table_entry.table().schema_with_stream();
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_mutation_manipulate = self.clone();
-                assert_eq!(children.len(), 1);
-                new_mutation_manipulate.input = children[0];
-                Box::new(new_mutation_manipulate)
+        // Matched clauses.
+        let mut matched_children = Vec::with_capacity(self.matched.len());
+        for evaluator in &self.matched {
+            let condition_format = evaluator.0.as_ref().map_or_else(
+                || "condition: None".to_string(),
+                |predicate| {
+                    format!(
+                        "condition: {}",
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                    )
+                },
+            );
+
+            if evaluator.1.is_none() {
+                matched_children.push(FormatTreeNode::new(format!(
+                    "matched delete: [{}]",
+                    condition_format
+                )));
+            } else {
+                let mut update_list = evaluator.1.as_ref().unwrap().clone();
+                update_list.sort_by(|a, b| a.0.cmp(&b.0));
+                let update_format = update_list
+                    .iter()
+                    .map(|(field_idx, expr)| {
+                        format!(
+                            "{} = {}",
+                            target_schema.field(*field_idx).name(),
+                            expr.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                        )
+                    })
+                    .join(",");
+                matched_children.push(FormatTreeNode::new(format!(
+                    "matched update: [{}, update set {}]",
+                    condition_format, update_format
+                )));
             }
         }
+
+        // UnMatched clauses.
+        let mut unmatched_children = Vec::with_capacity(self.unmatched.len());
+        for evaluator in &self.unmatched {
+            let condition_format = evaluator.1.as_ref().map_or_else(
+                || "condition: None".to_string(),
+                |predicate| {
+                    format!(
+                        "condition: {}",
+                        predicate.as_expr(&BUILTIN_FUNCTIONS).sql_display()
+                    )
+                },
+            );
+            let insert_schema_format = evaluator
+                .0
+                .fields
+                .iter()
+                .map(|field| field.name())
+                .join(",");
+
+            let values_format = evaluator
+                .2
+                .iter()
+                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(",");
+
+            let unmatched_format = format!(
+                "insert into ({}) values({})",
+                insert_schema_format, values_format
+            );
+
+            unmatched_children.push(FormatTreeNode::new(format!(
+                "unmatched insert: [{}, {}]",
+                condition_format, unmatched_format
+            )));
+        }
+
+        let mut node_children = vec![];
+
+        node_children.extend(matched_children);
+        node_children.extend(unmatched_children);
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "MutationManipulate".to_string(),
+            node_children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

@@ -35,6 +35,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::executor::format_partial_tree;
+use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
@@ -164,22 +165,11 @@ impl Interpreter for ExplainInterpreter {
                 _ => self.explain_plan(&self.plan)?,
             },
 
-            ExplainKind::Join => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } => {
-                    let ctx = self.ctx.clone();
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
-                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
-                    self.explain_join_order(&plan, metadata)?
-                }
-                _ => Err(ErrorCode::Unimplemented(
+            ExplainKind::Join => {
+                return Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN JOIN statement",
-                ))?,
-            },
+                ));
+            }
 
             ExplainKind::AnalyzePlan | ExplainKind::Graphical => match &self.plan {
                 Plan::Query {
@@ -324,7 +314,7 @@ impl ExplainInterpreter {
 
     pub async fn explain_physical_plan(
         &self,
-        plan: &PhysicalPlan,
+        plan: &Box<dyn IPhysicalPlan>,
         metadata: &MetadataRef,
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
@@ -360,8 +350,9 @@ impl ExplainInterpreter {
             }
         }
 
+        let metadata = metadata.read();
         let result = plan
-            .format(metadata.clone(), Default::default())?
+            .format(&metadata, Default::default())?
             .format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -479,10 +470,9 @@ impl ExplainInterpreter {
         if !pruned_partitions_stats.is_empty() {
             plan.set_pruning_stats(&mut pruned_partitions_stats);
         }
-        let result = if self.partial {
-            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
-        } else {
-            plan.format(metadata.clone(), query_profiles.clone())?
+        let result = {
+            let metadata = metadata.read();
+            plan.format(&metadata, query_profiles.clone())?
                 .format_pretty()?
         };
         let line_split_result: Vec<&str> = result.lines().collect();

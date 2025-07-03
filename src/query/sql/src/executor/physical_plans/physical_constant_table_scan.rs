@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
+use itertools::Itertools;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -46,17 +50,34 @@ impl IPhysicalPlan for ConstantTableScan {
         Ok(self.output_schema.clone())
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
-            }
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.num_rows == 0 {
+            return Ok(FormatTreeNode::new(self.name().to_string()));
         }
+
+        let mut children = Vec::with_capacity(self.values.len() + 1);
+        children.push(FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        )));
+        for (i, value) in self.values.iter().enumerate() {
+            let column = value.iter().map(|val| format!("{val}")).join(", ");
+            children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
+        }
+
+        Ok(FormatTreeNode::with_children(
+            self.name().to_string(),
+            children,
+        ))
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 

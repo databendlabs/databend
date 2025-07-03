@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use super::Exchange;
 use super::FragmentKind;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -39,17 +41,9 @@ impl IPhysicalPlan for BroadcastSource {
         &mut self.meta
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
-            }
-        }
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 
@@ -84,21 +78,20 @@ impl IPhysicalPlan for BroadcastSink {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        // ignore children
+        Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_broadcast_sink = self.clone();
-                assert_eq!(children.len(), 1);
-                new_broadcast_sink.input = children[0];
-                Box::new(new_broadcast_sink)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 

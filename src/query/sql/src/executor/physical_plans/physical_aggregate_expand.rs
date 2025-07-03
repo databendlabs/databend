@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -21,7 +22,10 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -87,6 +91,45 @@ impl IPhysicalPlan for AggregateExpand {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let sets = self
+            .grouping_sets
+            .sets
+            .iter()
+            .map(|set| {
+                set.iter()
+                    .map(|&index| ctx.metadata.column(index).name())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            })
+            .map(|s| format!("({})", s))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("grouping sets: [{sets}]")),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "AggregateExpand".to_string(),
+            node_children,
+        ))
+    }
+
     fn get_desc(&self) -> Result<String> {
         Ok(self
             .grouping_sets
@@ -103,20 +146,10 @@ impl IPhysicalPlan for AggregateExpand {
             .join(", "))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_aggregate_expand = self.clone();
-                assert_eq!(children.len(), 1);
-                new_aggregate_expand.input = children[0];
-                Box::new(new_aggregate_expand)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

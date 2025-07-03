@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table_context::TableContext;
@@ -49,8 +50,9 @@ use super::CommitType;
 use crate::binder::wrap_cast;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -123,21 +125,31 @@ impl IPhysicalPlan for Mutation {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let table_entry = ctx.metadata.table(self.target_table_index).clone();
+        let mut node_children = vec![FormatTreeNode::new(format!(
+            "target table: [catalog: {}] [database: {}] [table: {}]",
+            table_entry.catalog(),
+            table_entry.database(),
+            table_entry.name()
+        ))];
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_mutation = self.clone();
-                assert_eq!(children.len(), 1);
-                new_mutation.input = children[0];
-                Box::new(new_mutation)
-            }
-        }
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "DataMutation".to_string(),
+            node_children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -189,7 +201,7 @@ impl PhysicalPlanBuilder {
         if *truncate_table {
             // Do truncate.
             plan = Box::new(CommitSink {
-                input: Box::new(plan),
+                input: plan,
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
                 // let's use update first, we will do some optimizations and select exact strategy
@@ -323,7 +335,7 @@ impl PhysicalPlanBuilder {
         // into matched and not matched parts.
         if matches!(strategy, MutationStrategy::MixedMatched) {
             plan = Box::new(MutationSplit {
-                input: Box::new(plan),
+                input: plan,
                 split_index: row_id_offset,
                 meta: PhysicalPlanMeta::new("MutationSplit"),
             });
@@ -456,7 +468,7 @@ impl PhysicalPlanBuilder {
         }
 
         plan = Box::new(MutationManipulate {
-            input: Box::new(plan.clone()),
+            input: plan,
             table_info: table_info.clone(),
             unmatched: unmatched.clone(),
             matched: matched.clone(),
@@ -466,10 +478,11 @@ impl PhysicalPlanBuilder {
             can_try_update_column_only: *can_try_update_column_only,
             unmatched_schema: mutation_input_schema.clone(),
             meta: PhysicalPlanMeta::new("MutationManipulate"),
+            target_table_index: *target_table_index,
         });
 
         plan = Box::new(MutationOrganize {
-            input: Box::new(plan.clone()),
+            input: plan,
             strategy: strategy.clone(),
             meta: PhysicalPlanMeta::new("MutationOrganize"),
         });
@@ -496,7 +509,7 @@ impl PhysicalPlanBuilder {
             table_meta_timestamps: mutation_build_info.table_meta_timestamps,
         });
 
-        if distributed {
+        if *distributed {
             plan = Box::new(Exchange {
                 input: plan,
                 kind: FragmentKind::Merge,

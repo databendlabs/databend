@@ -25,7 +25,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::Exchange;
@@ -55,17 +55,9 @@ impl IPhysicalPlan for CompactSource {
         &mut self.meta
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
-            }
-        }
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 
@@ -123,7 +115,7 @@ impl PhysicalPlanBuilder {
         }
 
         root = Box::new(CommitSink {
-            input: Box::new(root),
+            input: root,
             table_info,
             snapshot: Some(snapshot),
             commit_type: CommitType::Mutation {

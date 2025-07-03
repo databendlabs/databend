@@ -24,7 +24,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::common::OnConflictField;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
@@ -70,21 +70,11 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_replace_deduplicate = self.clone();
-                assert_eq!(children.len(), 1);
-                new_replace_deduplicate.input = children[0];
-                Box::new(new_replace_deduplicate)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
@@ -22,8 +23,9 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use enum_as_inner::EnumAsInner;
 
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
 use crate::plans::CopyIntoTableMode;
@@ -77,36 +79,32 @@ impl IPhysicalPlan for CopyIntoTable {
         }
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
+        _ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(
+            format!("CopyIntoTable: {}", self.table_info),
+            children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
         match &self.source {
-            CopyIntoTableSource::Query(query_physical_plan) => {
-                let derive_input = query_physical_plan.derive_with(handle);
-                match handle.derive(self, vec![derive_input]) {
-                    Ok(v) => v,
-                    Err(children) => {
-                        let mut new_copy_into_table = self.clone();
-                        assert_eq!(children.len(), 1);
-                        new_copy_into_table.source =
-                            CopyIntoTableSource::Query(Box::new(children[0]));
-                        Box::new(new_copy_into_table)
-                    }
-                }
+            CopyIntoTableSource::Query(_) => {
+                let mut new_copy_into_table = self.clone();
+                assert_eq!(children.len(), 1);
+                let input = children.pop().unwrap();
+                new_copy_into_table.source = CopyIntoTableSource::Query(input);
+                Box::new(new_copy_into_table)
             }
-            CopyIntoTableSource::Stage(v) => {
-                let derive_input = v.derive_with(handle);
-                match handle.derive(self, vec![derive_input]) {
-                    Ok(v) => v,
-                    Err(children) => {
-                        let mut new_copy_into_table = self.clone();
-                        assert_eq!(children.len(), 1);
-                        new_copy_into_table.source =
-                            CopyIntoTableSource::Stage(Box::new(children[0]));
-                        Box::new(new_copy_into_table)
-                    }
-                }
+            CopyIntoTableSource::Stage(_) => {
+                let mut new_copy_into_table = self.clone();
+                assert_eq!(children.len(), 1);
+                let input = children.pop().unwrap();
+                new_copy_into_table.source = CopyIntoTableSource::Stage(input);
+                Box::new(new_copy_into_table)
             }
         }
     }

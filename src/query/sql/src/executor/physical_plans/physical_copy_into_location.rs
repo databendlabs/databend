@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -22,7 +23,8 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -66,25 +68,26 @@ impl IPhysicalPlan for CopyIntoLocation {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn to_format_node(
+        &self,
+        _ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(
+            "CopyIntoLocation".to_string(),
+            children,
+        ))
+    }
+
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_copy_into_location = self.clone();
-                assert_eq!(children.len(), 1);
-                new_copy_into_location.input = children[0];
-                Box::new(new_copy_into_location)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

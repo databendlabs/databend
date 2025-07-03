@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::CatalogManager;
@@ -48,6 +49,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
 use rand::distributions::Bernoulli;
@@ -57,7 +59,11 @@ use rand::thread_rng;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::part_stats_info_to_format_tree;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::IPhysicalPlan;
@@ -123,6 +129,136 @@ impl IPhysicalPlan for TableScan {
         Ok(DataSchemaRefExt::create(fields))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        if self.table_index == Some(DUMMY_TABLE_INDEX) {
+            return Ok(FormatTreeNode::new("DummyTableScan".to_string()));
+        }
+
+        let table_name = match self.table_index {
+            None => format!(
+                "{}.{}",
+                self.source.source_info.catalog_name(),
+                self.source.source_info.desc()
+            ),
+            Some(table_index) => {
+                let table = ctx.metadata.table(table_index).clone();
+                format!("{}.{}.{}", table.catalog(), table.database(), table.name())
+            }
+        };
+        let filters = self
+            .source
+            .push_downs
+            .as_ref()
+            .and_then(|extras| {
+                extras
+                    .filters
+                    .as_ref()
+                    .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            })
+            .unwrap_or_default();
+
+        let limit = self
+            .source
+            .push_downs
+            .as_ref()
+            .map_or("NONE".to_string(), |extras| {
+                extras
+                    .limit
+                    .map_or("NONE".to_string(), |limit| limit.to_string())
+            });
+
+        let virtual_columns = self.source.push_downs.as_ref().and_then(|extras| {
+            extras.virtual_column.as_ref().map(|virtual_column| {
+                let mut names = virtual_column
+                    .virtual_column_fields
+                    .iter()
+                    .map(|c| c.name.clone())
+                    .collect::<Vec<_>>();
+                names.sort();
+                names.iter().join(", ")
+            })
+        });
+
+        let agg_index = self
+            .source
+            .push_downs
+            .as_ref()
+            .and_then(|extras| extras.agg_index.as_ref());
+
+        let mut children = vec![
+            FormatTreeNode::new(format!("table: {table_name}")),
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, ctx.metadata, false)
+            )),
+        ];
+
+        // Part stats.
+        children.extend(part_stats_info_to_format_tree(&self.source.statistics));
+        // Push downs.
+        let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
+        children.push(FormatTreeNode::new(push_downs));
+
+        // runtime filters
+        let rf = ctx.scan_id_to_runtime_filters.get(&self.scan_id);
+        if let Some(rf) = rf {
+            let rf = rf.iter().map(|rf| format!("#{:?}", rf.id)).join(", ");
+            children.push(FormatTreeNode::new(format!("apply join filters: [{rf}]")));
+        }
+
+        // Virtual columns.
+        if let Some(virtual_columns) = virtual_columns {
+            if !virtual_columns.is_empty() {
+                let virtual_columns = format!("virtual columns: [{virtual_columns}]");
+                children.push(FormatTreeNode::new(virtual_columns));
+            }
+        }
+
+        // Aggregating index
+        if let Some(agg_index) = agg_index {
+            let (_, agg_index_sql, _) = ctx
+                .metadata
+                .get_agg_indexes(&table_name)
+                .unwrap()
+                .iter()
+                .find(|(index, _, _)| *index == agg_index.index_id)
+                .unwrap();
+
+            children.push(FormatTreeNode::new(format!(
+                "aggregating index: [{agg_index_sql}]"
+            )));
+
+            let agg_sel = agg_index
+                .selection
+                .iter()
+                .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ");
+            let agg_filter = agg_index
+                .filter
+                .as_ref()
+                .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).sql_display());
+            let text = if let Some(f) = agg_filter {
+                format!("rewritten query: [selection: [{agg_sel}], filter: {f}]")
+            } else {
+                format!("rewritten query: [selection: [{agg_sel}]]")
+            };
+            children.push(FormatTreeNode::new(text));
+        }
+
+        if let Some(info) = &self.stat_info {
+            children.extend(plan_stats_info_to_format_tree(info));
+        }
+
+        Ok(FormatTreeNode::with_children(
+            "TableScan".to_string(),
+            children,
+        ))
+    }
+
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         Some(&self.source)
     }
@@ -175,17 +311,9 @@ impl IPhysicalPlan for TableScan {
         ]))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
-            }
-        }
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 

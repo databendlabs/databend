@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -26,7 +27,10 @@ use itertools::Itertools;
 
 use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::pretty_display_agg_desc;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
@@ -89,6 +93,45 @@ impl IPhysicalPlan for AggregatePartial {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let group_by = self
+            .group_by
+            .iter()
+            .map(|&index| ctx.metadata.column(index).name())
+            .join(", ");
+
+        let agg_funcs = self
+            .agg_funcs
+            .iter()
+            .map(|agg| pretty_display_agg_desc(agg, &ctx.metadata))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!("group by: [{group_by}]")),
+            FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            node_children.extend(plan_stats_info_to_format_tree(info));
+        }
+
+        if let Some((_, r)) = &self.rank_limit {
+            node_children.push(FormatTreeNode::new(format!("rank limit: {r}")));
+        }
+
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "AggregatePartial".to_string(),
+            node_children,
+        ))
+    }
+
     fn get_desc(&self) -> Result<String> {
         Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
     }
@@ -97,7 +140,7 @@ impl IPhysicalPlan for AggregatePartial {
         let mut labels = HashMap::with_capacity(2);
 
         if !self.group_by_display.is_empty() {
-            labels.insert(String::from("Grouping keys"), v.group_by_display.clone());
+            labels.insert(String::from("Grouping keys"), self.group_by_display.clone());
         }
 
         if !self.agg_funcs.is_empty() {
@@ -110,20 +153,10 @@ impl IPhysicalPlan for AggregatePartial {
         Ok(labels)
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_aggregate_partial = self.clone();
-                assert_eq!(children.len(), 1);
-                new_aggregate_partial.input = children[0];
-                Box::new(new_aggregate_partial)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

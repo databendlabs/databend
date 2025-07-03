@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -45,17 +48,38 @@ impl IPhysicalPlan for CacheScan {
         Ok(self.output_schema.clone())
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut children = Vec::with_capacity(2);
+        children.push(FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        )));
+
+        match &self.cache_source {
+            CacheSource::HashJoinBuild((cache_index, column_indexes)) => {
+                let mut column_indexes = column_indexes.clone();
+                column_indexes.sort();
+                children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
+                children.push(FormatTreeNode::new(format!(
+                    "column indexes: {:?}",
+                    column_indexes
+                )));
             }
         }
+
+        Ok(FormatTreeNode::with_children(
+            "CacheScan".to_string(),
+            children,
+        ))
+    }
+
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 

@@ -33,6 +33,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::parse_result_scan_args;
 use databend_common_sql::ColumnBinding;
@@ -110,7 +111,7 @@ impl SelectInterpreter {
 
     #[inline]
     #[async_backtrace::framed]
-    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
+    pub async fn build_physical_plan(&self) -> Result<Box<dyn IPhysicalPlan>> {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         self.ctx
             .set_status_info("[SELECT-INTERP] Building physical plan");

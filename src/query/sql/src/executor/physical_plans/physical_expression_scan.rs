@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -59,21 +63,38 @@ impl IPhysicalPlan for ExpressionScan {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = Vec::with_capacity(self.values.len() + 1);
+        node_children.push(FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        )));
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_expression_scan = self.clone();
-                assert_eq!(children.len(), 1);
-                new_expression_scan.input = children[0];
-                Box::new(new_expression_scan)
-            }
+        for (i, value) in self.values.iter().enumerate() {
+            let column = value
+                .iter()
+                .map(|val| val.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .join(", ");
+            node_children.push(FormatTreeNode::new(format!("column {}: [{}]", i, column)));
         }
+
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "ExpressionScan".to_string(),
+            node_children,
+        ))
+    }
+
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -108,7 +129,7 @@ impl PhysicalPlanBuilder {
 
         Ok(Box::new(ExpressionScan {
             values,
-            input: Box::new(input),
+            input,
             output_schema: scan.schema.clone(),
             meta: PhysicalPlanMeta::new("ExpressionScan"),
         }))

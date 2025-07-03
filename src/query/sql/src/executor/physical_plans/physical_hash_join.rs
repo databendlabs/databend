@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_cast;
@@ -26,11 +27,15 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
@@ -134,6 +139,115 @@ impl IPhysicalPlan for HashJoin {
         Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        for rf in self.runtime_filter.filters.iter() {
+            ctx.scan_id_to_runtime_filters
+                .entry(rf.scan_id)
+                .or_default()
+                .push(rf.clone());
+        }
+
+        let build_keys = self
+            .build_keys
+            .iter()
+            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let probe_keys = self
+            .probe_keys
+            .iter()
+            .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let is_null_equal = self.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
+
+        let filters = self
+            .non_equi_conditions
+            .iter()
+            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        assert_eq!(children.len(), 2);
+        children[0].payload = format!("{}(Build)", children[0].payload);
+        children[1].payload = format!("{}(Probe)", children[1].payload);
+
+        let mut build_runtime_filters = vec![];
+        for rf in self.runtime_filter.filters.iter() {
+            let mut s = format!(
+                "filter id:{}, build key:{}, probe key:{}, filter type:",
+                rf.id,
+                rf.build_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                rf.probe_key.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+            );
+            if rf.enable_bloom_runtime_filter {
+                s += "bloom,";
+            }
+            if rf.enable_inlist_runtime_filter {
+                s += "inlist,";
+            }
+            if rf.enable_min_max_runtime_filter {
+                s += "min_max,";
+            }
+            s = s.trim_end_matches(',').to_string();
+            build_runtime_filters.push(FormatTreeNode::new(s));
+        }
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("join type: {}", self.join_type)),
+            FormatTreeNode::new(format!("build keys: [{build_keys}]")),
+            FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
+            FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
+            FormatTreeNode::new(format!("filters: [{filters}]")),
+        ];
+
+        if !build_runtime_filters.is_empty() {
+            if self.broadcast_id.is_some() {
+                node_children.push(FormatTreeNode::with_children(
+                    format!("build join filters(distributed):"),
+                    build_runtime_filters,
+                ));
+            } else {
+                node_children.push(FormatTreeNode::with_children(
+                    format!("build join filters:"),
+                    build_runtime_filters,
+                ));
+            }
+        }
+
+        if let Some((cache_index, column_map)) = &self.build_side_cache_info {
+            let mut column_indexes = column_map.keys().collect::<Vec<_>>();
+            column_indexes.sort();
+            node_children.push(FormatTreeNode::new(format!("cache index: {}", cache_index)));
+            node_children.push(FormatTreeNode::new(format!(
+                "cache columns: {:?}",
+                column_indexes
+            )));
+        }
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "HashJoin".to_string(),
+            node_children,
+        ))
+    }
+
     fn get_desc(&self) -> Result<String> {
         let mut conditions = self
             .build_keys
@@ -194,23 +308,12 @@ impl IPhysicalPlan for HashJoin {
         Ok(labels)
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_probe = self.probe.derive_with(handle);
-        let derive_build = self.build.derive_with(handle);
-
-        match handle.derive(self, vec![derive_probe, derive_build]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_hash_join = self.clone();
-                assert_eq!(children.len(), 2);
-                new_hash_join.probe = children[0];
-                new_hash_join.build = children[1];
-                Box::new(new_hash_join)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_hash_join = self.clone();
+        assert_eq!(children.len(), 2);
+        new_hash_join.build = children.pop().unwrap();
+        new_hash_join.probe = children.pop().unwrap();
+        Box::new(new_hash_join)
     }
 }
 
@@ -222,8 +325,8 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
     ) -> Result<(Box<dyn IPhysicalPlan>, Box<dyn IPhysicalPlan>)> {
-        let probe_side = Box::new(self.build(s_expr.child(0)?, left_required).await?);
-        let build_side = Box::new(self.build(s_expr.child(1)?, right_required).await?);
+        let probe_side = self.build(s_expr.child(0)?, left_required).await?;
+        let build_side = self.build(s_expr.child(1)?, right_required).await?;
 
         Ok((probe_side, build_side))
     }

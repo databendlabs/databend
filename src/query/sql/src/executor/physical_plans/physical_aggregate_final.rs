@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,7 +27,11 @@ use itertools::Itertools;
 
 use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::pretty_display_agg_desc;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregateFunctionSignature;
@@ -93,6 +98,49 @@ impl IPhysicalPlan for AggregateFinal {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let group_by = self
+            .group_by
+            .iter()
+            .map(|&index| {
+                let name = ctx.metadata.column(index).name();
+                Ok(name)
+            })
+            .collect::<Result<Vec<_>>>()?
+            .join(", ");
+
+        let agg_funcs = self
+            .agg_funcs
+            .iter()
+            .map(|agg| pretty_display_agg_desc(agg, &ctx.metadata))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("group by: [{group_by}]")),
+            FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "AggregateFinal".to_string(),
+            node_children,
+        ))
+    }
+
     fn get_desc(&self) -> Result<String> {
         Ok(self.agg_funcs.iter().map(|x| x.display.clone()).join(", "))
     }
@@ -113,21 +161,11 @@ impl IPhysicalPlan for AggregateFinal {
         Ok(labels)
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_aggregate_final = self.clone();
-                assert_eq!(children.len(), 1);
-                new_aggregate_final.input = children[0];
-                Box::new(new_aggregate_final)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -173,7 +211,7 @@ impl PhysicalPlanBuilder {
         let input_schema = input.output_schema()?;
         let group_items = agg.group_items.iter().map(|v| v.index).collect::<Vec<_>>();
 
-        let result = match &agg.mode {
+        let result: Box<dyn IPhysicalPlan> = match &agg.mode {
             AggregateMode::Partial => {
                 let group_by_display = agg
                     .group_items
@@ -327,16 +365,16 @@ impl PhysicalPlanBuilder {
                         if group_by_shuffle_mode == "before_merge" =>
                     {
                         let aggregate_partial = if let Some(grouping_sets) = agg.grouping_sets {
-                            let expand = AggregateExpand {
+                            let expand = Box::new(AggregateExpand {
                                 input,
                                 grouping_sets,
                                 group_bys: group_items.clone(),
                                 stat_info: Some(stat_info.clone()),
                                 meta: PhysicalPlanMeta::new("AggregateExpand"),
-                            };
+                            });
 
-                            AggregatePartial {
-                                input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                            Box::new(AggregatePartial {
+                                input: expand,
                                 agg_funcs,
                                 enable_experimental_aggregate_hashtable,
                                 group_by_display,
@@ -344,9 +382,9 @@ impl PhysicalPlanBuilder {
                                 stat_info: Some(stat_info),
                                 rank_limit: None,
                                 meta: PhysicalPlanMeta::new("AggregatePartial"),
-                            }
+                            })
                         } else {
-                            AggregatePartial {
+                            Box::new(AggregatePartial {
                                 input,
                                 agg_funcs,
                                 rank_limit,
@@ -355,7 +393,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
                                 meta: PhysicalPlanMeta::new("AggregatePartial"),
-                            }
+                            })
                         };
 
                         let keys = {
@@ -372,20 +410,20 @@ impl PhysicalPlanBuilder {
                                 .collect()
                         };
 
-                        PhysicalPlan::Exchange(Exchange {
+                        Box::new(Exchange {
                             kind,
                             keys,
                             ignore_exchange: false,
                             allow_adjust_parallelism: true,
                             meta: PhysicalPlanMeta::new("Exchange"),
-                            input: Box::new(PhysicalPlan::AggregatePartial(aggregate_partial)),
+                            input: aggregate_partial,
                         })
                     }
                     _ => {
                         if let Some(grouping_sets) = agg.grouping_sets {
                             let expand = AggregateExpand {
+                                input,
                                 grouping_sets,
-                                input: Box::new(input),
                                 group_bys: group_items.clone(),
                                 stat_info: Some(stat_info.clone()),
                                 meta: PhysicalPlanMeta::new("AggregateExpand"),
@@ -402,12 +440,12 @@ impl PhysicalPlanBuilder {
                                 meta: PhysicalPlanMeta::new("AggregatePartial"),
                             })
                         } else {
-                            PhysicalPlan::AggregatePartial(AggregatePartial {
+                            Box::new(AggregatePartial {
+                                input,
                                 agg_funcs,
                                 enable_experimental_aggregate_hashtable,
                                 group_by_display,
                                 group_by: group_items,
-                                input: Box::new(input),
                                 stat_info: Some(stat_info),
                                 rank_limit,
                                 meta: PhysicalPlanMeta::new("AggregatePartial"),
@@ -430,7 +468,7 @@ impl PhysicalPlanBuilder {
                     _ => {
                         return Err(ErrorCode::Internal(format!(
                             "invalid input physical plan: {}",
-                            input.name(),
+                            input.get_name(),
                         )));
                     }
                 };
@@ -556,15 +594,16 @@ impl PhysicalPlanBuilder {
 
                 match input {
                     PhysicalPlan::AggregatePartial(ref partial) => {
+                        let group_by_display = partial.group_by_display.clone();
                         let before_group_by_schema = partial.input.output_schema()?;
 
-                        PhysicalPlan::AggregateFinal(AggregateFinal {
+                        Box::new(AggregateFinal {
+                            input,
                             agg_funcs,
+                            group_by_display,
                             before_group_by_schema,
                             group_by: group_items,
-                            input: Box::new(input),
                             stat_info: Some(stat_info),
-                            group_by_display: partial.group_by_display.clone(),
                             meta: PhysicalPlanMeta::new("AggregateFinal"),
                         })
                     }
@@ -576,10 +615,10 @@ impl PhysicalPlanBuilder {
                         let before_group_by_schema = partial.input.output_schema()?;
 
                         Box::new(AggregateFinal {
+                            input,
                             agg_funcs,
                             before_group_by_schema,
                             group_by: group_items,
-                            input: Box::new(input),
                             stat_info: Some(stat_info),
                             group_by_display: partial.group_by_display.clone(),
                             meta: PhysicalPlanMeta::new("AggregateFinal"),
@@ -589,7 +628,7 @@ impl PhysicalPlanBuilder {
                     _ => {
                         return Err(ErrorCode::Internal(format!(
                             "invalid input physical plan: {}",
-                            input.name(),
+                            input.get_name(),
                         )));
                     }
                 }

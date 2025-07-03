@@ -19,7 +19,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -42,17 +42,9 @@ impl IPhysicalPlan for Recluster {
         &mut self.meta
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
-            }
-        }
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 
@@ -90,20 +82,10 @@ impl IPhysicalPlan for HilbertPartition {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_hilbert_partition = self.clone();
-                assert_eq!(children.len(), 1);
-                new_hilbert_partition.input = children[0];
-                Box::new(new_hilbert_partition)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

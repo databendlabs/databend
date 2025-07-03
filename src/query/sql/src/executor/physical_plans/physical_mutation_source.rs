@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartStatistics;
@@ -29,7 +30,10 @@ use databend_common_meta_app::schema::TableInfo;
 
 use crate::binder::MutationType;
 use crate::executor::cast_expr_to_non_null_boolean;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::part_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -67,21 +71,51 @@ impl IPhysicalPlan for MutationSource {
         Ok(self.output_schema.clone())
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        _: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let table = ctx.metadata.table(self.table_index);
+        let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+
+        let filters = self
+            .filters
+            .as_ref()
+            .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .unwrap_or_default();
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!("table: {table_name}")),
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, ctx.metadata, false)
+            )),
+            FormatTreeNode::new(format!("filters: [{filters}]")),
+        ];
+
+        let payload = match self.input_type {
+            MutationType::Update => "Update",
+            MutationType::Delete if self.truncate_table => "DeleteAll",
+            MutationType::Delete => "Delete",
+            MutationType::Merge => "Merge",
+        };
+
+        // Part stats.
+        node_children.extend(part_stats_info_to_format_tree(&self.statistics));
+        Ok(FormatTreeNode::with_children(
+            format!("MutationSource({})", payload),
+            node_children,
+        ))
+    }
+
     fn try_find_mutation_source(&self) -> Option<MutationSource> {
         Some(self.clone())
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        match handle.derive(self, vec![]) {
-            Ok(v) => v,
-            Err(children) => {
-                assert!(children.is_empty());
-                Box::new(self.clone())
-            }
-        }
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        assert!(children.is_empty());
+        Box::new(self.clone())
     }
 }
 

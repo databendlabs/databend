@@ -18,7 +18,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -65,20 +65,10 @@ impl IPhysicalPlan for DistributedInsertSelect {
         self.input.try_find_single_data_source()
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_distributed_insert_select = self.clone();
-                assert_eq!(children.len(), 1);
-                new_distributed_insert_select.input = children[0];
-                Box::new(new_distributed_insert_select)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

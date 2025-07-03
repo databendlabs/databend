@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
@@ -21,7 +22,10 @@ use databend_common_expression::RemoteExpr;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -70,6 +74,31 @@ impl IPhysicalPlan for UnionAll {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        ))];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        let root = if !self.cte_scan_names.is_empty() {
+            "UnionAll(recursive cte)".to_string()
+        } else {
+            "UnionAll".to_string()
+        };
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(root, node_children))
+    }
+
     fn get_desc(&self) -> Result<String> {
         Ok(self
             .left_outputs
@@ -79,23 +108,12 @@ impl IPhysicalPlan for UnionAll {
             .join(", "))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_left = self.left.derive_with(handle);
-        let derive_right = self.right.derive_with(handle);
-
-        match handle.derive(self, vec![derive_left, derive_right]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_union_all = self.clone();
-                assert_eq!(children.len(), 2);
-                new_union_all.left = children[0];
-                new_union_all.right = children[1];
-                Box::new(new_union_all)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_union_all = self.clone();
+        assert_eq!(children.len(), 2);
+        new_union_all.right = children.pop().unwrap();
+        new_union_all.left = children.pop().unwrap();
+        Box::new(new_union_all)
     }
 }
 

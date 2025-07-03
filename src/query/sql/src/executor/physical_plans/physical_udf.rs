@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,7 +26,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -34,6 +38,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::UDFType;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::Metadata;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -77,6 +82,40 @@ impl IPhysicalPlan for Udf {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut node_children = vec![FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+        ))];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(vec![FormatTreeNode::new(format!(
+            "udf functions: {}",
+            self.udf_funcs
+                .iter()
+                .map(|func| {
+                    let arg_exprs = func.arg_exprs.join(", ");
+                    format!("{}({})", func.func_name, arg_exprs)
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))]);
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "Udf".to_string(),
+            node_children,
+        ))
+    }
+
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
@@ -90,21 +129,11 @@ impl IPhysicalPlan for Udf {
             .join(", "))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_udf = self.clone();
-                assert_eq!(children.len(), 1);
-                new_udf.input = children[0];
-                Box::new(new_udf)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -200,7 +229,7 @@ impl PhysicalPlanBuilder {
             .collect::<Result<Vec<_>>>()?;
 
         Ok(Box::new(Udf {
-            input: Box::new(input),
+            input,
             udf_funcs,
             script_udf: udf_plan.script_udf,
             stat_info: Some(stat_info),

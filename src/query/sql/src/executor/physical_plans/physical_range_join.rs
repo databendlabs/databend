@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
@@ -26,7 +27,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::plan_stats_info_to_format_tree;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -83,6 +87,64 @@ impl IPhysicalPlan for RangeJoin {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let range_join_conditions = self
+            .conditions
+            .iter()
+            .map(|condition| {
+                let left = condition
+                    .left_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                let right = condition
+                    .right_expr
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display();
+                format!("{left} {:?} {right}", condition.operator)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let other_conditions = self
+            .other_conditions
+            .iter()
+            .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        assert_eq!(children.len(), 2);
+        children[0].payload = format!("{}(Left)", children[0].payload);
+        children[1].payload = format!("{}(Right)", children[1].payload);
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("join type: {}", self.join_type)),
+            FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
+            FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            let items = plan_stats_info_to_format_tree(info);
+            node_children.extend(items);
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            match self.range_join_type {
+                RangeJoinType::IEJoin => "IEJoin".to_string(),
+                RangeJoinType::Merge => "MergeJoin".to_string(),
+            },
+            node_children,
+        ))
+    }
+
     fn get_desc(&self) -> Result<String> {
         let mut condition = self
             .conditions
@@ -109,23 +171,12 @@ impl IPhysicalPlan for RangeJoin {
         Ok(condition.join(" AND "))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_left = self.left.derive_with(handle);
-        let derive_right = self.right.derive_with(handle);
-
-        match handle.derive(self, vec![derive_left, derive_right]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_range_join = self.clone();
-                assert_eq!(children.len(), 2);
-                new_range_join.left = children[0];
-                new_range_join.right = children[1];
-                Box::new(new_range_join)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_range_join = self.clone();
+        assert_eq!(children.len(), 2);
+        new_range_join.right = children.pop().unwrap();
+        new_range_join.left = children.pop().unwrap();
+        Box::new(new_range_join)
     }
 }
 

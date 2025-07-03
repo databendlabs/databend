@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -21,8 +22,9 @@ use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plan::PhysicalPlan;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlanMeta;
@@ -65,20 +67,20 @@ impl IPhysicalPlan for ColumnMutation {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive_with(
+    fn to_format_node(
         &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
+        _: &mut FormatContext<'_>,
+        mut children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        // ignore self
+        assert_eq!(children.len(), 1);
+        Ok(children.pop().unwrap())
+    }
 
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_column_mutation = self.clone();
-                assert_eq!(children.len(), 1);
-                new_column_mutation.input = children[0];
-                Box::new(new_column_mutation)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }

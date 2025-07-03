@@ -35,10 +35,10 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::TableScan;
+use databend_common_sql::executor::DeriveHandle;
 use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
-use databend_common_sql::executor::PhysicalPlanDeriveHandle;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RelOperator;
@@ -382,7 +382,7 @@ struct ReadSourceDeriveHandle {
     source: DataSourcePlan,
 }
 
-impl PhysicalPlanDeriveHandle for ReadSourceDeriveHandle {
+impl DeriveHandle for ReadSourceDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,

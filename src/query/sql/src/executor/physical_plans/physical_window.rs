@@ -14,6 +14,7 @@
 
 use std::fmt::Display;
 
+use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,7 +34,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plan::PhysicalPlanDeriveHandle;
+use crate::executor::format::format_output_columns;
+use crate::executor::format::pretty_display_agg_desc;
+use crate::executor::format::FormatContext;
+use crate::executor::physical_plan::DeriveHandle;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::physical_plans::common::AggregateFunctionSignature;
 use crate::executor::physical_plans::common::SortDesc;
@@ -93,6 +97,54 @@ impl IPhysicalPlan for Window {
         Box::new(std::iter::once(&mut self.input))
     }
 
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let partition_by = self
+            .partition_by
+            .iter()
+            .map(|&index| Ok(ctx.metadata.column(index).name()))
+            .collect::<Result<Vec<_>>>()?
+            .join(", ");
+
+        let order_by = self
+            .order_by
+            .iter()
+            .map(|v| v.display_name.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let frame = self.window_frame.to_string();
+
+        let func = match &self.func {
+            WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, &ctx.metadata),
+            func => format!("{}", func),
+        };
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!("aggregate function: [{func}]")),
+            FormatTreeNode::new(format!("partition by: [{partition_by}]")),
+            FormatTreeNode::new(format!("order by: [{order_by}]")),
+            FormatTreeNode::new(format!("frame: [{frame}]")),
+        ];
+
+        if let Some(limit) = self.limit {
+            node_children.push(FormatTreeNode::new(format!("limit: [{limit}]")))
+        }
+
+        node_children.extend(children);
+        Ok(FormatTreeNode::with_children(
+            "Window".to_string(),
+            node_children,
+        ))
+    }
+
     #[recursive::recursive]
     fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         self.input.try_find_single_data_source()
@@ -126,21 +178,11 @@ impl IPhysicalPlan for Window {
         ))
     }
 
-    fn derive_with(
-        &self,
-        handle: &mut Box<dyn PhysicalPlanDeriveHandle>,
-    ) -> Box<dyn IPhysicalPlan> {
-        let derive_input = self.input.derive_with(handle);
-
-        match handle.derive(self, vec![derive_input]) {
-            Ok(v) => v,
-            Err(children) => {
-                let mut new_window = self.clone();
-                assert_eq!(children.len(), 1);
-                new_window.input = children[0];
-                Box::new(new_window)
-            }
-        }
+    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
     }
 }
 
@@ -433,8 +475,8 @@ impl PhysicalPlanBuilder {
         };
 
         Ok(Box::new(Window {
+            input,
             index: w.index,
-            input: Box::new(input),
             func,
             partition_by: partition_items,
             order_by: order_by_items,

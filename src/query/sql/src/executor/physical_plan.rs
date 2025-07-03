@@ -16,6 +16,8 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
@@ -23,6 +25,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::PlanProfile;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -35,6 +38,7 @@ use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSource;
 use super::physical_plans::MutationSplit;
+use crate::executor::format::FormatContext;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
@@ -80,6 +84,7 @@ use crate::executor::physical_plans::Udf;
 use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowPartition;
+use crate::Metadata;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PhysicalPlanMeta {
@@ -89,11 +94,14 @@ pub struct PhysicalPlanMeta {
 
 impl PhysicalPlanMeta {
     pub fn new(name: impl Into<String>) -> PhysicalPlanMeta {
-        PhysicalPlanMeta { plan_id: 0, name }
+        PhysicalPlanMeta {
+            plan_id: 0,
+            name: name.into(),
+        }
     }
 }
 
-pub trait PhysicalPlanDeriveHandle {
+pub trait DeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -108,7 +116,6 @@ pub trait IPhysicalPlan: Debug {
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta;
 
     // For methods with default implementations, the default implementation is usually sufficient.
-
     fn get_id(&self) -> u32 {
         self.get_meta().plan_id
     }
@@ -143,6 +150,14 @@ pub trait IPhysicalPlan: Debug {
 
     fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
+    }
+
+    fn to_format_node(
+        &self,
+        _ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        Ok(FormatTreeNode::with_children(self.get_name(), children))
     }
 
     /// Used to find data source info in a non-aggregation and single-table query plan.
@@ -194,8 +209,7 @@ pub trait IPhysicalPlan: Debug {
         Ok(HashMap::new())
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn PhysicalPlanDeriveHandle>)
-        -> Box<dyn IPhysicalPlan>;
+    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan>;
 }
 
 pub trait PhysicalPlanExt {
@@ -210,7 +224,71 @@ where T: 'static + IPhysicalPlan + Clone
     fn clone_box(&self) -> Box<dyn IPhysicalPlan> {
         Box::new(self.clone())
     }
+
+    fn down_cast<T>(&self) -> Option<&T> {
+        todo!()
+    }
 }
+
+pub trait PhysicalPlanDynExt {
+    fn format(
+        &self,
+        metadata: &Metadata,
+        profs: HashMap<u32, PlanProfile>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut context = FormatContext {
+            metadata,
+            scan_id_to_runtime_filters: HashMap::new(),
+        };
+
+        self.to_format_tree(&profs, &mut context)
+    }
+
+    fn to_format_tree(
+        &self,
+        profs: &HashMap<u32, PlanProfile>,
+        ctx: &mut FormatContext<'_>,
+    ) -> Result<FormatTreeNode<String>>;
+}
+
+impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan> {
+    fn to_format_tree(
+        &self,
+        profs: &HashMap<u32, PlanProfile>,
+        ctx: &mut FormatContext<'_>,
+    ) -> Result<FormatTreeNode<String>> {
+        let mut children = Vec::with_capacity(4);
+        for child in self.children() {
+            children.push(child.to_format_tree(profs, ctx)?);
+        }
+
+        let mut format_tree_node = self.to_format_node(ctx, children)?;
+
+        if let Some(prof) = profs.get(&self.get_id()) {
+            let mut children = Vec::with_capacity(format_tree_node.children.len() + 10);
+            for (_, desc) in get_statistics_desc().iter() {
+                if desc.display_name != "output rows" {
+                    continue;
+                }
+                if prof.statistics[desc.index] != 0 {
+                    children.push(FormatTreeNode::new(format!(
+                        "{}: {}",
+                        desc.display_name.to_lowercase(),
+                        desc.human_format(prof.statistics[desc.index])
+                    )));
+                }
+                break;
+            }
+
+            children.append(&mut format_tree_node.children);
+            format_tree_node.children = children;
+        }
+
+        Ok(format_tree_node)
+    }
+}
+
+unsafe impl Send for dyn IPhysicalPlan {}
 
 impl Clone for Box<dyn IPhysicalPlan> {
     fn clone(&self) -> Self {
