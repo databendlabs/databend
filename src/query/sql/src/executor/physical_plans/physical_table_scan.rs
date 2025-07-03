@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -98,6 +99,9 @@ pub struct TableScan {
 
 #[typetag::serde]
 impl IPhysicalPlan for TableScan {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

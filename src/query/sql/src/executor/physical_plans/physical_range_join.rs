@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -65,6 +66,9 @@ pub struct RangeJoin {
 
 #[typetag::serde]
 impl IPhysicalPlan for RangeJoin {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

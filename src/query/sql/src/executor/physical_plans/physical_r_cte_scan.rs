@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::fmt::Display;
 
 use databend_common_exception::Result;
@@ -35,6 +36,9 @@ pub struct RecursiveCteScan {
 
 #[typetag::serde]
 impl IPhysicalPlan for RecursiveCteScan {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

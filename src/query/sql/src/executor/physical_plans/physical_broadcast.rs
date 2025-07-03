@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -33,6 +35,9 @@ pub struct BroadcastSource {
 
 #[typetag::serde]
 impl IPhysicalPlan for BroadcastSource {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -56,6 +61,9 @@ pub struct BroadcastSink {
 
 #[typetag::serde]
 impl IPhysicalPlan for BroadcastSink {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

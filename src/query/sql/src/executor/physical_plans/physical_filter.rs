@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -52,6 +53,9 @@ pub struct Filter {
 
 #[typetag::serde]
 impl IPhysicalPlan for Filter {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

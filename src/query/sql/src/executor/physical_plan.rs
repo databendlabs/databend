@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
@@ -110,7 +111,9 @@ pub trait DeriveHandle {
 }
 
 #[typetag::serde]
-pub trait IPhysicalPlan: Debug {
+pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
+    fn as_any(&self) -> &dyn Any;
+
     fn get_meta(&self) -> &PhysicalPlanMeta;
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta;
@@ -214,19 +217,11 @@ pub trait IPhysicalPlan: Debug {
 
 pub trait PhysicalPlanExt {
     fn clone_box(&self) -> Box<dyn IPhysicalPlan>;
-
-    fn down_cast<T>(&self) -> Option<&T>;
 }
 
-impl<T> PhysicalPlanExt for T
-where T: 'static + IPhysicalPlan + Clone
-{
+impl<T: 'static + IPhysicalPlan + Clone> PhysicalPlanExt for T {
     fn clone_box(&self) -> Box<dyn IPhysicalPlan> {
         Box::new(self.clone())
-    }
-
-    fn down_cast<T>(&self) -> Option<&T> {
-        todo!()
     }
 }
 
@@ -249,9 +244,15 @@ pub trait PhysicalPlanDynExt {
         profs: &HashMap<u32, PlanProfile>,
         ctx: &mut FormatContext<'_>,
     ) -> Result<FormatTreeNode<String>>;
+
+    fn downcast_ref<To: 'static>(&self) -> Option<&To>;
+
+    fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To>;
+
+    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> Box<dyn IPhysicalPlan>;
 }
 
-impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan> {
+impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
     fn to_format_tree(
         &self,
         profs: &HashMap<u32, PlanProfile>,
@@ -286,13 +287,42 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan> {
 
         Ok(format_tree_node)
     }
+
+    fn downcast_ref<To: 'static>(&self) -> Option<&To> {
+        self.as_any().downcast_ref()
+    }
+
+    fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To> {
+        // self.as_any().downcast_mut()
+        unimplemented!()
+    }
+
+    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> Box<dyn IPhysicalPlan> {
+        let mut children = vec![];
+        for child in self.children() {
+            children.push(child.derive_with(handle));
+        }
+
+        self.derive(children)
+    }
 }
 
-unsafe impl Send for dyn IPhysicalPlan {}
+struct DummyDeriveHandle;
+
+impl DeriveHandle for DummyDeriveHandle {
+    fn derive(
+        &mut self,
+        _: &Box<dyn IPhysicalPlan>,
+        children: Vec<Box<dyn IPhysicalPlan>>,
+    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        Err(children)
+    }
+}
 
 impl Clone for Box<dyn IPhysicalPlan> {
     fn clone(&self) -> Self {
-        self.clone_box()
+        let mut handle: Box<dyn DeriveHandle> = Box::new(DummyDeriveHandle);
+        self.derive_with(&mut handle)
     }
 }
 

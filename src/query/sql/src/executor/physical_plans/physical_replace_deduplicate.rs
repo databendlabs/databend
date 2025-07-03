@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -48,6 +49,9 @@ pub struct ReplaceDeduplicate {
 
 #[typetag::serde]
 impl IPhysicalPlan for ReplaceDeduplicate {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

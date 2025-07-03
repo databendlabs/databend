@@ -359,17 +359,6 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    pub fn explain_join_order(
-        &self,
-        plan: &PhysicalPlan,
-        metadata: &MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
-        let result = plan.format_join(metadata)?.format_pretty()?;
-        let line_split_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = StringType::from_data(line_split_result);
-        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
-    }
-
     fn format_pipeline(build_res: &PipelineBuildResult) -> Vec<DataBlock> {
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline

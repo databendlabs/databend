@@ -36,6 +36,7 @@ use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::DeriveHandle;
 use databend_common_sql::executor::IPhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanDynExt;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
@@ -228,7 +229,7 @@ impl PlanFragment {
         ctx: Arc<QueryContext>,
         fragment_actions: &mut QueryFragmentActions,
     ) -> Result<()> {
-        let Some(plan) = self.plan.down_cast::<ExchangeSink>() else {
+        let Some(plan) = self.plan.downcast_ref::<ExchangeSink>() else {
             unreachable!("logic error");
         };
 
@@ -490,7 +491,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        if let Some(table_scan) = v.down_cast::<TableScan>() {
+        if let Some(table_scan) = v.downcast_ref::<TableScan>() {
             let source = self.sources.remove(&table_scan.get_id()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "Cannot find data source for table scan plan {}",
@@ -502,7 +503,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
                 source: Box::new(DataSourcePlan::try_from(source)?),
                 ..table_scan.clone()
             }));
-        } else if let Some(table_scan) = v.down_cast::<ConstantTableScan>() {
+        } else if let Some(table_scan) = v.downcast_ref::<ConstantTableScan>() {
             let source = self.sources.remove(&table_scan.get_id()).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "Cannot find data source for constant table scan plan {}",
@@ -539,7 +540,7 @@ impl DeriveHandle for ReclusterDeriveHandle {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        let Some(recluster) = v.down_cast::<Recluster>() else {
+        let Some(recluster) = v.downcast_ref::<Recluster>() else {
             return Err(children);
         };
 
@@ -566,7 +567,7 @@ impl DeriveHandle for MutationSourceDeriveHandle {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        let Some(mutation_source) = v.down_cast::<MutationSource>() else {
+        let Some(mutation_source) = v.downcast_ref::<MutationSource>() else {
             return Err(children);
         };
 
@@ -593,7 +594,7 @@ impl DeriveHandle for CompactSourceDeriveHandle {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        let Some(compact_source) = v.down_cast::<CompactSource>() else {
+        let Some(compact_source) = v.downcast_ref::<CompactSource>() else {
             return Err(children);
         };
 
@@ -631,7 +632,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        if let Some(replace_into) = v.down_cast::<ReplaceInto>() {
+        if let Some(replace_into) = v.downcast_ref::<ReplaceInto>() {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceInto {
                 input: children[0],
@@ -640,7 +641,7 @@ impl DeriveHandle for ReplaceDeriveHandle {
                 block_slots: self.slot.clone(),
                 ..replace_into.clone()
             }));
-        } else if let Some(replace_deduplicate) = v.down_cast::<ReplaceDeduplicate>() {
+        } else if let Some(replace_deduplicate) = v.downcast_ref::<ReplaceDeduplicate>() {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceDeduplicate {
                 input: children[0],

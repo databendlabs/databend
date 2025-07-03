@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
@@ -42,6 +43,9 @@ pub struct Duplicate {
 
 #[typetag::serde]
 impl IPhysicalPlan for Duplicate {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -95,6 +99,9 @@ pub struct Shuffle {
 
 #[typetag::serde]
 impl IPhysicalPlan for Shuffle {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -167,6 +174,9 @@ pub struct ChunkFilter {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkFilter {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -231,6 +241,9 @@ pub struct ChunkEvalScalar {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkEvalScalar {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -306,6 +319,9 @@ pub struct ChunkCastSchema {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkCastSchema {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -356,6 +372,9 @@ pub struct ChunkFillAndReorder {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkFillAndReorder {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -407,6 +426,9 @@ pub struct ChunkAppendData {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkAppendData {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -460,6 +482,9 @@ pub struct ChunkMerge {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkMerge {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -508,6 +533,9 @@ pub struct ChunkCommitInsert {
 
 #[typetag::serde]
 impl IPhysicalPlan for ChunkCommitInsert {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }

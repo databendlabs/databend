@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -36,6 +37,7 @@ use crate::executor::format::format_output_columns;
 use crate::executor::format::plan_stats_info_to_format_tree;
 use crate::executor::format::FormatContext;
 use crate::executor::physical_plan::DeriveHandle;
+use crate::executor::physical_plan::PhysicalPlanDynExt;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::IPhysicalPlan;
 use crate::executor::PhysicalPlan;
@@ -117,6 +119,9 @@ pub struct HashJoin {
 
 #[typetag::serde]
 impl IPhysicalPlan for HashJoin {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     fn get_meta(&self) -> &PhysicalPlanMeta {
         &self.meta
     }
@@ -426,47 +431,49 @@ impl PhysicalPlanBuilder {
         build_side: &mut Box<dyn IPhysicalPlan>,
     ) -> Result<()> {
         // Unify the data types of the left and right exchange keys
-        if let (
-            PhysicalPlan::Exchange(Exchange {
-                keys: probe_keys, ..
-            }),
-            PhysicalPlan::Exchange(Exchange {
-                keys: build_keys, ..
-            }),
-        ) = (probe_side.as_mut(), build_side.as_mut())
+        let Some(probe_exchange) = probe_side.downcast_mut_ref::<Exchange>() else {
+            return Ok(());
+        };
+
+        let Some(build_exchange) = build_side.downcast_mut_ref::<Exchange>() else {
+            return Ok(());
+        };
+
+        let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+        for (probe_key, build_key) in probe_exchange
+            .keys
+            .iter_mut()
+            .zip(build_exchange.keys.iter_mut())
         {
-            let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
-            for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
-                let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
-                let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
-                let common_ty = common_super_type(
-                    probe_expr.data_type().clone(),
-                    build_expr.data_type().clone(),
-                    cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for probe key {:?} and build key {:?}",
-                        &probe_expr, &build_expr
-                    ))
-                })?;
-                *probe_key = check_cast(
-                    probe_expr.span(),
-                    false,
-                    probe_expr,
-                    &common_ty,
-                    &BUILTIN_FUNCTIONS,
-                )?
-                .as_remote_expr();
-                *build_key = check_cast(
-                    build_expr.span(),
-                    false,
-                    build_expr,
-                    &common_ty,
-                    &BUILTIN_FUNCTIONS,
-                )?
-                .as_remote_expr();
-            }
+            let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+            let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
+            let common_ty = common_super_type(
+                probe_expr.data_type().clone(),
+                build_expr.data_type().clone(),
+                cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!(
+                    "Cannot find common type for probe key {:?} and build key {:?}",
+                    &probe_expr, &build_expr
+                ))
+            })?;
+            *probe_key = check_cast(
+                probe_expr.span(),
+                false,
+                probe_expr,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?
+            .as_remote_expr();
+            *build_key = check_cast(
+                build_expr.span(),
+                false,
+                build_expr,
+                &common_ty,
+                &BUILTIN_FUNCTIONS,
+            )?
+            .as_remote_expr();
         }
 
         Ok(())

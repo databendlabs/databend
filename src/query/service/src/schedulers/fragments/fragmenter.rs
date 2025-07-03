@@ -161,7 +161,7 @@ impl DeriveHandle for Fragmenter {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        let Some(compact_source) = v.down_cast::<CompactSource>() else {
+        let Some(compact_source) = v.downcast_ref::<CompactSource>() else {
             return Err(children);
         };
     }

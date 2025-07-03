@@ -388,7 +388,7 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         v: &Box<dyn IPhysicalPlan>,
         children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
-        let Some(table_scan) = v.down_cast::<TableScan>() else {
+        let Some(table_scan) = v.downcast_ref::<TableScan>() else {
             return Err(children);
         };
 
