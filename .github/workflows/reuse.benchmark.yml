@@ -23,15 +23,6 @@ on:
         description: The version of databend to run
         required: true
         type: string
-      runner_provider:
-        description: "Self-hosted runner provider, aws or gcp"
-        type: string
-        required: true
-      runner_capacity:
-        description: "Self-hosted runner capacity, spot or on-demand"
-        type: string
-        required: true
-        default: "spot"
       target:
         description: "The target of benchmark, local or cloud or all"
         type: string
@@ -44,18 +35,12 @@ permissions:
 
 env:
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: ${{ inputs.runner_provider }}
+  RUNNER_PROVIDER: github
 
 jobs:
   local:
     timeout-minutes: 60
-    runs-on:
-      - self-hosted
-      - X64
-      - Linux
-      - 8c32g
-      - ${{ inputs.runner_provider }}
-      - ${{ inputs.runner_capacity }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         dataset:
