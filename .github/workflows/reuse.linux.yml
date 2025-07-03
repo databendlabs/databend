@@ -121,7 +121,7 @@ jobs:
       - X64
       - Linux
       - 2c8g
-      - "${{ inputs.runner_provider }}" 
+      - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
