@@ -46,6 +46,7 @@ impl fmt::Display for WatchRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protobuf as pb;
     use crate::protobuf::watch_request::FilterType;
     use crate::protobuf::KvMeta;
     use crate::protobuf::SeqV;
@@ -53,7 +54,7 @@ mod tests {
     #[test]
     fn test_watch_response_display() {
         let mut watch_response = WatchResponse {
-            event: Some(Event {
+            event: Some(pb::Event {
                 key: "test_key".to_string(),
                 prev: Some(SeqV {
                     seq: 1,

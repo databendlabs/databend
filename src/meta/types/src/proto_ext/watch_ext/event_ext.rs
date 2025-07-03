@@ -45,7 +45,7 @@ impl pb::Event {
 
         match (&self.prev, &other.prev) {
             (Some(prev), Some(other_prev)) => {
-                if !prev.close_to(&other_prev, tolerance) {
+                if !prev.close_to(other_prev, tolerance) {
                     return false;
                 }
             }
@@ -55,7 +55,7 @@ impl pb::Event {
 
         match (&self.current, &other.current) {
             (Some(current), Some(other_current)) => {
-                if !current.close_to(&other_current, tolerance) {
+                if !current.close_to(other_current, tolerance) {
                     return false;
                 }
             }
@@ -213,7 +213,7 @@ mod tests {
             ))
             .with_current(pb::SeqV::with_meta(
                 1,
-                Some(pb::KvMeta::new_expire(1723102821_000)),
+                Some(pb::KvMeta::new_expire(1_723_102_821_000)),
                 b"".to_vec(),
             ));
 

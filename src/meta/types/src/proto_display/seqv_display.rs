@@ -71,7 +71,7 @@ mod tests {
         assert_eq!(meta.to_string(), "[expire=2024-08-08T07:40:19.000]");
 
         let meta = KvMeta {
-            expire_at: Some(1723102819_000),
+            expire_at: Some(1_723_102_819_000),
         };
         assert_eq!(meta.to_string(), "[expire=2024-08-08T07:40:19.000]");
     }
@@ -100,7 +100,7 @@ mod tests {
         let seqv = SeqV {
             seq: 1,
             meta: Some(KvMeta {
-                expire_at: Some(1723102819_000),
+                expire_at: Some(1_723_102_819_000),
             }),
             data: vec![65, 66, 67],
         };
@@ -125,7 +125,7 @@ mod tests {
             seq: 1,
             meta: Some(KvMeta {
                 // in millis
-                expire_at: Some(1723102819_000),
+                expire_at: Some(1_723_102_819_000),
             }),
             data: vec![0, 159, 146, 150],
         };
