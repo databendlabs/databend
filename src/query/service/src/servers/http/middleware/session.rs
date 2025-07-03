@@ -14,8 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
@@ -53,7 +51,6 @@ use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
-use poem::web::cookie::Cookie;
 use poem::web::Json;
 use poem::Addr;
 use poem::Endpoint;
@@ -70,8 +67,7 @@ use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
-use crate::servers::http::v1::unix_ts;
-use crate::servers::http::v1::ClientSessionManager;
+use crate::servers::http::middleware::session_header::ClientSession;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::login_history::LoginEventType;
@@ -81,9 +77,7 @@ use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
-const COOKIE_LAST_REFRESH_TIME: &str = "last_refresh_time";
-const COOKIE_SESSION_ID: &str = "session_id";
-const COOKIE_COOKIE_ENABLED: &str = "cookie_enabled";
+
 #[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
@@ -352,12 +346,6 @@ pub struct HTTPSessionEndpoint<E> {
     pub auth_manager: Arc<AuthMgr>,
 }
 
-fn make_cookie(name: impl Into<String>, value: impl Into<String>) -> Cookie {
-    let mut cookie = Cookie::new_with_str(name, value);
-    cookie.set_path("/");
-    cookie
-}
-
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(
@@ -371,6 +359,21 @@ impl<E> HTTPSessionEndpoint<E> {
         let node_id = GlobalConfig::instance().query.node_id.clone();
         login_history.client_ip = client_host.clone().unwrap_or_default();
         login_history.node_id = node_id.clone();
+        let user_agent = req
+            .headers()
+            .get(USER_AGENT)
+            .map(|id| id.to_str().unwrap().to_string());
+
+        let is_worksheet = user_agent
+            .as_ref()
+            .map(|ua_str| {
+                ["Mozilla", "Chrome", "Firefox", "Safari", "Edge"]
+                    .iter()
+                    .any(|kw| ua_str.contains(kw))
+            })
+            .unwrap_or(false);
+
+        login_history.user_agent = user_agent.clone().unwrap_or_default();
 
         let credential = get_credential(req, self.kind, self.endpoint_kind)?;
         login_history.auth_type = credential.type_name();
@@ -383,14 +386,6 @@ impl<E> HTTPSessionEndpoint<E> {
             let tenant = Tenant::new_or_err(tenant_id.clone(), func_name!())?;
             session.set_current_tenant(tenant);
         }
-
-        // cookie_enabled is used to recognize old clients that not support cookie yet.
-        // for these old clients, there is no session id available, thus can not use temp table.
-        let cookie_enabled = req.cookie().get(COOKIE_COOKIE_ENABLED).is_some();
-        let cookie_session_id = req
-            .cookie()
-            .get(COOKIE_SESSION_ID)
-            .map(|s| s.value_str().to_string());
         let (user_name, authed_client_session_id) = self
             .auth_manager
             .auth(
@@ -401,75 +396,42 @@ impl<E> HTTPSessionEndpoint<E> {
             .await?;
         login_history.user_name = user_name.clone();
 
-        // If cookie_session_id is set, we disable writing to login_history.
-        // The cookie_session_id is initially issued by the server to the client upon the first successful login.
-        // For all subsequent requests, the client includes this session_id with each request.
-        // This indicates the user is already logged in, so we skip recording another login event.
-        if cookie_session_id.is_some() {
-            login_history.disable_write = true;
-        }
-        let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
-            (Some(id1), Some(id2)) => {
-                if id1 != id2 {
-                    return Err(ErrorCode::AuthenticateFailure(format!(
-                        "[HTTP-SESSION] Session ID mismatch: token session ID '{}' does not match cookie session ID '{}'",
-                        id1, id2
-                    )));
-                }
-                Some(id1.clone())
-            }
-            (Some(id), None) => {
-                if cookie_enabled {
-                    req.cookie().add(make_cookie(COOKIE_SESSION_ID, id));
-                }
-                Some(id.clone())
-            }
-            (None, Some(id)) => Some(id.clone()),
-            (None, None) => {
-                if cookie_enabled {
-                    let id = Uuid::new_v4().to_string();
-                    info!("[HTTP-SESSION] Created new session with ID: {}", id);
-                    req.cookie().add(make_cookie(COOKIE_SESSION_ID, &id));
-                    Some(id)
-                } else {
-                    None
-                }
-            }
-        };
-        login_history.session_id = client_session_id.clone().unwrap_or_default();
-
-        if let Some(id) = &client_session_id {
-            session.set_client_session_id(id.clone());
+        let mut client_session = ClientSession::try_decode(req)?;
+        if client_session.is_none() && !matches!(self.endpoint_kind, EndpointKind::PollQuery) {
+            info!(
+                "[HTTP-SESSION] got request without session, url={}, headers={:?}",
+                req.uri(),
+                &req.headers()
+            );
         }
 
-        if cookie_enabled {
-            let last_refresh_time = req
-                .cookie()
-                .get(COOKIE_LAST_REFRESH_TIME)
-                .map(|s| s.value_str().to_string());
-
-            let need_update = if let Some(ts) = &last_refresh_time {
-                let ts = ts.parse::<u64>().map_err(|_| {
-                    ErrorCode::BadArguments(format!(
-                        "[HTTP-SESSION] Invalid last_refresh_time value: {}",
-                        ts
-                    ))
-                })?;
-                let ts = SystemTime::UNIX_EPOCH + Duration::from_secs(ts);
-                if let Some(id) = &client_session_id {
-                    ClientSessionManager::instance()
-                        .refresh_state(session.get_current_tenant(), id, &user_name, &ts)
-                        .await?
-                } else {
-                    true
-                }
-            } else {
-                true
-            };
-            if need_update {
-                let ts = unix_ts().as_secs().to_string();
-                req.cookie().add(make_cookie(COOKIE_LAST_REFRESH_TIME, ts));
+        if let (Some(id1), Some(c)) = (&authed_client_session_id, &client_session) {
+            if *id1 != c.header.id {
+                return Err(ErrorCode::AuthenticateFailure(format!(
+                    "[HTTP-SESSION] Session ID mismatch: token session ID '{}' does not match header session ID '{}'",
+                    id1, c.header.id
+                )));
             }
+        }
+        login_history.disable_write = false;
+        if let Some(s) = &mut client_session {
+            let sid = s.header.id.clone();
+            session.set_client_session_id(sid.clone());
+            login_history.session_id = sid.clone();
+            if !s.is_new_session {
+                // if session enabled by client:
+                //     log for the first request of the session.
+                // else:
+                //     log every request, which can be distinguished by `session_id = ''`
+                login_history.disable_write = true;
+            }
+            s.try_refresh_state(
+                session.get_current_tenant(),
+                &user_name,
+                req.cookie(),
+                is_worksheet,
+            )
+            .await?;
         }
 
         let session = session_manager.register_session(session)?;
@@ -478,12 +440,6 @@ impl<E> HTTPSessionEndpoint<E> {
             .headers()
             .get(HEADER_DEDUPLICATE_LABEL)
             .map(|id| id.to_str().unwrap().to_string());
-
-        let user_agent = req
-            .headers()
-            .get(USER_AGENT)
-            .map(|id| id.to_str().unwrap().to_string());
-        login_history.user_agent = user_agent.clone().unwrap_or_default();
 
         let expected_node_id = req
             .headers()
@@ -509,9 +465,11 @@ impl<E> HTTPSessionEndpoint<E> {
             http_method: req.method().to_string(),
             uri: req.uri().to_string(),
             client_host,
-            client_session_id,
+            client_session_id: client_session.as_ref().map(|s| s.header.id.clone()),
             user_name,
             is_sticky_node,
+            client_session,
+            fixed_coordinator_node: is_worksheet,
         })
     }
 }
@@ -698,8 +656,15 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                 Ok(ctx) => {
                     login_history.event_type = LoginEventType::LoginSuccess;
                     login_history.write_to_log();
+                    let client_session = ctx.client_session.clone();
                     req.extensions_mut().insert(ctx);
-                    self.ep.call(req).await.map(|v| v.into_response())
+                    self.ep.call(req).await.map(|v| {
+                        let mut r = v.into_response();
+                        if let Some(s) = client_session {
+                            s.on_response(&mut r);
+                        }
+                        r
+                    })
                 }
                 Err(err) => {
                     login_history.event_type = LoginEventType::LoginFailed;
