@@ -14,15 +14,11 @@
 
 use std::sync::Arc;
 
-use databend_common_cloud_control::client_config::make_request;
-use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::DropTaskRequest;
-use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropTaskPlan;
 
-use crate::interpreters::common::get_task_client_config;
+use crate::interpreters::task::TaskInterpreter;
+use crate::interpreters::task::TaskInterpreterFactory;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -39,17 +35,6 @@ impl DropTaskInterpreter {
     }
 }
 
-impl DropTaskInterpreter {
-    fn build_request(&self) -> DropTaskRequest {
-        let plan = self.plan.clone();
-        DropTaskRequest {
-            task_name: plan.task_name,
-            tenant_id: plan.tenant.tenant_name().to_string(),
-            if_exist: plan.if_exists,
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl Interpreter for DropTaskInterpreter {
     fn name(&self) -> &str {
@@ -63,18 +48,10 @@ impl Interpreter for DropTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
-            return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot drop task without cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        }
-        let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_task_client();
-        let req = self.build_request();
-        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
-        task_client.drop_task(req).await?;
+        TaskInterpreterFactory::build()
+            .drop_task(&self.ctx, &self.plan)
+            .await?;
+
         Ok(PipelineBuildResult::create())
     }
 }

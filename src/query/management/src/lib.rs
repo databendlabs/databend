@@ -32,6 +32,7 @@ mod warehouse;
 mod client_session;
 pub mod errors;
 mod procedure;
+pub mod task;
 mod workload;
 
 pub use client_session::ClientSessionMgr;
