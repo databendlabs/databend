@@ -50,9 +50,22 @@ impl pb::TxnOp {
         }
     }
 
-    pub fn with_ttl(mut self, ttl_ms: Option<u64>) -> Self {
-        if let Some(pb::txn_op::Request::Put(p)) = &mut self.request {
-            p.ttl_ms = ttl_ms;
+    pub fn with_ttl(mut self, ttl: Option<Duration>) -> Self {
+        let ttl_ms = ttl.map(|d| d.as_millis() as u64);
+        match &mut self.request {
+            Some(pb::txn_op::Request::Put(p)) => p.ttl_ms = ttl_ms,
+            Some(pb::txn_op::Request::PutSequential(p)) => p.ttl_ms = ttl_ms,
+            _ => {}
+        }
+        self
+    }
+
+    pub fn with_expires_at_ms(mut self, expires_at_ms: Option<u64>) -> Self {
+        match &mut self.request {
+            // Require 1.2.770 that support expire_at in milliseconds
+            Some(pb::txn_op::Request::Put(p)) => p.expire_at = expires_at_ms,
+            Some(pb::txn_op::Request::PutSequential(p)) => p.expires_at_ms = expires_at_ms,
+            _ => {}
         }
         self
     }
@@ -88,6 +101,22 @@ impl pb::TxnOp {
                 key: key.to_string(),
                 match_seq: None,
                 delta,
+            })),
+        }
+    }
+
+    pub fn put_sequential(
+        prefix: impl ToString,
+        sequence_key: impl ToString,
+        value: Vec<u8>,
+    ) -> Self {
+        pb::TxnOp {
+            request: Some(pb::txn_op::Request::PutSequential(pb::PutSequential {
+                prefix: prefix.to_string(),
+                sequence_key: sequence_key.to_string(),
+                value,
+                expires_at_ms: None,
+                ttl_ms: None,
             })),
         }
     }
@@ -178,7 +207,7 @@ mod tests {
     #[test]
     fn test_with_ttl() {
         let mut op = pb::TxnOp::put("key", b"value".to_vec());
-        op = op.with_ttl(Some(5000));
+        op = op.with_ttl(Some(Duration::from_millis(5000)));
 
         let Some(pb::txn_op::Request::Put(put_req)) = &op.request else {
             panic!("Expected Put request");
@@ -191,7 +220,7 @@ mod tests {
     fn test_with_ttl_non_put_operation() {
         // with_ttl should only work on Put operations
         let mut op = pb::TxnOp::get("key");
-        op = op.with_ttl(Some(5000));
+        op = op.with_ttl(Some(Duration::from_millis(5000)));
 
         // Should remain a Get operation unchanged
         assert!(matches!(op.request, Some(pb::txn_op::Request::Get(_))));
@@ -310,7 +339,8 @@ mod tests {
     #[test]
     fn test_method_chaining() {
         // Test that methods can be chained together
-        let op = pb::TxnOp::put("chain_key", b"chain_value".to_vec()).with_ttl(Some(1000));
+        let op = pb::TxnOp::put("chain_key", b"chain_value".to_vec())
+            .with_ttl(Some(Duration::from_millis(1000)));
 
         let Some(pb::txn_op::Request::Put(put_req)) = &op.request else {
             panic!("Expected Put request");

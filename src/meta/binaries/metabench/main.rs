@@ -333,7 +333,7 @@ async fn benchmark_table_copy_file(
             &copied_file_ident,
             serialize_struct(&copied_file_value).unwrap(),
         )
-        .with_ttl(param.ttl_ms);
+        .with_ttl(Duration::from_millis(param.ttl_ms));
 
         txn.if_then.push(put_op);
     }

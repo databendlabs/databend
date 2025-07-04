@@ -28,7 +28,6 @@ use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::txn_op::Request;
-use databend_common_meta_types::txn_op_response;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Cmd;
@@ -43,7 +42,6 @@ use databend_common_meta_types::TxnDeleteByPrefixResponse;
 use databend_common_meta_types::TxnDeleteRequest;
 use databend_common_meta_types::TxnDeleteResponse;
 use databend_common_meta_types::TxnGetRequest;
-use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnPutRequest;
 use databend_common_meta_types::TxnPutResponse;
@@ -52,6 +50,7 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use display_more::DisplayUnixTimeStampExt;
+use fastrace::func_name;
 use futures::stream::TryStreamExt;
 use futures_util::future::BoxFuture;
 use futures_util::StreamExt;
@@ -293,7 +292,10 @@ where SM: StateMachineApi + 'static
                 let mut resp: TxnReply = TxnReply::new(format!("operation:{i}"));
 
                 for op in &conditional.operations {
-                    self.txn_execute_operation(op, &mut resp).await?;
+                    if let Some(request) = &op.request {
+                        let r = self.txn_execute_operation(request).await?;
+                        resp.responses.push(r);
+                    }
                 }
 
                 return Ok(AppliedState::TxnReply(resp));
@@ -314,7 +316,10 @@ where SM: StateMachineApi + 'static
         let mut resp: TxnReply = TxnReply::new(path);
 
         for op in ops {
-            self.txn_execute_operation(op, &mut resp).await?;
+            if let Some(request) = &op.request {
+                let r = self.txn_execute_operation(request).await?;
+                resp.responses.push(r);
+            }
         }
 
         Ok(AppliedState::TxnReply(resp))
@@ -447,55 +452,51 @@ where SM: StateMachineApi + 'static
     #[fastrace::trace]
     async fn txn_execute_operation(
         &mut self,
-        op: &TxnOp,
-        resp: &mut TxnReply,
-    ) -> Result<(), io::Error> {
-        debug!(op :% =(op); "txn execute TxnOp");
+        request: &pb::txn_op::Request,
+    ) -> Result<TxnOpResponse, io::Error> {
+        debug!("{}: request={}", func_name!(), request);
 
-        let Some(request) = &op.request else {
-            warn!("txn_execute_operation: no request in TxnOp: {}", op);
-            return Ok(());
-        };
-
-        match request {
+        let resp = match request {
             Request::Get(get) => {
-                self.txn_execute_get(get, resp).await?;
+                let r = self.txn_execute_get(get).await?;
+                TxnOpResponse::new(r)
             }
             Request::Put(put) => {
-                self.txn_execute_put(put, resp).await?;
+                let r = self.txn_execute_put(put).await?;
+                TxnOpResponse::new(r)
             }
             Request::Delete(delete) => {
-                self.txn_execute_delete(delete, resp).await?;
+                let r = self.txn_execute_delete(delete).await?;
+                TxnOpResponse::new(r)
             }
             Request::DeleteByPrefix(delete_by_prefix) => {
-                self.txn_execute_delete_by_prefix(delete_by_prefix, resp)
-                    .await?;
+                let r = self.txn_execute_delete_by_prefix(delete_by_prefix).await?;
+                TxnOpResponse::new(r)
             }
             Request::FetchAddU64(fetch_add_u64) => {
-                self.txn_execute_fetch_add_u64(fetch_add_u64, resp).await?;
+                let r = self.txn_execute_fetch_add_u64(fetch_add_u64).await?;
+                TxnOpResponse::new(r)
             }
-        }
-        Ok(())
+            Request::PutSequential(put_sequential) => {
+                let r = self.txn_execute_put_sequential(put_sequential).await?;
+                TxnOpResponse::new(r)
+            }
+        };
+
+        Ok(resp)
     }
 
-    async fn txn_execute_get(
-        &self,
-        get: &TxnGetRequest,
-        resp: &mut TxnReply,
-    ) -> Result<(), io::Error> {
+    async fn txn_execute_get(&self, get: &TxnGetRequest) -> Result<pb::TxnGetResponse, io::Error> {
         let sv = self.sm.get_maybe_expired_kv(&get.key).await?;
-        let get_resp = TxnOpResponse::get(get.key.clone(), sv);
+        let get_resp = pb::TxnGetResponse {
+            key: get.key.clone(),
+            value: sv.map(pb::SeqV::from),
+        };
 
-        resp.responses.push(get_resp);
-
-        Ok(())
+        Ok(get_resp)
     }
 
-    async fn txn_execute_put(
-        &mut self,
-        put: &TxnPutRequest,
-        resp: &mut TxnReply,
-    ) -> Result<(), io::Error> {
+    async fn txn_execute_put(&mut self, put: &TxnPutRequest) -> Result<TxnPutResponse, io::Error> {
         let upsert = UpsertKV::update(&put.key, &put.value).with(MetaSpec::new(
             put.expire_at,
             put.ttl_ms.map(Interval::from_millis),
@@ -509,18 +510,13 @@ where SM: StateMachineApi + 'static
             current: result.map(pb::SeqV::from),
         };
 
-        resp.responses.push(TxnOpResponse {
-            response: Some(txn_op_response::Response::Put(put_resp)),
-        });
-
-        Ok(())
+        Ok(put_resp)
     }
 
     async fn txn_execute_delete(
         &mut self,
         delete: &TxnDeleteRequest,
-        resp: &mut TxnReply,
-    ) -> Result<(), io::Error> {
+    ) -> Result<TxnDeleteResponse, io::Error> {
         let upsert = UpsertKV::delete(&delete.key);
 
         // If `delete.match_seq` is `Some`, only delete the entry with the exact `seq`.
@@ -539,17 +535,13 @@ where SM: StateMachineApi + 'static
             prev_value: prev.map(pb::SeqV::from),
         };
 
-        resp.responses.push(TxnOpResponse {
-            response: Some(txn_op_response::Response::Delete(del_resp)),
-        });
-        Ok(())
+        Ok(del_resp)
     }
 
     async fn txn_execute_delete_by_prefix(
         &mut self,
         delete_by_prefix: &TxnDeleteByPrefixRequest,
-        resp: &mut TxnReply,
-    ) -> Result<(), io::Error> {
+    ) -> Result<TxnDeleteByPrefixResponse, io::Error> {
         let mut strm = self.sm.list_kv(&delete_by_prefix.prefix).await?;
         let mut count = 0;
 
@@ -564,17 +556,13 @@ where SM: StateMachineApi + 'static
             count,
         };
 
-        resp.responses.push(TxnOpResponse {
-            response: Some(txn_op_response::Response::DeleteByPrefix(del_resp)),
-        });
-        Ok(())
+        Ok(del_resp)
     }
 
     async fn txn_execute_fetch_add_u64(
         &mut self,
         req: &FetchAddU64,
-        resp: &mut TxnReply,
-    ) -> Result<(), io::Error> {
+    ) -> Result<pb::FetchAddU64Response, io::Error> {
         let before_seqv = self.sm.get_maybe_expired_kv(&req.key).await?;
 
         let before_seq = before_seqv.seq();
@@ -598,9 +586,9 @@ where SM: StateMachineApi + 'static
 
         if let Some(match_seq) = req.match_seq {
             if match_seq != before_seq {
-                let r = TxnOpResponse::unchanged_fetch_add_u64(&req.key, before_seq, before);
-                resp.responses.push(r);
-                return Ok(());
+                let response =
+                    pb::FetchAddU64Response::new_unchanged(&req.key, SeqV::new(before_seq, before));
+                return Ok(response);
             }
         }
 
@@ -612,12 +600,48 @@ where SM: StateMachineApi + 'static
             self.upsert_kv(&upsert).await?
         };
 
-        let fetch_add_resp =
-            TxnOpResponse::fetch_add_u64(req.key.clone(), before_seq, before, result.seq(), after);
+        let response = pb::FetchAddU64Response::new(
+            &req.key,
+            SeqV::new(before_seq, before),
+            SeqV::new(result.seq(), after),
+        );
 
-        resp.responses.push(fetch_add_resp);
+        Ok(response)
+    }
 
-        Ok(())
+    async fn txn_execute_put_sequential(
+        &mut self,
+        req: &pb::PutSequential,
+    ) -> Result<TxnPutResponse, io::Error> {
+        // Step 1. Build sequential key
+
+        let fetch_add_u64 = FetchAddU64 {
+            key: req.sequence_key.clone(),
+            delta: 1,
+            match_seq: None,
+        };
+
+        let fetch_add_response = self.txn_execute_fetch_add_u64(&fetch_add_u64).await?;
+        let next_seq = fetch_add_response.before;
+
+        let key = req.build_key(next_seq);
+
+        // Step 2. Insert the key.
+
+        let upsert = UpsertKV::update(&key, &req.value).with(MetaSpec::new(
+            req.expires_at_ms,
+            req.ttl_ms.map(Interval::from_millis),
+        ));
+
+        let (prev, result) = self.upsert_kv(&upsert).await?;
+
+        let put_resp = TxnPutResponse {
+            key,
+            prev_value: prev.map(pb::SeqV::from),
+            current: result.map(pb::SeqV::from),
+        };
+
+        Ok(put_resp)
     }
 
     /// Before applying, list expired keys to clean.

@@ -40,3 +40,27 @@ impl Display for Response {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SeqV;
+    #[test]
+    fn test_from() {
+        let resp = Response::from(pb::FetchAddU64Response::new_unchanged(
+            "key",
+            SeqV::new(1, 2),
+        ));
+
+        assert_eq!(
+            resp,
+            Response::FetchAddU64(pb::FetchAddU64Response {
+                key: "key".to_string(),
+                before_seq: 1,
+                before: 2,
+                after_seq: 1,
+                after: 2,
+            })
+        );
+    }
+}
