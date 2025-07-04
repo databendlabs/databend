@@ -21,49 +21,88 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256Type;
 use databend_common_expression::types::Decimal64Type;
+use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int16Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt16Type;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_number_type;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_storages_common_table_meta::meta::ColumnDistinctHLL;
+use enum_dispatch::enum_dispatch;
 
-pub trait ColumnNDVEstimator: Send + Sync {
+#[enum_dispatch]
+pub trait ColumnNDVEstimatorOps: Send + Sync {
     fn update_column(&mut self, column: &Column);
     fn update_scalar(&mut self, scalar: &ScalarRef);
     fn finalize(&self) -> u64;
 }
 
-pub fn create_column_ndv_estimator(data_type: &DataType) -> Box<dyn ColumnNDVEstimator> {
+#[enum_dispatch(ColumnNDVEstimatorOps)]
+pub enum ColumnNDVEstimator {
+    Int8(ColumnNDVEstimatorImpl<Int8Type>),
+    Int16(ColumnNDVEstimatorImpl<Int16Type>),
+    Int32(ColumnNDVEstimatorImpl<Int32Type>),
+    Int64(ColumnNDVEstimatorImpl<Int64Type>),
+    UInt8(ColumnNDVEstimatorImpl<UInt8Type>),
+    UInt16(ColumnNDVEstimatorImpl<UInt16Type>),
+    UInt32(ColumnNDVEstimatorImpl<UInt32Type>),
+    UInt64(ColumnNDVEstimatorImpl<UInt64Type>),
+    Float32(ColumnNDVEstimatorImpl<Float32Type>),
+    Float64(ColumnNDVEstimatorImpl<Float64Type>),
+    String(ColumnNDVEstimatorImpl<StringType>),
+    Date(ColumnNDVEstimatorImpl<DateType>),
+    Timestamp(ColumnNDVEstimatorImpl<TimestampType>),
+    Decimal64(ColumnNDVEstimatorImpl<Decimal64Type>),
+    Decimal128(ColumnNDVEstimatorImpl<Decimal128Type>),
+    Decimal256(ColumnNDVEstimatorImpl<Decimal256Type>),
+}
+
+pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
+    macro_rules! match_number_type_create {
+        ($inner_type:expr) => {{
+            with_number_type!(|NUM_TYPE| match $inner_type {
+                NumberDataType::NUM_TYPE => {
+                    paste::paste! {
+                        ColumnNDVEstimator::NUM_TYPE(ColumnNDVEstimatorImpl::<[<NUM_TYPE Type>]>::new())
+                    }
+                }
+            })
+        }};
+    }
+
     let inner_type = data_type.remove_nullable();
-    with_number_mapped_type!(|NUM_TYPE| match inner_type {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            ColumnNDVEstimatorImpl::<NumberType<NUM_TYPE>>::create()
+    match inner_type {
+        DataType::Number(num_type) => {
+            match_number_type_create!(num_type)
         }
-        DataType::String => {
-            ColumnNDVEstimatorImpl::<StringType>::create()
-        }
-        DataType::Date => {
-            ColumnNDVEstimatorImpl::<DateType>::create()
-        }
+        DataType::String => ColumnNDVEstimator::String(ColumnNDVEstimatorImpl::<StringType>::new()),
+        DataType::Date => ColumnNDVEstimator::Date(ColumnNDVEstimatorImpl::<DateType>::new()),
         DataType::Timestamp => {
-            ColumnNDVEstimatorImpl::<TimestampType>::create()
+            ColumnNDVEstimator::Timestamp(ColumnNDVEstimatorImpl::<TimestampType>::new())
         }
         DataType::Decimal(size) => {
             if size.can_carried_by_64() {
-                ColumnNDVEstimatorImpl::<Decimal64Type>::create()
+                ColumnNDVEstimator::Decimal64(ColumnNDVEstimatorImpl::<Decimal64Type>::new())
             } else if size.can_carried_by_128() {
-                ColumnNDVEstimatorImpl::<Decimal128Type>::create()
+                ColumnNDVEstimator::Decimal128(ColumnNDVEstimatorImpl::<Decimal128Type>::new())
             } else {
-                ColumnNDVEstimatorImpl::<Decimal256Type>::create()
+                ColumnNDVEstimator::Decimal256(ColumnNDVEstimatorImpl::<Decimal256Type>::new())
             }
         }
         _ => unreachable!("Unsupported data type: {:?}", data_type),
-    })
+    }
 }
 
 pub struct ColumnNDVEstimatorImpl<T>
@@ -80,15 +119,15 @@ where
     T: ValueType + Send + Sync,
     for<'a> T::ScalarRef<'a>: Hash,
 {
-    pub fn create() -> Box<dyn ColumnNDVEstimator> {
-        Box::new(Self {
+    pub fn new() -> Self {
+        Self {
             hll: ColumnDistinctHLL::new(),
             _phantom: Default::default(),
-        })
+        }
     }
 }
 
-impl<T> ColumnNDVEstimator for ColumnNDVEstimatorImpl<T>
+impl<T> ColumnNDVEstimatorOps for ColumnNDVEstimatorImpl<T>
 where
     T: ValueType + Send + Sync,
     for<'a> T::ScalarRef<'a>: Hash,

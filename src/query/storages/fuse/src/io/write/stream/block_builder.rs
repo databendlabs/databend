@@ -36,6 +36,7 @@ use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
+use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -192,7 +193,7 @@ impl StreamBlockBuilder {
                 let writer = NativeWriter::new(
                     buffer,
                     properties.source_schema.as_ref().clone(),
-                    databend_common_native::write::WriteOptions {
+                    WriteOptions {
                         default_compression: properties.write_settings.table_compression.into(),
                         max_page_size: Some(properties.write_settings.max_page_size),
                         default_compress_ratio,
@@ -217,27 +218,12 @@ impl StreamBlockBuilder {
             &properties.ngram_args,
         )?;
 
-        let virtual_column_builder = if properties
-            .ctx
-            .get_settings()
-            .get_enable_refresh_virtual_column_after_write()
-            .unwrap_or_default()
-            && properties.support_virtual_columns
-        {
-            VirtualColumnBuilder::try_create(
-                properties.ctx.clone(),
-                properties.source_schema.clone(),
-            )
-            .ok()
-        } else {
-            None
-        };
+        let virtual_column_builder = properties.virtual_column_builder.clone();
         let vector_index_builder = VectorIndexBuilder::try_create(
             properties.ctx.clone(),
             &properties.table_indexes,
             properties.source_schema.clone(),
         );
-
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state =
@@ -387,7 +373,10 @@ impl StreamBlockBuilder {
             vector_index_size,
             vector_index_location,
             create_on: Some(Utc::now()),
-            ngram_filter_index_size: None,
+            ngram_filter_index_size: bloom_index_state
+                .as_ref()
+                .map(|v| v.ngram_size)
+                .unwrap_or_default(),
             virtual_block_meta: None,
         };
         let serialized = BlockSerialization {
@@ -416,8 +405,8 @@ pub struct StreamBlockProperties {
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
+    virtual_column_builder: Option<VirtualColumnBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
-    support_virtual_columns: bool,
     table_indexes: BTreeMap<String, TableIndex>,
 }
 
@@ -463,6 +452,16 @@ impl StreamBlockProperties {
             .collect::<HashSet<_>>();
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let virtual_column_builder = if ctx
+            .get_settings()
+            .get_enable_refresh_virtual_column_after_write()
+            .unwrap_or_default()
+            && table.support_virtual_columns()
+        {
+            VirtualColumnBuilder::try_create(ctx.clone(), source_schema.clone()).ok()
+        } else {
+            None
+        };
 
         let cluster_stats_builder =
             ClusterStatisticsBuilder::try_create(table, ctx.clone(), &source_schema)?;
@@ -481,7 +480,6 @@ impl StreamBlockProperties {
                 }
             }
         }
-        let support_virtual_columns = table.support_virtual_columns();
         let table_indexes = table.table_info.meta.indexes.clone();
         Ok(Arc::new(StreamBlockProperties {
             ctx,
@@ -490,13 +488,13 @@ impl StreamBlockProperties {
             source_schema,
             write_settings,
             cluster_stats_builder,
+            virtual_column_builder,
             stats_columns,
             distinct_columns,
             bloom_columns_map,
             ngram_args,
             inverted_index_builders,
             table_meta_timestamps,
-            support_virtual_columns,
             table_indexes,
         }))
     }

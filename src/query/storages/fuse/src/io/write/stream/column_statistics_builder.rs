@@ -24,56 +24,124 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::Decimal128Type;
 use databend_common_expression::types::Decimal256Type;
 use databend_common_expression::types::Decimal64Type;
+use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::Int16Type;
+use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UInt16Type;
+use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::with_number_type;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
+use enum_dispatch::enum_dispatch;
 
 use crate::statistics::Trim;
 
-pub trait ColumnStatisticsBuilder: Send + Sync {
-    fn update_column(&mut self, column: &Column);
+pub type CommonBuilder<T> = GenericColumnStatisticsBuilder<T, CommonAdapter>;
+pub type DecimalBuilder<T> = GenericColumnStatisticsBuilder<T, DecimalAdapter>;
 
-    fn update_scalar(&mut self, scalar: &ScalarRef, num_rows: usize, data_type: &DataType);
-
-    fn finalize(self: Box<Self>) -> Result<ColumnStatistics>;
+#[enum_dispatch(ColumnStatsOps)]
+pub enum ColumnStatisticsBuilder {
+    Int8(CommonBuilder<Int8Type>),
+    Int16(CommonBuilder<Int16Type>),
+    Int32(CommonBuilder<Int32Type>),
+    Int64(CommonBuilder<Int64Type>),
+    UInt8(CommonBuilder<UInt8Type>),
+    UInt16(CommonBuilder<UInt16Type>),
+    UInt32(CommonBuilder<UInt32Type>),
+    UInt64(CommonBuilder<UInt64Type>),
+    Float32(CommonBuilder<Float32Type>),
+    Float64(CommonBuilder<Float64Type>),
+    String(CommonBuilder<StringType>),
+    Date(CommonBuilder<DateType>),
+    Timestamp(CommonBuilder<TimestampType>),
+    Decimal64(DecimalBuilder<Decimal64Type>),
+    Decimal128(DecimalBuilder<Decimal128Type>),
+    Decimal256(DecimalBuilder<Decimal256Type>),
 }
 
-pub fn create_column_stats_builder(data_type: &DataType) -> Box<dyn ColumnStatisticsBuilder> {
+#[enum_dispatch]
+pub trait ColumnStatsOps {
+    fn update_column(&mut self, column: &Column);
+    fn update_scalar(&mut self, scalar: &ScalarRef, num_rows: usize, data_type: &DataType);
+    fn finalize(self) -> Result<ColumnStatistics>;
+}
+
+impl<T, A> ColumnStatsOps for GenericColumnStatisticsBuilder<T, A>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: Send + Sync,
+    A: ColumnStatisticsAdapter<T> + 'static,
+    for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
+{
+    fn update_column(&mut self, column: &Column) {
+        GenericColumnStatisticsBuilder::update_column(self, column);
+    }
+
+    fn update_scalar(&mut self, scalar: &ScalarRef, num_rows: usize, data_type: &DataType) {
+        GenericColumnStatisticsBuilder::update_scalar(self, scalar, num_rows, data_type);
+    }
+
+    fn finalize(self) -> Result<ColumnStatistics> {
+        GenericColumnStatisticsBuilder::finalize(self)
+    }
+}
+
+pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuilder {
     let inner_type = data_type.remove_nullable();
-    with_number_mapped_type!(|NUM_TYPE| match inner_type {
-        DataType::Number(NumberDataType::NUM_TYPE) => {
-            GenericColumnStatisticsBuilder::<NumberType<NUM_TYPE>, CommonAdapter>::create(
-                inner_type,
-            )
+    macro_rules! match_number_type_create {
+        ($inner_type:expr) => {{
+            with_number_type!(|NUM_TYPE| match $inner_type {
+                NumberDataType::NUM_TYPE => {
+                    paste::paste! {
+                        ColumnStatisticsBuilder::NUM_TYPE(CommonBuilder::<[<NUM_TYPE Type>]>::create(inner_type))
+                    }
+                }
+            })
+        }};
+    }
+
+    match inner_type {
+        DataType::Number(num_type) => {
+            match_number_type_create!(num_type)
         }
         DataType::String => {
-            GenericColumnStatisticsBuilder::<StringType, CommonAdapter>::create(inner_type)
+            ColumnStatisticsBuilder::String(CommonBuilder::<StringType>::create(inner_type))
         }
         DataType::Date => {
-            GenericColumnStatisticsBuilder::<DateType, CommonAdapter>::create(inner_type)
+            ColumnStatisticsBuilder::Date(CommonBuilder::<DateType>::create(inner_type))
         }
         DataType::Timestamp => {
-            GenericColumnStatisticsBuilder::<TimestampType, CommonAdapter>::create(inner_type)
+            ColumnStatisticsBuilder::Timestamp(CommonBuilder::<TimestampType>::create(inner_type))
         }
         DataType::Decimal(size) => {
             if size.can_carried_by_64() {
-                GenericColumnStatisticsBuilder::<Decimal64Type, DecimalAdapter>::create(inner_type)
+                ColumnStatisticsBuilder::Decimal64(DecimalBuilder::<Decimal64Type>::create(
+                    inner_type,
+                ))
             } else if size.can_carried_by_128() {
-                GenericColumnStatisticsBuilder::<Decimal128Type, DecimalAdapter>::create(inner_type)
+                ColumnStatisticsBuilder::Decimal128(DecimalBuilder::<Decimal128Type>::create(
+                    inner_type,
+                ))
             } else {
-                GenericColumnStatisticsBuilder::<Decimal256Type, DecimalAdapter>::create(inner_type)
+                ColumnStatisticsBuilder::Decimal256(DecimalBuilder::<Decimal256Type>::create(
+                    inner_type,
+                ))
             }
         }
         _ => unreachable!("Unsupported data type: {:?}", data_type),
-    })
+    }
 }
 
 pub trait ColumnStatisticsAdapter<T: ValueType>: Send + Sync {
@@ -86,7 +154,7 @@ pub trait ColumnStatisticsAdapter<T: ValueType>: Send + Sync {
     fn update_value(value: &mut Self::Value, scalar: T::ScalarRef<'_>, ordering: Ordering);
 }
 
-struct CommonAdapter;
+pub struct CommonAdapter;
 
 impl<T> ColumnStatisticsAdapter<T> for CommonAdapter
 where
@@ -111,7 +179,7 @@ where
     }
 }
 
-struct DecimalAdapter;
+pub struct DecimalAdapter;
 
 impl<T> ColumnStatisticsAdapter<T> for DecimalAdapter
 where
@@ -137,7 +205,7 @@ where
     }
 }
 
-struct GenericColumnStatisticsBuilder<T, A>
+pub struct GenericColumnStatisticsBuilder<T, A>
 where
     T: ValueType,
     A: ColumnStatisticsAdapter<T>,
@@ -158,15 +226,15 @@ where
     A: ColumnStatisticsAdapter<T> + 'static,
     for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
 {
-    fn create(data_type: DataType) -> Box<dyn ColumnStatisticsBuilder> {
-        Box::new(Self {
+    fn create(data_type: DataType) -> Self {
+        Self {
             min: None,
             max: None,
             null_count: 0,
             in_memory_size: 0,
             data_type,
             _phantom: PhantomData,
-        })
+        }
     }
 
     fn add_batch<'a, I>(&mut self, mut iter: I)
@@ -201,15 +269,7 @@ where
             self.max = Some(A::scalar_to_value(max));
         }
     }
-}
 
-impl<T, A> ColumnStatisticsBuilder for GenericColumnStatisticsBuilder<T, A>
-where
-    T: ValueType + Send + Sync,
-    T::Scalar: Send + Sync,
-    A: ColumnStatisticsAdapter<T> + 'static,
-    for<'a, 'b> T::ScalarRef<'a>: PartialOrd<T::ScalarRef<'b>>,
-{
     fn update_column(&mut self, column: &Column) {
         self.in_memory_size += column.memory_size();
         if column.len() == 0 {
@@ -265,7 +325,7 @@ where
         self.add(val.clone(), val);
     }
 
-    fn finalize(self: Box<Self>) -> Result<ColumnStatistics> {
+    fn finalize(self) -> Result<ColumnStatistics> {
         let min = if let Some(v) = self.min {
             let v = A::value_to_scalar(v);
             // safe upwrap.
