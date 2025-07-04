@@ -21,8 +21,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::MetadataRef;
 
@@ -84,14 +84,8 @@ impl Rule for RulePushDownSortEvalScalar {
         }
         let eval_scalar: EvalScalar = eval_plan.plan().clone().try_into()?;
 
-        let sort_expr = SExpr::create_unary(
-            Arc::new(RelOperator::Sort(sort)),
-            Arc::new(eval_plan.child(0)?.clone()),
-        );
-        let mut result = SExpr::create_unary(
-            Arc::new(RelOperator::EvalScalar(eval_scalar)),
-            Arc::new(sort_expr),
-        );
+        let sort_expr = SExpr::create_unary(sort, eval_plan.child(0)?.clone());
+        let mut result = SExpr::create_unary(eval_scalar, sort_expr);
 
         result.set_applied_rule(&self.id);
         state.add_result(result);

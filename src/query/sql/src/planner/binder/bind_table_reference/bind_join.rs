@@ -135,7 +135,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: left_derived_scalars,
             };
-            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(left_child))
+            SExpr::create_unary(eval_scalar, left_child)
         } else {
             left_child
         };
@@ -143,7 +143,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: right_derived_scalars,
             };
-            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(right_child))
+            SExpr::create_unary(eval_scalar, right_child)
         } else {
             right_child
         };

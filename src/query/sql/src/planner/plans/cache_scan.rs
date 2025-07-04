@@ -122,4 +122,8 @@ impl Operator for CacheScan {
         required.distribution = Distribution::Serial;
         Ok(required.clone())
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

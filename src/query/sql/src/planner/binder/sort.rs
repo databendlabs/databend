@@ -225,7 +225,7 @@ impl Binder {
             pre_projection: None,
             window_partition: None,
         };
-        let new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child));
+        let new_expr = SExpr::create_unary(sort_plan, child);
         Ok(new_expr)
     }
 

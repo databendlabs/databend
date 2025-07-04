@@ -105,15 +105,11 @@ impl Rule for RulePushDownFilterUnion {
             };
 
             let s = (*union_sexpr).clone();
-            **union_sexpr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s));
+            **union_sexpr = SExpr::create_unary(filter, s);
         }
 
         // Create a filter which matches union's right child.
-        let result = SExpr::create_binary(
-            Arc::new(union.into()),
-            Arc::new(union_left_child),
-            Arc::new(union_right_child),
-        );
+        let result = SExpr::create_binary(union, union_left_child, union_right_child);
         state.add_result(result);
 
         Ok(())

@@ -59,7 +59,7 @@
 //! use crate::optimizer::ir::expr::AsyncSExprVisitor;
 //! use crate::optimizer::ir::expr::SExpr;
 //! use crate::optimizer::ir::expr::VisitAction;
-//! use crate::plans::RelOperator;
+//! use crate::plans::Operator;
 //!
 //! // Visitor that eliminates unnecessary Sort operations with empty sort keys
 //! struct EmptySortEliminator;
@@ -68,7 +68,7 @@
 //! impl AsyncSExprVisitor for EmptySortEliminator {
 //!     async fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
 //!         // Check if this is a Sort operator with empty sort keys
-//!         if let RelOperator::Sort(sort) = expr.plan.as_ref() {
+//!         if let Some(sort) = Sort::try_downcast_ref(&expr.plan) {
 //!             if sort.sort_keys.is_empty() {
 //!                 // If sort has no keys, it's unnecessary - replace with its child
 //!                 if expr.arity() == 1 {
@@ -91,7 +91,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::expr::SExpr;
-// use crate::plans::RelOperator;
+// use crate::plans::Operator;
 
 /// Action to take after visiting a node
 #[derive(Clone)]

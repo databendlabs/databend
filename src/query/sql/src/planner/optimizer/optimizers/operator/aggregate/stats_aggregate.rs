@@ -29,9 +29,9 @@ use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::Scan;
 use crate::ColumnBindingBuilder;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -58,7 +58,8 @@ impl RuleStatsAggregateOptimizer {
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
-        if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
+
+        if s_expr.plan.rel_op() == RelOp::Aggregate {
             self.normalize_aggregate(&s_expr).await
         } else {
             Ok(s_expr)
@@ -66,7 +67,7 @@ impl RuleStatsAggregateOptimizer {
     }
 
     async fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let agg: Aggregate = s_expr.plan().clone().try_into()?;
+        let agg: &Aggregate = s_expr.plan().as_any().downcast_ref().unwrap();
         if s_expr.arity() != 1 || agg.grouping_sets.is_some() || !agg.group_items.is_empty() {
             return Ok(s_expr.clone());
         }
@@ -84,7 +85,7 @@ impl RuleStatsAggregateOptimizer {
             return Ok(s_expr.clone());
         }
 
-        if let RelOperator::Scan(scan) = child.plan.as_ref() {
+        if let Some(scan) = child.plan.as_any().downcast_ref::<Scan>() {
             if scan.prewhere.is_none() && scan.push_down_predicates.is_none() {
                 let table = self.metadata.read().table(scan.table_index).table();
                 let schema = table.schema();
@@ -184,23 +185,14 @@ impl RuleStatsAggregateOptimizer {
 
                 if agg_results.is_empty() {
                     let leaf = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
-                    return Ok(SExpr::create_unary(
-                        Arc::new(eval_scalar.into()),
-                        Arc::new(leaf),
-                    ));
+                    return Ok(SExpr::create_unary(eval_scalar, leaf));
                 } else {
                     let agg = Aggregate {
                         aggregate_functions: agg_results,
                         ..agg.clone()
                     };
-                    let child = SExpr::create_unary(
-                        Arc::new(agg.into()),
-                        Arc::new(arg_eval_scalar.clone()),
-                    );
-                    return Ok(SExpr::create_unary(
-                        Arc::new(eval_scalar.into()),
-                        Arc::new(child),
-                    ));
+                    let child = SExpr::create_unary(agg, arg_eval_scalar.clone());
+                    return Ok(SExpr::create_unary(eval_scalar, child));
                 }
             }
         }

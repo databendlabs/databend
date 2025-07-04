@@ -48,7 +48,9 @@ use super::CommitType;
 use crate::binder::wrap_cast;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -95,12 +97,32 @@ pub struct Mutation {
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Mutation {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Mutation>()
+            .unwrap();
+        builder
+            .build_mutation(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub async fn build_mutation(
         &mut self,
         s_expr: &SExpr,
         mutation: &crate::plans::Mutation,
         required: ColumnSet,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let crate::plans::Mutation {
             bind_context,

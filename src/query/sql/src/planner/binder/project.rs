@@ -205,7 +205,7 @@ impl Binder {
 
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
-        let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
+        let new_expr = SExpr::create_unary(eval_scalar, child);
         // Set output columns
         bind_context.columns = columns;
         Ok(new_expr)

@@ -27,7 +27,7 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFuncType;
 use crate::MetadataRef;
@@ -141,7 +141,7 @@ impl PullUpFilterOptimizer {
             join.non_equi_conditions.clear();
             join.join_type = JoinType::Cross;
         }
-        let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+        let s_expr = s_expr.replace_plan(join);
         Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
     }
 
@@ -151,7 +151,7 @@ impl PullUpFilterOptimizer {
         for predicate in self.predicates.iter_mut() {
             Self::replace_predicate(predicate, &mut eval_scalar.items, &self.metadata)?;
         }
-        let s_expr = s_expr.replace_plan(Arc::new(RelOperator::EvalScalar(eval_scalar)));
+        let s_expr = s_expr.replace_plan(eval_scalar);
         Ok(s_expr.replace_children(vec![Arc::new(child)]))
     }
 

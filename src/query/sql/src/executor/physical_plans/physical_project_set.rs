@@ -59,6 +59,25 @@ impl ProjectSet {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for ProjectSet {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::ProjectSet>()
+            .unwrap();
+        builder
+            .build_project_set(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_project_set(
         &mut self,

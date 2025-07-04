@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::plans::CacheSource;
@@ -35,11 +36,29 @@ impl CacheScan {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for CacheScan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::CacheScan>()
+            .unwrap();
+        builder.build_cache_scan(plan, required, stat_info).await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_cache_scan(
         &mut self,
         scan: &crate::plans::CacheScan,
         required: ColumnSet,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let used: ColumnSet = required.intersection(&scan.columns).cloned().collect();

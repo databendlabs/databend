@@ -25,7 +25,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::SortColumnDescription;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::planner::plans::Plan;
-use databend_common_sql::plans::RelOperator;
+
 use databend_common_sql::Planner;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;

@@ -40,7 +40,7 @@ use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::executor::PhysicalPlanReplacer;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
-use databend_common_sql::plans::RelOperator;
+
 use databend_common_storages_fuse::operations::AggIndexSink;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::FuseBlockPartInfo;

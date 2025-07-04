@@ -21,6 +21,8 @@ use databend_common_sql::optimizer::optimizers::operator::DeduplicateJoinConditi
 use databend_common_sql::planner::plans::JoinType;
 use databend_common_sql::planner::plans::RelOperator;
 use databend_common_sql::planner::plans::ScalarExpr;
+use databend_common_sql::plans::Join;
+use databend_common_sql::plans::Scan;
 
 use crate::sql::planner::optimizer::test_utils::*;
 
@@ -33,7 +35,7 @@ fn run_optimizer(s_expr: SExpr) -> Result<SExpr> {
 /// Converts an SExpr to a readable string representation using a simple indented format
 fn sexpr_to_string(s_expr: &SExpr) -> String {
     fn format_join_conditions(s_expr: &SExpr) -> String {
-        if let RelOperator::Join(join) = s_expr.plan() {
+        if let Some(join) = s_expr.plan().as_any().downcast_ref::<Join>() {
             let conditions: Vec<String> = join
                 .equi_conditions
                 .iter()
@@ -85,7 +87,7 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
         let indent = "  ".repeat(depth);
         let mut result = String::new();
 
-        if let RelOperator::Join(_) = s_expr.plan() {
+        if let Some(join) = s_expr.plan().as_any().downcast_ref::<Join>() {
             // Add the join node with conditions
             result.push_str(&format!(
                 "{indent}Join {}\n",
@@ -97,7 +99,7 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
             for child in children {
                 result.push_str(&build_tree(child, depth + 1));
             }
-        } else if let RelOperator::Scan(scan) = s_expr.plan() {
+        } else if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
             // Leaf node (table scan)
             result.push_str(&format!("{indent}Table t{}\n", scan.table_index));
         } else {

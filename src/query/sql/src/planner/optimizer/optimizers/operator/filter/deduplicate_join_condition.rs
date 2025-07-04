@@ -21,7 +21,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::ScalarExpr;
 
 // The DeduplicateJoinConditionOptimizer uses the Union-Find algorithm to remove duplicate join conditions.
@@ -150,10 +150,9 @@ impl DeduplicateJoinConditionOptimizer {
         }
 
         // Create new expression
-        let new_plan = Arc::new(RelOperator::Join(join));
         let new_children = vec![Arc::new(left), Arc::new(right)];
 
-        Ok(s_expr.replace_plan(new_plan).replace_children(new_children))
+        Ok(s_expr.replace_plan(join).replace_children(new_children))
     }
 
     /// Recursively process children nodes

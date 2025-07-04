@@ -28,8 +28,9 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantExpr;
+use crate::plans::Operator;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
+use crate::plans::Scan;
 use crate::Binder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -47,21 +48,20 @@ pub struct ReclusterPlan {
 }
 
 pub fn set_update_stream_columns(s_expr: &SExpr) -> Result<SExpr> {
-    match s_expr.plan() {
-        RelOperator::Scan(scan) if scan.table_index == 0 => {
+    if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
+        if scan.table_index == 0 {
             let mut scan = scan.clone();
             scan.set_update_stream_columns(true);
-            Ok(SExpr::create_leaf(Arc::new(scan.into())))
-        }
-        _ => {
-            let mut children = Vec::with_capacity(s_expr.arity());
-            for child in s_expr.children() {
-                let child = set_update_stream_columns(child)?;
-                children.push(Arc::new(child));
-            }
-            Ok(s_expr.replace_children(children))
+            return Ok(SExpr::create_leaf(Arc::new(scan.into())));
         }
     }
+
+    let mut children = Vec::with_capacity(s_expr.arity());
+    for child in s_expr.children() {
+        let child = set_update_stream_columns(child)?;
+        children.push(Arc::new(child));
+    }
+    Ok(s_expr.replace_children(children))
 }
 
 #[async_backtrace::framed]

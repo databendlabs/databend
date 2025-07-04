@@ -36,7 +36,6 @@ use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Limit;
 use databend_common_sql::plans::Plan;
-use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;
@@ -498,11 +497,7 @@ impl ExprBuilder {
             equi_conditions,
             ..Default::default()
         };
-        SExpr::create_binary(
-            Arc::new(RelOperator::Join(join)),
-            Arc::new(left),
-            Arc::new(right),
-        )
+        SExpr::create_binary(Arc::new(join), Arc::new(left), Arc::new(right))
     }
 
     /// Create a join condition between two columns
@@ -517,10 +512,7 @@ impl ExprBuilder {
 
     /// Create a filter
     pub fn filter(&self, input: SExpr, predicates: Vec<ScalarExpr>) -> SExpr {
-        SExpr::create_unary(
-            Arc::new(RelOperator::Filter(Filter { predicates })),
-            Arc::new(input),
-        )
+        SExpr::create_unary(Arc::new(Filter { predicates }), Arc::new(input))
     }
 
     /// Create a table scan
@@ -529,7 +521,7 @@ impl ExprBuilder {
             table_index,
             ..Default::default()
         };
-        SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)))
+        SExpr::create_leaf(scan)
     }
 
     /// Create a table scan with column indices
@@ -544,7 +536,7 @@ impl ExprBuilder {
             columns,
             ..Default::default()
         };
-        SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)))
+        SExpr::create_leaf(scan)
     }
 
     /// Create an aggregate
@@ -563,7 +555,7 @@ impl ExprBuilder {
             from_distinct: false,
             rank_limit: None,
         };
-        SExpr::create_unary(Arc::new(RelOperator::Aggregate(agg)), Arc::new(input))
+        SExpr::create_unary(agg, Arc::new(input))
     }
 
     /// Create a limit
@@ -573,7 +565,7 @@ impl ExprBuilder {
             offset,
             before_exchange: false,
         };
-        SExpr::create_unary(Arc::new(RelOperator::Limit(limit_op)), Arc::new(input))
+        SExpr::create_unary(limit_op, Arc::new(input))
     }
 
     /// Create a scalar item

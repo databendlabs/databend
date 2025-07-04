@@ -65,7 +65,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
-            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
+            new_expr = SExpr::create_unary(eval_scalar, new_expr);
         }
 
         // Like aggregate, we just use scalar directly.

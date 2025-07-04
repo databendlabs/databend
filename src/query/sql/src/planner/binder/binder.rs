@@ -64,7 +64,7 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUserPlan;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;

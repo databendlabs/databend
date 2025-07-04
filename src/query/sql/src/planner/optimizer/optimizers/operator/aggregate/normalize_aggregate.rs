@@ -21,7 +21,7 @@ use crate::optimizer::Optimizer;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::ColumnBinding;

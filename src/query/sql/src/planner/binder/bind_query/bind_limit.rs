@@ -42,7 +42,7 @@ impl Binder {
             limit,
             offset,
         };
-        SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(s_expr))
+        SExpr::create_unary(limit_plan, s_expr)
     }
 
     pub(crate) fn extract_limit_and_offset(&self, query: &Query) -> Result<(Option<usize>, usize)> {

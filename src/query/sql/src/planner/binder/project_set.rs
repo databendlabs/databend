@@ -270,7 +270,7 @@ impl Binder {
         }
 
         let project_set = ProjectSet { srfs };
-        let new_expr = SExpr::create_unary(Arc::new(project_set.into()), Arc::new(child));
+        let new_expr = SExpr::create_unary(project_set, child);
 
         Ok(new_expr)
     }

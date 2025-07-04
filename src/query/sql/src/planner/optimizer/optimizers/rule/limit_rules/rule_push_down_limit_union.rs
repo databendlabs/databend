@@ -79,18 +79,10 @@ impl Rule for RulePushDownLimitUnion {
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add limit to union children
-        union_left_child = SExpr::create_unary(
-            Arc::new(new_limit.clone().into()),
-            Arc::new(union_left_child),
-        );
-        union_right_child =
-            SExpr::create_unary(Arc::new(new_limit.into()), Arc::new(union_right_child));
+        union_left_child = SExpr::create_unary(new_limit.clone(), union_left_child);
+        union_right_child = SExpr::create_unary(new_limit, union_right_child);
 
-        let mut result = SExpr::create_binary(
-            Arc::new(union.into()),
-            Arc::new(union_left_child),
-            Arc::new(union_right_child),
-        );
+        let mut result = SExpr::create_binary(union, union_left_child, union_right_child);
 
         // Add original limit to top
         result = s_expr.replace_children(vec![Arc::new(result)]);

@@ -44,8 +44,8 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::MatchedEvaluator;
+use crate::plans::Operator;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -319,8 +319,7 @@ impl Binder {
         }
 
         let schema = mutation.schema();
-        let mut s_expr =
-            SExpr::create_unary(Arc::new(RelOperator::Mutation(mutation)), Arc::new(input));
+        let mut s_expr = SExpr::create_unary(mutation, input);
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut bind_context, s_expr)?;

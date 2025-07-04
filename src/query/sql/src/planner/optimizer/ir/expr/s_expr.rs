@@ -28,7 +28,7 @@ use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
-use crate::plans::RelOperator;
+use crate::plans::OperatorRef;
 use crate::plans::Scan;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
@@ -43,7 +43,7 @@ use crate::IndexType;
     Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
 pub struct SExpr {
-    pub plan: Arc<RelOperator>,
+    pub plan: OperatorRef,
     pub(crate) children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
@@ -66,13 +66,14 @@ pub struct SExpr {
 }
 
 impl SExpr {
-    pub fn create(
-        plan: Arc<RelOperator>,
+    pub fn create<P: Operator>(
+        plan: P,
         children: impl Into<Vec<Arc<SExpr>>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
         stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
+        let plan = Arc::new(plan) as OperatorRef;
         SExpr {
             plan,
             children: children.into(),
@@ -83,12 +84,12 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: Arc<RelOperator>, child: impl Into<Arc<SExpr>>) -> Self {
+    pub fn create_unary<P: Operator>(plan: P, child: impl Into<Arc<SExpr>>) -> Self {
         Self::create(plan, [child.into()], None, None, None)
     }
 
-    pub fn create_binary(
-        plan: Arc<RelOperator>,
+    pub fn create_binary<P: Operator>(
+        plan: P,
         left_child: impl Into<Arc<SExpr>>,
         right_child: impl Into<Arc<SExpr>>,
     ) -> Self {
@@ -101,21 +102,21 @@ impl SExpr {
         )
     }
 
-    pub fn create_leaf(plan: Arc<RelOperator>) -> Self {
+    pub fn create_leaf<P: Operator>(plan: P) -> Self {
         Self::create(plan, [], None, None, None)
     }
 
-    pub fn build_unary(self, plan: Arc<RelOperator>) -> Self {
+    pub fn build_unary<P: Operator>(self, plan: P) -> Self {
         debug_assert_eq!(plan.arity(), 1);
-        Self::create(plan, [self.into()], None, None, None)
+        Self::create_unary(plan, self)
     }
 
-    pub fn ref_build_unary(self: &Arc<SExpr>, plan: Arc<RelOperator>) -> Self {
+    pub fn ref_build_unary<P: Operator>(self: &Arc<SExpr>, plan: P) -> Self {
         debug_assert_eq!(plan.arity(), 1);
-        Self::create(plan, [self.clone()], None, None, None)
+        Self::create_unary(plan, self.clone())
     }
 
-    pub fn plan(&self) -> &RelOperator {
+    pub fn plan(&self) -> &OperatorRef {
         &self.plan
     }
 
@@ -177,9 +178,9 @@ impl SExpr {
         }
     }
 
-    pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
+    pub fn replace_plan<P: Operator>(&self, plan: P) -> Self {
         Self {
-            plan,
+            plan: Arc::new(plan) as OperatorRef,
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),
@@ -204,188 +205,15 @@ impl SExpr {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
-    //
-    #[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
+        let iter = self.plan.scalar_expr_iter();
+        for scalar in iter {
+            for udf in scalar.get_udf_names()? {
+                udfs.insert(udf);
+            }
+        }
 
-        match self.plan.as_ref() {
-            RelOperator::Scan(scan) => {
-                let Scan {
-                    push_down_predicates,
-                    prewhere,
-                    agg_index,
-                    ..
-                } = scan;
-
-                if let Some(push_down_predicates) = push_down_predicates {
-                    for push_down_predicate in push_down_predicates {
-                        push_down_predicate.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-                if let Some(prewhere) = prewhere {
-                    for predicate in &prewhere.predicates {
-                        predicate.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-                if let Some(agg_index) = agg_index {
-                    for predicate in &agg_index.predicates {
-                        predicate.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                    for selection in &agg_index.selection {
-                        selection.scalar.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-            }
-            RelOperator::Exchange(exchange) => {
-                if let Exchange::Hash(hash) = exchange {
-                    for hash in hash {
-                        hash.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                }
-            }
-            RelOperator::Join(op) => {
-                for equi_condition in op.equi_conditions.iter() {
-                    equi_condition.left.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                    equi_condition
-                        .right
-                        .get_udf_names()?
-                        .iter()
-                        .for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                }
-                for non in &op.non_equi_conditions {
-                    non.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::EvalScalar(op) => {
-                for item in &op.items {
-                    item.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Filter(op) => {
-                for predicate in &op.predicates {
-                    predicate.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Aggregate(op) => {
-                for group_items in &op.group_items {
-                    group_items.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-                for agg_func in &op.aggregate_functions {
-                    agg_func.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Window(op) => {
-                match &op.function {
-                    WindowFuncType::Aggregate(agg) => {
-                        for arg in agg.exprs() {
-                            arg.get_udf_names()?.iter().for_each(|udf| {
-                                udfs.insert(*udf);
-                            });
-                        }
-                    }
-                    WindowFuncType::LagLead(lag_lead) => {
-                        // udfs_pad(&mut udfs, f, &lag_lead.arg)?;
-                        lag_lead.arg.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                        if let Some(default) = &lag_lead.default {
-                            default.get_udf_names()?.iter().for_each(|udf| {
-                                udfs.insert(*udf);
-                            });
-                        }
-                    }
-                    WindowFuncType::NthValue(nth) => {
-                        nth.arg.get_udf_names()?.iter().for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                    }
-                    _ => {}
-                }
-                for arg in &op.arguments {
-                    arg.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-                for order_by in &op.order_by {
-                    order_by
-                        .order_by_item
-                        .scalar
-                        .get_udf_names()?
-                        .iter()
-                        .for_each(|udf| {
-                            udfs.insert(*udf);
-                        });
-                }
-                for partition_by in &op.partition_by {
-                    partition_by.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::ProjectSet(op) => {
-                for srf in &op.srfs {
-                    srf.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Udf(udf) => {
-                for item in &udf.items {
-                    item.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::AsyncFunction(async_func) => {
-                for item in &async_func.items {
-                    item.scalar.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::MutationSource(mutation_source) => {
-                for predicate in &mutation_source.predicates {
-                    predicate.get_udf_names()?.iter().for_each(|udf| {
-                        udfs.insert(*udf);
-                    });
-                }
-            }
-            RelOperator::Limit(_)
-            | RelOperator::UnionAll(_)
-            | RelOperator::Sort(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::CompactBlock(_) => {}
-        };
         for child in &self.children {
             let udf = child.get_udfs()?;
             udf.iter().for_each(|udf| {
@@ -410,7 +238,7 @@ impl SExpr {
             inverted_index: &Option<InvertedIndexInfo>,
         ) -> SExpr {
             let mut s_expr = s_expr.clone();
-            s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
+            s_expr.plan = if let Some(mut p) = Scan::try_downcast_mut(&mut s_expr.plan) {
                 if p.table_index == table_index {
                     p.columns.insert(column_index);
                     if inverted_index.is_some() {
@@ -461,7 +289,7 @@ impl SExpr {
 
     #[recursive::recursive]
     pub fn has_merge_exchange(&self) -> bool {
-        if let RelOperator::Exchange(Exchange::Merge) = self.plan.as_ref() {
+        if let Some(Exchange::Merge) = Exchange::try_downcast_ref(&self.plan) {
             return true;
         }
         self.children.iter().any(|child| child.has_merge_exchange())
@@ -502,12 +330,10 @@ impl SExpr {
             | crate::plans::RelOp::Window
             | crate::plans::RelOp::ProjectSet
             | crate::plans::RelOp::Udf
-            | crate::plans::RelOp::Udaf
             | crate::plans::RelOp::AsyncFunction
             | crate::plans::RelOp::MergeInto
             | crate::plans::RelOp::CompactBlock
-            | crate::plans::RelOp::MutationSource
-            | crate::plans::RelOp::Pattern => self.child(0)?.get_data_distribution(),
+            | crate::plans::RelOp::MutationSource => self.child(0)?.get_data_distribution(),
         }
     }
 }

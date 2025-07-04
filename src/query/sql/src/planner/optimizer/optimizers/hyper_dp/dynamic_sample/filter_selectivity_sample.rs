@@ -35,7 +35,7 @@ use crate::planner::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::MetadataRef;

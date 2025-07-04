@@ -193,6 +193,9 @@ impl std::hash::Hash for Scan {
 }
 
 impl Operator for Scan {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Scan
     }

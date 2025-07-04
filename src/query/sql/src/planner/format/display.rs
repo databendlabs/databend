@@ -20,7 +20,7 @@ use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
@@ -157,7 +157,7 @@ where
             tree.children.extend(stats);
         }
 
-        let subquerys = op.get_subquery(vec![]);
+        let mut subquerys = op.collect_subquery();
         if !subquerys.is_empty() {
             let subquerys = subquerys
                 .into_iter()

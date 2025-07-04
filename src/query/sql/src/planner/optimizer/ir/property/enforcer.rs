@@ -27,7 +27,8 @@ use crate::optimizer::ir::property::PhysicalProperty;
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RequiredProperty;
 use crate::plans::Exchange;
-use crate::plans::RelOperator;
+use crate::plans::Join;
+use crate::plans::Operator;
 
 /// Enforcer is a trait that can enforce the physical property
 pub trait Enforcer: std::fmt::Debug + Send + Sync {
@@ -115,9 +116,8 @@ impl PropertyEnforcer {
             physical_properties.push(rel_expr.derive_physical_prop_child(index)?);
         }
 
-        let plan = s_expr.plan.as_ref().clone();
-
-        if let RelOperator::Join(_) = &plan {
+        let plan = s_expr.plan();
+        if let Some(join) = Join::try_downcast_ref(plan) {
             let (probe_required_property, build_required_property) =
                 required_properties.split_at_mut(1);
             if let Distribution::Hash(probe_keys) = &mut probe_required_property[0].distribution
@@ -196,7 +196,7 @@ impl PropertyEnforcer {
 
         // Apply the enforcer
         let exchange_op = enforcer.enforce()?;
-        let result = SExpr::create_unary(Arc::new(exchange_op), Arc::new(s_expr.clone()));
+        let result = SExpr::create_unary(exchange_op, s_expr.clone());
 
         Ok(result)
     }

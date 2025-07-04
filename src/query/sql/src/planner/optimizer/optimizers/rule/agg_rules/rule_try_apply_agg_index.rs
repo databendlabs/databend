@@ -19,8 +19,9 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
+use crate::plans::Scan;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -260,16 +261,15 @@ impl Rule for RuleTryApplyAggIndex {
 
 impl RuleTryApplyAggIndex {
     fn get_table(&self, s_expr: &SExpr) -> (IndexType, String) {
-        match s_expr.plan() {
-            RelOperator::Scan(scan) => {
-                let metadata = self.metadata.read();
-                let table = metadata.table(scan.table_index);
-                (
-                    scan.table_index,
-                    format!("{}.{}.{}", table.catalog(), table.database(), table.name()),
-                )
-            }
-            _ => self.get_table(s_expr.child(0).unwrap()),
+        if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
+            let metadata = self.metadata.read();
+            let table = metadata.table(scan.table_index);
+            (
+                scan.table_index,
+                format!("{}.{}.{}", table.catalog(), table.database(), table.name()),
+            )
+        } else {
+            self.get_table(s_expr.child(0).unwrap())
         }
     }
 }

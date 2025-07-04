@@ -31,6 +31,7 @@ use crate::executor::physical_plans::Exchange;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
+use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::DummyTableScan;
 use crate::ColumnSet;
@@ -70,11 +71,25 @@ impl AggregateFinal {
     }
 }
 
+impl BuildPhysicalPlan for AggregateFinal {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
+        builder
+            .build_aggregate(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_aggregate(
         &mut self,
         s_expr: &SExpr,
-        agg: &crate::plans::Aggregate,
+        agg: &Aggregate,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {

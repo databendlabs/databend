@@ -47,7 +47,7 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::ScalarExpr;
@@ -295,8 +295,7 @@ impl Binder {
                     });
                 }
                 let eval_scalar = EvalScalar { items };
-                let new_expr =
-                    SExpr::create_unary(Arc::new(eval_scalar.into()), srf_expr.children[0].clone());
+                let new_expr = SExpr::create_unary(eval_scalar, srf_expr.children[0].clone());
 
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
@@ -399,8 +398,7 @@ impl Binder {
                         // Add srf result column
                         bind_context.add_column_binding(column_binding);
 
-                        let flatten_expr =
-                            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(srf_expr));
+                        let flatten_expr = SExpr::create_unary(eval_scalar, srf_expr);
 
                         let (new_expr, mut bind_context) = self
                             .extract_srf_table_function_columns(

@@ -45,8 +45,15 @@ impl Filter {
 }
 
 impl Operator for Filter {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
         RelOp::Filter
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+        Box::new(self.predicates.iter())
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
