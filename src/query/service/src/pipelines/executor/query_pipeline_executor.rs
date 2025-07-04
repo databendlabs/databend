@@ -434,7 +434,7 @@ impl QueryPipelineExecutor {
     }
 
     pub fn format_graph_nodes(&self) -> String {
-        self.graph.format_graph_nodes()
+        self.graph.format_graph_nodes(false)
     }
 
     pub fn fetch_plans_profile(&self, collect_metrics: bool) -> HashMap<u32, PlanProfile> {
