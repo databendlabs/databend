@@ -29,6 +29,8 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -68,7 +70,7 @@ pub struct VirtualColumnState {
 #[derive(Clone)]
 pub struct VirtualColumnBuilder {
     // variant field offset and ColumnId
-    variant_fields: Vec<(usize, TableField)>,
+    pub(crate) variant_fields: Vec<(usize, TableField)>,
 }
 
 impl VirtualColumnBuilder {
@@ -129,46 +131,24 @@ impl VirtualColumnBuilder {
         let mut virtual_columns = Vec::new();
         // use a tmp column id to generate statistics for virtual columns.
         let mut tmp_column_id = 0;
-        let mut paths = VecDeque::new();
         // use first 10 rows as sample to check whether the block is suitable for generating virtual columns
         let sample_rows = num_rows.min(10);
         for (offset, source_field) in &self.variant_fields {
+            let virtual_field_num = virtual_fields.len();
             let source_column_id = source_field.column_id;
             let column = block.get_by_offset(*offset);
 
             let mut virtual_values = BTreeMap::new();
             for row in 0..sample_rows {
-                let val = unsafe { column.index_unchecked(row) };
-                if let ScalarRef::Variant(jsonb_bytes) = val {
-                    let val = from_slice(jsonb_bytes).unwrap();
-                    paths.clear();
-                    Self::collect_virtual_values(
-                        &val,
-                        row,
-                        virtual_fields.len(),
-                        &mut paths,
-                        &mut virtual_values,
-                    );
-                }
+                Self::extract_virtual_values(column, row, virtual_field_num, &mut virtual_values);
             }
             if Self::check_sample_virtual_values(sample_rows, &mut virtual_values) {
                 continue;
             }
             for row in sample_rows..num_rows {
-                let val = unsafe { column.index_unchecked(row) };
-                if let ScalarRef::Variant(jsonb_bytes) = val {
-                    let val = from_slice(jsonb_bytes).unwrap();
-                    paths.clear();
-                    Self::collect_virtual_values(
-                        &val,
-                        row,
-                        virtual_fields.len(),
-                        &mut paths,
-                        &mut virtual_values,
-                    );
-                }
+                Self::extract_virtual_values(column, row, virtual_field_num, &mut virtual_values);
             }
-            Self::discard_virtual_values(num_rows, virtual_fields.len(), &mut virtual_values);
+            Self::discard_virtual_values(num_rows, virtual_field_num, &mut virtual_values);
             if virtual_values.is_empty() {
                 continue;
             }
@@ -177,73 +157,11 @@ impl VirtualColumnBuilder {
             for ((key_paths, vals), val_type) in
                 virtual_values.into_iter().zip(value_types.into_iter())
             {
-                let virtual_type = match val_type {
-                    VariantDataType::Jsonb => DataType::Nullable(Box::new(DataType::Variant)),
-                    VariantDataType::Boolean => DataType::Nullable(Box::new(DataType::Boolean)),
-                    VariantDataType::UInt64 => {
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)))
-                    }
-                    VariantDataType::Int64 => {
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
-                    }
-                    VariantDataType::Float64 => {
-                        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64)))
-                    }
-                    VariantDataType::String => DataType::Nullable(Box::new(DataType::String)),
-                    _ => todo!(),
-                };
-
-                // create column
-                let column = match val_type {
-                    VariantDataType::Jsonb => VariantType::from_opt_data(
-                        vals.into_iter().map(|v| v.map(|v| v.to_vec())).collect(),
-                    ),
-                    VariantDataType::Boolean => BooleanType::from_opt_data(
-                        vals.into_iter()
-                            .map(|v| v.map(|v| v.as_bool().unwrap()))
-                            .collect(),
-                    ),
-                    VariantDataType::UInt64 => UInt64Type::from_opt_data(
-                        vals.into_iter()
-                            .map(|v| v.map(|v| v.as_u64().unwrap()))
-                            .collect(),
-                    ),
-                    VariantDataType::Int64 => Int64Type::from_opt_data(
-                        vals.into_iter()
-                            .map(|v| v.map(|v| v.as_i64().unwrap()))
-                            .collect(),
-                    ),
-                    VariantDataType::Float64 => Float64Type::from_opt_data(
-                        vals.into_iter()
-                            .map(|v| v.map(|v| v.as_f64().unwrap()))
-                            .collect(),
-                    ),
-                    VariantDataType::String => StringType::from_opt_data(
-                        vals.into_iter()
-                            .map(|v| v.map(|v| v.as_str().unwrap().to_string()))
-                            .collect(),
-                    ),
-                    _ => todo!(),
-                };
+                let (virtual_type, column) = Self::build_column(&val_type, vals);
                 let virtual_table_type = infer_schema_type(&virtual_type).unwrap();
                 virtual_columns.push(column.into());
 
-                let mut key_name = String::new();
-                for path in key_paths {
-                    key_name.push('[');
-                    match path {
-                        KeyPath::Index(idx) => {
-                            key_name.push_str(&format!("{idx}"));
-                        }
-                        KeyPath::Name(name) => {
-                            key_name.push('\'');
-                            key_name.push_str(&name);
-                            key_name.push('\'');
-                        }
-                    }
-                    key_name.push(']');
-                }
-
+                let key_name = Self::key_path_to_string(key_paths);
                 let virtual_name = format!("{}{}", source_field.name, key_name);
                 let virtual_field = TableField::new_from_column_id(
                     &virtual_name,
@@ -288,7 +206,7 @@ impl VirtualColumnBuilder {
             write_settings.table_compression,
         )?;
 
-        let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(
+        let draft_virtual_column_metas = Self::file_meta_to_virtual_column_metas(
             file_meta,
             virtual_column_names,
             columns_statistics,
@@ -310,7 +228,22 @@ impl VirtualColumnBuilder {
         })
     }
 
-    fn collect_virtual_values<'a>(
+    #[inline]
+    pub(crate) fn extract_virtual_values<'a>(
+        column: &'a BlockEntry,
+        row: usize,
+        virtual_field_num: usize,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'a>>>>,
+    ) {
+        let val = unsafe { column.index_unchecked(row) };
+        if let ScalarRef::Variant(jsonb_bytes) = val {
+            let mut paths = VecDeque::new();
+            let val = from_slice(jsonb_bytes).unwrap();
+            Self::collect_virtual_values(&val, row, virtual_field_num, &mut paths, virtual_values);
+        }
+    }
+
+    pub(crate) fn collect_virtual_values<'a>(
         val: &JsonbValue<'a>,
         row: usize,
         virtual_field_num: usize,
@@ -375,7 +308,7 @@ impl VirtualColumnBuilder {
         }
     }
 
-    fn check_sample_virtual_values(
+    pub(crate) fn check_sample_virtual_values(
         sample_rows: usize,
         virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
     ) -> bool {
@@ -402,7 +335,7 @@ impl VirtualColumnBuilder {
         most_null_percentage > 0.5
     }
 
-    fn discard_virtual_values(
+    pub(crate) fn discard_virtual_values(
         num_rows: usize,
         virtual_field_num: usize,
         virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
@@ -465,7 +398,7 @@ impl VirtualColumnBuilder {
         }
     }
 
-    fn inference_data_type(
+    pub(crate) fn inference_data_type(
         virtual_values: &BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue>>>,
     ) -> Vec<VariantDataType> {
         let mut val_types = Vec::with_capacity(virtual_values.len());
@@ -518,8 +451,81 @@ impl VirtualColumnBuilder {
         val_types
     }
 
-    fn file_meta_to_virtual_column_metas(
-        &self,
+    pub(crate) fn build_column(
+        vtype: &VariantDataType,
+        vals: Vec<Option<JsonbValue>>,
+    ) -> (DataType, Column) {
+        match vtype {
+            VariantDataType::Jsonb => (
+                DataType::Nullable(Box::new(DataType::Variant)),
+                VariantType::from_opt_data(
+                    vals.into_iter().map(|v| v.map(|x| x.to_vec())).collect(),
+                ),
+            ),
+            VariantDataType::Boolean => (
+                DataType::Nullable(Box::new(DataType::Boolean)),
+                BooleanType::from_opt_data(
+                    vals.into_iter()
+                        .map(|v| v.map(|x| x.as_bool().unwrap()))
+                        .collect(),
+                ),
+            ),
+            VariantDataType::UInt64 => (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
+                UInt64Type::from_opt_data(
+                    vals.into_iter()
+                        .map(|v| v.map(|x| x.as_u64().unwrap()))
+                        .collect(),
+                ),
+            ),
+            VariantDataType::Int64 => (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64))),
+                Int64Type::from_opt_data(
+                    vals.into_iter()
+                        .map(|v| v.map(|x| x.as_i64().unwrap()))
+                        .collect(),
+                ),
+            ),
+            VariantDataType::Float64 => (
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float64))),
+                Float64Type::from_opt_data(
+                    vals.into_iter()
+                        .map(|v| v.map(|x| x.as_f64().unwrap()))
+                        .collect(),
+                ),
+            ),
+            VariantDataType::String => (
+                DataType::Nullable(Box::new(DataType::String)),
+                StringType::from_opt_data(
+                    vals.into_iter()
+                        .map(|v| v.map(|x| x.as_str().unwrap().to_string()))
+                        .collect(),
+                ),
+            ),
+            _ => todo!(),
+        }
+    }
+
+    pub(crate) fn key_path_to_string(key_paths: Vec<KeyPath>) -> String {
+        let mut key_name = String::new();
+        for path in key_paths {
+            key_name.push('[');
+            match path {
+                KeyPath::Index(idx) => {
+                    key_name.push_str(&format!("{idx}"));
+                }
+                KeyPath::Name(name) => {
+                    key_name.push('\'');
+                    key_name.push_str(&name);
+                    key_name.push('\'');
+                }
+            }
+            key_name.push(']');
+        }
+        key_name
+    }
+
+    pub(crate) fn file_meta_to_virtual_column_metas(
         file_meta: FileMetaData,
         virtual_column_names: Vec<(ColumnId, String, VariantDataType)>,
         mut columns_statistics: StatisticsOfColumns,
@@ -586,7 +592,7 @@ impl VirtualColumnBuilder {
 
 /// Represents a valid key path.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
-enum KeyPath {
+pub(crate) enum KeyPath {
     /// represents the index of an Array
     Index(u32),
     /// represents the field name of an Object.

@@ -26,10 +26,11 @@ use crate::io::write::stream::create_column_ndv_estimator;
 use crate::io::write::stream::create_column_stats_builder;
 use crate::io::write::stream::ColumnNDVEstimator;
 use crate::io::write::stream::ColumnStatisticsBuilder;
+use crate::io::write::stream::ColumnStatsOps;
 use crate::statistics::traverse_values_dfs;
 
 pub struct ColumnStatisticsState {
-    col_stats: HashMap<ColumnId, Box<dyn ColumnStatisticsBuilder>>,
+    col_stats: HashMap<ColumnId, ColumnStatisticsBuilder>,
     distinct_columns: HashMap<ColumnId, Box<dyn ColumnNDVEstimator>>,
 }
 
