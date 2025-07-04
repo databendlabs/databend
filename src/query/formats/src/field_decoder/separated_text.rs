@@ -52,6 +52,7 @@ use databend_common_io::Interval;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use jsonb::parse_value;
+use jsonb::parse_value_standard_mode;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
@@ -89,6 +90,7 @@ impl SeparatedTextDecoder {
                 binary_format: params.binary_format,
                 is_rounding_mode: options_ext.is_rounding_mode,
                 enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
+                enable_extended_json_syntax: options_ext.enable_extended_json_syntax,
             },
             nested_decoder: NestedValues::create(options_ext),
         }
@@ -106,6 +108,7 @@ impl SeparatedTextDecoder {
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
                 enable_dst_hour_fix: options_ext.enable_dst_hour_fix,
+                enable_extended_json_syntax: options_ext.enable_extended_json_syntax,
             },
             nested_decoder: NestedValues::create(options_ext),
         }
@@ -287,7 +290,12 @@ impl SeparatedTextDecoder {
     }
 
     fn read_variant(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
-        match parse_value(data) {
+        let res = if self.common_settings.enable_extended_json_syntax {
+            parse_value(data)
+        } else {
+            parse_value_standard_mode(data)
+        };
+        match res {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);
                 column.commit_row();

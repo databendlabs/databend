@@ -1361,6 +1361,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_extended_json_syntax", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Set to 1 for entended JSON syntax, support decimal values.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

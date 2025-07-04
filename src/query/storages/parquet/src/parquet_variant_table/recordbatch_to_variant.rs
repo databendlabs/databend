@@ -25,6 +25,7 @@ pub fn read_record_batch(
     record_batch: RecordBatch,
     builder: &mut BinaryColumnBuilder,
     tz: &TimeZone,
+    enable_extended_json_syntax: bool,
     typ: &TableDataType,
     schema: &DataSchema,
 ) -> databend_common_exception::Result<()> {
@@ -34,7 +35,13 @@ pub fn read_record_batch(
     }
     let column = Column::Tuple(columns);
     for scalar in column.iter() {
-        cast_scalar_to_variant(scalar, tz, &mut builder.data, Some(typ));
+        cast_scalar_to_variant(
+            scalar,
+            tz,
+            enable_extended_json_syntax,
+            &mut builder.data,
+            Some(typ),
+        );
         builder.commit_row()
     }
     Ok(())
@@ -43,6 +50,7 @@ pub fn read_record_batch(
 pub fn record_batch_to_block(
     record_batch: RecordBatch,
     tz: &TimeZone,
+    enable_extended_json_syntax: bool,
     typ: &TableDataType,
     schema: &DataSchema,
 ) -> databend_common_exception::Result<DataBlock> {
@@ -50,7 +58,14 @@ pub fn record_batch_to_block(
         record_batch.num_rows(),
         record_batch.get_array_memory_size(),
     );
-    read_record_batch(record_batch, &mut builder, tz, typ, schema)?;
+    read_record_batch(
+        record_batch,
+        &mut builder,
+        tz,
+        enable_extended_json_syntax,
+        typ,
+        schema,
+    )?;
     let column = builder.build();
     let num_rows = column.len();
     Ok(DataBlock::new(

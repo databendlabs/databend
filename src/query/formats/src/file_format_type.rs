@@ -52,6 +52,7 @@ pub struct FileFormatOptionsExt {
     pub is_rounding_mode: bool,
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
+    pub enable_extended_json_syntax: bool,
 }
 
 impl FileFormatOptionsExt {
@@ -62,6 +63,7 @@ impl FileFormatOptionsExt {
         let timezone = parse_timezone(settings)?;
         let jiff_timezone = parse_jiff_timezone(settings)?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
+        let enable_extended_json_syntax = settings.get_enable_extended_json_syntax()?;
         let geometry_format = settings.get_geometry_output_format()?;
         let numeric_cast_option = settings
             .get_numeric_cast_option()
@@ -81,6 +83,7 @@ impl FileFormatOptionsExt {
             is_rounding_mode,
             geometry_format,
             enable_dst_hour_fix,
+            enable_extended_json_syntax,
         };
         Ok(options)
     }
@@ -93,6 +96,7 @@ impl FileFormatOptionsExt {
         let jiff_timezone = parse_jiff_timezone(settings)?;
         let geometry_format = settings.get_geometry_output_format()?;
         let enable_dst_hour_fix = settings.get_enable_dst_hour_fix()?;
+        let enable_extended_json_syntax = settings.get_enable_extended_json_syntax()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
@@ -106,6 +110,7 @@ impl FileFormatOptionsExt {
             is_rounding_mode: true,
             geometry_format,
             enable_dst_hour_fix,
+            enable_extended_json_syntax,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

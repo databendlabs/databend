@@ -1013,4 +1013,8 @@ impl Settings {
     pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
     }
+
+    pub fn get_enable_extended_json_syntax(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_extended_json_syntax")? == 1)
+    }
 }

@@ -76,6 +76,7 @@ use geozero::GeozeroGeometry;
 use geozero::ToGeo;
 use geozero::ToWkb;
 use jsonb::parse_value;
+use jsonb::parse_value_standard_mode;
 use jsonb::RawJsonb;
 use num_traits::AsPrimitive;
 use proj4rs::transform::transform;
@@ -134,14 +135,21 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             match ewkb_to_geo(&mut Ewkb(ewkb)).and_then(|(geo, _)| geo_to_json(geo)) {
-                Ok(json) => match parse_value(json.as_bytes()) {
-                    Ok(json_val) => {
-                        json_val.write_to_vec(&mut builder.data);
+                Ok(json) => {
+                    let res = if ctx.func_ctx.enable_extended_json_syntax {
+                        parse_value(json.as_bytes())
+                    } else {
+                        parse_value_standard_mode(json.as_bytes())
+                    };
+                    match res {
+                        Ok(json_val) => {
+                            json_val.write_to_vec(&mut builder.data);
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                        }
                     }
-                    Err(e) => {
-                        ctx.set_error(builder.len(), e.to_string());
-                    }
-                },
+                }
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
                 }

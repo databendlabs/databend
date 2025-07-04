@@ -67,6 +67,25 @@ select parse_json('{ "test" : "\\"abc\\"测试⚠️✅❌မြန်မာဘ�
 query TT
 select parse_json('99999999999999999999999999999999999999'), parse_json('-99999999.999999999999999999999999999999')
 ----
+1e38 -100000000.0
+
+query T
+select parse_json('9999999999999999999999999999999999999999999999999999999999999999999999999999')
+----
+1e76
+
+statement error 1006
+select parse_json('+1'), parse_json('0000012'), parse_json('1.'), parse_json('.2')
+
+statement error 1006
+select parse_json('[1,2, ,4]'), parse_json('[,2]'), parse_json('[1,]')
+
+statement ok
+set enable_extended_json_syntax = 1
+
+query TT
+select parse_json('99999999999999999999999999999999999999'), parse_json('-99999999.999999999999999999999999999999')
+----
 99999999999999999999999999999999999999 -99999999.999999999999999999999999999999
 
 query T
@@ -83,6 +102,9 @@ query TTTT
 select parse_json('[1,2, ,4]'), parse_json('[,2]'), parse_json('[1,]')
 ----
 [1,2,null,4] [null,2] [1,null]
+
+statement ok
+set enable_extended_json_syntax = 0
 
 statement error 1006
 select parse_json('[1,')

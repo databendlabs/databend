@@ -61,6 +61,7 @@ use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::prelude::FormatSettings;
 use databend_common_io::Interval;
 use jsonb::parse_value;
+use jsonb::parse_value_standard_mode;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
 
@@ -95,6 +96,7 @@ impl FastFieldDecoderValues {
                 binary_format: Default::default(),
                 is_rounding_mode,
                 enable_dst_hour_fix: format.enable_dst_hour_fix,
+                enable_extended_json_syntax: format.enable_extended_json_syntax,
             },
         }
     }
@@ -468,7 +470,12 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        match parse_value(&buf) {
+        let res = if self.common_settings.enable_extended_json_syntax {
+            parse_value(&buf)
+        } else {
+            parse_value_standard_mode(&buf)
+        };
+        match res {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);
                 column.commit_row();

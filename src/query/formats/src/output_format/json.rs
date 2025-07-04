@@ -51,6 +51,7 @@ impl JSONOutputFormat {
                 geometry_format: options.geometry_format,
                 enable_dst_hour_fix: options.enable_dst_hour_fix,
                 format_null_as_str: true,
+                enable_extended_json_syntax: options.enable_extended_json_syntax,
             },
         }
     }

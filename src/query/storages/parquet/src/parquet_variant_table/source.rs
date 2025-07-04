@@ -91,6 +91,7 @@ pub struct ParquetVariantSource {
     use_logic_type: bool,
 
     tz: TimeZone,
+    enable_extended_json_syntax: bool,
 }
 
 impl ParquetVariantSource {
@@ -108,6 +109,7 @@ impl ParquetVariantSource {
 
         let settings = ctx.get_settings();
         let tz_string = settings.get_timezone()?;
+        let enable_extended_json_syntax = settings.get_enable_extended_json_syntax()?;
         let tz = TimeZone::get(&tz_string).map_err(|e| {
             ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
         })?;
@@ -125,6 +127,7 @@ impl ParquetVariantSource {
             op_registry,
             batch_size: 1000,
             tz,
+            enable_extended_json_syntax,
             use_logic_type,
         })))
     }
@@ -184,7 +187,13 @@ impl Processor for ParquetVariantSource {
             } => {
                 if let Some((reader, mut start_row, typ, data_schema)) = vs.front_mut() {
                     if let Some(batch) = reader.next() {
-                        let mut block = record_batch_to_block(batch?, &self.tz, typ, data_schema)?;
+                        let mut block = record_batch_to_block(
+                            batch?,
+                            &self.tz,
+                            self.enable_extended_json_syntax,
+                            typ,
+                            data_schema,
+                        )?;
                         add_internal_columns(
                             &self.internal_columns,
                             location.clone(),
@@ -212,8 +221,13 @@ impl Processor for ParquetVariantSource {
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
                 for (buffer, path) in buffers {
-                    let mut block =
-                        read_small_file(buffer, self.batch_size, &self.tz, self.use_logic_type)?;
+                    let mut block = read_small_file(
+                        buffer,
+                        self.batch_size,
+                        &self.tz,
+                        self.enable_extended_json_syntax,
+                        self.use_logic_type,
+                    )?;
 
                     if self.is_copy {
                         self.copy_status.add_chunk(path.as_str(), FileStatus {
@@ -352,6 +366,7 @@ pub fn read_small_file(
     bytes: Bytes,
     batch_size: usize,
     tz: &TimeZone,
+    enable_extended_json_syntax: bool,
     use_logic_type: bool,
 ) -> databend_common_exception::Result<DataBlock> {
     let len = bytes.len();
@@ -367,7 +382,14 @@ pub fn read_small_file(
     let mut builder = BinaryColumnBuilder::with_capacity(batch_size, len);
     for batch in reader {
         let batch = batch?;
-        read_record_batch(batch, &mut builder, tz, &typ, &data_schema)?;
+        read_record_batch(
+            batch,
+            &mut builder,
+            tz,
+            enable_extended_json_syntax,
+            &typ,
+            &data_schema,
+        )?;
     }
     let column = builder.build();
     let num_rows = column.len();

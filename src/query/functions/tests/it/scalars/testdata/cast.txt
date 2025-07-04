@@ -231,7 +231,7 @@ output         : '-1'
 ast            : CAST(1.1 AS VARIANT)
 raw expr       : CAST(1.1 AS Variant)
 checked expr   : CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant)
-optimized expr : 0x200000002000000a70000000000000000b01
+optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant
 output domain  : Undefined
 output         : '1.1'
@@ -266,7 +266,7 @@ output         : '[0,"a"]'
 ast            : CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : CAST(to_timestamp(1000000) AS Variant)
 checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant)
-optimized expr : 0x200000006000000920000000e8d4a51000
+optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant
 output domain  : Undefined
 output         : '"1970-01-12 13:46:40.000000"'
@@ -355,6 +355,194 @@ error:
 ast            : CAST(a AS VARIANT)
 raw expr       : CAST(a::Bitmap AS Variant)
 checked expr   : CAST<Bitmap>(a AS Variant)
+evaluation:
++--------+-------------+---------------+
+|        | a           | Output        |
++--------+-------------+---------------+
+| Type   | Bitmap      | Variant       |
+| Domain | Undefined   | Undefined     |
+| Row 0  | '0,1,2,3,4' | '[0,1,2,3,4]' |
+| Row 1  | '1,2,3,4,5' | '[1,2,3,4,5]' |
+| Row 2  | '2,3,4,5,6' | '[2,3,4,5,6]' |
+| Row 3  | '3,4,5,6,7' | '[3,4,5,6,7]' |
++--------+-------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                     |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Bitmap([0x0100000000000000000000003a30000001000000000004001000000000000100020003000400, 0x0100000000000000000000003a30000001000000000004001000000001000200030004000500, 0x0100000000000000000000003a30000001000000000004001000000002000300040005000600, 0x0100000000000000000000003a30000001000000000004001000000003000400050006000700]) |
+| Output | Variant([0x800000052000000120000002200000022000000220000002005001500250035004, 0x80000005200000022000000220000002200000022000000250015002500350045005, 0x80000005200000022000000220000002200000022000000250025003500450055006, 0x80000005200000022000000220000002200000022000000250035004500550065007])                                  |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(NULL AS VARIANT)
+  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `NULL` to type `Variant`, during run expr: `CAST(NULL AS Variant)`
+
+
+
+ast            : CAST(0 AS VARIANT)
+raw expr       : CAST(0 AS Variant)
+checked expr   : CAST<UInt8>(0_u8 AS Variant)
+optimized expr : 0x200000002000000100
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '0'
+
+
+ast            : CAST(-1 AS VARIANT)
+raw expr       : CAST(minus(1) AS Variant)
+checked expr   : CAST<Int16>(minus<UInt8>(1_u8) AS Variant)
+optimized expr : 0x200000002000000240ff
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '-1'
+
+
+ast            : CAST(1.1 AS VARIANT)
+raw expr       : CAST(1.1 AS Variant)
+checked expr   : CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant)
+optimized expr : 0x200000002000000a70000000000000000b01
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '1.1'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST('🍦 が美味しい' AS VARIANT)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected value, pos 1 while evaluating function `parse_json('🍦 が美味しい')` in expr `CAST('🍦 が美味しい' AS Variant)`
+
+
+
+ast            : CAST([0, 1, 2] AS VARIANT)
+raw expr       : CAST(array(0, 1, 2) AS Variant)
+checked expr   : CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8) AS Variant)
+optimized expr : 0x800000032000000120000002200000020050015002
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '[0,1,2]'
+
+
+ast            : CAST([0::VARIANT, '"a"'::VARIANT] AS VARIANT)
+raw expr       : CAST(array(CAST(0 AS Variant), CAST('"a"' AS Variant)) AS Variant)
+checked expr   : CAST<Array(Variant)>(array<T0=Variant><T0, T0>(CAST<UInt8>(0_u8 AS Variant), CAST<String>("\"a\"" AS Variant)) AS Variant)
+optimized expr : 0x8000000220000001100000010061
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '[0,"a"]'
+
+
+ast            : CAST(to_timestamp(1000000) AS VARIANT)
+raw expr       : CAST(to_timestamp(1000000) AS Variant)
+checked expr   : CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant)
+optimized expr : 0x200000006000000920000000e8d4a51000
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '"1970-01-12 13:46:40.000000"'
+
+
+ast            : CAST(false AS VARIANT)
+raw expr       : CAST(false AS Variant)
+checked expr   : CAST<Boolean>(false AS Variant)
+optimized expr : 0x2000000030000000
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : 'false'
+
+
+ast            : CAST(true AS VARIANT)
+raw expr       : CAST(true AS Variant)
+checked expr   : CAST<Boolean>(true AS Variant)
+optimized expr : 0x2000000040000000
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : 'true'
+
+
+ast            : CAST(CAST('"🍦 が美味しい"' AS VARIANT) AS VARIANT)
+raw expr       : CAST(CAST('"🍦 が美味しい"' AS Variant) AS Variant)
+checked expr   : CAST<String>("\"🍦 が美味しい\"" AS Variant)
+optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '"🍦 が美味しい"'
+
+
+ast            : CAST((1,) AS VARIANT)
+raw expr       : CAST(tuple(1) AS Variant)
+checked expr   : CAST<Tuple(UInt8,)>(tuple<UInt8>(1_u8) AS Variant)
+optimized expr : 0x400000011000000120000002315001
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '{"1":1}'
+
+
+ast            : CAST((1, 2) AS VARIANT)
+raw expr       : CAST(tuple(1, 2) AS Variant)
+checked expr   : CAST<Tuple(UInt8, UInt8)>(tuple<UInt8, UInt8>(1_u8, 2_u8) AS Variant)
+optimized expr : 0x4000000210000001100000012000000220000002313250015002
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '{"1":1,"2":2}'
+
+
+ast            : CAST((false, true) AS VARIANT)
+raw expr       : CAST(tuple(false, true) AS Variant)
+checked expr   : CAST<Tuple(Boolean, Boolean)>(tuple<Boolean, Boolean>(false, true) AS Variant)
+optimized expr : 0x40000002100000011000000130000000400000003132
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '{"1":false,"2":true}'
+
+
+ast            : CAST(('a',) AS VARIANT)
+raw expr       : CAST(tuple('a') AS Variant)
+checked expr   : CAST<Tuple(String,)>(tuple<String>("a") AS Variant)
+optimized expr : 0x4000000110000001100000013161
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '{"1":"a"}'
+
+
+ast            : CAST((1, 2, (false, true, ('a',))) AS VARIANT)
+raw expr       : CAST(tuple(1, 2, tuple(false, true, tuple('a'))) AS Variant)
+checked expr   : CAST<Tuple(UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,)))>(tuple<UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, Tuple(String,)>(false, true, tuple<String>("a"))) AS Variant)
+optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
+func ctx       : (modified)
+output type    : Variant
+output domain  : Undefined
+output         : '{"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | CAST(a AS VARIANT)
+  | ^^^^^^^^^^^^^^^^^^ unable to cast `NULL` to type `Variant`, during run expr: `CAST(a AS Variant)`
+
+
+
+ast            : CAST(a AS VARIANT)
+raw expr       : CAST(a::Bitmap AS Variant)
+checked expr   : CAST<Bitmap>(a AS Variant)
+func ctx       : (modified)
 evaluation:
 +--------+-------------+---------------+
 |        | a           | Output        |
@@ -2409,7 +2597,7 @@ output         : '-1'
 ast            : TRY_CAST(1.1 AS VARIANT)
 raw expr       : TRY_CAST(1.1 AS Variant)
 checked expr   : TRY_CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant NULL)
-optimized expr : 0x200000002000000a70000000000000000b01
+optimized expr : 0x2000000020000009603ff199999999999a
 output type    : Variant NULL
 output domain  : Undefined
 output         : '1.1'
@@ -2445,7 +2633,7 @@ output         : '[0,"a"]'
 ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
 raw expr       : TRY_CAST(to_timestamp(1000000) AS Variant)
 checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant NULL)
-optimized expr : 0x200000006000000920000000e8d4a51000
+optimized expr : 0x200000001000001a313937302d30312d31322031333a34363a34302e303030303030
 output type    : Variant NULL
 output domain  : Undefined
 output         : '"1970-01-12 13:46:40.000000"'
@@ -2548,6 +2736,213 @@ evaluation (internal):
 ast            : TRY_CAST(a AS VARIANT)
 raw expr       : TRY_CAST(a::Bitmap AS Variant)
 checked expr   : TRY_CAST<Bitmap>(a AS Variant NULL)
+evaluation:
++--------+-------------+---------------+
+|        | a           | Output        |
++--------+-------------+---------------+
+| Type   | Bitmap      | Variant NULL  |
+| Domain | Undefined   | Undefined     |
+| Row 0  | '0,1,2,3,4' | '[0,1,2,3,4]' |
+| Row 1  | '1,2,3,4,5' | '[1,2,3,4,5]' |
+| Row 2  | '2,3,4,5,6' | '[2,3,4,5,6]' |
+| Row 3  | '3,4,5,6,7' | '[3,4,5,6,7]' |
++--------+-------------+---------------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                                                                                                                                                       |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| a      | Bitmap([0x0100000000000000000000003a30000001000000000004001000000000000100020003000400, 0x0100000000000000000000003a30000001000000000004001000000001000200030004000500, 0x0100000000000000000000003a30000001000000000004001000000002000300040005000600, 0x0100000000000000000000003a30000001000000000004001000000003000400050006000700])                   |
+| Output | NullableColumn { column: Variant([0x800000052000000120000002200000022000000220000002005001500250035004, 0x80000005200000022000000220000002200000022000000250015002500350045005, 0x80000005200000022000000220000002200000022000000250025003500450055006, 0x80000005200000022000000220000002200000022000000250035004500550065007]), validity: [0b____1111] } |
++--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(NULL AS VARIANT)
+raw expr       : TRY_CAST(NULL AS Variant)
+checked expr   : TRY_CAST<NULL>(NULL AS Variant NULL)
+optimized expr : NULL
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST(0 AS VARIANT)
+raw expr       : TRY_CAST(0 AS Variant)
+checked expr   : TRY_CAST<UInt8>(0_u8 AS Variant NULL)
+optimized expr : 0x200000002000000100
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '0'
+
+
+ast            : TRY_CAST(-1 AS VARIANT)
+raw expr       : TRY_CAST(minus(1) AS Variant)
+checked expr   : TRY_CAST<Int16>(minus<UInt8>(1_u8) AS Variant NULL)
+optimized expr : 0x200000002000000240ff
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '-1'
+
+
+ast            : TRY_CAST(1.1 AS VARIANT)
+raw expr       : TRY_CAST(1.1 AS Variant)
+checked expr   : TRY_CAST<Decimal(2, 1)>(1.1_d64(2,1) AS Variant NULL)
+optimized expr : 0x200000002000000a70000000000000000b01
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '1.1'
+
+
+ast            : TRY_CAST('🍦 が美味しい' AS VARIANT)
+raw expr       : TRY_CAST('🍦 が美味しい' AS Variant)
+checked expr   : TRY_CAST<String>("🍦 が美味しい" AS Variant NULL)
+optimized expr : NULL
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : TRY_CAST([0, 1, 2] AS VARIANT)
+raw expr       : TRY_CAST(array(0, 1, 2) AS Variant)
+checked expr   : TRY_CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(0_u8, 1_u8, 2_u8) AS Variant NULL)
+optimized expr : 0x800000032000000120000002200000020050015002
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[0,1,2]'
+
+
+ast            : TRY_CAST([0::VARIANT, '"a"'::VARIANT] AS VARIANT)
+raw expr       : TRY_CAST(array(CAST(0 AS Variant), CAST('"a"' AS Variant)) AS Variant)
+checked expr   : TRY_CAST<Array(Variant)>(array<T0=Variant><T0, T0>(CAST<UInt8>(0_u8 AS Variant), CAST<String>("\"a\"" AS Variant)) AS Variant NULL)
+optimized expr : 0x8000000220000001100000010061
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '[0,"a"]'
+
+
+ast            : TRY_CAST(to_timestamp(1000000) AS VARIANT)
+raw expr       : TRY_CAST(to_timestamp(1000000) AS Variant)
+checked expr   : TRY_CAST<Timestamp>(CAST<Int64>(CAST<UInt32>(1000000_u32 AS Int64) AS Timestamp) AS Variant NULL)
+optimized expr : 0x200000006000000920000000e8d4a51000
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '"1970-01-12 13:46:40.000000"'
+
+
+ast            : TRY_CAST(false AS VARIANT)
+raw expr       : TRY_CAST(false AS Variant)
+checked expr   : TRY_CAST<Boolean>(false AS Variant NULL)
+optimized expr : 0x2000000030000000
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : 'false'
+
+
+ast            : TRY_CAST(true AS VARIANT)
+raw expr       : TRY_CAST(true AS Variant)
+checked expr   : TRY_CAST<Boolean>(true AS Variant NULL)
+optimized expr : 0x2000000040000000
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : 'true'
+
+
+ast            : TRY_CAST(TRY_CAST('"🍦 が美味しい"' AS VARIANT) AS VARIANT)
+raw expr       : TRY_CAST(TRY_CAST('"🍦 が美味しい"' AS Variant) AS Variant)
+checked expr   : TRY_CAST<String>("\"🍦 が美味しい\"" AS Variant NULL)
+optimized expr : 0x2000000010000014f09f8da620e3818ce7be8ee591b3e38197e38184
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '"🍦 が美味しい"'
+
+
+ast            : TRY_CAST((1,) AS VARIANT)
+raw expr       : TRY_CAST(tuple(1) AS Variant)
+checked expr   : TRY_CAST<Tuple(UInt8,)>(tuple<UInt8>(1_u8) AS Variant NULL)
+optimized expr : 0x400000011000000120000002315001
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"1":1}'
+
+
+ast            : TRY_CAST((1, 2) AS VARIANT)
+raw expr       : TRY_CAST(tuple(1, 2) AS Variant)
+checked expr   : TRY_CAST<Tuple(UInt8, UInt8)>(tuple<UInt8, UInt8>(1_u8, 2_u8) AS Variant NULL)
+optimized expr : 0x4000000210000001100000012000000220000002313250015002
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"1":1,"2":2}'
+
+
+ast            : TRY_CAST((false, true) AS VARIANT)
+raw expr       : TRY_CAST(tuple(false, true) AS Variant)
+checked expr   : TRY_CAST<Tuple(Boolean, Boolean)>(tuple<Boolean, Boolean>(false, true) AS Variant NULL)
+optimized expr : 0x40000002100000011000000130000000400000003132
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"1":false,"2":true}'
+
+
+ast            : TRY_CAST(('a',) AS VARIANT)
+raw expr       : TRY_CAST(tuple('a') AS Variant)
+checked expr   : TRY_CAST<Tuple(String,)>(tuple<String>("a") AS Variant NULL)
+optimized expr : 0x4000000110000001100000013161
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"1":"a"}'
+
+
+ast            : TRY_CAST((1, 2, (false, true, ('a',))) AS VARIANT)
+raw expr       : TRY_CAST(tuple(1, 2, tuple(false, true, tuple('a'))) AS Variant)
+checked expr   : TRY_CAST<Tuple(UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,)))>(tuple<UInt8, UInt8, Tuple(Boolean, Boolean, Tuple(String,))>(1_u8, 2_u8, tuple<Boolean, Boolean, Tuple(String,)>(false, true, tuple<String>("a"))) AS Variant NULL)
+optimized expr : 0x4000000310000001100000011000000120000002200000025000002d313233500150024000000310000001100000011000000130000000400000005000000e3132334000000110000001100000013161
+func ctx       : (modified)
+output type    : Variant NULL
+output domain  : Undefined
+output         : '{"1":1,"2":2,"3":{"1":false,"2":true,"3":{"1":"a"}}}'
+
+
+ast            : TRY_CAST(a AS VARIANT)
+raw expr       : TRY_CAST(a::String NULL AS Variant)
+checked expr   : TRY_CAST<String NULL>(a AS Variant NULL)
+func ctx       : (modified)
+evaluation:
++--------+-------------------------------+--------------------+
+|        | a                             | Output             |
++--------+-------------------------------+--------------------+
+| Type   | String NULL                   | Variant NULL       |
+| Domain | {"[1,2,3]"..="true"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | 'true'                        | 'true'             |
+| Row 1  | NULL                          | NULL               |
+| Row 2  | '[1,2,3]'                     | '[1,2,3]'          |
++--------+-------------------------------+--------------------+
+evaluation (internal):
++--------+--------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                 |
++--------+--------------------------------------------------------------------------------------------------------------------------------------+
+| a      | NullableColumn { column: StringColumn[true, {"k":"v"}, [1,2,3]], validity: [0b_____101] }                                            |
+| Output | NullableColumn { column: Variant([0x2000000040000000, 0x, 0x80000003200000022000000220000002500150025003]), validity: [0b_____101] } |
++--------+--------------------------------------------------------------------------------------------------------------------------------------+
+
+
+ast            : TRY_CAST(a AS VARIANT)
+raw expr       : TRY_CAST(a::Bitmap AS Variant)
+checked expr   : TRY_CAST<Bitmap>(a AS Variant NULL)
+func ctx       : (modified)
 evaluation:
 +--------+-------------+---------------+
 |        | a           | Output        |
