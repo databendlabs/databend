@@ -111,6 +111,7 @@ pub use seq_num::SeqNum;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
 pub use seq_value::SeqValue;
+pub use time::flexible_timestamp_to_duration;
 pub use time::Interval;
 pub use time::Time;
 pub use with::With;

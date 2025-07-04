@@ -3730,6 +3730,7 @@ dependencies = [
  "logcall",
  "once_cell",
  "parking_lot 0.12.3",
+ "pretty_assertions",
  "prost",
  "rand 0.8.5",
  "semver",

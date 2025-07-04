@@ -72,14 +72,14 @@ copy into @unload from ii file_format=(format_name='csv_none');
 query
 copy into @unload from ii file_format=(format_name='csv_zip');
 ----
-3 12 118
+3 12 136
 
 query
 select right(name, 7), size from list_stage(location=>'@unload');
 ----
 .csv.gz 32
 000.csv 12
-csv.zip 118
+csv.zip 136
 
 query
 select $1, $2 from @unload(file_format => 'csv_gzip' pattern => '.*.gz');

@@ -169,7 +169,7 @@ download_file() {
     [[ "$presign_url" =~ ^https?:// ]] || { log ERROR "Invalid URL format"; return 1; }
 
     log DEBUG "Downloading from: $presign_url"
-    if curl -L -s -S -f -o "$download_dir/$filename" "$presign_url"; then
+    if curl -k -L -s -S -f -o "$download_dir/$filename" "$presign_url"; then
         log INFO "Downloaded: $filename ($(du -h "$download_dir/$filename" | cut -f1))"
         return 0
     else

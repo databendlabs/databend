@@ -153,10 +153,35 @@ impl Sub for Time {
     }
 }
 
+/// Timestamp in **seconds or milliseconds** since Unix epoch (1970-01-01).
+///
+/// The interpretation depends on the magnitude of the value:
+/// - Values > `100_000_000_000`: treated as milliseconds since epoch
+/// - Values ≤ `100_000_000_000`: treated as seconds since epoch
+///
+/// Examples:
+/// - `100_000_000_001` → `1973-03-03 17:46:40` (milliseconds)
+/// - `100_000_000_000` → `5138-11-16 17:46:40` (seconds)
+///
+/// Valid ranges:
+/// - Seconds: `1970-01-01 00:00:00` to `5138-11-16 17:46:40`
+/// - Milliseconds: `1973-03-03 17:46:40` onwards
+///
+/// To avoid overflow issues, use timestamps between `1973-03-03 17:46:40`
+/// and `5138-11-16 17:46:40` for reliable behavior across both interpretations.
+pub fn flexible_timestamp_to_duration(timestamp: u64) -> Duration {
+    if timestamp > 100_000_000_000 {
+        // Milliseconds since epoch
+        Duration::from_millis(timestamp)
+    } else {
+        // Seconds since epoch
+        Duration::from_secs(timestamp)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Interval;
-    use crate::time::Time;
+    use super::*;
 
     #[test]
     fn test_interval() {
@@ -190,5 +215,17 @@ mod tests {
         assert_eq!(time - Interval::from_millis(500), Time::from_millis(500));
         assert_eq!(time - Time::from_millis(500), Interval::from_millis(500));
         assert_eq!(time - Time::from_millis(1500), Interval::from_millis(0));
+    }
+
+    #[test]
+    fn test_adaptable_timestamp_to_duration() {
+        assert_eq!(
+            flexible_timestamp_to_duration(100_000_000_001),
+            Duration::from_millis(100_000_000_001)
+        );
+        assert_eq!(
+            flexible_timestamp_to_duration(100_000_000_000),
+            Duration::from_secs(100_000_000_000)
+        );
     }
 }

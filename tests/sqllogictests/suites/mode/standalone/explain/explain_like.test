@@ -19,7 +19,7 @@ explain select * from t1 where s like '%';
 ----
 Filter
 ├── output columns: [t1.s (#0)]
-├── filters: [is_true(like(t1.s (#0), '%'))]
+├── filters: [is_not_null(t1.s (#0))]
 ├── estimated rows: 5.00
 └── TableScan
     ├── table: default.default.t1
@@ -29,7 +29,7 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(like(t1.s (#0), '%'))], limit: NONE]
+    ├── push downs: [filters: [is_not_null(t1.s (#0))], limit: NONE]
     └── estimated rows: 5.00
 
 query T

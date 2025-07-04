@@ -21,7 +21,7 @@ WHEN NOT MATCHED THEN
 
 query I
 select count(*) from target_table;
----
+----
 2
 
 statement ok
@@ -35,7 +35,7 @@ WHEN NOT MATCHED THEN
 
 query I
 select count(*) from target_table;
----
+----
 4
 
 query I
