@@ -4339,6 +4339,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "divan",
  "enum-as-inner",
+ "enum_dispatch",
  "fastrace",
  "futures",
  "futures-util",

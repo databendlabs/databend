@@ -35,6 +35,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_native::write::NativeWriter;
+use databend_common_native::write::WriteOptions;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
@@ -54,6 +55,7 @@ use crate::io::create_inverted_index_builders;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 use crate::io::write::stream::ColumnStatisticsState;
+use crate::io::write::stream::VirtualColumnWriter;
 use crate::io::write::InvertedIndexState;
 use crate::io::BlockSerialization;
 use crate::io::BloomIndexState;
@@ -189,7 +191,7 @@ impl StreamBlockBuilder {
                 let writer = NativeWriter::new(
                     buffer,
                     properties.source_schema.as_ref().clone(),
-                    databend_common_native::write::WriteOptions {
+                    WriteOptions {
                         default_compression: properties.write_settings.table_compression.into(),
                         max_page_size: Some(properties.write_settings.max_page_size),
                         default_compress_ratio,
@@ -234,11 +236,18 @@ impl StreamBlockBuilder {
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state =
             ColumnStatisticsState::new(&properties.stats_columns, &properties.distinct_columns);
+        let virtual_column_writer = properties.virtual_column_builder.as_ref().map(|builder| {
+            VirtualColumnWriter::create(
+                builder.clone(),
+                properties.write_settings.table_compression,
+            )
+        });
 
         Ok(StreamBlockBuilder {
             properties,
             block_writer,
             inverted_index_writers,
+            virtual_column_writer,
             bloom_index_builder,
             virtual_column_builder,
             row_count: 0,
@@ -333,6 +342,12 @@ impl StreamBlockBuilder {
                 None
             };
 
+        let virtual_column_state = if let Some(writer) = self.virtual_column_writer.take() {
+            Some(writer.finalize(&block_location)?)
+        } else {
+            None
+        };
+
         let col_metas = self.block_writer.finish(&self.properties.source_schema)?;
         let block_raw_data = mem::take(self.block_writer.inner_mut());
 
@@ -363,7 +378,10 @@ impl StreamBlockBuilder {
             compression: self.properties.write_settings.table_compression.into(),
             inverted_index_size,
             create_on: Some(Utc::now()),
-            ngram_filter_index_size: None,
+            ngram_filter_index_size: bloom_index_state
+                .as_ref()
+                .map(|v| v.ngram_size)
+                .unwrap_or_default(),
             virtual_block_meta: None,
         };
         let serialized = BlockSerialization {
@@ -391,6 +409,7 @@ pub struct StreamBlockProperties {
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
+    virtual_column_builder: Option<VirtualColumnBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
     support_virtual_columns: bool,
 }
@@ -437,6 +456,15 @@ impl StreamBlockProperties {
             .collect::<HashSet<_>>();
 
         let inverted_index_builders = create_inverted_index_builders(&table.table_info.meta);
+        let virtual_column_builder = if ctx
+            .get_settings()
+            .get_enable_refresh_virtual_column_after_write()
+            .unwrap_or_default()
+        {
+            VirtualColumnBuilder::try_create(ctx.clone(), table, source_schema.clone()).ok()
+        } else {
+            None
+        };
 
         let cluster_stats_builder =
             ClusterStatisticsBuilder::try_create(table, ctx.clone(), &source_schema)?;
@@ -463,6 +491,7 @@ impl StreamBlockProperties {
             source_schema,
             write_settings,
             cluster_stats_builder,
+            virtual_column_builder,
             stats_columns,
             distinct_columns,
             bloom_columns_map,
