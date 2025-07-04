@@ -124,15 +124,13 @@ impl Base {
             .field(self.base.sort_row_offset)
             .data_type()
             .wrap_nullable();
+        
         let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
-        match bound {
-            Some(bound) => {
-                builder.push(bound.as_ref());
-            }
-            None => {
-                builder.push(Scalar::Null.as_ref());
-            }
-        }
+        let bound = match bound {
+            Some(bound) => bound.as_ref(),
+            None => Scalar::Null.as_ref(),
+        };
+        builder.push(bound);
         block.add_const_column(builder.build_scalar(), data_type);
     }
 }

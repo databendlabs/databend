@@ -30,6 +30,7 @@ use crate::pipelines::processors::transforms::sort::bounds::Bounds;
 use crate::pipelines::processors::transforms::sort::sort_spill::SpillableBlock;
 use crate::pipelines::processors::transforms::sort::SortCollectedMeta;
 use crate::servers::flight::v1::exchange::DataExchange;
+use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::ExchangeSorting;
@@ -72,19 +73,19 @@ impl ExchangeInjector for SortInjector {
 
     fn apply_shuffle_serializer(
         &self,
-        _params: &ShuffleExchangeParams,
-        _compression: Option<FlightCompression>,
-        _pipeline: &mut Pipeline,
+        params: &ShuffleExchangeParams,
+        compression: Option<FlightCompression>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        todo!()
+        DefaultExchangeInjector::create().apply_shuffle_serializer(params, compression, pipeline)
     }
 
     fn apply_shuffle_deserializer(
         &self,
-        _params: &ShuffleExchangeParams,
-        _pipeline: &mut Pipeline,
+        params: &ShuffleExchangeParams,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        todo!()
+        DefaultExchangeInjector::create().apply_shuffle_deserializer(params, pipeline)
     }
 }
 
