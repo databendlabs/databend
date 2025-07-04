@@ -1363,7 +1363,7 @@ impl DefaultSettings {
                 }),
                 ("enable_extended_json_syntax", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Set to 1 for entended JSON syntax, support decimal values.",
+                    desc: "Set to 1 for extended JSON syntax (like decimal values).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
