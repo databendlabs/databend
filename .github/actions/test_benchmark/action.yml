@@ -1,0 +1,30 @@
+name: "Test Benchmark"
+description: "Test Benchmark"
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: meta,query
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Setup Databend Binary
+      shell: bash
+      run: |
+        sudo cp ./target/${BUILD_PROFILE}/databend-* /usr/local/bin/
+        databend-query --version
+        databend-meta --version
+    - name: Run Benchmark
+      working-directory: benchmark/clickbench
+      env:
+        BENCHMARK_ID: ${{ inputs.run_id }}
+        BENCHMARK_DATASET: internal
+      shell: bash
+      run: |
+        ./benchmark_local.sh
+    - name: Check Result
+      working-directory: benchmark/clickbench
+      shell: bash
+      run: |
+        cat result.json
