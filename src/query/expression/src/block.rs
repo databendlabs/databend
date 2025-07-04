@@ -332,9 +332,28 @@ pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
         let boxed = boxed.as_ref() as &dyn Any;
         boxed.downcast_ref()
     }
+
+    fn downcast_from_err(boxed: BlockMetaInfoPtr) -> std::result::Result<Self, BlockMetaInfoPtr> {
+        if (boxed.as_ref() as &dyn Any).is::<Self>() {
+            Ok(*(boxed as Box<dyn Any>).downcast().unwrap())
+        } else {
+            Err(boxed)
+        }
+    }
 }
 
 impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
+
+#[typetag::serde(name = "empty")]
+impl BlockMetaInfo for () {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        <() as BlockMetaInfoDowncast>::downcast_ref_from(info).is_some()
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(())
+    }
+}
 
 impl DataBlock {
     #[inline]

@@ -37,7 +37,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use super::merge_sort::TransformSort;
 use super::sort_collect::TransformSortCollect;
 use super::sort_combine::TransformSortCombine;
-use super::sort_execute::TransformSortExecute;
+use super::sort_execute::TransformSortRestore;
 use super::sort_shuffle::SortSampleState;
 use super::sort_shuffle::TransformSortBoundBroadcast;
 use super::Base;
@@ -299,7 +299,7 @@ impl Build<'_> {
 
     fn build_sort_exec<A>(&mut self) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
-        Ok(Box::new(TransformSortExecute::<A>::create(
+        Ok(Box::new(TransformSortRestore::<A>::create(
             self.input.clone(),
             self.output.clone(),
             self.params.new_base(),

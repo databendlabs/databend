@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -199,17 +197,6 @@ impl SortedStream for Bounds {
             )),
             None => Ok((None, false)),
         }
-    }
-}
-
-#[typetag::serde(name = "sort_bounds")]
-impl BlockMetaInfo for Bounds {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        Bounds::downcast_ref_from(info).is_some_and(|other| self == other)
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
     }
 }
 

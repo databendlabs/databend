@@ -26,9 +26,11 @@ use databend_common_pipeline_transforms::HookTransformer;
 
 use super::sort_spill::SortSpill;
 use super::Base;
+use super::SortBound;
 use super::SortCollectedMeta;
+use crate::pipelines::processors::transforms::sort::sort_spill::OutputData;
 
-pub struct TransformSortExecute<A: SortAlgorithm> {
+pub struct TransformSortRestore<A: SortAlgorithm> {
     output: Option<DataBlock>,
 
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
@@ -39,7 +41,7 @@ pub struct TransformSortExecute<A: SortAlgorithm> {
     inner: Option<SortSpill<A>>,
 }
 
-impl<A> TransformSortExecute<A>
+impl<A> TransformSortRestore<A>
 where A: SortAlgorithm + Send + 'static
 {
     pub(super) fn create(
@@ -58,7 +60,7 @@ where A: SortAlgorithm + Send + 'static
 }
 
 #[async_trait::async_trait]
-impl<A> HookTransform for TransformSortExecute<A>
+impl<A> HookTransform for TransformSortRestore<A>
 where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
@@ -80,7 +82,7 @@ where
         Ok(self.output.take())
     }
 
-    fn need_process(&self) -> Option<Event> {
+    fn need_process(&self, _: bool) -> Option<Event> {
         if self.inner.is_some() {
             Some(Event::Async)
         } else {
@@ -93,8 +95,13 @@ where
         let Some(spill_sort) = &mut self.inner else {
             unreachable!()
         };
-        let (block, finish) = spill_sort.on_restore().await?;
-        if let Some(mut block) = block {
+        let OutputData {
+            block,
+            bound,
+            finish,
+        } = spill_sort.on_restore().await?;
+        if let Some(block) = block {
+            let mut block = block.add_meta(Some(SortBound { bound }.boxed()))?;
             if self.remove_order_col {
                 block.pop_columns(1);
             }

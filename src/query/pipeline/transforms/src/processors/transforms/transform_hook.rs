@@ -30,7 +30,7 @@ pub trait HookTransform: Send + 'static {
 
     fn on_output(&mut self) -> Result<Option<DataBlock>>;
 
-    fn need_process(&self) -> Option<Event>;
+    fn need_process(&self, input_finished: bool) -> Option<Event>;
 
     fn process(&mut self) -> Result<()> {
         unimplemented!()
@@ -83,7 +83,7 @@ impl<T: HookTransform> Processor for HookTransformer<T> {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(event) = self.inner.need_process() {
+        if let Some(event) = self.inner.need_process(self.input.is_finished()) {
             return Ok(event);
         }
 
@@ -92,7 +92,7 @@ impl<T: HookTransform> Processor for HookTransformer<T> {
             self.inner.on_input(data)?;
         }
 
-        if let Some(event) = self.inner.need_process() {
+        if let Some(event) = self.inner.need_process(self.input.is_finished()) {
             return Ok(event);
         }
 

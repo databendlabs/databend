@@ -20,6 +20,7 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_pipeline_transforms::SortSpillParams;
 use sort_spill::SpillableBlock;
 
@@ -91,6 +92,22 @@ struct SortExchangeMeta {
 impl BlockMetaInfo for SortExchangeMeta {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         SortExchangeMeta::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SortBound {
+    bound: Option<Scalar>,
+}
+
+#[typetag::serde(name = "sort_bound")]
+impl BlockMetaInfo for SortBound {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SortBound::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

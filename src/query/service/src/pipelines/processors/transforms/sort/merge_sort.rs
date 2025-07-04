@@ -40,6 +40,7 @@ use super::sort_spill::MemoryMerger;
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::MemoryRows;
+use crate::pipelines::processors::transforms::sort::sort_spill::OutputData;
 use crate::spillers::Spiller;
 
 #[derive(Debug)]
@@ -448,7 +449,7 @@ where
                     unreachable!()
                 };
                 assert!(input_data.is_empty());
-                let (block, finish) = spill_sort.on_restore().await?;
+                let OutputData { block, finish, .. } = spill_sort.on_restore().await?;
                 self.output_data.extend(block);
                 if finish {
                     self.state = State::Finish

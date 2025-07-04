@@ -150,7 +150,7 @@ where A: SortAlgorithm
         }
     }
 
-    pub async fn on_restore(&mut self) -> Result<(Option<DataBlock>, bool)> {
+    pub async fn on_restore(&mut self) -> Result<OutputData> {
         match &mut self.step {
             Step::Collect(collect) => self.step = Step::Sort(collect.next_step(&self.base)?),
             Step::Sort(_) => (),
@@ -170,7 +170,11 @@ where A: SortAlgorithm
 
         if sort.current.len() > sort.params.num_merge {
             sort.merge_current(&self.base).await?;
-            Ok((None, false))
+            Ok(OutputData {
+                block: None,
+                bound: None,
+                finish: false,
+            })
         } else {
             sort.restore_and_output(&self.base).await
         }
@@ -307,6 +311,12 @@ impl<A: SortAlgorithm> StepCollect<A> {
     }
 }
 
+pub struct OutputData {
+    pub block: Option<DataBlock>,
+    pub bound: Option<Scalar>,
+    pub finish: bool,
+}
+
 impl<A: SortAlgorithm> StepSort<A> {
     fn next_bound(&mut self) {
         match self.bounds.next_bound() {
@@ -353,7 +363,7 @@ impl<A: SortAlgorithm> StepSort<A> {
         Ok(())
     }
 
-    async fn restore_and_output(&mut self, base: &Base) -> Result<(Option<DataBlock>, bool)> {
+    async fn restore_and_output(&mut self, base: &Base) -> Result<OutputData> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
             None => {
@@ -362,6 +372,7 @@ impl<A: SortAlgorithm> StepSort<A> {
                     let mut s = self.current.pop().unwrap();
                     s.restore_first().await?;
                     let block = Some(s.take_next_bounded_block());
+                    let bound = s.bound.clone();
 
                     if !s.is_empty() {
                         if s.should_include_first() {
@@ -369,10 +380,18 @@ impl<A: SortAlgorithm> StepSort<A> {
                         } else {
                             self.subsequent.push(s);
                         }
-                        return Ok((block, false));
+                        return Ok(OutputData {
+                            block,
+                            bound,
+                            finish: false,
+                        });
                     }
 
-                    return Ok((block, self.subsequent.is_empty()));
+                    return Ok(OutputData {
+                        block,
+                        bound,
+                        finish: self.subsequent.is_empty(),
+                    });
                 }
 
                 self.sort_spill(base, self.params).await?;
@@ -393,18 +412,28 @@ impl<A: SortAlgorithm> StepSort<A> {
             let streams = self.output_merger.take().unwrap().streams();
             self.subsequent
                 .extend(streams.into_iter().filter(|s| !s.is_empty()));
-            return Ok((None, self.subsequent.is_empty()));
+
+            return Ok(OutputData {
+                block: None,
+                bound: None,
+                finish: self.subsequent.is_empty(),
+            });
         };
 
         let mut sorted = base.new_stream([base.new_block(data)].into(), self.cur_bound.clone());
-        let block = if sorted.should_include_first() {
+        let (block, bound) = if sorted.should_include_first() {
             let block = Some(sorted.take_next_bounded_block());
+            let bound = sorted.bound.clone();
             if sorted.is_empty() {
-                return Ok((block, false));
+                return Ok(OutputData {
+                    block,
+                    bound,
+                    finish: false,
+                });
             }
-            block
+            (block, bound)
         } else {
-            None
+            (None, None)
         };
 
         while let Some(data) = merger.async_next_block().await? {
@@ -420,7 +449,12 @@ impl<A: SortAlgorithm> StepSort<A> {
         let streams = self.output_merger.take().unwrap().streams();
         self.subsequent
             .extend(streams.into_iter().filter(|s| !s.is_empty()));
-        Ok((block, self.subsequent.is_empty()))
+
+        Ok(OutputData {
+            block,
+            bound,
+            finish: self.subsequent.is_empty(),
+        })
     }
 
     async fn sort_spill(
