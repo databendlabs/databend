@@ -19,6 +19,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -40,6 +41,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
@@ -271,10 +273,7 @@ impl ColumnsTable {
                     _ => {
                         let schema = table.schema();
                         let field_comments = table.field_comments();
-                        let columns_statistics =
-                            table.column_statistics_provider(ctx.clone()).await?;
 
-                        let row_count = columns_statistics.num_rows();
                         for (idx, field) in schema.fields().iter().enumerate() {
                             let comment = if field_comments.len() == schema.fields.len()
                                 && !field_comments[idx].is_empty()
@@ -285,6 +284,33 @@ impl ColumnsTable {
                                 "".to_string()
                             };
 
+                            // attach table should not collect statistics, source table column already collect them.
+                            let columns_statistics = if ctx
+                                .get_settings()
+                                .get_enable_collect_column_statistics()?
+                                && !FuseTable::is_table_attached(
+                                    &table.get_table_info().meta.options,
+                                ) {
+                                table
+                                    .column_statistics_provider(ctx.clone())
+                                    .await
+                                    .unwrap_or_else(|e| {
+                                        let msg = format!(
+                                            "Collect {}.{}.{} column statistics with error: {}",
+                                            catalog.name(),
+                                            database,
+                                            table.name(),
+                                            e
+                                        );
+                                        warn!("{}", msg);
+                                        ctx.push_warning(msg);
+                                        Box::new(DummyColumnStatisticsProvider)
+                                    })
+                            } else {
+                                Box::new(DummyColumnStatisticsProvider)
+                            };
+
+                            let row_count = columns_statistics.num_rows();
                             let column_statistics =
                                 columns_statistics.column_statistics(field.column_id);
                             rows.push(TableColumnInfo {
