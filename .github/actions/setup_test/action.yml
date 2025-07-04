@@ -5,6 +5,10 @@ inputs:
     description: "default to ./target/${BUILD_PROFILE}/"
     required: false
     default: ""
+  category:
+    description: "Category to download, only works with s3/gcs"
+    required: false
+    default: "full"
   artifacts:
     description: "Artifacts to download, only works with s3/gcs"
     required: false
@@ -25,7 +29,7 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ steps.target.outputs.target }}
-        category: full
+        category: ${{ inputs.category }}
         artifacts: ${{ inputs.artifacts }}
         path: ${{ inputs.path }}
 
