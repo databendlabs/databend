@@ -36,6 +36,9 @@ impl fmt::Display for Request {
             Request::FetchAddU64(r) => {
                 write!(f, "FetchAddU64({})", r)
             }
+            Request::PutSequential(r) => {
+                write!(f, "PutSequential({})", r)
+            }
         }
     }
 }

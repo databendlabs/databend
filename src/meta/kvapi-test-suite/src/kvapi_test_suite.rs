@@ -18,6 +18,7 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
+use databend_common_meta_types::protobuf::KvMeta;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
@@ -97,6 +98,9 @@ impl TestSuite {
         self.kv_transaction_fetch_add_u64(&builder.build().await)
             .await?;
         self.kv_transaction_fetch_add_u64_match_seq(&builder.build().await)
+            .await?;
+        self.kv_txn_put_sequential(&builder.build().await).await?;
+        self.kv_txn_put_sequential_expire_and_ttl(&builder.build().await)
             .await?;
         self.kv_transaction_with_ttl(&builder.build().await).await?;
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
@@ -1344,6 +1348,125 @@ impl TestSuite {
                 }
             );
         }
+
+        Ok(())
+    }
+
+    /// Tests match_seq must match the record seq to take place the operation.
+    #[fastrace::trace]
+    pub async fn kv_txn_put_sequential<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- {}", func_path!());
+
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put_sequential("k1/", "seq1", b("v1")),
+            TxnOp::put_sequential("k2/", "seq1", b("v2")),
+        ]);
+
+        let resp = kv.transaction(txn).await?;
+
+        assert_eq!(resp.responses.len(), 2);
+
+        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k1/000_000_000_000_000_000_000".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                2,
+                Some(KvMeta::default()),
+                b("v1").to_vec()
+            )),
+        });
+        assert_eq!(resp.responses[1].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k2/000_000_000_000_000_000_001".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                4,
+                Some(KvMeta::default()),
+                b("v2").to_vec()
+            )),
+        });
+
+        // insert again
+
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put_sequential("k1/", "seq1", b("v1")),
+            TxnOp::put_sequential("k2/", "seq1", b("v2")),
+        ]);
+
+        let resp = kv.transaction(txn).await?;
+
+        assert_eq!(resp.responses.len(), 2);
+
+        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k1/000_000_000_000_000_000_002".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                6,
+                Some(KvMeta::default()),
+                b("v1").to_vec()
+            )),
+        });
+        assert_eq!(resp.responses[1].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k2/000_000_000_000_000_000_003".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                8,
+                Some(KvMeta::default()),
+                b("v2").to_vec()
+            )),
+        });
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    pub async fn kv_txn_put_sequential_expire_and_ttl<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        // - Add a record via transaction with ttl
+
+        info!("--- {}", func_path!());
+
+        let now_ms = SeqV::<()>::now_ms();
+
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put_sequential("k1/", "seq1", b("v1")).with_expires_at_ms(Some(now_ms + 1000)),
+            TxnOp::put_sequential("k2/", "seq1", b("v2"))
+                .with_ttl(Some(Duration::from_millis(1000))),
+        ]);
+
+        let resp = kv.transaction(txn).await?;
+
+        assert_eq!(resp.responses.len(), 2);
+
+        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k1/000_000_000_000_000_000_000".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                2,
+                Some(KvMeta::new_expire(now_ms + 1000)),
+                b("v1").to_vec()
+            )),
+        });
+
+        let got = resp.responses[1].try_as_put().unwrap();
+        assert_eq!(got.key, "k2/000_000_000_000_000_000_001".to_string());
+        assert_eq!(got.prev_value, None);
+        let current = got.current.clone().unwrap();
+        assert_eq!(current.seq, 4);
+        assert_eq!(current.data, b("v2"));
+        assert!(current.meta.unwrap().close_to(
+            &KvMeta::new_expire(now_ms + 1000),
+            Duration::from_millis(1000)
+        ));
+
+        sleep(Duration::from_millis(2000)).await;
+
+        let got = kv.get_kv("k1/000_000_000_000_000_000_000").await?;
+        assert!(got.is_none(), "k1 should be expired");
+
+        let got = kv.get_kv("k2/000_000_000_000_000_000_001").await?;
+        assert!(got.is_none(), "k2 should be expired");
 
         Ok(())
     }

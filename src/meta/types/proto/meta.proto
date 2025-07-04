@@ -184,6 +184,7 @@ message TxnOp {
     TxnDeleteByPrefixRequest delete_by_prefix = 4;
 
     FetchAddU64 fetch_add_u64 = 5;
+    PutSequential put_sequential = 6;
   }
 }
 
