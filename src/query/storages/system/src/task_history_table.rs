@@ -44,7 +44,7 @@ use jiff::tz::TimeZone;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::extract_leveled_strings;
 use crate::util::find_gt_filter;
 use crate::util::find_lt_filter;
 
@@ -152,14 +152,13 @@ impl AsyncSystemTable for TaskHistoryTable {
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "name" {
-                        if let Scalar::String(s) = scalar {
-                            task_name = Some(s.clone());
-                        }
-                    }
-                    Ok(())
-                });
+                let func_ctx = ctx.get_function_context()?;
+                let (name, _) = extract_leveled_strings(&expr, &["name"], &func_ctx)?;
+                // find_filters will collect name = xx or name = yy.
+                // So if name.len() != 1 task_name should be None.
+                if name.len() == 1 {
+                    task_name = Some(name[0].clone())
+                };
                 find_lt_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "scheduled_time" {
                         if let Scalar::Timestamp(s) = scalar {

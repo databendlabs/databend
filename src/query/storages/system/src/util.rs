@@ -45,40 +45,6 @@ pub fn generate_catalog_meta(ctl_name: &str) -> CatalogMeta {
     }
 }
 
-pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar) -> Result<()>) {
-    match expr {
-        Expr::Constant(_) | Expr::ColumnRef(_) => {}
-        Expr::Cast(Cast { expr, .. }) => find_eq_filter(expr, visitor),
-        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-            // Like: select * from (select * from system.tables where database='default') where name='t'
-            // push downs: [filters: [and_filters(and_filters(tables.database (#1) = 'default', tables.name (#2) = 't'), tables.database (#1) = 'default')], limit: NONE]
-            // database generate twice, so when call find_eq_filter, should check uniq.
-            if function.signature.name == "eq" {
-                match args.as_slice() {
-                    [Expr::ColumnRef(ColumnRef { id, .. }), Expr::Constant(Constant { scalar, .. })]
-                    | [Expr::Constant(Constant { scalar, .. }), Expr::ColumnRef(ColumnRef { id, .. })] =>
-                    {
-                        let _ = visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" {
-                // only support this:
-                // 1. where xx and xx and xx
-                // 2. filter: Column `table`, Column `database`
-                for arg in args {
-                    find_eq_filter(arg, visitor)
-                }
-            }
-        }
-        Expr::LambdaFunctionCall(LambdaFunctionCall { args, .. }) => {
-            for arg in args {
-                find_eq_filter(arg, visitor);
-            }
-        }
-    }
-}
-
 pub fn find_gt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
         Expr::Constant(_) | Expr::ColumnRef(_) => {}
@@ -141,18 +107,15 @@ pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scala
     }
 }
 
-pub fn find_database_table_filters(
+pub fn extract_leveled_strings(
     expr: &Expr<String>,
+    level_names: &[&str],
     func_ctx: &FunctionContext,
 ) -> Result<(Vec<String>, Vec<String>)> {
-    let mut filtered_db_names = vec![];
-    let mut filtered_table_names = vec![];
-    let leveld_results = FilterHelpers::find_leveled_eq_filters(
-        expr,
-        &["database", "table"],
-        func_ctx,
-        &BUILTIN_FUNCTIONS,
-    )?;
+    let mut res1 = vec![];
+    let mut res2 = vec![];
+    let leveld_results =
+        FilterHelpers::find_leveled_eq_filters(expr, level_names, func_ctx, &BUILTIN_FUNCTIONS)?;
 
     for (i, scalars) in leveld_results.iter().enumerate() {
         for r in scalars.iter() {
@@ -164,12 +127,12 @@ pub fn find_database_table_filters(
 
             if let Ok(s) = check_string::<usize>(None, func_ctx, &e, &BUILTIN_FUNCTIONS) {
                 match i {
-                    0 => filtered_db_names.push(s),
-                    1 => filtered_table_names.push(s),
+                    0 => res1.push(s),
+                    1 => res2.push(s),
                     _ => unreachable!(),
                 }
             }
         }
     }
-    Ok((filtered_db_names, filtered_table_names))
+    Ok((res1, res2))
 }

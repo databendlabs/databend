@@ -26,7 +26,6 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -44,7 +43,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::extract_leveled_strings;
 use crate::util::generate_catalog_meta;
 
 pub type DatabasesTableWithHistory = DatabasesTable<true>;
@@ -112,14 +111,9 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "catalog" {
-                        if let Scalar::String(catalog) = scalar {
-                            filter_catalog_name = Some(catalog.clone());
-                        }
-                    }
-                    Ok(())
-                });
+                let (catalog_name, _) =
+                    extract_leveled_strings(&expr, &["catalog"], &ctx.get_function_context()?)?;
+                filter_catalog_name = Some(catalog_name);
             }
         }
 
@@ -132,15 +126,16 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let catalog_dbs = visibility_checker
             .as_ref()
             .and_then(|c| c.get_visibility_database());
-        let catalogs = if let Some(filter_catalog_name) = filter_catalog_name {
-            let mut res = vec![];
-            if filter_catalog_name == self.get_table_info().catalog() {
-                res.push((filter_catalog_name, ctl));
-            }
-            // If empty return empty result
-            res
-        } else {
+
+        let current_catalog_name = self.get_table_info().catalog();
+        // If filter_catalog_name is None (i.e., there is no filtering condition), the current directory is always included.
+        // If filter_catalog_name is Empty (i.e., where name like '%sys%'), the current directory is always included.
+        let catalogs = if filter_catalog_name.as_ref().is_none_or(|filter_names| {
+            filter_names.is_empty() || filter_names.iter().any(|name| name == current_catalog_name)
+        }) {
             vec![(ctl.name(), ctl)]
+        } else {
+            vec![]
         };
 
         let user_api = UserApiProvider::instance();

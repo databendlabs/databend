@@ -36,7 +36,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_database_table_filters;
+use crate::util::extract_leveled_strings;
 
 const POINT_GET_TABLE_LIMIT: usize = 20;
 
@@ -64,7 +64,7 @@ impl AsyncSystemTable for IndexesTable {
         if let Some(filters) = push_downs.and_then(|info| info.filters) {
             let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
             (filtered_db_names, filtered_table_names) =
-                find_database_table_filters(&expr, &func_ctx)?;
+                extract_leveled_strings(&expr, &["database", "table"], &func_ctx)?;
         }
 
         let filtered_db_names = if filtered_db_names.is_empty() {
