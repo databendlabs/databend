@@ -42,6 +42,7 @@ use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
+use crate::optimizer::ir::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -194,11 +195,16 @@ impl CteContext {
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
+    pub bind_result: CteBindResult,
     pub materialized: bool,
     pub recursive: bool,
-    pub cte_idx: IndexType,
-    // If cte is materialized, save its columns
     pub columns: Vec<ColumnBinding>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CteBindResult {
+    pub s_expr: SExpr,
+    pub bind_context: BindContext,
 }
 
 impl BindContext {

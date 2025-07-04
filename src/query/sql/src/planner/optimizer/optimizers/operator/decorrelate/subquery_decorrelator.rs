@@ -325,6 +325,12 @@ impl SubqueryDecorrelatorOptimizer {
                 ))
             }
 
+            RelOperator::MaterializedCTE(_) => Ok(SExpr::create_binary(
+                s_expr.plan.clone(),
+                Arc::new(self.optimize_sync(s_expr.left_child())?),
+                Arc::new(self.optimize_sync(s_expr.right_child())?),
+            )),
+
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
             | RelOperator::ConstantTableScan(_)
@@ -334,6 +340,7 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
+            | RelOperator::CTEConsumer(_)
             | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
         }
     }

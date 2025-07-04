@@ -99,7 +99,7 @@ impl Binder {
                     .await
             }
             CopyIntoTableSource::Query(query) => {
-                self.init_cte(bind_context, &stmt.with)?;
+                self.bind_cte_def(bind_context, &stmt.with)?;
 
                 let mut max_column_position = MaxColumnPosition::new();
                 query.drive(&mut max_column_position);

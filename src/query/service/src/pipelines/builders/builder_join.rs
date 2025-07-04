@@ -41,6 +41,8 @@ impl PipelineBuilder {
         let mut sub_builder =
             PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), sub_context);
         sub_builder.hash_join_states = self.hash_join_states.clone();
+        sub_builder.cte_receivers = self.cte_receivers.clone();
+        sub_builder.next_cte_consumer_id = self.next_cte_consumer_id.clone();
         sub_builder
     }
 

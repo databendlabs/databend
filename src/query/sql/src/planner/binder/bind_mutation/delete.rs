@@ -41,7 +41,7 @@ impl Binder {
             ..
         } = stamt;
 
-        self.init_cte(bind_context, with)?;
+        self.bind_cte_def(bind_context, with)?;
 
         let target_table_identifier = if let TableReference::Table {
             catalog,
