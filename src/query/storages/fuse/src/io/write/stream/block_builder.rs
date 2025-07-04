@@ -59,6 +59,7 @@ use crate::io::BloomIndexState;
 use crate::io::InvertedIndexBuilder;
 use crate::io::InvertedIndexWriter;
 use crate::io::TableMetaLocationGenerator;
+use crate::io::VirtualColumnBuilder;
 use crate::io::WriteSettings;
 use crate::operations::column_parquet_metas;
 use crate::FuseStorageFormat;
@@ -148,6 +149,7 @@ pub struct StreamBlockBuilder {
     block_writer: BlockWriterImpl,
     inverted_index_writers: Vec<InvertedIndexWriter>,
     bloom_index_builder: BloomIndexBuilder,
+    virtual_column_builder: Option<VirtualColumnBuilder>,
 
     cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
@@ -211,6 +213,22 @@ impl StreamBlockBuilder {
             &properties.ngram_args,
         )?;
 
+        let virtual_column_builder = if properties
+            .ctx
+            .get_settings()
+            .get_enable_refresh_virtual_column_after_write()
+            .unwrap_or_default()
+            && properties.support_virtual_columns
+        {
+            VirtualColumnBuilder::try_create(
+                properties.ctx.clone(),
+                properties.source_schema.clone(),
+            )
+            .ok()
+        } else {
+            None
+        };
+
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state =
@@ -221,6 +239,7 @@ impl StreamBlockBuilder {
             block_writer,
             inverted_index_writers,
             bloom_index_builder,
+            virtual_column_builder,
             row_count: 0,
             block_size: 0,
             column_stats_state,
@@ -255,6 +274,9 @@ impl StreamBlockBuilder {
         self.bloom_index_builder.add_block(&block)?;
         for writer in self.inverted_index_writers.iter_mut() {
             writer.add_block(&self.properties.source_schema, &block)?;
+        }
+        if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
+            virtual_column_builder.add_block(&block)?;
         }
 
         self.row_count += block.num_rows();
@@ -301,6 +323,14 @@ impl StreamBlockBuilder {
                 InvertedIndexState::try_create(data, inverted_index_location)?;
             inverted_index_states.push(inverted_index_state);
         }
+        let virtual_column_state =
+            if let Some(ref mut virtual_column_builder) = self.virtual_column_builder {
+                let virtual_column_state = virtual_column_builder
+                    .finalize(&self.properties.write_settings, &block_location)?;
+                Some(virtual_column_state)
+            } else {
+                None
+            };
 
         let col_metas = self.block_writer.finish(&self.properties.source_schema)?;
         let block_raw_data = mem::take(self.block_writer.inner_mut());
@@ -340,7 +370,7 @@ impl StreamBlockBuilder {
             block_meta,
             bloom_index_state,
             inverted_index_states,
-            virtual_column_state: None,
+            virtual_column_state,
         };
         Ok(serialized)
     }
@@ -361,6 +391,7 @@ pub struct StreamBlockProperties {
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     table_meta_timestamps: TableMetaTimestamps,
+    support_virtual_columns: bool,
 }
 
 impl StreamBlockProperties {
@@ -416,7 +447,7 @@ impl StreamBlockProperties {
                 }
             }
         }
-
+        let support_virtual_columns = table.support_virtual_columns();
         Ok(Arc::new(StreamBlockProperties {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
@@ -430,6 +461,7 @@ impl StreamBlockProperties {
             ngram_args,
             inverted_index_builders,
             table_meta_timestamps,
+            support_virtual_columns,
         }))
     }
 }

@@ -1204,7 +1204,19 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Parquet)
+        if matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && matches!(self.table_type, FuseTableType::Standard)
+        {
+            // ignore persistent system tables {
+            if let Ok(database_name) = self.table_info.database_name() {
+                if database_name == "persistent_system" {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
 
     fn result_can_be_cached(&self) -> bool {
