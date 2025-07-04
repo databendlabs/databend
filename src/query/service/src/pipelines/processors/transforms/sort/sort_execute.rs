@@ -16,7 +16,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -105,11 +107,32 @@ where
             if self.remove_order_col {
                 block.pop_columns(1);
             }
+            self.base.append_exchange_key(block, bound.as_ref());
             self.output = Some(block);
         }
         if finish {
             self.inner = None;
         }
         Ok(())
+    }
+}
+
+impl Base {
+    fn append_exchange_key(&self, &mut block: DataBlock, bound: Option<&Scalar>) {
+        let data_type = self
+            .schema
+            .field(self.base.sort_row_offset)
+            .data_type()
+            .wrap_nullable();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+        match bound {
+            Some(bound) => {
+                builder.push(bound.as_ref());
+            }
+            None => {
+                builder.push(Scalar::Null.as_ref());
+            }
+        }
+        block.add_const_column(builder.build_scalar(), data_type);
     }
 }
