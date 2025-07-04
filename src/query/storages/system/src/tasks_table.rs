@@ -21,7 +21,7 @@ use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTasksRequest;
-use databend_common_cloud_control::pb::Task;
+use databend_common_cloud_control::task_utils::Task;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,6 +36,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
+use itertools::Itertools;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -59,25 +60,24 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
     let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     for task in tasks {
-        let tsk: databend_common_cloud_control::task_utils::Task = task.try_into()?;
-        created_on.push(tsk.created_at.timestamp_micros());
-        name.push(tsk.task_name);
-        id.push(tsk.task_id);
-        owner.push(tsk.owner);
-        comment.push(tsk.comment);
-        warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse));
-        schedule.push(tsk.schedule_options);
-        status.push(tsk.status.to_string());
-        definition.push(tsk.query_text);
-        condition_text.push(tsk.condition_text);
+        created_on.push(task.created_at.timestamp_micros());
+        name.push(task.task_name);
+        id.push(task.task_id);
+        owner.push(task.owner);
+        comment.push(task.comment);
+        warehouse.push(task.warehouse_options.and_then(|s| s.warehouse));
+        schedule.push(task.schedule_options);
+        status.push(task.status.to_string());
+        definition.push(task.query_text);
+        condition_text.push(task.condition_text);
         // join by comma
-        after.push(tsk.after.into_iter().collect::<Vec<_>>().join(","));
-        suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
-        error_integration.push(tsk.error_integration);
-        next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
-        last_committed_on.push(tsk.updated_at.timestamp_micros());
-        last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
-        let serialized_params = serde_json::to_vec(&tsk.session_params).unwrap();
+        after.push(task.after.into_iter().collect::<Vec<_>>().join(","));
+        suspend_after_num_failures.push(task.suspend_task_after_num_failures.map(|v| v as u64));
+        error_integration.push(task.error_integration);
+        next_schedule_time.push(task.next_scheduled_at.map(|t| t.timestamp_micros()));
+        last_committed_on.push(task.updated_at.timestamp_micros());
+        last_suspended_on.push(task.last_suspended_at.map(|t| t.timestamp_micros()));
+        let serialized_params = serde_json::to_vec(&task.session_params).unwrap();
         session_params.push(Some(serialized_params));
     }
 
@@ -155,7 +155,7 @@ impl AsyncSystemTable for TasksTable {
         let resp = task_client.show_tasks(req).await?;
         let tasks = resp.tasks;
 
-        parse_tasks_to_datablock(tasks)
+        parse_tasks_to_datablock(tasks.into_iter().map(Task::try_from).try_collect()?)
     }
 }
 

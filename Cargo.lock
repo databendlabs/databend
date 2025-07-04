@@ -3580,6 +3580,10 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
+ "chrono",
+ "chrono-tz 0.8.6",
+ "cron",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
@@ -3601,6 +3605,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -4783,6 +4788,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "enumflags2",
+ "futures",
  "itertools 0.13.0",
  "jwt-simple",
  "log",
@@ -5229,6 +5235,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "concurrent-queue",
+ "cron",
  "ctor",
  "dashmap 6.1.0",
  "databend-common-ast",
@@ -5363,6 +5370,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "toml 0.8.22",
  "tonic",
  "tower 0.5.2",
