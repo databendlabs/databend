@@ -71,7 +71,7 @@ jobs:
         with:
           sha: ${{ inputs.sha }}
           target: x86_64-unknown-linux-gnu
-          category: full
+          category: docker
           artifacts: meta,query
       - name: Setup Databend Binary
         shell: bash
