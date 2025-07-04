@@ -15,6 +15,7 @@
 mod metrics;
 mod panic_handler;
 mod session;
+pub mod session_header;
 
 pub(crate) use metrics::MetricsMiddleware;
 pub(crate) use panic_handler::PanicHandler;

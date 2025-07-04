@@ -222,46 +222,17 @@ impl HttpQueryManager {
     }
 
     pub(crate) fn check_sticky_for_txn(&self, last_server_info: &Option<ServerInfo>) -> Result<()> {
-        if let Some(ServerInfo { id, start_time }) = last_server_info {
+        if let Some(ServerInfo { id, .. }) = last_server_info {
             if self.server_info.id != *id {
-                return Err(ErrorCode::InvalidSessionState(format!(
-                    "[HTTP-QUERY] Transaction is active but request was routed to the wrong server: current server is {}, expected server is {}",
-                    self.server_info.id, id
-                )));
-            }
-            if self.server_info.start_time != *start_time {
-                return Err(ErrorCode::CurrentTransactionIsAborted(format!(
-                    "[HTTP-QUERY] Transaction was aborted because server restarted at {}",
-                    start_time
+                return Err(ErrorCode::SessionLost(format!(
+                    "[HTTP-QUERY] Transaction aborted because server restart or route error: expecting server {}, current one is {} started at {} ",
+                    id, self.server_info.id, self.server_info.start_time
                 )));
             }
         } else {
             return Err(ErrorCode::InvalidSessionState(
                 "[HTTP-QUERY] Transaction is active but missing server_info".to_string(),
             ));
-        }
-        Ok(())
-    }
-
-    pub(crate) fn check_sticky_for_temp_table(
-        &self,
-        last_server_info: &Option<ServerInfo>,
-    ) -> std::result::Result<(), String> {
-        if let Some(ServerInfo { id, start_time }) = last_server_info {
-            if self.server_info.id != *id {
-                return Err(format!(
-                    "contains temporary tables but request was routed to the wrong server: current server is {}, expected server is {}",
-                    self.server_info.id, id
-                ));
-            }
-            if self.server_info.start_time != *start_time {
-                return Err(format!(
-                    "temporary tables were lost because server restarted at {}",
-                    start_time
-                ));
-            }
-        } else {
-            return Err("contains temporary tables but missing last_server_info field".to_string());
         }
         Ok(())
     }
