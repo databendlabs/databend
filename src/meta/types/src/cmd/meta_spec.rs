@@ -20,6 +20,7 @@ use deepsize::Context;
 use display_more::DisplayUnixTimeStampExt;
 
 use crate::cmd::CmdContext;
+use crate::flexible_timestamp_to_duration;
 use crate::seq_value::KVMeta;
 use crate::time::Interval;
 
@@ -30,7 +31,13 @@ use crate::time::Interval;
 /// When an `upsert` cmd is applied, this instance is evaluated and a `KVMeta` is built.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct MetaSpec {
-    /// expiration time in second since 1970
+    /// Expiration time in **seconds or milliseconds** since Unix epoch (1970-01-01).
+    ///
+    /// The interpretation depends on the magnitude of the value:
+    /// - Values > `100_000_000_000`: treated as milliseconds since epoch
+    /// - Values ≤ `100_000_000_000`: treated as seconds since epoch
+    ///
+    /// See [`adaptable_timestamp_to_duration`]
     pub(crate) expire_at: Option<u64>,
 
     /// Relative expiration time interval since when the raft log is applied.
@@ -55,11 +62,11 @@ impl fmt::Display for MetaSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "MetaSpec(",)?;
 
-        if let Some(expire_at_seq) = self.expire_at {
+        if let Some(expires_at) = self.expire_at {
             write!(
                 f,
                 "expire_at: {} ",
-                Duration::from_secs(expire_at_seq).display_unix_timestamp_short()
+                flexible_timestamp_to_duration(expires_at).display_unix_timestamp_short()
             )?;
         }
         if let Some(ttl) = &self.ttl {
@@ -73,14 +80,19 @@ impl fmt::Display for MetaSpec {
 
 impl MetaSpec {
     /// Create a new KVMeta
-    pub fn new(expire_at: Option<u64>, ttl: Option<Interval>) -> Self {
-        Self { expire_at, ttl }
+    ///
+    /// `expires_at_sec_or_ms`: absolute expiration time in **seconds or milliseconds** since 1970-01-01.
+    pub fn new(expires_at_sec_or_ms: Option<u64>, ttl: Option<Interval>) -> Self {
+        Self {
+            expire_at: expires_at_sec_or_ms,
+            ttl,
+        }
     }
 
     /// Create a KVMeta with a absolute expiration time in second since 1970-01-01.
-    pub fn new_expire(expire_at_sec: u64) -> Self {
+    pub fn new_expire(expires_at_sec_or_ms: u64) -> Self {
         Self {
-            expire_at: Some(expire_at_sec),
+            expire_at: Some(expires_at_sec_or_ms),
             ttl: None,
         }
     }
@@ -97,7 +109,7 @@ impl MetaSpec {
     pub fn to_kv_meta(&self, cmd_ctx: &CmdContext) -> KVMeta {
         // If `ttl` is set, override `expire_at`
         if let Some(ttl) = self.ttl {
-            return KVMeta::new_expire((cmd_ctx.time() + ttl).seconds());
+            return KVMeta::new_expires_at((cmd_ctx.time() + ttl).millis());
         }
 
         // No `ttl`, check if absolute expire time `expire_at` is set.
@@ -116,12 +128,12 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        let meta = MetaSpec::new_expire(100);
+        let meta = MetaSpec::new_expire(1723102819);
         let s = serde_json::to_string(&meta).unwrap();
-        assert_eq!(r#"{"expire_at":100}"#, s);
+        assert_eq!(r#"{"expire_at":1723102819}"#, s);
 
         let got: KVMeta = serde_json::from_str(&s).unwrap();
-        assert_eq!(Some(100), got.expire_at);
+        assert_eq!(Some(1723102819), got.expire_at);
 
         let meta = MetaSpec::new_ttl(Duration::from_millis(100));
         let s = serde_json::to_string(&meta).unwrap();
@@ -130,16 +142,24 @@ mod tests {
 
     #[test]
     fn test_to_kv_meta() {
-        let cmd_ctx = CmdContext::new(Time::from_millis(2000));
+        let cmd_ctx = CmdContext::new(Time::from_millis(1_723_102_819_000));
 
         // ttl
-        let meta = MetaSpec::new_ttl(Duration::from_millis(1000));
-        let kv_meta = meta.to_kv_meta(&cmd_ctx);
-        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 3000);
+        let meta_spec = MetaSpec::new_ttl(Duration::from_millis(1000));
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
+        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
 
         // expire_at
-        let meta = MetaSpec::new_expire(5);
-        let kv_meta = meta.to_kv_meta(&cmd_ctx);
+        let meta_spec = MetaSpec::new_expire(5);
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
         assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 5_000);
+
+        let meta_spec = MetaSpec::new_expire(1_723_102_820);
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
+        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
+
+        let meta_spec = MetaSpec::new_expire(1_723_102_820_000);
+        let kv_meta = meta_spec.to_kv_meta(&cmd_ctx);
+        assert_eq!(kv_meta.get_expire_at_ms().unwrap(), 1_723_102_820_000);
     }
 }

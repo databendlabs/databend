@@ -17,6 +17,11 @@ syntax = "proto3";
 package meta;
 
 message KVMeta {
+  // Expiration time in **seconds or milliseconds** since Unix epoch (1970-01-01).
+  //
+  // The interpretation depends on the magnitude of the value:
+  // - Values > `1_000_000_000_000`: treated as milliseconds since epoch
+  // - Values ≤ `1_000_000_000_000`: treated as seconds since epoch
   optional uint64 expire_at = 1;
 }
 

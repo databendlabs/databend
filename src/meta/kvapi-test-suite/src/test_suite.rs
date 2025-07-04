@@ -48,6 +48,7 @@ use fastrace::func_name;
 use fastrace::func_path;
 use log::debug;
 use log::info;
+use tokio::time::sleep;
 
 pub struct TestSuite {}
 
@@ -86,6 +87,7 @@ impl TestSuite {
         self.kv_delete(&builder.build().await).await?;
         self.kv_update(&builder.build().await).await?;
         self.kv_timeout(&builder.build().await).await?;
+        self.kv_expire_sec_or_ms(&builder.build().await).await?;
         self.kv_upsert_with_ttl(&builder.build().await).await?;
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
@@ -244,7 +246,7 @@ impl TestSuite {
 
     #[fastrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- kvapi::KVApiTestSuite::kv_timeout() start");
+        info!("--- {} start", func_name!());
 
         // - Test get  expired and non-expired.
         // - Test mget expired and non-expired.
@@ -307,7 +309,7 @@ impl TestSuite {
                 assert_eq!(v2.seq, 3);
                 assert_eq!(v2.data, b("v2"));
                 let v2_meta = v2.meta.unwrap();
-                let expire_at_sec = v2_meta.get_expire_at_ms().unwrap() / 1000;
+                let expire_at_sec = v2_meta.expires_at_sec_opt().unwrap();
                 let want = now_sec + 10;
                 assert!((want..want + 2).contains(&expire_at_sec));
             }
@@ -332,6 +334,80 @@ impl TestSuite {
 
             let res = kv.get_kv("k2").await?;
             assert!(res.is_none(), "k2 expired");
+        }
+
+        Ok(())
+    }
+
+    /// Test expire time in seconds or milliseconds.
+    #[fastrace::trace]
+    pub async fn kv_expire_sec_or_ms<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- {} start", func_name!());
+
+        // 100_000_000_000 is the max value in seconds.
+        kv.upsert_kv(UpsertKV::update("k1", b"v1").with(MetaSpec::new_expire(100_000_000_000)))
+            .await?;
+        // dbg!("upsert non expired k1", _res);
+
+        info!("--- get unexpired");
+        {
+            let res = kv.get_kv("k1").await?;
+            let meta = res.unwrap().meta.unwrap();
+            assert_eq!(meta.expires_at_sec_opt(), Some(100_000_000_000));
+        }
+
+        info!("--- expired in milliseconds");
+        {
+            let now_sec = SeqV::<()>::now_sec();
+
+            // expire time in milliseconds
+            kv.upsert_kv(
+                UpsertKV::update("k1", b"v1").with(MetaSpec::new_expire((now_sec - 2) * 1000)),
+            )
+            .await?;
+
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_none(), "expired");
+        }
+
+        info!("--- unexpired in milliseconds");
+        {
+            // 2035-01-04 18:12:23
+            let millis = 2051518343000;
+
+            // expire time in milliseconds
+            kv.upsert_kv(UpsertKV::update("k1", b"v1").with(MetaSpec::new_expire(millis)))
+                .await?;
+
+            let res = kv.get_kv("k1").await?;
+            let meta = res.unwrap().meta.unwrap();
+            assert_eq!(meta.get_expire_at_ms(), Some(millis));
+        }
+
+        info!("--- ttl in milliseconds: 1 sec");
+        {
+            kv.upsert_kv(
+                UpsertKV::update("k1", b"v1").with(MetaSpec::new_ttl(Duration::from_secs(1))),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(2_000)).await;
+
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_none());
+        }
+
+        info!("--- ttl in milliseconds: 5 sec");
+        {
+            kv.upsert_kv(
+                UpsertKV::update("k1", b"v1").with(MetaSpec::new_ttl(Duration::from_secs(5))),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(2_000)).await;
+
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_some());
         }
 
         Ok(())
@@ -409,7 +485,7 @@ impl TestSuite {
             assert_eq!(res.data, b("v1"));
 
             let meta = res.meta.unwrap();
-            let expire_at_sec = meta.get_expire_at_ms().unwrap() / 1000;
+            let expire_at_sec = meta.expires_at_sec_opt().unwrap();
             let want = now_sec + 20;
             assert!((want..want + 2).contains(&expire_at_sec));
         }
@@ -425,7 +501,7 @@ impl TestSuite {
             assert_eq!(res.data, b("v1"));
 
             let meta = res.meta.unwrap();
-            let expire_at_sec = meta.get_expire_at_ms().unwrap() / 1000;
+            let expire_at_sec = meta.expires_at_sec_opt().unwrap();
             let want = now_sec + 20;
             assert!((want..want + 2).contains(&expire_at_sec));
         }

@@ -133,7 +133,7 @@ mod tests {
         );
 
         t_string_try_from(
-            Marked::<String>::new_with_meta(1, s("hello"), Some(KVMeta::new_expire(20))),
+            Marked::<String>::new_with_meta(1, s("hello"), Some(KVMeta::new_expires_at(20))),
             SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello")),
         );
 
@@ -160,7 +160,7 @@ mod tests {
         );
 
         t_try_from(
-            Marked::new_with_meta(1, b("hello"), Some(KVMeta::new_expire(20))),
+            Marked::new_with_meta(1, b("hello"), Some(KVMeta::new_expires_at(20))),
             SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello")),
         );
 
