@@ -23,6 +23,14 @@ use crate::protobuf as pb;
 use crate::SeqV;
 
 impl pb::TxnOpResponse {
+    /// Create a new `TxnOpResponse` from a `Response` variant.
+    pub fn new<T>(r: T) -> Self
+    where pb::txn_op_response::Response: From<T> {
+        pb::TxnOpResponse {
+            response: Some(pb::txn_op_response::Response::from(r)),
+        }
+    }
+
     /// Create a new `TxnOpResponse` of a `Delete` operation.
     pub fn delete(key: impl ToString, success: bool, prev_value: Option<pb::SeqV>) -> Self {
         pb::TxnOpResponse {

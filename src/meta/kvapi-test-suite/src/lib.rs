@@ -14,5 +14,5 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod test_suite;
-pub use test_suite::TestSuite;
+mod kvapi_test_suite;
+pub use kvapi_test_suite::TestSuite;
