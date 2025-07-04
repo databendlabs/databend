@@ -162,6 +162,9 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2025-07-03: since TODO: add when merged
 ///   🖥 server: adaptive `expire_at` support both seconds and milliseconds.
 ///
+/// - 2025-07-04: since TODO: add when merged
+///   🖥 server: add `PutSequential`.
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:
