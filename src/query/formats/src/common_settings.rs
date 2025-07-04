@@ -28,6 +28,7 @@ pub struct InputCommonSettings {
     pub binary_format: BinaryFormat,
     pub is_rounding_mode: bool,
     pub enable_dst_hour_fix: bool,
+    pub enable_extended_json_syntax: bool,
 }
 
 #[derive(Clone)]

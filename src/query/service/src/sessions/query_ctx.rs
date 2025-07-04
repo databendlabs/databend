@@ -947,12 +947,14 @@ impl TableContext for QueryContext {
         let geometry_format = self.get_settings().get_geometry_output_format()?;
         let format_null_as_str = self.get_settings().get_format_null_as_str()?;
         let enable_dst_hour_fix = self.get_settings().get_enable_dst_hour_fix()?;
+        let enable_extended_json_syntax = self.get_settings().get_enable_extended_json_syntax()?;
         let format = FormatSettings {
             timezone,
             jiff_timezone,
             geometry_format,
             enable_dst_hour_fix,
             format_null_as_str,
+            enable_extended_json_syntax,
         };
         Ok(format)
     }
@@ -979,6 +981,7 @@ impl TableContext for QueryContext {
         let geometry_output_format = settings.get_geometry_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
+        let enable_extended_json_syntax = settings.get_enable_extended_json_syntax()?;
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
         let query_config = &GlobalConfig::instance().query;
@@ -1000,6 +1003,7 @@ impl TableContext for QueryContext {
             geometry_output_format,
             parse_datetime_ignore_remainder,
             enable_strict_datetime_parser,
+            enable_extended_json_syntax,
             random_function_seed,
             week_start,
             date_format_style,

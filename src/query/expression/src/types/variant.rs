@@ -32,6 +32,7 @@ use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
 use super::AccessType;
 use crate::property::Domain;
+use crate::types::interval::interval_to_string;
 use crate::types::map::KvPair;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -224,6 +225,7 @@ impl VariantType {
 pub fn cast_scalar_to_variant(
     scalar: ScalarRef,
     tz: &TimeZone,
+    enable_extended: bool,
     buf: &mut Vec<u8>,
     table_data_type: Option<&TableDataType>,
 ) {
@@ -243,41 +245,69 @@ pub fn cast_scalar_to_variant(
             NumberScalar::Float32(n) => n.0.into(),
             NumberScalar::Float64(n) => n.0.into(),
         },
-        ScalarRef::Decimal(x) => match x {
-            DecimalScalar::Decimal64(value, size) => {
-                let dec = jsonb::Decimal64 {
-                    scale: size.scale(),
-                    value,
-                };
-                jsonb::Value::Number(jsonb::Number::Decimal64(dec))
+        ScalarRef::Decimal(x) => {
+            if enable_extended {
+                match x {
+                    DecimalScalar::Decimal64(value, size) => {
+                        let dec = jsonb::Decimal64 {
+                            scale: size.scale(),
+                            value,
+                        };
+                        jsonb::Value::Number(jsonb::Number::Decimal64(dec))
+                    }
+                    DecimalScalar::Decimal128(value, size) => {
+                        let dec = jsonb::Decimal128 {
+                            scale: size.scale(),
+                            value,
+                        };
+                        jsonb::Value::Number(jsonb::Number::Decimal128(dec))
+                    }
+                    DecimalScalar::Decimal256(value, size) => {
+                        let dec = jsonb::Decimal256 {
+                            scale: size.scale(),
+                            value: value.0,
+                        };
+                        jsonb::Value::Number(jsonb::Number::Decimal256(dec))
+                    }
+                }
+            } else {
+                x.to_float64().into()
             }
-            DecimalScalar::Decimal128(value, size) => {
-                let dec = jsonb::Decimal128 {
-                    scale: size.scale(),
-                    value,
-                };
-                jsonb::Value::Number(jsonb::Number::Decimal128(dec))
-            }
-            DecimalScalar::Decimal256(value, size) => {
-                let dec = jsonb::Decimal256 {
-                    scale: size.scale(),
-                    value: value.0,
-                };
-                jsonb::Value::Number(jsonb::Number::Decimal256(dec))
-            }
-        },
+        }
         ScalarRef::Boolean(b) => jsonb::Value::Bool(b),
-        ScalarRef::Binary(s) => jsonb::Value::Binary(s),
+        ScalarRef::Binary(s) => {
+            if enable_extended {
+                jsonb::Value::Binary(s)
+            } else {
+                jsonb::Value::String(hex::encode_upper(s).into())
+            }
+        }
         ScalarRef::String(s) => jsonb::Value::String(s.into()),
-        ScalarRef::Timestamp(ts) => jsonb::Value::Timestamp(jsonb::Timestamp { value: ts }),
-        ScalarRef::Date(d) => jsonb::Value::Date(jsonb::Date { value: d }),
+        ScalarRef::Timestamp(ts) => {
+            if enable_extended {
+                jsonb::Value::Timestamp(jsonb::Timestamp { value: ts })
+            } else {
+                timestamp_to_string(ts, tz).to_string().into()
+            }
+        }
+        ScalarRef::Date(d) => {
+            if enable_extended {
+                jsonb::Value::Date(jsonb::Date { value: d })
+            } else {
+                date_to_string(d, tz).to_string().into()
+            }
+        }
         ScalarRef::Interval(i) => {
-            let interval = jsonb::Interval {
-                months: i.months(),
-                days: i.days(),
-                micros: i.microseconds(),
-            };
-            jsonb::Value::Interval(interval)
+            if enable_extended {
+                let interval = jsonb::Interval {
+                    months: i.months(),
+                    days: i.days(),
+                    micros: i.microseconds(),
+                };
+                jsonb::Value::Interval(interval)
+            } else {
+                interval_to_string(&i).to_string().into()
+            }
         }
         ScalarRef::Array(col) => {
             let typ = if let Some(TableDataType::Array(typ)) = table_data_type {
@@ -285,7 +315,7 @@ pub fn cast_scalar_to_variant(
             } else {
                 None
             };
-            let items = cast_scalars_to_variants(col.iter(), tz, typ.as_ref());
+            let items = cast_scalars_to_variants(col.iter(), tz, enable_extended, typ.as_ref());
             let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
                 .expect("failed to build jsonb array");
             buf.extend_from_slice(owned_jsonb.as_ref());
@@ -311,7 +341,7 @@ pub fn cast_scalar_to_variant(
                     _ => unreachable!(),
                 };
                 let mut val = vec![];
-                cast_scalar_to_variant(v, tz, &mut val, typ.as_ref());
+                cast_scalar_to_variant(v, tz, enable_extended, &mut val, typ.as_ref());
                 kvs.insert(key, val);
             }
             let owned_jsonb =
@@ -344,6 +374,7 @@ pub fn cast_scalar_to_variant(
                         cast_scalar_to_variant(
                             scalar,
                             tz,
+                            enable_extended,
                             &mut builder.data,
                             Some(&typ.remove_nullable()),
                         );
@@ -359,7 +390,7 @@ pub fn cast_scalar_to_variant(
                     .expect("failed to build jsonb object from tuple")
                 }
                 _ => {
-                    let values = cast_scalars_to_variants(fields, tz, None);
+                    let values = cast_scalars_to_variants(fields, tz, enable_extended, None);
                     OwnedJsonb::build_object(
                         values
                             .iter()
@@ -378,16 +409,24 @@ pub fn cast_scalar_to_variant(
         }
         ScalarRef::Geometry(bytes) => {
             let geom = Ewkb(bytes).to_json().expect("failed to decode wkb data");
-            jsonb::parse_value(geom.as_bytes())
-                .expect("failed to parse geojson to json value")
+            let res = if enable_extended {
+                jsonb::parse_value(geom.as_bytes())
+            } else {
+                jsonb::parse_value_standard_mode(geom.as_bytes())
+            };
+            res.expect("failed to parse geojson to json value")
                 .write_to_vec(buf);
             return;
         }
         ScalarRef::Geography(bytes) => {
             // todo: Implement direct conversion, omitting intermediate processes
             let geom = Ewkb(bytes.0).to_json().expect("failed to decode wkb data");
-            jsonb::parse_value(geom.as_bytes())
-                .expect("failed to parse geojson to json value")
+            let res = if enable_extended {
+                jsonb::parse_value(geom.as_bytes())
+            } else {
+                jsonb::parse_value_standard_mode(geom.as_bytes())
+            };
+            res.expect("failed to parse geojson to json value")
                 .write_to_vec(buf);
             return;
         }
@@ -397,6 +436,7 @@ pub fn cast_scalar_to_variant(
                     vals.iter()
                         .map(|n| ScalarRef::Number(NumberScalar::NUM_TYPE(*n))),
                     tz,
+                    enable_extended,
                     None,
                 );
                 let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
@@ -412,12 +452,19 @@ pub fn cast_scalar_to_variant(
 pub fn cast_scalars_to_variants(
     scalars: impl IntoIterator<Item = ScalarRef>,
     tz: &TimeZone,
+    enable_extended: bool,
     table_data_type: Option<&TableDataType>,
 ) -> BinaryColumn {
     let iter = scalars.into_iter();
     let mut builder = BinaryColumnBuilder::with_capacity(iter.size_hint().0, 0);
     for scalar in iter {
-        cast_scalar_to_variant(scalar, tz, &mut builder.data, table_data_type);
+        cast_scalar_to_variant(
+            scalar,
+            tz,
+            enable_extended,
+            &mut builder.data,
+            table_data_type,
+        );
         builder.commit_row();
     }
     builder.build()

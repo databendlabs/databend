@@ -33,7 +33,8 @@ fn test_cast() {
 
     for is_try in [false, true] {
         test_cast_primitive(file, is_try);
-        test_cast_to_variant(file, is_try);
+        test_cast_to_variant(file, is_try, false);
+        test_cast_to_variant(file, is_try, true);
         test_cast_number_to_timestamp(file, is_try);
         test_cast_number_to_date(file, is_try);
         test_cast_between_number_and_string(file, is_try);
@@ -138,57 +139,130 @@ fn test_cast_primitive(file: &mut impl Write, is_try: bool) {
     )]);
 }
 
-fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
+fn test_cast_to_variant(file: &mut impl Write, is_try: bool, enable_extended_json_syntax: bool) {
     let prefix = if is_try { "TRY_" } else { "" };
+    let func_ctx = FunctionContext {
+        enable_extended_json_syntax,
+        ..FunctionContext::default()
+    };
+    let test_ctx = TestContext {
+        func_ctx: func_ctx.clone(),
+        ..TestContext::default()
+    };
 
-    run_ast(file, format!("{prefix}CAST(NULL AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST(0 AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST(-1 AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST(1.1 AS VARIANT)"), &[]);
-    run_ast(
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(NULL AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(0 AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(-1 AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(1.1 AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
         file,
         format!("{prefix}CAST('🍦 が美味しい' AS VARIANT)"),
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(file, format!("{prefix}CAST([0, 1, 2] AS VARIANT)"), &[]);
-    run_ast(
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST([0, 1, 2] AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
         file,
         format!("{prefix}CAST([0::VARIANT, '\"a\"'::VARIANT] AS VARIANT)"),
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(
+    run_ast_with_context(
         file,
         format!("{prefix}CAST(to_timestamp(1000000) AS VARIANT)"),
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(file, format!("{prefix}CAST(false AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST(true AS VARIANT)"), &[]);
-    run_ast(
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(false AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(true AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
         file,
         format!("{prefix}CAST({prefix}CAST('\"🍦 が美味しい\"' AS VARIANT) AS VARIANT)"),
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(file, format!("{prefix}CAST((1,) AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST((1, 2) AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST((false, true) AS VARIANT)"), &[]);
-    run_ast(file, format!("{prefix}CAST(('a',) AS VARIANT)"), &[]);
-    run_ast(
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST((1,) AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST((1, 2) AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST((false, true) AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(('a',) AS VARIANT)"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
         file,
         format!("{prefix}CAST((1, 2, (false, true, ('a',))) AS VARIANT)"),
-        &[],
+        test_ctx.clone(),
     );
 
-    run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(
-        "a",
-        StringType::from_data_with_validity(vec!["true", "{\"k\":\"v\"}", "[1,2,3]"], vec![
-            true, false, true,
-        ]),
-    )]);
+    let test_ctx_with_column = TestContext {
+        columns: &[(
+            "a",
+            StringType::from_data_with_validity(vec!["true", "{\"k\":\"v\"}", "[1,2,3]"], vec![
+                true, false, true,
+            ]),
+        )],
+        func_ctx: FunctionContext {
+            enable_extended_json_syntax,
+            ..FunctionContext::default()
+        },
+        ..TestContext::default()
+    };
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(a AS VARIANT)"),
+        test_ctx_with_column,
+    );
 
-    run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(
-        "a",
-        gen_bitmap_data(),
-    )]);
+    let test_ctx_with_column = TestContext {
+        columns: &[("a", gen_bitmap_data())],
+        func_ctx: FunctionContext {
+            enable_extended_json_syntax,
+            ..FunctionContext::default()
+        },
+        ..TestContext::default()
+    };
+    run_ast_with_context(
+        file,
+        format!("{prefix}CAST(a AS VARIANT)"),
+        test_ctx_with_column,
+    );
 }
 
 fn test_cast_number_to_timestamp(file: &mut impl Write, is_try: bool) {
