@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_pipeline_transforms::sort::Rows;
+use databend_common_pipeline_transforms::AsyncBlockingTransform;
 use databend_common_pipeline_transforms::BlockMetaTransform;
 use databend_common_settings::FlightCompression;
 
-use crate::pipelines::processors::transforms::aggregator::FlightSerializedMeta;
+use crate::pipelines::processors::transforms::sort::bounds::Bounds;
+use crate::pipelines::processors::transforms::sort::sort_spill::SpillableBlock;
 use crate::pipelines::processors::transforms::sort::SortCollectedMeta;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
@@ -39,12 +44,12 @@ pub struct SortInjector {}
 impl ExchangeInjector for SortInjector {
     fn flight_scatter(
         &self,
-        ctx: &Arc<QueryContext>,
+        _: &Arc<QueryContext>,
         exchange: &DataExchange,
     ) -> Result<Arc<Box<dyn FlightScatter>>> {
         match exchange {
             DataExchange::Merge(_) | DataExchange::Broadcast(_) => unreachable!(),
-            DataExchange::ShuffleDataExchange(exchange) => Ok(Arc::new(Box::new(DummyScatter {}))),
+            DataExchange::ShuffleDataExchange(_) => Ok(Arc::new(Box::new(DummyScatter {}))),
         }
     }
 
@@ -54,34 +59,30 @@ impl ExchangeInjector for SortInjector {
 
     fn apply_merge_serializer(
         &self,
-        params: &MergeExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
+        _: &MergeExchangeParams,
+        _: Option<FlightCompression>,
+        _: &mut Pipeline,
     ) -> Result<()> {
         unreachable!()
     }
 
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    fn apply_merge_deserializer(&self, _: &MergeExchangeParams, _: &mut Pipeline) -> Result<()> {
         unreachable!()
     }
 
     fn apply_shuffle_serializer(
         &self,
-        params: &ShuffleExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
+        _params: &ShuffleExchangeParams,
+        _compression: Option<FlightCompression>,
+        _pipeline: &mut Pipeline,
     ) -> Result<()> {
         todo!()
     }
 
     fn apply_shuffle_deserializer(
         &self,
-        params: &ShuffleExchangeParams,
-        pipeline: &mut Pipeline,
+        _params: &ShuffleExchangeParams,
+        _pipeline: &mut Pipeline,
     ) -> Result<()> {
         todo!()
     }
@@ -90,7 +91,7 @@ impl ExchangeInjector for SortInjector {
 pub struct DummyScatter {}
 
 impl FlightScatter for DummyScatter {
-    fn execute(&self, mut data_block: DataBlock) -> Result<Vec<DataBlock>> {
+    fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         Ok(vec![data_block])
     }
 }
@@ -107,31 +108,34 @@ pub struct TransformExchangeSortSerializer {
 impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeSortSerializer {
     const NAME: &'static str = "TransformExchangeSortSerializer";
 
-    fn transform(&mut self, meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
-        let serialized_blocks = meta
-            .blocks
-            .into_iter()
-            .map(|mut block| {
-                let SortCollectedMeta {
-                    params,
-                    bounds,
-                    blocks,
-                } = SortCollectedMeta::downcast_from(block.take_meta().unwrap()).unwrap();
+    fn transform(&mut self, _meta: ExchangeShuffleMeta) -> Result<Vec<DataBlock>> {
+        // let serialized_blocks = meta
+        //     .blocks
+        //     .into_iter()
+        //     .map(|mut block| {
+        //         let SortCollectedMeta {
+        //             params,
+        //             bounds,
+        //             blocks,
+        //         } = block
+        //             .take_meta()
+        //             .and_then(SortCollectedMeta::downcast_from)
+        //             .unwrap();
 
-                //             match index == self.local_pos {
-                //                 true => local_agg_spilling_aggregate_payload(
-                //                     self.ctx.clone(),
-                //                     self.spiller.clone(),
-                //                     payload,
-                //                 )?,
-                //                 false => exchange_agg_spilling_aggregate_payload(
-                //                     self.ctx.clone(),
-                //                     self.spiller.clone(),
-                //                     payload,
-                //                 )?,
-                //             },
-            })
-            .collect();
+        //             match index == self.local_pos {
+        //                 true => local_agg_spilling_aggregate_payload(
+        //                     self.ctx.clone(),
+        //                     self.spiller.clone(),
+        //                     payload,
+        //                 )?,
+        //                 false => exchange_agg_spilling_aggregate_payload(
+        //                     self.ctx.clone(),
+        //                     self.spiller.clone(),
+        //                     payload,
+        //                 )?,
+        //             },
+        // })
+        // .collect();
 
         // let meta = SortCollectedMeta::downcast_from(block.take_meta().unwrap()).unwrap();
 
@@ -173,8 +177,104 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeSortSerializer
         //     }
         // };
 
-        Ok(vec![DataBlock::empty_with_meta(
-            FlightSerializedMeta::create(serialized_blocks),
-        )])
+        todo!()
+
+        // Ok(vec![DataBlock::empty_with_meta(
+        //     FlightSerializedMeta::create(serialized_blocks),
+        // )])
+    }
+}
+
+struct SortScatter<R> {
+    ctx: Arc<QueryContext>,
+    local_pos: usize,
+    options: IpcWriteOptions,
+    schema: DataSchemaRef,
+
+    partitions: usize,
+    spiller: Arc<Spiller>,
+    data: Option<SortCollectedMeta>,
+    scatter_bounds: Bounds,
+    blocks: Vec<Box<[SpillableBlock]>>,
+
+    _r: PhantomData<R>,
+}
+
+#[async_trait::async_trait]
+impl<R: Rows> AsyncBlockingTransform for SortScatter<R> {
+    const NAME: &'static str = "TransformExchangeSortSerializer";
+
+    async fn consume(&mut self, mut block: DataBlock) -> Result<()> {
+        let meta = block
+            .take_meta()
+            .and_then(SortCollectedMeta::downcast_from)
+            .unwrap();
+        self.data = Some(meta);
+        Ok(())
+    }
+
+    async fn transform(&mut self) -> Result<Option<DataBlock>> {
+        todo!()
+    }
+}
+
+impl<R: Rows> SortScatter<R> {
+    fn scatter_bounds(&self, bounds: Bounds) -> Bounds {
+        let n = self.partitions - 1;
+        let bounds = if bounds.len() < n {
+            bounds
+        } else {
+            bounds.dedup_reduce::<R>(n)
+        };
+        assert!(bounds.len() < self.partitions);
+        bounds
+    }
+
+    async fn scatter(&mut self) -> Result<Vec<Option<SortCollectedMeta>>> {
+        // if self.scatter_bounds.is_empty() {
+        //     return Ok(vec![Some(SortCollectedMeta {
+        //         params,
+        //         bounds,
+        //         blocks,
+        //     })]);
+        // }
+
+        // let base = {
+        //     Base {
+        //         schema: self.schema.clone(),
+        //         spiller: self.spiller.clone(),
+        //         sort_row_offset: self.schema.fields.len() - 1,
+        //         limit: None,
+        //     }
+        // };
+
+        // let mut scattered_blocks = Vec::with_capacity(self.scatter_bounds.len() + 1);
+
+        // let Some(list) = self.blocks.pop() else {
+        //     todo!()
+        // };
+        // let scattered = base
+        //     .scatter_stream::<R>(Vec::from(list).into(), self.scatter_bounds.clone())
+        //     .await?;
+
+        //        ExchangeShuffleMeta::create(blocks);
+
+        // for list in  {
+
+        // }
+
+        // let scattered_meta = scattered_blocks
+        //     .into_iter()
+        //     .map(|blocks| {
+        //         (!blocks.is_empty()).then_some(SortCollectedMeta {
+        //             params: todo!(),
+        //             bounds: todo!(),
+        //             blocks,
+        //         })
+        //     })
+        //     .collect();
+        // Ok(scattered_meta)
+
+        todo!()
     }
 }

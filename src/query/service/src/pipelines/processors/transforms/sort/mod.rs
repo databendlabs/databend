@@ -17,6 +17,7 @@ use std::sync::Arc;
 use bounds::Bounds;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::SortSpillParams;
@@ -77,5 +78,22 @@ trait MemoryRows {
 impl MemoryRows for Vec<DataBlock> {
     fn in_memory_rows(&self) -> usize {
         self.iter().map(|s| s.num_rows()).sum::<usize>()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct SortExchangeMeta {
+    params: SortSpillParams,
+    bounds: Bounds,
+}
+
+#[typetag::serde(name = "sort_exchange")]
+impl BlockMetaInfo for SortExchangeMeta {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        SortExchangeMeta::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
     }
 }

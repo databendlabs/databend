@@ -299,7 +299,7 @@ impl Build<'_> {
 
     fn build_sort_exec<A>(&mut self) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
-        Ok(Box::new(TransformSortExecute::<A>::new(
+        Ok(Box::new(TransformSortExecute::<A>::create(
             self.input.clone(),
             self.output.clone(),
             self.params.new_base(),

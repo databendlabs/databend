@@ -212,7 +212,7 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false)
     }
 
-    fn build_range_shuffle_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
+    pub fn build_range_shuffle_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
         let inputs = pipeline.output_len();
         let settings = self.ctx.get_settings();
         let num_exec = inputs;
@@ -287,9 +287,7 @@ impl SortPipelineBuilder {
     }
 
     fn build_sort_part(self, pipeline: &mut Pipeline) -> Result<()> {
-        let inputs = pipeline.output_len();
         let settings = self.ctx.get_settings();
-        let num_exec = inputs;
         let max_block_size = settings.get_max_block_size()? as usize;
 
         // Partial sort

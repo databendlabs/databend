@@ -37,7 +37,7 @@ pub struct TransformSortBoundBroadcast<R: Rows> {
     _r: PhantomData<R>,
 }
 
-impl<R: Rows> TransformSortBoundBroadcast<R> {
+impl<R: Rows + 'static> TransformSortBoundBroadcast<R> {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -110,7 +110,7 @@ impl<R: Rows + 'static> AsyncAccumulatingTransform for TransformSortBoundBroadca
             return Ok(None);
         }
 
-        let Some(params) = self.buffer.first().map(|meta| meta.params.clone()) else {
+        let Some(params) = self.buffer.first().map(|meta| meta.params) else {
             return Ok(None);
         };
 
@@ -123,7 +123,7 @@ impl<R: Rows + 'static> AsyncAccumulatingTransform for TransformSortBoundBroadca
 
         let blocks = self
             .buffer
-            .into_iter()
+            .drain(..)
             .flat_map(|meta| meta.blocks.into_iter())
             .collect();
 
@@ -167,73 +167,3 @@ impl SortCollectedMeta {
             .unwrap_or_default()
     }
 }
-
-// fn determine_bounds(&self, bounds: Bounds) -> Bounds {
-//     let n = self.partitions - 1;
-//     let bounds = if bounds.len() < n {
-//         bounds
-//     } else {
-//         bounds.dedup_reduce::<R>(n)
-//     };
-//     assert!(bounds.len() < self.partitions);
-//     bounds
-// }
-
-// async fn scatter(&mut self) -> Result<Vec<Option<SortCollectedMeta>>> {
-//     let SortCollectedMeta {
-//         params,
-//         bounds,
-//         blocks,
-//     } = match std::mem::replace(&mut self.step, Step::None) {
-//         Step::None => {
-//             return Ok(vec![]);
-//         }
-//         Step::Local(box meta) => meta,
-//         _ => unreachable!(),
-//     };
-
-//     let scatter_bounds = self.state.bounds();
-//     if scatter_bounds.is_empty() {
-//         return Ok(vec![Some(SortCollectedMeta {
-//             params,
-//             bounds,
-//             blocks,
-//         })]);
-//     }
-
-//     let base = {
-//         let inner = &self.state.inner;
-//         Base {
-//             schema: inner.schema.clone(),
-//             spiller: self.spiller.clone(),
-//             sort_row_offset: inner.schema.fields.len() - 1,
-//             limit: None,
-//         }
-//     };
-
-//     let mut scattered_blocks = std::iter::repeat_with(Vec::new)
-//         .take(scatter_bounds.len() + 1)
-//         .collect::<Vec<_>>();
-//     for blocks in blocks {
-//         let scattered = base
-//             .scatter_stream::<R>(Vec::from(blocks).into(), scatter_bounds.clone())
-//             .await?;
-//         for (i, part) in scattered.into_iter().enumerate() {
-//             if !part.is_empty() {
-//                 scattered_blocks[i].push(part.into_boxed_slice());
-//             }
-//         }
-//     }
-
-//     let scattered_meta = scattered_blocks
-//         .into_iter()
-//         .map(|blocks| {
-//             (!blocks.is_empty()).then_some(SortCollectedMeta {
-//                 params,
-//                 bounds: bounds.clone(),
-//                 blocks,
-//             })
-//         })
-//         .collect();
-//     Ok(scattered_meta)
-// }
