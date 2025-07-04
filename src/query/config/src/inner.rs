@@ -256,6 +256,8 @@ pub struct QueryConfig {
 
     pub settings: HashMap<String, UserSettingValue>,
     pub resources_management: Option<ResourcesManagementConfig>,
+
+    pub enable_queries_executor: bool,
 }
 
 impl Default for QueryConfig {
@@ -343,6 +345,7 @@ impl Default for QueryConfig {
             network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
             resources_management: None,
+            enable_queries_executor: false,
         }
     }
 }

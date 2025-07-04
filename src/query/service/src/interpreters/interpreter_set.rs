@@ -113,6 +113,25 @@ impl SetInterpreter {
                         .await?;
                     true
                 }
+                "use_legacy_query_executor" => {
+                    // This is a fallback setting, allowing user to fallback from **queries** executor
+                    // to the **query** executor. So, if queries executor not enable in the config
+                    // we will return an error.
+                    // TODO: we will remove this setting when queries executor is stable.
+                    let config = GlobalConfig::instance();
+                    if !config.query.enable_queries_executor {
+                        return Err(
+                            ErrorCode::InvalidArgument("This setting is not allowed when queries executor is not enabled in the configuration"));
+                    }
+                    if scalar.as_str() == "0" {
+                        return Err(ErrorCode::InvalidArgument(
+                            "This setting is not allowed set to 0, if already enable in the configuration, please use unset to revert this",
+                        ));
+                    }
+                    self.set_settings(var.to_string(), scalar.clone(), is_global)
+                        .await?;
+                    true
+                }
                 _ => {
                     self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;

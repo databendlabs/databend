@@ -19,8 +19,6 @@ io-uring = [
     "databend-common-meta-store/io-uring",
 ]
 
-enable_queries_executor = []
-
 [dependencies]
 anyhow = { workspace = true }
 arrow-array = { workspace = true }

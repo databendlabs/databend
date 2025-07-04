@@ -445,6 +445,7 @@ impl ExecutingGraph {
         let max_points = self.max_points.load(Ordering::SeqCst);
         let mut expected_value = 0;
         let mut desired_value = 0;
+
         loop {
             match self.points.compare_exchange_weak(
                 expected_value,
@@ -460,6 +461,7 @@ impl ExecutingGraph {
                     let epoch = new_expected & EPOCH_MASK;
 
                     expected_value = new_expected;
+
                     if epoch > global_epoch as u64 {
                         desired_value = new_expected;
                     } else if epoch < global_epoch as u64 {

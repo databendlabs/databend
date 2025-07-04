@@ -1059,9 +1059,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
-                ("enable_experimental_queries_executor", DefaultSettingValue {
+                ("use_legacy_query_executor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Enables experimental new executor",
+                    desc: "Fallback to legacy query executor",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
