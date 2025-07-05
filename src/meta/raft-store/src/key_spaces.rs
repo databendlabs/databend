@@ -233,14 +233,17 @@ impl SMEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RaftStoreEntry {
     DataHeader       { key: <DataHeader       as SledKeySpace>::K, value: <DataHeader       as SledKeySpace>::V, },
+    // V003 only
     Logs             { key: <Logs             as SledKeySpace>::K, value: <Logs             as SledKeySpace>::V, },
     Nodes            { key: <Nodes            as SledKeySpace>::K, value: <Nodes            as SledKeySpace>::V, },
     StateMachineMeta { key: <StateMachineMeta as SledKeySpace>::K, value: <StateMachineMeta as SledKeySpace>::V, },
+    // V003 only
     RaftStateKV      { key: <RaftStateKV      as SledKeySpace>::K, value: <RaftStateKV      as SledKeySpace>::V, },
     Expire           { key: <Expire           as SledKeySpace>::K, value: <Expire           as SledKeySpace>::V, },
     GenericKV        { key: <GenericKV        as SledKeySpace>::K, value: <GenericKV        as SledKeySpace>::V, },
     Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences        as SledKeySpace>::V, },
     ClientLastResps  { key: <ClientLastResps  as SledKeySpace>::K, value: <ClientLastResps  as SledKeySpace>::V, },
+    // V003 only
     LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: <LogMeta          as SledKeySpace>::V, },
 
     // V004 log:

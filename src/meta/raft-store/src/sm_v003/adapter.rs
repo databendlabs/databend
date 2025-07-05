@@ -31,11 +31,11 @@ use crate::state_machine::StateMachineMetaKey;
 /// or update SysData in place.
 ///
 /// It holds a lock of SysData because this converter may be run concurrently in multiple threads.
-pub struct SnapshotUpgradeV002ToV004 {
+pub struct SMEntryV002ToV004 {
     pub sys_data: Arc<Mutex<SysData>>,
 }
 
-impl SnapshotUpgradeV002ToV004 {
+impl SMEntryV002ToV004 {
     pub fn convert_line(&mut self, s: &str) -> Result<Option<(String, SeqMarked)>, io::Error> {
         let ent: SMEntry =
             serde_json::from_str(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
