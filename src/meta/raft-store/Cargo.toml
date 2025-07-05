@@ -33,13 +33,11 @@ futures = { workspace = true }
 futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
 hostname = { workspace = true }
-itertools = { workspace = true }
 log = { workspace = true }
 map-api = { workspace = true }
 maplit = { workspace = true }
 num = { workspace = true }
 openraft = { workspace = true }
-ordq = { workspace = true }
 raft-log = { workspace = true }
 rmp-serde = { workspace = true }
 rotbl = { workspace = true }

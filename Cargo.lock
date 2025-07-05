@@ -3837,13 +3837,11 @@ dependencies = [
  "futures-async-stream",
  "futures-util",
  "hostname",
- "itertools 0.13.0",
  "log",
  "map-api",
  "maplit",
  "num",
  "openraft",
- "ordq",
  "pretty_assertions",
  "raft-log",
  "rmp-serde",
@@ -3954,7 +3952,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "tokio",
  "tonic",
  "tonic-build",
 ]
@@ -11176,16 +11173,6 @@ checksum = "49203cdcae0030493bad186b28da2fa25645fa276a51b6fec8010d281e02ef79"
 dependencies = [
  "dlv-list",
  "hashbrown 0.14.5",
-]
-
-[[package]]
-name = "ordq"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e535e05b861598cac4abfbe696573e5b0ae72ca55f4c55ec02a3dd22cef2faa"
-dependencies = [
- "crossbeam-channel",
- "thiserror 1.0.69",
 ]
 
 [[package]]

@@ -13,39 +13,29 @@
 // limitations under the License.
 
 use std::io;
-use std::iter::repeat_with;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::SnapshotData;
-use itertools::Itertools;
-use log::info;
-use openraft::SnapshotId;
 use rotbl::v001::SeqMarked;
 
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::marked::Marked;
-use crate::sm_v003::write_entry::WriteEntry;
-use crate::sm_v003::SnapshotStoreV004;
 use crate::state_machine::StateMachineMetaKey;
-
-pub type SnapshotUpgradeV002ToV003 = SnapshotUpgradeV002ToV004;
 
 /// Convert V002 snapshot lines in json of [`SMEntry`]
 /// to V004 rotbl key-value pairs. `(String, SeqMarked)`,
 /// or update SysData in place.
 ///
 /// It holds a lock of SysData because this converter may be run concurrently in multiple threads.
-pub struct SnapshotUpgradeV002ToV004 {
+pub struct SMEntryV002ToV004 {
     pub sys_data: Arc<Mutex<SysData>>,
 }
 
-impl SnapshotUpgradeV002ToV004 {
+impl SMEntryV002ToV004 {
     pub fn convert_line(&mut self, s: &str) -> Result<Option<(String, SeqMarked)>, io::Error> {
         let ent: SMEntry =
             serde_json::from_str(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -108,145 +98,4 @@ impl SnapshotUpgradeV002ToV004 {
         }
         Ok(None)
     }
-}
-
-impl ordq::Work for SnapshotUpgradeV002ToV004 {
-    type I = WriteEntry<Vec<String>>;
-    type O = Result<WriteEntry<Vec<(String, SeqMarked)>>, io::Error>;
-
-    fn run(&mut self, strings: Self::I) -> Self::O {
-        let WriteEntry::Data(strings) = strings else {
-            return Ok(WriteEntry::Finish(()));
-        };
-
-        let mut res = Vec::with_capacity(strings.len());
-        for s in strings {
-            if let Some(kv) = self.convert_line(&s)? {
-                res.push(kv)
-            }
-        }
-
-        Ok(WriteEntry::Data(res))
-    }
-}
-
-/// Upgrade snapshot V002(ndjson) to V004(rotbl).
-///
-/// After install, the state machine has only one level of data.
-pub async fn upgrade_snapshot_data_v002_to_v003_or_v004(
-    snapshot_store: &SnapshotStoreV004,
-    data: Box<SnapshotData>,
-    snapshot_id: SnapshotId,
-) -> Result<DB, io::Error> {
-    fn closed_err(e: impl std::error::Error) -> io::Error {
-        io::Error::other(format!("channel closed: {}", e))
-    }
-
-    let data_size = data.data_size().await?;
-    info!(
-        "upgrade snapshot from v002 to v004, data len: {}",
-        data_size
-    );
-
-    // It create thread pool with ordq:
-    // ```
-    // file -> ordq -+-> worker -+--> writer
-    //               |           |
-    //               `-> worker -'
-    // ```
-
-    let sys_data = Arc::new(Mutex::new(SysData::default()));
-
-    // Create a writer to write converted kvs to snapshot v004
-    let writer = snapshot_store.new_writer()?;
-    let (writer_tx, writer_join_handle) =
-        writer.spawn_writer_thread("upgrade_snapshot_data_v002_to_v004");
-
-    // Create a worker pool to convert the ndjson lines.
-    let (ordq_tx, ordq_rx) = {
-        let queue_depth = 1024;
-        let n_workers = 16;
-
-        ordq::new(
-            queue_depth,
-            repeat_with(|| SnapshotUpgradeV002ToV004 {
-                sys_data: sys_data.clone(),
-            })
-            .take(n_workers),
-        )
-    };
-
-    // Chain ordq output to writer
-    databend_common_base::runtime::spawn_blocking(move || {
-        // snapshot v002 stores expire index(`exp-/`) after kvs(`kv--/`),
-        // We need to store expire index before kvs in snapshot v004.
-        let mut kv_cache = Vec::with_capacity(1_000_000);
-
-        while let Some(res) = ordq_rx.recv() {
-            let res = res.map_err(|e| io::Error::other(format!("ordq recv error: {}", e)))?; // ordq recv error
-
-            let ent = res?; // io error
-
-            match ent {
-                WriteEntry::Data(lines) => {
-                    for (k, v) in lines {
-                        if k.starts_with("kv--/") {
-                            kv_cache.push((k, v));
-                        } else {
-                            writer_tx
-                                .blocking_send(WriteEntry::Data((k, v)))
-                                .map_err(closed_err)?;
-                        }
-                    }
-                }
-                WriteEntry::Finish(_) => {
-                    for (k, v) in kv_cache {
-                        writer_tx
-                            .blocking_send(WriteEntry::Data((k, v)))
-                            .map_err(closed_err)?;
-                    }
-
-                    let sys_data = sys_data.lock().unwrap().clone();
-                    writer_tx
-                        .blocking_send(WriteEntry::Finish(sys_data))
-                        .map_err(closed_err)?;
-                    break;
-                }
-            }
-        }
-        Ok::<(), io::Error>(())
-    });
-
-    let f = data.into_std().await;
-
-    // Feed input to the worker pool.
-    databend_common_base::runtime::spawn_blocking(move || {
-        {
-            let mut br = io::BufReader::with_capacity(16 * 1024 * 1024, f);
-            let lines = io::BufRead::lines(&mut br);
-            for c in &lines.into_iter().chunks(1024) {
-                let chunk = c.collect::<Result<Vec<_>, _>>()?;
-                ordq_tx
-                    .send(WriteEntry::Data(chunk))
-                    .map_err(io::Error::other)?
-            }
-
-            ordq_tx
-                .send(WriteEntry::Finish(()))
-                .map_err(io::Error::other)?;
-        }
-
-        Ok::<_, io::Error>(())
-    });
-
-    let temp_snapshot = writer_join_handle.await.map_err(closed_err)??;
-    let db = temp_snapshot.move_to_final_path(snapshot_id)?;
-    info!(
-        "upgraded snapshot from v002 to v004: file_size: {}, db stat: {}, sys_data: {}",
-        db.inner().file_size(),
-        db.inner().stat(),
-        db.inner().meta().user_data(),
-    );
-
-    Ok(db)
 }

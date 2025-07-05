@@ -26,7 +26,6 @@ rotbl = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 tonic = { workspace = true }
 
 [build-dependencies]

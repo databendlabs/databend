@@ -22,18 +22,10 @@ use std::io::BufReader;
 use std::io::Lines;
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use databend_common_meta_raft_store::config::RaftConfig;
-use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_raft_store::key_spaces::SMEntry;
 use databend_common_meta_raft_store::ondisk::DataVersion;
 use databend_common_meta_raft_store::raft_log_v004;
-use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV003;
-use databend_common_meta_raft_store::sm_v003::write_entry::WriteEntry;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
-use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
@@ -45,7 +37,6 @@ use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::LogEntry;
@@ -104,113 +95,12 @@ async fn import_lines<B: BufRead + 'static>(
                  please use an older version databend-metactl to import from V001"
             ));
         }
-        DataVersion::V002 => import_v002(raft_config, it).await?,
-        DataVersion::V003 => import_v003(raft_config, it).await?,
+        // v002 v003 v004 share the same exported data format.
+        DataVersion::V002 => crate::import_v004::import_v004(raft_config, it).await?,
+        DataVersion::V003 => crate::import_v004::import_v004(raft_config, it).await?,
         DataVersion::V004 => crate::import_v004::import_v004(raft_config, it).await?,
     };
 
-    Ok(max_log_id)
-}
-
-/// Import serialized lines for `DataVersion::V002`
-///
-/// While importing, the max log id is also returned.
-///
-/// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
-async fn import_v002(
-    raft_config: RaftConfig,
-    lines: impl IntoIterator<Item = Result<String, io::Error>>,
-) -> anyhow::Result<Option<LogId>> {
-    // v002 and v003 share the same exported data format.
-    import_v003(raft_config, lines).await
-}
-
-/// Import serialized lines for `DataVersion::V003`
-///
-/// While importing, the max log id is also returned.
-///
-/// It write logs and related entries to sled trees, and state_machine entries to a snapshot.
-async fn import_v003(
-    raft_config: RaftConfig,
-    lines: impl IntoIterator<Item = Result<String, io::Error>>,
-) -> anyhow::Result<Option<LogId>> {
-    let db = init_get_sled_db(raft_config.raft_dir.clone(), 1024 * 1024 * 1024);
-
-    let mut n = 0;
-    let mut max_log_id: Option<LogId> = None;
-    let mut trees = BTreeMap::new();
-
-    let sys_data = Arc::new(Mutex::new(SysData::default()));
-
-    let snapshot_store = SnapshotStoreV003::new(raft_config);
-    let writer = snapshot_store.new_writer()?;
-    let (tx, join_handle) = writer.spawn_writer_thread("import_v003");
-
-    let mut converter = SnapshotUpgradeV002ToV003 {
-        sys_data: sys_data.clone(),
-    };
-
-    for line in lines {
-        let l = line?;
-        let (tree_name, kv_entry): (String, RaftStoreEntry) = serde_json::from_str(&l)?;
-
-        if tree_name.starts_with("state_machine/") {
-            // Write to snapshot
-            let sm_entry: SMEntry = kv_entry.try_into().map_err(|err_str| {
-                anyhow::anyhow!("Failed to convert RaftStoreEntry to SMEntry: {}", err_str)
-            })?;
-
-            let kv = converter.sm_entry_to_rotbl_kv(sm_entry)?;
-            if let Some(kv) = kv {
-                tx.send(WriteEntry::Data(kv)).await?;
-            }
-        } else {
-            // Write to sled tree
-            if !trees.contains_key(&tree_name) {
-                let tree = db.open_tree(&tree_name)?;
-                trees.insert(tree_name.clone(), tree);
-            }
-
-            let tree = trees.get(&tree_name).unwrap();
-
-            let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
-
-            tree.insert(k, v)?;
-
-            if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
-                max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
-            };
-        }
-
-        n += 1;
-    }
-
-    for tree in trees.values() {
-        tree.flush()?;
-    }
-
-    let s = {
-        let r = sys_data.lock().unwrap();
-        r.clone()
-    };
-
-    tx.send(WriteEntry::Finish(s)).await?;
-    let temp_snapshot_data = join_handle.await??;
-
-    let last_applied = {
-        let r = sys_data.lock().unwrap();
-        *r.last_applied_ref()
-    };
-    let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
-    let db = temp_snapshot_data.move_to_final_path(snapshot_id.to_string())?;
-
-    eprintln!(
-        "Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
-        n,
-        snapshot_id,
-        db.path(),
-        db.stat()
-    );
     Ok(max_log_id)
 }
 

@@ -24,7 +24,7 @@ use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::RaftLogV004;
-use databend_common_meta_raft_store::sm_v003::adapter::SnapshotUpgradeV002ToV004;
+use databend_common_meta_raft_store::sm_v003::adapter::SMEntryV002ToV004;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::sm_v003::WriteEntry;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
@@ -60,7 +60,7 @@ pub async fn import_v004(
 
     let sys_data = Arc::new(Mutex::new(SysData::default()));
 
-    let mut converter = SnapshotUpgradeV002ToV004 {
+    let mut converter = SMEntryV002ToV004 {
         sys_data: sys_data.clone(),
     };
 
@@ -79,6 +79,7 @@ pub async fn import_v004(
                 tx.send(WriteEntry::Data(kv)).await?;
             }
         } else {
+            let kv_entry = kv_entry.upgrade();
             if let RaftStoreEntry::DataHeader { .. } = kv_entry {
                 // Data header is not stored in V004 RaftLog
                 continue;
