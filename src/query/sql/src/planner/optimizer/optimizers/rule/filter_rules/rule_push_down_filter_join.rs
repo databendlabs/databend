@@ -83,7 +83,7 @@ impl Rule for RulePushDownFilterJoin {
 
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
-        if s_expr.plan().rel_op() != RelOp::Filter {
+        if s_expr.plan_rel_op() != RelOp::Filter {
             state.add_result(s_expr);
             return Ok(());
         }

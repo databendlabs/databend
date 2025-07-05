@@ -26,6 +26,7 @@ use crate::optimizer::ir::property::StatInfo;
 use crate::optimizer::ir::Group;
 use crate::optimizer::ir::GroupState;
 use crate::plans::Operator;
+use crate::plans::OperatorRef;
 use crate::IndexType;
 
 /// `Memo` is a search space which memoize possible plans of a query.
@@ -38,7 +39,7 @@ pub struct Memo {
 
     /// Hash table for detecting duplicated expressions.
     /// The entry is `(plan, children) -> (group_index, m_expr_index)`.
-    pub m_expr_lookup_table: HashMap<(Arc<RelOperator>, Vec<IndexType>), (IndexType, IndexType)>,
+    pub m_expr_lookup_table: HashMap<(OperatorRef, Vec<IndexType>), (IndexType, IndexType)>,
 }
 
 impl Memo {
@@ -153,10 +154,10 @@ impl Memo {
 
     /// Get an estimate of the memory size of the memo.
     pub fn mem_size(&self) -> usize {
-        // Since all the `RelOperator` are interned,
+        // Since all the `OperatorRef` are interned,
         // we only need to count the size of `m_expr_lookup_table`.
-        // We assume the `RelOperator`s are the major part of the memo.
-        self.m_expr_lookup_table.len() * std::mem::size_of::<RelOperator>()
+        // We assume the `OperatorRef`s are the major part of the memo.
+        self.m_expr_lookup_table.len() * std::mem::size_of::<OperatorRef>()
     }
 
     /// Get the number of groups in the memo.

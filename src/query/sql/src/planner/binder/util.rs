@@ -25,7 +25,6 @@ use databend_common_expression::types::DataType;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Operator;
-use crate::plans::Operator;
 use crate::Binder;
 use crate::NameResolutionContext;
 use crate::NameResolutionSuggest;
@@ -86,7 +85,7 @@ impl Binder {
             | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
-                    expr.plan().rel_op()
+                    expr.plan_rel_op()
                 )));
             }
         }

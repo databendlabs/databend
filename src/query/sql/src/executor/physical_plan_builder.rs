@@ -77,7 +77,7 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
-        with_match_rel_op!(|TY| match s_expr.plan().rel_op() {
+        with_match_rel_op!(|TY| match s_expr.plan_rel_op() {
             crate::plans::RelOp::TY => TY::build(self, s_expr, required, stat_info).await,
             _ => Err(ErrorCode::Internal("Unsupported operator")),
         })

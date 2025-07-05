@@ -76,7 +76,7 @@ impl Rule for RulePushDownSortScan {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
 
-        let mut get = match child.plan().rel_op() {
+        let mut get = match child.plan_rel_op() {
             RelOp::Scan => {
                 let s = child.plan().as_any().downcast_ref::<Scan>().unwrap();
                 s.clone()
@@ -98,7 +98,7 @@ impl Rule for RulePushDownSortScan {
 
         let get = SExpr::create_leaf(get);
 
-        let mut result = match child.plan().rel_op() {
+        let mut result = match child.plan_rel_op() {
             RelOp::Scan => s_expr.replace_children(vec![Arc::new(get)]),
             RelOp::EvalScalar => {
                 let child = child.replace_children(vec![Arc::new(get)]);

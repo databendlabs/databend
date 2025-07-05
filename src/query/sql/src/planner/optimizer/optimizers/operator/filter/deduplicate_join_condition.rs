@@ -105,14 +105,12 @@ impl DeduplicateJoinConditionOptimizer {
 
     #[recursive::recursive]
     pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        match s_expr.plan.as_ref() {
-            // Only optimize inner joins
-            RelOperator::Join(join) if join.join_type == JoinType::Inner => {
-                self.optimize_inner_join(s_expr, join)
+        if let Some(join) = Join::try_downcast_ref(s_expr.plan.as_ref()) {
+            if join.join_type == JoinType::Inner {
+                return self.optimize_inner_join(s_expr, join);
             }
-            // Recursively process other nodes
-            _ => self.deduplicate_children(s_expr),
         }
+        self.deduplicate_children(s_expr)
     }
 
     /// Optimize inner join by removing redundant conditions

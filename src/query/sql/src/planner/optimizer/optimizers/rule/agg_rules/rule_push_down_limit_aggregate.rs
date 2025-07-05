@@ -130,7 +130,7 @@ impl RulePushDownRankLimitAggregate {
     ) -> databend_common_exception::Result<()> {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let mut has_eval_scalar = false;
-        let agg_limit_expr = match s_expr.child(0)?.plan().rel_op() {
+        let agg_limit_expr = match s_expr.child(0)?.plan_rel_op() {
             RelOp::Aggregate => s_expr.child(0)?,
             RelOp::EvalScalar => {
                 has_eval_scalar = true;
@@ -199,7 +199,7 @@ impl Rule for RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        match s_expr.plan().rel_op() {
+        match s_expr.plan_rel_op() {
             RelOp::Limit => self.apply_limit(s_expr, state),
             RelOp::Sort | RelOp::EvalScalar => self.apply_sort(s_expr, state),
             _ => Ok(()),

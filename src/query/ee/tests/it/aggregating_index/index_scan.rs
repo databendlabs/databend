@@ -25,7 +25,6 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::SortColumnDescription;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::planner::plans::Plan;
-
 use databend_common_sql::Planner;
 use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::interpreters::InterpreterFactory;
@@ -596,7 +595,7 @@ fn is_index_scan_plan(plan: &Plan) -> bool {
 }
 
 fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
-    if let RelOperator::Scan(scan) = s_expr.plan() {
+    if let Some(scan) = Scan::try_downcast_ref(&s_expr.plan) {
         scan.agg_index.is_some()
     } else {
         s_expr.children().any(is_index_scan_sexpr)
@@ -1041,10 +1040,7 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
                 "query_out_of_memory_behavior".to_string(),
                 "spilling".to_string(),
             ),
-            (
-                "max_query_memory_usage".to_string(),
-                "1".to_string(),
-            ),
+            ("max_query_memory_usage".to_string(), "1".to_string()),
         ]))
     } else {
         None

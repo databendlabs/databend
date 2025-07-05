@@ -38,13 +38,15 @@ use crate::optimizer::optimizers::operator::UnnestResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
-use crate::plans::RelOp;
 use crate::plans::Operator;
+use crate::plans::ProjectSet;
+use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
@@ -583,10 +585,11 @@ impl SubqueryDecorrelatorOptimizer {
         }
 
         let child = subquery.subquery.child(0)?;
-        if let RelOperator::DummyTableScan(_) = child.plan() {
+        if let RelOp::DummyTableScan = child.plan_rel_op() {
             // subquery is a simple constant value.
             // for example: `SELECT * FROM t WHERE id = (select 1);`
-            if let RelOperator::EvalScalar(eval) = subquery.subquery.plan() {
+            if let RelOp::EvalScalar = subquery.subquery.plan_rel_op() {
+                let eval = EvalScalar::try_downcast_ref(subquery.subquery.plan.as_ref()).unwrap();
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
@@ -628,7 +631,7 @@ impl SubqueryDecorrelatorOptimizer {
             // subquery is a set returning function return constant values.
             // for example: `SELECT * FROM t WHERE id IN (SELECT * FROM UNNEST(SPLIT('1,2,3', ',')) AS t1);`
             let mut output_column_index = None;
-            if let RelOperator::EvalScalar(eval) = subquery.subquery.plan() {
+            if let Some(eval) = EvalScalar::try_downcast_ref(subquery.subquery.plan.as_ref()) {
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
@@ -642,7 +645,8 @@ impl SubqueryDecorrelatorOptimizer {
             let output_column_index = output_column_index.unwrap();
 
             let mut srf_column_index = None;
-            if let RelOperator::EvalScalar(eval) = child.plan() {
+
+            if let Some(eval) = EvalScalar::try_downcast_ref(child.plan.as_ref()) {
                 if eval.items.len() != 1 || eval.items[0].index != output_column_index {
                     return Ok(None);
                 }
@@ -664,7 +668,8 @@ impl SubqueryDecorrelatorOptimizer {
             let srf_column_index = srf_column_index.unwrap();
 
             let project_set_expr = child.child(0)?;
-            if let RelOperator::ProjectSet(project_set) = project_set_expr.plan() {
+            if let Some(project_set) = ProjectSet::try_downcast_ref(project_set_expr.plan.as_ref())
+            {
                 if project_set.srfs.len() != 1
                     || project_set.srfs[0].index != srf_column_index
                     || !matches!(

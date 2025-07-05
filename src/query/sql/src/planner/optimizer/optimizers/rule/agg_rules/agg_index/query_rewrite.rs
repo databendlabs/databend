@@ -107,7 +107,7 @@ impl QueryInfo {
             // collect query info from the plan
             let mut s_expr = s_expr.child(0)?;
             loop {
-                match s_expr.plan().rel_op() {
+                match s_expr.plan_rel_op() {
                     RelOp::EvalScalar => {
                         let eval = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
                         for item in &eval.items {

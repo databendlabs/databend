@@ -21,6 +21,7 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
+use crate::plans::OperatorRef;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::Metadata;
@@ -37,7 +38,7 @@ pub trait IdHumanizer {
 
 /// A trait for humanizing operators.
 pub trait OperatorHumanizer<I: IdHumanizer> {
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode;
+    fn humanize_operator(&self, id_humanizer: &I, op: &OperatorRef) -> FormatTreeNode;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -57,11 +58,11 @@ pub struct FormatOptions {
 /// use databend_query::planner::format::display_rel_operator::Filter;
 /// use databend_query::planner::format::display_rel_operator::IdHumanizer;
 /// use databend_query::planner::format::display_rel_operator::OperatorHumanizer;
-/// use databend_query::planner::format::display_rel_operator::RelOperator;
+/// use databend_query::planner::format::display_rel_operator::OperatorRef;
 ///
 /// let id_humanizer = DefaultIdHumanizer;
 /// let operator_humanizer = DefaultOperatorHumanizer;
-/// let op = RelOperator::Filter(Filter { predicates: vec![] });
+/// let op = Arc::new(Filter { predicates: vec![] });
 /// let tree = operator_humanizer.humanize_operator(&id_humanizer, &op);
 ///
 /// assert_eq!(tree.payload, "Filter");

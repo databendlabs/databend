@@ -19,7 +19,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use databend_common_sql::planner::plans::JoinType;
-use databend_common_sql::planner::plans::RelOperator;
 use databend_common_sql::planner::plans::ScalarExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::Scan;

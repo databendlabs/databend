@@ -252,7 +252,7 @@ impl Binder {
         };
 
         if let Some(fields) = fields {
-            if let RelOperator::EvalScalar(plan) = (*srf_expr.plan).clone() {
+            if let Some(plan) = EvalScalar::try_downcast_ref(&srf_expr.plan) {
                 if plan.items.len() != 1 {
                     return Err(ErrorCode::Internal(format!(
                         "Invalid table function subquery EvalScalar items, expect 1, but got {}",

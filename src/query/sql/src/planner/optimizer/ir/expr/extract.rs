@@ -49,7 +49,7 @@ impl Matcher {
     pub fn matches(&self, s_expr: &SExpr) -> bool {
         match self {
             Matcher::MatchOp { op_type, children } => {
-                if s_expr.plan().rel_op() != *op_type {
+                if s_expr.plan_rel_op() != *op_type {
                     return false;
                 }
 

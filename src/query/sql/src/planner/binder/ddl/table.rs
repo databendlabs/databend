@@ -1251,7 +1251,7 @@ impl Binder {
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
             AstOptimizeTableAction::All => {
-                let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                let compact_block = R OptimizeCompactBlock {
                     catalog,
                     database,
                     table,
@@ -1259,8 +1259,8 @@ impl Binder {
                         segment_limit: limit,
                         block_limit: None,
                     },
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                };
+                let s_expr = SExpr::create_leaf( compact_block);
                 Plan::OptimizeCompactBlock {
                     s_expr: Box::new(s_expr),
                     need_purge: true,
@@ -1283,7 +1283,7 @@ impl Binder {
             }
             AstOptimizeTableAction::Compact { target } => match target {
                 CompactTarget::Block => {
-                    let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+                    let compact_block =  OptimizeCompactBlock {
                         catalog,
                         database,
                         table,
@@ -1291,8 +1291,8 @@ impl Binder {
                             segment_limit: limit,
                             block_limit: None,
                         },
-                    });
-                    let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+                    };
+                    let s_expr = SExpr::create_leaf(compact_block);
                     Plan::OptimizeCompactBlock {
                         s_expr: Box::new(s_expr),
                         need_purge: false,

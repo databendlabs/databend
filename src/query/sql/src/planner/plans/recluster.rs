@@ -27,7 +27,9 @@ use databend_common_expression::Scalar;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
+use crate::plans::Aggregate;
 use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::Scan;
@@ -126,15 +128,17 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
         partitions: u16,
     ) -> SExpr {
         let mut s_expr = s_expr.clone();
-        s_expr.plan = match s_expr.plan.as_ref() {
-            RelOperator::EvalScalar(expr) if !variables.is_empty() => {
+        s_expr.plan = match s_expr.plan.rel_op() {
+            RelOp::EvalScalar if !variables.is_empty() => {
+                let expr = EvalScalar::try_downcast_ref(&s_expr.plan).unwrap();
                 let mut expr = expr.clone();
                 for item in &mut expr.items {
                     visit_expr_column(&mut item.scalar, variables);
                 }
                 Arc::new(expr.into())
             }
-            RelOperator::Aggregate(aggr) => {
+            RelOp::Aggregate => {
+                let aggr = Aggregate::try_downcast_ref(&s_expr.plan).unwrap();
                 let mut aggr = aggr.clone();
                 for item in &mut aggr.aggregate_functions {
                     if let ScalarExpr::AggregateFunction(func) = &mut item.scalar {

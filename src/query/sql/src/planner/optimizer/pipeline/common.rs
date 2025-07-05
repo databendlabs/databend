@@ -37,7 +37,7 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
         } else {
             false
         }
-        || matches!(s_expr.plan().rel_op(), RelOp::RecursiveCteScan)
+        || matches!(s_expr.plan_rel_op(), RelOp::RecursiveCteScan)
 }
 
 pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {

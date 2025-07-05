@@ -119,6 +119,7 @@ use crate::plans::InspectWarehousePlan;
 use crate::plans::KillPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
+use crate::plans::Operator;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
@@ -128,7 +129,6 @@ use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableCachePlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
-use crate::plans::Operator;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTableColumnPlan;
@@ -591,7 +591,8 @@ impl Plan {
             ignore_result,
         } = self
         {
-            if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan.as_ref() {
+            let s = Exchange::try_downcast_ref(&s_expr.plan);
+            if let Some(Exchange::Merge) = s {
                 let s_expr = Box::new(s_expr.child(0).unwrap().clone());
                 return Plan::Query {
                     s_expr,

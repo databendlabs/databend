@@ -326,7 +326,7 @@ impl DPhpyOptimizer {
             return self.process_subquery(s_expr).await;
         }
 
-        match s_expr.plan().rel_op() {
+        match s_expr.plan_rel_op() {
             RelOp::Scan => self.process_scan_node(s_expr, join_relation),
             RelOp::Join => self.process_join_node(s_expr, join_conditions).await,
             RelOp::ProjectSet

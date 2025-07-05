@@ -22,7 +22,6 @@ use databend_common_sql::optimizer::optimizers::rule::RulePushDownFilterJoin;
 use databend_common_sql::optimizer::optimizers::rule::TransformResult;
 use databend_common_sql::planner::plans::JoinEquiCondition;
 use databend_common_sql::planner::plans::JoinType;
-use databend_common_sql::planner::plans::RelOperator;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;

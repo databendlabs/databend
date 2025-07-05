@@ -37,6 +37,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::Operator;
 use crate::plans::ScalarItem;
+use crate::plans::Scan;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -51,7 +52,7 @@ pub async fn filter_selectivity_sample(
     // Because it's meaningless for filter cardinality by sample in single table query.
     let child = s_expr.child(0)?;
     let child_rel_expr = RelExpr::with_s_expr(child);
-    if let RelOperator::Scan(mut scan) = child.plan().clone() {
+    if let Some(scan) = Scan::try_downcast_ref(child.plan.as_ref()) {
         let num_rows = scan
             .statistics
             .table_stats
@@ -68,7 +69,7 @@ pub async fn filter_selectivity_sample(
                 block_level: Some(50.0),
             };
             scan.sample = Some(sample_conf);
-            let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
+            let new_child = SExpr::create_leaf(Arc::new(scan));
             new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
 
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());

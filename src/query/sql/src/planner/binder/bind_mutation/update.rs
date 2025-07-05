@@ -32,9 +32,9 @@ use crate::optimizer::ir::Matcher;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
-use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
 use crate::BindContext;
@@ -124,9 +124,9 @@ impl Binder {
         let Plan::DataMutation { box s_expr, .. } = &plan else {
             return Ok(plan);
         };
-        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+        if s_expr.plan_rel_op() != RelOp::Mutation {
             return Ok(plan);
-        };
+        }
         let matcher = Matcher::MatchOp {
             op_type: RelOp::Filter,
             children: vec![Matcher::MatchOp {

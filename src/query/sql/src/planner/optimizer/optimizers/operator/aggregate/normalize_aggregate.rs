@@ -42,7 +42,7 @@ impl RuleNormalizeAggregateOptimizer {
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
-        if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
+        if let Some(aggregate) = Aggregate::try_downcast_ref(s_expr.plan.as_ref()) {
             self.normalize_aggregate(&s_expr)
         } else {
             Ok(s_expr)

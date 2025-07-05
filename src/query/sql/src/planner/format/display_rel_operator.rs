@@ -28,7 +28,8 @@ use crate::plans::Join;
 use crate::plans::Limit;
 use crate::plans::Mutation;
 use crate::plans::Operator;
-use crate::plans::Operator;
+use crate::plans::OperatorRef;
+use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
@@ -38,29 +39,71 @@ use crate::plans::UnionAll;
 use crate::plans::Window;
 
 impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
-    fn humanize_operator(&self, id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
+    fn humanize_operator(&self, id_humanizer: &I, op: &OperatorRef) -> FormatTreeNode {
         to_format_tree(id_humanizer, op)
     }
 }
 
-/// Build `FormatTreeNode` for a `RelOperator`, which may returns a tree structure instead of
+/// Build `FormatTreeNode` for a `OperatorRef`, which may returns a tree structure instead of
 /// a single node.
-fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatTreeNode {
-    match op {
-        RelOperator::Join(op) => join_to_format_tree(id_humanizer, op),
-        RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
-        RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(id_humanizer, op),
-        RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
-        RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
-        RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
-        RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
-        RelOperator::AsyncFunction(op) => async_func_to_format_tree(id_humanizer, op),
-        RelOperator::Sort(op) => sort_to_format_tree(id_humanizer, op),
-        RelOperator::Limit(op) => limit_to_format_tree(id_humanizer, op),
-        RelOperator::Exchange(op) => exchange_to_format_tree(id_humanizer, op),
-        RelOperator::ConstantTableScan(op) => constant_scan_to_format_tree(id_humanizer, op),
-        RelOperator::UnionAll(op) => union_all_to_format_tree(id_humanizer, op),
-        RelOperator::Mutation(op) => merge_into_to_format_tree(id_humanizer, op),
+fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &OperatorRef) -> FormatTreeNode {
+    match op.rel_op() {
+        RelOp::Join => {
+            let join = Join::try_downcast_ref(op).unwrap();
+            join_to_format_tree(id_humanizer, join)
+        }
+        RelOp::Scan => {
+            let scan = Scan::try_downcast_ref(op).unwrap();
+            scan_to_format_tree(id_humanizer, scan)
+        }
+        RelOp::EvalScalar => {
+            let eval_scalar = EvalScalar::try_downcast_ref(op).unwrap();
+            eval_scalar_to_format_tree(id_humanizer, eval_scalar)
+        }
+        RelOp::Filter => {
+            let filter = Filter::try_downcast_ref(op).unwrap();
+            filter_to_format_tree(id_humanizer, filter)
+        }
+        RelOp::Aggregate => {
+            let aggregate = Aggregate::try_downcast_ref(op).unwrap();
+            aggregate_to_format_tree(id_humanizer, aggregate)
+        }
+        RelOp::Window => {
+            let window = Window::try_downcast_ref(op).unwrap();
+            window_to_format_tree(id_humanizer, window)
+        }
+        RelOp::Udf => {
+            let udf = Udf::try_downcast_ref(op).unwrap();
+            udf_to_format_tree(id_humanizer, udf)
+        }
+        RelOp::AsyncFunction => {
+            let async_func = AsyncFunction::try_downcast_ref(op).unwrap();
+            async_func_to_format_tree(id_humanizer, async_func)
+        }
+        RelOp::Sort => {
+            let sort = Sort::try_downcast_ref(op).unwrap();
+            sort_to_format_tree(id_humanizer, sort)
+        }
+        RelOp::Limit => {
+            let limit = Limit::try_downcast_ref(op).unwrap();
+            limit_to_format_tree(id_humanizer, limit)
+        }
+        RelOp::Exchange => {
+            let exchange = Exchange::try_downcast_ref(op).unwrap();
+            exchange_to_format_tree(id_humanizer, exchange)
+        }
+        RelOp::ConstantTableScan => {
+            let constant_scan = ConstantTableScan::try_downcast_ref(op).unwrap();
+            constant_scan_to_format_tree(id_humanizer, constant_scan)
+        }
+        RelOp::UnionAll => {
+            let union_all = UnionAll::try_downcast_ref(op).unwrap();
+            union_all_to_format_tree(id_humanizer, union_all)
+        }
+        RelOp::MergeInto => {
+            let merge_into = MergeInto::try_downcast_ref(op).unwrap();
+            merge_into_to_format_tree(id_humanizer, merge_into)
+        }
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),
     }
 }

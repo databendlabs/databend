@@ -73,12 +73,23 @@ impl PullUpFilterOptimizer {
 
     #[recursive::recursive]
     pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        match s_expr.plan.as_ref() {
-            RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
-            RelOperator::Join(join) if !join.is_lateral && !join.has_null_equi_condition() => {
-                self.pull_up_join(s_expr, join)
+        match s_expr.plan.rel_op() {
+            RelOp::Filter => {
+                let filter = Filter::try_downcast_ref(&s_expr.plan).unwrap();
+                self.pull_up_filter(s_expr, filter)
             }
-            RelOperator::EvalScalar(eval_scalar) => self.pull_up_eval_scalar(s_expr, eval_scalar),
+            RelOp::Join => {
+                let join = Join::try_downcast_ref(&s_expr.plan).unwrap();
+                if !join.is_lateral && !join.has_null_equi_condition() {
+                    self.pull_up_join(s_expr, join)
+                } else {
+                    self.pull_up_others(s_expr)
+                }
+            }
+            RelOp::EvalScalar => {
+                let eval_scalar = EvalScalar::try_downcast_ref(&s_expr.plan).unwrap();
+                self.pull_up_eval_scalar(s_expr, eval_scalar)
+            }
             _ => self.pull_up_others(s_expr),
         }
     }

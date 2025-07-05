@@ -31,6 +31,7 @@ use crate::plans::AggregateMode;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::ProjectSet;
+use crate::plans::RelOp;
 use crate::plans::UnionAll;
 use crate::MetadataRef;
 
@@ -67,8 +68,8 @@ pub async fn dynamic_sample(
         }
     }
 
-    match s_expr.plan() {
-        RelOperator::Filter(_) => {
+    match s_expr.plan_rel_op() {
+        RelOp::Filter => {
             sample_with_budget(
                 start_time,
                 time_budget,
@@ -80,37 +81,33 @@ pub async fn dynamic_sample(
             )
             .await
         }
-        RelOperator::Join(_) => {
-            join_selectivity_sample(ctx, metadata, s_expr, sample_executor).await
-        }
-        RelOperator::Scan(_)
-        | RelOperator::DummyTableScan(_)
-        | RelOperator::ConstantTableScan(_)
-        | RelOperator::CacheScan(_)
-        | RelOperator::ExpressionScan(_)
-        | RelOperator::RecursiveCteScan(_)
-        | RelOperator::Mutation(_)
-        | RelOperator::CompactBlock(_)
-        | RelOperator::MutationSource(_) => {
-            s_expr.plan().derive_stats(&RelExpr::with_s_expr(s_expr))
-        }
+        RelOp::Join => join_selectivity_sample(ctx, metadata, s_expr, sample_executor).await,
+        RelOp::Scan
+        | RelOp::DummyTableScan
+        | RelOp::ConstantTableScan
+        | RelOp::CacheScan
+        | RelOp::ExpressionScan
+        | RelOp::RecursiveCteScan
+        | RelOp::Mutation
+        | RelOp::CompactBlock
+        | RelOp::MutationSource => s_expr.plan().derive_stats(&RelExpr::with_s_expr(s_expr)),
 
-        RelOperator::Aggregate(agg) => {
+        RelOp::Aggregate => {
+            let agg = Aggregate::try_from(s_expr.plan().clone()).unwrap();
             let child_stat_info =
                 dynamic_sample(ctx, metadata, s_expr.child(0)?, sample_executor).await?;
             if agg.mode == AggregateMode::Final {
                 return Ok(child_stat_info);
             }
-            let agg = Aggregate::try_from(s_expr.plan().clone())?;
             agg.derive_agg_stats(child_stat_info)
         }
-        RelOperator::Limit(_) => {
+        RelOp::Limit => {
             let child_stat_info =
                 dynamic_sample(ctx, metadata, s_expr.child(0)?, sample_executor).await?;
             let limit = Limit::try_from(s_expr.plan().clone())?;
             limit.derive_limit_stats(child_stat_info)
         }
-        RelOperator::UnionAll(_) => {
+        RelOp::UnionAll => {
             let left_stat_info = dynamic_sample(
                 ctx.clone(),
                 metadata.clone(),
@@ -123,23 +120,16 @@ pub async fn dynamic_sample(
             let union = UnionAll::try_from(s_expr.plan().clone())?;
             union.derive_union_stats(left_stat_info, right_stat_info)
         }
-        RelOperator::ProjectSet(_) => {
+        RelOp::ProjectSet => {
             let mut child_stat_info =
                 dynamic_sample(ctx, metadata, s_expr.child(0)?, sample_executor)
                     .await?
                     .deref()
                     .clone();
-            let project_set = ProjectSet::try_from(s_expr.plan().clone())?;
+            let project_set = ProjectSet::try_downcast_ref(s_expr.plan()).unwrap();
             project_set.derive_project_set_stats(&mut child_stat_info)
         }
 
-        RelOperator::EvalScalar(_)
-        | RelOperator::Sort(_)
-        | RelOperator::Exchange(_)
-        | RelOperator::Window(_)
-        | RelOperator::Udf(_)
-        | RelOperator::AsyncFunction(_) => {
-            dynamic_sample(ctx, metadata, s_expr.child(0)?, sample_executor).await
-        }
+        _ => dynamic_sample(ctx, metadata, s_expr.child(0)?, sample_executor).await,
     }
 }

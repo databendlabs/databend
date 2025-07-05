@@ -29,6 +29,7 @@ use crate::optimizer::ir::property::RequiredProperty;
 use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::Operator;
+use crate::plans::OperatorRef;
 
 /// Enforcer is a trait that can enforce the physical property
 pub trait Enforcer: std::fmt::Debug + Send + Sync {
@@ -36,7 +37,7 @@ pub trait Enforcer: std::fmt::Debug + Send + Sync {
     fn check_enforce(&self, input_prop: &PhysicalProperty) -> bool;
 
     /// Enforce the physical property
-    fn enforce(&self) -> Result<RelOperator>;
+    fn enforce(&self) -> Result<OperatorRef>;
 }
 
 /// Enforcer for distribution properties
@@ -66,15 +67,16 @@ impl Enforcer for DistributionEnforcer {
         !self.0.satisfied_by(&input_prop.distribution)
     }
 
-    fn enforce(&self) -> Result<RelOperator> {
-        match &self.0 {
-            Distribution::Serial => Ok(Exchange::Merge.into()),
-            Distribution::Broadcast => Ok(Exchange::Broadcast.into()),
-            Distribution::Hash(hash_keys) => Ok(Exchange::Hash(hash_keys.clone()).into()),
+    fn enforce(&self) -> Result<OperatorRef> {
+        let m = match &self.0 {
+            Distribution::Serial => Ok(Exchange::Merge),
+            Distribution::Broadcast => Ok(Exchange::Broadcast),
+            Distribution::Hash(hash_keys) => Ok(Exchange::Hash(hash_keys.clone())),
             Distribution::Random | Distribution::Any => Err(ErrorCode::Internal(
                 "Cannot enforce random or any distribution",
             )),
-        }
+        }?;
+        Ok(Arc::new(m))
     }
 }
 

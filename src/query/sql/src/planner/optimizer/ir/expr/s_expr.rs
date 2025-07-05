@@ -120,6 +120,10 @@ impl SExpr {
         &self.plan
     }
 
+    pub fn plan_rel_op(&self) -> RelOp {
+        self.plan.rel_op()
+    }
+
     pub fn children(&self) -> impl Iterator<Item = &SExpr> {
         self.children.iter().map(|v| v.as_ref())
     }

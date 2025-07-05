@@ -43,7 +43,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MutationSource;
 use crate::plans::Operator;
-use crate::plans::Operator;
+use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
 use crate::BindContext;
@@ -252,8 +252,7 @@ impl MutationExpression {
                         read_partition_columns: Default::default(),
                     };
 
-                    s_expr =
-                        SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation_source)));
+                    s_expr = SExpr::create_leaf(MutationSource(mutation_source));
 
                     if !predicates.is_empty() {
                         s_expr = SExpr::create_unary(Filter { predicates }, s_expr);
@@ -400,23 +399,19 @@ impl MutationExpression {
         if !is_lazy_table && !update_stream_columns {
             return Ok(s_expr.clone());
         }
-        match s_expr.plan() {
-            RelOperator::Scan(scan) => {
-                let mut scan = scan.clone();
-                scan.is_lazy_table = is_lazy_table;
-                scan.set_update_stream_columns(update_stream_columns);
-                Ok(SExpr::create_leaf(Arc::new(scan.into())))
-            }
-            _ => {
-                let mut children = Vec::with_capacity(s_expr.arity());
-                for child in s_expr.children() {
-                    let child =
-                        Self::update_target_scan(child, is_lazy_table, update_stream_columns)?;
-                    children.push(Arc::new(child));
-                }
-                Ok(s_expr.replace_children(children))
-            }
+
+        if let Some(scan) = Scan::try_downcast_ref(s_expr.plan()) {
+            let mut scan = scan.clone();
+            scan.is_lazy_table = is_lazy_table;
+            scan.set_update_stream_columns(update_stream_columns);
+            return Ok(SExpr::create_leaf(Arc::new(scan.into())));
         }
+        let mut children = Vec::with_capacity(s_expr.arity());
+        for child in s_expr.children() {
+            let child = Self::update_target_scan(child, is_lazy_table, update_stream_columns)?;
+            children.push(Arc::new(child));
+        }
+        Ok(s_expr.replace_children(children))
     }
 }
 
@@ -550,12 +545,12 @@ pub struct MutationExpressionBindResult {
 }
 
 pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {
-    if !matches!(s_expr.plan(), RelOperator::Join(_)) {
+    if !matches!(s_expr.plan_rel_op(), RelOp::Join) {
         return Ok(false);
     }
 
     fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
-        if let RelOperator::Scan(ref scan) = s_expr.plan() {
+        if let Some(scan) = Scan::try_downcast_ref(s_expr.plan()) {
             scan.table_index == target_table_index
         } else {
             s_expr
