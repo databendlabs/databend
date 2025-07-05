@@ -15,7 +15,7 @@
 #[allow(clippy::module_inception)]
 mod sm_v003;
 mod sm_v003_kv_api;
-mod snapshot_store_v002;
+mod snapshot_store_error;
 mod snapshot_store_v003;
 mod writer_v003;
 
@@ -36,8 +36,7 @@ mod compact_with_db_test;
 mod sm_v003_test;
 
 pub use sm_v003::SMV003;
-pub use snapshot_store_v002::SnapshotStoreError;
-pub use snapshot_store_v002::SnapshotStoreV002;
+pub use snapshot_store_error::SnapshotStoreError;
 pub use snapshot_store_v003::SnapshotStoreV003;
 pub use snapshot_store_v003::SnapshotStoreV004;
 pub use write_entry::WriteEntry;
