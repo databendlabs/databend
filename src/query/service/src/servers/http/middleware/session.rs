@@ -364,9 +364,12 @@ impl<E> HTTPSessionEndpoint<E> {
             .get(USER_AGENT)
             .map(|id| id.to_str().unwrap().to_string());
 
+        // worksheet start query with ua like DatabendCloud/worksheet=4703;
         let is_worksheet = user_agent
             .as_ref()
             .map(|ua_str| {
+                // only worksheet client run in browser.
+                // most browser ua contain multi of them
                 ["Mozilla", "Chrome", "Firefox", "Safari", "Edge"]
                     .iter()
                     .any(|kw| ua_str.contains(kw))
