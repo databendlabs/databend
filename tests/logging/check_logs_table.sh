@@ -18,7 +18,7 @@ function check_query_log() {
   echo $full_sql_query
   response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
     -H 'Content-Type: application/json' \
-    -d "{\"sql\": \"$full_sql_query\"}")
+    -d "{\"sql\": \"$full_sql_query\", \"pagination\": {\"wait_time_secs\": 10}}")
 
   result=$(echo $response | jq -r '.data[0][0]' | tr -d '"')
   if [ "$result" != "$expected_result" ]; then
