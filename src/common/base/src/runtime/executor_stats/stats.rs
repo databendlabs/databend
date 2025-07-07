@@ -6,6 +6,8 @@ const RING_BUFFER_SIZE: usize = 10;
 const TS_SHIFT: u32 = 32;
 const VAL_MASK: u64 = 0xFFFFFFFF;
 
+const NANOS_PER_MICRO: usize = 1_000;
+
 /// Packs a timestamp (u32) and a value (u32) into a u64.
 #[inline]
 fn pack(timestamp: u32, value: u32) -> u64 {
@@ -49,36 +51,24 @@ impl ExecutorStatsSlot {
     /// This operation is thread-safe and uses a lock-free CAS loop.
     /// If the time window has expired, the value is reset before adding.
     pub fn add(&self, timestamp: u32, value_to_add: u32) {
-        // Start the CAS loop.
+        let mut current_packed = self.0.load(Ordering::SeqCst);
         loop {
-            // Atomically load the current packed value.
-            let current_packed = self.0.load(Ordering::SeqCst);
             let (current_ts, current_val) = unpack(current_packed);
-
-            let new_val;
-            let new_ts;
-
-            if current_ts == timestamp {
-                // Time window is current. Accumulate the value.
-                new_ts = current_ts;
-                new_val = current_val.saturating_add(value_to_add);
+            let new_packed = if current_ts == timestamp {
+                pack(current_ts, current_val.saturating_add(value_to_add))
             } else {
-                // Time window has expired. Reset the value and update the timestamp.
-                new_ts = timestamp;
-                new_val = value_to_add;
-            }
-
-            let new_packed = pack(new_ts, new_val);
-
-            // Attempt to swap the old value with the new one.
+                pack(timestamp, value_to_add)
+            };
             match self.0.compare_exchange_weak(
                 current_packed,
                 new_packed,
                 Ordering::SeqCst,
                 Ordering::SeqCst,
             ) {
-                Ok(_) => return,    // Success, exit the loop.
-                Err(_) => continue, // Contention, another thread updated. Retry.
+                Ok(_) => return,
+                Err(expected) => {
+                    current_packed = expected;
+                }
             }
         }
     }
@@ -92,25 +82,39 @@ impl ExecutorStatsSlot {
 
 // A ring-buffer thread-free implementation for storing scheduling profile
 pub struct ExecutorStats {
-    pub query_id: String,
-    pub slots: [ExecutorStatsSlot; RING_BUFFER_SIZE],
+    pub process_time: [ExecutorStatsSlot; RING_BUFFER_SIZE],
+    pub process_rows: [ExecutorStatsSlot; RING_BUFFER_SIZE],
 }
 
 impl ExecutorStats {
-    pub fn new(query_id: String) -> Self {
-        let slots = std::array::from_fn(|_| ExecutorStatsSlot::new());
-
-        ExecutorStats { query_id, slots }
+    pub fn new() -> Self {
+        let process_time = std::array::from_fn(|_| ExecutorStatsSlot::new());
+        let process_rows = std::array::from_fn(|_| ExecutorStatsSlot::new());
+        ExecutorStats {
+            process_time,
+            process_rows,
+        }
     }
 
-    pub fn record(&self, elapsed_nano: usize) {
+    // Records the elapsed process time in microseconds.
+    pub fn record_process_time(&self, elapsed_nanos: usize) {
+        let elapsed_micros = elapsed_nanos / NANOS_PER_MICRO;
+        self.record_to_slots(&self.process_time, elapsed_micros);
+    }
+
+    // Records the number of rows processed.
+    pub fn record_process_rows(&self, rows: usize) {
+        self.record_to_slots(&self.process_rows, rows);
+    }
+
+    fn record_to_slots(&self, slots: &[ExecutorStatsSlot; RING_BUFFER_SIZE], value: usize) {
         let now = SystemTime::now();
         let now_secs = now
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs() as usize;
         let index = now_secs % RING_BUFFER_SIZE;
-        let slot = &self.slots[index];
-        slot.record_metric(now_secs, elapsed_nano);
+        let slot = &slots[index];
+        slot.record_metric(now_secs, value);
     }
 }

@@ -170,6 +170,7 @@ impl ExecutorWorkerContext {
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
+        proc.graph.record_process_time(nanos as usize);
 
         if let Err(out_of_limit) = guard.flush() {
             return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));
