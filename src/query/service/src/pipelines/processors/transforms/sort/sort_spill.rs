@@ -573,6 +573,7 @@ impl Base {
         }
     }
 
+    #[expect(dead_code)]
     pub async fn scatter_stream<R: Rows>(
         &self,
         mut blocks: VecDeque<SpillableBlock>,
@@ -831,6 +832,7 @@ impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
         Ok(())
     }
 
+    #[expect(dead_code)]
     async fn take_next_bounded_spillable(&mut self) -> Result<Option<SpillableBlock>> {
         let Some(bound) = &self.bound else {
             return Ok(self.blocks.pop_front());

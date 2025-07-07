@@ -61,7 +61,7 @@ pub enum SortStep {
 
     // range shuffle mode
     Sample,
-    RangeSort,
+    SortShuffled,
     Route,
 }
 
@@ -94,7 +94,7 @@ impl Sort {
                 fields.pop();
                 Ok(DataSchemaRefExt::create(fields))
             }
-            SortStep::RangeSort => Ok(input_schema),
+            SortStep::SortShuffled => Ok(input_schema),
             SortStep::Single | SortStep::Partial | SortStep::Sample => {
                 let mut fields = self
                     .pre_projection
@@ -278,7 +278,7 @@ impl PhysicalPlanBuilder {
             input: Box::new(exchange),
             order_by,
             limit: sort.limit,
-            step: SortStep::RangeSort,
+            step: SortStep::SortShuffled,
             pre_projection: None,
             broadcast_id: None,
             stat_info: Some(stat_info),

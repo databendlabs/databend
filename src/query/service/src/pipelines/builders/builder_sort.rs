@@ -67,7 +67,7 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
         let sort_desc = sort_desc.into();
 
-        if sort.step != SortStep::RangeSort {
+        if sort.step != SortStep::SortShuffled {
             self.build_pipeline(&sort.input)?;
         }
 
@@ -102,10 +102,29 @@ impl PipelineBuilder {
             self.main_pipeline.try_resize(max_threads)?;
         }
 
-        let builder = SortPipelineBuilder::create(self.ctx.clone(), plan_schema, sort_desc, None)?
-            .with_limit(sort.limit);
+        let builder = SortPipelineBuilder::create(
+            self.ctx.clone(),
+            plan_schema,
+            sort_desc,
+            sort.broadcast_id,
+        )?
+        .with_limit(sort.limit);
 
         match sort.step {
+            SortStep::Single => {
+                // Build for single node mode.
+                // We build the full sort pipeline for it.
+                builder
+                    .remove_order_col_at_last()
+                    .build_full_sort_pipeline(&mut self.main_pipeline)
+            }
+
+            SortStep::Partial => {
+                // Build for each cluster node.
+                // We build the full sort pipeline for it.
+                // Don't remove the order column at last.
+                builder.build_full_sort_pipeline(&mut self.main_pipeline)
+            }
             SortStep::FinalMerge => {
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
@@ -121,21 +140,9 @@ impl PipelineBuilder {
                         .build_merge_sort_pipeline(&mut self.main_pipeline, true)
                 }
             }
-            SortStep::Partial => {
-                // Build for each cluster node.
-                // We build the full sort pipeline for it.
-                // Don't remove the order column at last.
-                builder.build_full_sort_pipeline(&mut self.main_pipeline)
-            }
-            SortStep::Single => {
-                // Build for single node mode.
-                // We build the full sort pipeline for it.
-                builder
-                    .remove_order_col_at_last()
-                    .build_full_sort_pipeline(&mut self.main_pipeline)
-            }
-            SortStep::Sample => builder.build_sort_part(&mut self.main_pipeline),
-            SortStep::RangeSort => {
+
+            SortStep::Sample => builder.build_sample(&mut self.main_pipeline),
+            SortStep::SortShuffled => {
                 if matches!(*sort.input, PhysicalPlan::ExchangeSource(_)) {
                     let exchange = builder.exchange_injector();
                     let old_inject = std::mem::replace(&mut self.exchange_injector, exchange);
@@ -144,9 +151,10 @@ impl PipelineBuilder {
                 } else {
                     self.build_pipeline(&sort.input)?;
                 }
-                todo!()
+
+                self.main_pipeline.resize(1, false)
             }
-            SortStep::Route => todo!(),
+            SortStep::Route => self.main_pipeline.resize(1, false),
         }
     }
 }
@@ -286,7 +294,7 @@ impl SortPipelineBuilder {
         })
     }
 
-    fn build_sort_part(self, pipeline: &mut Pipeline) -> Result<()> {
+    fn build_sample(self, pipeline: &mut Pipeline) -> Result<()> {
         let settings = self.ctx.get_settings();
         let max_block_size = settings.get_max_block_size()? as usize;
 
@@ -335,9 +343,7 @@ impl SortPipelineBuilder {
             max_block_size,
             self.ctx.clone(),
             self.broadcast_id.unwrap(),
-        )?;
-
-        Ok(())
+        )
     }
 
     fn build_merge_sort(&self, pipeline: &mut Pipeline, order_col_generated: bool) -> Result<()> {
