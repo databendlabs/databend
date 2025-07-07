@@ -63,17 +63,17 @@ impl<R: Rows> AccumulatingTransform for TransformSortCombine<R> {
             .collect();
         let bounds = Bounds::merge::<R>(bounds, self.batch_rows)?;
 
-        let blocks = self
+        let sequences = self
             .metas
             .drain(..)
-            .flat_map(|meta| meta.blocks.into_iter())
+            .flat_map(|meta| meta.sequences.into_iter())
             .collect();
 
         Ok(vec![DataBlock::empty_with_meta(Box::new(
             SortCollectedMeta {
                 params,
                 bounds,
-                blocks,
+                sequences,
             },
         ))])
     }

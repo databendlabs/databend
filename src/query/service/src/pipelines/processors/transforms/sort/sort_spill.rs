@@ -100,10 +100,10 @@ where A: SortAlgorithm
         let SortCollectedMeta {
             params,
             bounds,
-            blocks,
+            sequences,
         } = meta;
 
-        let subsequent = blocks
+        let subsequent = sequences
             .into_iter()
             .filter_map(|list| {
                 (!list.is_empty()).then(|| base.new_stream(Vec::from(list).into(), None))
@@ -209,7 +209,7 @@ where A: SortAlgorithm
             ..
         } = collect.next_step(&base)?;
 
-        let blocks = subsequent
+        let sequences = subsequent
             .into_iter()
             .map(|stream| {
                 assert!(stream.bound.is_none());
@@ -219,7 +219,7 @@ where A: SortAlgorithm
 
         Ok(SortCollectedMeta {
             params,
-            blocks,
+            sequences,
             bounds,
         })
     }

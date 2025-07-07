@@ -56,7 +56,7 @@ struct Base {
 struct SortCollectedMeta {
     params: SortSpillParams,
     bounds: Bounds,
-    blocks: Vec<Box<[SpillableBlock]>>,
+    sequences: Vec<Box<[SpillableBlock]>>,
 }
 
 local_block_meta_serde!(SortCollectedMeta);

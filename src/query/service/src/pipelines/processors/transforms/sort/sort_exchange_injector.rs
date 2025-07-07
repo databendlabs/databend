@@ -46,7 +46,7 @@ impl ExchangeInjector for SortInjector {
             DataExchange::Merge(_) | DataExchange::Broadcast(_) => unreachable!(),
             DataExchange::ShuffleDataExchange(exchange) => {
                 Ok(Arc::new(Box::new(SortBoundScatter {
-                    paritions: exchange.destination_ids.len() as _,
+                    partitions: exchange.destination_ids.len() as _,
                 })))
             }
         }
@@ -88,7 +88,7 @@ impl ExchangeInjector for SortInjector {
 }
 
 pub struct SortBoundScatter {
-    paritions: u64,
+    partitions: u64,
 }
 
 impl FlightScatter for SortBoundScatter {
@@ -112,7 +112,7 @@ impl FlightScatter for SortBoundScatter {
 
         let mut hasher = XxHash64::default();
         bound.hash(&mut hasher);
-        let index = hasher.finish() % self.paritions;
+        let index = hasher.finish() % self.partitions;
 
         Ok(std::iter::repeat_n(DataBlock::empty(), index as _)
             .chain(Some(data_block))

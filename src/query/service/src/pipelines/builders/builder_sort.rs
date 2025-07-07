@@ -450,7 +450,7 @@ impl SortPipelineBuilder {
         }
     }
 
-    pub fn exchange_injector(self) -> Arc<dyn ExchangeInjector> {
+    pub fn exchange_injector(&self) -> Arc<dyn ExchangeInjector> {
         Arc::new(SortInjector {})
     }
 }

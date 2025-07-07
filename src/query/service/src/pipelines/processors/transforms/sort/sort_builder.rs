@@ -237,13 +237,17 @@ impl TransformSortBuilder {
         broadcast_id: u32,
     ) -> Result<()> {
         let state = SortSampleState::new(schema, batch_rows, ctx, broadcast_id);
+
+        let n = pipeline.output_len();
+        pipeline.resize(1, false)?;
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(self.build_bound_broadcast(
                 input,
                 output,
                 state.clone(),
             )?))
-        })
+        })?;
+        pipeline.resize(n, false)
     }
 
     pub fn exchange_injector(&self) -> Arc<dyn ExchangeInjector> {
@@ -307,7 +311,7 @@ impl Build<'_> {
         )?))
     }
 
-    fn build_sort_shuffle<R>(&mut self) -> Result<Box<dyn Processor>>
+    fn build_bound_broadcast<R>(&mut self) -> Result<Box<dyn Processor>>
     where R: Rows + 'static {
         Ok(TransformSortBoundBroadcast::<R>::create(
             self.input.clone(),
@@ -355,7 +359,7 @@ impl RowsTypeVisitor for Build<'_> {
                 true => self.build_sort_exec::<LoserTreeSort<R>>(),
                 false => self.build_sort_exec::<HeapSort<R>>(),
             },
-            SortType::BoundBroadcast => self.build_sort_shuffle::<R>(),
+            SortType::BoundBroadcast => self.build_bound_broadcast::<R>(),
             SortType::Combine => self.build_sort_combine::<R>(),
         }
     }
