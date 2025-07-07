@@ -52,7 +52,8 @@ mod executor_stats_loom_tests {
 
 mod executor_stats_regular_tests {
     use std::sync::Arc;
-    use std::thread;
+
+    use databend_common_base::runtime::Thread;
 
     use super::*;
 
@@ -108,7 +109,7 @@ mod executor_stats_regular_tests {
         let handles: Vec<_> = (0..num_threads)
             .map(|_| {
                 let slot = slot.clone();
-                thread::spawn(move || {
+                Thread::spawn(move || {
                     for _ in 0..adds_per_thread {
                         slot.add(timestamp, 1);
                     }

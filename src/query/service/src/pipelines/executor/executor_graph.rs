@@ -28,6 +28,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
@@ -178,6 +179,7 @@ struct ExecutingGraph {
     finished_notify: Arc<WatchNotify>,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
+    executor_stats: ExecutorStats,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -193,6 +195,7 @@ impl ExecutingGraph {
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         Self::init_graph(&mut pipeline, &mut graph, &mut time_series_profile_builder);
+        let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -203,6 +206,7 @@ impl ExecutingGraph {
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
+            executor_stats,
         })
     }
 
@@ -218,7 +222,7 @@ impl ExecutingGraph {
         for pipeline in &mut pipelines {
             Self::init_graph(pipeline, &mut graph, &mut time_series_profile_builder);
         }
-
+        let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
@@ -229,6 +233,7 @@ impl ExecutingGraph {
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
+            executor_stats,
         })
     }
 
@@ -969,6 +974,13 @@ impl RunningGraph {
     /// Change the priority
     pub fn change_priority(&self, priority: u64) {
         self.0.max_points.store(priority, Ordering::SeqCst);
+    }
+
+    pub fn record_process_time(&self, elapsed_nanos: usize) {
+        self.0.executor_stats.record_process_time(elapsed_nanos);
+    }
+    pub fn record_process_rows(&self, rows: usize) {
+        self.0.executor_stats.record_process_rows(rows);
     }
 }
 
