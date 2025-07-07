@@ -147,7 +147,7 @@ fn process_outputs(
     required: &ColumnSet,
     schema: &DataSchema,
 ) -> Result<Vec<(IndexType, Option<RemoteExpr>)>> {
-    outputs
+    let mut vs = outputs
         .iter()
         .filter(|(index, _)| required.contains(index))
         .map(|(index, scalar_expr)| {
@@ -160,5 +160,8 @@ fn process_outputs(
                 Ok((*index, None))
             }
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()?;
+
+    vs.dedup_by_key(|(index, _)| *index);
+    Ok(vs)
 }

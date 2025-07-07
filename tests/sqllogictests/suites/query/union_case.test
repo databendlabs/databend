@@ -1,0 +1,87 @@
+statement ok
+CREATE OR REPLACE TABLE abc (
+    zj STRING,
+    djsj TIMESTAMP,
+    hymc STRING,
+    sqlxdm STRING,
+    sqlxmc STRING,
+    sqlbdj STRING,
+    sqlbdm STRING,
+    sqlbmc STRING,
+    sjsqlbdm STRING,
+    dsdm STRING,
+    dsmc STRING,
+    qxdm STRING,
+    qxmc STRING
+);
+
+statement ok
+INSERT INTO abc VALUES
+('001', '2024-01-15 10:00:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350000', '福建省', '', ''),
+('002', '2024-02-20 14:30:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350000', '福建省', '', ''),
+('003', '2024-03-10 09:15:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350000', '福建省', '', ''),
+('004', '2024-04-05 16:45:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350000', '福建省', '', ''),
+('005', '2024-01-25 11:20:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '', ''),
+('006', '2024-02-28 13:40:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '', ''),
+('007', '2024-03-15 10:30:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350200', '厦门市', '', ''),
+('008', '2024-04-10 15:20:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350200', '厦门市', '', ''),
+('009', '2024-01-30 09:45:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '350102', '鼓楼区'),
+('010', '2024-02-15 14:10:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '350103', '台江区'),
+('011', '2024-03-20 11:50:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350200', '厦门市', '350203', '思明区'),
+('012', '2024-04-15 16:30:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350200', '厦门市', '350205', '海沧区'),
+('101', '2023-01-15 10:00:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350000', '福建省', '', ''),
+('102', '2023-02-20 14:30:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350000', '福建省', '', ''),
+('103', '2023-03-10 09:15:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350000', '福建省', '', ''),
+('105', '2023-01-25 11:20:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '', ''),
+('106', '2023-02-28 13:40:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '', ''),
+('107', '2023-03-15 10:30:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350200', '厦门市', '', ''),
+('109', '2023-01-30 09:45:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '350102', '鼓楼区'),
+('110', '2023-02-15 14:10:00', '教育', 'SQ001', '投诉', '一级', 'LB001', '教育质量', 'SLB001', '350100', '福州市', '350103', '台江区'),
+('111', '2023-03-20 11:50:00', '医疗', 'SQ002', '建议', '一级', 'LB002', '医疗服务', 'SLB002', '350200', '厦门市', '350203', '思明区');
+
+
+statement ok
+create or replace table test3 as SELECT 'AK47' AS yjmk ,  ywwdz AS ywwdz2  FROM (SELECT '' AS ywwdz, '' AS sjqhdm, a.zbz AS zbz, CASE WHEN b.zbz IS NULL THEN - 1 ELSE round(a.zbz / b.zbz - 1, 6) * 100 END AS hbz, 1 AS pm, a.sjsqlbdm, '' AS dqwdmc, '' AS sjdqwdmc FROM (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, COUNT(DISTINCT zj) AS zbz FROM abc   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm) AS a LEFT OUTER JOIN (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, 3 AS zbz FROM abc) AS b ON a.hymc = b.hymc AND a.sqlxmc = b.sqlxmc AND a.sqlbdj = b.sqlbdj AND a.sqlbdm = b.sqlbdm AND a.sqlbmc = b.sqlbmc  UNION ALL SELECT  a.qxmc AS ywwdz, a.dsdm AS sjqhdm, a.zbz AS zbz, CASE WHEN b.zbz IS NULL THEN - 1 ELSE round(a.zbz / b.zbz - 1, 6) * 100 END AS hbz, 1 AS pm, a.sjsqlbdm, a.qxmc AS dqwdmc, a.dsmc AS sjdqwdmc FROM (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, qxdm, qxmc, dsdm, dsmc, COUNT(DISTINCT zj) AS zbz FROM abc AS t1   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, qxdm, qxmc, dsdm, dsmc) AS a LEFT OUTER JOIN (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, qxdm, qxmc, dsdm, COUNT(DISTINCT zj) AS zbz FROM abc AS t2   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, qxdm, qxmc, dsdm) AS b ON a.hymc = b.hymc AND a.sqlxmc = b.sqlxmc AND a.sqlbdj = b.sqlbdj AND a.sqlbdm = b.sqlbdm AND a.sqlbmc = b.sqlbmc AND a.qxdm = b.qxdm) AS t3;
+
+
+statement ok
+insert into test3 SELECT 'AK47' AS yjmk ,  ywwdz AS ywwdz2  FROM (SELECT '' AS ywwdz, '' AS sjqhdm, a.zbz AS zbz, CASE WHEN b.zbz IS NULL THEN - 1 ELSE round(a.zbz / b.zbz - 1, 6) * 100 END AS hbz, 1 AS pm, a.sjsqlbdm, '' AS dqwdmc, '' AS sjdqwdmc FROM (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, COUNT(DISTINCT zj) AS zbz FROM abc   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm) AS a LEFT OUTER JOIN (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, 3 AS zbz FROM abc) AS b ON a.hymc = b.hymc AND a.sqlxmc = b.sqlxmc AND a.sqlbdj = b.sqlbdj AND a.sqlbdm = b.sqlbdm AND a.sqlbmc = b.sqlbmc  UNION ALL SELECT  a.qxmc AS ywwdz, a.dsdm AS sjqhdm, a.zbz AS zbz, CASE WHEN b.zbz IS NULL THEN - 1 ELSE round(a.zbz / b.zbz - 1, 6) * 100 END AS hbz, 1 AS pm, a.sjsqlbdm, a.qxmc AS dqwdmc, a.dsmc AS sjdqwdmc FROM (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, qxdm, qxmc, dsdm, dsmc, COUNT(DISTINCT zj) AS zbz FROM abc AS t1   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, qxdm, qxmc, dsdm, dsmc) AS a LEFT OUTER JOIN (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, qxdm, qxmc, dsdm, COUNT(DISTINCT zj) AS zbz FROM abc AS t2   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, qxdm, qxmc, dsdm) AS b ON a.hymc = b.hymc AND a.sqlxmc = b.sqlxmc AND a.sqlbdj = b.sqlbdj AND a.sqlbdm = b.sqlbdm AND a.sqlbmc = b.sqlbmc AND a.qxdm = b.qxdm) AS t3;
+
+
+
+query TT rowsort
+SELECT 'AK47' AS yjmk ,  ywwdz AS ywwdz2  FROM (SELECT '' AS ywwdz, '' AS sjqhdm, a.zbz AS zbz, CASE WHEN b.zbz IS NULL THEN - 1 ELSE round(a.zbz / b.zbz - 1, 6) * 100 END AS hbz, 1 AS pm, a.sjsqlbdm, '' AS dqwdmc, '' AS sjdqwdmc FROM (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, COUNT(DISTINCT zj) AS zbz FROM abc   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm) AS a LEFT OUTER JOIN (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, 3 AS zbz FROM abc) AS b ON a.hymc = b.hymc AND a.sqlxmc = b.sqlxmc AND a.sqlbdj = b.sqlbdj AND a.sqlbdm = b.sqlbdm AND a.sqlbmc = b.sqlbmc  UNION ALL SELECT  a.qxmc AS ywwdz, a.dsdm AS sjqhdm, a.zbz AS zbz, CASE WHEN b.zbz IS NULL THEN - 1 ELSE round(a.zbz / b.zbz - 1, 6) * 100 END AS hbz, 1 AS pm, a.sjsqlbdm, a.qxmc AS dqwdmc, a.dsmc AS sjdqwdmc FROM (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, qxdm, qxmc, dsdm, dsmc, COUNT(DISTINCT zj) AS zbz FROM abc AS t1   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, sjsqlbdm, qxdm, qxmc, dsdm, dsmc) AS a LEFT OUTER JOIN (SELECT hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, qxdm, qxmc, dsdm, COUNT(DISTINCT zj) AS zbz FROM abc AS t2   GROUP BY hymc, sqlxdm, sqlxmc, sqlbdj, sqlbdm, sqlbmc, qxdm, qxmc, dsdm) AS b ON a.hymc = b.hymc AND a.sqlxmc = b.sqlxmc AND a.sqlbdj = b.sqlbdj AND a.sqlbdm = b.sqlbdm AND a.sqlbmc = b.sqlbmc AND a.qxdm = b.qxdm) AS t3;
+----
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 (empty)
+AK47 台江区
+AK47 思明区
+AK47 海沧区
+AK47 鼓楼区
