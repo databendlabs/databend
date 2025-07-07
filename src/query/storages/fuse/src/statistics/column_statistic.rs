@@ -43,7 +43,7 @@ pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u6
         vec![Scalar::Number(NumberScalar::Float64(
             DISTINCT_ERROR_RATE.into(),
         ))],
-        &[column.clone()],
+        &[column.clone().into()],
         rows,
         vec![],
     )?;
@@ -83,8 +83,8 @@ pub fn gen_columns_statistics(
                 let mut min = Scalar::Null;
                 let mut max = Scalar::Null;
 
-                let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows, vec![])?;
-                let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows, vec![])?;
+                let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
+                let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
 
                 if mins.len() > 0 {
                     min = if let Some(v) = mins.index(0) {

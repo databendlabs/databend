@@ -24,8 +24,6 @@ use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
-use super::run_ast_with_context;
-use super::TestContext;
 
 #[test]
 fn test_arithmetic() {
@@ -312,17 +310,11 @@ fn test_decimal() {
         ),
     ];
 
-    run_ast_with_context(
+    run_ast(
         file,
         "l_extendedprice + (1 - l_discount) - l_quantity",
-        TestContext {
-            columns: &columns,
-            ..Default::default()
-        },
+        &columns,
     );
 
-    run_ast_with_context(file, "1964831797.0000 - 0.0214642400000", TestContext {
-        columns: &columns,
-        ..Default::default()
-    })
+    run_ast(file, "1964831797.0000 - 0.0214642400000", &columns);
 }

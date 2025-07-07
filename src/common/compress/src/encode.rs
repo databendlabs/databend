@@ -183,7 +183,10 @@ impl CompressCodec {
         Ok(compress_bufs.concat())
     }
 
-    pub fn compress_all_zip(to_compress: &[u8]) -> databend_common_exception::Result<Vec<u8>> {
+    pub fn compress_all_zip(
+        to_compress: &[u8],
+        file_name: &str,
+    ) -> databend_common_exception::Result<Vec<u8>> {
         let mut cursor = Cursor::new(Vec::new());
 
         let mut zip = ZipWriter::new(&mut cursor);
@@ -192,7 +195,7 @@ impl CompressCodec {
             .unix_permissions(0o644);
 
         // zip for archive files
-        zip.start_file("tmp", options)
+        zip.start_file(file_name, options)
             .map_err(|e| ErrorCode::InvalidCompressionData(format!("zip start_file error: {e}")))?;
 
         zip.write_all(to_compress)

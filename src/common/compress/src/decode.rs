@@ -610,7 +610,7 @@ mod tests {
         let mut content = vec![0; 16 * 1024 * 1024];
         rng.fill_bytes(&mut content);
 
-        let compressed_content = CompressCodec::compress_all_zip(&content)?;
+        let compressed_content = CompressCodec::compress_all_zip(&content, "unload.csv")?;
         let result = DecompressDecoder::decompress_all_zip(&compressed_content)?;
 
         assert_eq!(result, content);

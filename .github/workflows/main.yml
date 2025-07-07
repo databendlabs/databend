@@ -45,7 +45,6 @@ jobs:
     with:
       build_profile: release
       runner_provider: aws
-      runner_capacity: spot
       license_type: enterprise
 
   # macos:

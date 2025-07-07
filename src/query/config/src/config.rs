@@ -1674,7 +1674,7 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "60")]
     pub http_handler_result_timeout_secs: u64,
 
-    #[clap(long, value_name = "VALUE", default_value = "3600")]
+    #[clap(long, value_name = "VALUE", default_value = "14400")]
     pub http_session_timeout_secs: u64,
 
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
@@ -1946,6 +1946,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     pub resources_management: Option<ResourcesManagementConfig>,
+
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub enable_queries_executor: bool,
 }
 
 impl Default for QueryConfig {
@@ -2047,6 +2050,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
             resources_management: self.resources_management,
+            enable_queries_executor: self.enable_queries_executor,
         })
     }
 }
@@ -2155,6 +2159,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
             resources_management: None,
+            enable_queries_executor: inner.enable_queries_executor,
         }
     }
 }

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::group_hash_columns;
 use databend_common_expression::DataBlock;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_pipeline_core::processors::Exchange;
 
 use super::WindowPartitionMeta;
@@ -43,7 +43,7 @@ impl Exchange for WindowPartitionExchange {
 
         // Extract the columns used for hash computation.
         let data_block = data_block.consume_convert_to_full();
-        let hash_cols = InputColumns::new_block_proxy(&self.hash_keys, &data_block);
+        let hash_cols = ProjectedBlock::project(&self.hash_keys, &data_block);
 
         // Compute the hash value for each row.
         let mut hashes = vec![0u64; num_rows];

@@ -22,6 +22,7 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateRegistry;
@@ -30,7 +31,7 @@ use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use itertools::Itertools;
@@ -74,26 +75,31 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        entries: ProjectedBlock,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
         let state = Self::get_state(place);
-        Self::init_columns(columns, state, Some(input_rows));
+        Self::init_columns(entries, state, Some(input_rows));
 
         match validity {
             Some(validity) => {
-                for (i, column) in columns.iter().enumerate() {
-                    column.iter().zip(validity.iter()).for_each(|(v, b)| {
-                        if b {
-                            state.columns[i].push(v.to_owned());
-                        }
-                    });
+                for (i, entry) in entries.iter().enumerate() {
+                    entry
+                        .downcast::<AnyType>()
+                        .unwrap()
+                        .iter()
+                        .zip(validity.iter())
+                        .for_each(|(v, b)| {
+                            if b {
+                                state.columns[i].push(v.to_owned());
+                            }
+                        });
                 }
             }
             None => {
-                for (i, column) in columns.iter().enumerate() {
-                    column.iter().for_each(|v| {
+                for (i, entry) in entries.iter().enumerate() {
+                    entry.downcast::<AnyType>().unwrap().iter().for_each(|v| {
                         state.columns[i].push(v.to_owned());
                     });
                 }
@@ -103,7 +109,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
         Self::init_columns(columns, state, None);
 
@@ -183,7 +189,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         self.inner.init_state(inner_place);
         self.inner.accumulate(
             inner_place,
-            InputColumns::new_block_proxy(&args, &block),
+            ProjectedBlock::project(&args, &block),
             None,
             num_rows,
         )?;
@@ -203,7 +209,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         }
     }
 
-    fn get_if_condition(&self, columns: InputColumns) -> Option<Bitmap> {
+    fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
         self.inner.get_if_condition(columns)
     }
 }
@@ -233,7 +239,7 @@ impl AggregateFunctionSortAdaptor {
             .write_state(state);
     }
 
-    fn init_columns(columns: InputColumns, state: &mut SortAggState, num_rows: Option<usize>) {
+    fn init_columns(columns: ProjectedBlock, state: &mut SortAggState, num_rows: Option<usize>) {
         if state.columns.is_empty() && state.data_types.is_empty() {
             state.columns = Vec::with_capacity(columns.len());
             state.data_types = Vec::with_capacity(columns.len());

@@ -539,9 +539,9 @@ set max_block_size = 2;
 query IT?
 select id, json_path_query(arr, '$[2, 1 to last -1]'), typeof(json_path_query(arr, '$[2, 1 to last -1]')) from t1
 ----
-1 3 number
-1 2 number
-1 3 number
+1 3 INTEGER
+1 2 INTEGER
+1 3 INTEGER
 
 query IT
 select id, json_path_query(arr, '$[*]?(@ > 1 && @ <= 3)') from t1

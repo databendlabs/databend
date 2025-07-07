@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_meta_kvapi::kvapi;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
@@ -28,5 +27,7 @@ async fn test_metasrv_kv_api() -> anyhow::Result<()> {
         test_contexts: Arc::new(Mutex::new(vec![])),
     };
 
-    kvapi::TestSuite {}.test_all(builder).await
+    databend_common_meta_kvapi_test_suite::TestSuite {}
+        .test_all(builder)
+        .await
 }

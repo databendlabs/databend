@@ -118,6 +118,8 @@ use itertools::Itertools;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
+use serde_json::json;
+use serde_json::to_string;
 use simsearch::SimSearch;
 use unicase::Ascii;
 
@@ -2871,9 +2873,9 @@ impl<'a> TypeChecker<'a> {
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if let Some(rewritten_func_result) =
-            self.try_rewrite_sugar_function(span, func_name, arguments)
-        {
+        if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
+            self.try_rewrite_sugar_function(span, func_name, arguments),
+        ) {
             return rewritten_func_result;
         }
 
@@ -3610,6 +3612,8 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("currentuser"),
             Ascii::new("current_user"),
             Ascii::new("current_role"),
+            Ascii::new("current_secondary_roles"),
+            Ascii::new("current_available_roles"),
             Ascii::new("connection_id"),
             Ascii::new("timezone"),
             Ascii::new("nullif"),
@@ -3637,7 +3641,7 @@ impl<'a> TypeChecker<'a> {
         FUNCTIONS
     }
 
-    fn try_rewrite_sugar_function(
+    async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -3676,6 +3680,60 @@ impl<'a> TypeChecker<'a> {
                     ),
                 }),
             ),
+            ("current_secondary_roles", &[]) => {
+                let mut res = self
+                    .ctx
+                    .get_all_effective_roles()
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<String>>();
+                res.sort();
+                let roles_comma_separated_string = res.iter().join(",");
+                let res = if self.ctx.get_secondary_roles().is_none() {
+                    json!({
+                        "roles": roles_comma_separated_string,
+                        "value": "ALL"
+                    })
+                } else {
+                    json!({
+                        "roles": roles_comma_separated_string,
+                        "value": "None"
+                    })
+                };
+                match to_string(&res) {
+                    Ok(res) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(res),
+                    })),
+                    Err(e) => Some(Err(ErrorCode::IllegalRole(format!(
+                        "Failed to serialize secondary roles into JSON string: {}",
+                        e
+                    )))),
+                }
+            }
+            ("current_available_roles", &[]) => {
+                let mut res = self
+                    .ctx
+                    .get_all_available_roles()
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<String>>();
+                res.sort();
+                match to_string(&res) {
+                    Ok(res) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(res),
+                    })),
+                    Err(e) => Some(Err(ErrorCode::IllegalRole(format!(
+                        "Failed to serialize available roles into JSON string: {}",
+                        e
+                    )))),
+                }
+            }
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
                 value: Literal::String(self.ctx.get_connection_id()),
@@ -4376,7 +4434,15 @@ impl<'a> TypeChecker<'a> {
         } else {
             Cow::Borrowed(like_str)
         };
-        if check_const(&new_like_str) {
+        if check_percent(&new_like_str) {
+            // Convert to `a is not null`
+            let is_not_null = Expr::IsNull {
+                span: None,
+                expr: Box::new(left.clone()),
+                not: true,
+            };
+            self.resolve(&is_not_null)
+        } else if check_const(&new_like_str) {
             // Convert to equal comparison
             self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
         } else if check_prefix(&new_like_str) {
@@ -5702,6 +5768,11 @@ pub fn validate_function_arg(
             }
         }
     }
+}
+
+// optimize special cases for like expression
+fn check_percent(like_str: &str) -> bool {
+    !like_str.is_empty() && like_str.chars().all(|c| c == '%')
 }
 
 // Some check functions for like expression

@@ -135,8 +135,8 @@ impl IEJoinState {
             return false;
         }
 
-        let left_l1_column = left_block.get_by_offset(0).to_column();
-        let right_l1_column = right_block.get_by_offset(0).to_column();
+        let left_l1_column = left_block.get_by_offset(0);
+        let right_l1_column = right_block.get_by_offset(0);
         // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
         let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) = match self.l1_order {
             true => {

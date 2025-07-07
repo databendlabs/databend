@@ -14,12 +14,10 @@ async-trait = { workspace = true }
 databend-common-meta-app-types = { workspace = true }
 databend-common-meta-types = { workspace = true }
 display-more = { workspace = true }
-fastrace = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
 
 [lints]
 workspace = true

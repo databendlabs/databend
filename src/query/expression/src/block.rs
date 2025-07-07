@@ -23,9 +23,11 @@ use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
 use crate::schema::DataSchema;
+use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::DataType;
+use crate::types::ValueType;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::ColumnSet;
@@ -79,6 +81,16 @@ impl BlockEntry {
     pub fn remove_nullable(self) -> Self {
         match self {
             BlockEntry::Column(Column::Nullable(col)) => col.column().clone().into(),
+            BlockEntry::Column(_) => self,
+            BlockEntry::Const(scalar, DataType::Nullable(inner), num_rows) => {
+                if scalar.is_null() {
+                    let mut builder = ColumnBuilder::with_capacity(&inner, 1);
+                    builder.push_default();
+                    BlockEntry::Const(builder.build_scalar(), *inner, num_rows)
+                } else {
+                    BlockEntry::Const(scalar, *inner, num_rows)
+                }
+            }
             _ => self,
         }
     }
@@ -149,10 +161,34 @@ impl BlockEntry {
         }
     }
 
-    pub fn num_rows(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
             BlockEntry::Const(_, _, n) => *n,
             BlockEntry::Column(column) => column.len(),
+        }
+    }
+
+    pub fn slice(&self, range: Range<usize>) -> Self {
+        assert!(
+            range.end <= self.len(),
+            "range {range:?} out of len {}",
+            self.len()
+        );
+        match self {
+            BlockEntry::Const(scalar, data_type, _) => {
+                BlockEntry::Const(scalar.clone(), data_type.clone(), range.end - range.start)
+            }
+            BlockEntry::Column(c) => c.slice(range).into(),
+        }
+    }
+
+    pub fn downcast<T: AccessType>(&self) -> Option<ColumnView<T>> {
+        match self {
+            BlockEntry::Const(scalar, _, num_rows) => T::try_downcast_scalar(&scalar.as_ref())
+                .map(|s| ColumnView::Const(T::to_owned_scalar(s), *num_rows)),
+            BlockEntry::Column(column) => {
+                T::try_downcast_column(column).map(|c| ColumnView::Column(c))
+            }
         }
     }
 }
@@ -172,6 +208,96 @@ impl TryFrom<Value<AnyType>> for BlockEntry {
         match value {
             Value::Scalar(scalar) => Err(scalar),
             Value::Column(column) => Ok(column.into()),
+        }
+    }
+}
+
+#[derive(Debug, EnumAsInner)]
+pub enum ColumnView<T: AccessType> {
+    Const(T::Scalar, usize),
+    Column(T::Column),
+}
+
+impl<T: AccessType> ColumnView<T> {
+    pub fn len(&self) -> usize {
+        match self {
+            ColumnView::Const(_, num_rows) => *num_rows,
+            ColumnView::Column(column) => T::column_len(column),
+        }
+    }
+
+    pub fn iter(&self) -> ColumnViewIter<T> {
+        match self {
+            ColumnView::Const(scalar, num_rows) => {
+                ColumnViewIter::Const(T::to_scalar_ref(scalar), *num_rows)
+            }
+            ColumnView::Column(column) => ColumnViewIter::Column(T::iter_column(column)),
+        }
+    }
+
+    pub fn index(&self, i: usize) -> Option<T::ScalarRef<'_>> {
+        match self {
+            ColumnView::Const(scalar, n) => {
+                if i < *n {
+                    Some(T::to_scalar_ref(scalar))
+                } else {
+                    None
+                }
+            }
+            ColumnView::Column(column) => T::index_column(column, i),
+        }
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn index_unchecked(&self, i: usize) -> T::ScalarRef<'_> {
+        debug_assert!(i < self.len());
+        match self {
+            ColumnView::Const(scalar, _) => T::to_scalar_ref(scalar),
+            ColumnView::Column(column) => T::index_column_unchecked(column, i),
+        }
+    }
+}
+
+impl<T: ValueType> ColumnView<T> {
+    pub fn upcast(self, data_type: DataType) -> BlockEntry {
+        match self {
+            ColumnView::Const(scalar, num_rows) => {
+                let scalar = T::upcast_scalar_with_type(scalar, &data_type);
+                BlockEntry::new_const_column(data_type, scalar, num_rows)
+            }
+            ColumnView::Column(column) => T::upcast_column_with_type(column, &data_type).into(),
+        }
+    }
+}
+
+pub enum ColumnViewIter<'a, T: AccessType> {
+    Column(T::ColumnIterator<'a>),
+    Const(T::ScalarRef<'a>, usize),
+}
+
+impl<'a, T: AccessType> Iterator for ColumnViewIter<'a, T> {
+    type Item = T::ScalarRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            ColumnViewIter::Column(iter) => iter.next(),
+            ColumnViewIter::Const(scalar, n) => {
+                if *n == 0 {
+                    None
+                } else {
+                    *n -= 1;
+                    Some(scalar.clone())
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            ColumnViewIter::Column(iter) => iter.size_hint(),
+            ColumnViewIter::Const(_, n) => (*n, Some(*n)),
         }
     }
 }
@@ -273,8 +399,8 @@ impl DataBlock {
         let num_rows = columns[0].len();
         debug_assert!(columns.iter().all(|c| c.len() == num_rows));
 
-        let columns = columns.into_iter().map(|col| col.into()).collect();
-        DataBlock::new(columns, num_rows)
+        let entries = columns.into_iter().map(|col| col.into()).collect();
+        DataBlock::new(entries, num_rows)
     }
 
     #[inline]
@@ -408,12 +534,7 @@ impl DataBlock {
         let entries = self
             .entries
             .iter()
-            .map(|entry| match entry {
-                BlockEntry::Const(scalar, data_type, _) => {
-                    BlockEntry::Const(scalar.clone(), data_type.clone(), range.end - range.start)
-                }
-                BlockEntry::Column(c) => c.slice(range.clone()).into(),
-            })
+            .map(|entry| entry.slice(range.clone()))
             .collect();
         Self {
             entries,

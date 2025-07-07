@@ -161,6 +161,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
+
     pub(in crate::sessions) table_meta_timestamps: Arc<Mutex<HashMap<u64, TableMetaTimestamps>>>,
 
     pub(in crate::sessions) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
@@ -246,7 +247,6 @@ impl QueryContextShared {
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
             table_meta_timestamps: Arc::new(Mutex::new(HashMap::new())),
-
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
@@ -432,6 +432,10 @@ impl QueryContextShared {
 
     pub fn get_current_role(&self) -> Option<RoleInfo> {
         self.session.get_current_role()
+    }
+
+    pub fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.session.get_secondary_roles()
     }
 
     /// Get all tables that already attached in this query.
@@ -631,6 +635,10 @@ impl QueryContextShared {
     }
 
     pub fn attach_query_str(&self, kind: QueryKind, query: String) {
+        // `create view as view_query` the view_query should not cover create view
+        if !self.get_query_str().is_empty() {
+            return;
+        }
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(
@@ -649,14 +657,18 @@ impl QueryContextShared {
 
     pub fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
         {
-            let mut running_query_hash = self.running_query_text_hash.write();
-            *running_query_hash = Some(text_hash);
+            if self.get_query_text_hash().is_empty() {
+                let mut running_query_hash = self.running_query_text_hash.write();
+                *running_query_hash = Some(text_hash);
+            }
         }
 
         {
-            let mut running_query_parameterized_hash =
-                self.running_query_parameterized_hash.write();
-            *running_query_parameterized_hash = Some(parameterized_hash);
+            if self.get_query_parameterized_hash().is_empty() {
+                let mut running_query_parameterized_hash =
+                    self.running_query_parameterized_hash.write();
+                *running_query_parameterized_hash = Some(parameterized_hash);
+            }
         }
     }
 
@@ -844,10 +856,6 @@ impl QueryContextShared {
         }
 
         nodes_peek_memory_usage
-    }
-
-    pub fn get_table_meta_timestamps(&self) -> Arc<Mutex<HashMap<u64, TableMetaTimestamps>>> {
-        self.table_meta_timestamps.clone()
     }
 
     pub fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {

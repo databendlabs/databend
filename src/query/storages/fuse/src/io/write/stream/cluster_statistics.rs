@@ -131,9 +131,9 @@ impl ClusterStatisticsState {
             .iter()
             .map(|&i| block.get_by_offset(i).to_column())
             .collect();
-        let tuple = Column::Tuple(cols);
-        let (min, _) = eval_aggr("min", vec![], &[tuple.clone()], num_rows, vec![])?;
-        let (max, _) = eval_aggr("max", vec![], &[tuple.clone()], num_rows, vec![])?;
+        let entries = [Column::Tuple(cols).into()];
+        let (min, _) = eval_aggr("min", vec![], &entries, num_rows, vec![])?;
+        let (max, _) = eval_aggr("max", vec![], &entries, num_rows, vec![])?;
         assert_eq!(min.len(), 1);
         assert_eq!(max.len(), 1);
         self.mins.push(min.index(0).unwrap().to_owned());

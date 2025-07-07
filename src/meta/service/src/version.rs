@@ -117,6 +117,7 @@ pub(crate) mod raft {
             del_provide(("install_snapshot", 0), "2024-05-21", (1,  2, 479)),
             del_provide(("install_snapshot", 2), "2024-07-02", (1,  2, 552)),
             add_provide(("install_snapshot", 3), "2024-07-02", (1,  2, 552)),
+            del_provide(("install_snapshot", 1), "2025-07-02", (1,  2, 769)),
         ];
 
         /// The client features that raft server depends on.

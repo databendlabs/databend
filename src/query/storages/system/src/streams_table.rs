@@ -30,7 +30,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -51,7 +50,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::extract_leveled_strings;
 use crate::util::generate_catalog_meta;
 
 pub type FullStreamsTable = StreamsTable<true>;
@@ -111,19 +110,10 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
 
         let mut dbs = Vec::new();
         if let Some(push_downs) = &push_downs {
-            let mut db_name = Vec::new();
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(database) = scalar {
-                            if !db_name.contains(database) {
-                                db_name.push(database.clone());
-                            }
-                        }
-                    }
-                    Ok(())
-                });
+                let func_ctx = ctx.get_function_context()?;
+                let (db_name, _) = extract_leveled_strings(&expr, &["database"], &func_ctx)?;
                 for db in db_name {
                     match ctl.get_database(&tenant, db.as_str()).await {
                         Ok(database) => dbs.push(database),

@@ -20,6 +20,10 @@ show catalogs where name='ctl';
 ----
 ctl
 
+statement ok
+create or replace database default.system_db_test;
+
+## should not display system_db_test
 query T
 show databases from ctl;
 ----
@@ -27,6 +31,9 @@ information_schema
 system
 test
 tpch
+
+statement ok
+drop database if exists default.system_db_test;
 
 statement error 1003
 use aa;

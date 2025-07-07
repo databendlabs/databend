@@ -14,38 +14,11 @@
 
 use anyerror::AnyError;
 
-use crate::protobuf::SnapshotChunkRequest;
 use crate::protobuf::SnapshotChunkRequestV003;
-use crate::protobuf::SnapshotChunkV1;
 use crate::protobuf::SnapshotResponseV003;
-use crate::raft_types::InstallSnapshotRequest;
 use crate::raft_types::NetworkError;
 use crate::raft_types::SnapshotMeta;
 use crate::raft_types::Vote;
-
-impl SnapshotChunkRequest {
-    /// Return the length of the data in the chunk.
-    pub fn data_len(&self) -> u64 {
-        self.chunk.as_ref().map_or(0, |x| x.data.len()) as u64
-    }
-
-    pub fn new_v1(r: InstallSnapshotRequest) -> Self {
-        let meta = (r.vote, r.meta);
-        let rpc_meta = serde_json::to_string(&meta).unwrap();
-
-        let chunk_v1 = SnapshotChunkV1 {
-            offset: r.offset,
-            done: r.done,
-            data: r.data,
-        };
-
-        SnapshotChunkRequest {
-            ver: 1,
-            rpc_meta,
-            chunk: Some(chunk_v1),
-        }
-    }
-}
 
 impl SnapshotChunkRequestV003 {
     /// Build the last chunk of a snapshot stream, which contains vote and snapshot meta, without data.

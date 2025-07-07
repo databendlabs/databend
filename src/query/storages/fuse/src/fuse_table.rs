@@ -156,8 +156,8 @@ pub struct FuseTable {
 
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
-// default schema refreshing timeout is 5 seconds.
 impl FuseTable {
+    // TODO rename these creators
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
     }
@@ -491,7 +491,9 @@ impl FuseTable {
     ///   1. Number of snapshots to keep (from table option or setting)
     ///   2. Time-based retention period (if snapshot count is not specified)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        let policy =
+        let policy = if self.is_transient() {
+            RetentionPolicy::ByNumOfSnapshotsToKeep(1)
+        } else {
             // Try to get number of snapshots to keep
             if let Some(num_snapshots) = self.try_get_policy_by_num_snapshots_to_keep(ctx)? {
                 RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize)
@@ -499,7 +501,8 @@ impl FuseTable {
                 // Fall back to time-based retention policy
                 let duration = self.get_data_retention_period(ctx)?;
                 RetentionPolicy::ByTimePeriod(duration)
-            };
+            }
+        };
 
         Ok(policy)
     }

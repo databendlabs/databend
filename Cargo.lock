@@ -3730,6 +3730,7 @@ dependencies = [
  "logcall",
  "once_cell",
  "parking_lot 0.12.3",
+ "pretty_assertions",
  "prost",
  "rand 0.8.5",
  "semver",
@@ -3771,11 +3772,22 @@ dependencies = [
  "databend-common-meta-app-types",
  "databend-common-meta-types",
  "display-more",
- "fastrace",
  "futures-util",
  "log",
  "serde",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "databend-common-meta-kvapi-test-suite"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "databend-common-meta-kvapi",
+ "databend-common-meta-types",
+ "display-more",
+ "fastrace",
+ "log",
  "tokio",
 ]
 
@@ -3825,13 +3837,11 @@ dependencies = [
  "futures-async-stream",
  "futures-util",
  "hostname",
- "itertools 0.13.0",
  "log",
  "map-api",
  "maplit",
  "num",
  "openraft",
- "ordq",
  "pretty_assertions",
  "raft-log",
  "rmp-serde",
@@ -3906,6 +3916,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
+ "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
  "databend-meta",
@@ -3941,7 +3952,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "tokio",
  "tonic",
  "tonic-build",
 ]
@@ -4193,6 +4203,7 @@ dependencies = [
  "regex",
  "roaring",
  "serde",
+ "serde_json",
  "sha2",
  "similar",
  "simsearch",
@@ -5111,6 +5122,7 @@ dependencies = [
  "databend-common-meta-cache",
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
+ "databend-common-meta-kvapi-test-suite",
  "databend-common-meta-raft-store",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
@@ -5953,8 +5965,8 @@ dependencies = [
 
 [[package]]
 name = "display-more"
-version = "0.1.3"
-source = "git+https://github.com/databendlabs/display-more?tag=v0.1.3#c4390e0a5136617e49da28141403204e01edc4c9"
+version = "0.2.0"
+source = "git+https://github.com/databendlabs/display-more?tag=v0.2.0#8a3e8351a72b9c6ac30f6ac4f6948abfd2c8c0b3"
 dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
@@ -9388,8 +9400,9 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.5.1"
-source = "git+https://github.com/databendlabs/jsonb?rev=dcaf261#dcaf261df0f2a41ce9029a91444611c1d401e390"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "153dfebb6ad4484c84a5ae765a18976bf476b8a3f5165ce987aedd59d1f1e6c8"
 dependencies = [
  "byteorder",
  "ethnum",
@@ -11163,16 +11176,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ordq"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e535e05b861598cac4abfbe696573e5b0ae72ca55f4c55ec02a3dd22cef2faa"
-dependencies = [
- "crossbeam-channel",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12791,9 +12794,9 @@ checksum = "e3a8614ee435691de62bcffcf4a66d91b3594bf1428a5722e79103249a095690"
 
 [[package]]
 name = "reqsign"
-version = "0.16.3"
+version = "0.16.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9323c0afb30e54f793f4705b10c890395bccc87c6e6ea62c4e7e82d09a380dc6"
+checksum = "43451dbf3590a7590684c25fb8d12ecdcc90ed3ac123433e500447c7d77ed701"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12818,6 +12821,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "tokio",
 ]
 
 [[package]]

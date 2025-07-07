@@ -16,6 +16,6 @@ mod alter_table;
 mod external;
 mod global_history_log;
 mod meta;
-mod session;
+pub mod session;
 
 pub use global_history_log::GlobalHistoryLog;

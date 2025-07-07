@@ -45,7 +45,7 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::InputColumns;
+use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 
@@ -474,20 +474,19 @@ where
     fn accumulate(
         &self,
         place: AggrState,
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<State>();
-        match &columns[0] {
-            Column::Nullable(box nullable_column) => {
-                let column = T::try_downcast_column(&nullable_column.column).unwrap();
-                state.add_batch(&column, Some(&nullable_column.validity))
-            }
-            _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
-                state.add_batch(&column, None)
-            }
+        let entry = &columns[0];
+        if entry.data_type().is_nullable() {
+            let nullable_column =
+                NullableType::<T>::try_downcast_column(&entry.to_column()).unwrap();
+            state.add_batch(nullable_column.column(), Some(nullable_column.validity()))
+        } else {
+            let column = T::try_downcast_column(&entry.to_column()).unwrap();
+            state.add_batch(&column, None)
         }
     }
 
@@ -495,15 +494,15 @@ where
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        columns: InputColumns,
+        columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        match &columns[0] {
+        match &columns[0].to_column() {
             Column::Nullable(box nullable_column) => {
-                let column = T::try_downcast_column(&nullable_column.column).unwrap();
+                let column = T::try_downcast_column(nullable_column.column()).unwrap();
                 let column_iter = T::iter_column(&column);
                 column_iter
-                    .zip(nullable_column.validity.iter().zip(places.iter()))
+                    .zip(nullable_column.validity().iter().zip(places.iter()))
                     .for_each(|(v, (valid, place))| {
                         let state = AggrState::new(*place, loc).get::<State>();
                         if valid {
@@ -513,8 +512,8 @@ where
                         }
                     });
             }
-            _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
+            column => {
+                let column = T::try_downcast_column(column).unwrap();
                 let column_iter = T::iter_column(&column);
                 column_iter.zip(places.iter()).for_each(|(v, place)| {
                     let state = AggrState::new(*place, loc).get::<State>();
@@ -526,21 +525,21 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
-        match &columns[0] {
+        match &columns[0].to_column() {
             Column::Nullable(box nullable_column) => {
-                let valid = nullable_column.validity.get_bit(row);
+                let valid = nullable_column.validity().get_bit(row);
                 if valid {
-                    let column = T::try_downcast_column(&nullable_column.column).unwrap();
+                    let column = T::try_downcast_column(nullable_column.column()).unwrap();
                     let v = T::index_column(&column, row);
                     state.add(v);
                 } else {
                     state.add(None);
                 }
             }
-            _ => {
-                let column = T::try_downcast_column(&columns[0]).unwrap();
+            column => {
+                let column = T::try_downcast_column(column).unwrap();
                 let v = T::index_column(&column, row);
                 state.add(v);
             }

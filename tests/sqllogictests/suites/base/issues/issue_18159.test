@@ -1,0 +1,38 @@
+# https://github.com/databendlabs/databend/issues/18159
+# bug: transient table no work as expected inside explicit transaction
+
+statement ok
+create or replace database issue_18159
+
+statement ok
+use issue_18159
+
+statement ok
+create or replace transient table c( c int);
+
+statement ok
+insert into c values(1);
+
+statement ok
+begin;
+
+statement ok
+delete from c where c = 1;
+
+statement ok
+insert into c values(2);
+
+statement ok
+insert into c values(3);
+
+statement ok
+commit;
+
+query T
+select * from c order by c;
+----
+2
+3
+
+statement ok
+drop database issue_18159

@@ -115,16 +115,15 @@ async fn get_block_filter(fixture: &TestFixture, columns: &[String]) -> Result<B
         .await
         .transpose()?
         .unwrap();
-    let path = block.columns()[0].to_column().remove_nullable();
-    let path_scalar = path.as_string().unwrap().index(0).unwrap();
-    let length = block.columns()[1].to_column();
-    let length_scalar = length.as_number().unwrap().index(0).unwrap();
+    let path = block.get_by_offset(0).index(0).unwrap();
+    let path = *path.as_string().unwrap();
+    let length = block.get_by_offset(1).index(0).unwrap();
 
     load_bloom_filter_by_columns(
         DataOperator::instance().operator(),
         columns,
-        path_scalar,
-        *length_scalar.as_u_int64().unwrap(),
+        path,
+        *length.as_number().unwrap().as_u_int64().unwrap(),
     )
     .await
 }

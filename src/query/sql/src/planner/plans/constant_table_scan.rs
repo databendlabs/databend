@@ -162,7 +162,13 @@ impl Operator for ConstantTableScan {
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
-            let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows, vec![])?;
+            let (mins, _) = eval_aggr(
+                "min",
+                vec![],
+                &[value.clone().into()],
+                self.num_rows,
+                vec![],
+            )?;
             let min = if let Some(v) = mins.index(0) {
                 match Datum::from_scalar(v.to_owned()) {
                     Some(val) => val,
@@ -173,7 +179,13 @@ impl Operator for ConstantTableScan {
             } else {
                 continue;
             };
-            let (maxs, _) = eval_aggr("max", vec![], &[value.clone()], self.num_rows, vec![])?;
+            let (maxs, _) = eval_aggr(
+                "max",
+                vec![],
+                &[value.clone().into()],
+                self.num_rows,
+                vec![],
+            )?;
             let max = if let Some(v) = maxs.index(0) {
                 match Datum::from_scalar(v.to_owned()) {
                     Some(val) => val,
@@ -188,7 +200,7 @@ impl Operator for ConstantTableScan {
             let distinct_values = eval_aggr(
                 "approx_count_distinct",
                 vec![],
-                &[value.clone()],
+                &[value.clone().into()],
                 self.num_rows,
                 vec![],
             )?;

@@ -552,6 +552,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }
 
+    pub fn get_enable_collect_column_statistics(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_collect_column_statistics")? != 0)
+    }
+
     pub fn get_enable_expand_roles(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_expand_roles")? != 0)
     }
@@ -800,8 +804,8 @@ impl Settings {
         self.try_get_u64("idle_transaction_timeout_secs")
     }
 
-    pub fn get_enable_experimental_queries_executor(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_queries_executor")? == 1)
+    pub fn get_use_legacy_query_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_legacy_query_executor")? == 1)
     }
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {

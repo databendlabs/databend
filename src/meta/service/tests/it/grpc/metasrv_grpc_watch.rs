@@ -523,12 +523,8 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 1)));
-            let want2 = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(now_sec + 2)));
             let msg = client_stream.message().await?.unwrap();
-            assert!(Some(want.clone()) == msg.event || Some(want2.clone()) == msg.event,
-                    "expect {:?} equals {:?} or {:?}; the expire time is not accurate, so we need to check both",
-                msg.event, want, want2
-            );
+            assert!(msg.event.unwrap().close_to(&want, Duration::from_secs(2)));
         }
 
         // Check event generated when applying the txn
@@ -561,20 +557,30 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         fn tidy(mut ev: Event) -> Event {
             if let Some(ref mut prev) = ev.prev {
                 if let Some(ref mut meta) = prev.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
+                    meta.expire_at = meta.expire_at.map(tidy_timestamp);
                 }
             }
             if let Some(ref mut current) = ev.current {
                 if let Some(ref mut meta) = current.meta {
-                    meta.expire_at = meta.expire_at.map(|x| x / 10 * 10);
+                    meta.expire_at = meta.expire_at.map(tidy_timestamp);
                 }
             }
             ev
         }
 
+        fn tidy_timestamp(x: u64) -> u64 {
+            if x > 100_000_000_000 {
+                // tidy the timestamp in millis
+                x / 10_000 * 10_000
+            } else {
+                // tidy the timestamp in seconds
+                x / 10 * 10
+            }
+        }
+
         for ev in watch_events {
             let msg = client_stream.message().await?.unwrap();
-            assert_eq!(Some(tidy(ev)), msg.event.map(tidy));
+            assert!(tidy(ev).close_to(&tidy(msg.event.unwrap()), Duration::from_secs(2)));
         }
     }
 

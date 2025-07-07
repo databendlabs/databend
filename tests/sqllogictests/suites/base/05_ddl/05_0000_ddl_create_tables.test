@@ -681,3 +681,6 @@ query
 select '\'0\'' = a from t
 ----
 1
+
+statement error 1075
+create or replace table t(id int) compression='xxxx';
