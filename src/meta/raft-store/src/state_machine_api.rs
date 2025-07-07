@@ -50,20 +50,6 @@ where T: SMEventSender
 pub trait StateMachineApi: Send + Sync {
     type Map: MapApi<String, KVMeta> + MapApi<ExpireKey, KVMeta> + 'static;
 
-    /// Returns the current expire key cursor position.
-    ///
-    /// The expiry key cursor marks a boundary in the key space:
-    /// - All keys before this cursor (exclusive) have already been processed and deleted
-    /// - This cursor position is used to track progress when incrementally cleaning up expired keys
-    fn get_expire_cursor(&self) -> ExpireKey;
-
-    /// Updates the expiry key cursor position.
-    ///
-    /// This method is called after a batch of expired keys have been processed and deleted.
-    /// The new cursor position indicates that all keys before it (exclusive) have been
-    /// successfully cleaned up.
-    fn set_expire_cursor(&mut self, cursor: ExpireKey);
-
     /// Returns a reference to the map that stores application data.
     ///
     /// This method provides read-only access to the underlying key-value store

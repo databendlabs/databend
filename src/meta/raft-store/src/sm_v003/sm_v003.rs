@@ -46,14 +46,6 @@ pub struct SMV003 {
 impl StateMachineApi for SMV003 {
     type Map = LeveledMap;
 
-    fn get_expire_cursor(&self) -> ExpireKey {
-        self.expire_cursor
-    }
-
-    fn set_expire_cursor(&mut self, cursor: ExpireKey) {
-        self.expire_cursor = cursor;
-    }
-
     fn map_ref(&self) -> &Self::Map {
         &self.levels
     }

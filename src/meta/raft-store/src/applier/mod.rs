@@ -688,8 +688,6 @@ where SM: StateMachineApi + 'static
             }
         }
 
-        self.sm.update_expire_cursor(log_time_ms);
-
         Ok(())
     }
 
