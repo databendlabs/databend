@@ -17,7 +17,6 @@ mod cluster_statistics;
 mod column_ndv_estimator;
 mod column_statistics_builder;
 mod column_statistics_state;
-mod virtual_column_builder;
 
 pub(crate) use block_builder::StreamBlockBuilder;
 pub(crate) use block_builder::StreamBlockProperties;
@@ -27,4 +26,3 @@ pub(crate) use column_statistics_builder::create_column_stats_builder;
 pub(crate) use column_statistics_builder::ColumnStatisticsBuilder;
 pub(crate) use column_statistics_builder::ColumnStatsOps;
 pub(crate) use column_statistics_state::ColumnStatisticsState;
-pub(crate) use virtual_column_builder::VirtualColumnWriter;
