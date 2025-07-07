@@ -19,13 +19,16 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::filter_helper::FilterHelpers;
+use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
+use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
+use databend_common_expression::Expr;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -41,7 +44,6 @@ use databend_common_meta_app::tenant::Tenant;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
 use crate::util::generate_catalog_meta;
 
 pub struct LocksTable {
@@ -88,18 +90,30 @@ impl AsyncSystemTable for LocksTable {
             if let Some(push_downs) = &push_downs {
                 if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                    find_eq_filter(&expr, &mut |col_name, scalar| {
-                        if col_name == "table_id" {
-                            if let Scalar::Number(s) = scalar {
-                                if let Some(v) = s.as_u_int64() {
-                                    if !table_ids.contains(v) {
-                                        table_ids.push(*v);
-                                    }
-                                }
+                    let func_ctx = ctx.get_function_context()?;
+
+                    let leveld_results = FilterHelpers::find_leveled_eq_filters(
+                        &expr,
+                        &["table_id"],
+                        &func_ctx,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+
+                    for scalars in leveld_results {
+                        for r in scalars.iter() {
+                            let e = Expr::Constant(Constant {
+                                span: None,
+                                scalar: r.clone(),
+                                data_type: r.as_ref().infer_data_type(),
+                            });
+
+                            if let Ok(s) =
+                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                            {
+                                table_ids.push(s);
                             }
                         }
-                        Ok(())
-                    });
+                    }
                 }
             }
 

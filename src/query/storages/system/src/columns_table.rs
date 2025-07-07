@@ -51,7 +51,7 @@ use log::warn;
 use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_database_table_filters;
+use crate::util::extract_leveled_strings;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -352,7 +352,7 @@ pub(crate) async fn dump_tables(
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
             (filtered_db_names, filtered_table_names) =
-                find_database_table_filters(&expr, &func_ctx)?;
+                extract_leveled_strings(&expr, &["database", "table"], &func_ctx)?;
         }
     }
 
