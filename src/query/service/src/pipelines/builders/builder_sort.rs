@@ -284,7 +284,7 @@ impl SortPipelineBuilder {
         })?;
 
         pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(builder.build_exec(input, output)?))
+            Ok(ProcessorPtr::create(builder.build_restore(input, output)?))
         })?;
 
         add_range_shuffle_route(pipeline)?;
@@ -347,7 +347,11 @@ impl SortPipelineBuilder {
             max_block_size,
             self.ctx.clone(),
             self.broadcast_id.unwrap(),
-        )
+        )?;
+
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(builder.build_restore(input, output)?))
+        })
     }
 
     fn build_merge_sort(&self, pipeline: &mut Pipeline, order_col_generated: bool) -> Result<()> {

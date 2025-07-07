@@ -31,6 +31,7 @@ use super::SortCollectedMeta;
 use crate::pipelines::processors::transforms::sort::sort_spill::OutputData;
 
 pub struct TransformSortRestore<A: SortAlgorithm> {
+    input: Vec<SortCollectedMeta>,
     output: Option<DataBlock>,
 
     /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
@@ -51,6 +52,7 @@ where A: SortAlgorithm + Send + 'static
         output_order_col: bool,
     ) -> Result<HookTransformer<Self>> {
         Ok(HookTransformer::new(input, output, Self {
+            input: Vec::new(),
             output: None,
             remove_order_col: !output_order_col,
             base,
@@ -73,8 +75,7 @@ where
             .take_meta()
             .and_then(SortCollectedMeta::downcast_from)
             .expect("require a SortCollectedMeta");
-
-        self.inner = Some(SortSpill::<A>::from_meta(self.base.clone(), meta));
+        self.input.push(meta);
         Ok(())
     }
 
@@ -82,8 +83,8 @@ where
         Ok(self.output.take())
     }
 
-    fn need_process(&self, _: bool) -> Option<Event> {
-        if self.inner.is_some() {
+    fn need_process(&self, input_finished: bool) -> Option<Event> {
+        if input_finished && (self.inner.is_some() || !self.input.is_empty()) {
             Some(Event::Async)
         } else {
             None
@@ -92,9 +93,26 @@ where
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        let Some(spill_sort) = &mut self.inner else {
-            unreachable!()
+        let spill_sort = match &mut self.inner {
+            Some(inner) => inner,
+            None => {
+                debug_assert!(!self.input.is_empty());
+                let sequences = self
+                    .input
+                    .iter_mut()
+                    .flat_map(|meta| meta.sequences.drain(..))
+                    .collect();
+
+                let meta = self.input.pop().unwrap();
+                self.input.clear();
+                self.inner
+                    .insert(SortSpill::from_meta(self.base.clone(), SortCollectedMeta {
+                        sequences,
+                        ..meta
+                    }))
+            }
         };
+
         let OutputData {
             block,
             bound,

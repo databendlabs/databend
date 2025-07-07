@@ -41,7 +41,6 @@ use super::sort_execute::TransformSortRestore;
 use super::sort_shuffle::SortSampleState;
 use super::sort_shuffle::TransformSortBoundBroadcast;
 use super::Base;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 
@@ -50,7 +49,7 @@ enum SortType {
     Collect,
     BoundBroadcast,
     Combine,
-    Execute,
+    Restore,
 }
 
 pub struct TransformSortBuilder {
@@ -146,7 +145,7 @@ impl TransformSortBuilder {
         select_row_type(&mut build)
     }
 
-    pub fn build_exec(
+    pub fn build_restore(
         &self,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -157,7 +156,7 @@ impl TransformSortBuilder {
             params: self,
             input,
             output,
-            typ: SortType::Execute,
+            typ: SortType::Restore,
             state: None,
         };
 
@@ -249,10 +248,6 @@ impl TransformSortBuilder {
         })?;
         pipeline.resize(n, false)
     }
-
-    pub fn exchange_injector(&self) -> Arc<dyn ExchangeInjector> {
-        todo!()
-    }
 }
 
 struct Build<'a> {
@@ -301,7 +296,7 @@ impl Build<'_> {
         )?))
     }
 
-    fn build_sort_exec<A>(&mut self) -> Result<Box<dyn Processor>>
+    fn build_sort_restore<A>(&mut self) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
         Ok(Box::new(TransformSortRestore::<A>::create(
             self.input.clone(),
@@ -355,9 +350,9 @@ impl RowsTypeVisitor for Build<'_> {
                 true => self.build_sort_collect::<LoserTreeSort<R>, C>(limit_sort),
                 false => self.build_sort_collect::<HeapSort<R>, C>(limit_sort),
             },
-            SortType::Execute => match self.params.enable_loser_tree {
-                true => self.build_sort_exec::<LoserTreeSort<R>>(),
-                false => self.build_sort_exec::<HeapSort<R>>(),
+            SortType::Restore => match self.params.enable_loser_tree {
+                true => self.build_sort_restore::<LoserTreeSort<R>>(),
+                false => self.build_sort_restore::<HeapSort<R>>(),
             },
             SortType::BoundBroadcast => self.build_bound_broadcast::<R>(),
             SortType::Combine => self.build_sort_combine::<R>(),

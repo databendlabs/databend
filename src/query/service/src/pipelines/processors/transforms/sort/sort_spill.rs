@@ -105,8 +105,8 @@ where A: SortAlgorithm
 
         let subsequent = sequences
             .into_iter()
-            .filter_map(|list| {
-                (!list.is_empty()).then(|| base.new_stream(Vec::from(list).into(), None))
+            .filter_map(|seq| {
+                (!seq.is_empty()).then(|| base.new_stream(Vec::from(seq).into(), None))
             })
             .collect::<Vec<_>>();
         debug_assert!(!subsequent.is_empty());
