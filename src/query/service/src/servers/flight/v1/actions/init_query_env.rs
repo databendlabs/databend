@@ -28,10 +28,7 @@ use crate::servers::flight::v1::packets::QueryEnv;
 
 pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 
-pub async fn init_query_env(mut env: QueryEnv) -> Result<()> {
-    // Update query id to make sure they are compatible.
-    env.query_id = env.query_id.replace('-', "");
-
+pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let mut tracking_workload_group = None;
     let mut parent_mem_stat = ParentMemStat::StaticRef(&GLOBAL_MEM_STAT);
 
