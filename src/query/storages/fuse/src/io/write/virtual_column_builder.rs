@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -43,7 +44,6 @@ use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_blocks::blocks_to_parquet;
-use databend_storages_common_cache::Table;
 use databend_storages_common_table_meta::meta::DraftVirtualBlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
@@ -51,13 +51,13 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 use jsonb::from_slice;
 use jsonb::Number as JsonbNumber;
+use jsonb::RawJsonb;
 use jsonb::Value as JsonbValue;
 use parquet::format::FileMetaData;
 
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::statistics::gen_columns_statistics;
-use crate::FuseTable;
 
 #[derive(Debug, Clone)]
 pub struct VirtualColumnState {
@@ -66,15 +66,23 @@ pub struct VirtualColumnState {
 }
 
 #[derive(Clone)]
+#[allow(clippy::type_complexity)]
 pub struct VirtualColumnBuilder {
-    // variant field offset and ColumnId
-    variant_fields: Vec<(usize, TableField)>,
+    // Variant fields
+    variant_fields: Vec<TableField>,
+    // Variant field offsets
+    variant_offsets: Vec<usize>,
+    // Store virtual values across multiple blocks
+    virtual_values: Vec<BTreeMap<Vec<KeyPath>, Vec<Option<Vec<u8>>>>>,
+    // Ignored fields
+    ignored_fields: HashSet<usize>,
+    // Total number of rows processed
+    total_rows: usize,
 }
 
 impl VirtualColumnBuilder {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        table: &FuseTable,
         schema: TableSchemaRef,
     ) -> Result<VirtualColumnBuilder> {
         LicenseManagerSwitch::instance()
@@ -88,55 +96,44 @@ impl VirtualColumnBuilder {
                 "Virtual column is an experimental feature, `set enable_experimental_virtual_column=1` to use this feature."
             ));
         }
-        if !table.support_virtual_columns() {
-            return Err(ErrorCode::VirtualColumnError(format!(
-                "storage format {:?} don't support virtual column",
-                table.get_storage_format()
-            )));
-        }
-
-        // ignore persistent system tables {
-        if let Ok(database_name) = table.table_info.database_name() {
-            if database_name == "persistent_system" {
-                return Err(ErrorCode::VirtualColumnError(format!(
-                    "system database {} don't support virtual column",
-                    database_name
-                )));
-            }
-        }
 
         let mut variant_fields = Vec::new();
+        let mut variant_offsets = Vec::new();
         for (i, field) in schema.fields.iter().enumerate() {
             if field.data_type().remove_nullable() == TableDataType::Variant {
-                variant_fields.push((i, field.clone()));
+                variant_fields.push(field.clone());
+                variant_offsets.push(i);
             }
         }
         if variant_fields.is_empty() {
             return Err(ErrorCode::VirtualColumnError("Virtual column only support variant type, but this table don't have variant type fields"));
         }
-        Ok(VirtualColumnBuilder { variant_fields })
+        let mut virtual_values = Vec::with_capacity(variant_fields.len());
+        for _ in 0..variant_fields.len() {
+            virtual_values.push(BTreeMap::new());
+        }
+        Ok(VirtualColumnBuilder {
+            variant_offsets,
+            variant_fields,
+            virtual_values,
+            ignored_fields: HashSet::new(),
+            total_rows: 0,
+        })
     }
 
-    pub fn add_block(
-        &self,
-        block: &DataBlock,
-        write_settings: &WriteSettings,
-        location: &Location,
-    ) -> Result<VirtualColumnState> {
+    pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
         let num_rows = block.num_rows();
-        let mut virtual_column_names = Vec::new();
-        let mut virtual_fields = Vec::new();
-        let mut virtual_columns = Vec::new();
         // use a tmp column id to generate statistics for virtual columns.
-        let mut tmp_column_id = 0;
         let mut paths = VecDeque::new();
         // use first 10 rows as sample to check whether the block is suitable for generating virtual columns
         let sample_rows = num_rows.min(10);
-        for (offset, source_field) in &self.variant_fields {
-            let source_column_id = source_field.column_id;
+        for (i, offset) in self.variant_offsets.iter().enumerate() {
+            if self.ignored_fields.contains(&i) {
+                continue;
+            }
             let column = block.get_by_offset(*offset);
 
-            let mut virtual_values = BTreeMap::new();
+            let mut field_virtual_values = BTreeMap::new();
             for row in 0..sample_rows {
                 let val = unsafe { column.index_unchecked(row) };
                 if let ScalarRef::Variant(jsonb_bytes) = val {
@@ -145,15 +142,20 @@ impl VirtualColumnBuilder {
                     Self::collect_virtual_values(
                         &val,
                         row,
-                        virtual_fields.len(),
+                        self.virtual_values.len(),
                         &mut paths,
-                        &mut virtual_values,
+                        &mut field_virtual_values,
                     );
                 }
             }
-            if Self::check_sample_virtual_values(sample_rows, &mut virtual_values) {
+
+            if Self::check_sample_virtual_values(sample_rows, &mut field_virtual_values) {
+                self.ignored_fields.insert(i);
+                field_virtual_values.clear();
                 continue;
             }
+
+            let virtual_field_num = self.virtual_values.iter().map(|v| v.len()).sum();
             for row in sample_rows..num_rows {
                 let val = unsafe { column.index_unchecked(row) };
                 if let ScalarRef::Variant(jsonb_bytes) = val {
@@ -162,20 +164,86 @@ impl VirtualColumnBuilder {
                     Self::collect_virtual_values(
                         &val,
                         row,
-                        virtual_fields.len(),
+                        virtual_field_num,
                         &mut paths,
-                        &mut virtual_values,
+                        &mut field_virtual_values,
                     );
                 }
             }
-            Self::discard_virtual_values(num_rows, virtual_fields.len(), &mut virtual_values);
-            if virtual_values.is_empty() {
-                continue;
-            }
 
-            let value_types = Self::inference_data_type(&virtual_values);
-            for ((key_paths, vals), val_type) in
-                virtual_values.into_iter().zip(value_types.into_iter())
+            // Merge block virtual values into the global virtual values
+            for (key_path, values) in field_virtual_values {
+                if let Some(existing_values) = self.virtual_values[i].get_mut(&key_path) {
+                    // Extend existing values with new values
+                    existing_values.extend(values);
+                } else {
+                    // Add padding for previous blocks if this is a new key path
+                    let mut padded_values = Vec::with_capacity(self.total_rows + values.len());
+                    // Add None for all rows in previous blocks
+                    for _ in 0..self.total_rows {
+                        padded_values.push(None);
+                    }
+                    // Add values from current block
+                    padded_values.extend(values);
+                    self.virtual_values[i].insert(key_path, padded_values);
+                }
+            }
+        }
+
+        self.total_rows += num_rows;
+
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    pub fn finalize(
+        &mut self,
+        write_settings: &WriteSettings,
+        location: &Location,
+    ) -> Result<VirtualColumnState> {
+        let mut virtual_values = Vec::with_capacity(self.variant_fields.len());
+        for _ in 0..self.variant_fields.len() {
+            virtual_values.push(BTreeMap::new());
+        }
+        std::mem::swap(&mut self.virtual_values, &mut virtual_values);
+        let total_rows = self.total_rows;
+        self.total_rows = 0;
+        self.ignored_fields.clear();
+
+        let mut virtual_field_num = 0;
+        // Process the collected virtual values
+        for field_virtual_values in &mut virtual_values {
+            Self::discard_virtual_values(total_rows, virtual_field_num, field_virtual_values);
+            virtual_field_num += field_virtual_values.len();
+        }
+
+        // If after discarding, no virtual values remain, return empty state
+        if virtual_field_num == 0 {
+            let draft_virtual_block_meta = DraftVirtualBlockMeta {
+                virtual_column_metas: vec![],
+                virtual_column_size: 0,
+                virtual_location: ("".to_string(), 0),
+            };
+
+            return Ok(VirtualColumnState {
+                data: vec![],
+                draft_virtual_block_meta,
+            });
+        }
+
+        let mut virtual_column_names = Vec::new();
+        let mut virtual_fields = Vec::new();
+        let mut virtual_columns = Vec::new();
+        // use a tmp column id to generate statistics for virtual columns.
+        let mut tmp_column_id = 0;
+
+        for (source_field, field_virtual_values) in
+            self.variant_fields.iter().zip(virtual_values.into_iter())
+        {
+            let value_types = Self::inference_data_type(&field_virtual_values);
+            for ((key_paths, vals), val_type) in field_virtual_values
+                .into_iter()
+                .zip(value_types.into_iter())
             {
                 let virtual_type = match val_type {
                     VariantDataType::Jsonb => DataType::Nullable(Box::new(DataType::Variant)),
@@ -195,32 +263,32 @@ impl VirtualColumnBuilder {
 
                 // create column
                 let column = match val_type {
-                    VariantDataType::Jsonb => VariantType::from_opt_data(
-                        vals.into_iter().map(|v| v.map(|v| v.to_vec())).collect(),
-                    ),
+                    VariantDataType::Jsonb => VariantType::from_opt_data(vals),
                     VariantDataType::Boolean => BooleanType::from_opt_data(
                         vals.into_iter()
-                            .map(|v| v.map(|v| v.as_bool().unwrap()))
+                            .map(|v| v.map(|v| RawJsonb::new(&v).as_bool().unwrap().unwrap()))
                             .collect(),
                     ),
                     VariantDataType::UInt64 => UInt64Type::from_opt_data(
                         vals.into_iter()
-                            .map(|v| v.map(|v| v.as_u64().unwrap()))
+                            .map(|v| v.map(|v| RawJsonb::new(&v).as_u64().unwrap().unwrap()))
                             .collect(),
                     ),
                     VariantDataType::Int64 => Int64Type::from_opt_data(
                         vals.into_iter()
-                            .map(|v| v.map(|v| v.as_i64().unwrap()))
+                            .map(|v| v.map(|v| RawJsonb::new(&v).as_i64().unwrap().unwrap()))
                             .collect(),
                     ),
                     VariantDataType::Float64 => Float64Type::from_opt_data(
                         vals.into_iter()
-                            .map(|v| v.map(|v| v.as_f64().unwrap()))
+                            .map(|v| v.map(|v| RawJsonb::new(&v).as_f64().unwrap().unwrap()))
                             .collect(),
                     ),
                     VariantDataType::String => StringType::from_opt_data(
                         vals.into_iter()
-                            .map(|v| v.map(|v| v.as_str().unwrap().to_string()))
+                            .map(|v| {
+                                v.map(|v| RawJsonb::new(&v).as_str().unwrap().unwrap().to_string())
+                            })
                             .collect(),
                     ),
                     _ => todo!(),
@@ -253,29 +321,18 @@ impl VirtualColumnBuilder {
                 virtual_fields.push(virtual_field);
                 tmp_column_id += 1;
 
+                let source_column_id = source_field.column_id;
                 virtual_column_names.push((source_column_id, key_name, val_type));
-            }
-            if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
-                break;
+
+                if virtual_fields.len() >= VIRTUAL_COLUMNS_LIMIT {
+                    break;
+                }
             }
         }
 
-        // There are no suitable virtual columns, returning empty data.
-        if virtual_fields.is_empty() {
-            let draft_virtual_block_meta = DraftVirtualBlockMeta {
-                virtual_column_metas: vec![],
-                virtual_column_size: 0,
-                virtual_location: ("".to_string(), 0),
-            };
-
-            return Ok(VirtualColumnState {
-                data: vec![],
-                draft_virtual_block_meta,
-            });
-        }
-
+        // Create the virtual block and convert to parquet
         let virtual_block_schema = TableSchemaRefExt::create(virtual_fields);
-        let virtual_block = DataBlock::new(virtual_columns, block.num_rows());
+        let virtual_block = DataBlock::new(virtual_columns, total_rows);
 
         let columns_statistics =
             gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
@@ -315,7 +372,7 @@ impl VirtualColumnBuilder {
         row: usize,
         virtual_field_num: usize,
         paths: &mut VecDeque<KeyPath>,
-        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'a>>>>,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<Vec<u8>>>>,
     ) {
         if virtual_values.len() + virtual_field_num > VIRTUAL_COLUMNS_LIMIT {
             return;
@@ -364,20 +421,22 @@ impl VirtualColumnBuilder {
             while vals.len() < row {
                 vals.push(None);
             }
-            vals.push(Some(val.clone()))
+            let buf = val.to_vec();
+            vals.push(Some(buf));
         } else {
             let mut vals = Vec::with_capacity(row + 1);
             for _ in 0..row {
                 vals.push(None);
             }
-            vals.push(Some(val.clone()));
+            let buf = val.to_vec();
+            vals.push(Some(buf));
             virtual_values.insert(path_names, vals);
         }
     }
 
     fn check_sample_virtual_values(
         sample_rows: usize,
-        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<Vec<u8>>>>,
     ) -> bool {
         // All values are NULL or scalar Variant value.
         if virtual_values.is_empty() {
@@ -405,7 +464,7 @@ impl VirtualColumnBuilder {
     fn discard_virtual_values(
         num_rows: usize,
         virtual_field_num: usize,
-        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue<'_>>>>,
+        virtual_values: &mut BTreeMap<Vec<KeyPath>, Vec<Option<Vec<u8>>>>,
     ) {
         if virtual_values.is_empty() {
             return;
@@ -466,7 +525,7 @@ impl VirtualColumnBuilder {
     }
 
     fn inference_data_type(
-        virtual_values: &BTreeMap<Vec<KeyPath>, Vec<Option<JsonbValue>>>,
+        virtual_values: &BTreeMap<Vec<KeyPath>, Vec<Option<Vec<u8>>>>,
     ) -> Vec<VariantDataType> {
         let mut val_types = Vec::with_capacity(virtual_values.len());
         let mut val_type_set = BTreeSet::new();
@@ -474,18 +533,19 @@ impl VirtualColumnBuilder {
             val_type_set.clear();
             let mut max_u64 = u64::MIN;
             let mut min_i64 = i64::MAX;
-            for val in vals.iter().flatten() {
+            for buf in vals.iter().flatten() {
+                let val = from_slice(buf).unwrap();
                 let ty = match val {
                     JsonbValue::Bool(_) => VariantDataType::Boolean,
                     JsonbValue::Number(JsonbNumber::UInt64(n)) => {
-                        if *n >= max_u64 {
-                            max_u64 = *n;
+                        if n >= max_u64 {
+                            max_u64 = n;
                         }
                         VariantDataType::UInt64
                     }
                     JsonbValue::Number(JsonbNumber::Int64(n)) => {
-                        if *n <= min_i64 {
-                            min_i64 = *n;
+                        if n <= min_i64 {
+                            min_i64 = n;
                         }
                         VariantDataType::Int64
                     }

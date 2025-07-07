@@ -180,11 +180,10 @@ impl BlockBuilder {
 
         let virtual_column_state =
             if let Some(ref virtual_column_builder) = self.virtual_column_builder {
-                let virtual_column_state = virtual_column_builder.add_block(
-                    &data_block,
-                    &self.write_settings,
-                    &block_location,
-                )?;
+                let mut virtual_column_builder = virtual_column_builder.clone();
+                virtual_column_builder.add_block(&data_block)?;
+                let virtual_column_state =
+                    virtual_column_builder.finalize(&self.write_settings, &block_location)?;
                 Some(virtual_column_state)
             } else {
                 None
