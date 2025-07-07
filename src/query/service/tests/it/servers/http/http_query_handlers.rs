@@ -460,7 +460,6 @@ async fn test_client_query_id() -> Result<()> {
     Ok(())
 }
 
-// `-` in query id will be trimmed.
 #[tokio::test(flavor = "current_thread")]
 async fn test_client_compatible_query_id() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
@@ -473,7 +472,7 @@ async fn test_client_compatible_query_id() -> Result<()> {
     let (status, result) =
         post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, headers).await?;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(result.id, "testqueryid");
+    assert_eq!(result.id, "test-query-id");
 
     Ok(())
 }

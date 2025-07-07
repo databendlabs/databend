@@ -683,7 +683,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
         let query_id = req
             .headers()
             .get(HEADER_QUERY_ID)
-            .map(|id| id.to_str().unwrap().replace('-', ""))
+            .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::now_v7().simple().to_string());
 
         let mut login_history = LoginHistory::new();
