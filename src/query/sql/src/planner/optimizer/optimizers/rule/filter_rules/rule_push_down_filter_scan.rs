@@ -198,10 +198,7 @@ impl Rule for RulePushDownFilterScan {
             None => scan.push_down_predicates = Some(add_filters),
         }
 
-        let mut result = SExpr::create_unary(
-            Arc::new(filter.into()),
-            Arc::new(SExpr::create_leaf(Arc::new(scan.into()))),
-        );
+        let mut result = SExpr::create_unary(filter, SExpr::create_leaf(scan));
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

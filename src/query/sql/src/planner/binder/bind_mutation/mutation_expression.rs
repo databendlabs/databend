@@ -404,7 +404,7 @@ impl MutationExpression {
             let mut scan = scan.clone();
             scan.is_lazy_table = is_lazy_table;
             scan.set_update_stream_columns(update_stream_columns);
-            return Ok(SExpr::create_leaf(Arc::new(scan.into())));
+            return Ok(SExpr::create_leaf(scan));
         }
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {

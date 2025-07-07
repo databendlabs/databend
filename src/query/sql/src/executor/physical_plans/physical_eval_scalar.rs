@@ -32,9 +32,9 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::Operator;
 use crate::plans::ProjectSet;
 use crate::plans::RelOp;
-use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Visitor;
@@ -232,7 +232,7 @@ impl PhysicalPlanBuilder {
             return Ok(None);
         }
 
-        if let RelOperator::Filter(filter) = s_expr.plan() {
+        if let Some(filter) = Filter::try_downcast_ref(s_expr.plan()) {
             let child = s_expr.child(0)?;
             let project_set: ProjectSet = child.plan().clone().try_into()?;
             let Some(new_project_set) =

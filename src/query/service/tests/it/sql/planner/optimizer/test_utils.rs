@@ -497,7 +497,7 @@ impl ExprBuilder {
             equi_conditions,
             ..Default::default()
         };
-        SExpr::create_binary(Arc::new(join), Arc::new(left), Arc::new(right))
+        SExpr::create_binary(join, left, right)
     }
 
     /// Create a join condition between two columns
@@ -512,7 +512,7 @@ impl ExprBuilder {
 
     /// Create a filter
     pub fn filter(&self, input: SExpr, predicates: Vec<ScalarExpr>) -> SExpr {
-        SExpr::create_unary(Arc::new(Filter { predicates }), Arc::new(input))
+        SExpr::create_unary(Filter { predicates }, input)
     }
 
     /// Create a table scan

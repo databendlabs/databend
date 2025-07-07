@@ -109,7 +109,7 @@ impl PhysicalPlanBuilder {
         });
 
         if agg.group_items.is_empty() && used.is_empty() {
-            let expr = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
+            let expr = SExpr::create_leaf(DummyTableScan);
             return self.build(&expr, required).await;
         }
 

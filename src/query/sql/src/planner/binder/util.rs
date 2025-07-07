@@ -25,6 +25,7 @@ use databend_common_expression::types::DataType;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::Binder;
 use crate::NameResolutionContext;
 use crate::NameResolutionSuggest;
@@ -46,43 +47,37 @@ impl Binder {
         cte_scan_names: &mut Vec<String>,
         cte_types: &mut Vec<DataType>,
     ) -> Result<()> {
-        match expr.plan() {
-            RelOperator::Join(_) | RelOperator::UnionAll(_) => {
+        match expr.plan_rel_op() {
+            RelOp::Join | RelOp::UnionAll => {
                 self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
                 self.count_r_cte_scan(expr.child(1)?, cte_scan_names, cte_types)?;
             }
 
-            RelOperator::ProjectSet(_)
-            | RelOperator::AsyncFunction(_)
-            | RelOperator::Udf(_)
-            | RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_) => {
+            RelOp::ProjectSet
+            | RelOp::AsyncFunction
+            | RelOp::Udf
+            | RelOp::EvalScalar
+            | RelOp::Filter => {
                 self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
             }
-            RelOperator::RecursiveCteScan(plan) => {
+            RelOp::RecursiveCteScan => {
                 cte_scan_names.push(plan.table_name.clone());
                 if cte_types.is_empty() {
                     cte_types.extend(plan.fields.iter().map(|f| f.data_type().clone()));
                 }
             }
 
-            RelOperator::Exchange(_)
-            | RelOperator::Scan(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_) => {}
+            RelOp::Exchange
+            | RelOp::Scan
+            | RelOp::DummyTableScan
+            | RelOp::ConstantTableScan
+            | RelOp::ExpressionScan
+            | RelOp::CacheScan => {}
             // Each recursive step in a recursive query generates new rows, and these rows are used for the next recursion.
             // Each step depends on the results of the previous step, so it's essential to ensure that the result set is built incrementally.
             // These operators need to operate on the entire result set,
             // which is incompatible with the way a recursive query incrementally builds the result set.
-            RelOperator::Sort(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Aggregate(_)
-            | RelOperator::Window(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::MutationSource(_)
-            | RelOperator::CompactBlock(_) => {
+            _ => {
                 return Err(ErrorCode::SyntaxException(format!(
                     "{:?} is not allowed in recursive cte",
                     expr.plan_rel_op()

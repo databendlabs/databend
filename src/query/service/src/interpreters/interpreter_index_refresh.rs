@@ -38,9 +38,10 @@ use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::executor::PhysicalPlanReplacer;
+use databend_common_sql::plans::EvalScalar;
+use databend_common_sql::plans::Operator;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
-
 use databend_common_storages_fuse::operations::AggIndexSink;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::FuseBlockPartInfo;
@@ -223,7 +224,7 @@ impl Interpreter for RefreshIndexInterpreter {
                 bind_context,
                 ..
             } => {
-                let schema = if let RelOperator::EvalScalar(eval) = s_expr.plan() {
+                let schema = if let Some(eval) = EvalScalar::try_downcast_ref(s_expr.plan()) {
                     let fields = eval
                         .items
                         .iter()

@@ -184,7 +184,7 @@ impl RuleStatsAggregateOptimizer {
                 };
 
                 if agg_results.is_empty() {
-                    let leaf = SExpr::create_leaf(Arc::new(DummyTableScan.into()));
+                    let leaf = SExpr::create_leaf(DummyTableScan);
                     return Ok(SExpr::create_unary(eval_scalar, leaf));
                 } else {
                     let agg = Aggregate {

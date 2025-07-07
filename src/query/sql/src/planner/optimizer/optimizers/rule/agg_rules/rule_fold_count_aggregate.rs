@@ -108,10 +108,9 @@ impl Rule for RuleFoldCountAggregate {
                 }
             }
             let eval_scalar = EvalScalar { items: scalars };
-            let dummy_table_scan = DummyTableScan;
             state.add_result(SExpr::create_unary(
-                Arc::new(eval_scalar.into()),
-                Arc::new(SExpr::create_leaf(Arc::new(dummy_table_scan.into()))),
+                eval_scalar,
+                SExpr::create_leaf(DummyTableScan),
             ));
         }
         Ok(())

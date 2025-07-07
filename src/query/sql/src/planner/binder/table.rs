@@ -66,8 +66,8 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::DummyTableScan;
-use crate::plans::RecursiveCteScan;
 use crate::plans::Operator;
+use crate::plans::RecursiveCteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
@@ -99,10 +99,7 @@ impl Binder {
             }
         }
         let bind_context = BindContext::with_parent(bind_context.clone())?;
-        Ok((
-            SExpr::create_leaf(Arc::new(DummyTableScan.into())),
-            bind_context,
-        ))
+        Ok((SExpr::create_leaf(DummyTableScan), bind_context))
     }
 
     #[async_backtrace::framed]
@@ -305,10 +302,7 @@ impl Binder {
         };
 
         Ok((
-            SExpr::create_leaf(Arc::new(RelOperator::RecursiveCteScan(RecursiveCteScan {
-                fields,
-                table_name,
-            }))),
+            SExpr::create_leaf(RecursiveCteScan { fields, table_name }),
             new_bind_ctx,
         ))
     }
@@ -436,18 +430,15 @@ impl Binder {
             .add_base_column_scan_id(base_column_scan_id);
 
         Ok((
-            SExpr::create_leaf(Arc::new(
-                Scan {
-                    table_index,
-                    columns: columns.into_iter().map(|col| col.index()).collect(),
-                    statistics: Arc::new(Statistics::default()),
-                    change_type,
-                    sample: sample.clone(),
-                    scan_id,
-                    ..Default::default()
-                }
-                .into(),
-            )),
+            SExpr::create_leaf(Scan {
+                table_index,
+                columns: columns.into_iter().map(|col| col.index()).collect(),
+                statistics: Arc::new(Statistics::default()),
+                change_type,
+                sample: sample.clone(),
+                scan_id,
+                ..Default::default()
+            }),
             bind_context,
         ))
     }

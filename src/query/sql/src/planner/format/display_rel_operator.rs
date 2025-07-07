@@ -101,7 +101,7 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &OperatorRef) -> FormatT
             union_all_to_format_tree(id_humanizer, union_all)
         }
         RelOp::MergeInto => {
-            let merge_into = MergeInto::try_downcast_ref(op).unwrap();
+            let merge_into = Mutation::try_downcast_ref(op).unwrap();
             merge_into_to_format_tree(id_humanizer, merge_into)
         }
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),

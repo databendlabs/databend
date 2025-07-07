@@ -69,8 +69,8 @@ pub async fn filter_selectivity_sample(
                 block_level: Some(50.0),
             };
             scan.sample = Some(sample_conf);
-            let new_child = SExpr::create_leaf(Arc::new(scan));
-            new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
+            let new_child = SExpr::create_leaf(scan);
+            new_s_expr = s_expr.replace_children(vec![new_child]);
 
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
             let mut collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);

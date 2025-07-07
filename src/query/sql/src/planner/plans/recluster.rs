@@ -54,7 +54,7 @@ pub fn set_update_stream_columns(s_expr: &SExpr) -> Result<SExpr> {
         if scan.table_index == 0 {
             let mut scan = scan.clone();
             scan.set_update_stream_columns(true);
-            return Ok(SExpr::create_leaf(Arc::new(scan.into())));
+            return Ok(SExpr::create_leaf(scan));
         }
     }
 

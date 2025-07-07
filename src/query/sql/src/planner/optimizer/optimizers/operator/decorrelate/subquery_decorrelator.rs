@@ -303,8 +303,7 @@ impl SubqueryDecorrelatorOptimizer {
                     non_equi_conditions: vec![],
                     ..join.clone()
                 };
-                let mut outer =
-                    SExpr::create_binary(Arc::new(join.into()), Arc::new(left), Arc::new(right));
+                let mut outer = SExpr::create_binary(join, left, right);
 
                 for pred in predicates.iter_mut() {
                     (*pred, outer) = self.try_rewrite_subquery(pred, outer, true)?;

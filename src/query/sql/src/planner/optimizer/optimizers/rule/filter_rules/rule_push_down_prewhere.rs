@@ -169,7 +169,7 @@ impl RulePushDownPrewhere {
                 predicates: prewhere_pred,
             });
         }
-        Ok(SExpr::create_leaf(Arc::new(scan.into())))
+        Ok(SExpr::create_leaf(scan))
     }
 }
 

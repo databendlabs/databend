@@ -27,7 +27,6 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::ReclusterPlan;
-
 use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
@@ -169,13 +168,13 @@ async fn compact_table(
 
     {
         // do compact.
-        let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
+        let compact_block = OptimizeCompactBlock {
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
             table: compact_target.table.clone(),
             limit: compaction_limits.clone(),
-        });
-        let s_expr = SExpr::create_leaf(Arc::new(compact_block));
+        };
+        let s_expr = SExpr::create_leaf(compact_block);
         let compact_interpreter = OptimizeCompactBlockInterpreter::try_create(
             ctx.clone(),
             s_expr,

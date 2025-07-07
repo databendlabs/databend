@@ -945,7 +945,7 @@ impl SubqueryDecorrelatorOptimizer {
         Ok(Arc::new(scan))
     }
 
-    fn clone_outer_scan(&mut self, scan: &Scan) -> OperatorRef {
+    fn clone_outer_scan(&mut self, scan: &Scan) -> Result<OperatorRef> {
         let mut metadata = self.metadata.write();
         let columns = scan
             .columns

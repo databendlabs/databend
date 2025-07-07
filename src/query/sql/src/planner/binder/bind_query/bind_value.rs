@@ -597,18 +597,15 @@ pub fn bind_expression_scan(
         );
     }
 
-    let s_expr = SExpr::create_leaf(Arc::new(
-        ExpressionScan {
-            expression_scan_index,
-            values: scalars,
-            num_scalar_columns: num_columns,
-            cache_index,
-            data_types: column_common_type,
-            column_indexes,
-            schema: DataSchemaRefExt::create(vec![]),
-        }
-        .into(),
-    ));
+    let s_expr = SExpr::create_leaf(ExpressionScan {
+        expression_scan_index,
+        values: scalars,
+        num_scalar_columns: num_columns,
+        cache_index,
+        data_types: column_common_type,
+        column_indexes,
+        schema: DataSchemaRefExt::create(vec![]),
+    });
 
     Ok((s_expr, bind_context.clone()))
 }
@@ -698,15 +695,12 @@ pub fn bind_constant_scan(
     }
     let schema = DataSchemaRefExt::create(fields);
 
-    let s_expr = SExpr::create_leaf(Arc::new(
-        ConstantTableScan {
-            values: value_columns,
-            num_rows: num_values,
-            schema,
-            columns,
-        }
-        .into(),
-    ));
+    let s_expr = SExpr::create_leaf(ConstantTableScan {
+        values: value_columns,
+        num_rows: num_values,
+        schema,
+        columns,
+    });
 
     Ok((s_expr, bind_context.clone()))
 }
