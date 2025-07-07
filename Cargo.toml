@@ -483,6 +483,7 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 serde_repr = "0.1.9"
 serde_stacker = { version = "0.1" }
 serde_test = "1.0"
+loom = "0.7.2"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.8.1" }
 serde_yaml = { version = "0.9.34" }
