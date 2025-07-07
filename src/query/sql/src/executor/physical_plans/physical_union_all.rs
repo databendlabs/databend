@@ -62,41 +62,47 @@ impl PhysicalPlanBuilder {
         let lazy_columns = metadata.lazy_columns();
         required.extend(lazy_columns);
 
+        // Use left's output columns as the offset indices
         // if the union has a CTE, the output columns are not filtered
         // otherwise, if the output columns of the union do not contain the columns used by the plan in the union, the expression will fail to obtain data.
-        let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
-            let left: ColumnSet = union_all
-                .left_outputs
-                .iter()
-                .map(|(index, _)| *index)
-                .collect();
-            let right: ColumnSet = union_all
-                .right_outputs
-                .iter()
-                .map(|(index, _)| *index)
-                .collect();
+        let (offset_indices, left_required, right_required) =
+            if !union_all.cte_scan_names.is_empty() {
+                let left: ColumnSet = union_all
+                    .left_outputs
+                    .iter()
+                    .map(|(index, _)| *index)
+                    .collect();
+                let right: ColumnSet = union_all
+                    .right_outputs
+                    .iter()
+                    .map(|(index, _)| *index)
+                    .collect();
 
-            (left, right)
-        } else {
-            let indices: Vec<usize> = (0..union_all.left_outputs.len())
-                .filter(|index| required.contains(&union_all.output_indexes[*index]))
-                .collect();
-            if indices.is_empty() {
-                (
-                    ColumnSet::from([union_all.left_outputs[0].0]),
-                    ColumnSet::from([union_all.right_outputs[0].0]),
-                )
+                let offset_indices: Vec<usize> = (0..union_all.left_outputs.len()).collect();
+                (offset_indices, left, right)
             } else {
-                indices.iter().fold(
-                    (ColumnSet::default(), ColumnSet::default()),
-                    |(mut left, mut right), &index| {
-                        left.insert(union_all.left_outputs[index].0);
-                        right.insert(union_all.right_outputs[index].0);
-                        (left, right)
-                    },
-                )
-            }
-        };
+                let offset_indices: Vec<usize> = (0..union_all.left_outputs.len())
+                    .filter(|index| required.contains(&union_all.output_indexes[*index]))
+                    .collect();
+
+                if offset_indices.is_empty() {
+                    (
+                        vec![0],
+                        ColumnSet::from([union_all.left_outputs[0].0]),
+                        ColumnSet::from([union_all.right_outputs[0].0]),
+                    )
+                } else {
+                    offset_indices.iter().fold(
+                        (vec![], ColumnSet::default(), ColumnSet::default()),
+                        |(mut offset_indices, mut left, mut right), &index| {
+                            left.insert(union_all.left_outputs[index].0);
+                            right.insert(union_all.right_outputs[index].0);
+                            offset_indices.push(index);
+                            (offset_indices, left, right)
+                        },
+                    )
+                }
+            };
 
         // 2. Build physical plan.
         let left_plan = self.build(s_expr.child(0)?, left_required.clone()).await?;
@@ -124,9 +130,9 @@ impl PhysicalPlanBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let left_outputs = process_outputs(&union_all.left_outputs, &left_required, &left_schema)?;
+        let left_outputs = process_outputs(&union_all.left_outputs, &offset_indices, &left_schema)?;
         let right_outputs =
-            process_outputs(&union_all.right_outputs, &right_required, &right_schema)?;
+            process_outputs(&union_all.right_outputs, &offset_indices, &right_schema)?;
 
         Ok(PhysicalPlan::UnionAll(UnionAll {
             plan_id: 0,
@@ -144,24 +150,20 @@ impl PhysicalPlanBuilder {
 
 fn process_outputs(
     outputs: &[(IndexType, Option<ScalarExpr>)],
-    required: &ColumnSet,
+    offset_indices: &[usize],
     schema: &DataSchema,
 ) -> Result<Vec<(IndexType, Option<RemoteExpr>)>> {
-    let mut vs = outputs
-        .iter()
-        .filter(|(index, _)| required.contains(index))
-        .map(|(index, scalar_expr)| {
-            if let Some(scalar_expr) = scalar_expr {
-                let expr = scalar_expr
-                    .type_check(schema)?
-                    .project_column_ref(|idx| schema.index_of(&idx.to_string()).unwrap());
-                Ok((*index, Some(expr.as_remote_expr())))
-            } else {
-                Ok((*index, None))
-            }
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    vs.dedup_by_key(|(index, _)| *index);
-    Ok(vs)
+    let mut results = Vec::with_capacity(offset_indices.len());
+    for index in offset_indices {
+        let output = &outputs[*index];
+        if let Some(scalar_expr) = &output.1 {
+            let expr = scalar_expr
+                .type_check(schema)?
+                .project_column_ref(|idx| schema.index_of(&idx.to_string()).unwrap());
+            results.push((output.0, Some(expr.as_remote_expr())));
+        } else {
+            results.push((output.0, None));
+        }
+    }
+    Ok(results)
 }
