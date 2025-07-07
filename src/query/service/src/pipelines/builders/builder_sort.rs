@@ -141,10 +141,14 @@ impl PipelineBuilder {
                 }
             }
 
-            SortStep::Sample => builder.build_sample(&mut self.main_pipeline),
+            SortStep::Sample => {
+                builder.build_sample(&mut self.main_pipeline)?;
+                self.exchange_injector = Arc::new(SortInjector {});
+                Ok(())
+            }
             SortStep::SortShuffled => {
                 if matches!(*sort.input, PhysicalPlan::ExchangeSource(_)) {
-                    let exchange = builder.exchange_injector();
+                    let exchange = Arc::new(SortInjector {});
                     let old_inject = std::mem::replace(&mut self.exchange_injector, exchange);
                     self.build_pipeline(&sort.input)?;
                     self.exchange_injector = old_inject;
@@ -329,7 +333,7 @@ impl SortPipelineBuilder {
         )
         .with_limit(self.limit)
         .with_order_col_generated(false)
-        .with_output_order_col(false)
+        .with_output_order_col(true)
         .with_memory_settings(memory_settings)
         .with_enable_loser_tree(enable_loser_tree);
 

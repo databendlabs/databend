@@ -45,7 +45,7 @@ impl ExchangeInjector for SortInjector {
         match exchange {
             DataExchange::Merge(_) | DataExchange::Broadcast(_) => unreachable!(),
             DataExchange::ShuffleDataExchange(exchange) => {
-                Ok(Arc::new(Box::new(BoundHashScatter {
+                Ok(Arc::new(Box::new(SortBoundScatter {
                     paritions: exchange.destination_ids.len() as _,
                 })))
             }
@@ -87,11 +87,15 @@ impl ExchangeInjector for SortInjector {
     }
 }
 
-pub struct BoundHashScatter {
+pub struct SortBoundScatter {
     paritions: u64,
 }
 
-impl FlightScatter for BoundHashScatter {
+impl FlightScatter for SortBoundScatter {
+    fn name(&self) -> &'static str {
+        "SortBound"
+    }
+
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let meta = data_block
             .get_meta()

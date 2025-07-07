@@ -832,7 +832,6 @@ impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
         Ok(())
     }
 
-    #[expect(dead_code)]
     async fn take_next_bounded_spillable(&mut self) -> Result<Option<SpillableBlock>> {
         let Some(bound) = &self.bound else {
             return Ok(self.blocks.pop_front());

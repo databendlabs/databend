@@ -62,6 +62,7 @@ impl<R: Rows + 'static> TransformSortBoundBroadcast<R> {
 pub struct SortSampleState {
     ctx: Arc<QueryContext>,
     broadcast_id: u32,
+    #[expect(dead_code)]
     schema: DataSchemaRef,
     batch_rows: usize,
 }

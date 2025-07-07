@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -63,6 +65,19 @@ pub enum SortStep {
     Sample,
     SortShuffled,
     Route,
+}
+
+impl Display for SortStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SortStep::Single => write!(f, "Single"),
+            SortStep::Partial => write!(f, "Partial"),
+            SortStep::FinalMerge => write!(f, "FinalMerge"),
+            SortStep::Sample => write!(f, "Sample"),
+            SortStep::SortShuffled => write!(f, "SortShuffled"),
+            SortStep::Route => write!(f, "Route"),
+        }
+    }
 }
 
 impl Sort {

@@ -100,7 +100,7 @@ impl Bounds {
         self.0.iter().all(|col| col.len() == 0)
     }
 
-    #[expect(dead_code)]
+    #[allow(dead_code)]
     pub fn reduce(&self, n: usize) -> Option<Self> {
         if n == 0 {
             return Some(Self::default());
