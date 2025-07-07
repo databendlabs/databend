@@ -111,28 +111,28 @@ impl PhysicalPlanBuilder {
         let left_schema = left_plan.output_schema()?;
         let right_schema = right_plan.output_schema()?;
 
-        let fields = union_all
-            .left_outputs
-            .iter()
-            .enumerate()
-            .filter(|(_, (index, _))| left_required.contains(index))
-            .map(|(i, (index, expr))| {
-                let data_type = if let Some(expr) = expr {
-                    expr.data_type()?
-                } else {
-                    left_schema
-                        .field_with_name(&index.to_string())?
-                        .data_type()
-                        .clone()
-                };
-                let output_index = union_all.output_indexes[i];
-                Ok(DataField::new(&output_index.to_string(), data_type))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
         let left_outputs = process_outputs(&union_all.left_outputs, &offset_indices, &left_schema)?;
         let right_outputs =
             process_outputs(&union_all.right_outputs, &offset_indices, &right_schema)?;
+
+        let mut fields = Vec::with_capacity(offset_indices.len());
+        for offset in offset_indices {
+            let index = union_all.output_indexes[offset];
+            let data_type = if let Some(scalar_expr) = &union_all.left_outputs[offset].1 {
+                let expr = scalar_expr
+                    .type_check(left_schema.as_ref())?
+                    .project_column_ref(|idx| left_schema.index_of(&idx.to_string()).unwrap());
+                expr.data_type().clone()
+            } else {
+                let col_index = union_all.left_outputs[offset].0;
+                left_schema
+                    .field_with_name(&col_index.to_string())?
+                    .data_type()
+                    .clone()
+            };
+
+            fields.push(DataField::new(&index.to_string(), data_type));
+        }
 
         Ok(PhysicalPlan::UnionAll(UnionAll {
             plan_id: 0,
