@@ -1143,6 +1143,19 @@ select to_date('9999-12-31','%Y-%m-%d');
 ----
 9999-12-31
 
+statement ok
+create or replace table t(c1 date);
+
+statement ok
+insert into t values('9999-12-31');
+
+query T
+select to_string(c1, '%Y'),c1 from t;
+----
+9999 9999-12-31
+
+statement ok
+drop table if exists t;
 
 statement ok
 set timezone='America/Los_Angeles';
