@@ -3637,6 +3637,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
+            Ascii::new("equal_null"),
         ];
         FUNCTIONS
     }
@@ -3759,6 +3760,33 @@ impl<'a> TypeChecker<'a> {
                         value: Literal::Null,
                     },
                     arg_x,
+                ]))
+            }
+            ("equal_null", &[arg_x, arg_y]) => {
+                // Rewrite equal_null(x, y) to (x = y) or (x is null and y is null)
+                let is_null_x = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_x.clone()),
+                    not: false,
+                };
+                let is_null_y = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_y.clone()),
+                    not: false,
+                };
+                Some(self.resolve_function(span, "or", vec![], &[
+                    &Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::Eq,
+                        left: Box::new(arg_x.clone()),
+                        right: Box::new(arg_y.clone()),
+                    },
+                    &Expr::BinaryOp {
+                        span,
+                        op: BinaryOperator::And,
+                        left: Box::new(is_null_x),
+                        right: Box::new(is_null_y),
+                    },
                 ]))
             }
             ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
