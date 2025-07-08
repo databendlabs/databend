@@ -172,7 +172,7 @@ impl FuseTable {
 
                 let cte_name = format!("_change${}", suffix);
                 format!(
-                    "with {cte_name} as materialized \
+                    "with {cte_name} as \
                     ( \
                         select * \
                         from ( \
