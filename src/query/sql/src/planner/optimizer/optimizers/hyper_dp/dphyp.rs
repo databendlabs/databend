@@ -275,6 +275,10 @@ impl DPhpyOptimizer {
         s_expr: &SExpr,
     ) -> Result<(Arc<SExpr>, bool)> {
         let new_s_expr = self.new_children(s_expr).await?;
+        self.join_relations.push(JoinRelation::new(
+            &new_s_expr,
+            self.sample_executor().clone(),
+        ));
         Ok((Arc::new(new_s_expr), true))
     }
 
