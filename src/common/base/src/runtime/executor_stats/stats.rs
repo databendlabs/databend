@@ -2,6 +2,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 
+use crate::runtime::ThreadTracker;
+
 const RING_BUFFER_SIZE: usize = 10;
 const TS_SHIFT: u32 = 32;
 const VAL_MASK: u64 = 0xFFFFFFFF;
@@ -116,5 +118,14 @@ impl ExecutorStats {
         let index = now_secs % RING_BUFFER_SIZE;
         let slot = &slots[index];
         slot.record_metric(now_secs, value);
+    }
+
+    pub fn record_thread_tracker(rows: usize) {
+        ThreadTracker::with(|x| {
+            x.borrow()
+                .payload
+                .process_rows
+                .store(rows, Ordering::SeqCst)
+        });
     }
 }

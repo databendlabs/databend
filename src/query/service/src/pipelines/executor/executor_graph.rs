@@ -157,14 +157,6 @@ impl Node {
     pub unsafe fn create_trigger(&self, index: EdgeIndex) -> *mut UpdateTrigger {
         self.updated_list.create_trigger(index)
     }
-
-    pub fn rows_number(&self, event_cause: EventCause) -> usize {
-        if let EventCause::Input(index) = event_cause {
-            self.inputs_port[index].rows_number()
-        } else {
-            0
-        }
-    }
 }
 
 const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
@@ -396,18 +388,19 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
-                let process_rows = node.rows_number(event_cause.clone());
-                let event = {
-                    let guard = ThreadTracker::tracking(node.tracking_payload.clone());
+                let (event, process_rows) = {
+                    let mut payload = node.tracking_payload.clone();
+                    payload.process_rows = AtomicUsize::new(0);
+                    let guard = ThreadTracker::tracking(payload);
 
                     if state_guard_cache.is_none() {
                         state_guard_cache = Some(node.state.lock().unwrap());
                     }
 
                     let event = node.processor.event(event_cause)?;
-
+                    let process_rows = ThreadTracker::process_rows();
                     match guard.flush() {
-                        Ok(_) => Ok(event),
+                        Ok(_) => Ok((event, process_rows)),
                         Err(out_of_limit) => {
                             Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
                         }
