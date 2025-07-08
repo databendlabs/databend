@@ -403,6 +403,8 @@ build_exceptions! {
     TaskCronInvalid(2614),
     /// Task schedule and after conflict
     TaskScheduleAndAfterConflict(2615),
+    /// Task when condition not met
+    TaskWhenConditionNotMet(2616),
 }
 
 // Search and External Service Errors [1901-1903, 1910]

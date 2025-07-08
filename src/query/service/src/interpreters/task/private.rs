@@ -163,9 +163,6 @@ impl TaskInterpreter for PrivateTaskInterpreter {
     ) -> Result<Vec<task_utils::Task>> {
         let tasks = UserApiProvider::instance().show_tasks(&plan.tenant).await?;
 
-        tasks
-            .into_iter()
-            .map(Self::task_trans)
-            .try_collect()
+        tasks.into_iter().map(Self::task_trans).try_collect()
     }
 }
