@@ -98,15 +98,6 @@ where
     }
 }
 
-macro_rules! create_builder_for_type {
-    ($data_type:expr, $variant:ident, $type:ty) => {
-        ColumnStatisticsBuilder::$variant(CommonBuilder::<$type>::create($data_type))
-    };
-    ($data_type:expr, $variant:ident, $type:ty, decimal) => {
-        ColumnStatisticsBuilder::$variant(DecimalBuilder::<$type>::create($data_type))
-    };
-}
-
 pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuilder {
     let inner_type = data_type.remove_nullable();
     macro_rules! match_number_type_create {
@@ -125,16 +116,28 @@ pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuil
         DataType::Number(num_type) => {
             match_number_type_create!(num_type)
         }
-        DataType::String => create_builder_for_type!(inner_type, String, StringType),
-        DataType::Date => create_builder_for_type!(inner_type, Date, DateType),
-        DataType::Timestamp => create_builder_for_type!(inner_type, Timestamp, TimestampType),
+        DataType::String => {
+            ColumnStatisticsBuilder::String(CommonBuilder::<StringType>::create(inner_type))
+        }
+        DataType::Date => {
+            ColumnStatisticsBuilder::Date(CommonBuilder::<DateType>::create(inner_type))
+        }
+        DataType::Timestamp => {
+            ColumnStatisticsBuilder::Timestamp(CommonBuilder::<TimestampType>::create(inner_type))
+        }
         DataType::Decimal(size) => {
             if size.can_carried_by_64() {
-                create_builder_for_type!(inner_type, Decimal64, Decimal64Type, decimal)
+                ColumnStatisticsBuilder::Decimal64(DecimalBuilder::<Decimal64Type>::create(
+                    inner_type,
+                ))
             } else if size.can_carried_by_128() {
-                create_builder_for_type!(inner_type, Decimal128, Decimal128Type, decimal)
+                ColumnStatisticsBuilder::Decimal128(DecimalBuilder::<Decimal128Type>::create(
+                    inner_type,
+                ))
             } else {
-                create_builder_for_type!(inner_type, Decimal256, Decimal256Type, decimal)
+                ColumnStatisticsBuilder::Decimal256(DecimalBuilder::<Decimal256Type>::create(
+                    inner_type,
+                ))
             }
         }
         _ => unreachable!("Unsupported data type: {:?}", data_type),
