@@ -44,6 +44,7 @@ use databend_query::servers::MySQLHandler;
 use databend_query::servers::MySQLTlsConfig;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
+use databend_query::task::TaskService;
 use databend_query::GlobalServices;
 use log::info;
 
@@ -302,6 +303,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         }
         println!("    system history tables: {}", conf.log.history);
     }
+    TaskService::instance().initialized();
 
     println!();
     println!(

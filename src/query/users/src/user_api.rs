@@ -153,9 +153,9 @@ impl UserApiProvider {
                 let task = task?;
 
                 if task.schedule_options.is_some() {
-                    let _ = task_tx.send(TaskMessage::ScheduleTask(task));
+                    let _ = task_tx.send(TaskMessage::ScheduleTask(task)).await;
                 } else if !task.after.is_empty() {
-                    let _ = task_tx.send(TaskMessage::AfterTask(task));
+                    let _ = task_tx.send(TaskMessage::AfterTask(task)).await;
                 }
             }
         }
