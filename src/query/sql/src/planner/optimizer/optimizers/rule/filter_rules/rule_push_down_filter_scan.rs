@@ -181,10 +181,15 @@ impl Rule for RulePushDownFilterScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut scan: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let mut scan = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_mut::<Scan>()
+            .unwrap();
 
-        let add_filters = self.find_push_down_predicates(&filter.predicates, &scan)?;
+        let add_filters = self.find_push_down_predicates(&filter.predicates, scan)?;
         match scan.push_down_predicates.as_mut() {
             Some(vs) => {
                 // Add `add_filters` to vs if there's not already there.

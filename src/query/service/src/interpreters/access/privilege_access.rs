@@ -1038,7 +1038,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::OptimizeCompactBlock { s_expr, .. } => {
-                let plan: OptimizeCompactBlock = s_expr.plan().clone().try_into()?;
+                let plan = s_expr.plan().as_any().downcast_ref::<OptimizeCompactBlock>().unwrap();
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Super, false, false).await?
             }
             Plan::VacuumTable(plan) => {
@@ -1095,7 +1095,7 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_insert_source(ctx, &plan.source).await?;
             }
             Plan::DataMutation { s_expr, .. } => {
-                let plan: Mutation = s_expr.plan().clone().try_into()?;
+                let plan = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
                 if enable_experimental_rbac_check {
                     let s_expr = s_expr.child(0)?;
                     match s_expr.get_udfs() {

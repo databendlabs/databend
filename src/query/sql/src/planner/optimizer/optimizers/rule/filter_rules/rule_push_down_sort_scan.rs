@@ -73,7 +73,7 @@ impl Rule for RulePushDownSortScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let sort = s_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
         let child = s_expr.child(0)?;
 
         let mut get = match child.plan_rel_op() {

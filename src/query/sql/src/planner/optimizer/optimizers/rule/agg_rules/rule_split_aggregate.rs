@@ -52,7 +52,7 @@ impl Rule for RuleSplitAggregate {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut agg: Aggregate = s_expr.plan().clone().try_into()?;
+        let mut agg = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
         if agg.mode != AggregateMode::Initial {
             return Ok(());
         }

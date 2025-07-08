@@ -327,7 +327,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
         input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     }
 
-    let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
+    let mut mutation = s_expr.plan().as_any().downcast_mut::<Mutation>().unwrap();
     mutation.distributed = opt_ctx.get_enable_distributed_optimization();
 
     let schema = mutation.schema();
@@ -338,7 +338,12 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     if !mutation.matched_evaluators.is_empty() {
         match inner_rel_op {
             RelOp::ConstantTableScan => {
-                let constant_table_scan = ConstantTableScan::try_from(input_s_expr.plan().clone())?;
+                let constant_table_scan = input_s_expr
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<ConstantTableScan>()
+                    .unwrap();
+
                 if constant_table_scan.num_rows == 0 {
                     mutation.no_effect = true;
                 }
@@ -351,8 +356,12 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
                     right_child = right_child.child(0)?;
                 }
                 if right_child_rel == RelOp::ConstantTableScan {
-                    let constant_table_scan =
-                        ConstantTableScan::try_from(right_child.plan().clone())?;
+                    let constant_table_scan = right_child
+                        .plan()
+                        .as_any()
+                        .downcast_ref::<ConstantTableScan>()
+                        .unwrap();
+
                     if constant_table_scan.num_rows == 0 {
                         mutation.matched_evaluators = vec![MatchedEvaluator {
                             condition: None,

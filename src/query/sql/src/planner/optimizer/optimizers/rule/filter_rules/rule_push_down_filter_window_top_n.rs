@@ -80,11 +80,15 @@ impl Rule for RulePushDownFilterWindowTopN {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         let window_expr = s_expr.child(0)?;
-        let window: Window = window_expr.plan().clone().try_into()?;
+        let window = window_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Window>()
+            .unwrap();
         let sort_expr = window_expr.child(0)?;
-        let mut sort: Sort = sort_expr.plan().clone().try_into()?;
+        let mut sort = sort_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
 
         if !is_ranking_function(&window.function) || sort.window_partition.is_none() {
             return Ok(());

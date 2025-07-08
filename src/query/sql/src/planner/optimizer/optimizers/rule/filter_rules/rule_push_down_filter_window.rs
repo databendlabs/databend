@@ -77,9 +77,13 @@ impl Rule for RulePushDownFilterWindow {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let Filter { predicates } = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         let window_expr = s_expr.child(0)?;
-        let window: Window = window_expr.plan().clone().try_into()?;
+        let window = window_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Window>()
+            .unwrap();
         let allowed = window.partition_by_columns()?;
         let rejected = ColumnSet::from_iter(
             window

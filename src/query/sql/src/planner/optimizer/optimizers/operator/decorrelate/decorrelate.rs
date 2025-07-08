@@ -117,7 +117,11 @@ impl SubqueryDecorrelatorOptimizer {
         let filter_tree = subquery
             .subquery // EvalScalar
             .unary_child(); // Filter
-        let filter: Filter = filter_tree.plan().clone().try_into()?;
+        let filter = filter_tree
+            .plan()
+            .as_any()
+            .downcast_ref::<Filter>()
+            .unwrap();
         let filter_expr = RelExpr::with_s_expr(filter_tree);
 
         let filter_prop = filter_expr.derive_relational_prop()?;

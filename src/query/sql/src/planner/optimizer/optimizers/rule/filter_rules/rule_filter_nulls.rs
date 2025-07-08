@@ -99,7 +99,7 @@ impl Rule for RuleFilterNulls {
             state.add_result(s_expr.clone());
             return Ok(());
         }
-        let join: Join = s_expr.plan().clone().try_into()?;
+        let join = s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
         if !matches!(
             join.join_type,
             JoinType::Inner | JoinType::LeftSemi | JoinType::RightSemi

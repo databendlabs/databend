@@ -84,7 +84,7 @@ impl Rule for RuleNormalizeScalarFilter {
         s_expr: &SExpr,
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
-        let mut filter: Filter = s_expr.plan().clone().try_into()?;
+        let mut filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
 
         if filter
             .predicates
@@ -93,8 +93,8 @@ impl Rule for RuleNormalizeScalarFilter {
         {
             filter.predicates = normalize_predicates(filter.predicates);
             state.add_result(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(s_expr.child(0)?.clone()),
+                filter.clone().into(),
+                s_expr.child(0)?.clone(),
             ));
             Ok(())
         } else {

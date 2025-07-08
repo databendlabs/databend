@@ -72,7 +72,12 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
             database,
             table,
             limit,
-        } = self.s_expr.plan().clone().try_into()?;
+        } = self
+            .s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<OptimizeCompactBlock>()
+            .unwrap();
 
         // try add lock table.
         let lock_guard = self

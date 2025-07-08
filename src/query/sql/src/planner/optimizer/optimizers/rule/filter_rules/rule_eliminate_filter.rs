@@ -61,7 +61,7 @@ impl Rule for RuleEliminateFilter {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
+        let eval_scalar = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         // First, de-duplication predicates.
         let origin_predicates = eval_scalar.predicates.clone();
         let predicates = origin_predicates

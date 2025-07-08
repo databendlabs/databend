@@ -27,6 +27,7 @@ use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::Scan;
 
 #[derive(Default)]

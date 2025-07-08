@@ -84,7 +84,7 @@ impl RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let Some(mut count) = limit.limit else {
             return Ok(());
         };
@@ -93,7 +93,7 @@ impl RulePushDownRankLimitAggregate {
             return Ok(());
         }
         let agg = s_expr.child(0)?;
-        let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
+        let mut agg_limit = agg.plan().as_any().downcast_ref::<Aggregate>().unwrap();
 
         let sort_items = agg_limit
             .group_items
@@ -128,7 +128,7 @@ impl RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let sort = s_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
         let mut has_eval_scalar = false;
         let agg_limit_expr = match s_expr.child(0)?.plan_rel_op() {
             RelOp::Aggregate => s_expr.child(0)?,
@@ -143,7 +143,11 @@ impl RulePushDownRankLimitAggregate {
             return Ok(());
         };
 
-        let mut agg_limit: Aggregate = agg_limit_expr.plan().clone().try_into()?;
+        let mut agg_limit = agg_limit_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Aggregate>()
+            .unwrap();
 
         let is_order_subset = sort
             .items

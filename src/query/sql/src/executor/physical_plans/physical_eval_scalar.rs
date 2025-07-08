@@ -234,7 +234,7 @@ impl PhysicalPlanBuilder {
 
         if let Some(filter) = s_expr.plan().as_any().downcast_ref::<Filter>() {
             let child = s_expr.child(0)?;
-            let project_set: ProjectSet = child.plan().clone().try_into()?;
+            let project_set = child.plan().as_any().downcast_ref::<ProjectSet>().unwrap();
             let Some(new_project_set) =
                 self.eliminate_flatten_columns(scalar_items, Some(filter), &project_set)
             else {
@@ -245,7 +245,7 @@ impl PhysicalPlanBuilder {
             let new_filter = SExpr::create_unary(s_expr.plan().clone(), new_child);
             Ok(Some(new_filter))
         } else {
-            let project_set: ProjectSet = s_expr.plan().clone().try_into()?;
+            let project_set = s_expr.plan().as_any().downcast_ref::<ProjectSet>().unwrap();
             let Some(new_project_set) =
                 self.eliminate_flatten_columns(scalar_items, None, &project_set)
             else {

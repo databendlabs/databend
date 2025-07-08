@@ -61,14 +61,19 @@ impl Rule for RulePushDownLimitScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let Some(mut count) = limit.limit else {
             return Ok(());
         };
         count += limit.offset;
 
         let child = s_expr.child(0)?;
-        let mut get: Scan = child.plan().clone().try_into()?;
+        let mut get = child
+            .plan()
+            .as_any()
+            .downcast_ref::<Scan>()
+            .unwrap()
+            .clone();
         get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
         let get = SExpr::create_leaf(get);
 

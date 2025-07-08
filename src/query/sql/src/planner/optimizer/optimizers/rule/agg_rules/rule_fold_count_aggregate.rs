@@ -59,7 +59,7 @@ impl Rule for RuleFoldCountAggregate {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let agg: Aggregate = s_expr.plan().clone().try_into()?;
+        let agg = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
 
         if agg.mode == AggregateMode::Final || agg.mode == AggregateMode::Partial {
             return Ok(());

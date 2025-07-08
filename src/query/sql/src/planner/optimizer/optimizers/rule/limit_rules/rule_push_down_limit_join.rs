@@ -69,10 +69,10 @@ impl Rule for RulePushDownLimitOuterJoin {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         if limit.limit.is_some() {
             let child = s_expr.child(0)?;
-            let join: Join = child.plan().clone().try_into()?;
+            let join = child.plan().as_any().downcast_ref::<Join>().unwrap();
             match join.join_type {
                 JoinType::Left => {
                     let child = child.replace_children(vec![

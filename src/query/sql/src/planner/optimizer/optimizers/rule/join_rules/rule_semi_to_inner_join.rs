@@ -58,7 +58,12 @@ impl Rule for RuleSemiToInnerJoin {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut join: Join = s_expr.plan().clone().try_into()?;
+        let mut join = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Join>()
+            .unwrap()
+            .clone();
         if !matches!(join.join_type, JoinType::LeftSemi | JoinType::RightSemi) {
             return Ok(());
         }

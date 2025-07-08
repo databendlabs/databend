@@ -104,7 +104,7 @@ impl SortAndLimitPushDownOptimizer {
             return Ok(s_expr.clone());
         }
 
-        let mut sort: Sort = s_expr.plan().clone().try_into()?;
+        let mut sort: Sort = s_expr.plan().as_any().downcast_mut::<Sort>().unwrap();
         sort.after_exchange = Some(false);
         let exchange_sexpr = s_expr.child(0)?;
 
@@ -130,7 +130,7 @@ impl SortAndLimitPushDownOptimizer {
         }
 
         let exchange_sexpr = s_expr.child(0)?;
-        let mut limit: Limit = s_expr.plan().clone().try_into()?;
+        let mut limit: Limit = s_expr.plan().as_any().downcast_mut::<Limit>().unwrap();
 
         if limit.limit.is_none() {
             if limit.offset != 0 {

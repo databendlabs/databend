@@ -35,6 +35,7 @@ use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]

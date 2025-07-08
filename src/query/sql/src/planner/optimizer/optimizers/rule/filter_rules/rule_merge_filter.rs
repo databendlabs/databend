@@ -56,8 +56,13 @@ impl Rule for RuleMergeFilter {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let up_filter: Filter = s_expr.plan().clone().try_into()?;
-        let down_filter: Filter = s_expr.child(0)?.plan().clone().try_into()?;
+        let up_filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let down_filter = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_ref::<Filter>()
+            .unwrap();
 
         let predicates = up_filter
             .predicates

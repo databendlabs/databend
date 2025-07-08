@@ -55,7 +55,12 @@ impl Rule for RuleCommuteJoinBaseTable {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut join: Join = s_expr.plan().clone().try_into()?;
+        let mut join = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Join>()
+            .unwrap()
+            .clone();
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
 

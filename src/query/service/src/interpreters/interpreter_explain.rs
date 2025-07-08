@@ -150,14 +150,14 @@ impl Interpreter for ExplainInterpreter {
                     schema,
                     metadata,
                 } => {
-                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                    let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
                     let interpreter = MutationInterpreter::try_create(
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let mut plan = interpreter.build_physical_plan(&mutation, true).await?;
+                    let mut plan = interpreter.build_physical_plan(mutation, true).await?;
                     self.inject_pruned_partitions_stats(&mut plan, metadata)?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
@@ -199,13 +199,13 @@ impl Interpreter for ExplainInterpreter {
                     .await?
                 }
                 Plan::DataMutation { s_expr, .. } => {
-                    let plan: Mutation = s_expr.plan().clone().try_into()?;
+                    let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
                     let mutation_build_info =
-                        build_mutation_info(self.ctx.clone(), &plan, true).await?;
+                        build_mutation_info(self.ctx.clone(), mutation, true).await?;
                     self.explain_analyze(
                         s_expr.child(0)?,
-                        &plan.metadata,
-                        *plan.required_columns.clone(),
+                        &mutation.metadata,
+                        mutation.required_columns.clone(),
                         Some(mutation_build_info),
                         true,
                     )
@@ -562,7 +562,7 @@ impl ExplainInterpreter {
         s_expr: SExpr,
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
-        let mutation: Mutation = s_expr.plan().clone().try_into()?;
+        let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
         let interpreter = MutationInterpreter::try_create(
             self.ctx.clone(),
             s_expr,

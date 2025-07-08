@@ -60,8 +60,14 @@ impl Rule for RuleMergeFilterIntoMutation {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut mutation: MutationSource = s_expr.child(0)?.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let mut mutation = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_mut::<MutationSource>()
+            .unwrap();
+
         mutation
             .read_partition_columns
             .extend(filter.predicates.iter().flat_map(|v| v.used_columns()));

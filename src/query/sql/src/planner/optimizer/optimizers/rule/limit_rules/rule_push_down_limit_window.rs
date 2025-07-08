@@ -69,7 +69,7 @@ impl Rule for RulePushDownLimitWindow {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let Some(mut count) = limit.limit else {
             return Ok(());
         };
@@ -78,7 +78,12 @@ impl Rule for RulePushDownLimitWindow {
             return Ok(());
         }
         let window = s_expr.child(0)?;
-        let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
+        let mut window_limit = window
+            .plan()
+            .as_any()
+            .downcast_ref::<LogicalWindow>()
+            .unwrap()
+            .clone();
         let limit = window_limit.limit.map_or(count, |c| c.max(count));
         if limit > self.max_limit {
             return Ok(());

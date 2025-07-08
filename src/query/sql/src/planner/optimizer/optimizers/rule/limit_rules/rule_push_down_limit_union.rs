@@ -57,9 +57,13 @@ impl Rule for RulePushDownLimitUnion {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let union_s_expr = s_expr.child(0)?;
-        let union: UnionAll = union_s_expr.plan().clone().try_into()?;
+        let union = union_s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<UnionAll>()
+            .unwrap();
 
         if limit.limit.is_none() {
             return Ok(());

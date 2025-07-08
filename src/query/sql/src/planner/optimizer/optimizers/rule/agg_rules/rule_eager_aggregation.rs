@@ -298,7 +298,7 @@ impl Rule for RuleEagerAggregation {
             false => extra_eval_scalar_expr,
         };
 
-        let join: Join = join_expr.plan().clone().try_into()?;
+        let join = join_expr.plan().as_any().downcast_ref::<Join>().unwrap();
         // Only supports inner/cross join and equal conditions.
         if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
             | !join.non_equi_conditions.is_empty()
@@ -306,8 +306,16 @@ impl Rule for RuleEagerAggregation {
             return Ok(());
         }
 
-        let eval_scalar: EvalScalar = eval_scalar_expr.plan().clone().try_into()?;
-        let mut final_agg: Aggregate = final_agg_expr.plan().clone().try_into()?;
+        let eval_scalar: EvalScalar = eval_scalar_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<EvalScalar>()
+            .unwrap();
+        let mut final_agg = final_agg_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Aggregate>()
+            .unwrap();
 
         // Get the original column set from the left child and right child of join.
         let mut columns_sets = Vec::with_capacity(2);
@@ -318,7 +326,12 @@ impl Rule for RuleEagerAggregation {
         }
 
         let extra_eval_scalar = if has_extra_eval {
-            extra_eval_scalar_expr.plan().clone().try_into()?
+            extra_eval_scalar_expr
+                .plan()
+                .as_any()
+                .downcast_ref::<EvalScalar>()
+                .unwrap()
+                .clone()
         } else {
             EvalScalar { items: vec![] }
         };

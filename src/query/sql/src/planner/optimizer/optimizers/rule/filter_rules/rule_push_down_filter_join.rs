@@ -87,7 +87,7 @@ impl Rule for RulePushDownFilterJoin {
             state.add_result(s_expr);
             return Ok(());
         }
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
             return Ok(());
@@ -117,7 +117,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
     // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
     let mut predicates = rewrite_predicates(s_expr)?;
     let join_expr = s_expr.child(0)?;
-    let mut join: Join = join_expr.plan().clone().try_into()?;
+    let mut join = join_expr.plan().as_any().downcast_mut::<Join>().unwrap();
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;

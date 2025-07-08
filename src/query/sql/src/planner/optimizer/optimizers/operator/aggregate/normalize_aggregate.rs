@@ -50,7 +50,7 @@ impl RuleNormalizeAggregateOptimizer {
     }
 
     fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let aggregate: Aggregate = s_expr.plan().clone().try_into()?;
+        let aggregate = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
         let mut work_expr = None;
         let mut alias_functions_index = vec![];
         let mut new_aggregate_functions = Vec::with_capacity(aggregate.aggregate_functions.len());

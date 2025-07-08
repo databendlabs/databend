@@ -48,7 +48,7 @@ impl BroadcastToShuffleOptimizer {
         assert_eq!(right_exchange.children.len(), 1);
         let right_exchange_input = right_exchange.child(0)?;
 
-        let mut join: Join = s_expr.plan().clone().try_into()?;
+        let mut join: Join = s_expr.plan().as_any().downcast_mut::<Join>().unwrap();
         join.need_hold_hash_table = true;
 
         let (left_conditions, right_conditions): (Vec<_>, Vec<_>) = join

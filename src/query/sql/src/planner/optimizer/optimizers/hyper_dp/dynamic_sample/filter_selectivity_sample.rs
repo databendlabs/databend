@@ -68,6 +68,7 @@ pub async fn filter_selectivity_sample(
                 row_level: Some(SampleRowLevel::RowsNum(sample_size)),
                 block_level: Some(50.0),
             };
+            let mut scan = scan.clone();
             scan.sample = Some(sample_conf);
             let new_child = SExpr::create_leaf(scan);
             new_s_expr = s_expr.replace_children(vec![new_child.into()]);

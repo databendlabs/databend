@@ -73,9 +73,13 @@ impl Rule for RulePushDownFilterProjectSet {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         let project_set_expr = s_expr.child(0)?;
-        let project_set: ProjectSet = project_set_expr.plan().clone().try_into()?;
+        let project_set = project_set_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<ProjectSet>()
+            .unwrap();
         let project_set_child_prop =
             RelExpr::with_s_expr(project_set_expr).derive_relational_prop_child(0)?;
         let mut pushed_down_predicates = vec![];

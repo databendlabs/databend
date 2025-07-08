@@ -332,7 +332,7 @@ pub async fn do_mutation(
     s_expr: SExpr,
     schema: DataSchemaRef,
 ) -> Result<()> {
-    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+    let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
     let interpreter =
         MutationInterpreter::try_create(ctx.clone(), s_expr, schema, mutation.metadata.clone())?;
     let _ = interpreter.execute(ctx).await?;

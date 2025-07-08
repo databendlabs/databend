@@ -73,7 +73,12 @@ impl Rule for RulePushDownSortEvalScalar {
         if self.metadata.read().lazy_columns().is_empty() {
             return Ok(());
         }
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let sort = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Sort>()
+            .unwrap()
+            .clone();
         let eval_plan = s_expr.child(0)?;
         let eval_child_output_cols = &RelExpr::with_s_expr(eval_plan.child(0)?)
             .derive_relational_prop()?
@@ -82,7 +87,12 @@ impl Rule for RulePushDownSortEvalScalar {
         if !sort.used_columns().is_subset(eval_child_output_cols) {
             return Ok(());
         }
-        let eval_scalar: EvalScalar = eval_plan.plan().clone().try_into()?;
+        let eval_scalar = eval_plan
+            .plan()
+            .as_any()
+            .downcast_ref::<EvalScalar>()
+            .unwrap()
+            .clone();
 
         let sort_expr = SExpr::create_unary(sort, eval_plan.child(0)?.clone());
         let mut result = SExpr::create_unary(eval_scalar, sort_expr);
