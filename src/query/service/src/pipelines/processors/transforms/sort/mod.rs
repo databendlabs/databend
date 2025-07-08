@@ -33,6 +33,7 @@ mod sort_collect;
 mod sort_combine;
 mod sort_exchange;
 mod sort_exchange_injector;
+mod sort_merge_stream;
 mod sort_restore;
 mod sort_route;
 mod sort_shuffle;

@@ -865,7 +865,7 @@ impl<R: Rows, S: Spill> BoundBlockStream<R, S> {
     }
 }
 
-fn block_split_off_position<R: Rows>(
+pub fn block_split_off_position<R: Rows>(
     data: &DataBlock,
     bound: &Scalar,
     sort_row_offset: usize,
