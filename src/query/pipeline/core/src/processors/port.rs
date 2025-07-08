@@ -123,6 +123,11 @@ impl SharedStatus {
     pub fn get_flags(&self) -> usize {
         self.data.load(Ordering::SeqCst) as usize & FLAGS_MASK
     }
+
+    #[inline(always)]
+    pub fn get_data(&self) -> *mut SharedData {
+        (self.data.load(Ordering::SeqCst) as usize & UNSET_FLAGS_MASK) as *mut SharedData
+    }
 }
 
 pub struct InputPort {
@@ -191,6 +196,19 @@ impl InputPort {
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
                 address => Some((*Box::from_raw(address)).0),
+            }
+        }
+    }
+
+    #[inline(always)]
+    pub fn rows_number(&self) -> usize {
+        unsafe {
+            match self.shared.get_data() {
+                address if address.is_null() => 0,
+                address => (*Box::from_raw(address))
+                    .0
+                    .as_ref()
+                    .map_or(0, |data_block| data_block.num_rows()),
             }
         }
     }
