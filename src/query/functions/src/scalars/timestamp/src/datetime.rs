@@ -732,15 +732,10 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                let format = if ctx.func_ctx.date_format_style == *"oracle" {
-                    pg_format_to_strftime(format)
-                } else {
-                    format.to_string()
-                };
-                let format = replace_time_format(&format);
+                let format = prepare_format_string(format, &ctx.func_ctx.date_format_style);
                 let mut buf = String::new();
                 let mut formatter = fmt::Formatter::new(&mut buf, FormattingOptions::new());
-                if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {
+                if Display::fmt(&ts.strftime(&format), &mut formatter).is_err() {
                     ctx.set_error(output.len(), format!("{format} is invalid time format"));
                     output.builder.commit_row();
                     output.validity.push(true);
@@ -2452,4 +2447,13 @@ where T: ToNumber<i32> {
             DateRounder::eval_timestamp::<T>(val, ctx.func_ctx.tz.clone())
         }),
     );
+}
+
+fn prepare_format_string(format: &str, date_format_style: &str) -> String {
+    let processed_format = if date_format_style == "oracle" {
+        pg_format_to_strftime(format)
+    } else {
+        format.to_string()
+    };
+    replace_time_format(&processed_format).to_string()
 }

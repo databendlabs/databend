@@ -57,13 +57,13 @@ impl FileStatus {
             None => {
                 self.error = Some(FileErrorsInfo {
                     num_errors: 1,
-                    first_error: FileErrorInfo { error, line },
+                    first_error: FileParseErrorAtLine { error, line },
                 });
             }
             Some(info) => {
                 info.num_errors += 1;
                 if info.first_error.line > line {
-                    info.first_error = FileErrorInfo { error, line };
+                    info.first_error = FileParseErrorAtLine { error, line };
                 }
             }
         };
@@ -82,7 +82,7 @@ impl FileStatus {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct FileErrorsInfo {
     pub num_errors: usize,
-    pub first_error: FileErrorInfo,
+    pub first_error: FileParseErrorAtLine,
 }
 
 impl FileErrorsInfo {
@@ -94,20 +94,20 @@ impl FileErrorsInfo {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct FileErrorInfo {
-    pub error: FileParseError,
-    pub line: usize,
-}
-
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum FileParseError {
+    #[error("Not a {format} file ({message})")]
+    WrongFileType { format: String, message: String },
+    #[error("Bad {format} file ({message})")]
+    BadFile { format: String, message: String },
+    #[error("Wrong root type: {message}")]
+    WrongRootType { message: String },
+    #[error("Invalid {format} row: {message}")]
+    InvalidRow { format: String, message: String },
     #[error(
         "Number of columns in file ({file}) does not match that of the corresponding table ({table})"
     )]
     NumberOfColumnsMismatch { table: usize, file: usize },
-    #[error("Invalid JSON row: {message}")]
-    InvalidNDJsonRow { message: String },
     #[error(
         "Invalid value '{column_data}' for column {column_index} ({column_name} {column_type}): {decode_error}"
     )]
@@ -151,13 +151,25 @@ pub enum FileParseError {
 }
 
 impl FileParseError {
-    pub fn to_error_code(&self, mode: &OnErrorMode, file_path: &str, line: usize) -> ErrorCode {
-        let pos: String = format!("at file '{}', line {}", file_path, line);
+    pub fn with_row(self, line: usize) -> FileParseErrorAtLine {
+        FileParseErrorAtLine { line, error: self }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct FileParseErrorAtLine {
+    pub error: FileParseError,
+    pub line: usize,
+}
+
+impl FileParseErrorAtLine {
+    pub fn to_error_code(&self, mode: &OnErrorMode, file_path: &str) -> ErrorCode {
+        let pos: String = format!("at file '{}', line {}", file_path, self.line);
         let message = match mode {
             OnErrorMode::AbortNum(n) if *n > 1u64 => {
-                format!("abort after {n} errors! the last error: {self}",)
+                format!("abort after {n} errors! the last error: {}", self.error)
             }
-            _ => format!("{self}"),
+            _ => format!("{}", self.error),
         };
         ErrorCode::BadBytes(message).add_detail_back(pos)
     }

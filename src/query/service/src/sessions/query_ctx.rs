@@ -851,7 +851,7 @@ impl TableContext for QueryContext {
     }
 
     fn get_id(&self) -> String {
-        self.shared.init_query_id.as_ref().read().replace('-', "")
+        self.shared.init_query_id.as_ref().read().clone()
     }
 
     fn get_current_catalog(&self) -> String {

@@ -66,7 +66,7 @@ pub struct TransformBlockWriter {
     // Only used in multi table insert
     table_id: Option<u64>,
 
-    max_block_size: usize,
+    max_block_rows: usize,
     input_data: VecDeque<DataBlock>,
     output_data: Option<DataBlock>,
 }
@@ -80,7 +80,7 @@ impl TransformBlockWriter {
         table_meta_timestamps: TableMetaTimestamps,
         with_tid: bool,
     ) -> Result<ProcessorPtr> {
-        let max_block_size = std::cmp::min(
+        let max_block_rows = std::cmp::min(
             ctx.get_settings().get_max_block_size()? as usize,
             table.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_ROW_COUNT),
         );
@@ -98,7 +98,7 @@ impl TransformBlockWriter {
             input_data_size: 0,
             input_num_rows: 0,
             output_data: None,
-            max_block_size,
+            max_block_rows,
         })))
     }
 
@@ -111,16 +111,16 @@ impl TransformBlockWriter {
         Ok(self.builder.as_mut().unwrap())
     }
 
-    fn calc_max_block_size(&self, block: &DataBlock) -> usize {
+    fn calc_max_block_rows(&self, block: &DataBlock) -> usize {
         let min_bytes_per_block = self.properties.block_thresholds.min_bytes_per_block;
         let block_size = block.estimate_block_size();
         if block_size < min_bytes_per_block {
-            return self.max_block_size;
+            return self.max_block_rows;
         }
         let num_rows = block.num_rows();
         let average_row_size = block_size.div_ceil(num_rows);
         let max_rows = min_bytes_per_block.div_ceil(average_row_size);
-        self.max_block_size.min(max_rows)
+        self.max_block_rows.min(max_rows)
     }
 }
 
@@ -198,7 +198,7 @@ impl Processor for TransformBlockWriter {
                 block.check_valid()?;
                 self.input_data_size += block.estimate_block_size();
                 self.input_num_rows += block.num_rows();
-                let max_rows_per_block = self.calc_max_block_size(&block);
+                let max_rows_per_block = self.calc_max_block_rows(&block);
                 let blocks = block.split_by_rows_no_tail(max_rows_per_block);
                 self.input_data.extend(blocks);
             }

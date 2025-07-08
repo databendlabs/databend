@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export RM_UUID="sed -E ""s/[a-z0-9]{32}/UUID/g"""
+export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 stmt "drop database if exists db01;"
 stmt "create database db01;"
