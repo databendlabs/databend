@@ -40,6 +40,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::AvroFileFormatParams;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_storage::FileParseError;
 use lexical_core::FromLexical;
 use num_bigint::BigInt;
 use num_traits::NumCast;
@@ -52,7 +53,6 @@ use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::default_expr_evaluator::DefaultExprEvaluator;
 use crate::read::error_handler::ErrorHandler;
 use crate::read::load_context::LoadContext;
-use crate::read::whole_file_reader::WholeFileData;
 
 #[derive(Default, Debug)]
 struct Error {
@@ -79,6 +79,7 @@ impl Error {
 }
 
 type ReadFieldResult = std::result::Result<(), Error>;
+
 pub(super) struct AvroDecoder {
     pub is_rounding_mode: bool,
     pub params: AvroFileFormatParams,
@@ -130,10 +131,6 @@ impl AvroDecoder {
         }
     }
 
-    pub fn add(&self, state: &mut BlockBuilderState, data: WholeFileData) -> Result<()> {
-        self.read_file(&data.data, state)
-    }
-
     fn read_file_for_select(
         &self,
         reader: Reader<&[u8]>,
@@ -149,16 +146,47 @@ impl AvroDecoder {
                     "invalid column builder when querying avro",
                 ));
             };
-            self.read_variant(column_builder, value.unwrap(), &schema)
-                .map_err(|e| {
-                    ErrorCode::BadBytes(format!("fail to read row {row}: {:?}", e.reason))
-                })?;
+            if let Err(e) = self.read_variant(column_builder, value.unwrap(), &schema) {
+                self.error_handler.on_error(
+                    FileParseError::InvalidRow {
+                        format: "AVRO".to_string(),
+                        message: e.reason.unwrap_or_default().to_string(),
+                    }
+                    .with_row(row),
+                    None,
+                    &mut state.file_status,
+                    &state.file_path,
+                )?;
+            }
             state.add_row(row)
         }
         Ok(())
     }
-    fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
-        let reader = Reader::new(file_data).unwrap();
+    pub fn read_file(&self, file_data: &[u8], state: &mut BlockBuilderState) -> Result<()> {
+        let reader = match Reader::new(file_data) {
+            Ok(r) => r,
+            Err(e) => {
+                let e = match e {
+                    apache_avro::Error::HeaderMagic | apache_avro::Error::ReadHeader(_) => {
+                        FileParseError::WrongFileType {
+                            format: "AVRO".to_string(),
+                            message: e.to_string(),
+                        }
+                    }
+                    _ => FileParseError::BadFile {
+                        format: "AVRO".to_string(),
+                        message: e.to_string(),
+                    },
+                };
+                return self.error_handler.on_error(
+                    e.with_row(0),
+                    None,
+                    &mut state.file_status,
+                    &state.file_path,
+                );
+            }
+        };
+
         let mut schema = reader.writer_schema().clone();
         if !self.params.use_logic_type {
             date_time_to_int(&mut schema);
@@ -169,9 +197,15 @@ impl AvroDecoder {
         let src_schema = if let Schema::Record(record) = schema {
             record
         } else {
-            return Err(ErrorCode::BadArguments(
-                "only support avro with record as top level type",
-            ));
+            let e = FileParseError::WrongRootType {
+                message: "copy from AVRO only support record as root type".to_string(),
+            };
+            return self.error_handler.on_error(
+                e.with_row(0),
+                None,
+                &mut state.file_status,
+                &state.file_path,
+            );
         };
         let names = self
             .schema
