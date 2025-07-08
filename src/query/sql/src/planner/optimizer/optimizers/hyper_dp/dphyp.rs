@@ -168,7 +168,7 @@ impl DPhpyOptimizer {
             JoinRelation::new(s_expr, self.sample_executor().clone())
         };
 
-        if let Some(op) = Scan::try_downcast_ref(s_expr.plan()) {
+        if let Some(op) = s_expr.plan.as_ref().as_any().downcast_ref::<Scan>() {
             self.table_index_map
                 .insert(op.table_index, self.join_relations.len() as IndexType);
         }
@@ -197,7 +197,12 @@ impl DPhpyOptimizer {
         s_expr: &SExpr,
         join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
     ) -> Result<(Arc<SExpr>, bool)> {
-        let op = Join::try_downcast_ref(s_expr.plan()).unwrap();
+        let op = s_expr
+            .plan
+            .as_ref()
+            .as_any()
+            .downcast_ref::<Join>()
+            .unwrap();
         // Skip if build side cache info is present
         if op.build_side_cache_info.is_some() {
             return Ok((Arc::new(s_expr.clone()), true));
@@ -278,7 +283,7 @@ impl DPhpyOptimizer {
         join_relation: Option<&SExpr>,
     ) -> Result<(Arc<SExpr>, bool)> {
         // If plan is filter, save it
-        if let Some(op) = Filter::try_downcast_ref(s_expr.plan()) {
+        if let Some(op) = s_expr.plan.as_ref().as_any().downcast_ref::<Filter>() {
             if join_child {
                 self.filters.insert(op.clone());
             }
@@ -960,7 +965,7 @@ impl DPhpyOptimizer {
         new_s_expr = self.push_down_filter(&new_s_expr)?;
 
         // Remove empty filter
-        if let Some(filter) = Filter::try_downcast_ref(&new_s_expr.plan) {
+        if let Some(filter) = new_s_expr.plan.as_ref().as_any().downcast_ref::<Filter>() {
             if filter.predicates.is_empty() {
                 new_s_expr = new_s_expr.child(0)?.clone();
             }
@@ -1006,7 +1011,7 @@ impl DPhpyOptimizer {
 
     /// Check if a filter exists in the expression and remove it from filters set
     fn check_filter(&mut self, expr: &SExpr) {
-        if let Some(filter) = Filter::try_downcast_ref(&expr.plan) {
+        if let Some(filter) = expr.plan.as_ref().as_any().downcast_ref::<Filter>() {
             if self.filters.contains(filter) {
                 self.filters.remove(filter);
             }

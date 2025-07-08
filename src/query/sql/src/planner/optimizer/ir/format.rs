@@ -57,12 +57,16 @@ fn display_rel_op(rel_op: &OperatorRef) -> String {
         RelOp::Limit => "Limit".to_string(),
         RelOp::UnionAll => "UnionAll".to_string(),
         RelOp::ConstantTableScan => {
-            let s = ConstantTableScan::try_downcast_ref(rel_op).unwrap();
+            let s = rel_op
+                .plan()
+                .as_any()
+                .downcast_ref::<ConstantTableScan>()
+                .unwrap();
             s.name().to_string()
         }
 
         RelOp::Exchange => {
-            let rel_op = Exchange::try_downcast_ref(rel_op).unwrap();
+            let rel_op = rel_op.plan().as_any().downcast_ref::<Exchange>().unwrap();
             format!("Exchange: ({})", match rel_op {
                 Exchange::Hash(scalars) => format!(
                     "Hash({})",

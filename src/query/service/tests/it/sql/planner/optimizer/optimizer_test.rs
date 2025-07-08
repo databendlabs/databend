@@ -365,7 +365,7 @@ struct StatsApplier<'a> {
 
 impl<'a> SExprVisitor for StatsApplier<'a> {
     fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
-        if let Some(scan) = Scan::try_downcast_ref(&expr.plan) {
+        if let Some(scan) = expr.plan().as_any().downcast_ref::<Scan>() {
             let metadata = self.metadata.read();
             let table = metadata.table(scan.table_index);
 

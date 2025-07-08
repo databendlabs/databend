@@ -242,7 +242,7 @@ impl SExpr {
             inverted_index: &Option<InvertedIndexInfo>,
         ) -> SExpr {
             let mut s_expr = s_expr.clone();
-            s_expr.plan = if let Some(mut p) = Scan::try_downcast_mut(&mut s_expr.plan) {
+            s_expr.plan = if let Some(mut p) = s_expr.plan().as_any().downcast_mut::<Scan>() {
                 if p.table_index == table_index {
                     p.columns.insert(column_index);
                     if inverted_index.is_some() {
@@ -293,7 +293,7 @@ impl SExpr {
 
     #[recursive::recursive]
     pub fn has_merge_exchange(&self) -> bool {
-        if let Some(Exchange::Merge) = Exchange::try_downcast_ref(&self.plan) {
+        if let Some(Exchange::Merge) = self.plan.as_any().downcast_ref::<Exchange>() {
             return true;
         }
         self.children.iter().any(|child| child.has_merge_exchange())

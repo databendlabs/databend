@@ -75,7 +75,11 @@ impl SubqueryDecorrelatorOptimizer {
 
         match subquery.plan_rel_op() {
             RelOp::EvalScalar => {
-                let eval_scalar = EvalScalar::try_downcast_ref(subquery.plan()).unwrap();
+                let eval_scalar = subquery
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<EvalScalar>()
+                    .unwrap();
                 self.flatten_sub_eval_scalar(
                     outer,
                     subquery,
@@ -86,7 +90,11 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::ProjectSet => {
-                let project_set = ProjectSet::try_downcast_ref(subquery.plan()).unwrap();
+                let project_set = subquery
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<ProjectSet>()
+                    .unwrap();
                 self.flatten_sub_project_set(
                     outer,
                     subquery,
@@ -97,7 +105,7 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::Filter => {
-                let filter = Filter::try_downcast_ref(subquery.plan()).unwrap();
+                let filter = subquery.plan().as_any().downcast_ref::<Filter>().unwrap();
                 self.flatten_sub_filter(
                     outer,
                     subquery,
@@ -108,11 +116,15 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::Join => {
-                let join = Join::try_downcast_ref(subquery.plan()).unwrap();
+                let join = subquery.plan().as_any().downcast_ref::<Join>().unwrap();
                 self.flatten_sub_join(outer, subquery, join, correlated_columns, flatten_info)
             }
             RelOp::Aggregate => {
-                let aggregate = Aggregate::try_downcast_ref(subquery.plan()).unwrap();
+                let aggregate = subquery
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<Aggregate>()
+                    .unwrap();
                 self.flatten_sub_aggregate(
                     outer,
                     subquery,
@@ -123,7 +135,7 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::Sort => {
-                let sort = Sort::try_downcast_ref(subquery.plan()).unwrap();
+                let sort = subquery.plan().as_any().downcast_ref::<Sort>().unwrap();
                 self.flatten_sub_sort(
                     outer,
                     subquery,
@@ -134,7 +146,7 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::Limit => {
-                let limit = Limit::try_downcast_ref(subquery.plan()).unwrap();
+                let limit = subquery.plan().as_any().downcast_ref::<Limit>().unwrap();
                 self.flatten_sub_limit(
                     outer,
                     subquery,
@@ -145,7 +157,7 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::UnionAll => {
-                let union_all = UnionAll::try_downcast_ref(subquery.plan()).unwrap();
+                let union_all = subquery.plan().as_any().downcast_ref::<UnionAll>().unwrap();
                 self.flatten_sub_union_all(
                     outer,
                     subquery,
@@ -156,11 +168,15 @@ impl SubqueryDecorrelatorOptimizer {
                 )
             }
             RelOp::Window => {
-                let window = Window::try_downcast_ref(subquery.plan()).unwrap();
+                let window = subquery.plan().as_any().downcast_ref::<Window>().unwrap();
                 self.flatten_sub_window(outer, subquery, window, correlated_columns, flatten_info)
             }
             RelOp::ExpressionScan => {
-                let scan = ExpressionScan::try_downcast_ref(subquery.plan()).unwrap();
+                let scan = subquery
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<ExpressionScan>()
+                    .unwrap();
                 self.flatten_sub_expression_scan(subquery, scan, correlated_columns)
             }
             _ => Err(ErrorCode::SemanticError(
@@ -839,23 +855,23 @@ impl SubqueryDecorrelatorOptimizer {
         let op = match plan.rel_op() {
             RelOp::DummyTableScan => DummyTableScan.into(),
             RelOp::ConstantTableScan => {
-                let scan = ConstantTableScan::try_downcast_ref(plan).unwrap();
+                let scan = plan.as_any().downcast_ref::<ConstantTableScan>().unwrap();
                 self.clone_outer_constant_table_scan(scan)?
             }
             RelOp::Scan => {
-                let scan = Scan::try_downcast_ref(plan).unwrap();
+                let scan = plan.as_any().downcast_ref::<Scan>().unwrap();
                 self.clone_outer_scan(scan)
             }
             RelOp::EvalScalar => {
-                let eval = EvalScalar::try_downcast_ref(plan).unwrap();
+                let eval = plan.as_any().downcast_ref::<EvalScalar>().unwrap();
                 self.clone_outer_eval_scalar(eval)?
             }
             RelOp::Limit => {
-                let limit = Limit::try_downcast_ref(plan).unwrap();
+                let limit = plan.as_any().downcast_ref::<Limit>().unwrap();
                 limit.clone().into()
             }
             RelOp::Sort => {
-                let sort = Sort::try_downcast_ref(plan).unwrap();
+                let sort = plan.as_any().downcast_ref::<Sort>().unwrap();
                 let mut sort = sort.clone();
                 for old in sort.used_columns() {
                     sort.replace_column(old, self.get_derived(old)?);
@@ -863,7 +879,7 @@ impl SubqueryDecorrelatorOptimizer {
                 sort.into()
             }
             RelOp::Filter => {
-                let filter = Filter::try_downcast_ref(plan).unwrap();
+                let filter = plan.as_any().downcast_ref::<Filter>().unwrap();
                 let mut filter = filter.clone();
                 for predicate in &mut filter.predicates {
                     for old in predicate.used_columns() {
@@ -873,7 +889,7 @@ impl SubqueryDecorrelatorOptimizer {
                 filter.into()
             }
             RelOp::Join => {
-                let join = Join::try_downcast_ref(plan).unwrap();
+                let join = plan.as_any().downcast_ref::<Join>().unwrap();
                 let mut join = join.clone();
                 for old in join.used_columns()? {
                     join.replace_column(old, self.get_derived(old)?)?;
@@ -890,7 +906,7 @@ impl SubqueryDecorrelatorOptimizer {
                 join.into()
             }
             RelOp::Aggregate => {
-                let aggregate = Aggregate::try_downcast_ref(plan).unwrap();
+                let aggregate = plan.as_any().downcast_ref::<Aggregate>().unwrap();
                 let mut aggregate = aggregate.clone();
                 let metadata = self.metadata.clone();
                 let mut metadata = metadata.write();

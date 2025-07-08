@@ -179,7 +179,7 @@ impl SubqueryDecorrelatorOptimizer {
 
         match s_expr.plan_rel_op() {
             RelOp::EvalScalar => {
-                let eval = EvalScalar::try_downcast_ref(s_expr.plan()).unwrap();
+                let eval = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 let mut eval = eval.clone();
                 for item in eval.items.iter_mut() {
@@ -189,7 +189,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
 
             RelOp::Filter => {
-                let filter = Filter::try_downcast_ref(s_expr.plan()).unwrap();
+                let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
                 let mut plan = filter.clone();
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 for pred in plan.predicates.iter_mut() {
@@ -199,7 +199,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
 
             RelOp::ProjectSet => {
-                let project_set = ProjectSet::try_downcast_ref(s_expr.plan()).unwrap();
+                let project_set = s_expr.plan().as_any().downcast_ref::<ProjectSet>().unwrap();
                 let mut plan = project_set.clone();
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 for item in plan.srfs.iter_mut() {
@@ -209,7 +209,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
 
             RelOp::Aggregate => {
-                let aggregate = Aggregate::try_downcast_ref(s_expr.plan()).unwrap();
+                let aggregate = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
                 let mut plan = aggregate.clone();
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
                 for item in plan.group_items.iter_mut() {
@@ -222,7 +222,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
 
             RelOp::Window => {
-                let window = Window::try_downcast_ref(s_expr.plan()).unwrap();
+                let window = s_expr.plan().as_any().downcast_ref::<Window>().unwrap();
                 let mut plan = window.clone();
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
 
@@ -245,7 +245,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
 
             RelOp::Sort => {
-                let sort = Sort::try_downcast_ref(s_expr.plan()).unwrap();
+                let sort = s_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
 
                 let Some(mut window) = sort.window_partition.clone() else {
@@ -264,7 +264,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
 
             RelOp::Join => {
-                let join = Join::try_downcast_ref(s_expr.plan()).unwrap();
+                let join = s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
                 let mut left = self.optimize_sync(s_expr.left_child())?;
                 let mut right = self.optimize_sync(s_expr.right_child())?;
                 if !join.has_subquery() {

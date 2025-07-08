@@ -68,7 +68,7 @@
 //! impl AsyncSExprVisitor for EmptySortEliminator {
 //!     async fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
 //!         // Check if this is a Sort operator with empty sort keys
-//!         if let Some(sort) = Sort::try_downcast_ref(&expr.plan) {
+//!         if let Some(sort) = expr.plan.as_any().downcast_ref::<Sort>() {
 //!             if sort.sort_keys.is_empty() {
 //!                 // If sort has no keys, it's unnecessary - replace with its child
 //!                 if expr.arity() == 1 {

@@ -232,7 +232,7 @@ impl PhysicalPlanBuilder {
             return Ok(None);
         }
 
-        if let Some(filter) = Filter::try_downcast_ref(s_expr.plan()) {
+        if let Some(filter) = s_expr.plan().as_any().downcast_ref::<Filter>() {
             let child = s_expr.child(0)?;
             let project_set: ProjectSet = child.plan().clone().try_into()?;
             let Some(new_project_set) =

@@ -591,7 +591,7 @@ impl Plan {
             ignore_result,
         } = self
         {
-            let s = Exchange::try_downcast_ref(&s_expr.plan);
+            let s = s_expr.plan().as_any().downcast_ref::<Exchange>();
             if let Some(Exchange::Merge) = s {
                 let s_expr = Box::new(s_expr.child(0).unwrap().clone());
                 return Plan::Query {

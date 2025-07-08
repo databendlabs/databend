@@ -79,16 +79,31 @@ impl DefaultCostModel {
     fn compute_cost_impl(&self, memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
         match m_expr.plan.as_ref().rel_op() {
             RelOp::Scan => {
-                let plan = Scan::try_downcast_ref(m_expr.plan()).unwrap();
+                let plan = m_expr
+                    .plan
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<Scan>()
+                    .unwrap();
                 self.compute_cost_scan(memo, m_expr, plan)
             }
             RelOp::ConstantTableScan => {
-                let plan = ConstantTableScan::try_downcast_ref(m_expr.plan()).unwrap();
+                let plan = m_expr
+                    .plan
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<ConstantTableScan>()
+                    .unwrap();
                 self.compute_cost_constant_scan(plan)
             }
             RelOp::DummyTableScan => Ok(Cost(0.0)),
             RelOp::Join => {
-                let plan = Join::try_downcast_ref(m_expr.plan()).unwrap();
+                let plan = m_expr
+                    .plan
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<Join>()
+                    .unwrap();
                 self.compute_cost_join(memo, m_expr, plan)
             }
             RelOp::UnionAll => self.compute_cost_union_all(memo, m_expr),

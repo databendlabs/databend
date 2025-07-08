@@ -224,7 +224,8 @@ impl Interpreter for RefreshIndexInterpreter {
                 bind_context,
                 ..
             } => {
-                let schema = if let Some(eval) = EvalScalar::try_downcast_ref(s_expr.plan()) {
+                let schema = if let Some(eval) = s_expr.plan().as_any().downcast_ref::<EvalScalar>()
+                {
                     let fields = eval
                         .items
                         .iter()

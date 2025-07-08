@@ -126,7 +126,12 @@ pub async fn dynamic_sample(
                     .await?
                     .deref()
                     .clone();
-            let project_set = ProjectSet::try_downcast_ref(s_expr.plan()).unwrap();
+            let project_set = s_expr
+                .plan
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ProjectSet>()
+                .unwrap();
             project_set.derive_project_set_stats(&mut child_stat_info)
         }
 

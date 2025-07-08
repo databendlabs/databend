@@ -589,7 +589,12 @@ impl SubqueryDecorrelatorOptimizer {
             // subquery is a simple constant value.
             // for example: `SELECT * FROM t WHERE id = (select 1);`
             if let RelOp::EvalScalar = subquery.subquery.plan_rel_op() {
-                let eval = EvalScalar::try_downcast_ref(subquery.subquery.plan.as_ref()).unwrap();
+                let eval = child
+                    .plan
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<EvalScalar>()
+                    .unwrap();
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
@@ -631,7 +636,13 @@ impl SubqueryDecorrelatorOptimizer {
             // subquery is a set returning function return constant values.
             // for example: `SELECT * FROM t WHERE id IN (SELECT * FROM UNNEST(SPLIT('1,2,3', ',')) AS t1);`
             let mut output_column_index = None;
-            if let Some(eval) = EvalScalar::try_downcast_ref(subquery.subquery.plan.as_ref()) {
+            if let Some(eval) = subquery
+                .subquery
+                .plan
+                .as_ref()
+                .as_any()
+                .downcast_ref::<EvalScalar>()
+            {
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
@@ -646,7 +657,7 @@ impl SubqueryDecorrelatorOptimizer {
 
             let mut srf_column_index = None;
 
-            if let Some(eval) = EvalScalar::try_downcast_ref(child.plan.as_ref()) {
+            if let Some(eval) = child.plan.as_ref().as_any().downcast_ref::<EvalScalar>() {
                 if eval.items.len() != 1 || eval.items[0].index != output_column_index {
                     return Ok(None);
                 }
@@ -668,7 +679,11 @@ impl SubqueryDecorrelatorOptimizer {
             let srf_column_index = srf_column_index.unwrap();
 
             let project_set_expr = child.child(0)?;
-            if let Some(project_set) = ProjectSet::try_downcast_ref(project_set_expr.plan.as_ref())
+            if let Some(project_set) = project_set_expr
+                .plan
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ProjectSet>()
             {
                 if project_set.srfs.len() != 1
                     || project_set.srfs[0].index != srf_column_index

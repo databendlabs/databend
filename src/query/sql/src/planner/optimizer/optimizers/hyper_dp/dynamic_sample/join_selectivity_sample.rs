@@ -44,6 +44,6 @@ pub async fn join_selectivity_sample(
         sample_executor.clone(),
     )
     .await?;
-    let join = Join::try_from(s_expr.plan().clone())?;
+    let join = s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
     join.derive_join_stats(left_stat_info, right_stat_info)
 }

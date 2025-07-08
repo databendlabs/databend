@@ -216,7 +216,7 @@ impl Binder {
         s_expr: &SExpr,
         metadata: MetadataRef,
     ) -> Result<(SExpr, ColumnSet)> {
-        if let Some(join) = Join::try_downcast_ref(&s_expr.plan) {
+        if let Some(join) = s_expr.plan().as_any().downcast_ref::<Join>() {
             if join.build_side_cache_info.is_some() {
                 let mut join = join.clone();
                 let build_side_cache_info = join.build_side_cache_info.as_mut().unwrap();
@@ -255,7 +255,7 @@ impl Binder {
             }
         }
 
-        if let Some(scan) = ExpressionScan::try_downcast_ref(&s_expr.plan) {
+        if let Some(scan) = s_expr.plan().as_any().downcast_ref::<ExpressionScan>() {
             // The join condition columns may consist of the following two parts:
             // (1) expression scan columns.
             // (2) correlated columns in values.

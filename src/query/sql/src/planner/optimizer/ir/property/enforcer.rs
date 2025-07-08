@@ -119,7 +119,7 @@ impl PropertyEnforcer {
         }
 
         let plan = s_expr.plan();
-        if let Some(join) = Join::try_downcast_ref(plan) {
+        if let Some(join) = plan.as_any().downcast_ref::<Join>() {
             let (probe_required_property, build_required_property) =
                 required_properties.split_at_mut(1);
             if let Distribution::Hash(probe_keys) = &mut probe_required_property[0].distribution

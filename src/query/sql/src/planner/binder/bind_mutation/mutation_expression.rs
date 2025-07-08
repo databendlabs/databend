@@ -400,7 +400,7 @@ impl MutationExpression {
             return Ok(s_expr.clone());
         }
 
-        if let Some(scan) = Scan::try_downcast_ref(s_expr.plan()) {
+        if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
             let mut scan = scan.clone();
             scan.is_lazy_table = is_lazy_table;
             scan.set_update_stream_columns(update_stream_columns);
@@ -550,7 +550,7 @@ pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {
     }
 
     fn contains_target_table(s_expr: &SExpr, target_table_index: usize) -> bool {
-        if let Some(scan) = Scan::try_downcast_ref(s_expr.plan()) {
+        if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
             scan.table_index == target_table_index
         } else {
             s_expr

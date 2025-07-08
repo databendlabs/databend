@@ -595,7 +595,7 @@ fn is_index_scan_plan(plan: &Plan) -> bool {
 }
 
 fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
-    if let Some(scan) = Scan::try_downcast_ref(&s_expr.plan) {
+    if let Some(scan) = s_expr.plan.as_any().downcast_ref::<Scan>() {
         scan.agg_index.is_some()
     } else {
         s_expr.children().any(is_index_scan_sexpr)

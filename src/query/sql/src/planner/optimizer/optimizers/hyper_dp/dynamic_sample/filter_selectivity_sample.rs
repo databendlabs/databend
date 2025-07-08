@@ -52,7 +52,7 @@ pub async fn filter_selectivity_sample(
     // Because it's meaningless for filter cardinality by sample in single table query.
     let child = s_expr.child(0)?;
     let child_rel_expr = RelExpr::with_s_expr(child);
-    if let Some(scan) = Scan::try_downcast_ref(child.plan.as_ref()) {
+    if let Some(scan) = child.plan.as_ref().as_any().downcast_ref::<Scan>() {
         let num_rows = scan
             .statistics
             .table_stats

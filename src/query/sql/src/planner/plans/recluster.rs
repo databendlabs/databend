@@ -130,7 +130,7 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
         let mut s_expr = s_expr.clone();
         s_expr.plan = match s_expr.plan.rel_op() {
             RelOp::EvalScalar if !variables.is_empty() => {
-                let expr = EvalScalar::try_downcast_ref(&s_expr.plan).unwrap();
+                let expr = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
                 let mut expr = expr.clone();
                 for item in &mut expr.items {
                     visit_expr_column(&mut item.scalar, variables);
@@ -138,7 +138,7 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
                 Arc::new(expr.into())
             }
             RelOp::Aggregate => {
-                let aggr = Aggregate::try_downcast_ref(&s_expr.plan).unwrap();
+                let aggr = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
                 let mut aggr = aggr.clone();
                 for item in &mut aggr.aggregate_functions {
                     if let ScalarExpr::AggregateFunction(func) = &mut item.scalar {

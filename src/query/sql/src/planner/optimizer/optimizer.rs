@@ -369,7 +369,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     input_s_expr = match mutation.mutation_type {
         MutationType::Merge => {
             if mutation.distributed && inner_rel_op == RelOp::Join {
-                let join = Join::try_from(input_s_expr.plan().clone())?;
+                let join = input_s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
                 let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
                     && broadcast_to_shuffle.is_broadcast(&input_s_expr)?;
