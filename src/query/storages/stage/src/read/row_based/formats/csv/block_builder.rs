@@ -164,11 +164,10 @@ impl RowDecoder for CsvDecoder {
                 &data.field_ends[field_end_idx..field_end_idx + num_fields],
             ) {
                 self.load_context.error_handler.on_error(
-                    e,
+                    e.with_row(row_id),
                     Some((columns, state.num_rows)),
                     &mut state.file_status,
                     &batch.start_pos.path,
-                    row_id,
                 )?
             } else {
                 state.add_row(row_id);
