@@ -126,13 +126,13 @@ use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::ModifyTableCommentPlan;
 use crate::plans::ModifyTableConnectionPlan;
+use crate::plans::Operator as OperatorTrait;
 use crate::plans::OptimizeCompactBlock;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterPlan;
 use crate::plans::RefreshTableCachePlan;
-use crate::plans::Operator;
 use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
@@ -1251,7 +1251,7 @@ impl Binder {
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
             AstOptimizeTableAction::All => {
-                let compact_block = R OptimizeCompactBlock {
+                let compact_block = OptimizeCompactBlock {
                     catalog,
                     database,
                     table,
@@ -1260,7 +1260,7 @@ impl Binder {
                         block_limit: None,
                     },
                 };
-                let s_expr = SExpr::create_leaf( compact_block);
+                let s_expr = SExpr::create_leaf(compact_block);
                 Plan::OptimizeCompactBlock {
                     s_expr: Box::new(s_expr),
                     need_purge: true,
@@ -1283,7 +1283,7 @@ impl Binder {
             }
             AstOptimizeTableAction::Compact { target } => match target {
                 CompactTarget::Block => {
-                    let compact_block =  OptimizeCompactBlock {
+                    let compact_block = OptimizeCompactBlock {
                         catalog,
                         database,
                         table,

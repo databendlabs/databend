@@ -70,7 +70,7 @@ pub async fn filter_selectivity_sample(
             };
             scan.sample = Some(sample_conf);
             let new_child = SExpr::create_leaf(scan);
-            new_s_expr = s_expr.replace_children(vec![new_child]);
+            new_s_expr = s_expr.replace_children(vec![new_child.into()]);
 
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
             let mut collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
@@ -79,14 +79,9 @@ pub async fn filter_selectivity_sample(
                 .await?;
         }
 
-        new_s_expr = SExpr::create_unary(
-            Arc::new(create_count_aggregate(AggregateMode::Partial).into()),
-            Arc::new(new_s_expr),
-        );
-        new_s_expr = SExpr::create_unary(
-            Arc::new(create_count_aggregate(AggregateMode::Final).into()),
-            Arc::new(new_s_expr),
-        );
+        new_s_expr =
+            SExpr::create_unary(create_count_aggregate(AggregateMode::Partial), new_s_expr);
+        new_s_expr = SExpr::create_unary(create_count_aggregate(AggregateMode::Final), new_s_expr);
 
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
         let mut required = ColumnSet::new();

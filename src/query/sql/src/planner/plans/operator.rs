@@ -142,36 +142,3 @@ pub enum RelOp {
     MutationSource,
     // Pattern
 }
-
-#[macro_export]
-macro_rules! with_match_rel_op {
-    (| $t:tt | $($tail:tt)*) => {
-        match_template::match_template! {
-            $t = [
-                Scan => Scan,
-                Join => Join,
-                EvalScalar => EvalScalar,
-                Filter => Filter,
-                Aggregate => Aggregate,
-                Sort => Sort,
-                Limit => Limit,
-                Exchange => Exchange,
-                UnionAll => UnionAll,
-                DummyTableScan => DummyTableScan,
-                Window => Window,
-                ProjectSet => ProjectSet,
-                ConstantTableScan => ConstantTableScan,
-                ExpressionScan => ExpressionScan,
-                CacheScan => CacheScan,
-                Udf => Udf,
-                Udaf => Udaf,
-                AsyncFunction => AsyncFunction,
-                RecursiveCteScan => RecursiveCteScan,
-                MergeInto => MergeInto,
-                CompactBlock => CompactBlock,
-                MutationSource => MutationSource,
-            ],
-            $($tail)*
-        }
-    }
-}
