@@ -17,6 +17,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Exchange;
 
+use super::bound_scatter;
 use super::SortScatteredMeta;
 
 pub struct SortRangeExchange;
@@ -40,5 +41,15 @@ impl Exchange for SortRangeExchange {
             .collect();
 
         Ok(blocks)
+    }
+}
+
+pub struct SortBoundExchange;
+
+impl Exchange for SortBoundExchange {
+    const NAME: &'static str = "SortBound";
+
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+        bound_scatter(data_block, n as _)
     }
 }

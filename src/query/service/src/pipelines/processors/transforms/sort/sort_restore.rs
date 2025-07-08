@@ -67,7 +67,7 @@ where
     A: SortAlgorithm + 'static,
     A::Rows: 'static,
 {
-    const NAME: &'static str = "TransformSortExecute";
+    const NAME: &'static str = "TransformSortRestore";
 
     fn on_input(&mut self, mut block: DataBlock) -> Result<()> {
         assert!(self.inner.is_none());

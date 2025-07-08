@@ -97,27 +97,31 @@ impl FlightScatter for SortBoundScatter {
     }
 
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        let meta = data_block
-            .get_meta()
-            .and_then(SortBound::downcast_ref_from)
-            .unwrap();
-
-        let bound = match &meta.bound {
-            Some(bound) => {
-                debug_assert!(!bound.is_null());
-                bound
-            }
-            None => &Scalar::Null,
-        };
-
-        let mut hasher = XxHash64::default();
-        bound.hash(&mut hasher);
-        let index = hasher.finish() % self.partitions;
-
-        Ok(std::iter::repeat_n(DataBlock::empty(), index as _)
-            .chain(Some(data_block))
-            .collect())
+        bound_scatter(data_block, self.partitions)
     }
+}
+
+pub(super) fn bound_scatter(data_block: DataBlock, n: u64) -> Result<Vec<DataBlock>> {
+    let meta = data_block
+        .get_meta()
+        .and_then(SortBound::downcast_ref_from)
+        .unwrap();
+
+    let bound = match &meta.bound {
+        Some(bound) => {
+            debug_assert!(!bound.is_null());
+            bound
+        }
+        None => &Scalar::Null,
+    };
+
+    let mut hasher = XxHash64::default();
+    bound.hash(&mut hasher);
+    let index = hasher.finish() % n;
+
+    Ok(std::iter::repeat_n(DataBlock::empty(), index as _)
+        .chain(Some(data_block))
+        .collect())
 }
 
 // pub struct TransformExchangeSortSerializer {

@@ -37,7 +37,7 @@ use databend_common_pipeline_transforms::MemorySettings;
 use super::merge_sort::TransformSort;
 use super::sort_collect::TransformSortCollect;
 use super::sort_combine::TransformSortCombine;
-use super::sort_execute::TransformSortRestore;
+use super::sort_restore::TransformSortRestore;
 use super::sort_shuffle::SortSampleState;
 use super::sort_shuffle::TransformSortBoundBroadcast;
 use super::Base;
@@ -237,7 +237,6 @@ impl TransformSortBuilder {
     ) -> Result<()> {
         let state = SortSampleState::new(schema, batch_rows, ctx, broadcast_id);
 
-        let n = pipeline.output_len();
         pipeline.resize(1, false)?;
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(self.build_bound_broadcast(
@@ -245,8 +244,7 @@ impl TransformSortBuilder {
                 output,
                 state.clone(),
             )?))
-        })?;
-        pipeline.resize(n, false)
+        })
     }
 }
 

@@ -277,7 +277,7 @@ impl SortPipelineBuilder {
             self.broadcast_id.unwrap(),
         )?;
 
-        pipeline.exchange(num_exec, Arc::new(SortRangeExchange));
+        pipeline.exchange(num_exec, Arc::new(SortRangeExchange))?;
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(builder.build_combine(input, output)?))
@@ -351,7 +351,26 @@ impl SortPipelineBuilder {
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(builder.build_restore(input, output)?))
-        })
+        })?;
+
+        // pipeline.exchange_with_merge(
+        //     pipeline.output_len(),
+        //     Arc::new(SortBoundExchange {}),
+        //     |inputs, output| {
+        //         Ok(ProcessorPtr::create(create_multi_sort_processor(
+        //             inputs,
+        //             output,
+        //             self.schema.clone(),
+        //             self.block_size,
+        //             self.limit,
+        //             self.sort_desc.clone(),
+        //             self.remove_order_col_at_last,
+        //             self.enable_loser_tree,
+        //         )?))
+        //     },
+        // )?;
+
+        Ok(())
     }
 
     fn build_merge_sort(&self, pipeline: &mut Pipeline, order_col_generated: bool) -> Result<()> {
