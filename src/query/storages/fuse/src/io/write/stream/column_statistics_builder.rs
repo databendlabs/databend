@@ -38,6 +38,7 @@ use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::with_number_type;
 use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
@@ -108,36 +109,21 @@ macro_rules! create_builder_for_type {
 
 pub fn create_column_stats_builder(data_type: &DataType) -> ColumnStatisticsBuilder {
     let inner_type = data_type.remove_nullable();
+    macro_rules! match_number_type_create {
+        ($inner_type:expr) => {{
+            with_number_type!(|NUM_TYPE| match $inner_type {
+                NumberDataType::NUM_TYPE => {
+                    paste::paste! {
+                        ColumnStatisticsBuilder::NUM_TYPE(CommonBuilder::<[<NUM_TYPE Type>]>::create(inner_type))
+                    }
+                }
+            })
+        }};
+    }
+
     match inner_type {
-        DataType::Number(NumberDataType::Int8) => {
-            create_builder_for_type!(inner_type, Int8, Int8Type)
-        }
-        DataType::Number(NumberDataType::Int16) => {
-            create_builder_for_type!(inner_type, Int16, Int16Type)
-        }
-        DataType::Number(NumberDataType::Int32) => {
-            create_builder_for_type!(inner_type, Int32, Int32Type)
-        }
-        DataType::Number(NumberDataType::Int64) => {
-            create_builder_for_type!(inner_type, Int64, Int64Type)
-        }
-        DataType::Number(NumberDataType::UInt8) => {
-            create_builder_for_type!(inner_type, UInt8, UInt8Type)
-        }
-        DataType::Number(NumberDataType::UInt16) => {
-            create_builder_for_type!(inner_type, UInt16, UInt16Type)
-        }
-        DataType::Number(NumberDataType::UInt32) => {
-            create_builder_for_type!(inner_type, UInt32, UInt32Type)
-        }
-        DataType::Number(NumberDataType::UInt64) => {
-            create_builder_for_type!(inner_type, UInt64, UInt64Type)
-        }
-        DataType::Number(NumberDataType::Float32) => {
-            create_builder_for_type!(inner_type, Float32, Float32Type)
-        }
-        DataType::Number(NumberDataType::Float64) => {
-            create_builder_for_type!(inner_type, Float64, Float64Type)
+        DataType::Number(num_type) => {
+            match_number_type_create!(num_type)
         }
         DataType::String => create_builder_for_type!(inner_type, String, StringType),
         DataType::Date => create_builder_for_type!(inner_type, Date, DateType),

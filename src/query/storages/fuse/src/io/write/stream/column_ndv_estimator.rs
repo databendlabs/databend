@@ -35,6 +35,7 @@ use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::with_number_type;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
@@ -69,37 +70,22 @@ pub enum ColumnNDVEstimator {
 }
 
 pub fn create_column_ndv_estimator(data_type: &DataType) -> ColumnNDVEstimator {
+    macro_rules! match_number_type_create {
+        ($inner_type:expr) => {{
+            with_number_type!(|NUM_TYPE| match $inner_type {
+                NumberDataType::NUM_TYPE => {
+                    paste::paste! {
+                        ColumnNDVEstimator::NUM_TYPE(ColumnNDVEstimatorImpl::<[<NUM_TYPE Type>]>::new())
+                    }
+                }
+            })
+        }};
+    }
+
     let inner_type = data_type.remove_nullable();
     match inner_type {
-        DataType::Number(NumberDataType::Int8) => {
-            ColumnNDVEstimator::Int8(ColumnNDVEstimatorImpl::<Int8Type>::new())
-        }
-        DataType::Number(NumberDataType::Int16) => {
-            ColumnNDVEstimator::Int16(ColumnNDVEstimatorImpl::<Int16Type>::new())
-        }
-        DataType::Number(NumberDataType::Int32) => {
-            ColumnNDVEstimator::Int32(ColumnNDVEstimatorImpl::<Int32Type>::new())
-        }
-        DataType::Number(NumberDataType::Int64) => {
-            ColumnNDVEstimator::Int64(ColumnNDVEstimatorImpl::<Int64Type>::new())
-        }
-        DataType::Number(NumberDataType::UInt8) => {
-            ColumnNDVEstimator::UInt8(ColumnNDVEstimatorImpl::<UInt8Type>::new())
-        }
-        DataType::Number(NumberDataType::UInt16) => {
-            ColumnNDVEstimator::UInt16(ColumnNDVEstimatorImpl::<UInt16Type>::new())
-        }
-        DataType::Number(NumberDataType::UInt32) => {
-            ColumnNDVEstimator::UInt32(ColumnNDVEstimatorImpl::<UInt32Type>::new())
-        }
-        DataType::Number(NumberDataType::UInt64) => {
-            ColumnNDVEstimator::UInt64(ColumnNDVEstimatorImpl::<UInt64Type>::new())
-        }
-        DataType::Number(NumberDataType::Float32) => {
-            ColumnNDVEstimator::Float32(ColumnNDVEstimatorImpl::<Float32Type>::new())
-        }
-        DataType::Number(NumberDataType::Float64) => {
-            ColumnNDVEstimator::Float64(ColumnNDVEstimatorImpl::<Float64Type>::new())
+        DataType::Number(num_type) => {
+            match_number_type_create!(num_type)
         }
         DataType::String => ColumnNDVEstimator::String(ColumnNDVEstimatorImpl::<StringType>::new()),
         DataType::Date => ColumnNDVEstimator::Date(ColumnNDVEstimatorImpl::<DateType>::new()),
