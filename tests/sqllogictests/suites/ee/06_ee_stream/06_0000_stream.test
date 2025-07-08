@@ -660,6 +660,44 @@ statement ok
 drop stream s3
 
 statement ok
+create or replace table t9 (id int not null, c1 varchar);
+
+statement ok
+create or replace table t9_v1 like t9; 
+
+statement ok
+create or replace stream stream_t9 on table t9 append_only=false;
+
+query II
+merge into t9 a using (select 10,'a') b(id,c1) on a.id=b.id when matched then update set a.c1=b.c1 when not matched then insert *;
+----
+1 0
+
+query T
+select id, c1, change$action, change$is_update from stream_t9;
+----
+10 a INSERT 0
+
+query I
+insert into t9_v1 select id,c1 from stream_t9;
+----
+1
+
+query IT
+select * from t9_v1;
+----
+10 a
+
+query II
+merge into t9 a using (select 10,'a') b(id,c1) on a.id=b.id when matched then update set a.c1=b.c1 when not matched then insert *;
+----
+0 1
+
+query T
+select * from stream_t9;
+----
+
+statement ok
 drop table t3 all
 
 statement ok
@@ -670,6 +708,15 @@ drop table t5 all
 
 statement ok
 drop table t6 all
+
+statement ok
+drop table t9 all
+
+statement ok
+drop table t9_v1 all
+
+statement ok
+drop stream stream_t9
 
 statement ok
 create table replace_t1(a int);
