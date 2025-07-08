@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 
 #[derive(Clone)]
@@ -60,6 +62,15 @@ impl MemorySettings {
             && self.global_memory_tracking.get_memory_usage() >= self.max_memory_usage
         {
             return true;
+        }
+
+        if let Some(workload_group) = ThreadTracker::workload_group() {
+            let workload_group_memory_usage = workload_group.mem_stat.get_memory_usage();
+            let max_memory_usage = workload_group.max_memory_usage.load(Ordering::Relaxed);
+
+            if max_memory_usage != 0 && workload_group_memory_usage >= max_memory_usage {
+                return true;
+            }
         }
 
         let Some(query_memory_tracking) = self.query_memory_tracking.as_ref() else {
