@@ -1182,7 +1182,7 @@ select id from t where id not like '%_SIP'
 ----
 IRxxSIPD
 
-query BBB
-select equal_null(1, 1), equal_null(1,null), equal_null(null,null), equal_null(1,0)
+query BBBB
+select equal_null(1, 1), equal_null(1, null), equal_null(null, null), equal_null(1, 0)
 ----
 1 0 1 0
