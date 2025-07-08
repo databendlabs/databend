@@ -3776,7 +3776,7 @@ impl<'a> TypeChecker<'a> {
                         distinct: false,
                         name: Identifier::from_name(span, "ifnull"),
                         args: vec![eq_expr, Expr::Literal {
-                            span: span,
+                            span,
                             value: Literal::Boolean(false),
                         }],
                         params: vec![],
