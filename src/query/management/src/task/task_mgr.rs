@@ -103,13 +103,21 @@ impl TaskMgr {
     ) -> Result<Result<(), TaskError>, TaskApiError> {
         task.created_at = Utc::now();
 
-        self.create_task_inner(task, create_option).await
+        self.create_task_inner(task, create_option, false).await
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn update_task(&self, task: Task) -> Result<Result<(), TaskError>, TaskApiError> {
+        self.create_task_inner(task, &CreateOption::CreateOrReplace, true)
+            .await
     }
 
     async fn create_task_inner(
         &self,
         task: Task,
         create_option: &CreateOption,
+        without_schedule: bool,
     ) -> Result<Result<(), TaskError>, TaskApiError> {
         assert!(task.after.is_empty() || task.schedule_options.is_none());
         // check
@@ -152,9 +160,13 @@ impl TaskMgr {
             }
         }
         if !task.after.is_empty() {
-            let _ = TaskChannel::instance().send(TaskMessage::AfterTask(task));
-        } else if task.schedule_options.is_some() {
-            let _ = TaskChannel::instance().send(TaskMessage::ScheduleTask(task));
+            let _ = TaskChannel::instance()
+                .send(TaskMessage::AfterTask(task))
+                .await;
+        } else if task.schedule_options.is_some() && !without_schedule {
+            let _ = TaskChannel::instance()
+                .send(TaskMessage::ScheduleTask(task))
+                .await;
         }
 
         Ok(Ok(()))
@@ -174,7 +186,9 @@ impl TaskMgr {
                 context: "while execute task".to_string(),
             }));
         };
-        let _ = TaskChannel::instance().send(TaskMessage::ExecuteTask(Task::clone(&task)));
+        let _ = TaskChannel::instance()
+            .send(TaskMessage::ExecuteTask(Task::clone(&task)))
+            .await;
 
         Ok(Ok(()))
     }
@@ -256,7 +270,7 @@ impl TaskMgr {
             }
         }
         if let Err(e) = self
-            .create_task_inner(task, &CreateOption::CreateOrReplace)
+            .create_task_inner(task, &CreateOption::CreateOrReplace, false)
             .await?
         {
             return Ok(Err(TaskError::NotFound {
@@ -320,50 +334,6 @@ impl TaskMgr {
             .await?;
 
         Ok(tasks)
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn update_task_run(
-        &self,
-        task_run: TaskRun,
-    ) -> Result<Result<(), TaskError>, TaskApiError> {
-        let seq = MatchSeq::from(CreateOption::CreateOrReplace);
-        let key = TaskRunIdent::new(&self.tenant, task_run.key());
-        let req = UpsertPB::insert(key, task_run.clone()).with(seq);
-        let _ = self.kv_api.upsert_pb(&req).await?;
-
-        Ok(Ok(()))
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn lasted_task_run(
-        &self,
-        task_name: &str,
-    ) -> Result<Result<Option<TaskRun>, TaskError>, TaskApiError> {
-        let key = DirName::new(TaskRunIdent::new(&self.tenant, task_name));
-        let result = self
-            .kv_api
-            .list_pb_values(&key)
-            .await?
-            .next()
-            .await
-            .transpose()?;
-
-        Ok(Ok(result))
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn show_task_runs_full(
-        &self,
-        task_name: &str,
-    ) -> Result<Result<Vec<TaskRun>, TaskApiError>, TaskApiError> {
-        let key = DirName::new(TaskRunIdent::new(&self.tenant, task_name));
-        let stream = self.kv_api.list_pb_values(&key).await?;
-
-        Ok(Ok(stream.try_collect().await?))
     }
 
     pub fn make_schedule_options(opt: ScheduleOptions) -> task::ScheduleOptions {

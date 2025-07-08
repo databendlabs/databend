@@ -61,7 +61,7 @@ pub mod table_functions;
 pub mod test_kits;
 
 mod global_services;
-mod task_service;
+pub mod task;
 
 pub use databend_common_sql as sql;
 pub use databend_common_storages_factory as storages;

@@ -58,7 +58,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
-use crate::task_service::TaskService;
+use crate::task::task_service::TaskService;
 
 pub struct GlobalServices;
 
@@ -123,8 +123,7 @@ impl GlobalServices {
         SessionManager::init(config)?;
         LockManager::init()?;
         AuthMgr::init(config)?;
-        
-        
+
         let task_rx = TaskChannel::init(GlobalConfig::instance().query.tasks_channel_len)?;
         // Init user manager.
         // Builtin users and udfs are created here.
@@ -146,7 +145,6 @@ impl GlobalServices {
             )
             .await?;
         }
-        TaskService::init(task_rx, config.query.tenant_id.clone())?;
         RoleCacheManager::init()?;
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
@@ -181,6 +179,7 @@ impl GlobalServices {
         if config.log.history.on {
             GlobalHistoryLog::init(config).await?;
         }
+        TaskService::init(task_rx, config)?;
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
 
