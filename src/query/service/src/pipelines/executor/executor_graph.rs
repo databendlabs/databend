@@ -157,6 +157,14 @@ impl Node {
     pub unsafe fn create_trigger(&self, index: EdgeIndex) -> *mut UpdateTrigger {
         self.updated_list.create_trigger(index)
     }
+
+    pub fn rows_number(&self, event_cause: EventCause) -> usize {
+        if let EventCause::Input(index) = event_cause {
+            self.inputs_port[index].rows_number()
+        } else {
+            0
+        }
+    }
 }
 
 const POINTS_MASK: u64 = 0xFFFFFFFF00000000;
@@ -388,7 +396,7 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
-
+                let process_rows = node.rows_number(event_cause.clone());
                 let event = {
                     let guard = ThreadTracker::tracking(node.tracking_payload.clone());
 
@@ -425,6 +433,7 @@ impl ExecutingGraph {
                         schedule_queue.push_sync(ProcessorWrapper {
                             processor: node.processor.clone(),
                             graph: graph.clone(),
+                            process_rows,
                         });
                         State::Processing
                     }
@@ -432,6 +441,7 @@ impl ExecutingGraph {
                         schedule_queue.push_async(ProcessorWrapper {
                             processor: node.processor.clone(),
                             graph: graph.clone(),
+                            process_rows,
                         });
                         State::Processing
                     }
@@ -486,6 +496,7 @@ impl ExecutingGraph {
 pub struct ProcessorWrapper {
     pub processor: ProcessorPtr,
     pub graph: Arc<RunningGraph>,
+    pub process_rows: usize,
 }
 
 pub struct ScheduleQueue {
@@ -574,6 +585,7 @@ impl ScheduleQueue {
 
     fn schedule_sync(&mut self, _: &QueryExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.sync_queue.pop_front() {
+            processor.graph.record_process_rows(processor.process_rows);
             ctx.set_task(ExecutorTask::Sync(processor));
         }
     }
@@ -621,37 +633,26 @@ impl ScheduleQueue {
             }
         }
 
-        if !self.sync_queue.is_empty() {
-            while let Some(processor) = self.sync_queue.pop_front() {
-                if processor
-                    .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
-                {
-                    context.set_task(ExecutorTask::Sync(processor));
-                    break;
-                } else {
-                    let mut tasks = VecDeque::with_capacity(1);
-                    tasks.push_back(ExecutorTask::Sync(processor));
-                    global.push_tasks(context.get_worker_id(), None, tasks);
-                }
+        let mut tasks_to_global = VecDeque::with_capacity(self.sync_queue.len());
+
+        if let Some(processor) = self.sync_queue.pop_front() {
+            if processor
+                .graph
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst))
+            {
+                processor.graph.record_process_rows(processor.process_rows);
+                context.set_task(ExecutorTask::Sync(processor));
+            } else {
+                tasks_to_global.push_back(ExecutorTask::Sync(processor));
             }
         }
 
-        if !self.sync_queue.is_empty() {
-            let mut current_tasks = VecDeque::with_capacity(self.sync_queue.len());
-            let mut next_tasks = VecDeque::with_capacity(self.sync_queue.len());
-            while let Some(processor) = self.sync_queue.pop_front() {
-                if processor
-                    .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
-                {
-                    current_tasks.push_back(ExecutorTask::Sync(processor));
-                } else {
-                    next_tasks.push_back(ExecutorTask::Sync(processor));
-                }
-            }
-            let worker_id = context.get_worker_id();
-            global.push_tasks(worker_id, Some(current_tasks), next_tasks);
+        // Add remaining tasks from sync queue to global queue
+        while let Some(processor) = self.sync_queue.pop_front() {
+            tasks_to_global.push_back(ExecutorTask::Sync(processor));
+        }
+        if !tasks_to_global.is_empty() {
+            global.push_tasks(context.get_worker_id(), None, tasks_to_global);
         }
     }
 

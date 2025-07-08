@@ -121,7 +121,9 @@ impl QueriesExecutorTasksQueue {
                     continue;
                 }
             }
-
+            if let ExecutorTask::Sync(processor) = &task {
+                processor.graph.record_process_rows(processor.process_rows);
+            }
             context.set_task(task);
 
             let workers_condvar = context.get_workers_condvar();
