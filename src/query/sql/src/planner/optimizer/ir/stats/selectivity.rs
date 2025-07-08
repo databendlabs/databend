@@ -104,8 +104,15 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "not" => {
-                let argument_selectivity = self.compute_selectivity(&func.arguments[0], false)?;
-                1.0 - argument_selectivity
+                if let ScalarExpr::BoundColumnRef(_) = &func.arguments[0] {
+                    // Not column e.g.
+                    // `SELECT * FROM t WHERE not c1`, the selectivity is 1.
+                    1.0
+                } else {
+                    let argument_selectivity =
+                        self.compute_selectivity(&func.arguments[0], false)?;
+                    1.0 - argument_selectivity
+                }
             }
 
             ScalarExpr::FunctionCall(func) => {
