@@ -43,10 +43,11 @@ pub struct WriterV003 {
 impl WriterV003 {
     /// Create a singleton writer for the snapshot.
     pub fn new(snapshot_config: &SnapshotConfig) -> Result<Self, io::Error> {
-        let temp_path = snapshot_config.snapshot_temp_path();
+        let (storage_path, temp_rel_path) = snapshot_config.snapshot_temp_dir_fn();
 
         let db_builder = DBBuilder::new(
-            temp_path.clone(),
+            storage_path.clone(),
+            &temp_rel_path,
             snapshot_config.raft_config().to_rotbl_config(),
         )?;
 

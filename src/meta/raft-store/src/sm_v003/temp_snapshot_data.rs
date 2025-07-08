@@ -48,11 +48,16 @@ impl TempSnapshotDataV003 {
     }
 
     pub fn move_to_final_path(self, snapshot_id: SnapshotId) -> Result<DB, io::Error> {
-        let final_path = self
+        let (storage_path, rel_path) = self
             .snapshot_config
             .move_to_final_path(&self.path, snapshot_id.clone())?;
 
-        let db = DB::open_snapshot(final_path, snapshot_id, self.snapshot_config.raft_config())?;
+        let db = DB::open_snapshot(
+            storage_path,
+            rel_path,
+            snapshot_id,
+            self.snapshot_config.raft_config(),
+        )?;
         Ok(db)
     }
 

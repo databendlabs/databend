@@ -82,19 +82,25 @@ impl RaftServiceImpl {
         let Received {
             vote: req_vote,
             snapshot_meta,
-            temp_path,
+            storage_path,
+            temp_rel_path,
             ..
         } = received;
 
         let raft_config = &self.meta_node.raft_store.config;
 
-        let db = DB::open_snapshot(&temp_path, snapshot_meta.snapshot_id.clone(), raft_config)
-            .map_err(|e| {
-                Status::internal(format!(
-                    "Fail to open snapshot: {:?}, snapshot_meta:{:?} path: {}",
-                    e, &snapshot_meta, temp_path
-                ))
-            })?;
+        let db = DB::open_snapshot(
+            &storage_path,
+            &temp_rel_path,
+            snapshot_meta.snapshot_id.clone(),
+            raft_config,
+        )
+        .map_err(|e| {
+            Status::internal(format!(
+                "Fail to open snapshot: {:?}, snapshot_meta:{:?} path: {}/{}",
+                e, &snapshot_meta, storage_path, temp_rel_path
+            ))
+        })?;
 
         let snapshot = Snapshot {
             meta: snapshot_meta,
