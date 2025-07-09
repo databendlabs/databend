@@ -14,45 +14,68 @@ statement ok
 CREATE TEMP TABLE d2.t2(a int not null, b int not null) ENGINE = Memory;
 
 query T
-select * from system.temporary_tables order by table_id;
+select database, name, engine, user, num_rows, num_segments, num_blocks  from system.temporary_tables where is_current_session = true order by database, name ;
 ----
-default t0 4611686018427407904 FUSE
-d1 t1 4611686018427407905 FUSE
-d2 t2 4611686018427407906 MEMORY
+d1 t1 FUSE root 0 NULL NULL
+d2 t2 MEMORY root 0 NULL NULL
+default t0 FUSE root 0 NULL NULL
 
 statement ok
 CREATE OR REPLACE TEMP TABLE d1.t1(a int not null, b int not null);
 
 query T
-select * from system.temporary_tables order by table_id;
+select database, name, engine, user, num_rows, num_segments, num_blocks  from system.temporary_tables where is_current_session = true order by database, name ;
 ----
-default t0 4611686018427407904 FUSE
-d2 t2 4611686018427407906 MEMORY
-d1 t1 4611686018427407907 FUSE
+d1 t1 FUSE root 0 NULL NULL
+d2 t2 MEMORY root 0 NULL NULL
+default t0 FUSE root 0 NULL NULL
 
 statement ok
 drop table d2.t2;
 
 query T
-select * from system.temporary_tables order by table_id;
+select database, name, engine, user, num_rows, num_segments, num_blocks  from system.temporary_tables where is_current_session = true order by database, name ;
 ----
-default t0 4611686018427407904 FUSE
-d1 t1 4611686018427407907 FUSE
+d1 t1 FUSE root 0 NULL NULL
+default t0 FUSE root 0 NULL NULL
 
 statement ok
 CREATE OR REPLACE TEMP TABLE d1.t1(a int not null, b int not null) as select * from d1.t1;
 
 query T
-select * from system.temporary_tables order by table_id;
+select database, name, engine, user, num_rows, num_segments, num_blocks  from system.temporary_tables where is_current_session = true order by database, name ;
 ----
-default t0 4611686018427407904 FUSE
-d1 t1 4611686018427407908 FUSE
+d1 t1 FUSE root 0 0 0
+default t0 FUSE root 0 NULL NULL
 
 statement ok
 CREATE OR REPLACE TEMP TABLE d1.t1(a int not null, b int not null) as select * from d1.t1;
 
 query T
-select * from system.temporary_tables order by table_id;
+select database, name, engine, user, num_rows, num_segments, num_blocks  from system.temporary_tables where is_current_session = true order by database, name ;
 ----
-default t0 4611686018427407904 FUSE
-d1 t1 4611686018427407909 FUSE
+d1 t1 FUSE root 0 0 0
+default t0 FUSE root 0 NULL NULL
+
+
+statement ok
+CREATE TEMP TABLE d2.t2(a int not null, b int not null) ENGINE = Fuse;
+
+statement ok
+INSERT INTO TABLE d2.t2 values(1, 2);
+
+statement ok
+INSERT INTO TABLE d2.t2 values(3, 4);
+
+statement ok
+INSERT INTO TABLE d2.t2 values(5, 6), (7,8);
+
+statement ok
+OPTIMIZE TABLE d2.t2 compact segment;
+
+query T
+select database, name, engine, user, num_rows, num_segments, num_blocks  from system.temporary_tables where is_current_session = true order by database, name ;
+----
+d1 t1 FUSE root 0 0 0
+d2 t2 FUSE root 4 1 3
+default t0 FUSE root 0 NULL NULL

@@ -101,8 +101,12 @@ impl MySQLConnection {
                     .drop_client_session_id(&session_id, &user)
                     .await
                     .ok();
-                // TODO bug
-                drop_all_temp_tables(&session_id, session.temp_tbl_mgr(), "mysql").await
+                drop_all_temp_tables(
+                    &format!("{user}/{session_id}"),
+                    session.temp_tbl_mgr(),
+                    "mysql",
+                )
+                .await
             });
             let _ = futures::executor::block_on(join_handle);
         });
