@@ -14,15 +14,20 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::BlockEntry::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -41,11 +46,15 @@ pub struct TemporaryTablesTable {
 impl SyncSystemTable for TemporaryTablesTable {
     const NAME: &'static str = "system.temporary_tables";
 
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Cluster;
+
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+        let node_id = ctx.get_cluster().local_id.clone();
+
         let mut dbs = Vec::new();
         let mut names = Vec::new();
         let mut table_ids = Vec::new();
@@ -53,6 +62,13 @@ impl SyncSystemTable for TemporaryTablesTable {
         let mut users = Vec::new();
         let mut session_ids = Vec::new();
         let mut is_current_sessions = Vec::new();
+        let mut created_ons = Vec::new();
+        let mut updated_ons = Vec::new();
+        let mut compressed_data_bytes_col = Vec::new();
+        let mut index_bytes_col = Vec::new();
+        let mut number_of_rows_col = Vec::new();
+        let mut number_of_blocks_col = Vec::new();
+        let mut number_of_segments_col = Vec::new();
 
         let client_session_manager = ClientSessionManager::instance();
         let all_temp_tables = client_session_manager.get_all_temp_tables()?;
@@ -81,16 +97,30 @@ impl SyncSystemTable for TemporaryTablesTable {
                 .as_ref()
                 .map(|id| id == &session_id)
                 .unwrap_or(false);
+            let meta = table.meta;
+            let created_on = meta.created_on;
+            let updated_on = meta.updated_on;
+            let compressed_data_bytes = meta.statistics.compressed_data_bytes;
+            let index_bytes = meta.statistics.index_data_bytes;
+            let number_of_rows = meta.statistics.number_of_rows;
+            let number_of_blocks = meta.statistics.number_of_blocks;
             dbs.push(db_name.to_string());
             names.push(table.name);
             table_ids.push(table.ident.table_id);
-            engines.push(table.meta.engine);
+            engines.push(meta.engine);
             users.push(user);
             session_ids.push(session_id);
             is_current_sessions.push(is_current_session);
+            created_ons.push(created_on.timestamp_micros());
+            updated_ons.push(updated_on.timestamp_micros());
+            compressed_data_bytes_col.push(compressed_data_bytes);
+            index_bytes_col.push(index_bytes);
+            number_of_rows_col.push(number_of_rows);
+            number_of_segments_col.push(meta.statistics.number_of_segments);
+            number_of_blocks_col.push(number_of_blocks);
         }
 
-        Ok(DataBlock::new_from_columns(vec![
+        let mut block = DataBlock::new_from_columns(vec![
             StringType::from_data(dbs),
             StringType::from_data(names),
             UInt64Type::from_data(table_ids),
@@ -98,7 +128,17 @@ impl SyncSystemTable for TemporaryTablesTable {
             StringType::from_data(users),
             StringType::from_data(session_ids),
             BooleanType::from_data(is_current_sessions),
-        ]))
+            TimestampType::from_data(created_ons),
+            TimestampType::from_data(updated_ons),
+            UInt64Type::from_data(compressed_data_bytes_col),
+            UInt64Type::from_data(index_bytes_col),
+            UInt64Type::from_data(number_of_rows_col),
+            UInt64Type::from_opt_data(number_of_segments_col),
+            UInt64Type::from_opt_data(number_of_blocks_col),
+        ]);
+
+        block.add_const_column(Scalar::String(node_id), DataType::String);
+        Ok(block)
     }
 }
 
@@ -112,6 +152,23 @@ impl TemporaryTablesTable {
             TableField::new("user", TableDataType::String),
             TableField::new("session_id", TableDataType::String),
             TableField::new("is_current_session", TableDataType::Boolean),
+            TableField::new("created_on", TableDataType::Timestamp),
+            TableField::new("updated_on", TableDataType::Timestamp),
+            TableField::new(
+                "compressed_data_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "index_data_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("num_rows", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "num_segments",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("num_blocks", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("node", TableDataType::String),
         ]);
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),

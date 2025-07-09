@@ -3615,6 +3615,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("current_secondary_roles"),
             Ascii::new("current_available_roles"),
             Ascii::new("connection_id"),
+            Ascii::new("client_session_id"),
             Ascii::new("timezone"),
             Ascii::new("nullif"),
             Ascii::new("iff"),
@@ -3738,6 +3739,12 @@ impl<'a> TypeChecker<'a> {
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
                 value: Literal::String(self.ctx.get_connection_id()),
+            })),
+            ("client_session_id", &[]) => Some(self.resolve(&Expr::Literal {
+                span,
+                value: Literal::String(
+                    self.ctx.get_current_client_session_id().unwrap_or_default(),
+                ),
             })),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
