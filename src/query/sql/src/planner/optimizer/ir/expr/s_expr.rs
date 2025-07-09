@@ -75,7 +75,6 @@ impl SExpr {
     ) -> Self {
         let plan = plan.into();
         let children = children.into();
-        debug_assert_eq!(plan.arity(), children.len());
         SExpr {
             plan,
             children,

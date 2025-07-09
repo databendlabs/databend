@@ -120,10 +120,15 @@ impl Operator for Window {
         let iter = iter.chain(self.partition_by.iter().map(|expr| &expr.scalar));
         let iter = iter.chain(self.arguments.iter().map(|expr| &expr.scalar));
 
-        if let WindowFuncType::Aggregate(agg) = &self.function {
-            Box::new(iter.chain(agg.exprs()))
-        } else {
-            Box::new(iter)
+        match &self.function {
+            WindowFuncType::Aggregate(agg) => Box::new(iter.chain(agg.exprs())),
+            WindowFuncType::LagLead(lag_lead_function) => {
+                Box::new(iter.chain(std::iter::once(lag_lead_function.arg.as_ref())))
+            }
+            WindowFuncType::NthValue(nth_value_function) => {
+                Box::new(iter.chain(std::iter::once(nth_value_function.arg.as_ref())))
+            }
+            _ => Box::new(iter),
         }
     }
 
