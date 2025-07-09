@@ -62,6 +62,11 @@ impl SnapshotConfig {
         )
     }
 
+    /// Return a two element tuple of snapshot dir and fn
+    pub fn snapshot_dir_fn(&self, snapshot_id: &SnapshotId) -> (String, String) {
+        (self.snapshot_dir(), Self::snapshot_fn(snapshot_id))
+    }
+
     pub fn snapshot_path(&self, snapshot_id: &SnapshotId) -> String {
         format!("{}/{}", self.snapshot_dir(), Self::snapshot_fn(snapshot_id))
     }
@@ -70,6 +75,14 @@ impl SnapshotConfig {
         format!("{}.snap", snapshot_id)
     }
 
+    // TODO: remvoe this
+    /// Return a two elements tuple of snapshot dir and temp fn
+    pub fn snapshot_temp_dir_fn(&self) -> (String, String) {
+        let temp_snapshot_id = self.temp_snapshot_id();
+        (self.snapshot_dir(), temp_snapshot_id)
+    }
+
+    // TODO: remvoe this
     pub fn snapshot_temp_path(&self) -> String {
         let temp_snapshot_id = self.temp_snapshot_id();
         format!("{}/{}", self.snapshot_dir(), temp_snapshot_id)
@@ -105,13 +118,15 @@ impl SnapshotConfig {
     ///
     /// So that it is visible and can be loaded.
     ///
-    /// It returns the final path.
+    /// It returns the final storage path and rel path.
     pub fn move_to_final_path(
         &self,
         temp_path: &str,
         snapshot_id: SnapshotId,
-    ) -> Result<String, io::Error> {
-        let final_path = self.snapshot_path(&snapshot_id);
+    ) -> Result<(String, String), io::Error> {
+        let (storage_path, rel_path) = self.snapshot_dir_fn(&snapshot_id);
+        let final_path = format!("{storage_path}/{rel_path}");
+
         fs::rename(temp_path, &final_path)?;
 
         info!(
@@ -119,7 +134,7 @@ impl SnapshotConfig {
             snapshot_id, final_path
         );
 
-        Ok(final_path)
+        Ok((storage_path, rel_path))
     }
 }
 

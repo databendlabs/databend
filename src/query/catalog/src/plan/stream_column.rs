@@ -38,7 +38,6 @@ use databend_common_expression::Value;
 use databend_common_expression::ORIGIN_BLOCK_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_expression::ORIGIN_VERSION_COLUMN_ID;
-use databend_common_expression::ROW_VERSION_COLUMN_ID;
 use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 
 use crate::plan::PartInfo;
@@ -132,7 +131,6 @@ pub enum StreamColumnType {
     OriginVersion,
     OriginBlockId,
     OriginRowNum,
-    RowVersion,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -168,7 +166,6 @@ impl StreamColumn {
             StreamColumnType::OriginRowNum => {
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64)))
             }
-            StreamColumnType::RowVersion => TableDataType::Number(NumberDataType::UInt64),
         }
     }
 
@@ -186,13 +183,12 @@ impl StreamColumn {
             StreamColumnType::OriginVersion => ORIGIN_VERSION_COLUMN_ID,
             StreamColumnType::OriginBlockId => ORIGIN_BLOCK_ID_COLUMN_ID,
             StreamColumnType::OriginRowNum => ORIGIN_BLOCK_ROW_NUM_COLUMN_ID,
-            StreamColumnType::RowVersion => ROW_VERSION_COLUMN_ID,
         }
     }
 
     pub fn generate_column_values(&self, meta: &StreamColumnMeta, num_rows: usize) -> BlockEntry {
         match &self.column_type {
-            StreamColumnType::OriginVersion | StreamColumnType::RowVersion => unreachable!(),
+            StreamColumnType::OriginVersion => unreachable!(),
             StreamColumnType::OriginBlockId => {
                 BlockEntry::new(meta.build_origin_block_id(), || {
                     (

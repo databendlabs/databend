@@ -25,7 +25,8 @@ use crate::snapshot_config::SnapshotConfig;
 
 /// A typed temporary snapshot data.
 pub struct TempSnapshotDataV003 {
-    path: String,
+    storage_path: String,
+    rel_path: String,
     snapshot_config: SnapshotConfig,
     inner: Arc<Rotbl>,
 }
@@ -39,24 +40,36 @@ impl Deref for TempSnapshotDataV003 {
 }
 
 impl TempSnapshotDataV003 {
-    pub fn new(path: impl ToString, snapshot_config: SnapshotConfig, r: Arc<Rotbl>) -> Self {
+    pub fn new(
+        storage_path: impl ToString,
+        rel_path: impl ToString,
+        snapshot_config: SnapshotConfig,
+        r: Arc<Rotbl>,
+    ) -> Self {
         Self {
-            path: path.to_string(),
+            storage_path: storage_path.to_string(),
+            rel_path: rel_path.to_string(),
             snapshot_config,
             inner: r,
         }
     }
 
     pub fn move_to_final_path(self, snapshot_id: SnapshotId) -> Result<DB, io::Error> {
-        let final_path = self
+        let final_path = format!("{}/{}", self.storage_path, self.rel_path);
+        let (storage_path, rel_path) = self
             .snapshot_config
-            .move_to_final_path(&self.path, snapshot_id.clone())?;
+            .move_to_final_path(&final_path, snapshot_id.clone())?;
 
-        let db = DB::open_snapshot(final_path, snapshot_id, self.snapshot_config.raft_config())?;
+        let db = DB::open_snapshot(
+            storage_path,
+            rel_path,
+            snapshot_id,
+            self.snapshot_config.raft_config(),
+        )?;
         Ok(db)
     }
 
-    pub fn path(&self) -> &str {
-        &self.path
+    pub fn path(&self) -> String {
+        format!("{}/{}", self.storage_path, self.rel_path)
     }
 }

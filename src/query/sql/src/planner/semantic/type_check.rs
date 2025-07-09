@@ -3637,6 +3637,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
+            Ascii::new("equal_null"),
         ];
         FUNCTIONS
     }
@@ -3760,6 +3761,49 @@ impl<'a> TypeChecker<'a> {
                     },
                     arg_x,
                 ]))
+            }
+            ("equal_null", &[arg_x, arg_y]) => {
+                // Rewrite equal_null(x, y) to ifnull(x = y, false) or (x is null and y is null)
+                let eq_expr = Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::Eq,
+                    left: Box::new(arg_x.clone()),
+                    right: Box::new(arg_y.clone()),
+                };
+                let ifnull_expr = Expr::FunctionCall {
+                    span,
+                    func: ASTFunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(span, "ifnull"),
+                        args: vec![eq_expr, Expr::Literal {
+                            span,
+                            value: Literal::Boolean(false),
+                        }],
+                        params: vec![],
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+
+                let is_null_x = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_x.clone()),
+                    not: false,
+                };
+                let is_null_y = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_y.clone()),
+                    not: false,
+                };
+                let and_expr = Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::And,
+                    left: Box::new(is_null_x),
+                    right: Box::new(is_null_y),
+                };
+
+                Some(self.resolve_function(span, "or", vec![], &[&ifnull_expr, &and_expr]))
             }
             ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
             ("ifnull" | "nvl", args) => {

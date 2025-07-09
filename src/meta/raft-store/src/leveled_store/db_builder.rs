@@ -22,6 +22,7 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures_util::TryStreamExt;
+use rotbl::storage::impls::fs::FsStorage;
 use rotbl::v001::Rotbl;
 use rotbl::v001::RotblMeta;
 use rotbl::v001::SeqMarked;
@@ -30,38 +31,37 @@ use crate::leveled_store::leveled_map::LeveledMap;
 
 /// Builds a snapshot from series of key-value in `(String, SeqMarked)`
 pub(crate) struct DBBuilder {
-    path: String,
-    rotbl_builder: rotbl::v001::Builder,
+    storage_path: String,
+    rel_path: String,
+    rotbl_builder: rotbl::v001::Builder<FsStorage>,
 }
 
 impl DBBuilder {
     pub fn new<P: AsRef<Path>>(
-        path: P,
+        storage_path: P,
+        rel_path: &str,
         rotbl_config: rotbl::v001::Config,
     ) -> Result<Self, io::Error> {
-        let p = path.as_ref().to_str().ok_or_else(|| {
+        let storage = FsStorage::new(storage_path.as_ref().to_path_buf());
+
+        let base_path = storage_path.as_ref().to_str().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("invalid path: {:?}", path.as_ref()),
+                format!("invalid path: {:?}", storage_path.as_ref()),
             )
         })?;
 
-        let inner = rotbl::v001::Builder::new(rotbl_config, path.as_ref())?;
+        let rel_path = rel_path.to_string();
+
+        let inner = rotbl::v001::Builder::new(storage, rotbl_config, &rel_path)?;
 
         let b = Self {
-            path: p.to_string(),
+            storage_path: base_path.to_string(),
+            rel_path,
             rotbl_builder: inner,
         };
 
         Ok(b)
-    }
-
-    /// This method is only used for test.
-    #[allow(dead_code)]
-    pub fn new_with_default_config<P: AsRef<Path>>(path: P) -> Result<Self, io::Error> {
-        let mut config = rotbl::v001::Config::default();
-        config.fill_default_values();
-        Self::new(path, config)
     }
 
     /// Append a key-value pair to the builder, the keys must be sorted.
@@ -82,8 +82,11 @@ impl DBBuilder {
         Ok(())
     }
 
-    /// Flush the data to disk and return a read-only table [`Rotbl`] instance.
-    pub fn flush(self, sys_data: SysData) -> Result<(String, Rotbl), io::Error> {
+    /// Flush the data to disk and return:
+    /// - storage path,
+    /// - relative path of the db,
+    /// - and a read-only table [`Rotbl`] instance.
+    pub fn flush(self, sys_data: SysData) -> Result<(String, String, Rotbl), io::Error> {
         let meta = serde_json::to_string(&sys_data).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -95,7 +98,7 @@ impl DBBuilder {
         let rotbl_meta = RotblMeta::new(0, meta);
 
         let r = self.rotbl_builder.commit(rotbl_meta)?;
-        Ok((self.path, r))
+        Ok((self.storage_path, self.rel_path, r))
     }
 
     /// Build a [`DB`] from a leveled map.
@@ -116,8 +119,8 @@ impl DBBuilder {
         self.append_kv_stream(strm).await?;
 
         let snapshot_id = make_snapshot_id(&sys_data);
-        let (path, r) = self.flush(sys_data)?;
-        let db = DB::new(path, snapshot_id, Arc::new(r))?;
+        let (storage_path, rel_path, r) = self.flush(sys_data)?;
+        let db = DB::new(storage_path, rel_path, snapshot_id, Arc::new(r))?;
 
         Ok(db)
     }
