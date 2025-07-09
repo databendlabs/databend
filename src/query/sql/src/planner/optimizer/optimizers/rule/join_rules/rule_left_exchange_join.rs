@@ -130,7 +130,7 @@ impl Rule for RuleLeftExchangeJoin {
         let t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;
         let t3_prop = RelExpr::with_s_expr(t3).derive_relational_prop()?;
         let join4_prop = RelExpr::with_s_expr(&SExpr::create_binary(
-            join_4.clone().into(),
+            join_4.clone(),
             t1.clone(),
             t3.clone(),
         ))
@@ -220,8 +220,8 @@ impl Rule for RuleLeftExchangeJoin {
         let mut result = SExpr::create(
             join_3,
             vec![
-                SExpr::create_binary(join_4, t1.clone(), t3.clone()),
-                t2.clone(),
+                Arc::new(SExpr::create_binary(join_4, t1.clone(), t3.clone())),
+                Arc::new(t2.clone()),
             ],
             None,
             None,

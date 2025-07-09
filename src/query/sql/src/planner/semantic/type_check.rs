@@ -5406,21 +5406,18 @@ impl<'a> TypeChecker<'a> {
         assert_eq!(ctx.columns.len(), 1);
         // Wrap group by on `const_scan` to deduplicate values
         let distinct_const_scan = SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items: vec![ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ctx.columns[0].clone(),
-                        }),
-                        index: self.metadata.read().columns().len() - 1,
-                    }],
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            Arc::new(const_scan),
+            Aggregate {
+                mode: AggregateMode::Initial,
+                group_items: vec![ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ctx.columns[0].clone(),
+                    }),
+                    index: self.metadata.read().columns().len() - 1,
+                }],
+                ..Default::default()
+            },
+            const_scan,
         );
 
         let box mut data_type = ctx.columns[0].data_type.clone();

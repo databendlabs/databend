@@ -47,7 +47,7 @@ impl Memo {
 }
 
 fn display_rel_op(rel_op: &OperatorRef) -> String {
-    match rel_op {
+    match rel_op.rel_op() {
         RelOp::Scan => "Scan".to_string(),
         RelOp::Join => "Join".to_string(),
         RelOp::EvalScalar => "EvalScalar".to_string(),

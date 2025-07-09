@@ -201,6 +201,6 @@ impl Operator for Mutation {
         self
     }
     fn rel_op(&self) -> RelOp {
-        RelOp::MergeInto
+        RelOp::Mutation
     }
 }

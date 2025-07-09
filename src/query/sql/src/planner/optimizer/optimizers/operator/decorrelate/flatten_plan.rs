@@ -145,17 +145,13 @@ impl SubqueryDecorrelatorOptimizer {
                     need_cross_join,
                 )
             }
-            RelOp::Limit => {
-                let limit = subquery.plan().as_any().downcast_ref::<Limit>().unwrap();
-                self.flatten_sub_limit(
-                    outer,
-                    subquery,
-                    limit,
-                    correlated_columns,
-                    flatten_info,
-                    need_cross_join,
-                )
-            }
+            RelOp::Limit => self.flatten_sub_limit(
+                outer,
+                subquery,
+                correlated_columns,
+                flatten_info,
+                need_cross_join,
+            ),
             RelOp::UnionAll => {
                 let union_all = subquery.plan().as_any().downcast_ref::<UnionAll>().unwrap();
                 self.flatten_sub_union_all(
@@ -262,10 +258,7 @@ impl SubqueryDecorrelatorOptimizer {
             });
         }
 
-        Ok(SExpr::create_unary(
-            Arc::new(EvalScalar { items }.into()),
-            Arc::new(flatten_plan),
-        ))
+        Ok(SExpr::create_unary(EvalScalar { items }, flatten_plan))
     }
 
     fn flatten_sub_project_set(
@@ -311,16 +304,13 @@ impl SubqueryDecorrelatorOptimizer {
             .map(|index| Self::scalar_item_from_index(*index, "outer.", &metadata))
             .collect();
         Ok(SExpr::create_unary(
-            Arc::new(ProjectSet { srfs }.into()),
-            Arc::new(SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(flatten_plan),
-            )),
+            ProjectSet { srfs },
+            SExpr::create_unary(
+                EvalScalar {
+                    items: scalar_items,
+                },
+                flatten_plan,
+            ),
         ))
     }
 
@@ -351,11 +341,8 @@ impl SubqueryDecorrelatorOptimizer {
             predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
         }
 
-        let filter_plan = Filter { predicates }.into();
-        Ok(SExpr::create_unary(
-            Arc::new(filter_plan),
-            Arc::new(flatten_plan),
-        ))
+        let filter_plan = Filter { predicates };
+        Ok(SExpr::create_unary(filter_plan, flatten_plan))
     }
 
     fn flatten_sub_join(
@@ -476,26 +463,23 @@ impl SubqueryDecorrelatorOptimizer {
         )?;
 
         Ok(SExpr::create_binary(
-            Arc::new(
-                Join {
-                    equi_conditions: JoinEquiCondition::new_conditions(
-                        left_conditions,
-                        right_conditions,
-                        vec![],
-                    ),
-                    non_equi_conditions,
-                    join_type: join.join_type.clone(),
-                    marker_index: join.marker_index,
-                    from_correlated_subquery: false,
-                    need_hold_hash_table: false,
-                    is_lateral: false,
-                    single_to_inner: None,
-                    build_side_cache_info: None,
-                }
-                .into(),
-            ),
-            Arc::new(left_flatten_plan),
-            Arc::new(right_flatten_plan),
+            Join {
+                equi_conditions: JoinEquiCondition::new_conditions(
+                    left_conditions,
+                    right_conditions,
+                    vec![],
+                ),
+                non_equi_conditions,
+                join_type: join.join_type.clone(),
+                marker_index: join.marker_index,
+                from_correlated_subquery: false,
+                need_hold_hash_table: false,
+                is_lateral: false,
+                single_to_inner: None,
+                build_side_cache_info: None,
+            },
+            left_flatten_plan,
+            right_flatten_plan,
         ))
     }
 
@@ -563,18 +547,15 @@ impl SubqueryDecorrelatorOptimizer {
             })
         }
         Ok(SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items,
-                    aggregate_functions: agg_items,
-                    from_distinct: aggregate.from_distinct,
-                    rank_limit: aggregate.rank_limit.clone(),
-                    grouping_sets: aggregate.grouping_sets.clone(),
-                }
-                .into(),
-            ),
-            Arc::new(flatten_plan),
+            Aggregate {
+                mode: AggregateMode::Initial,
+                group_items,
+                aggregate_functions: agg_items,
+                from_distinct: aggregate.from_distinct,
+                rank_limit: aggregate.rank_limit.clone(),
+                grouping_sets: aggregate.grouping_sets.clone(),
+            },
+            flatten_plan,
         ))
     }
 
@@ -608,10 +589,7 @@ impl SubqueryDecorrelatorOptimizer {
         }) {
             flatten_info.from_count_func = false;
         }
-        Ok(SExpr::create_unary(
-            subquery.plan.clone(),
-            Arc::new(flatten_plan),
-        ))
+        Ok(SExpr::create_unary(subquery.plan.clone(), flatten_plan))
     }
 
     fn flatten_sub_limit(
@@ -630,10 +608,7 @@ impl SubqueryDecorrelatorOptimizer {
             flatten_info,
             need_cross_join,
         )?;
-        Ok(SExpr::create_unary(
-            subquery.plan.clone(),
-            Arc::new(flatten_plan),
-        ))
+        Ok(SExpr::create_unary(subquery.plan.clone(), flatten_plan))
     }
 
     fn flatten_sub_window(
@@ -673,20 +648,17 @@ impl SubqueryDecorrelatorOptimizer {
         drop(metadata);
 
         Ok(SExpr::create_unary(
-            Arc::new(
-                Window {
-                    span: window.span,
-                    index: window.index,
-                    function: window.function.clone(),
-                    arguments: window.arguments.clone(),
-                    partition_by,
-                    order_by: window.order_by.clone(),
-                    frame: window.frame.clone(),
-                    limit: window.limit,
-                }
-                .into(),
-            ),
-            Arc::new(flatten_plan),
+            Window {
+                span: window.span,
+                index: window.index,
+                function: window.function.clone(),
+                arguments: window.arguments.clone(),
+                partition_by,
+                order_by: window.order_by.clone(),
+                frame: window.frame.clone(),
+                limit: window.limit,
+            },
+            flatten_plan,
         ))
     }
 
@@ -770,9 +742,9 @@ impl SubqueryDecorrelatorOptimizer {
             }));
 
         Ok(SExpr::create_binary(
-            Arc::new(union_all.clone().into()),
-            Arc::new(left_flatten_plan),
-            Arc::new(right_flatten_plan),
+            union_all.clone(),
+            left_flatten_plan,
+            right_flatten_plan,
         ))
     }
 
@@ -816,21 +788,18 @@ impl SubqueryDecorrelatorOptimizer {
             .collect::<Result<_>>()?;
 
         let aggr = SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items,
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            Arc::new(outer),
+            Aggregate {
+                mode: AggregateMode::Initial,
+                group_items,
+                ..Default::default()
+            },
+            outer,
         );
 
         Ok(SExpr::create_binary(
-            Arc::new(Join::default().into()),
-            Arc::new(aggr),
-            Arc::new(subquery.clone()),
+            Join::default(),
+            aggr,
+            subquery.clone(),
         ))
     }
 
@@ -868,7 +837,7 @@ impl SubqueryDecorrelatorOptimizer {
             }
             RelOp::Limit => {
                 let limit = plan.as_any().downcast_ref::<Limit>().unwrap();
-                limit.clone().into()
+                limit.clone()
             }
             RelOp::Sort => {
                 let sort = plan.as_any().downcast_ref::<Sort>().unwrap();
@@ -876,7 +845,7 @@ impl SubqueryDecorrelatorOptimizer {
                 for old in sort.used_columns() {
                     sort.replace_column(old, self.get_derived(old)?);
                 }
-                sort.into()
+                sort
             }
             RelOp::Filter => {
                 let filter = plan.as_any().downcast_ref::<Filter>().unwrap();

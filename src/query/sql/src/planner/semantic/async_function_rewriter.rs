@@ -129,10 +129,7 @@ impl AsyncFunctionRewriter {
                 items: scalar_items,
             };
 
-            child_expr = Arc::new(SExpr::create_unary(
-                Arc::new(eval_scalar.into()),
-                child_expr,
-            ));
+            child_expr = Arc::new(SExpr::create_unary(eval_scalar, child_expr));
         }
 
         if !self.async_functions.is_empty() {
@@ -141,10 +138,7 @@ impl AsyncFunctionRewriter {
             let async_func_plan = AsyncFunction {
                 items: async_fun_items,
             };
-            child_expr = Arc::new(SExpr::create_unary(
-                Arc::new(async_func_plan.into()),
-                child_expr,
-            ));
+            child_expr = Arc::new(SExpr::create_unary(async_func_plan, child_expr));
         }
         child_expr
     }

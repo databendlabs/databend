@@ -72,6 +72,7 @@ impl AggregateFinal {
     }
 }
 
+#[async_trait::async_trait]
 impl BuildPhysicalPlan for AggregateFinal {
     async fn build(
         builder: &mut PhysicalPlanBuilder,

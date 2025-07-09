@@ -124,25 +124,25 @@ impl Rule for RulePushDownFilterAggregate {
 
             let mut result = if remaining_predicates.is_empty() {
                 SExpr::create_unary(
-                    Arc::new(aggregate.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(aggregate_expr.child(0)?.clone()),
-                    )),
+                    aggregate.into(),
+                    SExpr::create_unary(
+                        pushed_down_filter.into(),
+                        aggregate_expr.child(0)?.clone(),
+                    ),
                 )
             } else {
                 let remaining_filter = Filter {
                     predicates: remaining_predicates,
                 };
                 SExpr::create_unary(
-                    Arc::new(remaining_filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(aggregate.into()),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(pushed_down_filter.into()),
-                            Arc::new(aggregate_expr.child(0)?.clone()),
-                        )),
-                    )),
+                    remaining_filter.into(),
+                    SExpr::create_unary(
+                        aggregate.into(),
+                        SExpr::create_unary(
+                            pushed_down_filter.into(),
+                            aggregate_expr.child(0)?.clone(),
+                        ),
+                    ),
                 )
             };
             result.set_applied_rule(&self.id);

@@ -54,7 +54,7 @@ macro_rules! with_match_rel_op {
                 Join => PhysicalJoinType,
                 EvalScalar => EvalScalar,
                 Filter => Filter,
-                Aggregate => Aggregate,
+                Aggregate => AggregateFinal,
                 Sort => Sort,
                 Limit => Limit,
                 Exchange => Exchange,
@@ -64,7 +64,7 @@ macro_rules! with_match_rel_op {
                 Udf => Udf,
                 AsyncFunction => AsyncFunction,
                 RecursiveCteScan => RecursiveCteScan,
-                MergeInto => Mutation,
+                Mutation => Mutation,
                 CompactBlock => CompactBlock,
                 MutationSource => MutationSource,
             ],
@@ -116,7 +116,7 @@ impl PhysicalPlanBuilder {
 
         with_match_rel_op!(|TY| match s_expr.plan_rel_op() {
             crate::plans::RelOp::TY => TY::build(self, s_expr, required, stat_info).await,
-            _ => Err(ErrorCode::Internal("Unsupported operator")),
+            // _ => Err(ErrorCode::Internal("Unsupported operator")),
         })
     }
 

@@ -672,10 +672,7 @@ pub fn bind_window_function_info(
         child
     };
 
-    Ok(SExpr::create_unary(
-        Arc::new(window_plan.into()),
-        Arc::new(child),
-    ))
+    Ok(SExpr::create_unary(window_plan, child))
 }
 
 impl Binder {

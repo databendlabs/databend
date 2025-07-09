@@ -60,13 +60,8 @@ impl Rule for RuleSplitAggregate {
         agg.mode = AggregateMode::Final;
         let mut partial = agg.clone();
         partial.mode = AggregateMode::Partial;
-        let result = SExpr::create_unary(
-            Arc::new(agg.into()),
-            Arc::new(SExpr::create_unary(
-                Arc::new(partial.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-            )),
-        );
+        let result =
+            SExpr::create_unary(agg, SExpr::create_unary(partial, s_expr.child(0)?.clone()));
         state.add_result(result);
         Ok(())
     }

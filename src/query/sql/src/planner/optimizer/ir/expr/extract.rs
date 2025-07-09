@@ -268,7 +268,7 @@ impl PatternExtractor {
             children.push(Arc::new(Self::expand_pattern(memo, child_m_expr)?));
         }
 
-        Ok(SExpr::create(
+        Ok(SExpr::create_with_plan(
             m_expr.plan.clone(),
             children,
             Some(m_expr.group_index),

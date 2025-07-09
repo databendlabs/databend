@@ -71,10 +71,7 @@ impl Rule for RuleMergeFilter {
             .collect();
         let merged = Filter { predicates };
 
-        let new_expr = SExpr::create_unary(
-            Arc::new(merged.into()),
-            Arc::new(s_expr.child(0)?.child(0)?.clone()),
-        );
+        let new_expr = SExpr::create_unary(merged, s_expr.child(0)?.child(0)?.clone());
         state.add_result(new_expr);
         Ok(())
     }

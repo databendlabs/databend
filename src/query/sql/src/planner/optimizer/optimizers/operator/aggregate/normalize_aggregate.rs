@@ -125,10 +125,7 @@ impl RuleNormalizeAggregateOptimizer {
             grouping_sets: aggregate.grouping_sets,
         };
 
-        let mut new_aggregate = SExpr::create_unary(
-            Arc::new(new_aggregate.into()),
-            Arc::new(s_expr.child(0)?.clone()),
-        );
+        let mut new_aggregate = SExpr::create_unary(new_aggregate, s_expr.child(0)?.clone());
 
         if let Some((work_index, work_c)) = work_expr {
             if alias_functions_index.len() < 2 {
@@ -158,13 +155,10 @@ impl RuleNormalizeAggregateOptimizer {
                 }
 
                 new_aggregate = SExpr::create_unary(
-                    Arc::new(
-                        EvalScalar {
-                            items: scalar_items,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(new_aggregate),
+                    EvalScalar {
+                        items: scalar_items,
+                    },
+                    new_aggregate,
                 );
             }
             Ok(new_aggregate)

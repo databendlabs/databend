@@ -73,6 +73,7 @@ pub use physical_broadcast::*;
 pub use physical_cache_scan::CacheScan;
 pub use physical_column_mutation::ColumnMutation;
 pub use physical_commit_sink::*;
+pub use physical_compact_source::CompactBlock;
 pub use physical_compact_source::CompactSource;
 pub use physical_constant_table_scan::ConstantTableScan;
 pub use physical_copy_into_location::CopyIntoLocation;

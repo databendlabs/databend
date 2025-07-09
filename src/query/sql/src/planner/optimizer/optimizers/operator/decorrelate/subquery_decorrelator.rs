@@ -307,10 +307,7 @@ impl SubqueryDecorrelatorOptimizer {
                     (*pred, outer) = self.try_rewrite_subquery(pred, outer, true)?;
                 }
                 let filter = Filter { predicates };
-                return Ok(SExpr::create_unary(
-                    Arc::new(filter.into()),
-                    Arc::new(outer),
-                ));
+                return Ok(SExpr::create_unary(filter, outer));
             }
 
             RelOp::UnionAll => Ok(SExpr::create_binary(
@@ -569,11 +566,7 @@ impl SubqueryDecorrelatorOptimizer {
                     join_type: JoinType::LeftSingle,
                     ..Join::default()
                 };
-                let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan.into()),
-                    Arc::new(outer),
-                    Arc::new(*subquery.subquery.clone()),
-                );
+                let s_expr = SExpr::create_binary(join_plan, outer, *subquery.subquery.clone());
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
@@ -642,10 +635,7 @@ impl SubqueryDecorrelatorOptimizer {
                     ],
                 };
 
-                let agg_s_expr = Arc::new(SExpr::create_unary(
-                    Arc::new(agg.into()),
-                    Arc::new(subquery_expr),
-                ));
+                let agg_s_expr = SExpr::create_unary(agg, subquery_expr);
 
                 let mut output_index = None;
                 let rewritten_subquery = if is_conjunctive_predicate {
@@ -677,11 +667,7 @@ impl SubqueryDecorrelatorOptimizer {
                     ..Join::default()
                 };
                 Ok((
-                    SExpr::create_binary(
-                        Arc::new(cross_join.into()),
-                        Arc::new(outer),
-                        Arc::new(rewritten_subquery),
-                    ),
+                    SExpr::create_binary(cross_join, outer, rewritten_subquery),
                     UnnestResult::SimpleJoin { output_index },
                 ))
             }
@@ -757,11 +743,7 @@ impl SubqueryDecorrelatorOptimizer {
                     marker_index: Some(marker_index),
                     ..Join::default()
                 };
-                let s_expr = SExpr::create_binary(
-                    Arc::new(mark_join.into()),
-                    Arc::new(outer),
-                    Arc::new(*subquery.subquery.clone()),
-                );
+                let s_expr = SExpr::create_binary(mark_join, outer, *subquery.subquery.clone());
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             _ => unreachable!(),

@@ -327,10 +327,10 @@ impl Binder {
         let input = if eval_scalar.items.is_empty() {
             aggr_expr
         } else {
-            aggr_expr.build_unary(Arc::new(eval_scalar.into()))
+            aggr_expr.build_unary(eval_scalar)
         };
 
-        let s_expr = Box::new(input.build_unary(Arc::new(mutation.into())));
+        let s_expr = Box::new(input.build_unary(mutation));
         let Plan::DataMutation {
             schema, metadata, ..
         } = plan

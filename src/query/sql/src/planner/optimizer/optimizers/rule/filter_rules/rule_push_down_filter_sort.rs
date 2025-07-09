@@ -72,11 +72,8 @@ impl Rule for RulePushDownFilterSort {
         let sort_expr = s_expr.child(0)?;
 
         let mut result = SExpr::create_unary(
-            Arc::new(sort.into()),
-            Arc::new(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(sort_expr.child(0)?.clone()),
-            )),
+            sort,
+            SExpr::create_unary(filter, sort_expr.child(0)?.clone()),
         );
         result.set_applied_rule(&self.id);
         state.add_result(result);

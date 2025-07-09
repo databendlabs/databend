@@ -65,10 +65,7 @@ impl PullUpFilterOptimizer {
             let predicates = InferFilterOptimizer::new(None).optimize(self.predicates.clone())?;
             let predicates = NormalizeDisjunctiveFilterOptimizer::new().optimize(predicates)?;
             let filter = Filter { predicates };
-            Ok(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(s_expr),
-            ))
+            Ok(SExpr::create_unary(filter, s_expr))
         }
     }
 

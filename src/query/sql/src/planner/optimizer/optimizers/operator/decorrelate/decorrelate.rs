@@ -197,13 +197,10 @@ impl SubqueryDecorrelatorOptimizer {
         let mut left_child = outer.clone();
         if !left_filters.is_empty() {
             left_child = SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: left_filters,
-                    }
-                    .into(),
-                ),
-                Arc::new(left_child),
+                Filter {
+                    predicates: left_filters,
+                },
+                left_child,
             );
         }
 
@@ -213,13 +210,10 @@ impl SubqueryDecorrelatorOptimizer {
             .replace_children(vec![Arc::new(filter_tree.child(0)?.clone())]);
         if !right_filters.is_empty() {
             right_child = SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: right_filters,
-                    }
-                    .into(),
-                ),
-                Arc::new(right_child),
+                Filter {
+                    predicates: right_filters,
+                },
+                right_child,
             );
         }
 
@@ -283,11 +277,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                 };
-                let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan.into()),
-                    Arc::new(outer.clone()),
-                    Arc::new(flatten_plan),
-                );
+                let s_expr = SExpr::create_binary(join_plan, outer.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
@@ -348,11 +338,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                 };
-                let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan.into()),
-                    Arc::new(outer.clone()),
-                    Arc::new(flatten_plan),
-                );
+                let s_expr = SExpr::create_binary(join_plan, outer.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
@@ -433,11 +419,7 @@ impl SubqueryDecorrelatorOptimizer {
                 }
                 .into();
                 Ok((
-                    SExpr::create_binary(
-                        Arc::new(mark_join),
-                        Arc::new(outer.clone()),
-                        Arc::new(flatten_plan),
-                    ),
+                    SExpr::create_binary(mark_join, outer.clone(), flatten_plan),
                     UnnestResult::MarkJoin { marker_index },
                 ))
             }

@@ -104,7 +104,7 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &OperatorRef) -> FormatT
             let union_all = op.as_any().downcast_ref::<UnionAll>().unwrap();
             union_all_to_format_tree(id_humanizer, union_all)
         }
-        RelOp::MergeInto => {
+        RelOp::Mutation => {
             let merge_into = op.as_any().downcast_ref::<Mutation>().unwrap();
             merge_into_to_format_tree(id_humanizer, merge_into)
         }

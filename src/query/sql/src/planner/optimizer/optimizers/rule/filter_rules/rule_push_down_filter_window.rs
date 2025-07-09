@@ -77,7 +77,12 @@ impl Rule for RulePushDownFilterWindow {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let filter = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Filter>()
+            .unwrap()
+            .clone();
         let window_expr = s_expr.child(0)?;
         let window = window_expr
             .plan()
@@ -95,7 +100,7 @@ impl Rule for RulePushDownFilterWindow {
         );
 
         let (pushed_down, remaining): (Vec<_>, Vec<_>) =
-            predicates.into_iter().partition(|predicate| {
+            filter.predicates.into_iter().partition(|predicate| {
                 let used = predicate.used_columns();
                 used.is_subset(&allowed) && used.is_disjoint(&rejected)
             });

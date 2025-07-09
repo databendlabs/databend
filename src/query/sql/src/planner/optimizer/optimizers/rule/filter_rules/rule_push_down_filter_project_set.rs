@@ -98,25 +98,22 @@ impl Rule for RulePushDownFilterProjectSet {
             };
             let mut result = if remaining_predicates.is_empty() {
                 SExpr::create_unary(
-                    Arc::new(project_set.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(project_set_expr.child(0)?.clone()),
-                    )),
+                    project_set,
+                    SExpr::create_unary(
+                        pushed_down_filter.into(),
+                        project_set_expr.child(0)?.clone(),
+                    ),
                 )
             } else {
                 let remaining_filter = Filter {
                     predicates: remaining_predicates,
                 };
                 SExpr::create_unary(
-                    Arc::new(remaining_filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(project_set.into()),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(pushed_down_filter.into()),
-                            Arc::new(project_set_expr.child(0)?.clone()),
-                        )),
-                    )),
+                    remaining_filter,
+                    SExpr::create_unary(
+                        project_set,
+                        SExpr::create_unary(pushed_down_filter, project_set_expr.child(0)?.clone()),
+                    ),
                 )
             };
             result.set_applied_rule(&self.id);

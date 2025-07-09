@@ -51,7 +51,7 @@ use crate::ScalarExpr;
 
 pub type OperatorRef = Arc<dyn Operator>;
 
-pub trait Operator: Send + Sync + 'static {
+pub trait Operator: std::hash::Hash + Sized + Clone + Send + Sync + 'static {
     /// Get relational operator kind
     fn rel_op(&self) -> RelOp;
 
@@ -137,7 +137,7 @@ pub enum RelOp {
     Udf,
     AsyncFunction,
     RecursiveCteScan,
-    MergeInto,
+    Mutation,
     CompactBlock,
     MutationSource,
     // Pattern

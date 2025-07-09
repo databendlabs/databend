@@ -87,9 +87,6 @@ impl Binder {
             ..Default::default()
         };
 
-        Ok(SExpr::create_unary(
-            Arc::new(distinct_plan.into()),
-            Arc::new(new_expr),
-        ))
+        Ok(SExpr::create_unary(distinct_plan, new_expr))
     }
 }

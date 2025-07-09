@@ -85,6 +85,23 @@ impl SExpr {
         }
     }
 
+    pub fn create_with_plan(
+        plan: OperatorRef,
+        children: impl Into<Vec<Arc<SExpr>>>,
+        original_group: Option<IndexType>,
+        rel_prop: Option<Arc<RelationalProperty>>,
+        stat_info: Option<Arc<StatInfo>>,
+    ) -> Self {
+        SExpr {
+            plan,
+            children: children.into(),
+            original_group,
+            rel_prop: Arc::new(Mutex::new(rel_prop)),
+            stat_info: Arc::new(Mutex::new(stat_info)),
+            applied_rules: AppliedRules::default(),
+        }
+    }
+
     pub fn create_unary<P: Operator>(plan: P, child: impl Into<Arc<SExpr>>) -> Self {
         Self::create(plan, [child.into()], None, None, None)
     }
@@ -250,7 +267,7 @@ impl SExpr {
                         p.inverted_index = inverted_index.clone();
                     }
                 }
-                Arc::new(p.into())
+                Arc::new(p.clone())
             } else {
                 s_expr.plan
             };
@@ -323,7 +340,8 @@ impl SExpr {
             crate::plans::RelOp::Join => self.probe_side_child().get_data_distribution(),
 
             crate::plans::RelOp::Exchange => {
-                Ok(Some(self.plan.as_ref().clone().try_into().unwrap()))
+                let exchange = self.plan.as_any().downcast_ref::<Exchange>().unwrap();
+                Ok(Some(exchange.clone()))
             }
 
             crate::plans::RelOp::EvalScalar
@@ -336,7 +354,7 @@ impl SExpr {
             | crate::plans::RelOp::ProjectSet
             | crate::plans::RelOp::Udf
             | crate::plans::RelOp::AsyncFunction
-            | crate::plans::RelOp::MergeInto
+            | crate::plans::RelOp::Mutation
             | crate::plans::RelOp::CompactBlock
             | crate::plans::RelOp::MutationSource => self.child(0)?.get_data_distribution(),
         }

@@ -155,7 +155,7 @@ fn find_group_by_keys(
         | RelOp::Join
         | RelOp::RecursiveCteScan
         | RelOp::MutationSource
-        | RelOp::MergeInto
+        | RelOp::Mutation
         | RelOp::CompactBlock => {}
     }
     Ok(())

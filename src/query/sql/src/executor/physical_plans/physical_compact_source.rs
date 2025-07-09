@@ -64,7 +64,7 @@ impl BuildPhysicalPlan for CompactBlock {
 }
 
 impl PhysicalPlanBuilder {
-    pub async fn build_compact_block(
+    pub async fn build_compact_source(
         &mut self,
         compact_block: &crate::plans::OptimizeCompactBlock,
     ) -> Result<PhysicalPlan> {

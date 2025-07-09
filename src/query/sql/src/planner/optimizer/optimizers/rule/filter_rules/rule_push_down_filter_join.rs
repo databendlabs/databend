@@ -286,25 +286,19 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
 
     if !left_push_down.is_empty() {
         left_child = SExpr::create_unary(
-            Arc::new(
-                Filter {
-                    predicates: left_push_down,
-                }
-                .into(),
-            ),
-            Arc::new(left_child),
+            Filter {
+                predicates: left_push_down,
+            },
+            left_child,
         );
     }
 
     if !right_push_down.is_empty() {
         right_child = SExpr::create_unary(
-            Arc::new(
-                Filter {
-                    predicates: right_push_down,
-                }
-                .into(),
-            ),
-            Arc::new(right_child),
+            Filter {
+                predicates: right_push_down,
+            },
+            right_child,
         );
     }
 
@@ -312,13 +306,10 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
 
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(
-            Arc::new(
-                Filter {
-                    predicates: original_predicates,
-                }
-                .into(),
-            ),
-            Arc::new(result),
+            Filter {
+                predicates: original_predicates,
+            },
+            result,
         );
     }
 

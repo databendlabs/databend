@@ -61,7 +61,7 @@ impl BuildPhysicalPlan for ConstantTableScan {
             .downcast_ref::<crate::plans::ConstantTableScan>()
             .unwrap();
         builder
-            .build_constant_table_scan(s_expr, plan, required, stat_info)
+            .build_constant_table_scan(plan, required, stat_info)
             .await
     }
 }

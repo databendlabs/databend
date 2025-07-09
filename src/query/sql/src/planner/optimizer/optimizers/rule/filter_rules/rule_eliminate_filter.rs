@@ -123,10 +123,7 @@ impl Rule for RuleEliminateFilter {
             state.add_result(s_expr.child(0)?.clone());
         } else if origin_predicates.len() != predicates.len() {
             let filter = Filter { predicates };
-            state.add_result(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-            ));
+            state.add_result(SExpr::create_unary(filter, s_expr.child(0)?.clone()));
         }
         Ok(())
     }
