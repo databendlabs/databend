@@ -102,6 +102,43 @@ impl TaskRun {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum TaskMessage {
+    ExecuteTask(Task),
+    ScheduleTask(Task),
+    DeleteTask(String),
+    AfterTask(Task),
+}
+
+impl TaskMessage {
+    pub fn task_name(&self) -> &str {
+        match self {
+            TaskMessage::ExecuteTask(task)
+            | TaskMessage::ScheduleTask(task)
+            | TaskMessage::AfterTask(task) => task.task_name.as_str(),
+            TaskMessage::DeleteTask(task_name) => task_name.as_str(),
+        }
+    }
+
+    pub fn key(&self) -> String {
+        let ty = match self {
+            TaskMessage::ExecuteTask(_) => 0,
+            TaskMessage::ScheduleTask(_) => 1,
+            TaskMessage::DeleteTask(_) => 2,
+            TaskMessage::AfterTask(_) => 3,
+        };
+        format!("{}-{}-{}", TaskMessage::prefix(), ty, self.task_name())
+    }
+
+    pub fn prefix() -> i64 {
+        0
+    }
+
+    pub fn prefix_range() -> (i64, i64) {
+        (0, 1)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AfterTaskInfo {
     pub afters: Arc<Vec<String>>,

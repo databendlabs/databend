@@ -33,26 +33,16 @@ message ScheduleOptions {
   optional uint64 milliseconds_interval = 5; // milliseconds level interval
 }
 
-message TaskRun {
+message TaskMessage {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
   
-  enum State {
-    Scheduled = 0;
-    Executing = 1;
-    Succeeded = 2;
-    Failed = 3;
-    Cancelled = 4;
+  oneof message {
+    Task execute_task = 1;
+    Task schedule_task = 2;
+    string delete_task = 3;
+    Task after_task = 4;
   }
-  uint64 run_id = 1;
-  int32 attempt_number = 2;
-  State state = 3;
-  string scheduled_at = 4;
-  optional string completed_at = 5;
-  int64 error_code = 6;
-  optional string error_message = 7;
-  uint64 root_task_id = 8;
-  Task task = 9;
 }
 
 message Task {

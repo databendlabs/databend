@@ -67,6 +67,10 @@ impl TaskMetaHandle {
         }
     }
 
+    pub fn meta_client(&self) -> &Arc<ClientHandle> {
+        &self.meta_client
+    }
+
     pub async fn acquire(&self, meta_key: &str, interval: u64) -> Result<Option<Permit>> {
         let acquired_guard = Semaphore::new_acquired(
             self.meta_client.clone(),

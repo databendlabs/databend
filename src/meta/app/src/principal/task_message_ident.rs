@@ -14,29 +14,29 @@
 
 use crate::tenant_key::ident::TIdent;
 
-pub type TaskRunIdent = TIdent<Resource>;
+pub type TaskMessageIdent = TIdent<Resource>;
 
-pub type TaskRunIdentRaw = TIdent<Resource>;
+pub type TaskMessageIdentRaw = TIdent<Resource>;
 
 pub use kvapi_impl::Resource;
 
 mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
-    use crate::principal::task_run_ident::TaskRunIdent;
-    use crate::principal::TaskRun;
+    use crate::principal::task::TaskMessage;
+    use crate::principal::task_message_ident::TaskMessageIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
     impl TenantResource for Resource {
-        const PREFIX: &'static str = "__fd_task_runs";
-        const TYPE: &'static str = "TaskRunIdent";
+        const PREFIX: &'static str = "__fd_task_messages";
+        const TYPE: &'static str = "TaskMessageIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = TaskRun;
+        type ValueType = TaskMessage;
     }
 
-    impl kvapi::Value for TaskRun {
-        type KeyType = TaskRunIdent;
+    impl kvapi::Value for TaskMessage {
+        type KeyType = TaskMessageIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []

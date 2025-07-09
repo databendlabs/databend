@@ -17,6 +17,4 @@ mod task_mgr;
 
 pub use errors::TaskApiError;
 pub use errors::TaskError;
-pub use task_mgr::TaskChannel;
-pub use task_mgr::TaskMessage;
 pub use task_mgr::TaskMgr;
