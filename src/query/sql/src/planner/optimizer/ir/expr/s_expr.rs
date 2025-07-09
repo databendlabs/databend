@@ -23,7 +23,9 @@ use educe::Educe;
 
 use crate::optimizer::ir::property::RelExpr;
 use crate::optimizer::ir::property::RelationalProperty;
+use crate::optimizer::ir::SExprVisitor;
 use crate::optimizer::ir::StatInfo;
+use crate::optimizer::ir::VisitAction;
 use crate::optimizer::optimizers::rule::AppliedRules;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
@@ -65,15 +67,18 @@ pub struct SExpr {
 
 impl SExpr {
     pub fn create(
-        plan: Arc<RelOperator>,
+        plan: impl Into<Arc<RelOperator>>,
         children: impl Into<Vec<Arc<SExpr>>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
         stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
+        let plan = plan.into();
+        let children = children.into();
+        debug_assert_eq!(plan.arity(), children.len());
         SExpr {
             plan,
-            children: children.into(),
+            children,
             original_group,
             rel_prop: Arc::new(Mutex::new(rel_prop)),
             stat_info: Arc::new(Mutex::new(stat_info)),
@@ -81,12 +86,12 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: Arc<RelOperator>, child: impl Into<Arc<SExpr>>) -> Self {
-        Self::create(plan, [child.into()], None, None, None)
+    pub fn create_unary(plan: impl Into<Arc<RelOperator>>, child: impl Into<Arc<SExpr>>) -> Self {
+        Self::create(plan.into(), [child.into()], None, None, None)
     }
 
     pub fn create_binary(
-        plan: Arc<RelOperator>,
+        plan: impl Into<Arc<RelOperator>>,
         left_child: impl Into<Arc<SExpr>>,
         right_child: impl Into<Arc<SExpr>>,
     ) -> Self {
@@ -99,17 +104,15 @@ impl SExpr {
         )
     }
 
-    pub fn create_leaf(plan: Arc<RelOperator>) -> Self {
+    pub fn create_leaf(plan: impl Into<Arc<RelOperator>>) -> Self {
         Self::create(plan, [], None, None, None)
     }
 
-    pub fn build_unary(self, plan: Arc<RelOperator>) -> Self {
-        debug_assert_eq!(plan.arity(), 1);
+    pub fn build_unary(self, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self::create(plan, [self.into()], None, None, None)
     }
 
-    pub fn ref_build_unary(self: &Arc<SExpr>, plan: Arc<RelOperator>) -> Self {
-        debug_assert_eq!(plan.arity(), 1);
+    pub fn ref_build_unary(self: &Arc<SExpr>, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self::create(plan, [self.clone()], None, None, None)
     }
 
@@ -129,27 +132,27 @@ impl SExpr {
     }
 
     pub fn unary_child(&self) -> &SExpr {
-        assert_eq!(self.children.len(), 1);
+        debug_assert_eq!(self.children.len(), 1);
         &self.children[0]
     }
 
     pub fn left_child(&self) -> &SExpr {
-        assert_eq!(self.children.len(), 2);
+        debug_assert_eq!(self.children.len(), 2);
         &self.children[0]
     }
 
     pub fn right_child(&self) -> &SExpr {
-        assert_eq!(self.children.len(), 2);
+        debug_assert_eq!(self.children.len(), 2);
         &self.children[1]
     }
 
     pub fn build_side_child(&self) -> &SExpr {
-        assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
         &self.children[1]
     }
 
     pub fn probe_side_child(&self) -> &SExpr {
-        assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
+        debug_assert_eq!(self.plan.rel_op(), crate::plans::RelOp::Join);
         &self.children[0]
     }
 
@@ -175,9 +178,9 @@ impl SExpr {
         }
     }
 
-    pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
+    pub fn replace_plan(&self, plan: impl Into<Arc<RelOperator>>) -> Self {
         Self {
-            plan,
+            plan: plan.into(),
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),
@@ -228,46 +231,41 @@ impl SExpr {
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
     ) -> SExpr {
-        #[recursive::recursive]
-        fn add_column_index_to_scans_recursive(
-            s_expr: &SExpr,
-            column_index: IndexType,
+        struct Visitor<'a> {
             table_index: IndexType,
-            inverted_index: &Option<InvertedIndexInfo>,
-        ) -> SExpr {
-            let mut s_expr = s_expr.clone();
-            s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
-                if p.table_index == table_index {
-                    p.columns.insert(column_index);
-                    if inverted_index.is_some() {
-                        p.inverted_index = inverted_index.clone();
+            column_index: IndexType,
+            inverted_index: &'a Option<InvertedIndexInfo>,
+        }
+
+        impl<'a> SExprVisitor for Visitor<'a> {
+            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+                if let Some(p) = expr.plan.as_ref().as_scan() {
+                    if p.table_index == self.table_index {
+                        let mut p = p.clone();
+                        p.columns.insert(self.column_index);
+                        if self.inverted_index.is_some() {
+                            p.inverted_index = self.inverted_index.clone();
+                        }
+                        let expr = expr.replace_plan(p);
+                        return Ok(VisitAction::Replace(expr));
+                    } else {
+                        return Ok(VisitAction::SkipChildren);
                     }
                 }
-                Arc::new(p.into())
-            } else {
-                s_expr.plan
-            };
-
-            if s_expr.children.is_empty() {
-                s_expr
-            } else {
-                let mut children = Vec::with_capacity(s_expr.children.len());
-                for child in s_expr.children.iter() {
-                    children.push(Arc::new(add_column_index_to_scans_recursive(
-                        child,
-                        column_index,
-                        table_index,
-                        inverted_index,
-                    )));
-                }
-
-                s_expr.children = children;
-
-                s_expr
+                Ok(VisitAction::Continue)
             }
         }
 
-        add_column_index_to_scans_recursive(self, column_index, table_index, inverted_index)
+        let mut visitor = Visitor {
+            table_index,
+            column_index,
+            inverted_index,
+        };
+        let expr = self.accept(&mut visitor);
+        if let Ok(Some(expr)) = expr {
+            return expr;
+        }
+        self.clone()
     }
 
     // The method will clear the applied rules of current SExpr and its children.
@@ -305,34 +303,35 @@ impl SExpr {
     }
 
     pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {
-        match self.plan.rel_op() {
-            crate::plans::RelOp::Scan
-            | crate::plans::RelOp::DummyTableScan
-            | crate::plans::RelOp::ConstantTableScan
-            | crate::plans::RelOp::ExpressionScan
-            | crate::plans::RelOp::CacheScan
-            | crate::plans::RelOp::RecursiveCteScan => Ok(None),
-
-            crate::plans::RelOp::Join => self.probe_side_child().get_data_distribution(),
-
-            crate::plans::RelOp::Exchange => {
-                Ok(Some(self.plan.as_ref().clone().try_into().unwrap()))
-            }
-
-            crate::plans::RelOp::EvalScalar
-            | crate::plans::RelOp::Filter
-            | crate::plans::RelOp::Aggregate
-            | crate::plans::RelOp::Sort
-            | crate::plans::RelOp::Limit
-            | crate::plans::RelOp::UnionAll
-            | crate::plans::RelOp::Window
-            | crate::plans::RelOp::ProjectSet
-            | crate::plans::RelOp::Udf
-            | crate::plans::RelOp::Udaf
-            | crate::plans::RelOp::AsyncFunction
-            | crate::plans::RelOp::MergeInto
-            | crate::plans::RelOp::CompactBlock
-            | crate::plans::RelOp::MutationSource => self.child(0)?.get_data_distribution(),
+        struct DataDistributionVisitor {
+            result: Option<Exchange>,
         }
+        impl SExprVisitor for DataDistributionVisitor {
+            fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+                match expr.plan.as_ref() {
+                    RelOperator::Exchange(exchange) => {
+                        self.result = Some(exchange.clone());
+                        return Ok(VisitAction::Stop);
+                    }
+
+                    RelOperator::Join(_) => {
+                        let child = expr.probe_side_child();
+                        self.result = child.get_data_distribution()?;
+                        return Ok(VisitAction::Stop);
+                    }
+                    _ => {
+                        if expr.arity() > 1 {
+                            Ok(VisitAction::Continue)
+                        } else {
+                            Ok(VisitAction::Stop)
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut visitor = DataDistributionVisitor { result: None };
+        let _ = self.accept(&mut visitor);
+        Ok(visitor.result)
     }
 }

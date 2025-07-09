@@ -105,7 +105,7 @@ pub struct Binder {
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
-impl<'a> Binder {
+impl Binder {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         catalogs: Arc<CatalogManager>,

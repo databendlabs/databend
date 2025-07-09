@@ -71,6 +71,12 @@ macro_rules! impl_try_from_rel_operator {
                 RelOperator::$ty(value)
             }
         }
+
+        impl From<$ty> for Arc<RelOperator> {
+            fn from(value: $ty) -> Self {
+                Arc::new(RelOperator::$ty(value))
+            }
+        }
     };
     // Multiple types implementation
     ($($ty:ident),+) => {
@@ -86,7 +92,6 @@ macro_rules! impl_match_rel_op {
             RelOperator::Scan($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Join($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::EvalScalar($rel_op) => $rel_op.$method($($arg),*),
-            // 其他所有变体...
             RelOperator::Filter($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Sort($rel_op) => $rel_op.$method($($arg),*),
