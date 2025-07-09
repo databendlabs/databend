@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -22,7 +21,6 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -46,7 +44,7 @@ where A: SortAlgorithm
     limit: Option<usize>,
 
     output_data: Option<DataBlock>,
-    bound: Option<Scalar>,
+    bound_index: u32,
     inner: std::result::Result<Merger<A, Stream<A>>, Vec<Stream<A>>>,
 }
 
@@ -67,7 +65,7 @@ where A: SortAlgorithm
                 data: None,
                 input: input.clone(),
                 remove_order_col,
-                bound: None,
+                bound_index: None,
                 sort_row_offset: schema.fields().len() - 1,
                 _r: PhantomData,
             })
@@ -80,7 +78,7 @@ where A: SortAlgorithm
             block_size,
             limit,
             output_data: None,
-            bound: None,
+            bound_index: u32::MAX,
             inner: Err(streams),
         })
     }
@@ -119,11 +117,7 @@ where A: SortAlgorithm + 'static
 
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.inner.as_mut().ok().unwrap().next_block()? {
-            let meta = SortBound {
-                bound: self.bound.clone(),
-            }
-            .boxed();
-            self.output_data = Some(block.add_meta(Some(meta))?);
+            self.output_data = Some(block.add_meta(Some(SortBound::create(self.bound_index)))?);
         };
         Ok(())
     }
@@ -158,20 +152,17 @@ where A: SortAlgorithm + 'static
                 .get_meta()
                 .and_then(SortBound::downcast_ref_from)
                 .expect("require a SortBound");
-            bounds.push(&meta.bound)
+            bounds.push(meta.bound_index)
         }
 
-        self.bound = match bounds.iter().min_by(|a, b| match (a, b) {
-            (None, None) => Ordering::Equal,
-            (None, Some(_)) => Ordering::Greater,
-            (Some(_), None) => Ordering::Less,
-            (Some(a), Some(b)) => A::Rows::scalar_as_item(a).cmp(&A::Rows::scalar_as_item(b)),
-        }) {
-            Some(bound) => (*bound).clone(),
+        let bound_index = match bounds.iter().min() {
+            Some(index) => *index,
             None => return Ok(Event::Finished),
         };
+        assert!(self.bound_index != u32::MAX || bound_index > self.bound_index);
+        self.bound_index = bound_index;
         for stream in streams.iter_mut() {
-            stream.bound = self.bound.clone();
+            stream.bound_index = Some(self.bound_index);
         }
 
         let streams = std::mem::take(streams);
@@ -189,7 +180,7 @@ struct BoundedInputStream<R: Rows> {
     data: Option<DataBlock>,
     input: Arc<InputPort>,
     remove_order_col: bool,
-    bound: Option<Scalar>,
+    bound_index: Option<u32>,
     sort_row_offset: usize,
     _r: PhantomData<R>,
 }
@@ -244,9 +235,9 @@ impl<R: Rows> BoundedInputStream<R> {
             .and_then(SortBound::downcast_ref_from)
             .expect("require a SortBound");
 
-        if meta.bound == self.bound {
+        if meta.bound_index == self.bound_index.unwrap() {
             self.data.take().map(|mut data| {
-                let _ = data.take_meta();
+                data.take_meta().unwrap();
                 data
             })
         } else {

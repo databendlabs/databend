@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::FlightCompression;
-use twox_hash::XxHash64;
 
 use crate::pipelines::processors::transforms::SortBound;
 use crate::servers::flight::v1::exchange::DataExchange;
@@ -88,7 +84,7 @@ impl ExchangeInjector for SortInjector {
 }
 
 pub struct SortBoundScatter {
-    partitions: u64,
+    partitions: u32,
 }
 
 impl FlightScatter for SortBoundScatter {
@@ -101,23 +97,13 @@ impl FlightScatter for SortBoundScatter {
     }
 }
 
-pub(super) fn bound_scatter(data_block: DataBlock, n: u64) -> Result<Vec<DataBlock>> {
+pub(super) fn bound_scatter(data_block: DataBlock, n: u32) -> Result<Vec<DataBlock>> {
     let meta = data_block
         .get_meta()
         .and_then(SortBound::downcast_ref_from)
         .unwrap();
 
-    let bound = match &meta.bound {
-        Some(bound) => {
-            debug_assert!(!bound.is_null());
-            bound
-        }
-        None => &Scalar::Null,
-    };
-
-    let mut hasher = XxHash64::default();
-    bound.hash(&mut hasher);
-    let index = hasher.finish() % n;
+    let index = meta.bound_index % n;
 
     Ok(std::iter::repeat_n(DataBlock::empty(), index as _)
         .chain(Some(data_block))

@@ -20,7 +20,6 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::Scalar;
 use databend_common_pipeline_transforms::SortSpillParams;
 use sort_spill::SpillableBlock;
 
@@ -107,7 +106,14 @@ impl BlockMetaInfo for SortExchangeMeta {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortBound {
-    bound: Option<Scalar>,
+    bound_index: u32,
+}
+
+impl SortBound {
+    fn create(bound_index: u32) -> Box<dyn BlockMetaInfo> {
+        debug_assert!(bound_index != u32::MAX);
+        SortBound { bound_index }.boxed()
+    }
 }
 
 #[typetag::serde(name = "sort_bound")]

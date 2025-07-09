@@ -115,11 +115,11 @@ where
 
         let OutputData {
             block,
-            bound,
+            bound: (bound_index, _),
             finish,
         } = spill_sort.on_restore().await?;
         if let Some(block) = block {
-            let mut block = block.add_meta(Some(SortBound { bound }.boxed()))?;
+            let mut block = block.add_meta(Some(SortBound::create(bound_index)))?;
             if self.remove_order_col {
                 block.pop_columns(1);
             }

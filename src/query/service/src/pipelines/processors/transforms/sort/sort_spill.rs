@@ -68,6 +68,7 @@ struct StepSort<A: SortAlgorithm> {
     /// Each boundary represents a cutoff point where data less than or equal to it belongs to one partition.
     bounds: Bounds,
     cur_bound: Option<Scalar>,
+    bound_index: i32,
 
     subsequent: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
     current: Vec<BoundBlockStream<A::Rows, Arc<Spiller>>>,
@@ -116,6 +117,7 @@ where A: SortAlgorithm
                 params,
                 bounds,
                 cur_bound: None,
+                bound_index: -1,
                 subsequent,
                 current: vec![],
                 output_merger: None,
@@ -172,7 +174,7 @@ where A: SortAlgorithm
             sort.merge_current(&self.base).await?;
             Ok(OutputData {
                 block: None,
-                bound: None,
+                bound: (u32::MAX, None),
                 finish: false,
             })
         } else {
@@ -303,6 +305,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
         Ok(StepSort {
             bounds,
             cur_bound: None,
+            bound_index: -1,
             subsequent: std::mem::take(&mut self.streams),
             current: vec![],
             output_merger: None,
@@ -313,7 +316,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
 
 pub struct OutputData {
     pub block: Option<DataBlock>,
-    pub bound: Option<Scalar>,
+    pub bound: (u32, Option<Scalar>),
     pub finish: bool,
 }
 
@@ -323,6 +326,7 @@ impl<A: SortAlgorithm> StepSort<A> {
             Some(bound) => self.cur_bound = Some(bound),
             None => self.cur_bound = None,
         }
+        self.bound_index += 1;
     }
 
     async fn merge_current(&mut self, base: &Base) -> Result<()> {
@@ -372,7 +376,8 @@ impl<A: SortAlgorithm> StepSort<A> {
                     let mut s = self.current.pop().unwrap();
                     s.restore_first().await?;
                     let block = Some(s.take_next_bounded_block());
-                    let bound = s.bound.clone();
+                    assert!(self.bound_index >= 0);
+                    let bound = (self.bound_index as _, s.bound.clone());
 
                     if !s.is_empty() {
                         if s.should_include_first() {
@@ -415,7 +420,7 @@ impl<A: SortAlgorithm> StepSort<A> {
 
             return Ok(OutputData {
                 block: None,
-                bound: None,
+                bound: (u32::MAX, None),
                 finish: self.subsequent.is_empty(),
             });
         };
@@ -423,7 +428,8 @@ impl<A: SortAlgorithm> StepSort<A> {
         let mut sorted = base.new_stream([base.new_block(data)].into(), self.cur_bound.clone());
         let (block, bound) = if sorted.should_include_first() {
             let block = Some(sorted.take_next_bounded_block());
-            let bound = sorted.bound.clone();
+            debug_assert!(self.bound_index >= 0);
+            let bound = (self.bound_index as _, sorted.bound.clone());
             if sorted.is_empty() {
                 return Ok(OutputData {
                     block,
@@ -433,7 +439,7 @@ impl<A: SortAlgorithm> StepSort<A> {
             }
             (block, bound)
         } else {
-            (None, None)
+            (None, (u32::MAX, None))
         };
 
         while let Some(data) = merger.async_next_block().await? {
