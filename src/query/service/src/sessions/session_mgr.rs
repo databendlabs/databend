@@ -442,10 +442,11 @@ impl SessionManager {
         let sessions = self.active_sessions_snapshot();
         for session in sessions {
             if let Some(session) = session.upgrade() {
-                let mgr_ref = session.temp_tbl_mgr();
-                let temp_tables_mgr = mgr_ref.lock();
-                let temp_tables = temp_tables_mgr.list_tables()?;
-                let session_started_at = session.get_status().read().session_started_at;
+                let temp_tables = {
+                    let mgr_ref = session.temp_tbl_mgr();
+                    let vals = mgr_ref.lock().list_tables();
+                    vals
+                }?;
                 for table in temp_tables {
                     all_temp_tables.push((
                         format!(

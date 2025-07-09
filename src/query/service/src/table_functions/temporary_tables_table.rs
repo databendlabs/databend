@@ -98,7 +98,7 @@ impl SyncSystemTable for TemporaryTablesTable {
 
         let current_session_type = ctx.get_session_type();
 
-        // currently http clients have there only client side session ids
+        // currently http clients have their own client side session ids, besides server side session ids
         let current_client_session_id = ctx.get_current_client_session_id();
         let current_session_id = ctx.get_current_session_id();
         log::info!("current_client_session_id: {:?}", current_client_session_id);
