@@ -1067,7 +1067,7 @@ impl TableContext for QueryContext {
         SessionManager::instance().processes_info()
     }
 
-    fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         let mut all = SessionManager::instance().get_query_execution_stats();
         all.extend(DataExchangeManager::instance().get_query_execution_stats());
         all

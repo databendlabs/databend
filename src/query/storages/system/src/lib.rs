@@ -102,6 +102,7 @@ pub use password_policies_table::PasswordPoliciesTable;
 pub use procedures_table::ProceduresTable;
 pub use processes_table::ProcessesTable;
 pub use query_cache_table::QueryCacheTable;
+pub use query_execution_table::QueryExecutionStatsQueue;
 pub use query_execution_table::QueryExecutionTable;
 pub use query_log_table::LogType;
 pub use query_log_table::QueryLogElement;

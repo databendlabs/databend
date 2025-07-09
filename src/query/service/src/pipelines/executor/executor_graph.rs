@@ -42,6 +42,8 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_storages_system::QueryExecutionStatsQueue;
+use databend_common_storages_system::SystemLogQueue;
 use fastrace::prelude::*;
 use log::debug;
 use log::trace;
@@ -980,6 +982,15 @@ impl RunningGraph {
 
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
         self.0.executor_stats.dump_snapshot()
+    }
+}
+
+impl Drop for RunningGraph {
+    fn drop(&mut self) {
+        let execution_stats = self.get_query_execution_stats();
+        if let Ok(queue) = QueryExecutionStatsQueue::instance() {
+            let _ = queue.append_data((self.get_query_id().to_string(), execution_stats));
+        }
     }
 }
 
