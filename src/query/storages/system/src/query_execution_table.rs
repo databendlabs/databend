@@ -72,10 +72,7 @@ impl SyncSystemTable for QueryExecutionTable {
         &self.table_info
     }
 
-    fn get_full_data(
-        &self,
-        ctx: Arc<dyn TableContext>,
-    ) -> databend_common_exception::Result<DataBlock> {
+    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let mut running = ctx.get_running_query_execution_stats();
         let archive = self.get_archive()?;
         running.extend(archive);
