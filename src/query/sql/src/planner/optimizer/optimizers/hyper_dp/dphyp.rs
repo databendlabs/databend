@@ -94,8 +94,10 @@ impl DPhpyOptimizer {
         // Parallel process children: start a new dphyp for each child.
         let left_expr = s_expr.children[0].clone();
         let opt_ctx = self.opt_ctx.clone();
+        let cte_table_index_map = self.cte_table_index_map.clone();
         let left_res = spawn(async move {
             let mut dphyp = DPhpyOptimizer::new(opt_ctx.clone());
+            dphyp.cte_table_index_map = cte_table_index_map;
             (
                 dphyp.optimize_async(&left_expr).await,
                 dphyp.table_index_map,
@@ -104,8 +106,10 @@ impl DPhpyOptimizer {
 
         let right_expr = s_expr.children[1].clone();
         let opt_ctx = self.opt_ctx.clone();
+        let cte_table_index_map = self.cte_table_index_map.clone();
         let right_res = spawn(async move {
             let mut dphyp = DPhpyOptimizer::new(opt_ctx.clone());
+            dphyp.cte_table_index_map = cte_table_index_map;
             (
                 dphyp.optimize_async(&right_expr).await,
                 dphyp.table_index_map,
@@ -137,6 +141,7 @@ impl DPhpyOptimizer {
     /// Process a subquery expression
     async fn process_subquery(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
         let mut dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        dphyp.cte_table_index_map = self.cte_table_index_map.clone();
         let new_s_expr = Arc::new(dphyp.optimize_async(s_expr).await?);
 
         // Merge `table_index_map` of subquery into current `table_index_map`.
@@ -283,12 +288,15 @@ impl DPhpyOptimizer {
         };
 
         let mut left_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        left_dphyp.cte_table_index_map = self.cte_table_index_map.clone();
         let left_expr = left_dphyp.optimize_async(s_expr.child(0)?).await?;
 
         let mut right_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        right_dphyp.cte_table_index_map = self.cte_table_index_map.clone();
+        // Use left_dphyp's table_index_map for the CTE definition
         right_dphyp.cte_table_index_map.insert(
             m_cte.cte_name.clone(),
-            self.table_index_map.keys().cloned().collect(),
+            left_dphyp.table_index_map.keys().cloned().collect(),
         );
         let right_expr = right_dphyp.optimize_async(s_expr.child(1)?).await?;
 
@@ -325,10 +333,9 @@ impl DPhpyOptimizer {
             JoinRelation::new(s_expr, self.sample_executor().clone())
         };
 
-        // Get table indexes from cte_table_index_map for this CTE
+        // Map table indexes before adding to join_relations
+        let relation_idx = self.join_relations.len() as IndexType;
         if let Some(table_indexes) = self.cte_table_index_map.get(&cte_consumer.cte_name) {
-            // Map each table index to current join_relations index
-            let relation_idx = self.join_relations.len() as IndexType;
             for table_index in table_indexes {
                 self.table_index_map.insert(*table_index, relation_idx);
             }
