@@ -157,6 +157,40 @@ pub enum RelOperator {
     MutationSource(MutationSource),
 }
 
+macro_rules! __impl_match_rel_op {
+    ($self:ident, $rel_op:ident, $method:ident, $($arg:expr),*) => {
+        match $self {
+            RelOperator::Scan($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Join($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::EvalScalar($rel_op) => $rel_op.$method($($arg),*),
+            // 其他所有变体...
+            RelOperator::Filter($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Sort($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Limit($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Exchange($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::UnionAll($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::DummyTableScan($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Window($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::ProjectSet($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::ConstantTableScan($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::ExpressionScan($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::CacheScan($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Udf($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::RecursiveCteScan($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::AsyncFunction($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Mutation($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::CompactBlock($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::MutationSource($rel_op) => $rel_op.$method($($arg),*),
+        }
+    }
+}
+
+macro_rules! match_rel_op {
+    ($self:ident, $method:ident) => { __impl_match_rel_op!($self, rel_op, $method,) };
+    ($self:ident, $method:ident($($arg:expr),*)) => { __impl_match_rel_op!($self, rel_op, $method, $($arg),*) };
+}
+
 impl RelOperator {
     pub fn has_subquery(&self) -> bool {
         match self {
@@ -277,133 +311,23 @@ impl RelOperator {
 
 impl Operator for RelOperator {
     fn rel_op(&self) -> RelOp {
-        match self {
-            RelOperator::Scan(rel_op) => rel_op.rel_op(),
-            RelOperator::Join(rel_op) => rel_op.rel_op(),
-            RelOperator::EvalScalar(rel_op) => rel_op.rel_op(),
-            RelOperator::Filter(rel_op) => rel_op.rel_op(),
-            RelOperator::Aggregate(rel_op) => rel_op.rel_op(),
-            RelOperator::Sort(rel_op) => rel_op.rel_op(),
-            RelOperator::Limit(rel_op) => rel_op.rel_op(),
-            RelOperator::Exchange(rel_op) => rel_op.rel_op(),
-            RelOperator::UnionAll(rel_op) => rel_op.rel_op(),
-            RelOperator::DummyTableScan(rel_op) => rel_op.rel_op(),
-            RelOperator::ProjectSet(rel_op) => rel_op.rel_op(),
-            RelOperator::Window(rel_op) => rel_op.rel_op(),
-            RelOperator::ConstantTableScan(rel_op) => rel_op.rel_op(),
-            RelOperator::ExpressionScan(rel_op) => rel_op.rel_op(),
-            RelOperator::CacheScan(rel_op) => rel_op.rel_op(),
-            RelOperator::Udf(rel_op) => rel_op.rel_op(),
-            RelOperator::RecursiveCteScan(rel_op) => rel_op.rel_op(),
-            RelOperator::AsyncFunction(rel_op) => rel_op.rel_op(),
-            RelOperator::Mutation(rel_op) => rel_op.rel_op(),
-            RelOperator::CompactBlock(rel_op) => rel_op.rel_op(),
-            RelOperator::MutationSource(rel_op) => rel_op.rel_op(),
-        }
+        match_rel_op!(self, rel_op)
     }
 
     fn arity(&self) -> usize {
-        match self {
-            RelOperator::Scan(rel_op) => rel_op.arity(),
-            RelOperator::Join(rel_op) => rel_op.arity(),
-            RelOperator::EvalScalar(rel_op) => rel_op.arity(),
-            RelOperator::Filter(rel_op) => rel_op.arity(),
-            RelOperator::Aggregate(rel_op) => rel_op.arity(),
-            RelOperator::Sort(rel_op) => rel_op.arity(),
-            RelOperator::Limit(rel_op) => rel_op.arity(),
-            RelOperator::Exchange(rel_op) => rel_op.arity(),
-            RelOperator::UnionAll(rel_op) => rel_op.arity(),
-            RelOperator::DummyTableScan(rel_op) => rel_op.arity(),
-            RelOperator::Window(rel_op) => rel_op.arity(),
-            RelOperator::ProjectSet(rel_op) => rel_op.arity(),
-            RelOperator::ConstantTableScan(rel_op) => rel_op.arity(),
-            RelOperator::ExpressionScan(rel_op) => rel_op.arity(),
-            RelOperator::CacheScan(rel_op) => rel_op.arity(),
-            RelOperator::Udf(rel_op) => rel_op.arity(),
-            RelOperator::RecursiveCteScan(rel_op) => rel_op.arity(),
-            RelOperator::AsyncFunction(rel_op) => rel_op.arity(),
-            RelOperator::Mutation(rel_op) => rel_op.arity(),
-            RelOperator::CompactBlock(rel_op) => rel_op.arity(),
-            RelOperator::MutationSource(rel_op) => rel_op.arity(),
-        }
+        match_rel_op!(self, arity)
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        match self {
-            RelOperator::Scan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Join(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::EvalScalar(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Filter(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Aggregate(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Sort(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Limit(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Exchange(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::UnionAll(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::DummyTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::ProjectSet(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::ConstantTableScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::ExpressionScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::CacheScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Udf(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::AsyncFunction(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::Mutation(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::CompactBlock(rel_op) => rel_op.derive_relational_prop(rel_expr),
-            RelOperator::MutationSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
-        }
+        match_rel_op!(self, derive_relational_prop(rel_expr))
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        match self {
-            RelOperator::Scan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Join(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::EvalScalar(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Filter(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Aggregate(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Sort(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Limit(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Exchange(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::UnionAll(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::DummyTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::ProjectSet(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Window(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::ConstantTableScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::ExpressionScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::CacheScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Udf(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::AsyncFunction(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::Mutation(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::CompactBlock(rel_op) => rel_op.derive_physical_prop(rel_expr),
-            RelOperator::MutationSource(rel_op) => rel_op.derive_physical_prop(rel_expr),
-        }
+        match_rel_op!(self, derive_physical_prop(rel_expr))
     }
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        match self {
-            RelOperator::Scan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Join(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::EvalScalar(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Filter(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Aggregate(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Sort(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Limit(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Exchange(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::UnionAll(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::DummyTableScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::ProjectSet(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Window(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::ConstantTableScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::ExpressionScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::CacheScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Udf(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::RecursiveCteScan(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::AsyncFunction(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::Mutation(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::CompactBlock(rel_op) => rel_op.derive_stats(rel_expr),
-            RelOperator::MutationSource(rel_op) => rel_op.derive_stats(rel_expr),
-        }
+        match_rel_op!(self, derive_stats(rel_expr))
     }
 
     fn compute_required_prop_child(
@@ -413,71 +337,10 @@ impl Operator for RelOperator {
         child_index: usize,
         required: &RequiredProperty,
     ) -> Result<RequiredProperty> {
-        match self {
-            RelOperator::Scan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Join(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::EvalScalar(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Filter(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Aggregate(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Sort(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Limit(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Exchange(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::UnionAll(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::DummyTableScan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Window(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::ProjectSet(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::ConstantTableScan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::ExpressionScan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::CacheScan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Udf(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::RecursiveCteScan(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::AsyncFunction(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::Mutation(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::CompactBlock(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-            RelOperator::MutationSource(rel_op) => {
-                rel_op.compute_required_prop_child(ctx, rel_expr, child_index, required)
-            }
-        }
+        match_rel_op!(
+            self,
+            compute_required_prop_child(ctx, rel_expr, child_index, required)
+        )
     }
 
     fn compute_required_prop_children(
@@ -486,71 +349,10 @@ impl Operator for RelOperator {
         rel_expr: &RelExpr,
         required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
-        match self {
-            RelOperator::Scan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Join(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::EvalScalar(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Filter(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Aggregate(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Sort(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Limit(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Exchange(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::UnionAll(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::DummyTableScan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Window(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::ProjectSet(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::ConstantTableScan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::ExpressionScan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::CacheScan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Udf(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::RecursiveCteScan(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::AsyncFunction(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::Mutation(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::CompactBlock(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-            RelOperator::MutationSource(rel_op) => {
-                rel_op.compute_required_prop_children(ctx, rel_expr, required)
-            }
-        }
+        match_rel_op!(
+            self,
+            compute_required_prop_children(ctx, rel_expr, required)
+        )
     }
 }
 
