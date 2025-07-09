@@ -126,6 +126,7 @@ impl SnapshotConfig {
     ) -> Result<(String, String), io::Error> {
         let (storage_path, rel_path) = self.snapshot_dir_fn(&snapshot_id);
         let final_path = format!("{storage_path}/{rel_path}");
+
         fs::rename(temp_path, &final_path)?;
 
         info!(

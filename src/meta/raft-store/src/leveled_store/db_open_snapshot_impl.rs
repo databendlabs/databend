@@ -42,7 +42,7 @@ impl OpenSnapshot for DB {
 
         info!("Opened snapshot at {storage_path}/{rel_path}");
 
-        let db = Self::new(storage_path, snapshot_id, Arc::new(r))?;
+        let db = Self::new(storage_path, rel_path, snapshot_id, Arc::new(r))?;
         Ok(db)
     }
 }

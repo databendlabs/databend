@@ -58,7 +58,7 @@ impl ReceiverV003 {
         temp_f: File,
     ) -> Self {
         let remote_addr = remote_addr.to_string();
-        info!("Begin receiving snapshot v2 stream from: {}", remote_addr);
+        info!("Begin receiving snapshot v003 stream from: {}", remote_addr);
 
         ReceiverV003 {
             remote_addr,

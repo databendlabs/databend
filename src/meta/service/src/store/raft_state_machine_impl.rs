@@ -101,7 +101,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
         let ss_store = SnapshotStoreV004::new(self.inner.config.clone());
         let (storage_path, rel_path) = ss_store
             .snapshot_config()
-            .move_to_final_path(&snapshot.path, meta.snapshot_id.clone())
+            .move_to_final_path(&snapshot.path(), meta.snapshot_id.clone())
             .map_err(|e| StorageError::write_snapshot(Some(sig.clone()), &e))?;
 
         let db = DB::open_snapshot(
