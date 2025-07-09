@@ -207,8 +207,8 @@ impl Display for CreateTableStmt {
         }
         match self.table_type {
             TableType::Normal => {}
-            TableType::Transient => write!(f, " TRANSIENT ")?,
-            TableType::Temporary => write!(f, " TEMPORARY ")?,
+            TableType::Transient => write!(f, " TRANSIENT")?,
+            TableType::Temporary => write!(f, " TEMPORARY")?,
         };
         write!(f, " TABLE")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
@@ -724,6 +724,7 @@ pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub no_scan: bool,
 }
 
 impl Display for AnalyzeTableStmt {
@@ -736,6 +737,9 @@ impl Display for AnalyzeTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+        if self.no_scan {
+            write!(f, " NOSCAN")?;
+        }
 
         Ok(())
     }

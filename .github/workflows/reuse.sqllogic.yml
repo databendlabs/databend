@@ -13,11 +13,6 @@ on:
         type: string
         required: true
         default: "aws"
-      runner_capacity:
-        description: "Self-hosted runner capacity, spot or on-demand"
-        type: string
-        required: true
-        default: "spot"
       license_type:
         description: "License type, enterprise or trial"
         type: string
@@ -36,7 +31,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
@@ -52,7 +46,6 @@ jobs:
       - Linux
       - "${{ matrix.tests.runner }}"
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -90,7 +83,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - name: Start UDF Server
@@ -118,7 +110,6 @@ jobs:
       - Linux
       - 4c16g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - name: Start Cloud Control Server
@@ -145,7 +136,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -178,7 +168,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
@@ -200,7 +189,6 @@ jobs:
       - Linux
       - 4c16g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -225,7 +213,6 @@ jobs:
       - Linux
       - "${{ matrix.tests.runner }}"
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -266,7 +253,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -304,7 +290,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:
@@ -334,7 +319,6 @@ jobs:
       - Linux
       - 2c8g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     strategy:
       fail-fast: false
       matrix:

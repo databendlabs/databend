@@ -30,6 +30,8 @@ storage_prefix=$(mysql -uroot -h127.0.0.1 -P3307  -e "set global hide_options_in
 
 comment "attaching table"
 echo "attach table table_to 's3://testbucket/admin/data/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+# If failed will return err msg. Expect it success.
+echo "select * from system.columns where table='table_to' ignore_result;" | $BENDSQL_CLIENT_CONNECT
 echo "attach table table_to2 's3://testbucket/admin/data/$storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 
 

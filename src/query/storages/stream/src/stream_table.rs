@@ -36,7 +36,6 @@ use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
-use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::Pipeline;
@@ -367,9 +366,6 @@ impl Table for StreamTable {
                 .unwrap(),
             STREAM_COLUMN_FACTORY
                 .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
-                .unwrap(),
-            STREAM_COLUMN_FACTORY
-                .get_stream_column(ROW_VERSION_COL_NAME)
                 .unwrap(),
         ]
     }

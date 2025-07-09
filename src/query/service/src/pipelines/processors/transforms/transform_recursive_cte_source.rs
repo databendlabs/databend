@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
-use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -35,8 +36,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sources::SyncSource;
-use databend_common_pipeline_sources::SyncSourcer;
+use databend_common_pipeline_sources::AsyncSource;
+use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::CreateTablePlan;
@@ -93,7 +94,7 @@ impl TransformRecursiveCteSource {
                 }
             })
             .collect::<Vec<_>>();
-        SyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
+        AsyncSourcer::create(ctx.clone(), output_port, TransformRecursiveCteSource {
             ctx,
             union_plan,
             left_outputs,
@@ -135,27 +136,31 @@ impl TransformRecursiveCteSource {
         let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
         ctx.set_executor(pulling_executor.get_inner())?;
-        Ok((
-            PullingExecutorStream::create(pulling_executor)?
-                .try_collect::<Vec<DataBlock>>()
-                .await?,
-            cte_scan_tables,
-        ))
+        let isolate_runtime = Runtime::with_worker_threads(2, Some("r-cte-source".to_string()))?;
+        let join_handle = isolate_runtime.spawn(async move {
+            let stream = PullingExecutorStream::create(pulling_executor)?;
+            stream.try_collect::<Vec<DataBlock>>().await
+        });
+        let data_blocks = join_handle.await.flatten()?;
+        Ok((data_blocks, cte_scan_tables))
     }
 }
 
 #[async_trait::async_trait]
-impl SyncSource for TransformRecursiveCteSource {
+impl AsyncSource for TransformRecursiveCteSource {
     const NAME: &'static str = "TransformRecursiveCteSource";
 
-    fn generate(&mut self) -> Result<Option<DataBlock>> {
+    #[async_backtrace::framed]
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         let mut res = None;
         let mut data = DataBlock::empty();
-        match GlobalIORuntime::instance().block_on(Self::execute_r_cte(
+        match Self::execute_r_cte(
             self.ctx.clone(),
             self.recursive_step,
             self.union_plan.clone(),
-        )) {
+        )
+        .await
+        {
             Ok(res) => {
                 if !res.0.is_empty() {
                     data = DataBlock::concat(&res.0)?;
@@ -195,7 +200,7 @@ impl SyncSource for TransformRecursiveCteSource {
             let ctx = self.ctx.clone();
             let table_names = self.union_plan.cte_scan_names.clone();
             // Recursive end, remove all tables
-            let _ = GlobalIORuntime::instance().block_on(drop_tables(ctx, table_names));
+            let _ = drop_tables(ctx, table_names).await?;
         }
         Ok(res)
     }

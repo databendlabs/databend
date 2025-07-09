@@ -37,7 +37,7 @@ use databend_common_expression::utils::FromData;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
-use databend_common_expression::Scalar;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -62,7 +62,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::extract_leveled_strings;
 use crate::util::generate_catalog_meta;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
@@ -176,8 +176,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .disable_table_info_refresh()?;
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
+        let func_ctx = ctx.get_function_context()?;
         if let Some((catalog_name, db_name)) =
-            self.is_external_show_tables_query(&push_downs, &catalog)
+            self.is_external_show_tables_query(&func_ctx, &push_downs, &catalog)
         {
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
@@ -1047,11 +1048,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
     fn is_external_show_tables_query(
         &self,
+        func_ctx: &FunctionContext,
         push_downs: &Option<PushDownInfo>,
         catalog: &Arc<dyn Catalog>,
     ) -> Option<(String, String)> {
         if !WITH_HISTORY && WITHOUT_VIEW {
-            let mut database_name = None;
             // Check projection
             if let Some(push_downs) = push_downs {
                 if let Some(Projection::Columns(projection_indices)) = &push_downs.projection {
@@ -1074,34 +1075,26 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         return None;
                     }
 
-                    // Check filters (catalog name)
-                    let mut catalog_name = None;
+                    let mut filtered_catalog_names = vec![];
+                    let mut filtered_db_names = vec![];
 
                     if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                         let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                        find_eq_filter(&expr, &mut |col_name, scalar| {
-                            if col_name == "catalog" {
-                                if let Scalar::String(catalog) = scalar {
-                                    catalog_name = Some(catalog.to_string());
-                                }
-                            }
-                            if col_name == "database" {
-                                if let Scalar::String(db) = scalar {
-                                    database_name = Some(db.to_string());
-                                }
-                            }
-                            Ok(())
-                        });
+                        (filtered_catalog_names, filtered_db_names) =
+                            extract_leveled_strings(&expr, &["catalog", "database"], func_ctx)
+                                .ok()?;
                     }
 
                     // Check iceberg catalog existence
-                    if let Some(catalog_name) = catalog_name {
-                        if let Some(database_name) = database_name {
-                            if catalog.name() == catalog_name {
-                                if let CatalogType::Iceberg = catalog.info().catalog_type() {
-                                    return Some((catalog_name, database_name));
-                                }
-                            }
+                    if filtered_catalog_names.len() == 1
+                        && filtered_db_names.len() == 1
+                        && catalog.name() == filtered_catalog_names[0].clone()
+                    {
+                        if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                            return Some((
+                                filtered_catalog_names[0].clone(),
+                                filtered_db_names[0].clone(),
+                            ));
                         }
                     }
                 }

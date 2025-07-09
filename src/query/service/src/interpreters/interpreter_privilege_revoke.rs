@@ -87,7 +87,7 @@ impl Interpreter for RevokePrivilegeInterpreter {
                         .revoke_privileges_from_role(&tenant, &role, object, plan.priv_types)
                         .await?;
                 }
-                // grant_ownership and grant_privileges_to_role will modify the kv in meta.
+                // revoke_privileges_from_role will modify the kv in meta.
                 // So we need invalidate the role cache.
                 RoleCacheManager::instance().invalidate_cache(&tenant);
             }

@@ -34,7 +34,6 @@ jobs:
       - Linux
       - 4c16g
       - aws
-      - spot
     strategy:
       matrix:
         include:

@@ -273,6 +273,3 @@ create temp table t(a int, A int) engine=MEMORY;
 
 statement error Duplicated column name
 create temp table t engine=MEMORY as select number, number from numbers(1);
-
-statement error 1006
-create temp table t engine=MEMORY as select 'a' as c1, null as c2;

@@ -55,7 +55,7 @@ fn init_service(_py: Python, config: &str, local_dir: &str) -> PyResult<()> {
     }
 
     // if config is file read it to config_str
-    let conf = if std::fs::exists(Path::new(config)).unwrap() {
+    let conf = if std::fs::exists(Path::new(config)).unwrap_or_default() {
         Config::load_with_config_file(config).unwrap()
     } else {
         let temp_dr = tempfile::tempdir().unwrap();
@@ -69,7 +69,9 @@ embedded_dir = "{local_dir}"
 type = "fs"
 allow_insecure = true
 [storage.fs]
-data_path = "{local_dir}"#
+data_path = "{local_dir}"
+allow_insecure = true
+"#
             )
         } else {
             config.to_string()

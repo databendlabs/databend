@@ -1,0 +1,130 @@
+statement ok
+create or replace database union_case;
+
+statement ok
+use union_case;
+
+statement ok
+CREATE OR REPLACE TABLE abc (
+    id STRING,
+    timestamp_col TIMESTAMP,
+    category STRING,
+    type_code STRING,
+    type_name STRING,
+    level_code STRING,
+    class_code STRING,
+    class_name STRING,
+    sub_class_code STRING,
+    region_code STRING,
+    region_name STRING,
+    sub_region_code STRING,
+    sub_region_name STRING
+);
+
+statement ok
+INSERT INTO abc VALUES
+('001', '2024-01-15 10:00:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1000', 'region1', '', ''),
+('002', '2024-02-20 14:30:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1000', 'region1', '', ''),
+('003', '2024-03-10 09:15:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1000', 'region1', '', ''),
+('004', '2024-04-05 16:45:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1000', 'region1', '', ''),
+('005', '2024-01-25 11:20:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', '', ''),
+('006', '2024-02-28 13:40:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', '', ''),
+('007', '2024-03-15 10:30:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1200', 'region3', '', ''),
+('008', '2024-04-10 15:20:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1200', 'region3', '', ''),
+('009', '2024-01-30 09:45:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', 'SR102', 'subregion1'),
+('010', '2024-02-15 14:10:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', 'SR103', 'subregion2'),
+('011', '2024-03-20 11:50:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1200', 'region3', 'SR203', 'subregion3'),
+('012', '2024-04-15 16:30:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1200', 'region3', 'SR205', 'subregion4'),
+('101', '2023-01-15 10:00:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1000', 'region1', '', ''),
+('102', '2023-02-20 14:30:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1000', 'region1', '', ''),
+('103', '2023-03-10 09:15:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1000', 'region1', '', ''),
+('105', '2023-01-25 11:20:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', '', ''),
+('106', '2023-02-28 13:40:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', '', ''),
+('107', '2023-03-15 10:30:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1200', 'region3', '', ''),
+('109', '2023-01-30 09:45:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', 'SR102', 'subregion5'),
+('110', '2023-02-15 14:10:00', 'cat1', 'T001', 'type1', 'L1', 'C001', 'class1', 'SC001', 'R1100', 'region2', 'SR103', 'subregion6'),
+('111', '2023-03-20 11:50:00', 'cat2', 'T002', 'type2', 'L1', 'C002', 'class2', 'SC002', 'R1200', 'region3', 'SR203', 'subregion7');
+
+
+statement ok
+create or replace table test3 as SELECT 'CODE1' AS code_id, location AS location_name FROM (SELECT '' AS location, '' AS parent_region, a.count_val AS count_val, CASE WHEN b.count_val IS NULL THEN - 1 ELSE round(a.count_val / b.count_val - 1, 6) * 100 END AS percent_diff, 1 AS rank, a.sub_class_code, '' AS current_name, '' AS parent_name FROM (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_class_code, COUNT(DISTINCT id) AS count_val FROM abc GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_class_code) AS a LEFT OUTER JOIN (SELECT category, type_code, type_name, level_code, class_code, class_name, 3 AS count_val FROM abc) AS b ON a.category = b.category AND a.type_name = b.type_name AND a.level_code = b.level_code AND a.class_code = b.class_code AND a.class_name = b.class_name UNION ALL SELECT a.sub_region_name AS location, a.region_code AS parent_region, a.count_val AS count_val, CASE WHEN b.count_val IS NULL THEN - 1 ELSE round(a.count_val / b.count_val - 1, 6) * 100 END AS percent_diff, 1 AS rank, a.sub_class_code, a.sub_region_name AS current_name, a.region_name AS parent_name FROM (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_class_code, sub_region_code, sub_region_name, region_code, region_name, COUNT(DISTINCT id) AS count_val FROM abc AS t1 GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_class_code, sub_region_code, sub_region_name, region_code, region_name) AS a LEFT OUTER JOIN (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_region_code, sub_region_name, region_code, COUNT(DISTINCT id) AS count_val FROM abc AS t2 GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_region_code, sub_region_name, region_code) AS b ON a.category = b.category AND a.type_name = b.type_name AND a.level_code = b.level_code AND a.class_code = b.class_code AND a.class_name = b.class_name AND a.sub_region_code = b.sub_region_code) AS t3;
+
+
+statement ok
+insert into test3 SELECT 'CODE1' AS code_id, location AS location_name FROM (SELECT '' AS location, '' AS parent_region, a.count_val AS count_val, CASE WHEN b.count_val IS NULL THEN - 1 ELSE round(a.count_val / b.count_val - 1, 6) * 100 END AS percent_diff, 1 AS rank, a.sub_class_code, '' AS current_name, '' AS parent_name FROM (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_class_code, COUNT(DISTINCT id) AS count_val FROM abc GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_class_code) AS a LEFT OUTER JOIN (SELECT category, type_code, type_name, level_code, class_code, class_name, 3 AS count_val FROM abc) AS b ON a.category = b.category AND a.type_name = b.type_name AND a.level_code = b.level_code AND a.class_code = b.class_code AND a.class_name = b.class_name UNION ALL SELECT a.sub_region_name AS location, a.region_code AS parent_region, a.count_val AS count_val, CASE WHEN b.count_val IS NULL THEN - 1 ELSE round(a.count_val / b.count_val - 1, 6) * 100 END AS percent_diff, 1 AS rank, a.sub_class_code, a.sub_region_name AS current_name, a.region_name AS parent_name FROM (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_class_code, sub_region_code, sub_region_name, region_code, region_name, COUNT(DISTINCT id) AS count_val FROM abc AS t1 GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_class_code, sub_region_code, sub_region_name, region_code, region_name) AS a LEFT OUTER JOIN (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_region_code, sub_region_name, region_code, COUNT(DISTINCT id) AS count_val FROM abc AS t2 GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_region_code, sub_region_name, region_code) AS b ON a.category = b.category AND a.type_name = b.type_name AND a.level_code = b.level_code AND a.class_code = b.class_code AND a.class_name = b.class_name AND a.sub_region_code = b.sub_region_code) AS t3;
+
+
+query TT rowsort
+SELECT 'CODE1' AS code_id, location AS location_name FROM (SELECT '' AS location, '' AS parent_region, a.count_val AS count_val, CASE WHEN b.count_val IS NULL THEN - 1 ELSE round(a.count_val / b.count_val - 1, 6) * 100 END AS percent_diff, 1 AS rank, a.sub_class_code, '' AS current_name, '' AS parent_name FROM (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_class_code, COUNT(DISTINCT id) AS count_val FROM abc GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_class_code) AS a LEFT OUTER JOIN (SELECT category, type_code, type_name, level_code, class_code, class_name, 3 AS count_val FROM abc) AS b ON a.category = b.category AND a.type_name = b.type_name AND a.level_code = b.level_code AND a.class_code = b.class_code AND a.class_name = b.class_name UNION ALL SELECT a.sub_region_name AS location, a.region_code AS parent_region, a.count_val AS count_val, CASE WHEN b.count_val IS NULL THEN - 1 ELSE round(a.count_val / b.count_val - 1, 6) * 100 END AS percent_diff, 1 AS rank, a.sub_class_code, a.sub_region_name AS current_name, a.region_name AS parent_name FROM (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_class_code, sub_region_code, sub_region_name, region_code, region_name, COUNT(DISTINCT id) AS count_val FROM abc AS t1 GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_class_code, sub_region_code, sub_region_name, region_code, region_name) AS a LEFT OUTER JOIN (SELECT category, type_code, type_name, level_code, class_code, class_name, sub_region_code, sub_region_name, region_code, COUNT(DISTINCT id) AS count_val FROM abc AS t2 GROUP BY category, type_code, type_name, level_code, class_code, class_name, sub_region_code, sub_region_name, region_code) AS b ON a.category = b.category AND a.type_name = b.type_name AND a.level_code = b.level_code AND a.class_code = b.class_code AND a.class_name = b.class_name AND a.sub_region_code = b.sub_region_code) AS t3;
+----
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 (empty)
+CODE1 subregion1
+CODE1 subregion1
+CODE1 subregion2
+CODE1 subregion2
+CODE1 subregion3
+CODE1 subregion3
+CODE1 subregion4
+CODE1 subregion5
+CODE1 subregion5
+CODE1 subregion6
+CODE1 subregion6
+CODE1 subregion7
+CODE1 subregion7
+
+
+statement ok
+create or replace table test(a string, b string, c string);
+
+statement ok
+insert into test values ('a', 'b', 'c'), ('d', 'e', 'f');
+
+query TTT rowsort
+select '1' as a , b, c from test union all select a, a as b, a as c from test;
+----
+1 b c
+1 e f
+a a a
+d d d
+
+query TTT rowsort
+select 'xx' as j, a, b from  (select '1' as a , b, c from test union all select a, a as b, a as c from test);
+----
+xx 1 b
+xx 1 e
+xx a a
+xx d d
+
+statement ok
+drop table abc;
+
+statement ok
+drop table test3;

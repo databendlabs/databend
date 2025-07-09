@@ -49,10 +49,14 @@ echo "SET ROLE testrole2; SET SECONDARY ROLES NONE; INSERT INTO t20_0015_table2 
 
 echo '-- test 5: set role as testrole3, secondary roles as NONE, can access table2, can not access table1, because role3 inherited from role2'
 echo "SET ROLE testrole3; SET SECONDARY ROLES NONE; INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT || true
+echo "SET SECONDARY ROLES NONE;select parse_json(current_secondary_roles())" | $TEST_USER_CONNECT
+echo "select current_available_roles()" | $TEST_USER_CONNECT
 echo "SET ROLE testrole3; SET SECONDARY ROLES NONE; INSERT INTO t20_0015_table2 VALUES (1);" | $TEST_USER_CONNECT
 
 echo '-- test 6: set role as testrole1, secondary roles as ALL, can access both table1 and table2'
 echo "SET ROLE testrole1; SET SECONDARY ROLES ALL; INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT
+echo "SET SECONDARY ROLES ALL;select parse_json(current_secondary_roles())" | $TEST_USER_CONNECT
+echo "select current_available_roles()" | $TEST_USER_CONNECT
 echo "SET ROLE testrole1; SET SECONDARY ROLES ALL; INSERT INTO t20_0015_table2 VALUES (1);" | $TEST_USER_CONNECT
 
 echo '-- test 7: set role as testrole1, testrole2, secondary roles defaults as ALL, can both table1 and table2'

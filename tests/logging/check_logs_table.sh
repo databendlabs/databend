@@ -93,3 +93,76 @@ check_query_log "t-3" "$select_query_id" "settings (timezone='Asia/Shanghai') SE
 check_query_log "t-4" null "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, event_time, now()) FROM system_history.login_history limit 1" "0"
 
 check_query_log "t-5" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, query_start, now()) FROM system_history.access_history WHERE" "0"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "drop user if exists a"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "drop role if exists ra"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"create user a identified by '123' with default_role='ra'\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "create role ra"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "grant select , drop on system_history.* to role ra"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "grant alter on system_history.* to role ra"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "grant role ra to a"}')
+
+execute_and_verify() {
+    local cmd_description="$1"
+    local user_cred="$2"
+    local json_payload="$3"
+    local jq_expression="$4"
+    local result
+
+    echo -n "Executing: $cmd_description ... "
+
+    result=$(curl -s -u "${user_cred}" -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "${json_payload}" | jq -r "${jq_expression}")
+
+    if [[ "$result" != "true" ]]; then
+        echo "Failed! Expected result: true, actual result: $result."
+        echo "$cmd_description failed."
+        exit 1 # Exit script immediately if it fails
+    fi
+}
+
+check_system_history_permissions() {
+    # Command 1: User 'a:123' attempts to create a table in 'system_history' (expected to fail)
+    execute_and_verify \
+        "User 'a:123' attempts to create a table in 'system_history'" \
+        "a:123" \
+        '{"sql": "create table system_history.t (a INT)"}' \
+        '.state == "Failed"'
+
+    # Command 2: User 'root:' attempts to modify 'system_history.log_history' table (expected to fail)
+    execute_and_verify \
+        "User 'root:' attempts to modify 'system_history.log_history' table" \
+        "root:" \
+        '{"sql": "alter table system_history.log_history add column id int"}' \
+        '.state == "Failed"'
+
+    # Command 3: User 'a:123' attempts to drop 'system_history.access_history' table (expected to succeed)
+    execute_and_verify \
+        "User 'a:123' attempts to drop 'system_history.access_history' table" \
+        "a:123" \
+        '{"sql": "drop table system_history.access_history"}' \
+        '.state == "Succeeded"'
+
+    # Command 4: User 'root:' attempts to grant ownership on 'system_history.*' (expected to fail)
+    execute_and_verify \
+        "User 'root:' attempts to grant ownership on 'system_history.*'" \
+        "root:" \
+        '{"sql": "grant ownership on system_history.* to role ra"}' \
+        '.state == "Failed"'
+
+    # Command 5: User 'root:' attempts to grant ownership on 'system_history.query_history' (expected to fail)
+    execute_and_verify \
+        "User 'root:' attempts to grant ownership on 'system_history.query_history'" \
+        "root:" \
+        '{"sql": "grant ownership on system_history.query_history to role ra"}' \
+        '.state == "Failed"'
+    # Command 6: User 'a:123' attempts to select 'system_history.query_history' table (expected to succeed)
+        execute_and_verify \
+            "User 'a:123' attempts to query 'system_history.query_history' table" \
+            "a:123" \
+            '{"sql": "select count() from system_history.query_history"}' \
+            '.state == "Succeeded"'
+}
+
+check_system_history_permissions
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "drop user if exists a"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "drop role if exists ra"}')

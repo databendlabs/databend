@@ -54,7 +54,6 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
-use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
@@ -491,7 +490,9 @@ impl FuseTable {
     ///   1. Number of snapshots to keep (from table option or setting)
     ///   2. Time-based retention period (if snapshot count is not specified)
     pub fn get_data_retention_policy(&self, ctx: &dyn TableContext) -> Result<RetentionPolicy> {
-        let policy =
+        let policy = if self.is_transient() {
+            RetentionPolicy::ByNumOfSnapshotsToKeep(1)
+        } else {
             // Try to get number of snapshots to keep
             if let Some(num_snapshots) = self.try_get_policy_by_num_snapshots_to_keep(ctx)? {
                 RetentionPolicy::ByNumOfSnapshotsToKeep(num_snapshots as usize)
@@ -499,7 +500,8 @@ impl FuseTable {
                 // Fall back to time-based retention policy
                 let duration = self.get_data_retention_period(ctx)?;
                 RetentionPolicy::ByTimePeriod(duration)
-            };
+            }
+        };
 
         Ok(policy)
     }
@@ -802,9 +804,6 @@ impl Table for FuseTable {
                     .unwrap(),
                 STREAM_COLUMN_FACTORY
                     .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
-                    .unwrap(),
-                STREAM_COLUMN_FACTORY
-                    .get_stream_column(ROW_VERSION_COL_NAME)
                     .unwrap(),
             ]
         } else {
@@ -1201,7 +1200,19 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Parquet)
+        if matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && matches!(self.table_type, FuseTableType::Standard)
+        {
+            // ignore persistent system tables {
+            if let Ok(database_name) = self.table_info.database_name() {
+                if database_name == "persistent_system" {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
 
     fn result_can_be_cached(&self) -> bool {

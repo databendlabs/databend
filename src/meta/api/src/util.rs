@@ -248,7 +248,7 @@ pub async fn send_txn(
     debug!("send txn: {}", txn_req);
     let tx_reply = kv_api.transaction(txn_req).await?;
     let (succ, responses) = unpack_txn_reply(tx_reply);
-    debug!("txn success: {}: {}", succ, responses.display_n::<20>());
+    debug!("txn success: {}: {}", succ, responses.display_n(20));
     Ok((succ, responses))
 }
 

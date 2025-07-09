@@ -49,6 +49,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
@@ -346,7 +347,9 @@ impl SchemaApiTestSuite {
 
         suite.get_table_name_by_id(&b.build().await).await?;
         suite.get_db_name_by_id(&b.build().await).await?;
-        suite.test_sequence(&b.build().await).await?;
+
+        suite.test_sequence_0(&b.build().await).await?;
+        suite.test_sequence_1(&b.build().await).await?;
 
         suite.dictionary_create_list_drop(&b.build().await).await?;
         Ok(())
@@ -5764,9 +5767,28 @@ impl SchemaApiTestSuite {
     }
 
     #[fastrace::trace]
-    async fn test_sequence<MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>>(
+    async fn test_sequence_0<MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>>(
         &self,
         mt: &MT,
+    ) -> anyhow::Result<()> {
+        self.test_sequence_with_version(mt, 0).await
+    }
+
+    #[fastrace::trace]
+    async fn test_sequence_1<MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>>(
+        &self,
+        mt: &MT,
+    ) -> anyhow::Result<()> {
+        self.test_sequence_with_version(mt, 1).await
+    }
+
+    #[fastrace::trace]
+    async fn test_sequence_with_version<
+        MT: SchemaApi + SequenceApi + kvapi::AsKVApi<Error = MetaError>,
+    >(
+        &self,
+        mt: &MT,
+        storage_version: u64,
     ) -> anyhow::Result<()> {
         let tenant = Tenant {
             tenant: "tenant1".to_string(),
@@ -5782,6 +5804,7 @@ impl SchemaApiTestSuite {
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 comment: Some("seq".to_string()),
+                storage_version,
             };
 
             let _resp = mt.create_sequence(req).await?;
@@ -5803,14 +5826,16 @@ impl SchemaApiTestSuite {
                 ident: SequenceIdent::new(&tenant, "seq1"),
                 create_on,
                 comment: Some("seq1".to_string()),
+                storage_version,
             };
 
-            let seqs = ["seq", "seq1"];
             let _resp = mt.create_sequence(req).await?;
             let values = mt.list_sequences(&tenant).await?;
-            for (i, (name, _)) in values.iter().enumerate() {
-                assert_eq!(name, seqs[i]);
-            }
+            assert_eq!(values.len(), 2);
+            assert_eq!(values[0].0, sequence_name);
+            assert_eq!(values[0].1.current, 1);
+            assert_eq!(values[1].0, "seq1");
+            assert_eq!(values[1].1.current, 1);
         }
 
         info!("--- get sequence nextval");
@@ -5821,7 +5846,7 @@ impl SchemaApiTestSuite {
             };
             let resp = mt.get_sequence_next_value(req).await?;
             assert_eq!(resp.start, 1);
-            assert_eq!(resp.end, 10);
+            assert_eq!(resp.end, 11);
         }
 
         info!("--- get sequence after nextval");
@@ -5833,6 +5858,16 @@ impl SchemaApiTestSuite {
             assert_eq!(resp.current, 11);
         }
 
+        info!("--- list sequence after nextval");
+        {
+            let values = mt.list_sequences(&tenant).await?;
+            assert_eq!(values.len(), 2);
+            assert_eq!(values[0].0, sequence_name);
+            assert_eq!(values[0].1.current, 11);
+            assert_eq!(values[1].0, "seq1");
+            assert_eq!(values[1].1.current, 1);
+        }
+
         info!("--- replace sequence");
         {
             let req = CreateSequenceReq {
@@ -5840,6 +5875,7 @@ impl SchemaApiTestSuite {
                 ident: SequenceIdent::new(&tenant, sequence_name),
                 create_on,
                 comment: Some("seq1".to_string()),
+                storage_version,
             };
 
             let _resp = mt.create_sequence(req).await?;
@@ -5852,6 +5888,7 @@ impl SchemaApiTestSuite {
             assert_eq!(resp.current, 1);
         }
 
+        info!("--- drop sequence");
         {
             let req = DropSequenceReq {
                 ident: SequenceIdent::new(&tenant, sequence_name),
@@ -5863,6 +5900,24 @@ impl SchemaApiTestSuite {
             let req = SequenceIdent::new(&tenant, sequence_name);
             let resp = mt.get_sequence(&req).await?;
             assert!(resp.is_none());
+
+            let storage_ident = SequenceStorageIdent::new_from(req);
+            let got = mt
+                .as_kv_api()
+                .get_kv(&storage_ident.to_string_key())
+                .await?;
+            assert!(
+                got.is_none(),
+                "storage_version==1 storage should be removed too"
+            );
+        }
+
+        info!("--- list sequence after drop");
+        {
+            let values = mt.list_sequences(&tenant).await?;
+            assert_eq!(values.len(), 1);
+            assert_eq!(values[0].0, "seq1");
+            assert_eq!(values[0].1.current, 1);
         }
 
         Ok(())

@@ -213,6 +213,9 @@ impl CreateTableInterpreter {
         if !reply.new_table && self.plan.create_option != CreateOption::CreateOrReplace {
             return Ok(PipelineBuildResult::create());
         }
+        if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
+            self.register_temp_table(prefix).await?;
+        }
 
         let table_id = reply.table_id;
         let prev_table_id = reply.prev_table_id;
@@ -376,18 +379,7 @@ impl CreateTableInterpreter {
 
         let reply = catalog.create_table(req.clone()).await?;
         if let Some(prefix) = req.table_meta.options.get(OPT_KEY_TEMP_PREFIX).cloned() {
-            let session = self.ctx.get_current_session();
-            if let Some(id) = session.get_client_session_id() {
-                let client_session_manager = ClientSessionManager::instance();
-                client_session_manager.add_temp_tbl_mgr(prefix, session.temp_tbl_mgr().clone());
-                client_session_manager
-                    .refresh_session_handle(
-                        self.ctx.get_tenant(),
-                        self.ctx.get_current_user()?.name,
-                        &id,
-                    )
-                    .await?;
-            }
+            self.register_temp_table(prefix).await?;
         }
 
         if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) && !catalog.is_external() {
@@ -528,6 +520,22 @@ impl CreateTableInterpreter {
         handler
             .build_attach_table_request(storage_prefix, &self.plan)
             .await
+    }
+
+    async fn register_temp_table(&self, prefix: String) -> Result<()> {
+        let session = self.ctx.get_current_session();
+        if let Some(id) = session.get_client_session_id() {
+            let client_session_manager = ClientSessionManager::instance();
+            client_session_manager.add_temp_tbl_mgr(prefix, session.temp_tbl_mgr().clone());
+            client_session_manager
+                .refresh_session_handle(
+                    self.ctx.get_tenant(),
+                    self.ctx.get_current_user()?.name,
+                    &id,
+                )
+                .await?;
+        }
+        Ok(())
     }
 }
 

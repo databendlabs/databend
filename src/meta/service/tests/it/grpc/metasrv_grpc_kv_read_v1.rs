@@ -23,8 +23,8 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::protobuf::KvMeta;
 use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
@@ -174,7 +174,9 @@ async fn test_streamed_mget(client: &Arc<ClientHandle>, now_sec: u64) -> anyhow:
         assert_eq!(b("a"), seq_v.data);
         // check meta
         {
-            let KvMeta { expire_at } = seq_v.meta.unwrap();
+            let kv_meta: KVMeta = seq_v.meta.unwrap().into();
+            let expire_at = kv_meta.expires_at_sec_opt();
+
             let want = now_sec + 10;
             assert!((want..want + 3).contains(&expire_at.unwrap()));
         }

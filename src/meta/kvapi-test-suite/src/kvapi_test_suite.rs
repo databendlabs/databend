@@ -14,9 +14,11 @@
 
 use std::time::Duration;
 
+use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
+use databend_common_meta_types::protobuf::KvMeta;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
@@ -47,12 +49,11 @@ use fastrace::func_name;
 use fastrace::func_path;
 use log::debug;
 use log::info;
-
-use crate::kvapi;
+use tokio::time::sleep;
 
 pub struct TestSuite {}
 
-impl kvapi::TestSuite {
+impl TestSuite {
     #[fastrace::trace]
     pub async fn test_all<KV, B>(&self, builder: B) -> anyhow::Result<()>
     where
@@ -87,6 +88,7 @@ impl kvapi::TestSuite {
         self.kv_delete(&builder.build().await).await?;
         self.kv_update(&builder.build().await).await?;
         self.kv_timeout(&builder.build().await).await?;
+        self.kv_expire_sec_or_ms(&builder.build().await).await?;
         self.kv_upsert_with_ttl(&builder.build().await).await?;
         self.kv_meta(&builder.build().await).await?;
         self.kv_list(&builder.build().await).await?;
@@ -96,6 +98,9 @@ impl kvapi::TestSuite {
         self.kv_transaction_fetch_add_u64(&builder.build().await)
             .await?;
         self.kv_transaction_fetch_add_u64_match_seq(&builder.build().await)
+            .await?;
+        self.kv_txn_put_sequential(&builder.build().await).await?;
+        self.kv_txn_put_sequential_expire_and_ttl(&builder.build().await)
             .await?;
         self.kv_transaction_with_ttl(&builder.build().await).await?;
         self.kv_transaction_delete_match_seq_none(&builder.build().await)
@@ -115,7 +120,7 @@ impl kvapi::TestSuite {
     }
 }
 
-impl kvapi::TestSuite {
+impl TestSuite {
     #[fastrace::trace]
     pub async fn kv_write_read<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         info!("--- kvapi::KVApiTestSuite::kv_write_read() start");
@@ -245,7 +250,7 @@ impl kvapi::TestSuite {
 
     #[fastrace::trace]
     pub async fn kv_timeout<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
-        info!("--- kvapi::KVApiTestSuite::kv_timeout() start");
+        info!("--- {} start", func_name!());
 
         // - Test get  expired and non-expired.
         // - Test mget expired and non-expired.
@@ -308,7 +313,7 @@ impl kvapi::TestSuite {
                 assert_eq!(v2.seq, 3);
                 assert_eq!(v2.data, b("v2"));
                 let v2_meta = v2.meta.unwrap();
-                let expire_at_sec = v2_meta.get_expire_at_ms().unwrap() / 1000;
+                let expire_at_sec = v2_meta.expires_at_sec_opt().unwrap();
                 let want = now_sec + 10;
                 assert!((want..want + 2).contains(&expire_at_sec));
             }
@@ -333,6 +338,80 @@ impl kvapi::TestSuite {
 
             let res = kv.get_kv("k2").await?;
             assert!(res.is_none(), "k2 expired");
+        }
+
+        Ok(())
+    }
+
+    /// Test expire time in seconds or milliseconds.
+    #[fastrace::trace]
+    pub async fn kv_expire_sec_or_ms<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- {} start", func_name!());
+
+        // 100_000_000_000 is the max value in seconds.
+        kv.upsert_kv(UpsertKV::update("k1", b"v1").with(MetaSpec::new_expire(100_000_000_000)))
+            .await?;
+        // dbg!("upsert non expired k1", _res);
+
+        info!("--- get unexpired");
+        {
+            let res = kv.get_kv("k1").await?;
+            let meta = res.unwrap().meta.unwrap();
+            assert_eq!(meta.expires_at_sec_opt(), Some(100_000_000_000));
+        }
+
+        info!("--- expired in milliseconds");
+        {
+            let now_sec = SeqV::<()>::now_sec();
+
+            // expire time in milliseconds
+            kv.upsert_kv(
+                UpsertKV::update("k1", b"v1").with(MetaSpec::new_expire((now_sec - 2) * 1000)),
+            )
+            .await?;
+
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_none(), "expired");
+        }
+
+        info!("--- unexpired in milliseconds");
+        {
+            // 2035-01-04 18:12:23
+            let millis = 2051518343000;
+
+            // expire time in milliseconds
+            kv.upsert_kv(UpsertKV::update("k1", b"v1").with(MetaSpec::new_expire(millis)))
+                .await?;
+
+            let res = kv.get_kv("k1").await?;
+            let meta = res.unwrap().meta.unwrap();
+            assert_eq!(meta.get_expire_at_ms(), Some(millis));
+        }
+
+        info!("--- ttl in milliseconds: 1 sec");
+        {
+            kv.upsert_kv(
+                UpsertKV::update("k1", b"v1").with(MetaSpec::new_ttl(Duration::from_secs(1))),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(2_000)).await;
+
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_none());
+        }
+
+        info!("--- ttl in milliseconds: 5 sec");
+        {
+            kv.upsert_kv(
+                UpsertKV::update("k1", b"v1").with(MetaSpec::new_ttl(Duration::from_secs(5))),
+            )
+            .await?;
+
+            sleep(Duration::from_millis(2_000)).await;
+
+            let res = kv.get_kv("k1").await?;
+            assert!(res.is_some());
         }
 
         Ok(())
@@ -410,7 +489,7 @@ impl kvapi::TestSuite {
             assert_eq!(res.data, b("v1"));
 
             let meta = res.meta.unwrap();
-            let expire_at_sec = meta.get_expire_at_ms().unwrap() / 1000;
+            let expire_at_sec = meta.expires_at_sec_opt().unwrap();
             let want = now_sec + 20;
             assert!((want..want + 2).contains(&expire_at_sec));
         }
@@ -426,7 +505,7 @@ impl kvapi::TestSuite {
             assert_eq!(res.data, b("v1"));
 
             let meta = res.meta.unwrap();
-            let expire_at_sec = meta.get_expire_at_ms().unwrap() / 1000;
+            let expire_at_sec = meta.expires_at_sec_opt().unwrap();
             let want = now_sec + 20;
             assert!((want..want + 2).contains(&expire_at_sec));
         }
@@ -1273,6 +1352,125 @@ impl kvapi::TestSuite {
         Ok(())
     }
 
+    /// Tests match_seq must match the record seq to take place the operation.
+    #[fastrace::trace]
+    pub async fn kv_txn_put_sequential<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
+        info!("--- {}", func_path!());
+
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put_sequential("k1/", "seq1", b("v1")),
+            TxnOp::put_sequential("k2/", "seq1", b("v2")),
+        ]);
+
+        let resp = kv.transaction(txn).await?;
+
+        assert_eq!(resp.responses.len(), 2);
+
+        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k1/000_000_000_000_000_000_000".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                2,
+                Some(KvMeta::default()),
+                b("v1").to_vec()
+            )),
+        });
+        assert_eq!(resp.responses[1].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k2/000_000_000_000_000_000_001".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                4,
+                Some(KvMeta::default()),
+                b("v2").to_vec()
+            )),
+        });
+
+        // insert again
+
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put_sequential("k1/", "seq1", b("v1")),
+            TxnOp::put_sequential("k2/", "seq1", b("v2")),
+        ]);
+
+        let resp = kv.transaction(txn).await?;
+
+        assert_eq!(resp.responses.len(), 2);
+
+        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k1/000_000_000_000_000_000_002".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                6,
+                Some(KvMeta::default()),
+                b("v1").to_vec()
+            )),
+        });
+        assert_eq!(resp.responses[1].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k2/000_000_000_000_000_000_003".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                8,
+                Some(KvMeta::default()),
+                b("v2").to_vec()
+            )),
+        });
+
+        Ok(())
+    }
+
+    #[fastrace::trace]
+    pub async fn kv_txn_put_sequential_expire_and_ttl<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        // - Add a record via transaction with ttl
+
+        info!("--- {}", func_path!());
+
+        let now_ms = SeqV::<()>::now_ms();
+
+        let txn = TxnRequest::new(vec![], vec![
+            TxnOp::put_sequential("k1/", "seq1", b("v1")).with_expires_at_ms(Some(now_ms + 1000)),
+            TxnOp::put_sequential("k2/", "seq1", b("v2"))
+                .with_ttl(Some(Duration::from_millis(1000))),
+        ]);
+
+        let resp = kv.transaction(txn).await?;
+
+        assert_eq!(resp.responses.len(), 2);
+
+        assert_eq!(resp.responses[0].try_as_put().unwrap(), &TxnPutResponse {
+            key: "k1/000_000_000_000_000_000_000".to_string(),
+            prev_value: None,
+            current: Some(pb::SeqV::with_meta(
+                2,
+                Some(KvMeta::new_expire(now_ms + 1000)),
+                b("v1").to_vec()
+            )),
+        });
+
+        let got = resp.responses[1].try_as_put().unwrap();
+        assert_eq!(got.key, "k2/000_000_000_000_000_000_001".to_string());
+        assert_eq!(got.prev_value, None);
+        let current = got.current.clone().unwrap();
+        assert_eq!(current.seq, 4);
+        assert_eq!(current.data, b("v2"));
+        assert!(current.meta.unwrap().close_to(
+            &KvMeta::new_expire(now_ms + 1000),
+            Duration::from_millis(1000)
+        ));
+
+        sleep(Duration::from_millis(2000)).await;
+
+        let got = kv.get_kv("k1/000_000_000_000_000_000_000").await?;
+        assert!(got.is_none(), "k1 should be expired");
+
+        let got = kv.get_kv("k2/000_000_000_000_000_000_001").await?;
+        assert!(got.is_none(), "k2 should be expired");
+
+        Ok(())
+    }
+
     #[fastrace::trace]
     pub async fn kv_transaction_with_ttl<KV: kvapi::KVApi>(&self, kv: &KV) -> anyhow::Result<()> {
         // - Add a record via transaction with ttl
@@ -1601,7 +1799,7 @@ impl kvapi::TestSuite {
 }
 
 /// Test that write and read should be forwarded to leader
-impl kvapi::TestSuite {
+impl TestSuite {
     #[fastrace::trace]
     pub async fn kv_write_read_across_nodes<KV: kvapi::KVApi>(
         &self,

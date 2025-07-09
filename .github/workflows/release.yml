@@ -121,7 +121,6 @@ jobs:
       - Linux
       - 16c64g
       - aws
-      - on-demand
     needs: create_release
     strategy:
       fail-fast: false
@@ -161,7 +160,6 @@ jobs:
       - Linux
       - 16c64g
       - aws
-      - on-demand
     needs: create_release
     strategy:
       fail-fast: false
@@ -195,7 +193,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - on-demand
     needs: [create_release, build_default]
     strategy:
       fail-fast: false
@@ -237,7 +234,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - on-demand
     needs: [create_release, build_default]
     strategy:
       fail-fast: false
@@ -287,7 +283,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - on-demand
     needs: [create_release, build_default]
     steps:
       - name: Checkout
@@ -367,7 +362,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - on-demand
     needs: [create_release, build_docker]
     strategy:
       fail-fast: false
@@ -443,7 +437,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - on-demand
     needs: [create_release, build_default]
     strategy:
       matrix:
@@ -534,7 +527,6 @@ jobs:
       - Linux
       - 2c8g
       - aws
-      - on-demand
     needs: [create_release, notify]
     steps:
       - uses: actions/checkout@v4
@@ -565,7 +557,6 @@ jobs:
       - Linux
       - 4c16g
       - aws
-      - spot
     needs: [create_release, notify]
     steps:
       - uses: actions/checkout@v4
@@ -601,8 +592,6 @@ jobs:
       source: release
       source_id: ${{ needs.create_release.outputs.version }}
       version: ${{ needs.create_release.outputs.version }}
-      runner_provider: aws
-      runner_capacity: spot
       target: all
 
   deb:
