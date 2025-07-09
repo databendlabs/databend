@@ -106,7 +106,7 @@ impl FilterHelpers {
                     }
                 }
 
-                values.retain(|v| !results.contains(v) && !invalid_results.contains(v));
+                values.retain(|v| !invalid_results.contains(v));
                 if results.is_empty() && !values.is_empty() {
                     let mut results_all_used = true;
                     // let's check or function that
