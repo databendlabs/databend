@@ -16,16 +16,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -33,6 +37,26 @@ use databend_common_meta_app::schema::TableMeta;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
+use crate::SystemLogElement;
+use crate::SystemLogQueue;
+
+pub type QueryExecutionStatsQueue = SystemLogQueue<QueryExecutionStatsElement>;
+pub type QueryExecutionStatsElement = (String, ExecutorStatsSnapshot);
+
+impl SystemLogElement for QueryExecutionStatsElement {
+    const TABLE_NAME: &'static str = "DUMMY";
+
+    fn schema() -> TableSchemaRef {
+        unimplemented!("Only used log queue, not a table");
+    }
+
+    fn fill_to_data_block(
+        &self,
+        _columns: &mut Vec<ColumnBuilder>,
+    ) -> databend_common_exception::Result<()> {
+        unimplemented!("Only used log queue, not a table");
+    }
+}
 
 pub struct QueryExecutionTable {
     table_info: TableInfo,
@@ -52,7 +76,9 @@ impl SyncSystemTable for QueryExecutionTable {
         &self,
         ctx: Arc<dyn TableContext>,
     ) -> databend_common_exception::Result<DataBlock> {
-        let running = ctx.get_query_execution_stats();
+        let mut running = ctx.get_running_query_execution_stats();
+        let archive = self.get_archive()?;
+        running.extend(archive);
         let local_id = ctx.get_cluster().local_id.clone();
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -121,7 +147,7 @@ impl SyncSystemTable for QueryExecutionTable {
 }
 
 impl QueryExecutionTable {
-    pub fn create(table_id: u64) -> Arc<dyn Table> {
+    pub fn create(table_id: u64, max_rows: usize) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("node", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
@@ -141,6 +167,19 @@ impl QueryExecutionTable {
             ..Default::default()
         };
 
+        QueryExecutionStatsQueue::init(max_rows);
+
         SyncOneBlockSystemTable::create(QueryExecutionTable { table_info })
+    }
+
+    pub fn get_archive(&self) -> Result<Vec<QueryExecutionStatsElement>> {
+        let archive = QueryExecutionStatsQueue::instance()?
+            .data
+            .read()
+            .event_queue
+            .iter()
+            .filter_map(|e| e.as_ref().map(|e| e.clone()))
+            .collect();
+        Ok(archive)
     }
 }

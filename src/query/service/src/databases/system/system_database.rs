@@ -135,7 +135,6 @@ impl SystemDatabase {
             UserFunctionsTable::create(sys_db_meta.next_table_id()),
             ViewsTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
             ProceduresTable::create(sys_db_meta.next_table_id()),
-            QueryExecutionTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_system_table_load;
@@ -167,6 +166,10 @@ impl SystemDatabase {
                     sys_db_meta.next_table_id(),
                     config.query.max_query_log_size,
                 )),
+                QueryExecutionTable::create(
+                    sys_db_meta.next_table_id(),
+                    config.query.max_query_log_size,
+                ),
             ]);
             disable_system_table_load = config.query.disable_system_table_load;
         } else {
