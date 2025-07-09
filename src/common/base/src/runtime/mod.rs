@@ -38,6 +38,7 @@ pub use catch_unwind::CatchUnwindFuture;
 pub use defer::defer;
 pub use executor_stats::ExecutorStats;
 pub use executor_stats::ExecutorStatsSlot;
+pub use executor_stats::ExecutorStatsSnapshot;
 pub use global_runtime::GlobalIORuntime;
 pub use global_runtime::GlobalQueryRuntime;
 pub use memory::set_alloc_error_hook;

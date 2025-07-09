@@ -31,6 +31,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
@@ -791,6 +792,13 @@ impl QueryContextShared {
                 }
             };
         }
+    }
+
+    pub fn get_query_execution_stats(&self) -> Option<ExecutorStatsSnapshot> {
+        if let Some(executor) = self.executor.read().upgrade() {
+            return Some(executor.get_query_execution_stats());
+        }
+        None
     }
 
     pub fn set_query_memory_tracking(&self, mem_stat: Option<Arc<MemStat>>) {

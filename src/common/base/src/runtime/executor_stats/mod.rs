@@ -16,3 +16,4 @@ mod stats;
 
 pub use stats::ExecutorStats;
 pub use stats::ExecutorStatsSlot;
+pub use stats::ExecutorStatsSnapshot;

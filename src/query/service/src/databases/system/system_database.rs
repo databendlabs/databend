@@ -52,6 +52,7 @@ use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::QueryCacheTable;
+use databend_common_storages_system::QueryExecutionTable;
 use databend_common_storages_system::RolesTable;
 use databend_common_storages_system::SettingsTable;
 use databend_common_storages_system::StagesTable;
@@ -134,6 +135,7 @@ impl SystemDatabase {
             UserFunctionsTable::create(sys_db_meta.next_table_id()),
             ViewsTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
             ProceduresTable::create(sys_db_meta.next_table_id()),
+            QueryExecutionTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_system_table_load;

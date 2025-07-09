@@ -25,6 +25,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::ProcessInfoState;
@@ -392,6 +393,26 @@ impl SessionManager {
             "Unknown query {}",
             query_id
         )))
+    }
+
+    pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut res = Vec::new();
+        for weak_ptr in self.active_sessions_snapshot() {
+            let Some(arc_session) = weak_ptr.upgrade() else {
+                continue;
+            };
+
+            let session_ctx = arc_session.session_ctx.as_ref();
+
+            if let Some(context_shared) = session_ctx.get_query_context_shared() {
+                let query_id = context_shared.init_query_id.as_ref().read().clone();
+                let stats = context_shared.get_query_execution_stats();
+                if let Some(stats) = stats {
+                    res.push((query_id, stats));
+                }
+            }
+        }
+        res
     }
 
     fn active_sessions_snapshot(&self) -> Vec<Weak<Session>> {
