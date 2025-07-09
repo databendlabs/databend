@@ -63,42 +63,50 @@ impl FilterHelpers {
             values.dedup();
 
             let mut results = Vec::with_capacity(values.len());
+            let mut invalid_results = Vec::with_capacity(values.len());
 
             if !values.is_empty() {
                 for value in values.iter() {
-                    // replace eq with false
-                    let expr =
-                        expr.replace_function_literals("eq", &mut |col_name, scalar, func| {
-                            if col_name.name() == *name {
-                                if scalar == value {
-                                    let data_type = func.function.signature.return_type.clone();
-                                    Some(Expr::Constant(Constant {
-                                        span: None,
-                                        scalar: Scalar::Boolean(false),
-                                        data_type,
-                                    }))
+                    // replace eq with false, true
+                    for (idx, t) in [false, true].iter().enumerate() {
+                        let expr =
+                            expr.replace_function_literals("eq", &mut |col_name, scalar, func| {
+                                if col_name.name() == *name {
+                                    if scalar == value {
+                                        let data_type = func.function.signature.return_type.clone();
+                                        Some(Expr::Constant(Constant {
+                                            span: None,
+                                            scalar: Scalar::Boolean(*t),
+                                            data_type,
+                                        }))
+                                    } else {
+                                        // for other values, we just ignore it
+                                        None
+                                    }
                                 } else {
-                                    // for other values, we just ignore it
+                                    // for other columns, we just ignore it
                                     None
                                 }
+                            });
+
+                        let (folded_expr, _) = ConstantFolder::fold(&expr, func_ctx, fn_registry);
+
+                        if let Expr::Constant(Constant {
+                            scalar: Scalar::Boolean(false),
+                            ..
+                        }) = folded_expr
+                        {
+                            if idx == 0 {
+                                results.push(value.clone());
                             } else {
-                                // for other columns, we just ignore it
-                                None
+                                // may contains negative values
+                                invalid_results.push(value.clone());
                             }
-                        });
-
-                    let (folded_expr, _) = ConstantFolder::fold(&expr, func_ctx, fn_registry);
-
-                    if let Expr::Constant(Constant {
-                        scalar: Scalar::Boolean(false),
-                        ..
-                    }) = folded_expr
-                    {
-                        results.push(value.clone());
+                        }
                     }
                 }
 
-                // let's check if it contains or for other columns
+                values.retain(|v| !results.contains(v) && !invalid_results.contains(v));
                 if results.is_empty() && !values.is_empty() {
                     let mut results_all_used = true;
                     // let's check or function that
@@ -117,6 +125,7 @@ impl FilterHelpers {
                             }
                         }
                     });
+
                     if results_all_used {
                         results = values;
                     }
