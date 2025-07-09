@@ -51,6 +51,8 @@ pub struct DPhpyOptimizer {
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
+    // cte name -> table indexes referenced by cte
+    cte_table_index_map: HashMap<String, Vec<IndexType>>,
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
@@ -66,6 +68,7 @@ impl DPhpyOptimizer {
             opt_ctx,
             join_relations: vec![],
             table_index_map: Default::default(),
+            cte_table_index_map: Default::default(),
             dp_table: Default::default(),
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
@@ -274,7 +277,28 @@ impl DPhpyOptimizer {
         &mut self,
         s_expr: &SExpr,
     ) -> Result<(Arc<SExpr>, bool)> {
-        let new_s_expr = self.new_children(s_expr).await?;
+        let m_cte = match s_expr.plan() {
+            RelOperator::MaterializedCTE(cte) => cte,
+            _ => unreachable!(),
+        };
+
+        let mut left_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        let left_expr = left_dphyp.optimize_async(s_expr.child(0)?).await?;
+
+        let mut right_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        right_dphyp.cte_table_index_map.insert(
+            m_cte.cte_name.clone(),
+            self.table_index_map.keys().cloned().collect(),
+        );
+        let right_expr = right_dphyp.optimize_async(s_expr.child(1)?).await?;
+
+        // Merge table_index_map from right child into current table_index_map
+        let relation_idx = self.join_relations.len() as IndexType;
+        for table_index in right_dphyp.table_index_map.keys() {
+            self.table_index_map.insert(*table_index, relation_idx);
+        }
+
+        let new_s_expr = s_expr.replace_children([Arc::new(left_expr), Arc::new(right_expr)]);
         self.join_relations.push(JoinRelation::new(
             &new_s_expr,
             self.sample_executor().clone(),
@@ -282,7 +306,35 @@ impl DPhpyOptimizer {
         Ok((Arc::new(new_s_expr), true))
     }
 
-    async fn process_cte_consumer_node(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
+    async fn process_cte_consumer_node(
+        &mut self,
+        s_expr: &SExpr,
+        join_relation: Option<&SExpr>,
+    ) -> Result<(Arc<SExpr>, bool)> {
+        let cte_consumer = match s_expr.plan() {
+            RelOperator::CTEConsumer(consumer) => consumer,
+            _ => unreachable!(),
+        };
+
+        let join_relation = if let Some(relation) = join_relation {
+            // Check if relation contains filter, if exists, check if the filter in `filters`
+            // If exists, remove it from `filters`
+            self.check_filter(relation);
+            JoinRelation::new(relation, self.sample_executor().clone())
+        } else {
+            JoinRelation::new(s_expr, self.sample_executor().clone())
+        };
+
+        // Get table indexes from cte_table_index_map for this CTE
+        if let Some(table_indexes) = self.cte_table_index_map.get(&cte_consumer.cte_name) {
+            // Map each table index to current join_relations index
+            let relation_idx = self.join_relations.len() as IndexType;
+            for table_index in table_indexes {
+                self.table_index_map.insert(*table_index, relation_idx);
+            }
+        }
+
+        self.join_relations.push(join_relation);
         Ok((Arc::new(s_expr.clone()), true))
     }
 
@@ -349,7 +401,9 @@ impl DPhpyOptimizer {
             RelOperator::Join(_) => self.process_join_node(s_expr, join_conditions).await,
 
             RelOperator::MaterializedCTE(_) => self.process_materialized_cte_node(s_expr).await,
-            RelOperator::CTEConsumer(_) => self.process_cte_consumer_node(s_expr).await,
+            RelOperator::CTEConsumer(_) => {
+                self.process_cte_consumer_node(s_expr, join_relation).await
+            }
 
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
