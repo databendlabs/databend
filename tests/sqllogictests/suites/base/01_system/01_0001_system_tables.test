@@ -51,6 +51,16 @@ t c
 t100 c
 
 query T
+select count() > 0 from system.tables where database not in ('system', 'default');
+----
+1
+
+query T
+select count() > 0 from system.tables where database not in ('default');
+----
+1
+
+query T
 select name, database from system.tables where database='c' or name ='t' or name like 't10%' order by name, database;
 ----
 t a
