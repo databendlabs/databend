@@ -319,7 +319,7 @@ impl SExpr {
                         Ok(VisitAction::Stop)
                     }
                     _ => {
-                        if expr.arity() > 1 {
+                        if expr.arity() > 0 {
                             Ok(VisitAction::Continue)
                         } else {
                             Ok(VisitAction::Stop)
