@@ -1006,7 +1006,7 @@ select to_quarter(to_datetime(1646404329000000)) = 1, quarter(to_datetime(164640
 1 1
 
 query T
-select date_add(QUARTER, 1, to_date('2018-01-02'))
+select dateadd(QUARTER, 1, to_date('2018-01-02'))
 ----
 2018-04-02
 
@@ -1016,7 +1016,7 @@ SELECT DATE_ADD(WEEK, 1, TODAY())=DATE_ADD('day', 7, TODAY())
 1
 
 query T
-SELECT DATE_DIFF(YEAR, to_date('2000-01-02'), to_date('2024-01-01'))
+SELECT DATEDIFF(YEAR, to_date('2000-01-02'), to_date('2024-01-01'))
 ----
 24
 
