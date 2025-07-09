@@ -170,16 +170,16 @@ where A: SortAlgorithm
             sort.choice_streams_by_bound();
         }
 
-        if sort.current.len() > sort.params.num_merge {
-            sort.merge_current(&self.base).await?;
-            Ok(OutputData {
-                block: None,
-                bound: (u32::MAX, None),
-                finish: false,
-            })
-        } else {
-            sort.restore_and_output(&self.base).await
+        if sort.current.len() <= sort.params.num_merge {
+            return sort.restore_and_output(&self.base).await;
         }
+
+        sort.merge_current(&self.base).await?;
+        Ok(OutputData {
+            block: None,
+            bound: (u32::MAX, None),
+            finish: false,
+        })
     }
 
     pub fn max_rows(&self) -> usize {
@@ -380,10 +380,9 @@ impl<A: SortAlgorithm> StepSort<A> {
                     let bound = (self.bound_index as _, s.bound.clone());
 
                     if !s.is_empty() {
-                        if s.should_include_first() {
-                            self.current.push(s);
-                        } else {
-                            self.subsequent.push(s);
+                        match s.should_include_first() {
+                            true => self.current.push(s),
+                            false => self.subsequent.push(s),
                         }
                         return Ok(OutputData {
                             block,

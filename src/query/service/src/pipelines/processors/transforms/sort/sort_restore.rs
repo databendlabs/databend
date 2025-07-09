@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -20,6 +21,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::HookTransform;
 use databend_common_pipeline_transforms::HookTransformer;
@@ -119,7 +121,7 @@ where
             finish,
         } = spill_sort.on_restore().await?;
         if let Some(block) = block {
-            let mut block = block.add_meta(Some(SortBound::create(bound_index)))?;
+            let mut block = block.add_meta(Some(SortBound::create(bound_index, true)))?;
             if self.remove_order_col {
                 block.pop_columns(1);
             }
@@ -129,5 +131,92 @@ where
             self.inner = None;
         }
         Ok(())
+    }
+}
+
+struct SortBoundEdge {
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    data: Option<DataBlock>,
+}
+
+impl SortBoundEdge {
+    pub fn new(input: Arc<InputPort>, output: Arc<OutputPort>) -> Self {
+        Self {
+            input,
+            output,
+            data: None,
+        }
+    }
+}
+
+impl Processor for SortBoundEdge {
+    fn name(&self) -> String {
+        String::from("SortBoundEdgeTransform")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        if self.output.is_finished() {
+            self.input.finish();
+            return Ok(Event::Finished);
+        }
+
+        if !self.output.can_push() {
+            self.input.set_not_need_data();
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.data.is_none() {
+            if self.input.is_finished() {
+                self.output.finish();
+                return Ok(Event::Finished);
+            }
+            let Some(block) = self.input.pull_data().transpose()? else {
+                self.input.set_need_data();
+                return Ok(Event::NeedData);
+            };
+            self.data = Some(block);
+        }
+
+        if self.input.is_finished() {
+            let mut block = self.data.take().unwrap();
+            let mut meta = block
+                .take_meta()
+                .and_then(SortBound::downcast_from)
+                .expect("require a SortBound");
+            meta.more = false;
+            self.output
+                .push_data(Ok(block.add_meta(Some(meta.boxed()))?));
+            self.output.finish();
+            return Ok(Event::Finished);
+        }
+
+        let Some(incoming) = self.input.pull_data().transpose()? else {
+            self.input.set_need_data();
+            return Ok(Event::NeedData);
+        };
+
+        let incoming_index = incoming
+            .get_meta()
+            .and_then(SortBound::downcast_ref_from)
+            .expect("require a SortBound")
+            .bound_index;
+
+        let mut output = self.data.replace(incoming).unwrap();
+        let mut output_meta = output
+            .mut_meta()
+            .and_then(SortBound::downcast_mut_from)
+            .expect("require a SortBound");
+
+        if output_meta.bound_index != incoming_index {
+            output_meta.more = false;
+        }
+
+        self.output.push_data(Ok(output));
+        Ok(Event::NeedConsume)
     }
 }

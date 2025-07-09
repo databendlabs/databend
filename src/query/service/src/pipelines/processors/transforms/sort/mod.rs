@@ -107,12 +107,13 @@ impl BlockMetaInfo for SortExchangeMeta {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortBound {
     bound_index: u32,
+    more: bool,
 }
 
 impl SortBound {
-    fn create(bound_index: u32) -> Box<dyn BlockMetaInfo> {
+    fn create(bound_index: u32, more: bool) -> Box<dyn BlockMetaInfo> {
         debug_assert!(bound_index != u32::MAX);
-        SortBound { bound_index }.boxed()
+        SortBound { bound_index, more }.boxed()
     }
 }
 

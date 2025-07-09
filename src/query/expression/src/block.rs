@@ -340,6 +340,11 @@ pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
             Err(boxed)
         }
     }
+
+    fn downcast_mut_from(boxed: &mut BlockMetaInfoPtr) -> Option<&mut Self> {
+        let boxed = boxed.as_mut() as &mut dyn Any;
+        boxed.downcast_mut()
+    }
 }
 
 impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
@@ -448,11 +453,6 @@ impl DataBlock {
     #[inline]
     pub fn empty_with_meta(meta: BlockMetaInfoPtr) -> Self {
         DataBlock::new_with_meta(vec![], 0, Some(meta))
-    }
-
-    #[inline]
-    pub fn take_meta(&mut self) -> Option<BlockMetaInfoPtr> {
-        self.meta.take()
     }
 
     #[inline]
@@ -719,6 +719,16 @@ impl DataBlock {
             num_rows: self.num_rows,
             meta,
         })
+    }
+
+    #[inline]
+    pub fn take_meta(&mut self) -> Option<BlockMetaInfoPtr> {
+        self.meta.take()
+    }
+
+    #[inline]
+    pub fn mut_meta(&mut self) -> Option<&mut BlockMetaInfoPtr> {
+        self.meta.as_mut()
     }
 
     #[inline]

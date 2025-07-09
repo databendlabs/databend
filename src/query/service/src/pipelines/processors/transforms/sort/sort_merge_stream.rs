@@ -117,7 +117,8 @@ where A: SortAlgorithm + 'static
 
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.inner.as_mut().ok().unwrap().next_block()? {
-            self.output_data = Some(block.add_meta(Some(SortBound::create(self.bound_index)))?);
+            self.output_data =
+                Some(block.add_meta(Some(SortBound::create(self.bound_index, todo!())))?);
         };
         Ok(())
     }

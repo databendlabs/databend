@@ -16,6 +16,8 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -25,42 +27,51 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 
+use crate::pipelines::processors::transforms::SortBound;
+
 struct TransformSortRoute {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    cur_input: usize,
+
+    input_data: Vec<Option<(DataBlock, u32)>>,
+    cur_index: u32,
 }
 
 impl TransformSortRoute {
     fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
         Self {
+            input_data: vec![None; inputs.len()],
+            cur_index: 0,
             inputs,
             output,
-            cur_input: 0,
         }
     }
 
-    fn process(&mut self) -> Result<()> {
-        for (i, input) in self.inputs.iter().enumerate() {
-            if i != self.cur_input {
-                if !input.is_finished() && !input.has_data() {
-                    input.set_need_data();
-                }
-                continue;
-            }
-
-            if input.is_finished() {
-                self.cur_input = i + 1;
-                continue;
-            }
-
-            match input.pull_data() {
-                Some(data) => self.output.push_data(data),
-                None => input.set_need_data(),
-            }
+    fn process(&mut self) -> Result<Event> {
+        for input in &self.inputs {
+            input.set_need_data();
         }
 
-        Ok(())
+        for (input, data) in self.inputs.iter().zip(self.input_data.iter_mut()) {
+            if data.is_none() {
+                let Some(mut block) = input.pull_data().transpose()? else {
+                    continue;
+                };
+
+                let bound_index = block
+                    .take_meta()
+                    .and_then(SortBound::downcast_from)
+                    .expect("require a SortBound")
+                    .bound_index;
+                if bound_index == self.cur_index {
+                    self.output.push_data(Ok(block));
+                    return Ok(Event::NeedConsume);
+                }
+                *data = Some((block, bound_index));
+            };
+        }
+
+        Ok(Event::NeedData)
     }
 }
 
