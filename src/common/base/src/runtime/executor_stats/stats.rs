@@ -108,23 +108,26 @@ impl ExecutorStats {
     // Records the elapsed process time in microseconds.
     pub fn record_process_time(&self, elapsed_nanos: usize) {
         let elapsed_micros = elapsed_nanos / NANOS_PER_MICRO;
-        self.record_to_slots(&self.process_time, elapsed_micros);
-    }
-
-    // Records the number of rows processed.
-    pub fn record_process_rows(&self, rows: usize) {
-        self.record_to_slots(&self.process_rows, rows);
-    }
-
-    fn record_to_slots(&self, slots: &[ExecutorStatsSlot; RING_BUFFER_SIZE], value: usize) {
         let now = SystemTime::now();
         let now_secs = now
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs() as usize;
         let index = now_secs % RING_BUFFER_SIZE;
-        let slot = &slots[index];
-        slot.record_metric(now_secs, value);
+        let slot = &self.process_time[index];
+        slot.record_metric(now_secs, elapsed_micros);
+    }
+
+    // Records the number of rows processed.
+    pub fn record_process_rows(&self, rows: usize) {
+        let now = SystemTime::now();
+        let now_secs = now
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+        let index = now_secs % RING_BUFFER_SIZE;
+        let slot = &self.process_rows[index];
+        slot.record_metric(now_secs, rows);
     }
 
     pub fn record_thread_tracker(rows: usize) {
