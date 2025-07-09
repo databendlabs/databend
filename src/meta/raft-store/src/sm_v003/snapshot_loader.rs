@@ -71,16 +71,17 @@ where SD: OpenSnapshot
             .ensure_snapshot_dir()
             .map_err(SnapshotStoreError::write)?;
 
-        let path = self.snapshot_config.snapshot_path(snapshot_id);
+        let (storage_path, rel_path) = self.snapshot_config.snapshot_dir_fn(snapshot_id);
 
         let d = SD::open_snapshot(
-            path.clone(),
+            storage_path.clone(),
+            rel_path,
             snapshot_id.clone(),
             self.snapshot_config.raft_config(),
         )
         .map_err(|e| {
-            error!("failed to open snapshot file({}): {}", path, e);
-            SnapshotStoreError::read(e).with_meta("opening snapshot file", path)
+            error!("failed to open snapshot file({}): {}", storage_path, e);
+            SnapshotStoreError::read(e).with_meta("opening snapshot file", storage_path)
         })?;
 
         Ok(d)

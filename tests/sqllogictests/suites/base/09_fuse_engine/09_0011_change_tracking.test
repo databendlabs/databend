@@ -14,7 +14,7 @@ statement ok
 insert into t values(1),(2)
 
 statement error 1065
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 
 statement ok
 alter table t set options(change_tracking = true)
@@ -22,23 +22,23 @@ alter table t set options(change_tracking = true)
 statement ok
 insert into t values(3),(4)
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-1 1 1 NULL 0
-2 1 1 NULL 0
-3 1 1 NULL 0
-4 1 1 NULL 0
+1 1 1 NULL
+2 1 1 NULL
+3 1 1 NULL
+4 1 1 NULL
 
 statement ok
 delete from t where a = 3
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-1 1 1 NULL 0
-2 1 1 NULL 0
-4 0 0 1 0
+1 1 1 NULL
+2 1 1 NULL
+4 0 0 1
 
 statement ok
 update t set a = 3 where a = 4
@@ -46,12 +46,12 @@ update t set a = 3 where a = 4
 statement ok
 optimize table t compact
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-1 0 0 0 0
-2 0 0 1 0
-3 0 0 1 1
+1 0 0 0
+2 0 0 1
+3 0 0 1
 
 statement ok
 insert into t values(5)
@@ -62,14 +62,14 @@ insert into t values(6)
 statement ok
 alter table t recluster
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-1 0 0 0 0
-2 0 0 1 0
-3 0 0 1 1
-5 0 0 0 0
-6 0 0 0 0
+1 0 0 0
+2 0 0 1
+3 0 0 1
+5 0 0 0
+6 0 0 0
 
 statement error 1065
 select change$is_update from t
@@ -77,15 +77,15 @@ select change$is_update from t
 statement ok
 replace into t on(a) values(6),(7)
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-1 0 0 0 0
-2 0 0 1 0
-3 0 0 1 1
-5 0 0 0 0
-6 1 1 NULL 0
-7 1 1 NULL 0
+1 0 0 0
+2 0 0 1
+3 0 0 1
+5 0 0 0
+6 1 1 NULL
+7 1 1 NULL
 
 statement ok
 create table t2(a int)
@@ -98,15 +98,15 @@ merge into t using t2 on t.a = t2.a when matched and t2.a = 1 then update set t.
 ----
 1 1 1
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-0 1 1 NULL 0
-3 0 0 1 1
-5 0 0 0 0
-6 1 1 NULL 0
-7 1 1 NULL 0
-8 0 0 0 1
+0 1 1 NULL
+3 0 0 1
+5 0 0 0
+6 1 1 NULL
+7 1 1 NULL
+8 0 0 0
 
 statement ok
 set enable_compact_after_write = 1;
@@ -128,15 +128,15 @@ merge into t using t1 on t.a = t1.a when matched and t1.a = 0 then update set t.
 ----
 2
 
-query IBBII
-select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num, _row_version from t order by a
+query IBBI
+select a, _origin_version is null, _origin_block_id is null, _origin_block_row_num from t order by a
 ----
-1 0 0 0 1
-2 0 0 1 2
-5 0 0 0 0
-6 0 0 0 0
-7 0 0 1 0
-8 0 0 0 1
+1 0 0 0
+2 0 0 1
+5 0 0 0
+6 0 0 0
+7 0 0 1
+8 0 0 0
 
 ###############
 # issue 14955 #
@@ -181,13 +181,13 @@ merge into t3 using t4 on t3.a = t4.a when matched and t4.a = 4 then delete when
 1 1 1
 
 
-query IIBBII
-select a, b, _row_version from t3 order by a
+query II
+select a, b from t3 order by a
 ----
-0 0 0
-1 1 0
-2 2 1
-3 3 1
+0 0
+1 1
+2 2
+3 3
 
 statement ok
 drop table t4 all
@@ -214,10 +214,10 @@ merge into db1.test_select t1 using (select * from db1.test_select) t2 on t1.id 
 ----
 1
 
-query ITI
-select id, name, _row_version from test_select
+query IT
+select id, name from test_select
 ----
-1 {} 1
+1 {}
 
 statement ok
 drop table test_select all

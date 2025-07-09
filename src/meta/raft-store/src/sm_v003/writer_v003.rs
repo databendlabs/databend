@@ -43,10 +43,11 @@ pub struct WriterV003 {
 impl WriterV003 {
     /// Create a singleton writer for the snapshot.
     pub fn new(snapshot_config: &SnapshotConfig) -> Result<Self, io::Error> {
-        let temp_path = snapshot_config.snapshot_temp_path();
+        let (storage_path, temp_rel_path) = snapshot_config.snapshot_temp_dir_fn();
 
         let db_builder = DBBuilder::new(
-            temp_path.clone(),
+            storage_path.clone(),
+            &temp_rel_path,
             snapshot_config.raft_config().to_rotbl_config(),
         )?;
 
@@ -121,8 +122,9 @@ impl WriterV003 {
     ///
     /// This method consumes the writer, thus the writer will not be used after commit.
     pub fn flush(self, sys_data: SysData) -> Result<TempSnapshotDataV003, io::Error> {
-        let (path, r) = self.db_builder.flush(sys_data)?;
-        let t = TempSnapshotDataV003::new(path, self.snapshot_config, Arc::new(r));
+        let (storage_path, rel_path, r) = self.db_builder.flush(sys_data)?;
+        let t =
+            TempSnapshotDataV003::new(storage_path, rel_path, self.snapshot_config, Arc::new(r));
         Ok(t)
     }
 
