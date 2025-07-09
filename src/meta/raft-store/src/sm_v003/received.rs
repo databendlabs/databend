@@ -23,7 +23,9 @@ pub struct Received {
     pub format: String,
     pub vote: Vote,
     pub snapshot_meta: SnapshotMeta,
-    pub temp_path: String,
+
+    pub storage_path: String,
+    pub temp_rel_path: String,
 
     pub remote_addr: String,
 

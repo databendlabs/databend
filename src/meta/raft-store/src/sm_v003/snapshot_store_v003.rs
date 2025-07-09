@@ -84,7 +84,8 @@ impl SnapshotStoreV004 {
     pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<ReceiverV003, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
 
-        let temp_path = self.snapshot_config.snapshot_temp_path();
+        let (storage_path, temp_rel_path) = self.snapshot_config.snapshot_temp_dir_fn();
+        let temp_path = format!("{}/{}", storage_path, temp_rel_path);
 
         let f = fs::OpenOptions::new()
             .create_new(true)
@@ -99,7 +100,7 @@ impl SnapshotStoreV004 {
                 )
             })?;
 
-        let r = ReceiverV003::new(remote_addr, temp_path, f);
+        let r = ReceiverV003::new(remote_addr, storage_path, temp_rel_path, f);
         Ok(r)
     }
 
