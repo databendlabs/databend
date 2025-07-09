@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod cascades;
-pub mod distributed;
-mod hyper_dp;
-pub mod operator;
-pub mod recursive;
-pub mod rule;
+mod cleanup_unused_cte;
 
-pub use cascades::CascadesOptimizer;
-pub use hyper_dp::DPhpyOptimizer;
-pub use operator::CleanupUnusedCTEOptimizer;
+pub use cleanup_unused_cte::CleanupUnusedCTEOptimizer;
