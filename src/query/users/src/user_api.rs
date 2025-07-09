@@ -23,8 +23,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
-use databend_common_management::task::TaskChannel;
-use databend_common_management::task::TaskMessage;
 use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::ClientSessionMgr;
@@ -41,21 +39,17 @@ use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
-use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_meta_cache::Cache;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use futures::stream::StreamExt;
 use log::debug;
 
 use crate::builtin::BuiltIn;
@@ -142,22 +136,6 @@ impl UserApiProvider {
         {
             let public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
             user_mgr.add_role(tenant, public, true).await?;
-        }
-
-        {
-            let task_tx = TaskChannel::instance();
-            let key = DirName::new(TaskIdent::new(tenant, ""));
-            let mut stream = user_mgr.client.list_pb_values(&key).await?;
-
-            while let Some(task) = stream.next().await {
-                let task = task?;
-
-                if task.schedule_options.is_some() {
-                    let _ = task_tx.send(TaskMessage::ScheduleTask(task)).await;
-                } else if !task.after.is_empty() {
-                    let _ = task_tx.send(TaskMessage::AfterTask(task)).await;
-                }
-            }
         }
 
         Ok(Arc::new(user_mgr))

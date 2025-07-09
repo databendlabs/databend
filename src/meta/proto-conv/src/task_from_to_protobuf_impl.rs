@@ -17,6 +17,7 @@ use chrono::Utc;
 use databend_common_meta_app::principal as mt;
 use databend_common_meta_app::principal::task::Status;
 use databend_common_protos::pb;
+use databend_common_protos::pb::task_message::Message;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -63,13 +64,12 @@ impl FromToProto for mt::Task {
                 }
             }
         };
-        let warehouse = match p.warehouse_options {
-            None => None,
-            Some(ref w) => Some(mt::WarehouseOptions {
-                warehouse: w.warehouse.clone(),
-                using_warehouse_size: w.using_warehouse_size.clone(),
-            }),
-        };
+        
+        
+        let warehouse = p.warehouse_options.as_ref().map(|w| mt::WarehouseOptions {
+            warehouse: w.warehouse.clone(),
+            using_warehouse_size: w.using_warehouse_size.clone(),
+        });
         Ok(Self {
             task_id: p.task_id,
             task_name: p.task_name,
@@ -107,23 +107,17 @@ impl FromToProto for mt::Task {
             query_text: self.query_text.clone(),
             comment: self.comment.clone(),
             owner: self.owner.clone(),
-            schedule_options: match &self.schedule_options {
-                None => None,
-                Some(s) => Some(pb::ScheduleOptions {
-                    interval: s.interval,
-                    cron: s.cron.clone(),
-                    time_zone: s.time_zone.clone(),
-                    schedule_type: s.schedule_type as i32,
-                    milliseconds_interval: s.milliseconds_interval,
-                }),
-            },
-            warehouse_options: match &self.warehouse_options {
-                None => None,
-                Some(w) => Some(pb::WarehouseOptions {
-                    warehouse: w.warehouse.clone(),
-                    using_warehouse_size: w.using_warehouse_size.clone(),
-                }),
-            },
+            schedule_options: self.schedule_options.as_ref().map(|s| pb::ScheduleOptions {
+                interval: s.interval,
+                cron: s.cron.clone(),
+                time_zone: s.time_zone.clone(),
+                schedule_type: s.schedule_type as i32,
+                milliseconds_interval: s.milliseconds_interval,
+            }),
+            warehouse_options: self.warehouse_options.as_ref().map(|w| pb::WarehouseOptions {
+                warehouse: w.warehouse.clone(),
+                using_warehouse_size: w.using_warehouse_size.clone(),
+            }),
             next_scheduled_at: match &self.next_scheduled_at {
                 None => None,
                 Some(d) => Some(d.to_pb()?),
@@ -145,54 +139,41 @@ impl FromToProto for mt::Task {
     }
 }
 
-impl FromToProto for mt::TaskRun {
-    type PB = pb::TaskRun;
+impl FromToProto for mt::TaskMessage {
+    type PB = pb::TaskMessage;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
-        Ok(mt::TaskRun {
-            task: mt::Task::from_pb(
-                p.task
-                    .ok_or_else(|| Incompatible::new("State can not be empty"))?,
-            )?,
-            run_id: p.run_id,
-            attempt_number: p.attempt_number,
-            state: match p.state {
-                0 => mt::State::Scheduled,
-                1 => mt::State::Executing,
-                2 => mt::State::Succeeded,
-                3 => mt::State::Failed,
-                4 => mt::State::Cancelled,
-                n => return Err(Incompatible::new(format!("State can not be {n}"))),
+        Ok(match p.message {
+            None => return Err(Incompatible::new("message can not be empty")),
+            Some(message) => match message {
+                Message::ExecuteTask(task) => {
+                    mt::TaskMessage::ExecuteTask(mt::Task::from_pb(task)?)
+                }
+                Message::ScheduleTask(task) => {
+                    mt::TaskMessage::ScheduleTask(mt::Task::from_pb(task)?)
+                }
+                Message::DeleteTask(task_name) => mt::TaskMessage::DeleteTask(task_name),
+                Message::AfterTask(task) => mt::TaskMessage::AfterTask(mt::Task::from_pb(task)?),
             },
-            scheduled_at: DateTime::<Utc>::from_pb(p.scheduled_at)?,
-            completed_at: p.completed_at.map(DateTime::<Utc>::from_pb).transpose()?,
-            error_code: p.error_code,
-            error_message: p.error_message,
-            root_task_id: p.root_task_id,
         })
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        Ok(pb::TaskRun {
+        let message = match self {
+            mt::TaskMessage::ExecuteTask(task) => Message::ExecuteTask(task.to_pb()?),
+            mt::TaskMessage::ScheduleTask(task) => Message::ScheduleTask(task.to_pb()?),
+            mt::TaskMessage::DeleteTask(task_name) => Message::DeleteTask(task_name.clone()),
+            mt::TaskMessage::AfterTask(task) => Message::AfterTask(task.to_pb()?),
+        };
+
+        Ok(pb::TaskMessage {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            run_id: self.run_id,
-            attempt_number: self.attempt_number,
-            state: self.state as i32,
-            scheduled_at: self.scheduled_at.to_pb()?,
-            completed_at: self
-                .completed_at
-                .as_ref()
-                .map(DateTime::<Utc>::to_pb)
-                .transpose()?,
-            error_code: self.error_code,
-            error_message: self.error_message.clone(),
-            root_task_id: self.root_task_id,
-            task: Some(self.task.to_pb()?),
+            message: Some(message),
         })
     }
 }

@@ -51,6 +51,7 @@ pub use serde::serialize_struct;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;
+pub use task::TaskMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
 pub use warehouse::SelectedNode;

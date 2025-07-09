@@ -27,7 +27,6 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::StackTrace;
-use databend_common_management::task::TaskChannel;
 use databend_common_management::WorkloadGroupResourceManager;
 use databend_common_management::WorkloadMgr;
 use databend_common_meta_app::schema::CatalogType;
@@ -57,7 +56,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
-use crate::task::task_service::TaskService;
+use crate::task::service::TaskService;
 
 pub struct GlobalServices;
 
@@ -123,7 +122,6 @@ impl GlobalServices {
         LockManager::init()?;
         AuthMgr::init(config)?;
 
-        let task_rx = TaskChannel::init(GlobalConfig::instance().query.tasks_channel_len)?;
         // Init user manager.
         // Builtin users and udfs are created here.
         {
@@ -177,7 +175,7 @@ impl GlobalServices {
         if config.log.history.on {
             GlobalHistoryLog::init(config).await?;
         }
-        TaskService::init(task_rx, config)?;
+        TaskService::init(config)?;
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
 

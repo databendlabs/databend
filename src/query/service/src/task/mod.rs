@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod meta;
+pub mod service;
 mod session;
-pub mod task_service;
 
-pub use task_service::TaskService;
+pub use service::TaskService;

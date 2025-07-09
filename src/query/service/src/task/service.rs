@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -33,10 +34,11 @@ use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_management::task::TaskChannel;
-use databend_common_management::task::TaskMessage;
+use databend_common_meta_api::kv_pb_api::decode_seqv;
 use databend_common_meta_app::principal::task::AfterTaskInfo;
+use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
+use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::principal::AfterTaskState;
 use databend_common_meta_app::principal::ScheduleOptions;
 use databend_common_meta_app::principal::ScheduleType;
@@ -49,13 +51,18 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::WarehouseOptions;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::MetaError;
 use databend_common_sql::Planner;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use futures_util::lock::Mutex;
+use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
-use tokio::sync::mpsc::Receiver;
 use tokio::time::sleep;
+use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::interpreters::InterpreterFactory;
@@ -64,10 +71,15 @@ use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
 use crate::task::session::get_task_user;
 
+pub type TaskMessageStream = BoxStream<'static, Result<(String, TaskMessage)>>;
+
+/// - Multiple Query nodes can send the same Task at the same time, and the key will be distinguished by node_id
+/// - Each Query node will grab the corresponding task through acquire task_name.
+/// - Tasks with the same task_name cannot be executed at the same time.
 pub struct TaskService {
     initialized: AtomicBool,
     interval: u64,
-    tenant_id: String,
+    tenant: Tenant,
     node_id: String,
     cluster_id: String,
     meta_handle: TaskMetaHandle,
@@ -80,7 +92,7 @@ impl TaskService {
     }
 
     pub async fn prepare(&self) -> Result<()> {
-        let prepare_key = format!("{}/task_run_prepare/lock", self.tenant_id);
+        let prepare_key = format!("{}/task_run_prepare/lock", self.tenant.tenant_name());
         let _guard = self.meta_handle.acquire(&prepare_key, 0).await?;
         let create_db = "CREATE DATABASE IF NOT EXISTS system_task";
         self.execute_sql(None, create_db).await?;
@@ -128,7 +140,7 @@ impl TaskService {
         self.initialized.store(true, Ordering::SeqCst);
     }
 
-    pub fn init(mut task_rx: Receiver<TaskMessage>, cfg: &InnerConfig) -> Result<()> {
+    pub fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
         let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
             .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for Task"))?;
@@ -141,7 +153,7 @@ impl TaskService {
         let instance = TaskService {
             initialized: AtomicBool::new(false),
             interval: 2,
-            tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
+            tenant: cfg.query.tenant_id.clone(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
             meta_handle,
@@ -172,7 +184,10 @@ impl TaskService {
             // after task state => [task1 name, task2 name], if task succeeded then remove task name on after task state
             let task_deps = Arc::new(Mutex::new(HashMap::<AfterTaskInfo, AfterTaskState>::new()));
 
-            while let Some(task) = task_rx.recv().await {
+            let mut steam = task_service.subscribe().await?;
+
+            while let Some(result) = steam.next().await {
+                let (key, task) = result?;
                 match task {
                     TaskMessage::ScheduleTask(mut task) => {
                         debug_assert!(task.schedule_options.is_some());
@@ -218,7 +233,7 @@ impl TaskService {
                                             loop {
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
-                                                        let _ = TaskChannel::instance().send(TaskMessage::ExecuteTask(task.clone())).await;
+                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
                                                     _ = child_token.cancelled() => {
                                                         break;
@@ -230,6 +245,7 @@ impl TaskService {
                                         });
                                 }
                                 ScheduleType::CronType => {
+                                    let task_mgr = task_mgr.clone();
                                     // SAFETY: check on CreateTask
                                     let cron_expr = schedule_options.cron.as_ref().unwrap();
                                     let tz = schedule_options.time_zone.as_ref().unwrap().parse::<Tz>().unwrap();
@@ -248,13 +264,14 @@ impl TaskService {
                                                 task.next_scheduled_at = Some(Utc::now() + duration);
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
-                                                        let _ = TaskChannel::instance().send(TaskMessage::ExecuteTask(task.clone())).await;
+                                                        task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
                                                     _ = child_token.cancelled() => {
                                                         break;
                                                     }
                                                 }
                                             }
+                                            Result::Ok(())
                                         });
                                 }
                             }
@@ -262,6 +279,13 @@ impl TaskService {
                         }
                     }
                     TaskMessage::ExecuteTask(task) => {
+                        let may_permit = task_service
+                            .meta_handle
+                            .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
+                            .await?;
+                        let Some(_guard) = may_permit else {
+                            continue;
+                        };
                         let task_name = task.task_name.clone();
                         let task_service = TaskService::instance();
 
@@ -286,6 +310,7 @@ impl TaskService {
                         let task_dep_infos = task_dep_infos.clone();
                         let task_deps = task_deps.clone();
                         let owner = Self::get_task_owner(&task, &tenant).await?;
+                        task_mgr.execute_accept(&key).await?;
                         runtime
                             .try_spawn(async move {
                                 while task_run.attempt_number >= 0 {
@@ -307,7 +332,7 @@ impl TaskService {
                                                             let dep_task = task_mgr.describe_task(dep_name).await??
                                                                 .ok_or_else(|| ErrorCode::UnknownTask(dep_name.clone()))?;
 
-                                                            let _ = TaskChannel::instance().send(TaskMessage::ExecuteTask(dep_task)).await;
+                                                            task_mgr.send(TaskMessage::ExecuteTask(dep_task)).await?;
                                                         }
                                                     }
                                                 }
@@ -389,6 +414,37 @@ impl TaskService {
         Ok(())
     }
 
+    pub async fn subscribe(&self) -> Result<TaskMessageStream> {
+        let (min, max) = TaskMessage::prefix_range();
+        let left = TaskMessageIdent::new(&self.tenant, min).to_string_key();
+        let right = TaskMessageIdent::new(&self.tenant, max).to_string_key();
+
+        let watch = WatchRequest::new(left, Some(right)).with_initial_flush(true);
+        let stream = self
+            .meta_handle
+            .meta_client()
+            .watch_with_initialization(watch)
+            .await?;
+
+        Ok(Box::pin(stream.filter_map(|result| {
+            result
+                .map(Self::decode)
+                .map_err(|_| ErrorCode::MetaServiceError("task watch-stream closed"))
+                .flatten()
+                .transpose()
+        })))
+    }
+
+    fn decode(resp: WatchResponse) -> Result<Option<(String, TaskMessage)>> {
+        let Some((key, _, Some(value))) = resp.unpack() else {
+            return Ok(None);
+        };
+        let message = decode_seqv::<TaskMessage>(value, || format!("decode value of {}", key))
+            .map_err(MetaError::from)?;
+
+        Ok(Some((key, TaskMessage::clone(message.deref()))))
+    }
+
     async fn get_task_owner(task: &Task, tenant: &Tenant) -> Result<UserInfo> {
         UserApiProvider::instance()
             .get_user(
@@ -444,7 +500,7 @@ impl TaskService {
             (other_user, None)
         } else {
             (
-                get_task_user(&self.tenant_id, &self.cluster_id),
+                get_task_user(self.tenant.tenant_name(), &self.cluster_id),
                 Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
             )
         };
