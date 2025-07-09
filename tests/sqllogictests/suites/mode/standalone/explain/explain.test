@@ -1262,21 +1262,21 @@ explain join SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT c
 ----
 HashJoin: LEFT MARK
 ├── Build
-│   └── Scan: default.edp_dev_stg.customers (#0) (read rows: 100)
+│   └── Scan: default.default.customers (#0) (read rows: 100)
 └── Probe
     └── HashJoin: RIGHT MARK
         ├── Build
         │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── Scan: default.edp_dev_stg.products (#3) (read rows: 10)
+        │       │   └── Scan: default.default.products (#3) (read rows: 10)
         │       └── Probe
-        │           └── Scan: default.edp_dev_stg.sales (#2) (read rows: 500)
+        │           └── Scan: default.default.sales (#2) (read rows: 500)
         └── Probe
             └── HashJoin: CROSS
                 ├── Build
-                │   └── Scan: default.edp_dev_stg.products (#1) (read rows: 10)
+                │   └── Scan: default.default.products (#1) (read rows: 10)
                 └── Probe
-                    └── Scan: default.edp_dev_stg.customers (#0) (read rows: 100)
+                    └── Scan: default.default.customers (#0) (read rows: 100)
 
 statement ok
 drop table customers;
