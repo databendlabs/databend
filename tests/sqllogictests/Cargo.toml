@@ -18,7 +18,6 @@ async-recursion = { workspace = true }
 async-trait = { workspace = true }
 bollard = { workspace = true }
 clap = { workspace = true }
-cookie = { workspace = true }
 databend-common-exception = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
@@ -35,7 +34,6 @@ testcontainers = { workspace = true }
 testcontainers-modules = { workspace = true, features = ["mysql", "redis"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-url = { workspace = true }
 walkdir = { workspace = true }
 
 [lints]
