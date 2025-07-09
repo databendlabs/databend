@@ -1595,16 +1595,14 @@ async fn test_session_secondary_roles() -> Result<()> {
 
     let route = create_endpoint()?;
 
-    // failed input: only ALL or NONE is allowed
     let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
-    assert!(result.error.is_some());
-    assert!(result
-        .error
-        .unwrap()
-        .message
-        .contains("only ALL or NONE is allowed on setting secondary roles"));
-    assert_eq!(result.state, ExecuteStateKind::Failed);
+    assert!(result.error.is_none());
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+    assert_eq!(
+        result.session.unwrap().secondary_roles,
+        Some(vec!["role1".to_string()])
+    );
 
     let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public", "secondary_roles": Vec::<String>::new()}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
