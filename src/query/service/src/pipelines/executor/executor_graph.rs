@@ -29,6 +29,7 @@ use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::ExecutorStats;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
@@ -975,6 +976,10 @@ impl RunningGraph {
     }
     pub fn record_process_rows(&self, rows: usize) {
         self.0.executor_stats.record_process_rows(rows);
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        self.0.executor_stats.dump_snapshot()
     }
 }
 

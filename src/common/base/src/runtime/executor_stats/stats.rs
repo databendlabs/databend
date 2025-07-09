@@ -10,6 +10,13 @@ const VAL_MASK: u64 = 0xFFFFFFFF;
 
 const NANOS_PER_MICRO: usize = 1_000;
 
+/// Snapshot of executor statistics containing timestamp-value pairs for process time and rows.
+#[derive(Debug, Clone)]
+pub struct ExecutorStatsSnapshot {
+    pub process_time: Vec<(u32, u32)>,
+    pub process_rows: Vec<(u32, u32)>,
+}
+
 /// Packs a timestamp (u32) and a value (u32) into a u64.
 #[inline]
 fn pack(timestamp: u32, value: u32) -> u64 {
@@ -127,5 +134,15 @@ impl ExecutorStats {
                 .process_rows
                 .store(rows, Ordering::SeqCst)
         });
+    }
+
+    pub fn dump_snapshot(&self) -> ExecutorStatsSnapshot {
+        let process_time_snapshot = self.process_time.iter().map(|slot| slot.get()).collect();
+        let process_rows_snapshot = self.process_rows.iter().map(|slot| slot.get()).collect();
+
+        ExecutorStatsSnapshot {
+            process_time: process_time_snapshot,
+            process_rows: process_rows_snapshot,
+        }
     }
 }
