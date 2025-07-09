@@ -21,6 +21,9 @@ use educe::Educe;
 
 use super::MutationSource;
 use super::SubqueryExpr;
+use crate::impl_match_rel_op;
+use crate::impl_try_from_rel_operator;
+use crate::match_rel_op;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -39,14 +42,14 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
 use crate::plans::Mutation;
-use crate::plans::OptimizeCompactBlock;
+use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
 use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
-use crate::plans::WindowFuncType;
+use crate::ScalarExpr;
 
 pub trait Operator {
     /// Get relational operator kind
@@ -55,6 +58,10 @@ pub trait Operator {
     /// Get arity of this operator
     fn arity(&self) -> usize {
         1
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(std::iter::empty())
     }
 
     /// Derive relational property
@@ -119,9 +126,6 @@ pub enum RelOp {
     MergeInto,
     CompactBlock,
     MutationSource,
-
-    // Pattern
-    Pattern,
 }
 
 /// Relational operators
@@ -153,159 +157,22 @@ pub enum RelOperator {
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
     Mutation(Mutation),
-    CompactBlock(OptimizeCompactBlock),
+    CompactBlock(CompactBlock),
     MutationSource(MutationSource),
-}
-
-macro_rules! __impl_match_rel_op {
-    ($self:ident, $rel_op:ident, $method:ident, $($arg:expr),*) => {
-        match $self {
-            RelOperator::Scan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Join($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::EvalScalar($rel_op) => $rel_op.$method($($arg),*),
-            // 其他所有变体...
-            RelOperator::Filter($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Aggregate($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Sort($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Limit($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Exchange($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::UnionAll($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::DummyTableScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Window($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::ProjectSet($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::ConstantTableScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::ExpressionScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::CacheScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Udf($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::RecursiveCteScan($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::AsyncFunction($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::Mutation($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::CompactBlock($rel_op) => $rel_op.$method($($arg),*),
-            RelOperator::MutationSource($rel_op) => $rel_op.$method($($arg),*),
-        }
-    }
-}
-
-macro_rules! match_rel_op {
-    ($self:ident, $method:ident) => { __impl_match_rel_op!($self, rel_op, $method,) };
-    ($self:ident, $method:ident($($arg:expr),*)) => { __impl_match_rel_op!($self, rel_op, $method, $($arg),*) };
 }
 
 impl RelOperator {
     pub fn has_subquery(&self) -> bool {
-        match self {
-            RelOperator::Scan(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Exchange(_)
-            | RelOperator::UnionAll(_)
-            | RelOperator::Sort(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::AsyncFunction(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::CompactBlock(_) => false,
-            RelOperator::Join(op) => op.has_subquery(),
-            RelOperator::EvalScalar(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
-            RelOperator::Filter(op) => op.predicates.iter().any(|expr| expr.has_subquery()),
-            RelOperator::Aggregate(op) => {
-                op.group_items.iter().any(|expr| expr.scalar.has_subquery())
-                    || op
-                        .aggregate_functions
-                        .iter()
-                        .any(|expr| expr.scalar.has_subquery())
-            }
-            RelOperator::Window(op) => {
-                op.order_by
-                    .iter()
-                    .any(|o| o.order_by_item.scalar.has_subquery())
-                    || op
-                        .partition_by
-                        .iter()
-                        .any(|expr| expr.scalar.has_subquery())
-                    || match &op.function {
-                        WindowFuncType::Aggregate(agg) => {
-                            agg.exprs().any(|expr| expr.has_subquery())
-                        }
-                        _ => false,
-                    }
-            }
-            RelOperator::ProjectSet(op) => op.srfs.iter().any(|expr| expr.scalar.has_subquery()),
-            RelOperator::Udf(op) => op.items.iter().any(|expr| expr.scalar.has_subquery()),
-            RelOperator::MutationSource(_) => false,
-        }
+        let mut iter = self.scalar_expr_iter();
+        iter.any(|expr| expr.has_subquery())
     }
 
-    pub fn get_subquery(&self, mut result: Vec<SubqueryExpr>) -> Vec<SubqueryExpr> {
-        match self {
-            RelOperator::Scan(_)
-            | RelOperator::Limit(_)
-            | RelOperator::Exchange(_)
-            | RelOperator::UnionAll(_)
-            | RelOperator::Sort(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::ConstantTableScan(_)
-            | RelOperator::ExpressionScan(_)
-            | RelOperator::CacheScan(_)
-            | RelOperator::AsyncFunction(_)
-            | RelOperator::RecursiveCteScan(_)
-            | RelOperator::Mutation(_)
-            | RelOperator::CompactBlock(_)
-            | RelOperator::MutationSource(_) => (),
-            RelOperator::Join(op) => {
-                for condition in &op.equi_conditions {
-                    result = condition.left.get_subquery(result);
-                    result = condition.right.get_subquery(result);
-                }
-                for expr in &op.non_equi_conditions {
-                    result = expr.get_subquery(result);
-                }
-            }
-            RelOperator::EvalScalar(op) => {
-                for item in &op.items {
-                    result = item.scalar.get_subquery(result);
-                }
-            }
-            RelOperator::Filter(op) => {
-                for pred in &op.predicates {
-                    result = pred.get_subquery(result);
-                }
-            }
-            RelOperator::Aggregate(op) => {
-                for item in &op.group_items {
-                    result = item.scalar.get_subquery(result);
-                }
-                for func in &op.aggregate_functions {
-                    result = func.scalar.get_subquery(result);
-                }
-            }
-            RelOperator::Window(op) => {
-                for order in &op.order_by {
-                    result = order.order_by_item.scalar.get_subquery(result);
-                }
-                for expr in &op.partition_by {
-                    result = expr.scalar.get_subquery(result);
-                }
-                if let WindowFuncType::Aggregate(agg) = &op.function {
-                    for expr in agg.exprs() {
-                        result = expr.get_subquery(result);
-                    }
-                }
-            }
-            RelOperator::ProjectSet(op) => {
-                for srf in &op.srfs {
-                    result = srf.scalar.get_subquery(result);
-                }
-            }
-            RelOperator::Udf(op) => {
-                for item in &op.items {
-                    result = item.scalar.get_subquery(result);
-                }
-            }
+    pub fn collect_subquery(&self) -> Vec<SubqueryExpr> {
+        let mut subqueries = Vec::new();
+        for scalar in self.scalar_expr_iter() {
+            scalar.collect_subquery(&mut subqueries);
         }
-        result
+        subqueries
     }
 }
 
@@ -316,6 +183,10 @@ impl Operator for RelOperator {
 
     fn arity(&self) -> usize {
         match_rel_op!(self, arity)
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        match_rel_op!(self, scalar_expr_iter)
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -356,387 +227,26 @@ impl Operator for RelOperator {
     }
 }
 
-impl From<Scan> for RelOperator {
-    fn from(v: Scan) -> Self {
-        Self::Scan(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Scan {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Scan(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Scan",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Join> for RelOperator {
-    fn from(v: Join) -> Self {
-        Self::Join(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Join {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Join(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Join",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<EvalScalar> for RelOperator {
-    fn from(v: EvalScalar) -> Self {
-        Self::EvalScalar(v)
-    }
-}
-
-impl TryFrom<RelOperator> for EvalScalar {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::EvalScalar(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to EvalScalar",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Filter> for RelOperator {
-    fn from(v: Filter) -> Self {
-        Self::Filter(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Filter {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Filter(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Filter",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Aggregate> for RelOperator {
-    fn from(v: Aggregate) -> Self {
-        Self::Aggregate(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Aggregate {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Aggregate(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Aggregate",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Window> for RelOperator {
-    fn from(v: Window) -> Self {
-        Self::Window(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Window {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Window(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Window",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Sort> for RelOperator {
-    fn from(v: Sort) -> Self {
-        Self::Sort(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Sort {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Sort(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Sort",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Limit> for RelOperator {
-    fn from(v: Limit) -> Self {
-        Self::Limit(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Limit {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Limit(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Limit",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Exchange> for RelOperator {
-    fn from(v: Exchange) -> Self {
-        Self::Exchange(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Exchange {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Exchange(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Exchange",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<UnionAll> for RelOperator {
-    fn from(v: UnionAll) -> Self {
-        Self::UnionAll(v)
-    }
-}
-
-impl TryFrom<RelOperator> for UnionAll {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::UnionAll(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to UnionAll",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<DummyTableScan> for RelOperator {
-    fn from(v: DummyTableScan) -> Self {
-        Self::DummyTableScan(v)
-    }
-}
-
-impl TryFrom<RelOperator> for DummyTableScan {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::DummyTableScan(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to DummyTableScan",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<ProjectSet> for RelOperator {
-    fn from(value: ProjectSet) -> Self {
-        Self::ProjectSet(value)
-    }
-}
-
-impl TryFrom<RelOperator> for ProjectSet {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::ProjectSet(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to ProjectSet",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<ConstantTableScan> for RelOperator {
-    fn from(value: ConstantTableScan) -> Self {
-        Self::ConstantTableScan(value)
-    }
-}
-
-impl From<ExpressionScan> for RelOperator {
-    fn from(value: ExpressionScan) -> Self {
-        Self::ExpressionScan(value)
-    }
-}
-
-impl TryFrom<RelOperator> for ConstantTableScan {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::ConstantTableScan(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to ConstantTableScan",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Udf> for RelOperator {
-    fn from(value: Udf) -> Self {
-        Self::Udf(value)
-    }
-}
-
-impl TryFrom<RelOperator> for Udf {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::Udf(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to Udf",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl TryFrom<RelOperator> for RecursiveCteScan {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::RecursiveCteScan(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to RecursiveCteScan",
-                value.rel_op()
-            )))
-        }
-    }
-}
-impl From<AsyncFunction> for RelOperator {
-    fn from(value: AsyncFunction) -> Self {
-        Self::AsyncFunction(value)
-    }
-}
-
-impl TryFrom<RelOperator> for AsyncFunction {
-    type Error = ErrorCode;
-
-    fn try_from(value: RelOperator) -> std::result::Result<Self, Self::Error> {
-        if let RelOperator::AsyncFunction(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to AsyncFunction",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<Mutation> for RelOperator {
-    fn from(v: Mutation) -> Self {
-        Self::Mutation(v)
-    }
-}
-
-impl TryFrom<RelOperator> for Mutation {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::Mutation(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to MergeInto",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<OptimizeCompactBlock> for RelOperator {
-    fn from(v: OptimizeCompactBlock) -> Self {
-        Self::CompactBlock(v)
-    }
-}
-
-impl TryFrom<RelOperator> for OptimizeCompactBlock {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::CompactBlock(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to OptimizeCompactBlock",
-                value.rel_op()
-            )))
-        }
-    }
-}
-
-impl From<MutationSource> for RelOperator {
-    fn from(v: MutationSource) -> Self {
-        Self::MutationSource(v)
-    }
-}
-
-impl TryFrom<RelOperator> for MutationSource {
-    type Error = ErrorCode;
-    fn try_from(value: RelOperator) -> Result<Self> {
-        if let RelOperator::MutationSource(value) = value {
-            Ok(value)
-        } else {
-            Err(ErrorCode::Internal(format!(
-                "Cannot downcast {:?} to MutationSource",
-                value.rel_op()
-            )))
-        }
-    }
+impl_try_from_rel_operator! {
+    Scan,
+    Join,
+    EvalScalar,
+    Filter,
+    Aggregate,
+    Sort,
+    Limit,
+    Exchange,
+    UnionAll,
+    DummyTableScan,
+    Window,
+    ProjectSet,
+    ConstantTableScan,
+    ExpressionScan,
+    CacheScan,
+    Udf,
+    RecursiveCteScan,
+    AsyncFunction,
+    Mutation,
+    CompactBlock,
+    MutationSource
 }
