@@ -311,13 +311,13 @@ impl SExpr {
                 match expr.plan.as_ref() {
                     RelOperator::Exchange(exchange) => {
                         self.result = Some(exchange.clone());
-                        return Ok(VisitAction::Stop);
+                        Ok(VisitAction::Stop)
                     }
 
                     RelOperator::Join(_) => {
                         let child = expr.probe_side_child();
                         self.result = child.get_data_distribution()?;
-                        return Ok(VisitAction::Stop);
+                        Ok(VisitAction::Stop)
                     }
                     _ => {
                         if expr.arity() > 1 {
