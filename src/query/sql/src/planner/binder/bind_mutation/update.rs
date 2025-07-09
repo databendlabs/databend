@@ -127,6 +127,7 @@ impl Binder {
         if s_expr.plan_rel_op() != RelOp::Mutation {
             return Ok(plan);
         }
+
         let matcher = Matcher::MatchOp {
             op_type: RelOp::Filter,
             children: vec![Matcher::MatchOp {
@@ -138,6 +139,7 @@ impl Binder {
             return Ok(plan);
         }
 
+        let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
         let mut mutation = mutation.clone();
 
         let row_id = mutation

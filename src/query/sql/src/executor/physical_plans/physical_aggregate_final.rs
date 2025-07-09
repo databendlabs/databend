@@ -23,6 +23,7 @@ use databend_common_expression::RemoteExpr;
 
 use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFunctionDesc;
 use crate::executor::physical_plans::AggregateFunctionSignature;

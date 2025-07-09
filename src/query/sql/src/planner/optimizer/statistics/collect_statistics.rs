@@ -100,7 +100,7 @@ impl CollectStatisticsOptimizer {
                 column_stats,
                 histograms,
             });
-            let mut s_expr = s_expr.replace_plan(scan);
+            let mut s_expr = s_expr.replace_plan(scan.clone());
             if let Some(sample) = &scan.sample {
                 // Only process row-level sampling in optimizer phase.
                 if let Some(row_level) = &sample.row_level {
@@ -128,13 +128,10 @@ impl CollectStatisticsOptimizer {
                             ],
                         });
                         s_expr = SExpr::create_unary(
-                            Arc::new(
-                                Filter {
-                                    predicates: vec![filter],
-                                }
-                                .into(),
-                            ),
-                            Arc::new(s_expr),
+                            Filter {
+                                predicates: vec![filter],
+                            },
+                            s_expr.child(0)?.clone(),
                         );
                     }
                 }

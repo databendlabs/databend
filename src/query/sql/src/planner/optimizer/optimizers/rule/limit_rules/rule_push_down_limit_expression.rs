@@ -65,13 +65,19 @@ impl Rule for RulePushDownLimitEvalScalar {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
+        let limit = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Limit>()
+            .unwrap()
+            .clone();
         let eval_plan = s_expr.child(0)?;
         let eval_scalar = eval_plan
             .plan()
             .as_any()
             .downcast_ref::<EvalScalar>()
-            .unwrap();
+            .unwrap()
+            .clone();
 
         let limit_expr = SExpr::create_unary(limit, eval_plan.child(0)?.clone());
         let mut result = SExpr::create_unary(eval_scalar, limit_expr);

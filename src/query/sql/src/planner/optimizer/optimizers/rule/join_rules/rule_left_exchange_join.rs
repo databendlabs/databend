@@ -96,8 +96,15 @@ impl Rule for RuleLeftExchangeJoin {
         //  join4 t2
         //  /  \
         // t1  t3
-        let join1: Join = s_expr.plan.deref().clone().try_into()?;
-        let join2: Join = s_expr.child(0)?.plan.deref().clone().try_into()?;
+        let join1 = s_expr.plan.as_any().downcast_ref::<Join>().unwrap().clone();
+        let join2 = s_expr
+            .child(0)?
+            .plan
+            .as_any()
+            .downcast_ref::<Join>()
+            .unwrap()
+            .clone();
+
         let t1 = s_expr.child(0)?.child(0)?;
         let t2 = s_expr.child(0)?.child(1)?;
         let t3 = s_expr.child(1)?;
@@ -123,9 +130,9 @@ impl Rule for RuleLeftExchangeJoin {
         let t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;
         let t3_prop = RelExpr::with_s_expr(t3).derive_relational_prop()?;
         let join4_prop = RelExpr::with_s_expr(&SExpr::create_binary(
-            Arc::new(join_4.clone().into()),
-            Arc::new(t1.clone()),
-            Arc::new(t3.clone()),
+            join_4.clone().into(),
+            t1.clone(),
+            t3.clone(),
         ))
         .derive_relational_prop()?;
 
@@ -211,14 +218,10 @@ impl Rule for RuleLeftExchangeJoin {
         }
 
         let mut result = SExpr::create(
-            Arc::new(join_3.into()),
+            join_3,
             vec![
-                Arc::new(SExpr::create_binary(
-                    Arc::new(join_4.into()),
-                    Arc::new(t1.clone()),
-                    Arc::new(t3.clone()),
-                )),
-                Arc::new(t2.clone()),
+                SExpr::create_binary(join_4, t1.clone(), t3.clone()),
+                t2.clone(),
             ],
             None,
             None,

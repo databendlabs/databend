@@ -87,11 +87,8 @@ impl Rule for RuleCommuteJoinBaseTable {
                         (condition.right.clone(), condition.left.clone());
                 }
                 join.join_type = join.join_type.opposite();
-                let mut result = SExpr::create_binary(
-                    Arc::new(join.into()),
-                    Arc::new(right_child.clone()),
-                    Arc::new(left_child.clone()),
-                );
+                let mut result =
+                    SExpr::create_binary(join, right_child.clone(), left_child.clone());
 
                 // Disable the following rules for the generated expression
                 result.set_applied_rule(&RuleID::CommuteJoinBaseTable);

@@ -57,9 +57,8 @@ impl RuleEliminateUnion {
             if let Some(empty_scan) = s_expr.plan().as_any().downcast_ref::<ConstantTableScan>() {
                 return Ok(empty_scan.num_rows == 0);
             }
-        } else {
-            Self::is_empty_scan(s_expr.child(0)?)
         }
+        Self::is_empty_scan(s_expr.child(0)?)
     }
 }
 

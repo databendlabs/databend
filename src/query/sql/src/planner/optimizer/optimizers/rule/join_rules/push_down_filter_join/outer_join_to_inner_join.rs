@@ -129,12 +129,12 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
     }
 
     let result = SExpr::create_unary(
-        Arc::new(filter.into()),
-        Arc::new(SExpr::create_binary(
-            Arc::new(join.into()),
-            Arc::new(join_s_expr.child(0)?.clone()),
-            Arc::new(join_s_expr.child(1)?.clone()),
-        )),
+        filter,
+        SExpr::create_binary(
+            join,
+            join_s_expr.child(0)?.clone(),
+            join_s_expr.child(1)?.clone(),
+        ),
     );
 
     Ok((result, true))

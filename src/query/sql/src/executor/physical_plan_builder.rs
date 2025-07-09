@@ -41,6 +41,38 @@ pub struct PhysicalPlanBuilder {
     pub(crate) mutation_build_info: Option<MutationBuildInfo>,
 }
 
+#[macro_export]
+macro_rules! with_match_rel_op {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                Scan => TableScan,
+                DummyTableScan => DummyTableScan,
+                ConstantTableScan => ConstantTableScan,
+                ExpressionScan => ExpressionScan,
+                CacheScan => CacheScan,
+                Join => PhysicalJoinType,
+                EvalScalar => EvalScalar,
+                Filter => Filter,
+                Aggregate => Aggregate,
+                Sort => Sort,
+                Limit => Limit,
+                Exchange => Exchange,
+                UnionAll => UnionAll,
+                Window => Window,
+                ProjectSet => ProjectSet,
+                Udf => Udf,
+                AsyncFunction => AsyncFunction,
+                RecursiveCteScan => RecursiveCteScan,
+                MergeInto => Mutation,
+                CompactBlock => CompactBlock,
+                MutationSource => MutationSource,
+            ],
+            $($tail)*
+        }
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>, dry_run: bool) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
@@ -77,6 +109,11 @@ impl PhysicalPlanBuilder {
     ) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
+
+        use databend_common_exception::ErrorCode;
+
+        use crate::executor::physical_plans::*;
+
         with_match_rel_op!(|TY| match s_expr.plan_rel_op() {
             crate::plans::RelOp::TY => TY::build(self, s_expr, required, stat_info).await,
             _ => Err(ErrorCode::Internal("Unsupported operator")),
@@ -110,36 +147,4 @@ pub trait BuildPhysicalPlan {
         required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan>;
-}
-
-#[macro_export]
-macro_rules! with_match_rel_op {
-    (| $t:tt | $($tail:tt)*) => {
-        match_template::match_template! {
-            $t = [
-                Scan => TableScan,
-                DummyTableScan => DummyTableScan,
-                ConstantTableScan => ConstantTableScan,
-                ExpressionScan => ExpressionScan,
-                CacheScan => CacheScan,
-                Join => Join,
-                EvalScalar => EvalScalar,
-                Filter => Filter,
-                Aggregate => Aggregate,
-                Sort => Sort,
-                Limit => Limit,
-                Exchange => Exchange,
-                UnionAll => UnionAll,
-                Window => Window,
-                ProjectSet => ProjectSet,
-                Udf => Udf,
-                AsyncFunction => AsyncFunction,
-                RecursiveCteScan => RecursiveCteScan,
-                MergeInto => MergeInto,
-                CompactBlock => CompactBlock,
-                MutationSource => MutationSource,
-            ],
-            $($tail)*
-        }
-    }
 }

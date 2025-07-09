@@ -43,6 +43,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MutationSource;
 use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
@@ -252,7 +253,7 @@ impl MutationExpression {
                         read_partition_columns: Default::default(),
                     };
 
-                    s_expr = SExpr::create_leaf(MutationSource(mutation_source));
+                    s_expr = SExpr::create_leaf(mutation_source);
 
                     if !predicates.is_empty() {
                         s_expr = SExpr::create_unary(Filter { predicates }, s_expr);

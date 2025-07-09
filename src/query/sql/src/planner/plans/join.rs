@@ -513,7 +513,7 @@ impl Operator for Join {
         2
     }
 
-    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         let iter = self.equi_conditions.iter().map(|condition| &condition.left);
         let iter = iter.chain(
             self.equi_conditions

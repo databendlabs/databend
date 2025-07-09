@@ -292,11 +292,7 @@ impl SubqueryDecorrelatorOptimizer {
                         equi_conditions,
                         ..join.clone()
                     };
-                    return Ok(SExpr::create_binary(
-                        Arc::new(join.into()),
-                        Arc::new(left),
-                        Arc::new(right),
-                    ));
+                    return Ok(SExpr::create_binary(join, left, right));
                 }
 
                 let mut predicates = join.non_equi_conditions.clone();

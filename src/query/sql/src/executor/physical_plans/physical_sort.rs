@@ -21,6 +21,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::physical_plans::WindowPartition;
 use crate::executor::physical_plans::WindowPartitionTopN;

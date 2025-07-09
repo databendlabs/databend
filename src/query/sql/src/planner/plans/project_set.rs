@@ -48,7 +48,7 @@ impl Operator for ProjectSet {
         RelOp::ProjectSet
     }
 
-    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         Box::new(self.srfs.iter().map(|expr| &expr.scalar))
     }
 

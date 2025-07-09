@@ -62,7 +62,7 @@ pub trait Operator: Send + Sync + 'static {
 
     fn as_any(&self) -> &dyn std::any::Any;
 
-    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         Box::new(std::iter::empty())
     }
 

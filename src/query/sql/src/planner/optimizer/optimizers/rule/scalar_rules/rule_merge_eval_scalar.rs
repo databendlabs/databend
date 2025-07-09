@@ -58,13 +58,19 @@ impl Rule for RuleMergeEvalScalar {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let up_eval_scalar = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
+        let up_eval_scalar = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<EvalScalar>()
+            .unwrap()
+            .clone();
         let down_eval_scalar = s_expr
             .child(0)?
             .plan()
             .as_any()
             .downcast_ref::<EvalScalar>()
-            .unwrap();
+            .unwrap()
+            .clone();
         let mut used_columns = ColumnSet::new();
         for item in up_eval_scalar.items.iter() {
             used_columns = used_columns
@@ -77,7 +83,7 @@ impl Rule for RuleMergeEvalScalar {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
         // Check if the up EvalScalar depends on the down EvalScalar
         if used_columns.is_subset(&input_prop.output_columns) {
-            // TODO(leiysky): eliminate duplicated scalars
+            // TODO(sundy): eliminate duplicated scalars
             let items = up_eval_scalar
                 .items
                 .into_iter()
@@ -85,10 +91,7 @@ impl Rule for RuleMergeEvalScalar {
                 .collect();
             let merged = EvalScalar { items };
 
-            let new_expr = SExpr::create_unary(
-                Arc::new(merged.into()),
-                Arc::new(s_expr.child(0)?.child(0)?.clone()),
-            );
+            let new_expr = SExpr::create_unary(merged, s_expr.child(0)?.child(0)?.clone());
             state.add_result(new_expr);
         }
 

@@ -83,7 +83,9 @@ impl Rule for RulePushDownFilterWindow {
             .plan()
             .as_any()
             .downcast_ref::<Window>()
-            .unwrap();
+            .unwrap()
+            .clone();
+
         let allowed = window.partition_by_columns()?;
         let rejected = ColumnSet::from_iter(
             window
@@ -106,25 +108,19 @@ impl Rule for RulePushDownFilterWindow {
         };
         let result = if remaining.is_empty() {
             SExpr::create_unary(
-                Arc::new(window.into()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(pushed_down_filter.into()),
-                    Arc::new(window_expr.child(0)?.clone()),
-                )),
+                window,
+                SExpr::create_unary(pushed_down_filter, window_expr.child(0)?.clone()),
             )
         } else {
             let remaining_filter = Filter {
                 predicates: remaining,
             };
             let mut s_expr = SExpr::create_unary(
-                Arc::new(remaining_filter.into()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(window.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(window_expr.child(0)?.clone()),
-                    )),
-                )),
+                remaining_filter,
+                SExpr::create_unary(
+                    window,
+                    SExpr::create_unary(pushed_down_filter, window_expr.child(0)?.clone()),
+                ),
             );
             s_expr.set_applied_rule(&self.id);
             s_expr

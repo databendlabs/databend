@@ -32,6 +32,7 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
 
 pub struct CompactBlock;

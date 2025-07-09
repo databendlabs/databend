@@ -81,7 +81,7 @@ impl Rule for RuleFoldCountAggregate {
             &input_stat_info.statistics.column_stats,
             &input_stat_info.statistics.precise_cardinality,
         ) {
-            let mut scalars = agg.aggregate_functions;
+            let mut scalars = agg.aggregate_functions.clone();
             for item in scalars.iter_mut() {
                 if let ScalarExpr::AggregateFunction(agg_func) = item.scalar.clone() {
                     if agg_func.args.is_empty() {

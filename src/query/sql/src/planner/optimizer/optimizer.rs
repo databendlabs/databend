@@ -327,7 +327,12 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
         input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     }
 
-    let mut mutation = s_expr.plan().as_any().downcast_mut::<Mutation>().unwrap();
+    let mut mutation = s_expr
+        .plan()
+        .as_any()
+        .downcast_ref::<Mutation>()
+        .unwrap()
+        .clone();
     mutation.distributed = opt_ctx.get_enable_distributed_optimization();
 
     let schema = mutation.schema();
@@ -425,7 +430,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
 
     Ok(Plan::DataMutation {
         schema,
-        s_expr: Box::new(SExpr::create_unary(mutation, input_s_expr)),
+        s_expr: Box::new(SExpr::create_unary(mutation.clone(), input_s_expr)),
         metadata: opt_ctx.get_metadata(),
     })
 }

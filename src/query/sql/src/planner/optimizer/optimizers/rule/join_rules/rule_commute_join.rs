@@ -105,11 +105,7 @@ impl Rule for RuleCommuteJoin {
                     (condition.right.clone(), condition.left.clone());
             }
             join.join_type = join.join_type.opposite();
-            let mut result = SExpr::create_binary(
-                Arc::new(join.into()),
-                Arc::new(right_child.clone()),
-                Arc::new(left_child.clone()),
-            );
+            let mut result = SExpr::create_binary(join, right_child.clone(), left_child.clone());
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

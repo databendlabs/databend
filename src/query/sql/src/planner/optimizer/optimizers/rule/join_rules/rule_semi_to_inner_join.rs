@@ -111,11 +111,8 @@ impl Rule for RuleSemiToInnerJoin {
             }
         }) {
             join.join_type = JoinType::Inner;
-            let mut join_expr = SExpr::create_binary(
-                Arc::new(join.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-                Arc::new(s_expr.child(1)?.clone()),
-            );
+            let mut join_expr =
+                SExpr::create_binary(join, s_expr.child(0)?.clone(), s_expr.child(1)?.clone());
             join_expr.set_applied_rule(&self.id);
             state.add_result(join_expr);
         }
@@ -131,7 +128,7 @@ fn find_group_by_keys(
     child: &SExpr,
     group_by_keys: &mut HashMap<IndexType, Box<DataType>>,
 ) -> Result<()> {
-    match child.plan() {
+    match child.plan_rel_op() {
         RelOp::EvalScalar | RelOp::Filter | RelOp::Window => {
             find_group_by_keys(child.child(0)?, group_by_keys)?;
         }
@@ -158,6 +155,7 @@ fn find_group_by_keys(
         | RelOp::Join
         | RelOp::RecursiveCteScan
         | RelOp::MutationSource
+        | RelOp::MergeInto
         | RelOp::CompactBlock => {}
     }
     Ok(())

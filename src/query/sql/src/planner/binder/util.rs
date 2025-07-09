@@ -25,6 +25,7 @@ use databend_common_expression::types::DataType;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Operator;
+use crate::plans::RecursiveCteScan;
 use crate::plans::RelOp;
 use crate::Binder;
 use crate::NameResolutionContext;
@@ -61,6 +62,11 @@ impl Binder {
                 self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
             }
             RelOp::RecursiveCteScan => {
+                let plan = expr
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<RecursiveCteScan>()
+                    .unwrap();
                 cte_scan_names.push(plan.table_name.clone());
                 if cte_types.is_empty() {
                     cte_types.extend(plan.fields.iter().map(|f| f.data_type().clone()));

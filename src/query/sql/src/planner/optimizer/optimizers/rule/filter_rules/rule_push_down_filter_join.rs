@@ -308,11 +308,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
         );
     }
 
-    let mut result = SExpr::create_binary(
-        Arc::new(join.into()),
-        Arc::new(left_child),
-        Arc::new(right_child),
-    );
+    let mut result = SExpr::create_binary(join, left_child, right_child);
 
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(

@@ -29,6 +29,7 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::plans::Exchange;
 use crate::plans::Operator;
 use crate::plans::OperatorRef;
+use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::plans::WindowFuncType;
 use crate::IndexType;

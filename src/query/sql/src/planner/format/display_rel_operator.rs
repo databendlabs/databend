@@ -49,47 +49,47 @@ impl<I: IdHumanizer> OperatorHumanizer<I> for DefaultOperatorHumanizer {
 fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &OperatorRef) -> FormatTreeNode {
     match op.rel_op() {
         RelOp::Join => {
-            let join = op.plan().as_any().downcast_ref::<Join>().unwrap();
+            let join = op.as_any().downcast_ref::<Join>().unwrap();
             join_to_format_tree(id_humanizer, join)
         }
         RelOp::Scan => {
-            let scan = op.plan().as_any().downcast_ref::<Scan>().unwrap();
+            let scan = op.as_any().downcast_ref::<Scan>().unwrap();
             scan_to_format_tree(id_humanizer, scan)
         }
         RelOp::EvalScalar => {
-            let eval_scalar = op.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
+            let eval_scalar = op.as_any().downcast_ref::<EvalScalar>().unwrap();
             eval_scalar_to_format_tree(id_humanizer, eval_scalar)
         }
         RelOp::Filter => {
-            let filter = op.plan().as_any().downcast_ref::<Filter>().unwrap();
+            let filter = op.as_any().downcast_ref::<Filter>().unwrap();
             filter_to_format_tree(id_humanizer, filter)
         }
         RelOp::Aggregate => {
-            let aggregate = op.plan().as_any().downcast_ref::<Aggregate>().unwrap();
+            let aggregate = op.as_any().downcast_ref::<Aggregate>().unwrap();
             aggregate_to_format_tree(id_humanizer, aggregate)
         }
         RelOp::Window => {
-            let window = op.plan().as_any().downcast_ref::<Window>().unwrap();
+            let window = op.as_any().downcast_ref::<Window>().unwrap();
             window_to_format_tree(id_humanizer, window)
         }
         RelOp::Udf => {
-            let udf = op.plan().as_any().downcast_ref::<Udf>().unwrap();
+            let udf = op.as_any().downcast_ref::<Udf>().unwrap();
             udf_to_format_tree(id_humanizer, udf)
         }
         RelOp::AsyncFunction => {
-            let async_func = op.plan().as_any().downcast_ref::<AsyncFunction>().unwrap();
+            let async_func = op.as_any().downcast_ref::<AsyncFunction>().unwrap();
             async_func_to_format_tree(id_humanizer, async_func)
         }
         RelOp::Sort => {
-            let sort = op.plan().as_any().downcast_ref::<Sort>().unwrap();
+            let sort = op.as_any().downcast_ref::<Sort>().unwrap();
             sort_to_format_tree(id_humanizer, sort)
         }
         RelOp::Limit => {
-            let limit = op.plan().as_any().downcast_ref::<Limit>().unwrap();
+            let limit = op.as_any().downcast_ref::<Limit>().unwrap();
             limit_to_format_tree(id_humanizer, limit)
         }
         RelOp::Exchange => {
-            let exchange = op.plan().as_any().downcast_ref::<Exchange>().unwrap();
+            let exchange = op.as_any().downcast_ref::<Exchange>().unwrap();
             exchange_to_format_tree(id_humanizer, exchange)
         }
         RelOp::ConstantTableScan => {
@@ -101,11 +101,11 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &OperatorRef) -> FormatT
             constant_scan_to_format_tree(id_humanizer, constant_scan)
         }
         RelOp::UnionAll => {
-            let union_all = op.plan().as_any().downcast_ref::<UnionAll>().unwrap();
+            let union_all = op.as_any().downcast_ref::<UnionAll>().unwrap();
             union_all_to_format_tree(id_humanizer, union_all)
         }
         RelOp::MergeInto => {
-            let merge_into = op.plan().as_any().downcast_ref::<Mutation>().unwrap();
+            let merge_into = op.as_any().downcast_ref::<Mutation>().unwrap();
             merge_into_to_format_tree(id_humanizer, merge_into)
         }
         _ => FormatTreeNode::with_children(format!("{:?}", op), vec![]),

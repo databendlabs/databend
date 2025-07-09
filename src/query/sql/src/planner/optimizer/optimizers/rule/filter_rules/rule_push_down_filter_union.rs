@@ -75,7 +75,9 @@ impl Rule for RulePushDownFilterUnion {
             .plan()
             .as_any()
             .downcast_ref::<UnionAll>()
-            .unwrap();
+            .unwrap()
+            .clone();
+
         if !union.cte_scan_names.is_empty() {
             // If the union has cte scan names, it's not allowed to push down filter.
             state.add_result(s_expr.clone());

@@ -27,6 +27,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plan_builder::PhysicalPlanBuilder;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
@@ -242,7 +243,7 @@ impl PhysicalPlanBuilder {
             };
             let mut new_child = child.clone();
             new_child.plan = Arc::new(new_project_set.into());
-            let new_filter = SExpr::create_unary(s_expr.plan().clone(), new_child);
+            let new_filter = SExpr::create_unary(filter.clone(), new_child);
             Ok(Some(new_filter))
         } else {
             let project_set = s_expr.plan().as_any().downcast_ref::<ProjectSet>().unwrap();

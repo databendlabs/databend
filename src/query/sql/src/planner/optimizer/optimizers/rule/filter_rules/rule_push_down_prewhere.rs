@@ -135,7 +135,8 @@ impl RulePushDownPrewhere {
             .plan()
             .as_any()
             .downcast_ref::<Scan>()
-            .unwrap();
+            .unwrap()
+            .clone();
         if scan.update_stream_columns {
             return Ok(s_expr.clone());
         }

@@ -223,11 +223,7 @@ impl SubqueryDecorrelatorOptimizer {
             );
         }
 
-        let result = SExpr::create_binary(
-            Arc::new(join.into()),
-            Arc::new(left_child),
-            Arc::new(right_child),
-        );
+        let result = SExpr::create_binary(join, left_child, right_child);
 
         Ok(Some(result))
     }

@@ -69,7 +69,12 @@ impl Rule for RulePushDownLimitOuterJoin {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
+        let limit = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Limit>()
+            .unwrap()
+            .clone();
         if limit.limit.is_some() {
             let child = s_expr.child(0)?;
             let join = child.plan().as_any().downcast_ref::<Join>().unwrap();
@@ -80,12 +85,12 @@ impl Rule for RulePushDownLimitOuterJoin {
                         Arc::new(child.child(1)?.clone()),
                     ]);
                     let mut result = SExpr::create_unary(
-                        Arc::new(Limit {
+                        Limit {
                             before_exchange: limit.before_exchange,
-                            limit: limit.limit,
+                            limit: limit.limit.clone(),
                             offset: 0,
-                        }),
-                        Arc::new(child),
+                        },
+                        child,
                     );
                     result.set_applied_rule(&self.id);
                     state.add_result(result)

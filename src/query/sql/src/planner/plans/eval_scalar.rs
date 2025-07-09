@@ -86,7 +86,7 @@ impl Operator for EvalScalar {
         RelOp::EvalScalar
     }
 
-    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr>> {
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         Box::new(self.items.iter().map(|expr| &expr.scalar))
     }
 

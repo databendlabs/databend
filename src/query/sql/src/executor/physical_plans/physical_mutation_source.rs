@@ -32,6 +32,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;

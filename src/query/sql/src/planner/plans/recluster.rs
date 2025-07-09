@@ -32,6 +32,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::Operator;
 use crate::plans::Plan;
+use crate::plans::RelOp;
 use crate::plans::Scan;
 use crate::Binder;
 use crate::MetadataRef;
@@ -135,7 +136,7 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
                 for item in &mut expr.items {
                     visit_expr_column(&mut item.scalar, variables);
                 }
-                Arc::new(expr.into())
+                Arc::new(expr),
             }
             RelOp::Aggregate => {
                 let aggr = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
@@ -147,7 +148,7 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
                         }
                     }
                 }
-                Arc::new(aggr.into())
+                Arc::new(aggr),
             }
             _ => s_expr.plan.clone(),
         };
