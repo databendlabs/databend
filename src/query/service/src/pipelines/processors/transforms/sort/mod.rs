@@ -39,9 +39,14 @@ mod sort_route;
 mod sort_shuffle;
 mod sort_spill;
 
+pub use merge_sort::*;
 pub use sort_builder::*;
+pub use sort_collect::*;
+pub use sort_combine::*;
 pub use sort_exchange::*;
 pub use sort_exchange_injector::*;
+pub use sort_merge_stream::*;
+pub use sort_restore::*;
 pub use sort_route::*;
 pub use sort_shuffle::*;
 

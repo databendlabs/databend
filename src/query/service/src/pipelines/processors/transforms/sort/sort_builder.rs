@@ -34,13 +34,7 @@ use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
 use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
 
-use super::merge_sort::TransformSort;
-use super::sort_collect::TransformSortCollect;
-use super::sort_combine::TransformSortCombine;
-use super::sort_restore::TransformSortRestore;
-use super::sort_shuffle::SortSampleState;
-use super::sort_shuffle::TransformSortBoundBroadcast;
-use super::Base;
+use super::*;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 
@@ -65,7 +59,7 @@ pub struct TransformSortBuilder {
 }
 
 impl TransformSortBuilder {
-    pub fn create(
+    pub fn new(
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         block_size: usize,
@@ -354,6 +348,86 @@ impl RowsTypeVisitor for Build<'_> {
             },
             SortType::BoundBroadcast => self.build_bound_broadcast::<R>(),
             SortType::Combine => self.build_sort_combine::<R>(),
+        }
+    }
+}
+
+pub struct BoundedMergeSortBuilder {
+    inputs: Vec<Arc<InputPort>>,
+    output: Arc<OutputPort>,
+    schema: DataSchemaRef,
+    sort_desc: Arc<[SortColumnDescription]>,
+    block_size: usize,
+    limit: Option<usize>,
+    remove_order_col: bool,
+    enable_loser_tree: bool,
+}
+
+impl BoundedMergeSortBuilder {
+    pub fn new(
+        inputs: Vec<Arc<InputPort>>,
+        output: Arc<OutputPort>,
+        schema: DataSchemaRef,
+        sort_desc: Arc<[SortColumnDescription]>,
+        block_size: usize,
+        limit: Option<usize>,
+        remove_order_col: bool,
+        enable_loser_tree: bool,
+    ) -> Self {
+        Self {
+            inputs,
+            output,
+            schema,
+            sort_desc,
+            block_size,
+            limit,
+            remove_order_col,
+            enable_loser_tree,
+        }
+    }
+
+    pub fn build(mut self) -> Result<Box<dyn Processor>> {
+        select_row_type(&mut self)
+    }
+}
+
+impl RowsTypeVisitor for BoundedMergeSortBuilder {
+    type Result = Result<Box<dyn Processor>>;
+
+    fn schema(&self) -> DataSchemaRef {
+        self.schema.clone()
+    }
+
+    fn sort_desc(&self) -> &[SortColumnDescription] {
+        &self.sort_desc
+    }
+
+    fn visit_type<R, C>(&mut self) -> Self::Result
+    where
+        R: Rows + 'static,
+        C: RowConverter<R> + Send + 'static,
+    {
+        match self.enable_loser_tree {
+            true => Ok(Box::new(
+                BoundedMultiSortMergeProcessor::<LoserTreeSort<R>>::new(
+                    self.inputs.clone(),
+                    self.output.clone(),
+                    self.schema.clone(),
+                    self.block_size,
+                    self.limit,
+                    self.remove_order_col,
+                )?,
+            )),
+            false => Ok(Box::new(
+                BoundedMultiSortMergeProcessor::<HeapSort<R>>::new(
+                    self.inputs.clone(),
+                    self.output.clone(),
+                    self.schema.clone(),
+                    self.block_size,
+                    self.limit,
+                    self.remove_order_col,
+                )?,
+            )),
         }
     }
 }

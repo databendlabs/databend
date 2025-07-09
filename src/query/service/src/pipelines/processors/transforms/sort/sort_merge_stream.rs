@@ -53,7 +53,7 @@ where A: SortAlgorithm
 impl<A> BoundedMultiSortMergeProcessor<A>
 where A: SortAlgorithm
 {
-    pub fn create(
+    pub fn new(
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,

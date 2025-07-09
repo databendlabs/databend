@@ -19,7 +19,11 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
@@ -38,6 +42,7 @@ use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::add_range_shuffle_route;
+use crate::pipelines::processors::transforms::BoundedMergeSortBuilder;
 use crate::pipelines::processors::transforms::SortInjector;
 use crate::pipelines::processors::transforms::SortRangeExchange;
 use crate::pipelines::processors::transforms::TransformLimit;
@@ -156,7 +161,7 @@ impl PipelineBuilder {
                     self.build_pipeline(&sort.input)?;
                 }
 
-                self.main_pipeline.resize(1, false)
+                builder.build_bounded_merge_sort(&mut self.main_pipeline)
             }
             SortStep::Route => self.main_pipeline.resize(1, false),
         }
@@ -253,7 +258,7 @@ impl SortPipelineBuilder {
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
-        let builder = TransformSortBuilder::create(
+        let builder = TransformSortBuilder::new(
             self.schema.clone(),
             self.sort_desc.clone(),
             max_block_size,
@@ -325,7 +330,7 @@ impl SortPipelineBuilder {
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
-        let builder = TransformSortBuilder::create(
+        let builder = TransformSortBuilder::new(
             self.schema.clone(),
             self.sort_desc.clone(),
             max_block_size,
@@ -377,12 +382,10 @@ impl SortPipelineBuilder {
         // Merge sort
         let need_multi_merge = pipeline.output_len() > 1;
         let output_order_col = need_multi_merge || !self.remove_order_col_at_last;
-        debug_assert!(if order_col_generated {
+        debug_assert!(
             // If `order_col_generated`, it means this transform is the last processor in the distributed sort pipeline.
-            !output_order_col
-        } else {
-            true
-        });
+            !order_col_generated || !output_order_col
+        );
 
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let sort_merge_output_schema = match output_order_col {
@@ -414,7 +417,7 @@ impl SortPipelineBuilder {
         };
 
         pipeline.add_transform(|input, output| {
-            let builder = TransformSortBuilder::create(
+            let builder = TransformSortBuilder::new(
                 sort_merge_output_schema.clone(),
                 self.sort_desc.clone(),
                 self.block_size,
@@ -475,5 +478,33 @@ impl SortPipelineBuilder {
 
     pub fn exchange_injector(&self) -> Arc<dyn ExchangeInjector> {
         Arc::new(SortInjector {})
+    }
+
+    pub fn build_bounded_merge_sort(self, pipeline: &mut Pipeline) -> Result<()> {
+        let inputs_port: Vec<_> = (0..pipeline.output_len())
+            .map(|_| InputPort::create())
+            .collect();
+        let output_port = OutputPort::create();
+
+        let processor = ProcessorPtr::create(
+            BoundedMergeSortBuilder::new(
+                inputs_port.clone(),
+                output_port.clone(),
+                self.schema.clone(),
+                self.sort_desc.clone(),
+                self.block_size,
+                self.limit,
+                self.remove_order_col_at_last,
+                self.enable_loser_tree,
+            )
+            .build()?,
+        );
+
+        pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+            processor,
+            inputs_port,
+            vec![output_port],
+        )]));
+        Ok(())
     }
 }
