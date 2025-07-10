@@ -271,6 +271,7 @@ impl Display for AccountMgrLevel {
 pub enum SecondaryRolesOption {
     None,
     All,
+    SpecifyRole(Vec<String>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]

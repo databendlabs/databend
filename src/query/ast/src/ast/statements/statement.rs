@@ -783,6 +783,9 @@ impl Display for Statement {
                 match option {
                     SecondaryRolesOption::None => write!(f, "NONE")?,
                     SecondaryRolesOption::All => write!(f, "ALL")?,
+                    SecondaryRolesOption::SpecifyRole(roles) => {
+                        write_comma_separated_list(f, roles)?
+                    }
                 }
             }
             Statement::ShowCatalogs(stmt) => write!(f, "{stmt}")?,

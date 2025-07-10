@@ -26,6 +26,41 @@ ShowDropDatabases(
 
 
 ---------- Input ----------
+SET SECONDARY ROLES ALL
+---------- Output ---------
+SET SECONDARY ROLES ALL
+---------- AST ------------
+SetSecondaryRoles {
+    option: All,
+}
+
+
+---------- Input ----------
+SET SECONDARY ROLES NONE
+---------- Output ---------
+SET SECONDARY ROLES NONE
+---------- AST ------------
+SetSecondaryRoles {
+    option: None,
+}
+
+
+---------- Input ----------
+SET SECONDARY ROLES role1, role2
+---------- Output ---------
+SET SECONDARY ROLES role1, role2
+---------- AST ------------
+SetSecondaryRoles {
+    option: SpecifyRole(
+        [
+            "role1",
+            "role2",
+        ],
+    ),
+}
+
+
+---------- Input ----------
 show drop databases like 'db%'
 ---------- Output ---------
 SHOW DROP DATABASES LIKE 'db%'

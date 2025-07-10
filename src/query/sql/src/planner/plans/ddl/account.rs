@@ -120,6 +120,7 @@ pub struct SetRolePlan {
 pub enum SetSecondaryRolesPlan {
     All,
     None,
+    SpecifyRole(Vec<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
