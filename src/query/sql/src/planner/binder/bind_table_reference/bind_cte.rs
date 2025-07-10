@@ -39,7 +39,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        let (_, cte_bind_context) = self.bind_cte_definition(
+        let (s_expr, cte_bind_context) = self.bind_cte_definition(
             table_name,
             bind_context.cte_context.cte_map.as_ref(),
             &cte_info.query,
@@ -101,7 +101,7 @@ impl Binder {
         let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
             cte_name: table_name.to_string(),
             cte_schema,
-            def: cte_info.bind_result.as_ref().unwrap().s_expr.clone(),
+            def: s_expr,
         })));
         Ok((s_expr, new_bind_context))
     }
