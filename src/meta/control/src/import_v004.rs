@@ -58,10 +58,10 @@ pub async fn import_v004(
     let writer = snapshot_store.new_writer()?;
     let (tx, join_handle) = writer.spawn_writer_thread("import_v004");
 
-    let sys_data = Arc::new(Mutex::new(SysData::default()));
+    let sys_data_holder = Arc::new(Mutex::new(SysData::default()));
 
     let mut converter = SMEntryV002ToV004 {
-        sys_data: sys_data.clone(),
+        sys_data: sys_data_holder.clone(),
     };
 
     for line in lines {
@@ -93,20 +93,15 @@ pub async fn import_v004(
     let max_log_id = raft_log_importer.max_log_id;
     raft_log_importer.flush().await?;
 
-    let s = {
-        let r = sys_data.lock().unwrap();
+    let sys_data = {
+        let r = sys_data_holder.lock().unwrap();
         r.clone()
     };
-
-    tx.send(WriteEntry::Finish(s)).await?;
-    let temp_snapshot_data = join_handle.await??;
-
-    let last_applied = {
-        let r = sys_data.lock().unwrap();
-        *r.last_applied_ref()
-    };
+    let last_applied = *sys_data.last_applied_ref();
     let snapshot_id = MetaSnapshotId::new_with_epoch(last_applied);
-    let db = temp_snapshot_data.move_to_final_path(snapshot_id.to_string())?;
+
+    tx.send(WriteEntry::Finish((snapshot_id, sys_data))).await?;
+    let db = join_handle.await??;
 
     eprintln!(
         "{data_version}: Imported {} records, snapshot: {}; snapshot_path: {}; snapshot_stat: {}",
