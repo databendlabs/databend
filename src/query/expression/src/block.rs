@@ -341,7 +341,7 @@ pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
         }
     }
 
-    fn downcast_mut_from(boxed: &mut BlockMetaInfoPtr) -> Option<&mut Self> {
+    fn downcast_mut(boxed: &mut BlockMetaInfoPtr) -> Option<&mut Self> {
         let boxed = boxed.as_mut() as &mut dyn Any;
         boxed.downcast_mut()
     }

@@ -65,7 +65,7 @@ where A: SortAlgorithm
                 data: None,
                 input: input.clone(),
                 remove_order_col,
-                bound_index: None,
+                bound: None,
                 sort_row_offset: schema.fields().len() - 1,
                 _r: PhantomData,
             })
@@ -78,7 +78,7 @@ where A: SortAlgorithm
             block_size,
             limit,
             output_data: None,
-            bound_index: u32::MAX,
+            bound_index: 0,
             inner: Err(streams),
         })
     }
@@ -116,9 +116,12 @@ where A: SortAlgorithm + 'static
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(block) = self.inner.as_mut().ok().unwrap().next_block()? {
-            self.output_data =
-                Some(block.add_meta(Some(SortBound::create(self.bound_index, todo!())))?);
+        let merger = self.inner.as_mut().ok().unwrap();
+        if let Some(block) = merger.next_block()? {
+            self.output_data = Some(block.add_meta(Some(SortBound::create(
+                self.bound_index,
+                (!merger.is_finished()).then_some(self.bound_index),
+            )))?);
         };
         Ok(())
     }
@@ -134,6 +137,7 @@ where A: SortAlgorithm + 'static
                 if !merger.is_finished() {
                     return Ok(Event::Sync);
                 }
+                self.bound_index += 1;
                 let merger = std::mem::replace(inner, Err(vec![])).ok().unwrap();
                 self.inner = Err(merger.streams());
                 self.inner.as_mut().err().unwrap()
@@ -141,35 +145,44 @@ where A: SortAlgorithm + 'static
             Err(streams) => streams,
         };
 
-        let mut bounds = Vec::with_capacity(streams.len());
-        for stream in streams.iter_mut() {
-            if stream.pull()? {
-                return Ok(Event::NeedData);
-            }
-            let Some(data) = &stream.data else {
-                continue;
-            };
-            let meta = data
-                .get_meta()
-                .and_then(SortBound::downcast_ref_from)
-                .expect("require a SortBound");
-            bounds.push(meta.bound_index)
+        if streams.iter().all(|stream| stream.input.is_finished()) {
+            return Ok(Event::Finished);
         }
 
-        let bound_index = match bounds.iter().min() {
-            Some(index) => *index,
-            None => return Ok(Event::Finished),
-        };
-        assert!(self.bound_index != u32::MAX || bound_index > self.bound_index);
-        self.bound_index = bound_index;
+        // {
+        //     for stream in streams.iter_mut() {
+        //         stream.pull()?;
+        //     }
+
+        //     if streams
+        //         .iter_mut()
+        //         .map(|stream| stream.pull())
+        //         .try_fold(false, |acc, pending| acc || pending?)?
+        //     {
+        //         return Ok(Event::NeedData);
+        //     }
+
+        //     if bounds.is_empty() {
+        //         return Ok(Event::Finished);
+        //     }
+
+        //     if bounds.iter().all(|meta| meta.index != self.bound_index) {
+        //         let meta = match bounds.iter().min_by_key(|meta| meta.index) {
+        //             Some(index) => *index,
+        //             None => return Ok(Event::Finished),
+        //         };
+        //         assert!(meta.index > self.bound_index);
+        //         self.bound_index = meta.index;
+        //     }
+        // }
+
         for stream in streams.iter_mut() {
-            stream.bound_index = Some(self.bound_index);
+            stream.update_bound_index(self.bound_index);
         }
 
-        let streams = std::mem::take(streams);
         self.inner = Ok(Merger::create(
             self.schema.clone(),
-            streams,
+            std::mem::take(streams),
             self.block_size,
             self.limit,
         ));
@@ -181,20 +194,29 @@ struct BoundedInputStream<R: Rows> {
     data: Option<DataBlock>,
     input: Arc<InputPort>,
     remove_order_col: bool,
-    bound_index: Option<u32>,
     sort_row_offset: usize,
+    bound: Option<Bound>,
     _r: PhantomData<R>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Bound {
+    bound_index: u32,
+    more: bool,
 }
 
 impl<R: Rows> SortedStream for BoundedInputStream<R> {
     fn next(&mut self) -> Result<(Option<(DataBlock, Column)>, bool)> {
-        if self.pull()? {
+        if self.bound.unwrap().more && self.pull()? {
             return Ok((None, true));
         }
 
         match self.take_next_bounded_block() {
             None => Ok((None, false)),
             Some(mut block) => {
+                if block.is_empty() {
+                    return Ok((None, true));
+                }
                 let col = sort_column(&block, self.sort_row_offset).clone();
                 if self.remove_order_col {
                     block.remove_column(self.sort_row_offset);
@@ -236,13 +258,23 @@ impl<R: Rows> BoundedInputStream<R> {
             .and_then(SortBound::downcast_ref_from)
             .expect("require a SortBound");
 
-        if meta.bound_index == self.bound_index.unwrap() {
+        let bound = self.bound.as_mut().unwrap();
+        if meta.index == bound.bound_index {
+            bound.more = meta.next.is_some_and(|next| next == meta.index);
             self.data.take().map(|mut data| {
                 data.take_meta().unwrap();
                 data
             })
         } else {
+            assert!(meta.index > bound.bound_index);
             None
         }
+    }
+
+    fn update_bound_index(&mut self, bound_index: u32) {
+        self.bound = Some(Bound {
+            bound_index,
+            more: true,
+        });
     }
 }

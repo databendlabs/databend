@@ -33,7 +33,7 @@ struct TransformSortRoute {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
 
-    input_data: Vec<Option<(DataBlock, u32)>>,
+    input_data: Vec<Option<(DataBlock, SortBound)>>,
     cur_index: u32,
 }
 
@@ -53,22 +53,30 @@ impl TransformSortRoute {
         }
 
         for (input, data) in self.inputs.iter().zip(self.input_data.iter_mut()) {
-            if data.is_none() {
-                let Some(mut block) = input.pull_data().transpose()? else {
-                    continue;
-                };
+            let meta = match data {
+                Some((_, meta)) => *meta,
+                None => {
+                    let Some(mut block) = input.pull_data().transpose()? else {
+                        continue;
+                    };
 
-                let bound_index = block
-                    .take_meta()
-                    .and_then(SortBound::downcast_from)
-                    .expect("require a SortBound")
-                    .bound_index;
-                if bound_index == self.cur_index {
-                    self.output.push_data(Ok(block));
-                    return Ok(Event::NeedConsume);
+                    let meta = block
+                        .take_meta()
+                        .and_then(SortBound::downcast_from)
+                        .expect("require a SortBound");
+
+                    data.insert((block, meta)).1
                 }
-                *data = Some((block, bound_index));
             };
+
+            if meta.index == self.cur_index {
+                let (block, meta) = data.take().unwrap();
+                self.output.push_data(Ok(block));
+                if meta.next.is_none() {
+                    self.cur_index += 1;
+                }
+                return Ok(Event::NeedConsume);
+            }
         }
 
         Ok(Event::NeedData)

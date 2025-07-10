@@ -121,7 +121,7 @@ where
             finish,
         } = spill_sort.on_restore().await?;
         if let Some(block) = block {
-            let mut block = block.add_meta(Some(SortBound::create(bound_index, true)))?;
+            let mut block = block.add_meta(Some(SortBound::create(bound_index, None)))?;
             if self.remove_order_col {
                 block.pop_columns(1);
             }
@@ -188,7 +188,7 @@ impl Processor for SortBoundEdge {
                 .take_meta()
                 .and_then(SortBound::downcast_from)
                 .expect("require a SortBound");
-            meta.more = false;
+            meta.next = None;
             self.output
                 .push_data(Ok(block.add_meta(Some(meta.boxed()))?));
             self.output.finish();
@@ -204,17 +204,15 @@ impl Processor for SortBoundEdge {
             .get_meta()
             .and_then(SortBound::downcast_ref_from)
             .expect("require a SortBound")
-            .bound_index;
+            .index;
 
         let mut output = self.data.replace(incoming).unwrap();
-        let mut output_meta = output
+        let output_meta = output
             .mut_meta()
-            .and_then(SortBound::downcast_mut_from)
+            .and_then(SortBound::downcast_mut)
             .expect("require a SortBound");
 
-        if output_meta.bound_index != incoming_index {
-            output_meta.more = false;
-        }
+        output_meta.next = Some(incoming_index);
 
         self.output.push_data(Ok(output));
         Ok(Event::NeedConsume)

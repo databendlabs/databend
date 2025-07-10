@@ -104,16 +104,16 @@ impl BlockMetaInfo for SortExchangeMeta {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortBound {
-    bound_index: u32,
-    more: bool,
+    index: u32,
+    next: Option<u32>,
 }
 
 impl SortBound {
-    fn create(bound_index: u32, more: bool) -> Box<dyn BlockMetaInfo> {
-        debug_assert!(bound_index != u32::MAX);
-        SortBound { bound_index, more }.boxed()
+    fn create(index: u32, next: Option<u32>) -> Box<dyn BlockMetaInfo> {
+        debug_assert!(index != u32::MAX);
+        SortBound { index, next }.boxed()
     }
 }
 
@@ -124,6 +124,6 @@ impl BlockMetaInfo for SortBound {
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(self.clone())
+        Box::new(*self)
     }
 }

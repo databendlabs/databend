@@ -42,7 +42,7 @@ impl ExchangeInjector for SortInjector {
             DataExchange::Merge(_) | DataExchange::Broadcast(_) => unreachable!(),
             DataExchange::ShuffleDataExchange(exchange) => {
                 Ok(Arc::new(Box::new(SortBoundScatter {
-                    partitions: exchange.destination_ids.len() as _,
+                    partitions: exchange.destination_ids.len(),
                 })))
             }
         }
@@ -84,7 +84,7 @@ impl ExchangeInjector for SortInjector {
 }
 
 pub struct SortBoundScatter {
-    partitions: u32,
+    partitions: usize,
 }
 
 impl FlightScatter for SortBoundScatter {
@@ -97,17 +97,17 @@ impl FlightScatter for SortBoundScatter {
     }
 }
 
-pub(super) fn bound_scatter(data_block: DataBlock, n: u32) -> Result<Vec<DataBlock>> {
-    let meta = data_block
+pub(super) fn bound_scatter(data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+    let meta = *data_block
         .get_meta()
         .and_then(SortBound::downcast_ref_from)
         .unwrap();
 
-    let index = meta.bound_index % n;
+    let empty = data_block.slice(0..0);
+    let mut result = vec![empty; n];
+    result[meta.index as usize % n] = data_block;
 
-    Ok(std::iter::repeat_n(DataBlock::empty(), index as _)
-        .chain(Some(data_block))
-        .collect())
+    Ok(result)
 }
 
 // pub struct TransformExchangeSortSerializer {
