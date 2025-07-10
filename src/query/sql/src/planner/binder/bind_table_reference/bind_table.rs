@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -29,17 +27,12 @@ use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
-use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::plans::CTEConsumer;
-use crate::plans::RelOperator;
 use crate::BindContext;
 impl Binder {
     /// Bind a base table.
@@ -87,68 +80,7 @@ impl Binder {
         let cte_map = bind_context.cte_context.cte_map.clone();
         if let Some(cte_info) = cte_map.get(&table_name) {
             if cte_info.materialized {
-                let mut cte_bind_context =
-                    cte_info.bind_result.as_ref().unwrap().bind_context.clone();
-                // Apply column aliases
-                let mut cols_alias = cte_info.columns_alias.clone();
-                if let Some(alias) = alias {
-                    for (idx, col_alias) in alias.columns.iter().enumerate() {
-                        if idx < cte_info.columns_alias.len() {
-                            cols_alias[idx] = col_alias.name.clone();
-                        } else {
-                            cols_alias.push(col_alias.name.clone());
-                        }
-                    }
-                }
-
-                let alias_table_name = alias
-                    .as_ref()
-                    .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
-                    .unwrap_or_else(|| table_name.to_string());
-
-                for column in cte_bind_context.columns.iter_mut() {
-                    column.database_name = None;
-                    column.table_name = Some(alias_table_name.clone());
-                }
-
-                if cols_alias.len() > cte_bind_context.columns.len() {
-                    return Err(ErrorCode::SemanticError(format!(
-                            "The CTE '{}' has {} columns, but {} aliases were provided. Ensure the number of aliases matches the number of columns in the CTE.",
-                            table_name,
-                            cte_bind_context.columns.len(),
-                            cols_alias.len()
-                        ))
-                            .set_span(*span));
-                }
-
-                for (index, column_name) in cols_alias.iter().enumerate() {
-                    cte_bind_context.columns[index].column_name = column_name.clone();
-                }
-
-                let fields = cte_bind_context
-                    .columns
-                    .iter()
-                    .map(|column_binding| {
-                        DataField::new(
-                            &column_binding.index.to_string(),
-                            *column_binding.data_type.clone(),
-                        )
-                    })
-                    .collect();
-                let cte_schema = DataSchemaRefExt::create(fields);
-
-                // Add the columns to the new bind context
-                let mut new_bind_context = bind_context.clone();
-                for column in cte_bind_context.columns {
-                    new_bind_context.add_column_binding(column);
-                }
-
-                let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
-                    cte_name: table_name,
-                    cte_schema,
-                    def: cte_info.bind_result.as_ref().unwrap().s_expr.clone(),
-                })));
-                return Ok((s_expr, new_bind_context));
+                return self.bind_cte_consumer(bind_context, &table_name, alias, cte_info);
             } else {
                 if self
                     .metadata
