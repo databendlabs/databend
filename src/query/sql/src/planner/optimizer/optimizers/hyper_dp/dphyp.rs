@@ -335,6 +335,10 @@ impl DPhpyOptimizer {
             table_indexes.push(scan.table_index);
         }
 
+        if let RelOperator::CTEConsumer(cte_consumer) = s_expr.plan() {
+            Self::collect_table_indexes_recursive(&cte_consumer.def, table_indexes);
+        }
+
         for child in s_expr.children() {
             Self::collect_table_indexes_recursive(child, table_indexes);
         }
