@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
@@ -27,6 +30,7 @@ use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
+use crate::aggregates::aggregate_stddev::DecimalFuncData;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -39,26 +43,8 @@ struct KurtosisState {
     pub sum_four: F64,
 }
 
-impl<T> UnaryState<T, Float64Type> for KurtosisState
-where
-    T: ValueType + Sync + Send,
-    T::Scalar: AsPrimitive<f64>,
-{
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let other = T::to_owned_scalar(other).as_();
-        self.n += 1;
-        self.sum += other;
-        self.sum_sqr += other.powi(2);
-        self.sum_cub += other.powi(3);
-        self.sum_four += other.powi(4);
-        Ok(())
-    }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
+impl KurtosisState {
+    fn merge_impl(&mut self, rhs: &Self) -> Result<()> {
         if rhs.n == 0 {
             return Ok(());
         }
@@ -70,11 +56,7 @@ where
         Ok(())
     }
 
-    fn merge_result(
-        &mut self,
-        mut builder: BuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn merge_result_impl(&mut self, mut builder: BuilderMut<'_, Float64Type>) -> Result<()> {
         if self.n <= 3 {
             builder.push(F64::from(0_f64));
             return Ok(());
@@ -110,6 +92,91 @@ where
         }
         Ok(())
     }
+
+    // Common implementation for updating state with a value
+    fn add_value(&mut self, value: f64) {
+        self.n += 1;
+        self.sum += value;
+        self.sum_sqr += value.powi(2);
+        self.sum_cub += value.powi(3);
+        self.sum_four += value.powi(4);
+    }
+}
+
+// Specialized state for regular numeric types
+#[derive(Default, BorshSerialize, BorshDeserialize)]
+struct NumberKurtosisState {
+    state: KurtosisState,
+}
+
+impl<T> UnaryState<T, Float64Type> for NumberKurtosisState
+where
+    T: ValueType + Sync + Send,
+    T::Scalar: AsPrimitive<f64>,
+{
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let value = T::to_owned_scalar(other).as_();
+        self.state.add_value(value);
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.state.merge_impl(&rhs.state)
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: BuilderMut<'_, Float64Type>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        self.state.merge_result_impl(builder)
+    }
+}
+
+// Specialized state for decimal types
+#[derive(Default, BorshSerialize, BorshDeserialize)]
+struct DecimalKurtosisState {
+    state: KurtosisState,
+}
+
+impl<T> UnaryState<T, Float64Type> for DecimalKurtosisState
+where
+    T: ValueType + Sync + Send,
+    T::Scalar: Decimal,
+{
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let other = T::to_owned_scalar(other);
+        let data = unsafe {
+            function_data
+                .unwrap()
+                .as_any()
+                .downcast_ref_unchecked::<DecimalFuncData>()
+        };
+
+        let value = other.to_float64(data.scale);
+        self.state.add_value(value);
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.state.merge_impl(&rhs.state)
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: BuilderMut<'_, Float64Type>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        self.state.merge_result_impl(builder)
+    }
 }
 
 pub fn try_create_aggregate_kurtosis_function(
@@ -119,17 +186,30 @@ pub fn try_create_aggregate_kurtosis_function(
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
-
+    let return_type = DataType::Number(NumberDataType::Float64);
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            let return_type = DataType::Number(NumberDataType::Float64);
             AggregateUnaryFunction::<
-                KurtosisState,
+                NumberKurtosisState,
                 NumberType<NUM_TYPE>,
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
-
+        DataType::Decimal(s) => {
+            with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    let func = AggregateUnaryFunction::<
+                        DecimalKurtosisState,
+                        DecimalType<DECIMAL>,
+                        Float64Type,
+                    >::try_create(
+                        display_name, return_type, params, arguments[0].clone()
+                    )
+                    .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
+                    Ok(Arc::new(func))
+                }
+            })
+        }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
             display_name, arguments[0]

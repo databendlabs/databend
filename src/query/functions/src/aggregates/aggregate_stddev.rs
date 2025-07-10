@@ -150,7 +150,7 @@ where
     }
 }
 
-struct DecimalFuncData {
+pub struct DecimalFuncData {
     pub scale: u8,
 }
 

@@ -304,6 +304,11 @@ select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
 ----
 10.99999999999836	-1.9614277138467147	-1.4451196915855287
 
+query III
+select kurtosis(cast(k as decimal(10,2)) ), kurtosis(cast(v as decimal(38,2)) ), kurtosis(cast(v2 as decimal(76,2)) ) from aggr;
+----
+10.99999999999836	-1.9614277138467147	-1.4451196915855287
+
 query I
 select  kurtosis(v2) from aggr group by v order by v;
 ----
@@ -329,6 +334,11 @@ NaN NaN
 
 query III
 select skewness(k), skewness(v), skewness(v2) from aggr
+----
+-3.316624790355393	-0.16344366935199225	0.3654008511025841
+
+query III
+select skewness(cast(k as decimal(10,2)) ), skewness(cast(v as decimal(38,2)) ), skewness(cast(v2 as decimal(76,2)) ) from aggr
 ----
 -3.316624790355393	-0.16344366935199225	0.3654008511025841
 
