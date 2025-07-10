@@ -17,7 +17,7 @@ echo "Starting Databend Query cluster with 2 nodes enable history tables"
 
 for node in 1 2; do
     CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
-    
+
     echo "Appending history table config to node-${node}"
     cat ./tests/logging/history_table.toml >> "$CONFIG_FILE"
 done
@@ -144,6 +144,8 @@ if [ "$response3_data" = "[]" ] || [ "$response3_data" = "null" ] || [ "$respons
 else
     echo "✓ response3 data field contains data as expected"
 fi
+
+sleep 15
 
 echo "Running test queries to test external history tables"
 ./tests/logging/check_logs_table.sh
