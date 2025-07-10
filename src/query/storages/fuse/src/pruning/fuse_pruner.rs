@@ -26,6 +26,10 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_after;
+use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_before;
+use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruning_after;
+use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruning_before;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_cache::CacheAccessor;
@@ -570,7 +574,27 @@ impl FusePruner {
                 sort,
                 limit,
             )?;
+
+            // Perf.
+            {
+                let block_size = metas.iter().map(|(_, m)| m.block_size).sum();
+                metrics_inc_blocks_vector_index_pruning_before(metas.len() as u64);
+                metrics_inc_bytes_block_vector_index_pruning_before(block_size);
+                self.pruning_ctx
+                    .pruning_stats
+                    .set_blocks_vector_index_pruning_before(metas.len() as u64);
+            }
             let pruned_metas = vector_pruner.prune(metas.clone()).await?;
+
+            // Perf.
+            {
+                let block_size = pruned_metas.iter().map(|(_, m)| m.block_size).sum();
+                metrics_inc_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
+                metrics_inc_bytes_block_vector_index_pruning_after(block_size);
+                self.pruning_ctx
+                    .pruning_stats
+                    .set_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
+            }
             return Ok(pruned_metas);
         }
         Ok(metas)
@@ -594,6 +618,11 @@ impl FusePruner {
         let blocks_inverted_index_pruning_after =
             stats.get_blocks_inverted_index_pruning_after() as usize;
 
+        let blocks_vector_index_pruning_before =
+            stats.get_blocks_vector_index_pruning_before() as usize;
+        let blocks_vector_index_pruning_after =
+            stats.get_blocks_vector_index_pruning_after() as usize;
+
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
@@ -603,6 +632,8 @@ impl FusePruner {
             blocks_bloom_pruning_after,
             blocks_inverted_index_pruning_before,
             blocks_inverted_index_pruning_after,
+            blocks_vector_index_pruning_before,
+            blocks_vector_index_pruning_after,
         }
     }
 
