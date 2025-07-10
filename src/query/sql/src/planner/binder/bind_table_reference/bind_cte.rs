@@ -177,7 +177,7 @@ impl Binder {
                 let (s_expr, bind_context) =
                     self.bind_cte_definition(&cte_name, &cte_context.cte_map, &cte.query)?;
 
-                let materialized_cte = MaterializedCTE::new(cte_name, bind_context.column_set());
+                let materialized_cte = MaterializedCTE::new(cte_name, bind_context.columns);
                 current_expr = SExpr::create_binary(
                     Arc::new(materialized_cte.into()),
                     Arc::new(s_expr),

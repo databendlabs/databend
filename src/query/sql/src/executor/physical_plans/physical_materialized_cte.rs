@@ -19,6 +19,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
+use crate::ColumnBinding;
 use crate::ColumnSet;
 
 /// This is a binary operator that executes its children in order (left to right), and returns the results of the right child
@@ -31,6 +32,7 @@ pub struct MaterializedCTE {
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub cte_name: String,
+    pub cte_output_columns: Vec<ColumnBinding>,
 }
 
 impl MaterializedCTE {
@@ -48,8 +50,15 @@ impl PhysicalPlanBuilder {
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let left_side = Box::new(
-            self.build(s_expr.child(0)?, materialized_cte.required.clone())
-                .await?,
+            self.build(
+                s_expr.child(0)?,
+                materialized_cte
+                    .cte_output_columns
+                    .iter()
+                    .map(|c| c.index)
+                    .collect(),
+            )
+            .await?,
         );
         let right_side = Box::new(self.build(s_expr.child(1)?, required).await?);
         Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
@@ -58,6 +67,7 @@ impl PhysicalPlanBuilder {
             left: left_side,
             right: right_side,
             cte_name: materialized_cte.cte_name.clone(),
+            cte_output_columns: materialized_cte.cte_output_columns.clone(),
         })))
     }
 }

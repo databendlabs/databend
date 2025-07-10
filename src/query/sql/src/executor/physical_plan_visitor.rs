@@ -657,6 +657,7 @@ pub trait PhysicalPlanReplacer {
             right: Box::new(right),
             stat_info: plan.stat_info.clone(),
             cte_name: plan.cte_name.clone(),
+            cte_output_columns: plan.cte_output_columns.clone(),
         })))
     }
 

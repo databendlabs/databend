@@ -23,16 +23,19 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnSet;
+use crate::ColumnBinding;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
-    pub required: ColumnSet,
+    pub cte_output_columns: Vec<ColumnBinding>,
 }
 
 impl MaterializedCTE {
-    pub fn new(cte_name: String, required: ColumnSet) -> Self {
-        Self { cte_name, required }
+    pub fn new(cte_name: String, output_columns: Vec<ColumnBinding>) -> Self {
+        Self {
+            cte_name,
+            cte_output_columns: output_columns,
+        }
     }
 }
 

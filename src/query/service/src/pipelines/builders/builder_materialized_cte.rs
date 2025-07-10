@@ -32,6 +32,14 @@ impl PipelineBuilder {
 
         // build cte pipeline
         let mut build_res = sub_builder.finalize(&cte.left)?;
+        let input_schema = cte.left.output_schema()?;
+        Self::build_result_projection(
+            &self.func_ctx,
+            input_schema,
+            &cte.cte_output_columns,
+            &mut build_res.main_pipeline,
+            false,
+        )?;
         build_res.main_pipeline.try_resize(1)?;
         let (tx, rx) = tokio::sync::watch::channel(Arc::new(MaterializedCteData::default()));
         self.cte_receivers.insert(cte.cte_name.clone(), rx);
