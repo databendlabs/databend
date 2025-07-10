@@ -44,7 +44,10 @@ enum SortType {
     Sort(Arc<InputPort>),
 
     Collect(Arc<InputPort>),
-    BoundBroadcast(Arc<InputPort>),
+    BoundBroadcast {
+        input: Arc<InputPort>,
+        state: SortSampleState,
+    },
     Restore(Arc<InputPort>),
 
     BoundedMergeSort(Vec<Arc<InputPort>>),
@@ -118,7 +121,6 @@ impl TransformSortBuilder {
             params: self,
             output,
             typ: Some(SortType::Sort(input)),
-            state: None,
         };
 
         select_row_type(&mut build)
@@ -135,7 +137,6 @@ impl TransformSortBuilder {
             params: self,
             output,
             typ: Some(SortType::Collect(input)),
-            state: None,
         };
 
         select_row_type(&mut build)
@@ -152,8 +153,7 @@ impl TransformSortBuilder {
         let mut build = Build {
             params: self,
             output,
-            typ: Some(SortType::BoundBroadcast(input)),
-            state: Some(state),
+            typ: Some(SortType::BoundBroadcast { input, state }),
         };
 
         select_row_type(&mut build)
@@ -170,7 +170,6 @@ impl TransformSortBuilder {
             params: self,
             output,
             typ: Some(SortType::Restore(input)),
-            state: None,
         };
 
         select_row_type(&mut build)
@@ -197,7 +196,6 @@ impl TransformSortBuilder {
             params: self,
             output,
             typ: Some(SortType::BoundedMergeSort(inputs)),
-            state: None,
         };
 
         select_row_type(&mut build)
@@ -233,7 +231,7 @@ impl TransformSortBuilder {
         ctx: Arc<QueryContext>,
         broadcast_id: u32,
     ) -> Result<()> {
-        let state = SortSampleState::new(self.inner_schema(), batch_rows, ctx, broadcast_id);
+        let state = SortSampleState::new(batch_rows, ctx, broadcast_id);
 
         pipeline.resize(1, false)?;
         pipeline.add_transform(|input, output| {
@@ -274,7 +272,6 @@ struct Build<'a> {
     params: &'a TransformSortBuilder,
     typ: Option<SortType>,
     output: Arc<OutputPort>,
-    state: Option<SortSampleState>,
 }
 
 impl Build<'_> {
@@ -333,12 +330,18 @@ impl Build<'_> {
         )?))
     }
 
-    fn build_bound_broadcast<R>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
-    where R: Rows + 'static {
+    fn build_bound_broadcast<R>(
+        &mut self,
+        input: Arc<InputPort>,
+        state: SortSampleState,
+    ) -> Result<Box<dyn Processor>>
+    where
+        R: Rows + 'static,
+    {
         Ok(TransformSortBoundBroadcast::<R>::create(
             input,
             self.output.clone(),
-            self.state.clone().unwrap(),
+            state,
         ))
     }
 
@@ -386,7 +389,9 @@ impl RowsTypeVisitor for Build<'_> {
                 true => self.build_sort_collect::<LoserTreeSort<R>, C>(limit_sort, input),
                 false => self.build_sort_collect::<HeapSort<R>, C>(limit_sort, input),
             },
-            SortType::BoundBroadcast(input) => self.build_bound_broadcast::<R>(input),
+            SortType::BoundBroadcast { input, state } => {
+                self.build_bound_broadcast::<R>(input, state)
+            }
             SortType::Restore(input) => match self.params.enable_loser_tree {
                 true => self.build_sort_restore::<LoserTreeSort<R>>(input),
                 false => self.build_sort_restore::<HeapSort<R>>(input),

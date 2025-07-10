@@ -152,7 +152,7 @@ impl SortBoundEdge {
 
 impl Processor for SortBoundEdge {
     fn name(&self) -> String {
-        String::from("SortBoundEdgeTransform")
+        String::from("SortBoundEdge")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {

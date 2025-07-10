@@ -58,12 +58,12 @@ pub enum SortStep {
     Single,
 
     // cluster mode
-    Partial,    // before the exchange plan
-    FinalMerge, // after the exchange plan
+    Partial, // before the exchange plan
+    Final,   // after the exchange plan
 
     // range shuffle mode
     Sample,
-    SortShuffled,
+    Shuffled,
     Route,
 }
 
@@ -72,9 +72,9 @@ impl Display for SortStep {
         match self {
             SortStep::Single => write!(f, "Single"),
             SortStep::Partial => write!(f, "Partial"),
-            SortStep::FinalMerge => write!(f, "FinalMerge"),
+            SortStep::Final => write!(f, "Final"),
             SortStep::Sample => write!(f, "Sample"),
-            SortStep::SortShuffled => write!(f, "SortShuffled"),
+            SortStep::Shuffled => write!(f, "Shuffled"),
             SortStep::Route => write!(f, "Route"),
         }
     }
@@ -97,7 +97,7 @@ impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         match self.step {
-            SortStep::FinalMerge | SortStep::Route => {
+            SortStep::Final | SortStep::Route => {
                 let mut fields = input_schema.fields().clone();
                 // If the plan is after exchange plan in cluster mode,
                 // the order column is at the last of the input schema.
@@ -109,7 +109,7 @@ impl Sort {
                 fields.pop();
                 Ok(DataSchemaRefExt::create(fields))
             }
-            SortStep::SortShuffled => Ok(input_schema),
+            SortStep::Shuffled => Ok(input_schema),
             SortStep::Single | SortStep::Partial | SortStep::Sample => {
                 let mut fields = self
                     .pre_projection
@@ -188,7 +188,7 @@ impl PhysicalPlanBuilder {
 
             let sort_step = match sort.after_exchange {
                 Some(false) => SortStep::Partial,
-                Some(true) => SortStep::FinalMerge,
+                Some(true) => SortStep::Final,
                 None => SortStep::Single,
             };
 
@@ -247,7 +247,7 @@ impl PhysicalPlanBuilder {
                     input: Box::new(input_plan),
                     order_by,
                     limit: sort.limit,
-                    step: SortStep::FinalMerge,
+                    step: SortStep::Final,
                     pre_projection: None,
                     broadcast_id: None,
                     stat_info: Some(stat_info),
@@ -293,7 +293,7 @@ impl PhysicalPlanBuilder {
             input: Box::new(exchange),
             order_by,
             limit: sort.limit,
-            step: SortStep::SortShuffled,
+            step: SortStep::Shuffled,
             pre_projection: None,
             broadcast_id: None,
             stat_info: Some(stat_info),

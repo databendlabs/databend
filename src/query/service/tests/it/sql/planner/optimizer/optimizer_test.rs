@@ -606,6 +606,7 @@ fn configure_optimizer(ctx: &Arc<QueryContext>, auto_stats: bool) -> Result<()> 
     settings.set_setting("enable_dphyp".to_string(), "1".to_string())?;
     settings.set_setting("max_push_down_limit".to_string(), "10000".to_string())?;
     settings.set_setting("enable_optimizer_trace".to_string(), "1".to_string())?;
+    settings.set_setting("enable_shuffle_sort".to_string(), "0".to_string())?;
 
     if auto_stats {
         settings.set_optimizer_skip_list("".to_string())

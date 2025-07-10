@@ -27,23 +27,23 @@ use crate::spillers::Spiller;
 
 mod bounds;
 mod merge_sort;
+mod sort_broadcast;
 mod sort_builder;
 mod sort_collect;
 mod sort_exchange_injector;
 mod sort_merge_stream;
 mod sort_restore;
 mod sort_route;
-mod sort_shuffle;
 mod sort_spill;
 
 pub use merge_sort::*;
+pub use sort_broadcast::*;
 pub use sort_builder::*;
 pub use sort_collect::*;
 pub use sort_exchange_injector::*;
 pub use sort_merge_stream::*;
 pub use sort_restore::*;
 pub use sort_route::*;
-pub use sort_shuffle::*;
 
 #[derive(Clone)]
 struct Base {

@@ -201,7 +201,7 @@ impl PipelineBuilder {
 
         let have_order_col = match window_partition.sort_step {
             SortStep::Single | SortStep::Partial => false,
-            SortStep::FinalMerge => true,
+            SortStep::Final => true,
             _ => unimplemented!(),
         };
 

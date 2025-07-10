@@ -19,7 +19,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::Rows;
@@ -62,22 +61,14 @@ impl<R: Rows + 'static> TransformSortBoundBroadcast<R> {
 pub struct SortSampleState {
     ctx: Arc<QueryContext>,
     broadcast_id: u32,
-    #[expect(dead_code)]
-    schema: DataSchemaRef,
     batch_rows: usize,
 }
 
 impl SortSampleState {
-    pub fn new(
-        schema: DataSchemaRef,
-        batch_rows: usize,
-        ctx: Arc<QueryContext>,
-        broadcast_id: u32,
-    ) -> SortSampleState {
+    pub fn new(batch_rows: usize, ctx: Arc<QueryContext>, broadcast_id: u32) -> SortSampleState {
         SortSampleState {
             ctx,
             broadcast_id,
-            schema,
             batch_rows,
         }
     }
@@ -110,7 +101,7 @@ impl SortSampleState {
 
 #[async_trait::async_trait]
 impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
-    const NAME: &'static str = "TransformSortBoundBroadcast";
+    const NAME: &'static str = "SortBoundBroadcast";
 
     fn on_input(&mut self, mut data: DataBlock) -> Result<()> {
         let meta = data

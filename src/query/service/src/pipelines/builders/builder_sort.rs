@@ -66,7 +66,7 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
         let sort_desc = sort_desc.into();
 
-        if sort.step != SortStep::SortShuffled {
+        if sort.step != SortStep::Shuffled {
             self.build_pipeline(&sort.input)?;
         }
 
@@ -124,7 +124,7 @@ impl PipelineBuilder {
                 // Don't remove the order column at last.
                 builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
-            SortStep::FinalMerge => {
+            SortStep::Final => {
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
                 // as the data is already sorted in each cluster node.
@@ -145,7 +145,7 @@ impl PipelineBuilder {
                 self.exchange_injector = TransformSortBuilder::exchange_injector();
                 Ok(())
             }
-            SortStep::SortShuffled => {
+            SortStep::Shuffled => {
                 if matches!(*sort.input, PhysicalPlan::ExchangeSource(_)) {
                     let exchange = TransformSortBuilder::exchange_injector();
                     let old_inject = std::mem::replace(&mut self.exchange_injector, exchange);
@@ -383,7 +383,7 @@ impl SortPipelineBuilder {
         let builder =
             TransformSortBuilder::new(self.schema.clone(), self.sort_desc.clone(), self.block_size)
                 .with_limit(self.limit)
-                .with_order_column(true, self.remove_order_col_at_last)
+                .with_order_column(true, !self.remove_order_col_at_last)
                 .with_enable_loser_tree(self.enable_loser_tree);
 
         let inputs_port: Vec<_> = (0..pipeline.output_len())

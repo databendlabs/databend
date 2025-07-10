@@ -3,14 +3,14 @@ Limit
 ├── limit: 100
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [customer.c_customer_id (#79)]
     ├── sort keys: [c_customer_id ASC NULLS LAST]
     ├── estimated rows: 0.00
     └── Exchange
         ├── output columns: [customer.c_customer_id (#79), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [customer.c_customer_id (#79), #_order_col]
             ├── sort keys: [c_customer_id ASC NULLS LAST]
             ├── estimated rows: 0.00
