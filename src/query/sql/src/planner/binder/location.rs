@@ -178,7 +178,6 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     if in_history_table_scope {
         disable_credential_loader = false;
     }
-    dbg!(in_history_table_scope);
 
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
