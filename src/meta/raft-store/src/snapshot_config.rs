@@ -75,7 +75,7 @@ impl SnapshotConfig {
         format!("{}.snap", snapshot_id)
     }
 
-    // TODO: remvoe this
+    // TODO: remove this
     /// Return a two elements tuple of snapshot dir and temp fn
     pub fn snapshot_temp_dir_fn(&self) -> (String, String) {
         let temp_snapshot_id = self.temp_snapshot_id();
