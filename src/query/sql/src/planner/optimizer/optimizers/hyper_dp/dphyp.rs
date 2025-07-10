@@ -51,8 +51,6 @@ pub struct DPhpyOptimizer {
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
-    // cte name -> table indexes referenced by cte
-    cte_table_index_map: HashMap<String, Vec<IndexType>>,
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
@@ -68,7 +66,6 @@ impl DPhpyOptimizer {
             opt_ctx,
             join_relations: vec![],
             table_index_map: Default::default(),
-            cte_table_index_map: Default::default(),
             dp_table: Default::default(),
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
@@ -94,10 +91,8 @@ impl DPhpyOptimizer {
         // Parallel process children: start a new dphyp for each child.
         let left_expr = s_expr.children[0].clone();
         let opt_ctx = self.opt_ctx.clone();
-        let cte_table_index_map = self.cte_table_index_map.clone();
         let left_res = spawn(async move {
             let mut dphyp = DPhpyOptimizer::new(opt_ctx.clone());
-            dphyp.cte_table_index_map = cte_table_index_map;
             (
                 dphyp.optimize_async(&left_expr).await,
                 dphyp.table_index_map,
@@ -106,10 +101,8 @@ impl DPhpyOptimizer {
 
         let right_expr = s_expr.children[1].clone();
         let opt_ctx = self.opt_ctx.clone();
-        let cte_table_index_map = self.cte_table_index_map.clone();
         let right_res = spawn(async move {
             let mut dphyp = DPhpyOptimizer::new(opt_ctx.clone());
-            dphyp.cte_table_index_map = cte_table_index_map;
             (
                 dphyp.optimize_async(&right_expr).await,
                 dphyp.table_index_map,
@@ -141,7 +134,6 @@ impl DPhpyOptimizer {
     /// Process a subquery expression
     async fn process_subquery(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
         let mut dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
-        dphyp.cte_table_index_map = self.cte_table_index_map.clone();
         let new_s_expr = Arc::new(dphyp.optimize_async(s_expr).await?);
 
         // Merge `table_index_map` of subquery into current `table_index_map`.
@@ -282,22 +274,10 @@ impl DPhpyOptimizer {
         &mut self,
         s_expr: &SExpr,
     ) -> Result<(Arc<SExpr>, bool)> {
-        let m_cte = match s_expr.plan() {
-            RelOperator::MaterializedCTE(cte) => cte,
-            _ => unreachable!(),
-        };
-
         let mut left_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
-        left_dphyp.cte_table_index_map = self.cte_table_index_map.clone();
         let left_expr = left_dphyp.optimize_async(s_expr.child(0)?).await?;
 
         let mut right_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
-        right_dphyp.cte_table_index_map = self.cte_table_index_map.clone();
-        // Use left_dphyp's table_index_map for the CTE definition
-        right_dphyp.cte_table_index_map.insert(
-            m_cte.cte_name.clone(),
-            left_dphyp.table_index_map.keys().cloned().collect(),
-        );
         let right_expr = right_dphyp.optimize_async(s_expr.child(1)?).await?;
 
         // Merge table_index_map from right child into current table_index_map
@@ -335,14 +315,29 @@ impl DPhpyOptimizer {
 
         // Map table indexes before adding to join_relations
         let relation_idx = self.join_relations.len() as IndexType;
-        if let Some(table_indexes) = self.cte_table_index_map.get(&cte_consumer.cte_name) {
-            for table_index in table_indexes {
-                self.table_index_map.insert(*table_index, relation_idx);
-            }
+        let table_indexes = Self::get_table_indexes(&cte_consumer.def);
+        for table_index in table_indexes {
+            self.table_index_map.insert(table_index, relation_idx);
         }
 
         self.join_relations.push(join_relation);
         Ok((Arc::new(s_expr.clone()), true))
+    }
+
+    fn get_table_indexes(s_expr: &SExpr) -> Vec<IndexType> {
+        let mut table_indexes = Vec::new();
+        Self::collect_table_indexes_recursive(s_expr, &mut table_indexes);
+        table_indexes
+    }
+
+    fn collect_table_indexes_recursive(s_expr: &SExpr, table_indexes: &mut Vec<IndexType>) {
+        if let RelOperator::Scan(scan) = s_expr.plan() {
+            table_indexes.push(scan.table_index);
+        }
+
+        for child in s_expr.children() {
+            Self::collect_table_indexes_recursive(child, table_indexes);
+        }
     }
 
     /// Process a unary operator node
