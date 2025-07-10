@@ -195,7 +195,6 @@ impl CteContext {
 pub struct CteInfo {
     pub columns_alias: Vec<String>,
     pub query: Query,
-    pub bind_result: Option<CteBindResult>,
     pub materialized: bool,
     pub recursive: bool,
     pub columns: Vec<ColumnBinding>,

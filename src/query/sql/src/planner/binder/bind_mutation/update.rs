@@ -63,7 +63,7 @@ impl Binder {
             ..
         } = stmt;
 
-        self.bind_cte_def(bind_context, with)?;
+        self.init_cte(bind_context, with)?;
 
         let target_table_identifier =
             TableIdentifier::new(self, catalog, database, table, table_alias);

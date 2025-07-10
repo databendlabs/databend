@@ -25,16 +25,12 @@ use databend_common_exception::Result;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
-use crate::binder::CteBindResult;
-use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
-use crate::planner::binder::CteContext;
 use crate::plans::BoundColumnRef;
-use crate::plans::MaterializedCTE;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
@@ -74,7 +70,7 @@ impl Binder {
         }
 
         // Bind cte definition.
-        self.bind_cte_def(bind_context, &with)?;
+        self.init_cte(bind_context, &with)?;
 
         // Extract limit and offset from query.
         let (limit, offset) = self.extract_limit_and_offset(query)?;
@@ -120,62 +116,6 @@ impl Binder {
                 // Materialize if referenced more than once
                 cte.materialized |= *count > 1;
             }
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn bind_cte_def(
-        &mut self,
-        bind_context: &mut BindContext,
-        with: &Option<With>,
-    ) -> Result<()> {
-        let Some(with) = with else {
-            return Ok(());
-        };
-        for cte in with.ctes.iter() {
-            let cte_name = self.normalize_identifier(&cte.alias.name).name;
-            if bind_context.cte_context.cte_map.contains_key(&cte_name) {
-                return Err(ErrorCode::SemanticError(format!(
-                    "Duplicate common table expression: {cte_name}"
-                )));
-            }
-
-            let column_name = cte
-                .alias
-                .columns
-                .iter()
-                .map(|ident| self.normalize_identifier(ident).name)
-                .collect();
-
-            let bind_result = if with.recursive {
-                None
-            } else {
-                let mut cte_bind_context = BindContext {
-                    cte_context: CteContext {
-                        cte_name: Some(cte_name.clone()),
-                        cte_map: bind_context.cte_context.cte_map.clone(),
-                    },
-                    ..Default::default()
-                };
-                let (s_expr, cte_bind_context) =
-                    self.bind_query(&mut cte_bind_context, &cte.query)?;
-                let bind_result = CteBindResult {
-                    s_expr,
-                    bind_context: cte_bind_context,
-                };
-                Some(bind_result)
-            };
-
-            let cte_info = CteInfo {
-                columns_alias: column_name,
-                query: *cte.query.clone(),
-                recursive: with.recursive,
-                materialized: cte.materialized,
-                columns: vec![],
-                bind_result,
-            };
-            bind_context.cte_context.cte_map.insert(cte_name, cte_info);
         }
 
         Ok(())
@@ -247,39 +187,5 @@ impl Binder {
             Arc::new(sort_plan.into()),
             Arc::new(child),
         ))
-    }
-
-    fn bind_materialized_cte(
-        &mut self,
-        with: &With,
-        main_query_expr: SExpr,
-        cte_context: CteContext,
-    ) -> Result<SExpr> {
-        let mut current_expr = main_query_expr;
-
-        for cte in with.ctes.iter().rev() {
-            if cte.materialized {
-                let cte_name = self.normalize_identifier(&cte.alias.name).name;
-                let CteBindResult {
-                    s_expr,
-                    bind_context,
-                } = cte_context
-                    .cte_map
-                    .get(&cte_name)
-                    .unwrap()
-                    .bind_result
-                    .clone()
-                    .unwrap();
-
-                let materialized_cte = MaterializedCTE::new(cte_name, bind_context.column_set());
-                current_expr = SExpr::create_binary(
-                    Arc::new(materialized_cte.into()),
-                    Arc::new(s_expr),
-                    Arc::new(current_expr),
-                );
-            }
-        }
-
-        Ok(current_expr)
     }
 }
