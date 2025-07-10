@@ -41,14 +41,8 @@ use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::add_range_shuffle_route;
-use crate::pipelines::processors::transforms::BoundedMergeSortBuilder;
-use crate::pipelines::processors::transforms::SortInjector;
-use crate::pipelines::processors::transforms::SortRangeExchange;
-use crate::pipelines::processors::transforms::TransformLimit;
 use crate::pipelines::processors::transforms::TransformSortBuilder;
 use crate::pipelines::PipelineBuilder;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -148,12 +142,12 @@ impl PipelineBuilder {
 
             SortStep::Sample => {
                 builder.build_sample(&mut self.main_pipeline)?;
-                self.exchange_injector = Arc::new(SortInjector {});
+                self.exchange_injector = TransformSortBuilder::exchange_injector();
                 Ok(())
             }
             SortStep::SortShuffled => {
                 if matches!(*sort.input, PhysicalPlan::ExchangeSource(_)) {
-                    let exchange = Arc::new(SortInjector {});
+                    let exchange = TransformSortBuilder::exchange_injector();
                     let old_inject = std::mem::replace(&mut self.exchange_injector, exchange);
                     self.build_pipeline(&sort.input)?;
                     self.exchange_injector = old_inject;
@@ -163,7 +157,7 @@ impl PipelineBuilder {
 
                 builder.build_bounded_merge_sort(&mut self.main_pipeline)
             }
-            SortStep::Route => self.main_pipeline.resize(1, false),
+            SortStep::Route => TransformSortBuilder::add_route(&mut self.main_pipeline),
         }
     }
 }
@@ -229,80 +223,6 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false)
     }
 
-    pub fn build_range_shuffle_sort_pipeline(self, pipeline: &mut Pipeline) -> Result<()> {
-        let inputs = pipeline.output_len();
-        let settings = self.ctx.get_settings();
-        let num_exec = inputs;
-        let max_block_size = settings.get_max_block_size()? as usize;
-
-        // Partial sort
-        pipeline.add_transformer(|| {
-            TransformSortPartial::new(
-                LimitType::from_limit_rows(self.limit),
-                self.sort_desc.clone(),
-            )
-        });
-
-        let spiller = {
-            let location_prefix = self.ctx.query_id_spill_prefix();
-            let config = SpillerConfig {
-                spiller_type: SpillerType::OrderBy,
-                location_prefix,
-                disk_spill: None,
-                use_parquet: settings.get_spilling_file_format()?.is_parquet(),
-            };
-            let op = DataOperator::instance().spill_operator();
-            Arc::new(Spiller::create(self.ctx.clone(), op, config)?)
-        };
-
-        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
-        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
-
-        let builder = TransformSortBuilder::new(
-            self.schema.clone(),
-            self.sort_desc.clone(),
-            max_block_size,
-            spiller,
-        )
-        .with_limit(self.limit)
-        .with_order_col_generated(false)
-        .with_output_order_col(false)
-        .with_memory_settings(memory_settings)
-        .with_enable_loser_tree(enable_loser_tree);
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
-        })?;
-
-        builder.add_bound_broadcast(
-            pipeline,
-            builder.inner_schema(),
-            max_block_size,
-            self.ctx.clone(),
-            self.broadcast_id.unwrap(),
-        )?;
-
-        pipeline.exchange(num_exec, Arc::new(SortRangeExchange))?;
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(builder.build_combine(input, output)?))
-        })?;
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(builder.build_restore(input, output)?))
-        })?;
-
-        add_range_shuffle_route(pipeline)?;
-
-        if self.limit.is_none() {
-            return Ok(());
-        }
-
-        pipeline.add_transform(|input, output| {
-            TransformLimit::try_create(self.limit, 0, input, output).map(ProcessorPtr::create)
-        })
-    }
-
     fn build_sample(self, pipeline: &mut Pipeline) -> Result<()> {
         let settings = self.ctx.get_settings();
         let max_block_size = settings.get_max_block_size()? as usize;
@@ -330,17 +250,13 @@ impl SortPipelineBuilder {
         let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
 
-        let builder = TransformSortBuilder::new(
-            self.schema.clone(),
-            self.sort_desc.clone(),
-            max_block_size,
-            spiller,
-        )
-        .with_limit(self.limit)
-        .with_order_col_generated(false)
-        .with_output_order_col(true)
-        .with_memory_settings(memory_settings)
-        .with_enable_loser_tree(enable_loser_tree);
+        let builder =
+            TransformSortBuilder::new(self.schema.clone(), self.sort_desc.clone(), max_block_size)
+                .with_spiller(spiller)
+                .with_limit(self.limit)
+                .with_order_column(false, true)
+                .with_memory_settings(memory_settings)
+                .with_enable_loser_tree(enable_loser_tree);
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
@@ -348,7 +264,6 @@ impl SortPipelineBuilder {
 
         builder.add_bound_broadcast(
             pipeline,
-            builder.inner_schema(),
             max_block_size,
             self.ctx.clone(),
             self.broadcast_id.unwrap(),
@@ -358,22 +273,11 @@ impl SortPipelineBuilder {
             Ok(ProcessorPtr::create(builder.build_restore(input, output)?))
         })?;
 
-        // pipeline.exchange_with_merge(
-        //     pipeline.output_len(),
-        //     Arc::new(SortBoundExchange {}),
-        //     |inputs, output| {
-        //         Ok(ProcessorPtr::create(create_multi_sort_processor(
-        //             inputs,
-        //             output,
-        //             self.schema.clone(),
-        //             self.block_size,
-        //             self.limit,
-        //             self.sort_desc.clone(),
-        //             self.remove_order_col_at_last,
-        //             self.enable_loser_tree,
-        //         )?))
-        //     },
-        // )?;
+        pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(
+                builder.build_bound_edge(input, output)?,
+            ))
+        })?;
 
         Ok(())
     }
@@ -421,11 +325,10 @@ impl SortPipelineBuilder {
                 sort_merge_output_schema.clone(),
                 self.sort_desc.clone(),
                 self.block_size,
-                spiller.clone(),
             )
+            .with_spiller(spiller.clone())
             .with_limit(self.limit)
-            .with_order_col_generated(order_col_generated)
-            .with_output_order_col(output_order_col)
+            .with_order_column(order_col_generated, output_order_col)
             .with_memory_settings(memory_settings.clone())
             .with_enable_loser_tree(enable_loser_tree);
 
@@ -476,28 +379,20 @@ impl SortPipelineBuilder {
         }
     }
 
-    pub fn exchange_injector(&self) -> Arc<dyn ExchangeInjector> {
-        Arc::new(SortInjector {})
-    }
-
     pub fn build_bounded_merge_sort(self, pipeline: &mut Pipeline) -> Result<()> {
+        let builder =
+            TransformSortBuilder::new(self.schema.clone(), self.sort_desc.clone(), self.block_size)
+                .with_limit(self.limit)
+                .with_order_column(true, self.remove_order_col_at_last)
+                .with_enable_loser_tree(self.enable_loser_tree);
+
         let inputs_port: Vec<_> = (0..pipeline.output_len())
             .map(|_| InputPort::create())
             .collect();
         let output_port = OutputPort::create();
 
         let processor = ProcessorPtr::create(
-            BoundedMergeSortBuilder::new(
-                inputs_port.clone(),
-                output_port.clone(),
-                self.schema.clone(),
-                self.sort_desc.clone(),
-                self.block_size,
-                self.limit,
-                self.remove_order_col_at_last,
-                self.enable_loser_tree,
-            )
-            .build()?,
+            builder.build_bounded_merge_sort(inputs_port.clone(), output_port.clone())?,
         );
 
         pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(

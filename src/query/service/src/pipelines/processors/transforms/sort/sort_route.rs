@@ -22,14 +22,10 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
-use databend_common_pipeline_core::Pipeline;
 
 use crate::pipelines::processors::transforms::SortBound;
 
-struct TransformSortRoute {
+pub struct TransformSortRoute {
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
 
@@ -38,7 +34,7 @@ struct TransformSortRoute {
 }
 
 impl TransformSortRoute {
-    fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
+    pub(super) fn new(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> Self {
         Self {
             input_data: vec![None; inputs.len()],
             cur_index: 0,
@@ -116,24 +112,4 @@ impl Processor for TransformSortRoute {
 
         Ok(Event::NeedData)
     }
-}
-
-pub fn add_range_shuffle_route(pipeline: &mut Pipeline) -> Result<()> {
-    let inputs = pipeline.output_len();
-    let inputs_port = (0..inputs).map(|_| InputPort::create()).collect::<Vec<_>>();
-    let output = OutputPort::create();
-
-    let processor = ProcessorPtr::create(Box::new(TransformSortRoute::new(
-        inputs_port.clone(),
-        output.clone(),
-    )));
-
-    let pipe = Pipe::create(inputs, 1, vec![PipeItem::create(
-        processor,
-        inputs_port,
-        vec![output],
-    )]);
-
-    pipeline.add_pipe(pipe);
-    Ok(())
 }

@@ -21,6 +21,8 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::sort::algorithm::HeapSort;
@@ -31,19 +33,21 @@ use databend_common_pipeline_transforms::sort::utils::ORDER_COL_NAME;
 use databend_common_pipeline_transforms::sort::RowConverter;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::RowsTypeVisitor;
-use databend_common_pipeline_transforms::AccumulatingTransformer;
 use databend_common_pipeline_transforms::MemorySettings;
 
 use super::*;
+use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 
 enum SortType {
-    Sort,
-    Collect,
-    BoundBroadcast,
-    Combine,
-    Restore,
+    Sort(Arc<InputPort>),
+
+    Collect(Arc<InputPort>),
+    BoundBroadcast(Arc<InputPort>),
+    Restore(Arc<InputPort>),
+
+    BoundedMergeSort(Vec<Arc<InputPort>>),
 }
 
 pub struct TransformSortBuilder {
@@ -53,7 +57,7 @@ pub struct TransformSortBuilder {
     order_col_generated: bool,
     output_order_col: bool,
     memory_settings: MemorySettings,
-    spiller: Arc<Spiller>,
+    spiller: Option<Arc<Spiller>>,
     enable_loser_tree: bool,
     limit: Option<usize>,
 }
@@ -63,13 +67,12 @@ impl TransformSortBuilder {
         schema: DataSchemaRef,
         sort_desc: Arc<[SortColumnDescription]>,
         block_size: usize,
-        spiller: Arc<Spiller>,
     ) -> Self {
         TransformSortBuilder {
             block_size,
             schema,
             sort_desc,
-            spiller,
+            spiller: None,
             order_col_generated: false,
             output_order_col: false,
             enable_loser_tree: false,
@@ -78,13 +81,14 @@ impl TransformSortBuilder {
         }
     }
 
-    pub fn with_order_col_generated(mut self, order_col_generated: bool) -> Self {
-        self.order_col_generated = order_col_generated;
+    pub fn with_spiller(mut self, spiller: Arc<Spiller>) -> Self {
+        self.spiller = Some(spiller);
         self
     }
 
-    pub fn with_output_order_col(mut self, output_order_col: bool) -> Self {
-        self.output_order_col = output_order_col;
+    pub fn with_order_column(mut self, generated: bool, output: bool) -> Self {
+        self.order_col_generated = generated;
+        self.output_order_col = output;
         self
     }
 
@@ -112,9 +116,8 @@ impl TransformSortBuilder {
 
         let mut build = Build {
             params: self,
-            input,
             output,
-            typ: SortType::Sort,
+            typ: Some(SortType::Sort(input)),
             state: None,
         };
 
@@ -130,27 +133,8 @@ impl TransformSortBuilder {
 
         let mut build = Build {
             params: self,
-            input,
             output,
-            typ: SortType::Collect,
-            state: None,
-        };
-
-        select_row_type(&mut build)
-    }
-
-    pub fn build_restore(
-        &self,
-        input: Arc<InputPort>,
-        output: Arc<OutputPort>,
-    ) -> Result<Box<dyn Processor>> {
-        self.check();
-
-        let mut build = Build {
-            params: self,
-            input,
-            output,
-            typ: SortType::Restore,
+            typ: Some(SortType::Collect(input)),
             state: None,
         };
 
@@ -167,16 +151,15 @@ impl TransformSortBuilder {
 
         let mut build = Build {
             params: self,
-            input,
             output,
-            typ: SortType::BoundBroadcast,
+            typ: Some(SortType::BoundBroadcast(input)),
             state: Some(state),
         };
 
         select_row_type(&mut build)
     }
 
-    pub fn build_combine(
+    pub fn build_restore(
         &self,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -185,9 +168,35 @@ impl TransformSortBuilder {
 
         let mut build = Build {
             params: self,
-            input,
             output,
-            typ: SortType::Combine,
+            typ: Some(SortType::Restore(input)),
+            state: None,
+        };
+
+        select_row_type(&mut build)
+    }
+
+    pub fn build_bound_edge(
+        &self,
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        Ok(Box::new(SortBoundEdge::new(input, output)))
+    }
+
+    pub fn build_bounded_merge_sort(
+        &self,
+        inputs: Vec<Arc<InputPort>>,
+        output: Arc<OutputPort>,
+    ) -> Result<Box<dyn Processor>> {
+        self.check();
+
+        let mut build = Build {
+            params: self,
+            output,
+            typ: Some(SortType::BoundedMergeSort(inputs)),
             state: None,
         };
 
@@ -199,11 +208,7 @@ impl TransformSortBuilder {
     }
 
     fn check(&self) {
-        assert!(if self.output_order_col {
-            self.schema.has_field(ORDER_COL_NAME)
-        } else {
-            !self.schema.has_field(ORDER_COL_NAME)
-        });
+        assert_eq!(self.schema.has_field(ORDER_COL_NAME), self.output_order_col)
     }
 
     fn new_base(&self) -> Base {
@@ -212,24 +217,23 @@ impl TransformSortBuilder {
         Base {
             sort_row_offset,
             schema,
-            spiller: self.spiller.clone(),
+            spiller: self.spiller.clone().unwrap(),
             limit: self.limit,
         }
     }
 
-    pub fn inner_schema(&self) -> DataSchemaRef {
+    fn inner_schema(&self) -> DataSchemaRef {
         add_order_field(self.schema.clone(), &self.sort_desc)
     }
 
     pub fn add_bound_broadcast(
         &self,
         pipeline: &mut Pipeline,
-        schema: DataSchemaRef,
         batch_rows: usize,
         ctx: Arc<QueryContext>,
         broadcast_id: u32,
     ) -> Result<()> {
-        let state = SortSampleState::new(schema, batch_rows, ctx, broadcast_id);
+        let state = SortSampleState::new(self.inner_schema(), batch_rows, ctx, broadcast_id);
 
         pipeline.resize(1, false)?;
         pipeline.add_transform(|input, output| {
@@ -240,80 +244,119 @@ impl TransformSortBuilder {
             )?))
         })
     }
+
+    pub fn add_route(pipeline: &mut Pipeline) -> Result<()> {
+        let inputs = pipeline.output_len();
+        let inputs_port: Vec<_> = (0..inputs).map(|_| InputPort::create()).collect();
+        let output = OutputPort::create();
+
+        let processor = ProcessorPtr::create(Box::new(TransformSortRoute::new(
+            inputs_port.clone(),
+            output.clone(),
+        )));
+
+        let pipe = Pipe::create(inputs, 1, vec![PipeItem::create(
+            processor,
+            inputs_port,
+            vec![output],
+        )]);
+
+        pipeline.add_pipe(pipe);
+        Ok(())
+    }
+
+    pub fn exchange_injector() -> Arc<dyn ExchangeInjector> {
+        Arc::new(SortInjector {})
+    }
 }
 
 struct Build<'a> {
     params: &'a TransformSortBuilder,
-    typ: SortType,
-    input: Arc<InputPort>,
+    typ: Option<SortType>,
     output: Arc<OutputPort>,
     state: Option<SortSampleState>,
 }
 
 impl Build<'_> {
-    fn build_sort<A, C>(&mut self, limit_sort: bool) -> Result<Box<dyn Processor>>
+    fn build_sort<A, C>(
+        &mut self,
+        limit_sort: bool,
+        input: Arc<InputPort>,
+    ) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
         let schema = add_order_field(self.params.schema.clone(), &self.params.sort_desc);
         Ok(Box::new(TransformSort::<A, C>::new(
-            self.input.clone(),
+            input,
             self.output.clone(),
             schema,
             self.params.sort_desc.clone(),
             self.params.block_size,
             self.params.limit.map(|limit| (limit, limit_sort)),
-            self.params.spiller.clone(),
+            self.params.spiller.clone().unwrap(),
             self.params.output_order_col,
             self.params.order_col_generated,
             self.params.memory_settings.clone(),
         )?))
     }
 
-    fn build_sort_collect<A, C>(&mut self, limit_sort: bool) -> Result<Box<dyn Processor>>
+    fn build_sort_collect<A, C>(
+        &mut self,
+        sort_limit: bool,
+        input: Arc<InputPort>,
+    ) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
         C: RowConverter<A::Rows> + Send + 'static,
     {
         Ok(Box::new(TransformSortCollect::<A, C>::new(
-            self.input.clone(),
+            input,
             self.output.clone(),
             self.params.new_base(),
             self.params.sort_desc.clone(),
             self.params.block_size,
-            limit_sort,
+            sort_limit,
             self.params.order_col_generated,
             self.params.memory_settings.clone(),
         )?))
     }
 
-    fn build_sort_restore<A>(&mut self) -> Result<Box<dyn Processor>>
+    fn build_sort_restore<A>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
     where A: SortAlgorithm + 'static {
         Ok(Box::new(TransformSortRestore::<A>::create(
-            self.input.clone(),
+            input,
             self.output.clone(),
             self.params.new_base(),
             self.params.output_order_col,
         )?))
     }
 
-    fn build_bound_broadcast<R>(&mut self) -> Result<Box<dyn Processor>>
+    fn build_bound_broadcast<R>(&mut self, input: Arc<InputPort>) -> Result<Box<dyn Processor>>
     where R: Rows + 'static {
         Ok(TransformSortBoundBroadcast::<R>::create(
-            self.input.clone(),
+            input,
             self.output.clone(),
             self.state.clone().unwrap(),
         ))
     }
 
-    fn build_sort_combine<R>(&mut self) -> Result<Box<dyn Processor>>
-    where R: Rows + 'static {
-        Ok(AccumulatingTransformer::create(
-            self.input.clone(),
+    fn build_bounded_merge_sort<A>(
+        &mut self,
+        inputs: Vec<Arc<InputPort>>,
+    ) -> Result<Box<dyn Processor>>
+    where
+        A: SortAlgorithm + 'static,
+    {
+        Ok(Box::new(BoundedMultiSortMergeProcessor::<A>::new(
+            inputs,
             self.output.clone(),
-            TransformSortCombine::<R>::new(self.params.block_size),
-        ))
+            self.schema().clone(),
+            self.params.block_size,
+            self.params.limit,
+            !self.params.output_order_col,
+        )?))
     }
 }
 
@@ -333,101 +376,26 @@ impl RowsTypeVisitor for Build<'_> {
         C: RowConverter<R> + Send + 'static,
     {
         let limit_sort = self.params.should_use_sort_limit();
-        match self.typ {
-            SortType::Sort => match self.params.enable_loser_tree {
-                true => self.build_sort::<LoserTreeSort<R>, C>(limit_sort),
-                false => self.build_sort::<HeapSort<R>, C>(limit_sort),
+        match self.typ.take().unwrap() {
+            SortType::Sort(input) => match self.params.enable_loser_tree {
+                true => self.build_sort::<LoserTreeSort<R>, C>(limit_sort, input),
+                false => self.build_sort::<HeapSort<R>, C>(limit_sort, input),
             },
-            SortType::Collect => match self.params.enable_loser_tree {
-                true => self.build_sort_collect::<LoserTreeSort<R>, C>(limit_sort),
-                false => self.build_sort_collect::<HeapSort<R>, C>(limit_sort),
+
+            SortType::Collect(input) => match self.params.enable_loser_tree {
+                true => self.build_sort_collect::<LoserTreeSort<R>, C>(limit_sort, input),
+                false => self.build_sort_collect::<HeapSort<R>, C>(limit_sort, input),
             },
-            SortType::Restore => match self.params.enable_loser_tree {
-                true => self.build_sort_restore::<LoserTreeSort<R>>(),
-                false => self.build_sort_restore::<HeapSort<R>>(),
+            SortType::BoundBroadcast(input) => self.build_bound_broadcast::<R>(input),
+            SortType::Restore(input) => match self.params.enable_loser_tree {
+                true => self.build_sort_restore::<LoserTreeSort<R>>(input),
+                false => self.build_sort_restore::<HeapSort<R>>(input),
             },
-            SortType::BoundBroadcast => self.build_bound_broadcast::<R>(),
-            SortType::Combine => self.build_sort_combine::<R>(),
-        }
-    }
-}
 
-pub struct BoundedMergeSortBuilder {
-    inputs: Vec<Arc<InputPort>>,
-    output: Arc<OutputPort>,
-    schema: DataSchemaRef,
-    sort_desc: Arc<[SortColumnDescription]>,
-    block_size: usize,
-    limit: Option<usize>,
-    remove_order_col: bool,
-    enable_loser_tree: bool,
-}
-
-impl BoundedMergeSortBuilder {
-    pub fn new(
-        inputs: Vec<Arc<InputPort>>,
-        output: Arc<OutputPort>,
-        schema: DataSchemaRef,
-        sort_desc: Arc<[SortColumnDescription]>,
-        block_size: usize,
-        limit: Option<usize>,
-        remove_order_col: bool,
-        enable_loser_tree: bool,
-    ) -> Self {
-        Self {
-            inputs,
-            output,
-            schema,
-            sort_desc,
-            block_size,
-            limit,
-            remove_order_col,
-            enable_loser_tree,
-        }
-    }
-
-    pub fn build(mut self) -> Result<Box<dyn Processor>> {
-        select_row_type(&mut self)
-    }
-}
-
-impl RowsTypeVisitor for BoundedMergeSortBuilder {
-    type Result = Result<Box<dyn Processor>>;
-
-    fn schema(&self) -> DataSchemaRef {
-        self.schema.clone()
-    }
-
-    fn sort_desc(&self) -> &[SortColumnDescription] {
-        &self.sort_desc
-    }
-
-    fn visit_type<R, C>(&mut self) -> Self::Result
-    where
-        R: Rows + 'static,
-        C: RowConverter<R> + Send + 'static,
-    {
-        match self.enable_loser_tree {
-            true => Ok(Box::new(
-                BoundedMultiSortMergeProcessor::<LoserTreeSort<R>>::new(
-                    self.inputs.clone(),
-                    self.output.clone(),
-                    self.schema.clone(),
-                    self.block_size,
-                    self.limit,
-                    self.remove_order_col,
-                )?,
-            )),
-            false => Ok(Box::new(
-                BoundedMultiSortMergeProcessor::<HeapSort<R>>::new(
-                    self.inputs.clone(),
-                    self.output.clone(),
-                    self.schema.clone(),
-                    self.block_size,
-                    self.limit,
-                    self.remove_order_col,
-                )?,
-            )),
+            SortType::BoundedMergeSort(inputs) => match self.params.enable_loser_tree {
+                true => self.build_bounded_merge_sort::<LoserTreeSort<R>>(inputs),
+                false => self.build_bounded_merge_sort::<HeapSort<R>>(inputs),
+            },
         }
     }
 }

@@ -134,7 +134,7 @@ where
     }
 }
 
-struct SortBoundEdge {
+pub struct SortBoundEdge {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     data: Option<DataBlock>,

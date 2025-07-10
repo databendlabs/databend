@@ -228,7 +228,7 @@ impl PhysicalPlanBuilder {
             }));
         };
 
-        if !self.ctx.get_settings().get_enable_range_shuffle_sort()? {
+        if !self.ctx.get_settings().get_enable_shuffle_sort()? {
             let input_plan = self.build(s_expr.unary_child(), required).await?;
             return if !after_exchange {
                 Ok(PhysicalPlan::Sort(Sort {

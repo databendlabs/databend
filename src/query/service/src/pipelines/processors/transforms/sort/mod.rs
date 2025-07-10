@@ -29,8 +29,6 @@ mod bounds;
 mod merge_sort;
 mod sort_builder;
 mod sort_collect;
-mod sort_combine;
-mod sort_exchange;
 mod sort_exchange_injector;
 mod sort_merge_stream;
 mod sort_restore;
@@ -41,8 +39,6 @@ mod sort_spill;
 pub use merge_sort::*;
 pub use sort_builder::*;
 pub use sort_collect::*;
-pub use sort_combine::*;
-pub use sort_exchange::*;
 pub use sort_exchange_injector::*;
 pub use sort_merge_stream::*;
 pub use sort_restore::*;
@@ -68,14 +64,6 @@ local_block_meta_serde!(SortCollectedMeta);
 
 #[typetag::serde(name = "sort_collected")]
 impl BlockMetaInfo for SortCollectedMeta {}
-
-#[derive(Debug)]
-struct SortScatteredMeta(pub Vec<Option<SortCollectedMeta>>);
-
-local_block_meta_serde!(SortScatteredMeta);
-
-#[typetag::serde(name = "sort_scattered")]
-impl BlockMetaInfo for SortScatteredMeta {}
 
 trait MemoryRows {
     fn in_memory_rows(&self) -> usize;
