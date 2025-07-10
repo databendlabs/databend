@@ -78,7 +78,6 @@ impl SyncSystemTable for TemporaryTablesTable {
                 .get_all_temp_tables()?
                 .into_iter()
                 .filter(|(_, typ, _)| typ == &SessionType::MySQL)
-                .map(|(session_key, typ, table)| (session_key, typ, table))
                 .collect::<Vec<_>>()
         };
 
@@ -93,7 +92,7 @@ impl SyncSystemTable for TemporaryTablesTable {
 
         let all_temp_tables = mysql_temp_tables
             .into_iter()
-            .chain(http_client_temp_tables.into_iter())
+            .chain(http_client_temp_tables)
             .collect::<Vec<_>>();
 
         let current_session_type = ctx.get_session_type();
