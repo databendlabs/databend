@@ -5486,7 +5486,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
- "databend-common-vector",
  "databend-storages-common-table-meta",
  "divan",
  "fastrace",

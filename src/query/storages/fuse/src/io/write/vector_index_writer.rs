@@ -36,6 +36,11 @@ use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
+use log::debug;
+use log::info;
+
+const DEFAULT_M: usize = 16;
+const DEFAULT_EF_CONSTRUCT: usize = 100;
 
 #[derive(Debug, Clone)]
 pub struct VectorIndexState {
@@ -70,6 +75,11 @@ impl VectorIndexBuilder {
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
     ) -> Option<VectorIndexBuilder> {
+        info!(
+            "Starting vector index creation with {} table indexes",
+            table_indexes.len()
+        );
+
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VectorIndex)
             .ok()?;
@@ -86,6 +96,7 @@ impl VectorIndexBuilder {
                 continue;
             }
 
+            info!("Processing vector index: {}", index.name);
             let mut offsets = Vec::with_capacity(index.column_ids.len());
             for column_id in &index.column_ids {
                 for (offset, field) in schema.fields.iter().enumerate() {
@@ -97,6 +108,10 @@ impl VectorIndexBuilder {
             }
             // ignore invalid index
             if offsets.len() != index.column_ids.len() {
+                debug!(
+                    "Ignoring invalid vector index: {}, missing columns",
+                    index.name
+                );
                 continue;
             }
             for (offset, _) in &offsets {
@@ -106,13 +121,13 @@ impl VectorIndexBuilder {
 
             // Parse index parameters
             let m = match index.options.get("m") {
-                Some(value) => value.parse::<usize>().unwrap_or(16),
-                None => 16,
+                Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_M),
+                None => DEFAULT_M,
             };
 
             let ef_construct = match index.options.get("ef_construct") {
-                Some(value) => value.parse::<usize>().unwrap_or(64),
-                None => 64,
+                Some(value) => value.parse::<usize>().unwrap_or(DEFAULT_EF_CONSTRUCT),
+                None => DEFAULT_EF_CONSTRUCT,
             };
 
             let mut distances = Vec::new();
@@ -132,8 +147,16 @@ impl VectorIndexBuilder {
                 None => continue,
             };
             if distances.is_empty() {
+                debug!(
+                    "Ignoring vector index: {}, no valid distance types",
+                    index.name
+                );
                 continue;
             }
+            info!(
+                "Added vector index parameters for {}: m={}, ef_construct={}, distances={:?}",
+                index.name, m, ef_construct, distances
+            );
             let index_param = VectorIndexParam {
                 index_name: index.name.clone(),
                 index_version: index.version.clone(),
@@ -162,6 +185,11 @@ impl VectorIndexBuilder {
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
+        info!(
+            "Adding block with {} rows to vector index",
+            block.num_rows()
+        );
+
         for offset in &self.field_offsets_set {
             let block_entry = block.get_by_offset(*offset);
             let column = block_entry.to_column();
@@ -178,6 +206,7 @@ impl VectorIndexBuilder {
     #[async_backtrace::framed]
     pub fn finalize(&mut self, location: &Location) -> Result<VectorIndexState> {
         let start = Instant::now();
+        info!("Start build vector HNSW index for location: {}", location.0);
 
         let mut columns = BTreeMap::new();
         for offset in &self.field_offsets_set {
@@ -196,6 +225,7 @@ impl VectorIndexBuilder {
         let mut metadata = BTreeMap::new();
 
         for (field_offsets, index_param) in self.field_offsets.iter().zip(&self.index_params) {
+            debug!("Building HNSW index for {}", index_param.index_name);
             for (offset, column_id) in field_offsets {
                 let Some(column) = concated_columns.get(offset) else {
                     return Err(ErrorCode::Internal("Can't find vector column"));
@@ -238,9 +268,14 @@ impl VectorIndexBuilder {
         };
 
         // Perf.
+        let elapsed_ms = start.elapsed().as_millis() as u64;
         {
-            metrics_inc_block_vector_index_generate_milliseconds(start.elapsed().as_millis() as u64);
+            metrics_inc_block_vector_index_generate_milliseconds(elapsed_ms);
         }
+        info!(
+            "Finish build vector HNSW index: location={}, size={} bytes in {} ms",
+            location.0, size, elapsed_ms
+        );
 
         Ok(state)
     }

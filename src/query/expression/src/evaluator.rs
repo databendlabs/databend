@@ -921,11 +921,13 @@ impl<'a> Evaluator<'a> {
                 }
             }
             (DataType::Array(inner_src_ty), DataType::Vector(inner_dest_ty)) => {
-                if !matches!(&**inner_src_ty, DataType::Number(_) | DataType::Decimal(_))
-                    || matches!(inner_dest_ty, VectorDataType::Int8(_))
+                if !matches!(
+                    inner_src_ty.remove_nullable(),
+                    DataType::Number(_) | DataType::Decimal(_)
+                ) || matches!(inner_dest_ty, VectorDataType::Int8(_))
                 {
                     return Err(ErrorCode::BadArguments(format!(
-                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
                     ))
                     .set_span(span));
                 }
@@ -971,6 +973,7 @@ impl<'a> Evaluator<'a> {
                                 )
                                 .set_span(span));
                             }
+                            let col = col.remove_nullable();
                             match col {
                                 Column::Number(num_col) => {
                                     for i in 0..dimension {

@@ -639,7 +639,10 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
             true
         }
         (DataType::Array(fields_src_ty), DataType::Vector(_))
-            if matches!(&**fields_src_ty, DataType::Number(_) | DataType::Decimal(_)) =>
+            if matches!(
+                fields_src_ty.remove_nullable(),
+                DataType::Number(_) | DataType::Decimal(_)
+            ) =>
         {
             true
         }
