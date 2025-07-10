@@ -404,8 +404,6 @@ impl SessionManager {
         // Since there are chances that we are the last one that holding the reference, and the
         // destruction of session need to acquire the write lock of `active_sessions`, which leads
         // to dead lock.
-        //
-        // Although online expression can also do this, to make this clearer, we wrap it in a block
 
         let active_sessions_guard = self.active_sessions.read();
         active_sessions_guard.values().cloned().collect::<Vec<_>>()
@@ -430,5 +428,38 @@ impl SessionManager {
         }
 
         false
+    }
+    pub fn get_all_temp_tables(
+        &self,
+    ) -> Result<
+        Vec<(
+            String,
+            SessionType,
+            databend_common_meta_app::schema::TableInfo,
+        )>,
+    > {
+        let mut all_temp_tables = Vec::new();
+        let sessions = self.active_sessions_snapshot();
+        for session in sessions {
+            if let Some(session) = session.upgrade() {
+                let temp_tables = {
+                    let mgr_ref = session.temp_tbl_mgr();
+                    let vals = mgr_ref.lock().list_tables();
+                    vals
+                }?;
+                for table in temp_tables {
+                    all_temp_tables.push((
+                        format!(
+                            "{}/{}",
+                            session.get_current_user()?.name.clone(),
+                            session.id.clone()
+                        ),
+                        session.typ.read().clone(),
+                        table,
+                    ));
+                }
+            }
+        }
+        Ok(all_temp_tables)
     }
 }
