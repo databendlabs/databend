@@ -42,7 +42,6 @@ use crate::binder::project_set::SetReturningInfo;
 use crate::binder::window::WindowInfo;
 use crate::binder::ColumnBindingBuilder;
 use crate::normalize_identifier;
-use crate::optimizer::ir::SExpr;
 use crate::plans::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
