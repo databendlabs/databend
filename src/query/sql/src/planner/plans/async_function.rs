@@ -25,6 +25,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
+use crate::ScalarExpr;
 
 /// `AsyncFunction` is a plan that evaluate a series of async functions.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -46,6 +47,10 @@ impl AsyncFunction {
 impl Operator for AsyncFunction {
     fn rel_op(&self) -> RelOp {
         RelOp::AsyncFunction
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(self.items.iter().map(|expr| &expr.scalar))
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
