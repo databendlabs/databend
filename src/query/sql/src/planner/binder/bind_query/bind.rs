@@ -69,7 +69,6 @@ impl Binder {
             }
         }
 
-        // Bind cte definition.
         self.init_cte(bind_context, &with)?;
 
         // Extract limit and offset from query.

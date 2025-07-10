@@ -200,12 +200,6 @@ pub struct CteInfo {
     pub columns: Vec<ColumnBinding>,
 }
 
-#[derive(Clone, Debug)]
-pub struct CteBindResult {
-    pub s_expr: SExpr,
-    pub bind_context: BindContext,
-}
-
 impl BindContext {
     pub fn new() -> Self {
         Self {
