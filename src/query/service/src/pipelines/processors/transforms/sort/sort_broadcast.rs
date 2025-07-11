@@ -138,7 +138,9 @@ impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
         let bounds = Bounds::merge::<R>(
             self.input_data
                 .iter_mut()
-                .map(|meta| std::mem::take(&mut meta.bounds))
+                .filter_map(|meta| {
+                    (!meta.bounds.is_empty()).then(|| std::mem::take(&mut meta.bounds))
+                })
                 .collect(),
             self.state.batch_rows,
         )?;
@@ -169,7 +171,10 @@ impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
             }))
             .await?;
 
-        let bounds_vec = global.into_iter().map(|meta| meta.bounds).collect();
+        let bounds_vec = global
+            .into_iter()
+            .filter_map(|meta| (!meta.bounds.is_empty()).then_some(meta.bounds))
+            .collect();
         self.output_data = Some(SortCollectedMeta {
             bounds: Bounds::merge::<R>(bounds_vec, self.state.batch_rows)?.dedup::<R>(),
             ..local

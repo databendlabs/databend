@@ -48,11 +48,8 @@ impl Bounds {
         Ok(Bounds(vec![block.get_last_column().clone()]))
     }
 
-    pub fn merge<R: Rows>(vector: Vec<Bounds>, batch_rows: usize) -> Result<Self> {
-        let mut vector: Vec<_> = vector
-            .into_iter()
-            .filter(|bounds| !bounds.is_empty())
-            .collect();
+    pub fn merge<R: Rows>(mut vector: Vec<Bounds>, batch_rows: usize) -> Result<Self> {
+        debug_assert!(vector.iter().all(|bounds| !bounds.is_empty()));
         match vector.len() {
             0 => Ok(Bounds(vec![])),
             1 => Ok(vector.pop().unwrap()),
