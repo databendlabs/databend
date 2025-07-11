@@ -26,6 +26,7 @@ use crate::binder::MutationType;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
+use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::optimizers::operator::PullUpFilterOptimizer;
 use crate::optimizer::optimizers::operator::RuleNormalizeAggregateOptimizer;
@@ -273,7 +274,9 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add_if(
             !opt_ctx.get_planning_agg_index(),
             RecursiveRuleOptimizer::new(opt_ctx.clone(), [RuleID::EliminateEvalScalar].as_slice()),
-        );
+        )
+        // 15. Clean up unused CTEs
+        .add(CleanupUnusedCTEOptimizer);
 
     // 15. Execute the pipeline
     let s_expr = pipeline.execute().await?;

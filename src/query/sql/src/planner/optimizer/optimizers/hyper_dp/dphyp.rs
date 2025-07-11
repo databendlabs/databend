@@ -270,6 +270,80 @@ impl DPhpyOptimizer {
         Ok((new_s_expr, left_res.1 && right_res.1))
     }
 
+    async fn process_materialized_cte_node(
+        &mut self,
+        s_expr: &SExpr,
+    ) -> Result<(Arc<SExpr>, bool)> {
+        let mut left_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        let left_expr = left_dphyp.optimize_async(s_expr.child(0)?).await?;
+
+        let mut right_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
+        let right_expr = right_dphyp.optimize_async(s_expr.child(1)?).await?;
+
+        // Merge table_index_map from right child into current table_index_map
+        let relation_idx = self.join_relations.len() as IndexType;
+        for table_index in right_dphyp.table_index_map.keys() {
+            self.table_index_map.insert(*table_index, relation_idx);
+        }
+
+        let new_s_expr = s_expr.replace_children([Arc::new(left_expr), Arc::new(right_expr)]);
+        self.join_relations.push(JoinRelation::new(
+            &new_s_expr,
+            self.sample_executor().clone(),
+        ));
+        Ok((Arc::new(new_s_expr), true))
+    }
+
+    async fn process_cte_consumer_node(
+        &mut self,
+        s_expr: &SExpr,
+        join_relation: Option<&SExpr>,
+    ) -> Result<(Arc<SExpr>, bool)> {
+        let cte_consumer = match s_expr.plan() {
+            RelOperator::CTEConsumer(consumer) => consumer,
+            _ => unreachable!(),
+        };
+
+        let join_relation = if let Some(relation) = join_relation {
+            // Check if relation contains filter, if exists, check if the filter in `filters`
+            // If exists, remove it from `filters`
+            self.check_filter(relation);
+            JoinRelation::new(relation, self.sample_executor().clone())
+        } else {
+            JoinRelation::new(s_expr, self.sample_executor().clone())
+        };
+
+        // Map table indexes before adding to join_relations
+        let relation_idx = self.join_relations.len() as IndexType;
+        let table_indexes = Self::get_table_indexes(&cte_consumer.def);
+        for table_index in table_indexes {
+            self.table_index_map.insert(table_index, relation_idx);
+        }
+
+        self.join_relations.push(join_relation);
+        Ok((Arc::new(s_expr.clone()), true))
+    }
+
+    fn get_table_indexes(s_expr: &SExpr) -> Vec<IndexType> {
+        let mut table_indexes = Vec::new();
+        Self::collect_table_indexes_recursive(s_expr, &mut table_indexes);
+        table_indexes
+    }
+
+    fn collect_table_indexes_recursive(s_expr: &SExpr, table_indexes: &mut Vec<IndexType>) {
+        if let RelOperator::Scan(scan) = s_expr.plan() {
+            table_indexes.push(scan.table_index);
+        }
+
+        if let RelOperator::CTEConsumer(cte_consumer) = s_expr.plan() {
+            Self::collect_table_indexes_recursive(&cte_consumer.def, table_indexes);
+        }
+
+        for child in s_expr.children() {
+            Self::collect_table_indexes_recursive(child, table_indexes);
+        }
+    }
+
     /// Process a unary operator node
     async fn process_unary_node(
         &mut self,
@@ -331,6 +405,11 @@ impl DPhpyOptimizer {
             RelOperator::Scan(_) => self.process_scan_node(s_expr, join_relation),
 
             RelOperator::Join(_) => self.process_join_node(s_expr, join_conditions).await,
+
+            RelOperator::MaterializedCTE(_) => self.process_materialized_cte_node(s_expr).await,
+            RelOperator::CTEConsumer(_) => {
+                self.process_cte_consumer_node(s_expr, join_relation).await
+            }
 
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
