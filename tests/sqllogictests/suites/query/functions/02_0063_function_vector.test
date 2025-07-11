@@ -8,3 +8,33 @@ query F
 select  [1, 2] <-> [2, 3] as sim
 ----
 1.4142135
+
+query FF
+select cosine_distance([1.1,2.2,3], [1,1,1]), cosine_distance([1,2.2,3], [4,6,8])
+----
+0.062412794753543555 0.00699537571767439
+
+query FF
+select cosine_distance([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), cosine_distance([1,2.2,3]::vector(3), [4,6,8]::vector(3))
+----
+0.06241274 0.0069953203
+
+query FF
+select l1_distance([1.1,2.2,3], [1,1,1]), l1_distance([1,2.2,3], [4,6,8])
+----
+3.3000000000000003 11.8
+
+query FF
+select l1_distance([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), l1_distance([1,2.2,3]::vector(3), [4,6,8]::vector(3))
+----
+3.3000002 11.8
+
+query FF
+select l2_distance([1.1,2.2,3], [1,1,1]), l2_distance([1,2.2,3], [4,6,8])
+----
+2.3345235059857505 6.959885056522126 
+
+query FF
+select l2_distance([1.1,2.2,3]::vector(3), [1,1,1]::vector(3)), l2_distance([1,2.2,3]::vector(3), [4,6,8]::vector(3))
+----
+2.3345234 6.959885

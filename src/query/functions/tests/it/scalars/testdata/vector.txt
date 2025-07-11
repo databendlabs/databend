@@ -1,23 +1,171 @@
-ast            : cosine_distance([a], [b])
-raw expr       : cosine_distance(array(a::Float32), array(b::Float32))
-checked expr   : cosine_distance<Array(Float32), Array(Float32)>(array<T0=Float32><T0>(a), array<T0=Float32><T0>(b))
-evaluation:
-+--------+---------+---------+---------+
-|        | a       | b       | Output  |
-+--------+---------+---------+---------+
-| Type   | Float32 | Float32 | Float32 |
-| Domain | {0..=2} | {3..=5} | Unknown |
-| Row 0  | 0       | 3       | NaN     |
-| Row 1  | 1       | 4       | 0       |
-| Row 2  | 2       | 5       | 0       |
-+--------+---------+---------+---------+
-evaluation (internal):
-+--------+----------------------+
-| Column | Data                 |
-+--------+----------------------+
-| a      | Float32([0, 1, 2])   |
-| b      | Float32([3, 4, 5])   |
-| Output | Float32([NaN, 0, 0]) |
-+--------+----------------------+
+ast            : cosine_distance([1,0,0], [1,0,0])
+raw expr       : cosine_distance(array(1, 0, 0), array(1, 0, 0))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)))
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : cosine_distance([1,0,0], [-1,0,0])
+raw expr       : cosine_distance(array(1, 0, 0), array(minus(1), 0, 0))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(1_u8), CAST<UInt8>(0_u8 AS Int16), CAST<UInt8>(0_u8 AS Int16)) AS Array(Float32)))
+optimized expr : 2_f32
+output type    : Float32
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : cosine_distance([1,2,3], [4,5,6])
+raw expr       : cosine_distance(array(1, 2, 3), array(4, 5, 6))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(4_u8, 5_u8, 6_u8) AS Array(Float32)))
+optimized expr : 0.02536821_f32
+output type    : Float32
+output domain  : {0.02536821..=0.02536821}
+output         : 0.02536821
+
+
+ast            : cosine_distance([0,0,0], [1,2,3])
+raw expr       : cosine_distance(array(0, 0, 0), array(1, 2, 3))
+checked expr   : cosine_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(0_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
+optimized expr : NaN_f32
+output type    : Float32
+output domain  : {NaN..=NaN}
+output         : NaN
+
+
+ast            : cosine_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
+raw expr       : cosine_distance(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
+checked expr   : cosine_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+optimized expr : 1.974632_f32
+output type    : Float32
+output domain  : {1.974632..=1.974632}
+output         : 1.974632
+
+
+ast            : cosine_distance([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))
+raw expr       : cosine_distance(CAST(array(0.1, 0.2, 0.3) AS Vector(3)), CAST(array(0.4, 0.5, 0.6) AS Vector(3)))
+checked expr   : cosine_distance<Vector(3), Vector(3)>(CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.1_d64(1,1), 0.2_d64(1,1), 0.3_d64(1,1)) AS Vector(3)), CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.4_d64(1,1), 0.5_d64(1,1), 0.6_d64(1,1)) AS Vector(3)))
+optimized expr : 0.02536827_f32
+output type    : Float32
+output domain  : {0.02536827..=0.02536827}
+output         : 0.02536827
+
+
+ast            : cosine_distance([1,0]::vector(2), [0,1]::vector(2))
+raw expr       : cosine_distance(CAST(array(1, 0) AS Vector(2)), CAST(array(0, 1) AS Vector(2)))
+checked expr   : cosine_distance<Vector(2), Vector(2)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 0_u8) AS Vector(2)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(0_u8, 1_u8) AS Vector(2)))
+optimized expr : 1_f32
+output type    : Float32
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : l1_distance([1,2,3], [1,2,3])
+raw expr       : l1_distance(array(1, 2, 3), array(1, 2, 3))
+checked expr   : l1_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : l1_distance([1,2,3], [4,5,6])
+raw expr       : l1_distance(array(1, 2, 3), array(4, 5, 6))
+checked expr   : l1_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(4_u8, 5_u8, 6_u8) AS Array(Float32)))
+optimized expr : 9_f32
+output type    : Float32
+output domain  : {9..=9}
+output         : 9
+
+
+ast            : l1_distance([0,0,0], [1,2,3])
+raw expr       : l1_distance(array(0, 0, 0), array(1, 2, 3))
+checked expr   : l1_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(0_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
+optimized expr : 6_f32
+output type    : Float32
+output domain  : {6..=6}
+output         : 6
+
+
+ast            : l1_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
+raw expr       : l1_distance(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
+checked expr   : l1_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+optimized expr : 21_f32
+output type    : Float32
+output domain  : {21..=21}
+output         : 21
+
+
+ast            : l1_distance([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))
+raw expr       : l1_distance(CAST(array(0.1, 0.2, 0.3) AS Vector(3)), CAST(array(0.4, 0.5, 0.6) AS Vector(3)))
+checked expr   : l1_distance<Vector(3), Vector(3)>(CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.1_d64(1,1), 0.2_d64(1,1), 0.3_d64(1,1)) AS Vector(3)), CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.4_d64(1,1), 0.5_d64(1,1), 0.6_d64(1,1)) AS Vector(3)))
+optimized expr : 0.9_f32
+output type    : Float32
+output domain  : {0.9..=0.9}
+output         : 0.9
+
+
+ast            : l1_distance([1,2]::vector(2), [3,4]::vector(2))
+raw expr       : l1_distance(CAST(array(1, 2) AS Vector(2)), CAST(array(3, 4) AS Vector(2)))
+checked expr   : l1_distance<Vector(2), Vector(2)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Vector(2)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(3_u8, 4_u8) AS Vector(2)))
+optimized expr : 4_f32
+output type    : Float32
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : l2_distance([1,2,3], [1,2,3])
+raw expr       : l2_distance(array(1, 2, 3), array(1, 2, 3))
+checked expr   : l2_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : l2_distance([1,2,3], [4,5,6])
+raw expr       : l2_distance(array(1, 2, 3), array(4, 5, 6))
+checked expr   : l2_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(4_u8, 5_u8, 6_u8) AS Array(Float32)))
+optimized expr : 5.196152_f32
+output type    : Float32
+output domain  : {5.196152..=5.196152}
+output         : 5.196152
+
+
+ast            : l2_distance([0,0,0], [1,2,3])
+raw expr       : l2_distance(array(0, 0, 0), array(1, 2, 3))
+checked expr   : l2_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(0_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
+optimized expr : 3.741658_f32
+output type    : Float32
+output domain  : {3.741658..=3.741658}
+output         : 3.741658
+
+
+ast            : l2_distance([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
+raw expr       : l2_distance(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
+checked expr   : l2_distance<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+optimized expr : 12.4499_f32
+output type    : Float32
+output domain  : {12.4499..=12.4499}
+output         : 12.4499
+
+
+ast            : l2_distance([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))
+raw expr       : l2_distance(CAST(array(0.1, 0.2, 0.3) AS Vector(3)), CAST(array(0.4, 0.5, 0.6) AS Vector(3)))
+checked expr   : l2_distance<Vector(3), Vector(3)>(CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.1_d64(1,1), 0.2_d64(1,1), 0.3_d64(1,1)) AS Vector(3)), CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.4_d64(1,1), 0.5_d64(1,1), 0.6_d64(1,1)) AS Vector(3)))
+optimized expr : 0.5196152_f32
+output type    : Float32
+output domain  : {0.5196152..=0.5196152}
+output         : 0.5196152
+
+
+ast            : l2_distance([1,2]::vector(2), [3,4]::vector(2))
+raw expr       : l2_distance(CAST(array(1, 2) AS Vector(2)), CAST(array(3, 4) AS Vector(2)))
+checked expr   : l2_distance<Vector(2), Vector(2)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 2_u8) AS Vector(2)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(3_u8, 4_u8) AS Vector(2)))
+optimized expr : 2.828427_f32
+output type    : Float32
+output domain  : {2.828427..=2.828427}
+output         : 2.828427
 
 

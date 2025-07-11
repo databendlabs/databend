@@ -3285,6 +3285,30 @@ pub struct CacheConfig {
     )]
     pub inverted_index_filter_memory_ratio: u64,
 
+    /// Max number of cached vector index meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-vector-index-meta-count",
+        value_name = "VALUE",
+        default_value = "3000"
+    )]
+    pub vector_index_meta_count: u64,
+
+    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-vector-index-filter-size",
+        value_name = "VALUE",
+        default_value = "2147483648"
+    )]
+    pub vector_index_filter_size: u64,
+
+    /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
+    #[clap(
+        long = "cache-vector-index-filter-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub vector_index_filter_memory_ratio: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -3609,6 +3633,9 @@ mod cache_config_converters {
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
+                vector_index_meta_count: value.vector_index_meta_count,
+                vector_index_filter_size: value.vector_index_filter_size,
+                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -3645,6 +3672,9 @@ mod cache_config_converters {
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
+                vector_index_meta_count: value.vector_index_meta_count,
+                vector_index_filter_size: value.vector_index_filter_size,
+                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),

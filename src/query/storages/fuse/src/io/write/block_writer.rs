@@ -32,6 +32,9 @@ use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
+use databend_common_metrics::storage::metrics_inc_block_vector_index_write_bytes;
+use databend_common_metrics::storage::metrics_inc_block_vector_index_write_milliseconds;
+use databend_common_metrics::storage::metrics_inc_block_vector_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
@@ -52,6 +55,8 @@ use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
+use crate::io::write::VectorIndexBuilder;
+use crate::io::write::VectorIndexState;
 use crate::io::write::WriteSettings;
 use crate::io::BloomIndexState;
 use crate::io::TableMetaLocationGenerator;
@@ -130,6 +135,7 @@ pub struct BlockSerialization {
     pub bloom_index_state: Option<BloomIndexState>,
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
+    pub vector_index_state: Option<VectorIndexState>,
 }
 
 #[derive(Clone)]
@@ -143,6 +149,7 @@ pub struct BlockBuilder {
     pub ngram_args: Vec<NgramArgs>,
     pub inverted_index_builders: Vec<InvertedIndexBuilder>,
     pub virtual_column_builder: Option<VirtualColumnBuilder>,
+    pub vector_index_builder: Option<VectorIndexBuilder>,
     pub table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -177,6 +184,15 @@ impl BlockBuilder {
             )?;
             inverted_index_states.push(inverted_index_state);
         }
+        let vector_index_state = if let Some(ref vector_index_builder) = self.vector_index_builder {
+            let vector_index_location = self.meta_locations.block_vector_index_location();
+            let mut vector_index_builder = vector_index_builder.clone();
+            vector_index_builder.add_block(&data_block)?;
+            let vector_index_state = vector_index_builder.finalize(&vector_index_location)?;
+            Some(vector_index_state)
+        } else {
+            None
+        };
 
         let virtual_column_state =
             if let Some(ref virtual_column_builder) = self.virtual_column_builder {
@@ -225,6 +241,8 @@ impl BlockBuilder {
                 .as_ref()
                 .map(|v| v.ngram_size)
                 .unwrap_or_default(),
+            vector_index_size: vector_index_state.as_ref().map(|v| v.size),
+            vector_index_location: vector_index_state.as_ref().map(|v| v.location.clone()),
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
@@ -237,6 +255,7 @@ impl BlockBuilder {
             bloom_index_state,
             inverted_index_states,
             virtual_column_state,
+            vector_index_state,
         };
         Ok(serialized)
     }
@@ -268,6 +287,7 @@ impl BlockWriter {
 
         Self::write_down_data_block(dal, serialized.block_raw_data, &block_meta.location.0).await?;
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
+        Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
 
@@ -304,6 +324,24 @@ impl BlockWriter {
             metrics_inc_block_index_write_nums(1);
             metrics_inc_block_index_write_nums(index_state.size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
+        }
+        Ok(())
+    }
+
+    pub async fn write_down_vector_index_state(
+        dal: &Operator,
+        vector_index_state: Option<VectorIndexState>,
+    ) -> Result<()> {
+        if let Some(vector_index_state) = vector_index_state {
+            let start = Instant::now();
+
+            let location = &vector_index_state.location.0;
+            let index_size = vector_index_state.size;
+            write_data(vector_index_state.data, dal, location).await?;
+
+            metrics_inc_block_vector_index_write_nums(1);
+            metrics_inc_block_vector_index_write_bytes(index_size);
+            metrics_inc_block_vector_index_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
     }

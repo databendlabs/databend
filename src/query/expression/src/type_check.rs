@@ -638,7 +638,14 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         {
             true
         }
-
+        (DataType::Array(fields_src_ty), DataType::Vector(_))
+            if matches!(
+                fields_src_ty.remove_nullable(),
+                DataType::Number(_) | DataType::Decimal(_)
+            ) =>
+        {
+            true
+        }
         (DataType::Nullable(box inner_src_ty), DataType::Nullable(box inner_dest_ty))
         | (DataType::Nullable(box inner_src_ty), inner_dest_ty)
         | (inner_src_ty, DataType::Nullable(box inner_dest_ty))

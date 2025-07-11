@@ -271,6 +271,12 @@ pub enum DecimalScalar {
 }
 
 impl DecimalScalar {
+    pub fn to_float32(&self) -> f32 {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(v, size) => v.to_float32(size.scale),
+        })
+    }
+
     pub fn to_float64(&self) -> f64 {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(v, size) => v.to_float64(size.scale),
