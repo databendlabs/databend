@@ -61,6 +61,7 @@ use futures::Stream;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
 use itertools::Itertools;
+use log::error;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -173,73 +174,90 @@ impl TaskService {
         };
         GlobalInstance::set(Arc::new(instance));
 
-        runtime.clone().try_spawn(async move {
-            let task_service = TaskService::instance();
-            loop {
-                if !task_service.initialized.load(Ordering::SeqCst) {
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                } else {
-                    break;
+        runtime.clone().try_spawn(
+            async move {
+                let task_service = TaskService::instance();
+                loop {
+                    if !task_service.initialized.load(Ordering::SeqCst) {
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    } else {
+                        break;
+                    }
                 }
-            }
-            task_service.prepare().await?;
+                if let Err(err) = task_service.prepare().await {
+                    error!("[PRIVATE-TASKS] prepare failed due to {}", err);
+                }
+                if let Err(err) = task_service.work(&tenant, runtime).await {
+                    error!("[PRIVATE-TASKS] prepare failed due to {}", err);
+                }
+            },
+            None,
+        )?;
+        Ok(())
+    }
 
-            let mut scheduled_tasks: HashMap<String, CancellationToken> = HashMap::new();
-            let task_mgr = UserApiProvider::instance().task_api(&tenant);
+    async fn work(&self, tenant: &Tenant, runtime: Arc<Runtime>) -> Result<()> {
+        let mut scheduled_tasks: HashMap<String, CancellationToken> = HashMap::new();
+        let task_mgr = UserApiProvider::instance().task_api(tenant);
 
-            let mut steam = task_service.subscribe().await?;
+        let mut steam = self.subscribe().await?;
 
-            let fn_lock = async |task_service: &TaskService, key: &str| {
-                task_service
-                    .meta_handle
-                    .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
-                    .await
-            };
+        let fn_lock = async |task_service: &TaskService, key: &str| {
+            task_service
+                .meta_handle
+                .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
+                .await
+        };
 
-            while let Some(result) = steam.next().await {
-                let (task_key, task_message) = result?;
-                match task_message {
-                    // ScheduleTask is always monitored by all Query nodes, and ExecuteTask is sent serially to avoid repeated sending.
-                    TaskMessage::ScheduleTask(mut task) => {
-                        debug_assert!(task.schedule_options.is_some());
-                        if let Some(schedule_options) = &task.schedule_options {
-                            // clean old task if alter
-                            if let Some(token) = scheduled_tasks.remove(&task.task_name) {
-                                token.cancel();
-                            }
-                            match task.status {
-                                Status::Suspended => continue,
-                                Status::Started => ()
-                            }
+        while let Some(result) = steam.next().await {
+            let (task_key, task_message) = result?;
+            match task_message {
+                // ScheduleTask is always monitored by all Query nodes, and ExecuteTask is sent serially to avoid repeated sending.
+                TaskMessage::ScheduleTask(mut task) => {
+                    debug_assert!(task.schedule_options.is_some());
+                    if let Some(schedule_options) = &task.schedule_options {
+                        // clean old task if alter
+                        if let Some(token) = scheduled_tasks.remove(&task.task_name) {
+                            token.cancel();
+                        }
+                        match task.status {
+                            Status::Suspended => continue,
+                            Status::Started => (),
+                        }
 
-                            let token = CancellationToken::new();
-                            let child_token = token.child_token();
-                            let task_name = task.task_name.to_string();
-                            let task_name_clone = task_name.clone();
-                            let task_service = TaskService::instance();
+                        let token = CancellationToken::new();
+                        let child_token = token.child_token();
+                        let task_name = task.task_name.to_string();
+                        let task_name_clone = task_name.clone();
+                        let task_service = TaskService::instance();
 
-                            task_service.update_or_create_task_run(&TaskRun {
+                        task_service
+                            .update_or_create_task_run(&TaskRun {
                                 task: task.clone(),
                                 run_id: Self::make_run_id(),
-                                attempt_number: task.suspend_task_after_num_failures.unwrap_or(0) as i32,
+                                attempt_number: task.suspend_task_after_num_failures.unwrap_or(0)
+                                    as i32,
                                 state: State::Scheduled,
                                 scheduled_at: Utc::now(),
                                 completed_at: None,
                                 error_code: 0,
                                 error_message: None,
                                 root_task_id: EMPTY_TASK_ID,
-                            }).await?;
+                            })
+                            .await?;
 
-                            match schedule_options.schedule_type {
-                                ScheduleType::IntervalType => {
-                                    let task_mgr = task_mgr.clone();
-                                    let mut duration = Duration::from_secs(schedule_options.interval.unwrap() as u64);
-                                    if let Some(ms) = &schedule_options.milliseconds_interval {
-                                        duration += Duration::from_millis(*ms);
-                                    }
+                        match schedule_options.schedule_type {
+                            ScheduleType::IntervalType => {
+                                let task_mgr = task_mgr.clone();
+                                let mut duration =
+                                    Duration::from_secs(schedule_options.interval.unwrap() as u64);
+                                if let Some(ms) = &schedule_options.milliseconds_interval {
+                                    duration += Duration::from_millis(*ms);
+                                }
 
-                                    runtime
-                                        .spawn(async move {
+                                runtime
+                                    .spawn(async move {
+                                        let mut fn_work = async move || {
                                             task.next_scheduled_at = Some(Utc::now() + duration);
                                             task_mgr.update_task(task.clone()).await??;
                                             loop {
@@ -255,20 +273,29 @@ impl TaskService {
                                                     }
                                                 }
                                             }
-                                            // TODO: log error
                                             Result::Ok(())
-                                        });
-                                }
-                                ScheduleType::CronType => {
-                                    let task_mgr = task_mgr.clone();
-                                    // SAFETY: check on CreateTask
-                                    let cron_expr = schedule_options.cron.as_ref().unwrap();
-                                    let tz = schedule_options.time_zone.as_ref().unwrap().parse::<Tz>().unwrap();
-                                    let schedule = Schedule::from_str(cron_expr).unwrap();
-                                    let task_name = task_name.clone();
+                                        };
+                                        if let Err(err) = fn_work().await {
+                                            error!("[PRIVATE-TASKS] interval schedule failed due to {}", err);
+                                        }
+                                    });
+                            }
+                            ScheduleType::CronType => {
+                                let task_mgr = task_mgr.clone();
+                                // SAFETY: check on CreateTask
+                                let cron_expr = schedule_options.cron.as_ref().unwrap();
+                                let tz = schedule_options
+                                    .time_zone
+                                    .as_ref()
+                                    .unwrap()
+                                    .parse::<Tz>()
+                                    .unwrap();
+                                let schedule = Schedule::from_str(cron_expr).unwrap();
+                                let task_name = task_name.clone();
 
-                                    runtime
-                                        .spawn(async move {
+                                runtime
+                                    .spawn(async move {
+                                        let mut fn_work = async move || {
                                             let upcoming = schedule.upcoming(tz);
 
                                             for next_time in upcoming {
@@ -291,58 +318,74 @@ impl TaskService {
                                                 }
                                             }
                                             Result::Ok(())
-                                        });
-                                }
+                                        };
+                                        if let Err(err) = fn_work().await {
+                                            error!("[PRIVATE-TASKS] cron schedule failed due to {}", err);
+                                        }
+                                    });
                             }
-                            let _ = scheduled_tasks.insert(task_name_clone, token);
                         }
+                        let _ = scheduled_tasks.insert(task_name_clone, token);
                     }
-                    TaskMessage::ExecuteTask(task) => {
-                        let Some(_guard) = fn_lock(&task_service, &task.task_name).await? else {
-                            continue;
-                        };
-                        let task_name = task.task_name.clone();
-                        let task_service = TaskService::instance();
+                }
+                TaskMessage::ExecuteTask(task) => {
+                    let Some(_guard) = fn_lock(self, &task.task_name).await? else {
+                        continue;
+                    };
+                    let task_name = task.task_name.clone();
+                    let task_service = TaskService::instance();
 
-                        // TODO: Meta control query is executed serially through watch key
+                    let mut task_run = task_service
+                        .lasted_task_run(&task_name)
+                        .await?
+                        .unwrap_or_else(|| TaskRun {
+                            task: task.clone(),
+                            run_id: Self::make_run_id(),
+                            attempt_number: task.suspend_task_after_num_failures.unwrap_or(0)
+                                as i32,
+                            state: State::Executing,
+                            scheduled_at: Utc::now(),
+                            completed_at: None,
+                            error_code: 0,
+                            error_message: None,
+                            root_task_id: EMPTY_TASK_ID,
+                        });
+                    task_service.update_or_create_task_run(&task_run).await?;
 
-                        let mut task_run = task_service.lasted_task_run(&task_name).await?
-                            .unwrap_or_else(|| TaskRun {
-                                task: task.clone(),
-                                run_id: Self::make_run_id(),
-                                attempt_number: task.suspend_task_after_num_failures.unwrap_or(0) as i32,
-                                state: State::Executing,
-                                scheduled_at: Utc::now(),
-                                completed_at: None,
-                                error_code: 0,
-                                error_message: None,
-                                root_task_id: EMPTY_TASK_ID,
-                            });
-                        task_service.update_or_create_task_run(&task_run).await?;
+                    let task_mgr = task_mgr.clone();
+                    let tenant = tenant.clone();
+                    let owner = Self::get_task_owner(&task, &tenant).await?;
 
-                        let task_mgr = task_mgr.clone();
-                        let tenant = tenant.clone();
-                        let owner = Self::get_task_owner(&task, &tenant).await?;
-
-                        runtime
-                            .try_spawn(async move {
+                    runtime.try_spawn(
+                        async move {
+                            let mut fn_work = async move || {
                                 while task_run.attempt_number >= 0 {
-                                    let task_result = Self::spawn_task(task.clone(), owner.clone()).await;
+                                    let task_result =
+                                        Self::spawn_task(task.clone(), owner.clone()).await;
 
                                     match task_result {
                                         Ok(()) => {
                                             task_run.state = State::Succeeded;
                                             task_run.completed_at = Some(Utc::now());
-                                            task_service.update_or_create_task_run(&task_run).await?;
+                                            task_service
+                                                .update_or_create_task_run(&task_run)
+                                                .await?;
 
-                                            let mut stream = Box::pin(task_service.check_next_tasks(&task_name));
+                                            let mut stream =
+                                                Box::pin(task_service.check_next_tasks(&task_name));
 
                                             while let Some(next_task) = stream.next().await {
                                                 let next_task = next_task?;
-                                                let dep_task = task_mgr.describe_task(&next_task).await??
-                                                    .ok_or_else(|| ErrorCode::UnknownTask(next_task))?;
+                                                let dep_task = task_mgr
+                                                    .describe_task(&next_task)
+                                                    .await??
+                                                    .ok_or_else(|| {
+                                                        ErrorCode::UnknownTask(next_task)
+                                                    })?;
 
-                                                task_mgr.send(TaskMessage::ExecuteTask(dep_task)).await?;
+                                                task_mgr
+                                                    .send(TaskMessage::ExecuteTask(dep_task))
+                                                    .await?;
                                             }
                                             task_mgr.execute_accept(&task_key).await?;
                                             break;
@@ -353,42 +396,47 @@ impl TaskService {
                                             task_run.attempt_number -= 1;
                                             task_run.error_code = err.code() as i64;
                                             task_run.error_message = Some(err.message());
-                                            task_service.update_or_create_task_run(&task_run).await?;
+                                            task_service
+                                                .update_or_create_task_run(&task_run)
+                                                .await?;
                                             task_run.run_id = Self::make_run_id();
                                         }
                                     }
                                     task_mgr.execute_accept(&task_key).await?;
-                                    task_mgr.alter_task(&task.task_name, &AlterTaskOptions::Suspend).await??;
+                                    task_mgr
+                                        .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
+                                        .await??;
                                 }
 
-                                // TODO: log error
                                 Result::Ok(())
-                            }, None)?;
+                            };
+                            if let Err(err) = fn_work().await {
+                                error!("[PRIVATE-TASKS] execute failed due to {}", err);
+                            }
+                        },
+                        None,
+                    )?;
+                }
+                TaskMessage::DeleteTask(task_name) => {
+                    if let Some(_guard) = fn_lock(self, &task_name).await? {
+                        self.clean_task_afters(&task_name).await?;
                     }
-                    TaskMessage::DeleteTask(task_name) => {
-                        if let Some(_guard) = fn_lock(&task_service, &task_name).await? {
-                            task_service.clean_task_afters(&task_name).await?;
-                        }
-                        if let Some(token) = scheduled_tasks.remove(&task_name) {
-                            token.cancel();
-                        }
-                    }
-                    TaskMessage::AfterTask(task) => {
-                        let Some(_guard) = fn_lock(&task_service, &task.task_name).await? else {
-                            continue;
-                        };
-                        match task.status {
-                            Status::Suspended => continue,
-                            Status::Started => (),
-                        }
-                        task_service.update_task_afters(&task).await?;
+                    if let Some(token) = scheduled_tasks.remove(&task_name) {
+                        token.cancel();
                     }
                 }
+                TaskMessage::AfterTask(task) => {
+                    let Some(_guard) = fn_lock(self, &task.task_name).await? else {
+                        continue;
+                    };
+                    match task.status {
+                        Status::Suspended => continue,
+                        Status::Started => (),
+                    }
+                    self.update_task_afters(&task).await?;
+                }
             }
-
-            // TODO: log error
-            Result::Ok(())
-        }, None)?;
+        }
         Ok(())
     }
 
