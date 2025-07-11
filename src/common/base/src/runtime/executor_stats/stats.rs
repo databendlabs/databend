@@ -1,3 +1,17 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
@@ -8,7 +22,7 @@ const RING_BUFFER_SIZE: usize = 10;
 const TS_SHIFT: u32 = 32;
 const VAL_MASK: u64 = 0xFFFFFFFF;
 
-const NANOS_PER_MICRO: usize = 1_000;
+const MICROS_PER_SEC: u64 = 1_000_000;
 
 /// Snapshot of executor statistics containing timestamp-value pairs for process time and rows.
 #[derive(Debug, Clone)]
@@ -105,29 +119,57 @@ impl ExecutorStats {
         }
     }
 
-    // Records the elapsed process time in microseconds.
-    pub fn record_process_time(&self, elapsed_nanos: usize) {
-        let elapsed_micros = elapsed_nanos / NANOS_PER_MICRO;
-        let now = SystemTime::now();
-        let now_secs = now
+    pub fn record_process(&self, begin: SystemTime, elapsed_micros: usize, rows: usize) {
+        let begin_micros = begin
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs() as usize;
-        let index = now_secs % RING_BUFFER_SIZE;
-        let slot = &self.process_time[index];
-        slot.record_metric(now_secs, elapsed_micros);
-    }
+            .as_micros() as u64;
 
-    // Records the number of rows processed.
-    pub fn record_process_rows(&self, rows: usize) {
-        let now = SystemTime::now();
-        let now_secs = now
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as usize;
-        let index = now_secs % RING_BUFFER_SIZE;
-        let slot = &self.process_rows[index];
-        slot.record_metric(now_secs, rows);
+        let end_micros = begin_micros + elapsed_micros as u64;
+
+        let begin_timestamp_secs = begin_micros / MICROS_PER_SEC;
+        let end_timestamp_secs = end_micros / MICROS_PER_SEC;
+
+        if begin_timestamp_secs == end_timestamp_secs {
+            // Single second case - record all in one slot
+            let slot_idx = (begin_timestamp_secs % RING_BUFFER_SIZE as u64) as usize;
+            self.process_time[slot_idx]
+                .record_metric(begin_timestamp_secs as usize, elapsed_micros);
+            self.process_rows[slot_idx].record_metric(begin_timestamp_secs as usize, rows);
+        } else {
+            // Cross-second case - distribute proportionally
+            let total_duration_micros = elapsed_micros as u64;
+
+            for current_sec in begin_timestamp_secs..=end_timestamp_secs {
+                let slot_idx = (current_sec % RING_BUFFER_SIZE as u64) as usize;
+
+                let sec_start_micros = if current_sec == begin_timestamp_secs {
+                    begin_micros % MICROS_PER_SEC
+                } else {
+                    0
+                };
+
+                let sec_end_micros = if current_sec == end_timestamp_secs {
+                    end_micros % MICROS_PER_SEC
+                } else {
+                    MICROS_PER_SEC
+                };
+
+                let sec_duration_micros = sec_end_micros - sec_start_micros;
+                let proportion = sec_duration_micros as f64 / total_duration_micros as f64;
+
+                let allocated_micros = (elapsed_micros as f64 * proportion) as usize;
+                let allocated_rows = (rows as f64 * proportion) as usize;
+
+                if allocated_micros > 0 {
+                    self.process_time[slot_idx]
+                        .record_metric(current_sec as usize, allocated_micros);
+                }
+                if allocated_rows > 0 {
+                    self.process_rows[slot_idx].record_metric(current_sec as usize, allocated_rows);
+                }
+            }
+        }
     }
 
     pub fn record_thread_tracker(rows: usize) {
@@ -147,5 +189,11 @@ impl ExecutorStats {
             process_time: process_time_snapshot,
             process_rows: process_rows_snapshot,
         }
+    }
+}
+
+impl Default for ExecutorStats {
+    fn default() -> Self {
+        Self::new()
     }
 }

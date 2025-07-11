@@ -66,10 +66,10 @@ procfs = { workspace = true }
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+loom = { workspace = true }
 quickcheck = { workspace = true }
 rand = { workspace = true }
 serde_test = { workspace = true }
-loom = { workspace = true }
 
 [lints]
 workspace = true

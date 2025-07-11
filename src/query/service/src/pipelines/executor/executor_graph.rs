@@ -23,6 +23,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::PoisonError;
+use std::time::SystemTime;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
@@ -43,7 +44,6 @@ use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_storages_system::QueryExecutionStatsQueue;
-use databend_common_storages_system::SystemLogQueue;
 use fastrace::prelude::*;
 use log::debug;
 use log::trace;
@@ -581,7 +581,6 @@ impl ScheduleQueue {
 
     fn schedule_sync(&mut self, _: &QueryExecutorTasksQueue, ctx: &mut ExecutorWorkerContext) {
         if let Some(processor) = self.sync_queue.pop_front() {
-            processor.graph.record_process_rows(processor.process_rows);
             ctx.set_task(ExecutorTask::Sync(processor));
         }
     }
@@ -636,7 +635,6 @@ impl ScheduleQueue {
                 .graph
                 .can_perform_task(executor.epoch.load(Ordering::SeqCst))
             {
-                processor.graph.record_process_rows(processor.process_rows);
                 context.set_task(ExecutorTask::Sync(processor));
             } else {
                 tasks_to_global.push_back(ExecutorTask::Sync(processor));
@@ -973,11 +971,10 @@ impl RunningGraph {
         self.0.max_points.store(priority, Ordering::SeqCst);
     }
 
-    pub fn record_process_time(&self, elapsed_nanos: usize) {
-        self.0.executor_stats.record_process_time(elapsed_nanos);
-    }
-    pub fn record_process_rows(&self, rows: usize) {
-        self.0.executor_stats.record_process_rows(rows);
+    pub fn record_process(&self, begin: SystemTime, elapsed_micros: usize, rows: usize) {
+        self.0
+            .executor_stats
+            .record_process(begin, elapsed_micros, rows);
     }
 
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
