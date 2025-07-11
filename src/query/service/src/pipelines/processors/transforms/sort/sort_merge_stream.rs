@@ -146,35 +146,9 @@ where A: SortAlgorithm + 'static
         };
 
         if streams.iter().all(|stream| stream.input.is_finished()) {
+            self.output.finish();
             return Ok(Event::Finished);
         }
-
-        // {
-        //     for stream in streams.iter_mut() {
-        //         stream.pull()?;
-        //     }
-
-        //     if streams
-        //         .iter_mut()
-        //         .map(|stream| stream.pull())
-        //         .try_fold(false, |acc, pending| acc || pending?)?
-        //     {
-        //         return Ok(Event::NeedData);
-        //     }
-
-        //     if bounds.is_empty() {
-        //         return Ok(Event::Finished);
-        //     }
-
-        //     if bounds.iter().all(|meta| meta.index != self.bound_index) {
-        //         let meta = match bounds.iter().min_by_key(|meta| meta.index) {
-        //             Some(index) => *index,
-        //             None => return Ok(Event::Finished),
-        //         };
-        //         assert!(meta.index > self.bound_index);
-        //         self.bound_index = meta.index;
-        //     }
-        // }
 
         for stream in streams.iter_mut() {
             stream.update_bound_index(self.bound_index);

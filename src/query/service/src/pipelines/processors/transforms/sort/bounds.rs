@@ -48,7 +48,11 @@ impl Bounds {
         Ok(Bounds(vec![block.get_last_column().clone()]))
     }
 
-    pub fn merge<R: Rows>(mut vector: Vec<Bounds>, batch_rows: usize) -> Result<Self> {
+    pub fn merge<R: Rows>(vector: Vec<Bounds>, batch_rows: usize) -> Result<Self> {
+        let mut vector: Vec<_> = vector
+            .into_iter()
+            .filter(|bounds| !bounds.is_empty())
+            .collect();
         match vector.len() {
             0 => Ok(Bounds(vec![])),
             1 => Ok(vector.pop().unwrap()),
@@ -95,7 +99,6 @@ impl Bounds {
         self.0.iter().map(Column::len).sum()
     }
 
-    #[expect(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.0.iter().all(|col| col.len() == 0)
     }

@@ -44,17 +44,15 @@ impl TransformSortRoute {
     }
 
     fn process(&mut self) -> Result<Event> {
-        for input in &self.inputs {
-            input.set_need_data();
-        }
-
         for (input, data) in self.inputs.iter().zip(self.input_data.iter_mut()) {
             let meta = match data {
                 Some((_, meta)) => *meta,
                 None => {
                     let Some(mut block) = input.pull_data().transpose()? else {
+                        input.set_need_data();
                         continue;
                     };
+                    input.set_need_data();
 
                     let meta = block
                         .take_meta()
