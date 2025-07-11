@@ -23,6 +23,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
+use databend_common_management::task::TaskMgr;
 use databend_common_management::udf::UdfMgr;
 use databend_common_management::ClientSessionMgr;
 use databend_common_management::ConnectionMgr;
@@ -154,6 +155,10 @@ impl UserApiProvider {
 
     pub fn udf_api(&self, tenant: &Tenant) -> UdfMgr {
         UdfMgr::create(self.client.clone(), tenant)
+    }
+
+    pub fn task_api(&self, tenant: &Tenant) -> TaskMgr {
+        TaskMgr::create(self.client.clone(), tenant)
     }
 
     pub fn user_api(&self, tenant: &Tenant) -> Arc<impl UserApi> {

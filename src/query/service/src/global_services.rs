@@ -56,6 +56,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
+use crate::task::service::TaskService;
 
 pub struct GlobalServices;
 
@@ -141,7 +142,6 @@ impl GlobalServices {
             )
             .await?;
         }
-
         RoleCacheManager::init()?;
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
@@ -175,6 +175,7 @@ impl GlobalServices {
         if config.log.history.on {
             GlobalHistoryLog::init(config).await?;
         }
+        TaskService::init(config).await?;
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
 

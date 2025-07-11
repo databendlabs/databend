@@ -43,7 +43,7 @@ use futures::TryStreamExt;
 use itertools::Itertools;
 
 pub(crate) use self::codec::decode_non_empty_item;
-pub(crate) use self::codec::decode_seqv;
+pub use self::codec::decode_seqv;
 pub(crate) use self::codec::decode_transition;
 pub(crate) use self::codec::encode_operation;
 pub use self::upsert_pb::UpsertPB;

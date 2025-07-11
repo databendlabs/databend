@@ -170,6 +170,7 @@ mod interpreter_view_create;
 mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
+mod task;
 mod util;
 
 pub use access::ManagementModeAccess;
