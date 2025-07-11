@@ -41,7 +41,6 @@ where A: SortAlgorithm
     output: Arc<OutputPort>,
     schema: DataSchemaRef,
     block_size: usize,
-    limit: Option<usize>,
 
     output_data: Option<DataBlock>,
     cur_index: u32,
@@ -56,7 +55,6 @@ where A: SortAlgorithm
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         block_size: usize,
-        limit: Option<usize>,
         remove_order_col: bool,
     ) -> Result<Self> {
         let streams = inputs
@@ -76,7 +74,6 @@ where A: SortAlgorithm
             output,
             schema,
             block_size,
-            limit,
             output_data: None,
             cur_index: 0,
             inner: Err(streams),
@@ -145,11 +142,12 @@ where A: SortAlgorithm + 'static
             Err(streams) => streams,
         };
 
-        if streams.iter().all(|stream| stream.input.is_finished()) {
+        if streams.iter().all(|stream| stream.is_finished()) {
             self.output.finish();
             return Ok(Event::Finished);
         }
 
+        log::debug!("create merger cur_index {}", self.cur_index);
         for stream in streams.iter_mut() {
             stream.update_bound_index(self.cur_index);
         }
@@ -158,7 +156,7 @@ where A: SortAlgorithm + 'static
             self.schema.clone(),
             std::mem::take(streams),
             self.block_size,
-            self.limit,
+            None,
         ));
         Ok(Event::Sync)
     }
@@ -211,8 +209,7 @@ impl<R: Rows> BoundedInputStream<R> {
             return Ok(false);
         }
 
-        if self.input.has_data() {
-            let block = self.input.pull_data().unwrap()?;
+        if let Some(block) = self.input.pull_data().transpose()? {
             self.input.set_need_data();
             self.data = Some(block);
             Ok(false)
@@ -253,6 +250,10 @@ impl<R: Rows> BoundedInputStream<R> {
             bound_index,
             more: true,
         });
+    }
+
+    fn is_finished(&self) -> bool {
+        self.input.is_finished() && self.data.is_none()
     }
 }
 

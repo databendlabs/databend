@@ -357,7 +357,6 @@ impl Build<'_> {
             self.output.clone(),
             self.schema().clone(),
             self.params.block_size,
-            self.params.limit,
             !self.params.output_order_col,
         )?))
     }
