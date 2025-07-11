@@ -30,7 +30,7 @@ use databend_common_pipeline_transforms::sort::Merger;
 use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::SortedStream;
 
-use crate::pipelines::processors::transforms::SortBound;
+use super::SortBound;
 
 type Stream<A> = BoundedInputStream<<A as SortAlgorithm>::Rows>;
 
@@ -44,7 +44,7 @@ where A: SortAlgorithm
     limit: Option<usize>,
 
     output_data: Option<DataBlock>,
-    bound_index: u32,
+    cur_index: u32,
     inner: std::result::Result<Merger<A, Stream<A>>, Vec<Stream<A>>>,
 }
 
@@ -78,7 +78,7 @@ where A: SortAlgorithm
             block_size,
             limit,
             output_data: None,
-            bound_index: 0,
+            cur_index: 0,
             inner: Err(streams),
         })
     }
@@ -119,8 +119,8 @@ where A: SortAlgorithm + 'static
         let merger = self.inner.as_mut().ok().unwrap();
         if let Some(block) = merger.next_block()? {
             self.output_data = Some(block.add_meta(Some(SortBound::create(
-                self.bound_index,
-                (!merger.is_finished()).then_some(self.bound_index),
+                self.cur_index,
+                (!merger.is_finished()).then_some(self.cur_index),
             )))?);
         };
         Ok(())
@@ -137,7 +137,7 @@ where A: SortAlgorithm + 'static
                 if !merger.is_finished() {
                     return Ok(Event::Sync);
                 }
-                self.bound_index += 1;
+                self.cur_index += 1;
                 let merger = std::mem::replace(inner, Err(vec![])).ok().unwrap();
                 self.inner = Err(merger.streams());
                 self.inner.as_mut().err().unwrap()
@@ -151,7 +151,7 @@ where A: SortAlgorithm + 'static
         }
 
         for stream in streams.iter_mut() {
-            stream.update_bound_index(self.bound_index);
+            stream.update_bound_index(self.cur_index);
         }
 
         self.inner = Ok(Merger::create(
@@ -233,6 +233,10 @@ impl<R: Rows> BoundedInputStream<R> {
             .expect("require a SortBound");
 
         let bound = self.bound.as_mut().unwrap();
+        assert!(
+            meta.index >= bound.bound_index,
+            "meta: {meta:?}, bound: {bound:?}",
+        );
         if meta.index == bound.bound_index {
             bound.more = meta.next.is_some_and(|next| next == meta.index);
             self.data.take().map(|mut data| {
@@ -240,7 +244,6 @@ impl<R: Rows> BoundedInputStream<R> {
                 data
             })
         } else {
-            assert!(meta.index > bound.bound_index);
             None
         }
     }
@@ -250,5 +253,105 @@ impl<R: Rows> BoundedInputStream<R> {
             bound_index,
             more: true,
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::types::Int32Type;
+    use databend_common_expression::FromData;
+    use databend_common_pipeline_core::processors::connect;
+    use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
+
+    use super::*;
+
+    fn create_block(empty: bool, index: u32, next: Option<u32>) -> DataBlock {
+        let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);
+        let block = if empty { block.slice(0..0) } else { block };
+        block
+            .add_meta(Some(SortBound::create(index, next)))
+            .unwrap()
+    }
+
+    fn create_stream() -> (
+        BoundedInputStream<SimpleRowsAsc<Int32Type>>,
+        Arc<OutputPort>,
+    ) {
+        let output = OutputPort::create();
+        let input = InputPort::create();
+        unsafe {
+            connect(&input, &output);
+        }
+
+        let stream = BoundedInputStream {
+            data: None,
+            input,
+            remove_order_col: false,
+            sort_row_offset: 0,
+            bound: None,
+            _r: PhantomData,
+        };
+        (stream, output)
+    }
+
+    #[test]
+    fn test_bounded_input_stream() {
+        let (mut stream, output) = create_stream();
+
+        stream.update_bound_index(0);
+
+        {
+            let (_, pending) = stream.next().unwrap();
+
+            assert!(stream.bound.unwrap().more);
+            assert!(pending);
+        }
+
+        {
+            let block = create_block(true, 0, Some(0));
+            output.push_data(Ok(block));
+
+            let (_, pending) = stream.next().unwrap();
+
+            assert!(stream.bound.unwrap().more);
+            assert!(pending);
+        }
+
+        {
+            let block = create_block(false, 0, Some(0));
+            output.push_data(Ok(block));
+
+            let (data, pending) = stream.next().unwrap();
+            assert!(!pending);
+            let data = data.unwrap();
+            assert!(data.0.get_meta().is_none());
+            assert_eq!(data.1.len(), 3);
+        }
+
+        {
+            let block = create_block(true, 0, Some(1));
+            output.push_data(Ok(block));
+
+            let (data, pending) = stream.next().unwrap();
+
+            assert!(data.is_none());
+            assert!(!stream.bound.unwrap().more);
+            assert!(pending);
+
+            let block = create_block(false, 1, Some(1));
+            output.push_data(Ok(block));
+
+            let (data, pending) = stream.next().unwrap();
+            assert!(data.is_none());
+            assert!(!stream.bound.unwrap().more);
+            assert!(!pending);
+
+            let (data, pending) = stream.next().unwrap();
+            assert!(data.is_none());
+            assert!(!stream.bound.unwrap().more);
+            assert!(!pending);
+        }
     }
 }
