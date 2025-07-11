@@ -49,8 +49,8 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::WarehouseOptions;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::MetaError;
@@ -147,10 +147,15 @@ impl TaskService {
         self.initialized.store(true, Ordering::SeqCst);
     }
 
-    pub fn init(cfg: &InnerConfig) -> Result<()> {
+    pub async fn init(cfg: &InnerConfig) -> Result<()> {
         let tenant = cfg.query.tenant_id.clone();
-        let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())
-            .map_err(|_e| ErrorCode::Internal("Create MetaClient failed for Task"))?;
+        let meta_store = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf())
+            .create_meta_store()
+            .await
+            .map_err(|e| {
+                ErrorCode::MetaServiceError(format!("Failed to create meta store: {}", e))
+            })?;
+        let meta_client = meta_store.deref().clone();
         let meta_handle = TaskMetaHandle::new(meta_client, cfg.query.node_id.clone());
         let runtime = Arc::new(Runtime::with_worker_threads(
             4,
