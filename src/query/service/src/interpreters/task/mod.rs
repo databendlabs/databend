@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_cloud_control::task_utils;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTaskPlan;
 use databend_common_sql::plans::CreateTaskPlan;
@@ -34,9 +35,7 @@ pub(crate) struct TaskInterpreterFactory;
 
 impl TaskInterpreterFactory {
     pub fn build() -> TaskInterpreterImpl {
-        // TODO: for test
-        if true {
-            // if GlobalConfig::instance().query.enable_private_task {
+        if GlobalConfig::instance().query.enable_private_task {
             return TaskInterpreterImpl::Private(PrivateTaskInterpreter);
         }
         TaskInterpreterImpl::Cloud(CloudTaskInterpreter)
