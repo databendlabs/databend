@@ -138,9 +138,7 @@ impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
         let bounds = Bounds::merge::<R>(
             self.input_data
                 .iter_mut()
-                .filter_map(|meta| {
-                    (!meta.bounds.is_empty()).then(|| std::mem::take(&mut meta.bounds))
-                })
+                .map(|meta| std::mem::take(&mut meta.bounds))
                 .collect(),
             self.state.batch_rows,
         )?;
@@ -163,42 +161,43 @@ impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
             sequences,
         };
 
+        let bounds = local.normalize_bounds();
         let global = self
             .state
-            .commit_sample(Some(SortExchangeMeta {
-                params,
-                bounds: local.normalize_bounds::<R>(),
-            }))
+            .commit_sample(Some(SortExchangeMeta { params, bounds }))
             .await?;
 
         let bounds_vec = global
             .into_iter()
-            .filter_map(|meta| (!meta.bounds.is_empty()).then_some(meta.bounds))
+            .map(|meta| {
+                assert!(!meta.bounds.is_empty());
+                meta.bounds.clone()
+            })
             .collect();
-        self.output_data = Some(SortCollectedMeta {
-            bounds: Bounds::merge::<R>(bounds_vec, self.state.batch_rows)?.dedup::<R>(),
-            ..local
-        });
+
+        let bounds = Bounds::merge::<R>(bounds_vec, self.state.batch_rows)?.dedup::<R>();
+        log::debug!("global_bounds.len: {}", bounds.len());
+        self.output_data = Some(SortCollectedMeta { bounds, ..local });
         Ok(())
     }
 }
 
 impl SortCollectedMeta {
-    fn normalize_bounds<R: Rows>(&self) -> Bounds {
+    fn normalize_bounds(&self) -> Bounds {
         if self.bounds.len() > 1 {
-            return self.bounds.dedup::<R>();
+            return self.bounds.clone();
         }
 
         let Some(seq) = self.sequences.get(self.sequences.len() / 2) else {
-            return Bounds::default();
+            unreachable!()
         };
 
         seq.get(seq.len() / 2)
             .map(|block| match block.domain.len() {
                 0 => Bounds::default(),
                 1 => Bounds::new_unchecked(block.domain.clone()),
-                _ => Bounds::new_unchecked(block.domain.slice(0..1)).dedup::<R>(),
+                _ => Bounds::new_unchecked(block.domain.slice(0..1)),
             })
-            .unwrap_or_default()
+            .unwrap()
     }
 }

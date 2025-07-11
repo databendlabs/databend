@@ -97,7 +97,7 @@ impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         match self.step {
-            SortStep::Final | SortStep::Route => {
+            SortStep::Final | SortStep::Shuffled => {
                 let mut fields = input_schema.fields().clone();
                 // If the plan is after exchange plan in cluster mode,
                 // the order column is at the last of the input schema.
@@ -109,7 +109,6 @@ impl Sort {
                 fields.pop();
                 Ok(DataSchemaRefExt::create(fields))
             }
-            SortStep::Shuffled => Ok(input_schema),
             SortStep::Single | SortStep::Partial | SortStep::Sample => {
                 let mut fields = self
                     .pre_projection
@@ -143,6 +142,7 @@ impl Sort {
                 }
                 Ok(DataSchemaRefExt::create(fields))
             }
+            SortStep::Route => Ok(input_schema),
         }
     }
 }

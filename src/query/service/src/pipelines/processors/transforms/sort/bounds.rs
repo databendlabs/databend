@@ -31,6 +31,9 @@ pub struct Bounds(
 
 impl Bounds {
     pub fn new_unchecked(column: Column) -> Bounds {
+        if column.len() == 0 {
+            return Self::default();
+        }
         Bounds(vec![column])
     }
 
@@ -49,7 +52,6 @@ impl Bounds {
     }
 
     pub fn merge<R: Rows>(mut vector: Vec<Bounds>, batch_rows: usize) -> Result<Self> {
-        debug_assert!(vector.iter().all(|bounds| !bounds.is_empty()));
         match vector.len() {
             0 => Ok(Bounds(vec![])),
             1 => Ok(vector.pop().unwrap()),
@@ -68,7 +70,7 @@ impl Bounds {
                     blocks
                         .iter()
                         .rev()
-                        .map(|b| b.get_last_column().clone())
+                        .map(|b| b.get_by_offset(0).to_column())
                         .collect(),
                 ))
             }
@@ -136,6 +138,7 @@ impl Bounds {
         )]))
     }
 
+    #[allow(dead_code)]
     pub fn dedup_reduce<R: Rows>(&self, n: usize) -> Self {
         if n == 0 {
             return Self::default();
@@ -178,11 +181,8 @@ impl Bounds {
             last = Some((cur_rows, r_idx));
         }
 
-        Bounds(vec![Column::take_column_indices(
-            &self.0,
-            &indices,
-            indices.len(),
-        )])
+        let col = Column::take_column_indices(&self.0, &indices, indices.len());
+        Bounds::new_unchecked(col)
     }
 
     pub fn dedup<R: Rows>(&self) -> Self {

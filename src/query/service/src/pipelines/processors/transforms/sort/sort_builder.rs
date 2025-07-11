@@ -355,9 +355,8 @@ impl Build<'_> {
         Ok(Box::new(BoundedMultiSortMergeProcessor::<A>::new(
             inputs,
             self.output.clone(),
-            self.schema().clone(),
+            self.params.schema.clone(),
             self.params.block_size,
-            !self.params.output_order_col,
         )?))
     }
 }

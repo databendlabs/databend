@@ -63,6 +63,13 @@ impl TransformSortRoute {
                 }
             };
 
+            log::debug!(
+                "input {:?}, meta: {meta:?}, cur_index {}",
+                input as *const _,
+                self.cur_index
+            );
+
+            assert!(!input.is_finished() || meta.next.is_none());
             if meta.index == self.cur_index {
                 let (block, meta) = data.take().unwrap();
                 self.output.push_data(Ok(block));

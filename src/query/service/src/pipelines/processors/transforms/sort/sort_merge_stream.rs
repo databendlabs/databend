@@ -55,16 +55,15 @@ where A: SortAlgorithm
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
         block_size: usize,
-        remove_order_col: bool,
     ) -> Result<Self> {
         let streams = inputs
             .iter()
             .map(|input| BoundedInputStream {
                 data: None,
                 input: input.clone(),
-                remove_order_col,
+                remove_order_col: true,
                 bound: None,
-                sort_row_offset: schema.fields().len() - 1,
+                sort_row_offset: schema.fields().len(),
                 _r: PhantomData,
             })
             .collect();
@@ -143,6 +142,7 @@ where A: SortAlgorithm + 'static
         };
 
         if streams.iter().all(|stream| stream.is_finished()) {
+            log::debug!("output finished, cur_index {}", self.cur_index);
             self.output.finish();
             return Ok(Event::Finished);
         }

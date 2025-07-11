@@ -214,6 +214,8 @@ impl Processor for SortBoundEdge {
 
         output_meta.next = Some(incoming_index);
 
+        log::debug!("output_meta: {:?}", output_meta);
+
         self.output.push_data(Ok(output));
         Ok(Event::NeedConsume)
     }
