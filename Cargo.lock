@@ -4788,7 +4788,6 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "enumflags2",
- "futures",
  "itertools 0.13.0",
  "jwt-simple",
  "log",
