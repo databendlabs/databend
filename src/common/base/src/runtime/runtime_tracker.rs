@@ -45,6 +45,7 @@
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -132,7 +133,6 @@ impl CaptureLogSettings {
     }
 }
 
-#[derive(Clone)]
 pub struct TrackingPayload {
     pub query_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
@@ -143,6 +143,26 @@ pub struct TrackingPayload {
     pub local_time_series_profile: Option<Arc<TimeSeriesProfiles>>,
     pub workload_group_resource: Option<Arc<WorkloadGroupResource>>,
     pub perf_enabled: bool,
+    pub process_rows: AtomicUsize,
+}
+
+impl Clone for TrackingPayload {
+    fn clone(&self) -> Self {
+        TrackingPayload {
+            query_id: self.query_id.clone(),
+            profile: self.profile.clone(),
+            mem_stat: self.mem_stat.clone(),
+            metrics: self.metrics.clone(),
+            capture_log_settings: self.capture_log_settings.clone(),
+            time_series_profile: self.time_series_profile.clone(),
+            local_time_series_profile: self.local_time_series_profile.clone(),
+            workload_group_resource: self.workload_group_resource.clone(),
+            perf_enabled: self.perf_enabled,
+            process_rows: AtomicUsize::new(
+                self.process_rows.load(std::sync::atomic::Ordering::SeqCst),
+            ),
+        }
+    }
 }
 
 pub struct TrackingGuard {
@@ -222,6 +242,7 @@ impl ThreadTracker {
                 local_time_series_profile: None,
                 workload_group_resource: None,
                 perf_enabled: false,
+                process_rows: AtomicUsize::new(0),
             }),
         }
     }
@@ -335,6 +356,18 @@ impl ThreadTracker {
             })
             .ok()
             .and_then(|x| x)
+    }
+
+    pub fn process_rows() -> usize {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .process_rows
+                    .load(std::sync::atomic::Ordering::SeqCst)
+            })
+            .unwrap_or(0)
     }
 }
 

@@ -3102,6 +3102,7 @@ dependencies = [
  "libc",
  "log",
  "logcall",
+ "loom 0.7.2",
  "micromarshal",
  "num-traits",
  "num_cpus",

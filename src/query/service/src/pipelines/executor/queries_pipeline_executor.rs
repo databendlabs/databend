@@ -147,8 +147,13 @@ impl QueriesPipelineExecutor {
         let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
         while !self.global_tasks_queue.is_finished() {
-            // When there are not enough tasks, the thread will be blocked, so we need loop check.
+            // Load tasks from global queue into worker context when context is empty.
+            // When context already contains tasks (new scheduled task triggered
+            // by previously executed processors in this context),
+            // those local tasks take priority and are executed first.
             while !self.global_tasks_queue.is_finished() && !context.has_task() {
+                // If no tasks are available in the global tasks queue,
+                // this steal_tasks_to_context will block here
                 self.global_tasks_queue
                     .steal_task_to_context(&mut context, self);
             }
