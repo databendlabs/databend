@@ -41,7 +41,6 @@ use databend_common_pipeline_core::SourcePipeBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
-use databend_common_storages_system::QueryExecutionStatsQueue;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;

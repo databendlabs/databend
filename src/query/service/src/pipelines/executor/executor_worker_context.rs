@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::intrinsics::assume;
 use std::sync::Arc;
 use std::time::Instant;
+use std::time::SystemTime;
 
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
@@ -163,14 +164,16 @@ impl ExecutorWorkerContext {
     ) -> Result<Option<(NodeIndex, Arc<RunningGraph>)>> {
         let payload = proc.graph.get_node_tracking_payload(proc.processor.id());
         let guard = ThreadTracker::tracking(payload.clone());
-
+        let begin = SystemTime::now();
         let instant = Instant::now();
 
         proc.processor.process()?;
         let nanos = instant.elapsed().as_nanos();
         assume(nanos < 18446744073709551615_u128);
         Profile::record_usize_profile(ProfileStatisticsName::CpuTime, nanos as usize);
-        proc.graph.record_process_time(nanos as usize);
+        let process_rows = proc.process_rows;
+        proc.graph
+            .record_process(begin, nanos as usize / 1_000, process_rows);
 
         if let Err(out_of_limit) = guard.flush() {
             return Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)));

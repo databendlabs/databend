@@ -73,9 +73,6 @@ impl QueryExecutorTasksQueue {
         if !workers_tasks.is_empty() {
             let task = workers_tasks.pop_task(context.get_worker_id());
 
-            if let ExecutorTask::Sync(processor) = &task {
-                processor.graph.record_process_rows(processor.process_rows);
-            }
             context.set_task(task);
 
             let workers_condvar = context.get_workers_condvar();

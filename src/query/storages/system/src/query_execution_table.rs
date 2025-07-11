@@ -21,9 +21,11 @@ use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::VariantType;
+use databend_common_expression::types::UInt32Type;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -83,63 +85,17 @@ impl SyncSystemTable for QueryExecutionTable {
             .as_secs() as u32;
         let valid_time_range = now - 10..now;
 
-        // Create HashMap {timestamp:{query_id:process_rows}}
-        let mut rows_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
+        let (rows_by_timestamp, times_by_timestamp) =
+            self.aggregate_running_stats(running, &valid_time_range);
 
-        // Create HashMap {timestamp:{query_id:process_times}}
-        let mut times_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
+        let columns = self.build_data_columns(
+            local_id,
+            valid_time_range,
+            &rows_by_timestamp,
+            &times_by_timestamp,
+        )?;
 
-        // Aggregate data from all running queries
-        for (query_id, stats) in running {
-            // Process rows data
-            for (timestamp, rows) in stats.process_rows {
-                if !valid_time_range.contains(&timestamp) {
-                    continue;
-                }
-                rows_by_timestamp
-                    .entry(timestamp)
-                    .or_insert_with(HashMap::new)
-                    .insert(query_id.clone(), rows);
-            }
-
-            // Process times data
-            for (timestamp, time_micros) in stats.process_time {
-                if !valid_time_range.contains(&timestamp) {
-                    continue;
-                }
-                times_by_timestamp
-                    .entry(timestamp)
-                    .or_insert_with(HashMap::new)
-                    .insert(query_id.clone(), time_micros);
-            }
-        }
-
-        let mut nodes = Vec::new();
-        let mut timestamps = Vec::new();
-        let mut process_rows_json = Vec::new();
-        let mut process_times_json = Vec::new();
-
-        let empty_map = HashMap::new();
-        for timestamp in valid_time_range {
-            nodes.push(local_id.clone());
-            timestamps.push(timestamp as i64 * 1_000_000);
-
-            let rows_for_timestamp = rows_by_timestamp.get(&timestamp).unwrap_or(&empty_map);
-            let rows_json = serde_json::to_vec(rows_for_timestamp)?;
-            process_rows_json.push(Some(rows_json));
-
-            let times_for_timestamp = times_by_timestamp.get(&timestamp).unwrap_or(&empty_map);
-            let times_json = serde_json::to_vec(times_for_timestamp)?;
-            process_times_json.push(Some(times_json));
-        }
-
-        // Create DataBlock
-        Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(nodes),
-            TimestampType::from_data(timestamps),
-            VariantType::from_opt_data(process_rows_json),
-            VariantType::from_opt_data(process_times_json),
-        ]))
+        Ok(DataBlock::new_from_columns(columns))
     }
 }
 
@@ -148,8 +104,23 @@ impl QueryExecutionTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("node", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
-            TableField::new("process_rows", TableDataType::Variant),
-            TableField::new("process_time_in_micros", TableDataType::Variant),
+            TableField::new("query_id", TableDataType::String),
+            TableField::new(
+                "process_rows",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "process_rows_percentage",
+                TableDataType::Number(NumberDataType::Float64),
+            ),
+            TableField::new(
+                "process_time_in_micros",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "process_time_percentage",
+                TableDataType::Number(NumberDataType::Float64),
+            ),
         ]);
 
         let table_info = TableInfo {
@@ -158,7 +129,7 @@ impl QueryExecutionTable {
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
                 schema,
-                engine: "SystemProcesses".to_string(),
+                engine: "SystemQueryExecution".to_string(),
                 ..Default::default()
             },
             ..Default::default()
@@ -178,5 +149,117 @@ impl QueryExecutionTable {
             .filter_map(|e| e.as_ref().map(|e| e.clone()))
             .collect();
         Ok(archive)
+    }
+
+    fn aggregate_running_stats(
+        &self,
+        running: Vec<(String, ExecutorStatsSnapshot)>,
+        valid_time_range: &std::ops::Range<u32>,
+    ) -> (
+        HashMap<u32, HashMap<String, u32>>,
+        HashMap<u32, HashMap<String, u32>>,
+    ) {
+        let mut rows_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
+        let mut times_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
+
+        for (query_id, stats) in running {
+            aggregate_stats_by_timestamp(
+                stats.process_rows,
+                &query_id,
+                valid_time_range,
+                &mut rows_by_timestamp,
+            );
+            aggregate_stats_by_timestamp(
+                stats.process_time,
+                &query_id,
+                valid_time_range,
+                &mut times_by_timestamp,
+            );
+        }
+
+        (rows_by_timestamp, times_by_timestamp)
+    }
+
+    fn build_data_columns(
+        &self,
+        local_id: String,
+        valid_time_range: std::ops::Range<u32>,
+        rows_by_timestamp: &HashMap<u32, HashMap<String, u32>>,
+        times_by_timestamp: &HashMap<u32, HashMap<String, u32>>,
+    ) -> Result<Vec<databend_common_expression::Column>> {
+        let mut nodes = Vec::new();
+        let mut timestamps = Vec::new();
+        let mut query_ids = Vec::new();
+        let mut process_rows = Vec::new();
+        let mut process_rows_percentage = Vec::new();
+        let mut process_times = Vec::new();
+        let mut process_time_percentage = Vec::new();
+
+        let empty_map = HashMap::new();
+        for timestamp in valid_time_range {
+            let rows_for_timestamp = rows_by_timestamp.get(&timestamp).unwrap_or(&empty_map);
+            let times_for_timestamp = times_by_timestamp.get(&timestamp).unwrap_or(&empty_map);
+
+            let rows_percentage = calculate_percentage(rows_for_timestamp);
+            let times_percentage = calculate_percentage(times_for_timestamp);
+
+            let mut all_query_ids = std::collections::HashSet::new();
+            all_query_ids.extend(rows_for_timestamp.keys());
+            all_query_ids.extend(times_for_timestamp.keys());
+
+            for query_id in all_query_ids {
+                nodes.push(local_id.clone());
+                timestamps.push(timestamp as i64 * 1_000_000);
+                query_ids.push(query_id.clone());
+                process_rows.push(rows_for_timestamp.get(query_id).copied().unwrap_or(0));
+                process_rows_percentage.push(rows_percentage.get(query_id).copied().unwrap_or(0.0));
+                process_times.push(times_for_timestamp.get(query_id).copied().unwrap_or(0));
+                process_time_percentage
+                    .push(times_percentage.get(query_id).copied().unwrap_or(0.0));
+            }
+        }
+
+        Ok(vec![
+            StringType::from_data(nodes),
+            TimestampType::from_data(timestamps),
+            StringType::from_data(query_ids),
+            UInt32Type::from_data(process_rows),
+            Float64Type::from_data(process_rows_percentage),
+            UInt32Type::from_data(process_times),
+            Float64Type::from_data(process_time_percentage),
+        ])
+    }
+}
+
+fn calculate_percentage(data: &HashMap<String, u32>) -> HashMap<String, f64> {
+    let total: u32 = data.values().sum();
+    if total > 0 {
+        data.iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    ((*v as f64 / total as f64) * 10000.0).round() / 100.0,
+                )
+            })
+            .collect()
+    } else {
+        HashMap::new()
+    }
+}
+
+fn aggregate_stats_by_timestamp(
+    stats_data: Vec<(u32, u32)>,
+    query_id: &str,
+    valid_time_range: &std::ops::Range<u32>,
+    target_map: &mut HashMap<u32, HashMap<String, u32>>,
+) {
+    for (timestamp, value) in stats_data {
+        if !valid_time_range.contains(&timestamp) {
+            continue;
+        }
+        target_map
+            .entry(timestamp)
+            .or_insert_with(HashMap::new)
+            .insert(query_id.to_string(), value);
     }
 }
