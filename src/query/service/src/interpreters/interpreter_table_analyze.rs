@@ -283,66 +283,34 @@ fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
     fn traverse(plan: PhysicalPlan) -> PhysicalPlan {
         match plan {
             PhysicalPlan::Filter(plan) => PhysicalPlan::Filter(Filter {
-                plan_id: plan.plan_id,
-                projections: plan.projections,
                 input: Box::new(traverse(*plan.input)),
-                predicates: plan.predicates,
-                stat_info: plan.stat_info,
+                ..plan
             }),
             PhysicalPlan::EvalScalar(plan) => PhysicalPlan::EvalScalar(EvalScalar {
-                plan_id: plan.plan_id,
-                projections: plan.projections,
                 input: Box::new(traverse(*plan.input)),
-                exprs: plan.exprs,
-                stat_info: plan.stat_info,
+                ..plan
             }),
             PhysicalPlan::AggregateExpand(plan) => PhysicalPlan::AggregateExpand(AggregateExpand {
-                plan_id: plan.plan_id,
                 input: Box::new(traverse(*plan.input)),
-                group_bys: plan.group_bys,
-                grouping_sets: plan.grouping_sets,
-                stat_info: plan.stat_info,
+                ..plan
             }),
             PhysicalPlan::AggregatePartial(plan) => {
                 PhysicalPlan::AggregatePartial(AggregatePartial {
-                    plan_id: plan.plan_id,
                     input: Box::new(traverse(*plan.input)),
-                    group_by: plan.group_by,
-                    agg_funcs: plan.agg_funcs,
-                    rank_limit: plan.rank_limit,
-                    enable_experimental_aggregate_hashtable: plan
-                        .enable_experimental_aggregate_hashtable,
-                    group_by_display: plan.group_by_display,
-                    stat_info: plan.stat_info,
+                    ..plan
                 })
             }
             PhysicalPlan::AggregateFinal(plan) => PhysicalPlan::AggregateFinal(AggregateFinal {
-                plan_id: plan.plan_id,
                 input: Box::new(traverse(*plan.input)),
-                group_by: plan.group_by,
-                agg_funcs: plan.agg_funcs,
-                before_group_by_schema: plan.before_group_by_schema,
-                group_by_display: plan.group_by_display,
-                stat_info: plan.stat_info,
+                ..plan
             }),
             PhysicalPlan::Window(plan) => PhysicalPlan::Window(Window {
-                plan_id: plan.plan_id,
-                index: plan.index,
                 input: Box::new(traverse(*plan.input)),
-                func: plan.func,
-                partition_by: plan.partition_by,
-                order_by: plan.order_by,
-                window_frame: plan.window_frame,
-                limit: plan.limit,
+                ..plan
             }),
             PhysicalPlan::Sort(plan) => PhysicalPlan::Sort(Sort {
-                plan_id: plan.plan_id,
                 input: Box::new(traverse(*plan.input)),
-                order_by: plan.order_by,
-                limit: plan.limit,
-                after_exchange: plan.after_exchange,
-                pre_projection: plan.pre_projection,
-                stat_info: plan.stat_info,
+                ..plan
             }),
             PhysicalPlan::Exchange(plan) => traverse(*plan.input),
             _ => plan,

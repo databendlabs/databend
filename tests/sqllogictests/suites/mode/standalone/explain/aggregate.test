@@ -227,7 +227,7 @@ EvalScalar
 query T
 explain select avg(b) from explain_agg_t1 group by a order by avg(b);
 ----
-Sort
+Sort(Single)
 ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -258,7 +258,7 @@ Sort
 query T
 explain select avg(b) + 1 from explain_agg_t1 group by a order by avg(b);
 ----
-Sort
+Sort(Single)
 ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5)]
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -288,7 +288,7 @@ Sort
 query T
 explain select avg(b), avg(b) + 1 from explain_agg_t1 group by a order by avg(b);
 ----
-Sort
+Sort(Single)
 ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -318,7 +318,7 @@ Sort
 query T
 explain select avg(b) + 1, avg(b) from explain_agg_t1 group by a order by avg(b);
 ----
-Sort
+Sort(Single)
 ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#4), sum(b) / if(count(b) = 0, 1, count(b)) (#5), sum(b) / if(count(b) = 0, 1, count(b)) (#6)]
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -348,7 +348,7 @@ Sort
 query T
 explain select avg(b), avg(b) + 1 from explain_agg_t1 group by a order by avg(b) + 1;
 ----
-Sort
+Sort(Single)
 ├── output columns: [sum(b) / if(count(b) = 0, 1, count(b)) (#4), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#5), sum(b) / if(count(b) = 0, 1, count(b)) + 1 (#6)]
 ├── sort keys: [sum(b) / if(count(b) = 0, 1, count(b)) + 1 ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -472,7 +472,7 @@ Limit
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
     ├── sort keys: [referer ASC NULLS LAST, isrefresh DESC NULLS LAST]
     ├── estimated rows: 0.00
@@ -504,7 +504,7 @@ Limit
 ├── limit: 10
 ├── offset: 3
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [count() (#2), t.referer (#0), t.isrefresh (#1)]
     ├── sort keys: [referer ASC NULLS LAST, isrefresh ASC NULLS LAST]
     ├── estimated rows: 0.00

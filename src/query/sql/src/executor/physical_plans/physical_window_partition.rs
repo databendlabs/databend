@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plans::physical_sort::SortStep;
 use crate::executor::physical_plans::SortDesc;
 use crate::executor::PhysicalPlan;
 use crate::IndexType;
@@ -26,7 +27,7 @@ pub struct WindowPartition {
     pub input: Box<PhysicalPlan>,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
-    pub after_exchange: Option<bool>,
+    pub sort_step: SortStep,
     pub top_n: Option<WindowPartitionTopN>,
 
     pub stat_info: Option<PlanStatsInfo>,

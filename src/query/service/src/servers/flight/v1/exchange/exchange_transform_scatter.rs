@@ -43,6 +43,10 @@ impl ScatterTransform {
 impl Transform for ScatterTransform {
     const NAME: &'static str = "ScatterTransform";
 
+    fn name(&self) -> String {
+        format!("ScatterTransform({})", self.scatter.name())
+    }
+
     fn transform(&mut self, data: DataBlock) -> databend_common_exception::Result<DataBlock> {
         let blocks = self.scatter.execute(data)?;
 

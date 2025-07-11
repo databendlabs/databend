@@ -18,6 +18,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
+use enum_as_inner::EnumAsInner;
 
 use super::MutationSource;
 use super::SubqueryExpr;
@@ -125,7 +126,7 @@ pub enum RelOp {
 }
 
 /// Relational operators
-#[derive(Educe)]
+#[derive(Educe, EnumAsInner)]
 #[educe(
     PartialEq(bound = false, attrs = "#[recursive::recursive]"),
     Eq,

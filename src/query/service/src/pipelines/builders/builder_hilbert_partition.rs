@@ -47,7 +47,7 @@ impl PipelineBuilder {
         self.main_pipeline.exchange(
             num_processors,
             HilbertPartitionExchange::create(partition.num_partitions),
-        );
+        )?;
 
         let settings = self.ctx.get_settings();
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;

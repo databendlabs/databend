@@ -332,9 +332,33 @@ pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
         let boxed = boxed.as_ref() as &dyn Any;
         boxed.downcast_ref()
     }
+
+    fn downcast_from_err(boxed: BlockMetaInfoPtr) -> std::result::Result<Self, BlockMetaInfoPtr> {
+        if (boxed.as_ref() as &dyn Any).is::<Self>() {
+            Ok(*(boxed as Box<dyn Any>).downcast().unwrap())
+        } else {
+            Err(boxed)
+        }
+    }
+
+    fn downcast_mut(boxed: &mut BlockMetaInfoPtr) -> Option<&mut Self> {
+        let boxed = boxed.as_mut() as &mut dyn Any;
+        boxed.downcast_mut()
+    }
 }
 
 impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
+
+#[typetag::serde(name = "empty")]
+impl BlockMetaInfo for () {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        <() as BlockMetaInfoDowncast>::downcast_ref_from(info).is_some()
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(())
+    }
+}
 
 impl DataBlock {
     #[inline]
@@ -429,11 +453,6 @@ impl DataBlock {
     #[inline]
     pub fn empty_with_meta(meta: BlockMetaInfoPtr) -> Self {
         DataBlock::new_with_meta(vec![], 0, Some(meta))
-    }
-
-    #[inline]
-    pub fn take_meta(&mut self) -> Option<BlockMetaInfoPtr> {
-        self.meta.take()
     }
 
     #[inline]
@@ -700,6 +719,16 @@ impl DataBlock {
             num_rows: self.num_rows,
             meta,
         })
+    }
+
+    #[inline]
+    pub fn take_meta(&mut self) -> Option<BlockMetaInfoPtr> {
+        self.meta.take()
+    }
+
+    #[inline]
+    pub fn mut_meta(&mut self) -> Option<&mut BlockMetaInfoPtr> {
+        self.meta.as_mut()
     }
 
     #[inline]

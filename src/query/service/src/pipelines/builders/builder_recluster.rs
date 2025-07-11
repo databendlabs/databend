@@ -156,7 +156,7 @@ impl PipelineBuilder {
                 );
 
                 let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs.into())?
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, sort_descs.into(), None)?
                         .with_block_size_hit(sort_block_size)
                         .remove_order_col_at_last();
                 // Todo(zhyass): Recluster will no longer perform sort in the near future.
