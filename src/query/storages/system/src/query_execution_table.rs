@@ -85,8 +85,23 @@ impl SyncSystemTable for QueryExecutionTable {
             .as_secs() as u32;
         let valid_time_range = now - 10..now;
 
-        let (rows_by_timestamp, times_by_timestamp) =
-            self.aggregate_running_stats(running, &valid_time_range);
+        let mut rows_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
+        let mut times_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
+
+        for (query_id, stats) in running {
+            aggregate_stats_by_timestamp(
+                stats.process_rows,
+                &query_id,
+                &valid_time_range,
+                &mut rows_by_timestamp,
+            );
+            aggregate_stats_by_timestamp(
+                stats.process_time,
+                &query_id,
+                &valid_time_range,
+                &mut times_by_timestamp,
+            );
+        }
 
         let columns = self.build_data_columns(
             local_id,
@@ -149,35 +164,6 @@ impl QueryExecutionTable {
             .filter_map(|e| e.as_ref().map(|e| e.clone()))
             .collect();
         Ok(archive)
-    }
-
-    fn aggregate_running_stats(
-        &self,
-        running: Vec<(String, ExecutorStatsSnapshot)>,
-        valid_time_range: &std::ops::Range<u32>,
-    ) -> (
-        HashMap<u32, HashMap<String, u32>>,
-        HashMap<u32, HashMap<String, u32>>,
-    ) {
-        let mut rows_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
-        let mut times_by_timestamp: HashMap<u32, HashMap<String, u32>> = HashMap::new();
-
-        for (query_id, stats) in running {
-            aggregate_stats_by_timestamp(
-                stats.process_rows,
-                &query_id,
-                valid_time_range,
-                &mut rows_by_timestamp,
-            );
-            aggregate_stats_by_timestamp(
-                stats.process_time,
-                &query_id,
-                valid_time_range,
-                &mut times_by_timestamp,
-            );
-        }
-
-        (rows_by_timestamp, times_by_timestamp)
     }
 
     fn build_data_columns(
@@ -259,7 +245,7 @@ fn aggregate_stats_by_timestamp(
         }
         target_map
             .entry(timestamp)
-            .or_insert_with(HashMap::new)
+            .or_default()
             .insert(query_id.to_string(), value);
     }
 }

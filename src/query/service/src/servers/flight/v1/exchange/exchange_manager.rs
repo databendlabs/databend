@@ -122,9 +122,9 @@ impl DataExchangeManager {
             let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
             for (query_id, query_coordinator) in queries_coordinator.iter() {
                 if let Some(info) = &query_coordinator.info {
-                    info.query_executor.clone().map(|executor| {
+                    if let Some(executor) = info.query_executor.clone() {
                         executors.push((query_id, executor));
-                    });
+                    }
                 }
             }
         }

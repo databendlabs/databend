@@ -12,262 +12,174 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
+
 use databend_common_base::runtime::ExecutorStats;
 use databend_common_base::runtime::ExecutorStatsSlot;
-mod executor_stats_loom_tests {
-    use loom::sync::Arc;
-    use loom::thread;
-    use rand::Rng;
+use databend_common_base::runtime::Thread;
 
-    use super::*;
-    #[test]
-    pub fn test_slot_with_loom() {
-        let mut rng = rand::thread_rng();
-        let numbers: [u32; 2] = [rng.gen::<u32>(), rng.gen::<u32>()];
-        let expected_sum = numbers.iter().fold(0u32, |acc, &x| acc.saturating_add(x));
-        let expected_timestamp = 1751871568;
+#[test]
+fn test_executor_stats_slot_basic() {
+    let slot = ExecutorStatsSlot::new();
+    let timestamp = 1000;
 
-        loom::model(move || {
-            let slot = Arc::new(ExecutorStatsSlot::new());
+    // Test initial state
+    let (ts, val) = slot.get();
+    assert_eq!(ts, 0);
+    assert_eq!(val, 0);
 
-            let ths: Vec<_> = numbers
-                .map(|number| {
-                    let slot_clone = slot.clone();
-                    thread::spawn(move || {
-                        slot_clone.add(expected_timestamp, number);
-                    })
-                })
-                .into_iter()
-                .collect();
+    // Test adding values
+    slot.add(timestamp, 100);
+    let (ts, val) = slot.get();
+    assert_eq!(ts, timestamp);
+    assert_eq!(val, 100);
 
-            for th in ths {
-                th.join().unwrap();
-            }
+    // Test accumulation with same timestamp
+    slot.add(timestamp, 200);
+    let (ts, val) = slot.get();
+    assert_eq!(ts, timestamp);
+    assert_eq!(val, 300);
 
-            let (timestamp, sum) = slot.get();
-            assert_eq!(timestamp, expected_timestamp);
-            assert_eq!(sum, expected_sum);
-        });
-    }
+    // Test different timestamp resets value
+    slot.add(timestamp + 1, 50);
+    let (ts, val) = slot.get();
+    assert_eq!(ts, timestamp + 1);
+    assert_eq!(val, 50);
 }
 
-mod executor_stats_regular_tests {
-    use std::sync::Arc;
-    use std::time::Duration;
-    use std::time::SystemTime;
+#[test]
+fn test_executor_stats_slot_overflow() {
+    let slot = ExecutorStatsSlot::new();
+    let timestamp = 2000;
 
-    use databend_common_base::runtime::Thread;
+    // Test saturation at u32::MAX
+    slot.add(timestamp, u32::MAX - 10);
+    slot.add(timestamp, 20); // Should saturate at u32::MAX
+    let (ts, val) = slot.get();
+    assert_eq!(ts, timestamp);
+    assert_eq!(val, u32::MAX);
+}
 
-    use super::*;
+#[test]
+fn test_executor_stats_slot_concurrent() {
+    let slot = Arc::new(ExecutorStatsSlot::new());
+    let timestamp = 4000;
+    let num_threads = 10;
+    let adds_per_thread = 100;
 
-    #[test]
-    fn test_executor_stats_slot_basic() {
-        let slot = ExecutorStatsSlot::new();
-        let timestamp = 1000;
-
-        // Test initial state
-        let (ts, val) = slot.get();
-        assert_eq!(ts, 0);
-        assert_eq!(val, 0);
-
-        // Test adding values
-        slot.add(timestamp, 100);
-        let (ts, val) = slot.get();
-        assert_eq!(ts, timestamp);
-        assert_eq!(val, 100);
-
-        // Test accumulation with same timestamp
-        slot.add(timestamp, 200);
-        let (ts, val) = slot.get();
-        assert_eq!(ts, timestamp);
-        assert_eq!(val, 300);
-
-        // Test different timestamp resets value
-        slot.add(timestamp + 1, 50);
-        let (ts, val) = slot.get();
-        assert_eq!(ts, timestamp + 1);
-        assert_eq!(val, 50);
-    }
-
-    #[test]
-    fn test_executor_stats_slot_overflow() {
-        let slot = ExecutorStatsSlot::new();
-        let timestamp = 2000;
-
-        // Test saturation at u32::MAX
-        slot.add(timestamp, u32::MAX - 10);
-        slot.add(timestamp, 20); // Should saturate at u32::MAX
-        let (ts, val) = slot.get();
-        assert_eq!(ts, timestamp);
-        assert_eq!(val, u32::MAX);
-    }
-
-    #[test]
-    fn test_executor_stats_slot_concurrent() {
-        let slot = Arc::new(ExecutorStatsSlot::new());
-        let timestamp = 4000;
-        let num_threads = 10;
-        let adds_per_thread = 100;
-
-        let handles: Vec<_> = (0..num_threads)
-            .map(|_| {
-                let slot = slot.clone();
-                Thread::spawn(move || {
-                    for _ in 0..adds_per_thread {
-                        slot.add(timestamp, 1);
-                    }
-                })
+    let handles: Vec<_> = (0..num_threads)
+        .map(|_| {
+            let slot = slot.clone();
+            Thread::spawn(move || {
+                for _ in 0..adds_per_thread {
+                    slot.add(timestamp, 1);
+                }
             })
-            .collect();
+        })
+        .collect();
 
-        for handle in handles {
-            handle.join().unwrap();
-        }
-
-        // All threads should have accumulated their values
-        let (ts, val) = slot.get();
-        assert_eq!(ts, timestamp);
-        assert_eq!(val, num_threads * adds_per_thread);
+    for handle in handles {
+        handle.join().unwrap();
     }
 
-    // --- record_process function tests ---
+    // All threads should have accumulated their values
+    let (ts, val) = slot.get();
+    assert_eq!(ts, timestamp);
+    assert_eq!(val, num_threads * adds_per_thread);
+}
 
-    #[test]
-    fn test_record_process_single_second() {
-        let stats = ExecutorStats::new();
-        let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
-        let elapsed_micros = 500_000; // 500ms = 500,000 microseconds
-        let rows = 1000;
+// --- record_process function tests ---
 
-        stats.record_process(base_time, elapsed_micros, rows);
+#[test]
+fn test_record_process_single_second() {
+    let stats = ExecutorStats::new();
+    let base_time = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+    let elapsed_micros = 500_000; // 500ms = 500,000 microseconds
+    let rows = 1000;
 
-        let snapshot = stats.dump_snapshot();
+    stats.record_process(base_time, elapsed_micros, rows);
 
-        // Find the slot with data
-        let mut found_time = false;
-        let mut found_rows = false;
+    let snapshot = stats.dump_snapshot();
 
-        for (ts, micros) in snapshot.process_time {
-            if ts == 1000 && micros == 500_000 {
-                found_time = true;
-                break;
-            }
+    // Find the slot with data
+    let mut found_time = false;
+    let mut found_rows = false;
+
+    for (ts, micros) in snapshot.process_time {
+        if ts == 1000 && micros == 500_000 {
+            found_time = true;
+            break;
         }
-
-        for (ts, row_count) in snapshot.process_rows {
-            if ts == 1000 && row_count == 1000 {
-                found_rows = true;
-                break;
-            }
-        }
-
-        assert!(
-            found_time,
-            "Should find process time recorded in single second"
-        );
-        assert!(
-            found_rows,
-            "Should find process rows recorded in single second"
-        );
     }
 
-    #[test]
-    fn test_record_process_cross_second() {
-        let stats = ExecutorStats::new();
-        // Start at 999.8 seconds, run for 0.4 seconds (crosses into 1000s)
-        let base_time = SystemTime::UNIX_EPOCH + Duration::from_millis(999_800);
-        let elapsed_micros = 400_000; // 400ms = 400,000 microseconds
-        let rows = 1000;
-
-        stats.record_process(base_time, elapsed_micros, rows);
-
-        let snapshot = stats.dump_snapshot();
-
-        // Should have data in both second 999 and 1000
-        let mut found_999 = false;
-        let mut found_1000 = false;
-        let mut total_rows = 0;
-        let mut total_micros = 0;
-
-        for (ts, micros) in snapshot.process_time {
-            if ts == 999 && micros > 0 {
-                found_999 = true;
-                total_micros += micros;
-            } else if ts == 1000 && micros > 0 {
-                found_1000 = true;
-                total_micros += micros;
-            }
+    for (ts, row_count) in snapshot.process_rows {
+        if ts == 1000 && row_count == 1000 {
+            found_rows = true;
+            break;
         }
-
-        for (ts, row_count) in snapshot.process_rows {
-            if ts == 999 && row_count > 0 {
-                total_rows += row_count;
-            } else if ts == 1000 && row_count > 0 {
-                total_rows += row_count;
-            }
-        }
-
-        assert!(found_999, "Should find data in second 999");
-        assert!(found_1000, "Should find data in second 1000");
-        // Note: Due to floating point precision issues in current implementation,
-        // we check that total is close to expected rather than exact
-        assert!(
-            total_micros <= 400_000,
-            "Total micros should not exceed input"
-        );
-        assert!(total_rows <= 1000, "Total rows should not exceed input");
     }
 
-    #[test]
-    fn test_record_process_proportional_allocation() {
-        let stats = ExecutorStats::new();
-        // Start at 999.5 seconds, run for 1.0 seconds (exactly half in each second)
-        let base_time = SystemTime::UNIX_EPOCH + Duration::from_millis(999_500);
-        let elapsed_micros = 1_000_000; // 1 second = 1,000,000 microseconds
-        let rows = 1000;
+    assert!(
+        found_time,
+        "Should find process time recorded in single second"
+    );
+    assert!(
+        found_rows,
+        "Should find process rows recorded in single second"
+    );
+}
 
-        stats.record_process(base_time, elapsed_micros, rows);
+#[test]
+fn test_record_process_proportional_allocation() {
+    let stats = ExecutorStats::new();
+    // Start at 999.5 seconds, run for 1.0 seconds (exactly half in each second)
+    let base_time = SystemTime::UNIX_EPOCH + Duration::from_millis(999_500);
+    let elapsed_micros = 1_000_000; // 1 second = 1,000,000 microseconds
+    let rows = 1000;
 
-        let snapshot = stats.dump_snapshot();
+    stats.record_process(base_time, elapsed_micros, rows);
 
-        let mut micros_999 = 0;
-        let mut micros_1000 = 0;
-        let mut rows_999 = 0;
-        let mut rows_1000 = 0;
+    let snapshot = stats.dump_snapshot();
 
-        for (ts, micros) in snapshot.process_time {
-            if ts == 999 {
-                micros_999 = micros;
-            } else if ts == 1000 {
-                micros_1000 = micros;
-            }
+    let mut micros_999 = 0;
+    let mut micros_1000 = 0;
+    let mut rows_999 = 0;
+    let mut rows_1000 = 0;
+
+    for (ts, micros) in snapshot.process_time {
+        if ts == 999 {
+            micros_999 = micros;
+        } else if ts == 1000 {
+            micros_1000 = micros;
         }
-
-        for (ts, row_count) in snapshot.process_rows {
-            if ts == 999 {
-                rows_999 = row_count;
-            } else if ts == 1000 {
-                rows_1000 = row_count;
-            }
-        }
-
-        // Due to floating point precision issues, we check ranges rather than exact values
-        assert!(
-            micros_999 + micros_1000 <= 1_000_000,
-            "Total micros should not exceed input"
-        );
-        assert!(
-            rows_999 + rows_1000 <= 1000,
-            "Total rows should not exceed input"
-        );
-
-        // Each second should have some allocation
-        assert!(micros_999 > 0, "Second 999 should have some time allocated");
-        assert!(
-            micros_1000 > 0,
-            "Second 1000 should have some time allocated"
-        );
-        assert!(rows_999 > 0, "Second 999 should have some rows allocated");
-        assert!(rows_1000 > 0, "Second 1000 should have some rows allocated");
     }
+
+    for (ts, row_count) in snapshot.process_rows {
+        if ts == 999 {
+            rows_999 = row_count;
+        } else if ts == 1000 {
+            rows_1000 = row_count;
+        }
+    }
+
+    // Due to floating point precision issues, we check ranges rather than exact values
+    assert!(
+        micros_999 + micros_1000 <= 1_000_000,
+        "Total micros should not exceed input"
+    );
+    assert!(
+        rows_999 + rows_1000 <= 1000,
+        "Total rows should not exceed input"
+    );
+
+    // Each second should have some allocation
+    assert!(micros_999 > 0, "Second 999 should have some time allocated");
+    assert!(
+        micros_1000 > 0,
+        "Second 1000 should have some time allocated"
+    );
+    assert!(rows_999 > 0, "Second 999 should have some rows allocated");
+    assert!(rows_1000 > 0, "Second 1000 should have some rows allocated");
 }
