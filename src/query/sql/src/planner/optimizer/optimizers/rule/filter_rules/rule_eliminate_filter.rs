@@ -30,7 +30,6 @@ use crate::plans::ConstantTableScan;
 use crate::plans::Filter;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::MetadataRef;
 
@@ -62,7 +61,7 @@ impl Rule for RuleEliminateFilter {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let eval_scalar: Filter = s_expr.plan().clone().try_into()?;
+        let eval_scalar = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         // First, de-duplication predicates.
         let origin_predicates = eval_scalar.predicates.clone();
         let predicates = origin_predicates
@@ -94,7 +93,7 @@ impl Rule for RuleEliminateFilter {
             }
             let empty_scan =
                 ConstantTableScan::new_empty_scan(DataSchemaRefExt::create(fields), output_columns);
-            let result = SExpr::create_leaf(Arc::new(RelOperator::ConstantTableScan(empty_scan)));
+            let result = SExpr::create_leaf(empty_scan);
             state.add_result(result);
             return Ok(());
         }
@@ -124,10 +123,7 @@ impl Rule for RuleEliminateFilter {
             state.add_result(s_expr.child(0)?.clone());
         } else if origin_predicates.len() != predicates.len() {
             let filter = Filter { predicates };
-            state.add_result(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-            ));
+            state.add_result(SExpr::create_unary(filter, s_expr.child(0)?.clone()));
         }
         Ok(())
     }

@@ -23,7 +23,6 @@ use crate::plans::Aggregate;
 use crate::plans::Limit;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 use crate::plans::SortItem;
 
@@ -85,7 +84,7 @@ impl RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let Some(mut count) = limit.limit else {
             return Ok(());
         };
@@ -94,7 +93,7 @@ impl RulePushDownRankLimitAggregate {
             return Ok(());
         }
         let agg = s_expr.child(0)?;
-        let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
+        let mut agg_limit = agg.plan().as_any().downcast_ref::<Aggregate>().unwrap();
 
         let sort_items = agg_limit
             .group_items
@@ -115,11 +114,8 @@ impl RulePushDownRankLimitAggregate {
             window_partition: None,
         };
 
-        let agg = SExpr::create_unary(
-            Arc::new(RelOperator::Aggregate(agg_limit)),
-            Arc::new(agg.child(0)?.clone()),
-        );
-        let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg);
+        let agg = SExpr::create_unary(agg_limit, Arc::new(agg.child(0)?.clone()));
+        let sort = SExpr::create_unary(sort, agg);
         let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
 
         result.set_applied_rule(&self.id);
@@ -132,9 +128,9 @@ impl RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let sort = s_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
         let mut has_eval_scalar = false;
-        let agg_limit_expr = match s_expr.child(0)?.plan().rel_op() {
+        let agg_limit_expr = match s_expr.child(0)?.plan_rel_op() {
             RelOp::Aggregate => s_expr.child(0)?,
             RelOp::EvalScalar => {
                 has_eval_scalar = true;
@@ -147,7 +143,11 @@ impl RulePushDownRankLimitAggregate {
             return Ok(());
         };
 
-        let mut agg_limit: Aggregate = agg_limit_expr.plan().clone().try_into()?;
+        let mut agg_limit = agg_limit_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Aggregate>()
+            .unwrap();
 
         let is_order_subset = sort
             .items
@@ -179,10 +179,7 @@ impl RulePushDownRankLimitAggregate {
 
         agg_limit.rank_limit = Some((sort_items, limit));
 
-        let agg = SExpr::create_unary(
-            Arc::new(RelOperator::Aggregate(agg_limit)),
-            Arc::new(agg_limit_expr.child(0)?.clone()),
-        );
+        let agg = SExpr::create_unary(agg_limit, Arc::new(agg_limit_expr.child(0)?.clone()));
 
         let mut result = if has_eval_scalar {
             let eval_scalar = s_expr.child(0)?.replace_children(vec![Arc::new(agg)]);
@@ -206,7 +203,7 @@ impl Rule for RulePushDownRankLimitAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        match s_expr.plan().rel_op() {
+        match s_expr.plan_rel_op() {
             RelOp::Limit => self.apply_limit(s_expr, state),
             RelOp::Sort | RelOp::EvalScalar => self.apply_sort(s_expr, state),
             _ => Ok(()),

@@ -488,7 +488,7 @@ impl InterpreterFactory {
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
             Plan::DataMutation { s_expr, schema, .. } => {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
                 Ok(Arc::new(MutationInterpreter::try_create(
                     ctx,
                     *s_expr.clone(),

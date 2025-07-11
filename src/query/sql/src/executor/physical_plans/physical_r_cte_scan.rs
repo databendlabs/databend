@@ -19,8 +19,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::SExpr;
+use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {
@@ -37,10 +40,31 @@ impl RecursiveCteScan {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for RecursiveCteScan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::RecursiveCteScan>()
+            .unwrap();
+        builder
+            .build_recursive_cte_scan(s_expr, plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_recursive_cte_scan(
         &mut self,
+        _s_expr: &SExpr,
         recursive_cte_scan: &crate::plans::RecursiveCteScan,
+        _required: ColumnSet,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::RecursiveCteScan(RecursiveCteScan {

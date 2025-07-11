@@ -83,11 +83,11 @@ impl Rule for RulePushDownFilterJoin {
 
         // Second, check if can convert mark join to semi join
         let (s_expr, mark_to_semi) = convert_mark_to_semi_join(&s_expr)?;
-        if s_expr.plan().rel_op() != RelOp::Filter {
+        if s_expr.plan_rel_op() != RelOp::Filter {
             state.add_result(s_expr);
             return Ok(());
         }
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         if filter.predicates.is_empty() {
             state.add_result(s_expr);
             return Ok(());
@@ -117,7 +117,7 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
     // So `(t1.a=1 or t1.a=1), (t2.b=2 or t2.b=1)` may be pushed down join and reduce rows between join
     let mut predicates = rewrite_predicates(s_expr)?;
     let join_expr = s_expr.child(0)?;
-    let mut join: Join = join_expr.plan().clone().try_into()?;
+    let mut join = join_expr.plan().as_any().downcast_mut::<Join>().unwrap();
 
     let rel_expr = RelExpr::with_s_expr(join_expr);
     let left_prop = rel_expr.derive_relational_prop_child(0)?;
@@ -286,43 +286,30 @@ pub fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Resul
 
     if !left_push_down.is_empty() {
         left_child = SExpr::create_unary(
-            Arc::new(
-                Filter {
-                    predicates: left_push_down,
-                }
-                .into(),
-            ),
-            Arc::new(left_child),
+            Filter {
+                predicates: left_push_down,
+            },
+            left_child,
         );
     }
 
     if !right_push_down.is_empty() {
         right_child = SExpr::create_unary(
-            Arc::new(
-                Filter {
-                    predicates: right_push_down,
-                }
-                .into(),
-            ),
-            Arc::new(right_child),
+            Filter {
+                predicates: right_push_down,
+            },
+            right_child,
         );
     }
 
-    let mut result = SExpr::create_binary(
-        Arc::new(join.into()),
-        Arc::new(left_child),
-        Arc::new(right_child),
-    );
+    let mut result = SExpr::create_binary(join, left_child, right_child);
 
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(
-            Arc::new(
-                Filter {
-                    predicates: original_predicates,
-                }
-                .into(),
-            ),
-            Arc::new(result),
+            Filter {
+                predicates: original_predicates,
+            },
+            result,
         );
     }
 

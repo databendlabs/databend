@@ -57,9 +57,13 @@ impl Rule for RulePushDownLimitUnion {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let union_s_expr = s_expr.child(0)?;
-        let union: UnionAll = union_s_expr.plan().clone().try_into()?;
+        let union = union_s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<UnionAll>()
+            .unwrap();
 
         if limit.limit.is_none() {
             return Ok(());
@@ -79,18 +83,10 @@ impl Rule for RulePushDownLimitUnion {
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add limit to union children
-        union_left_child = SExpr::create_unary(
-            Arc::new(new_limit.clone().into()),
-            Arc::new(union_left_child),
-        );
-        union_right_child =
-            SExpr::create_unary(Arc::new(new_limit.into()), Arc::new(union_right_child));
+        union_left_child = SExpr::create_unary(new_limit.clone(), union_left_child);
+        union_right_child = SExpr::create_unary(new_limit, union_right_child);
 
-        let mut result = SExpr::create_binary(
-            Arc::new(union.into()),
-            Arc::new(union_left_child),
-            Arc::new(union_right_child),
-        );
+        let mut result = SExpr::create_binary(union.clone(), union_left_child, union_right_child);
 
         // Add original limit to top
         result = s_expr.replace_children(vec![Arc::new(result)]);

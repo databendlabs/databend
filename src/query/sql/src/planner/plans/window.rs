@@ -43,6 +43,7 @@ use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
@@ -114,6 +115,18 @@ impl Operator for Window {
         RelOp::Window
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let iter = self.order_by.iter().map(|o| &o.order_by_item.scalar);
+        let iter = iter.chain(self.partition_by.iter().map(|expr| &expr.scalar));
+        let iter = iter.chain(self.arguments.iter().map(|expr| &expr.scalar));
+
+        if let WindowFuncType::Aggregate(agg) = &self.function {
+            Box::new(iter.chain(agg.exprs()))
+        } else {
+            Box::new(iter)
+        }
+    }
+
     fn compute_required_prop_child(
         &self,
         _ctx: Arc<dyn TableContext>,
@@ -174,6 +187,10 @@ impl Operator for Window {
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

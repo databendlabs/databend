@@ -238,10 +238,7 @@ impl Binder {
             pre_projection: None,
             window_partition: None,
         };
-        Ok(SExpr::create_unary(
-            Arc::new(sort_plan.into()),
-            Arc::new(child),
-        ))
+        Ok(SExpr::create_unary(sort_plan, child))
     }
 
     fn m_cte_to_temp_table(&mut self, cte: &CTE, cte_index: usize, mut with: With) -> Result<()> {

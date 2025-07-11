@@ -32,6 +32,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::physical_plans::common::AggregateFunctionSignature;
 use crate::executor::physical_plans::common::SortDesc;
@@ -147,6 +148,25 @@ pub struct NthValueFunctionDesc {
 pub struct NtileFunctionDesc {
     pub n: u64,
     pub return_type: DataType,
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Window {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Window>()
+            .unwrap();
+        builder
+            .build_window(s_expr, plan, required, stat_info)
+            .await
+    }
 }
 
 impl PhysicalPlanBuilder {

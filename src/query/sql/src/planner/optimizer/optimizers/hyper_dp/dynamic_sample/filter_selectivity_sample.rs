@@ -35,8 +35,9 @@ use crate::planner::QueryExecutor;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
+use crate::plans::Scan;
 use crate::ColumnSet;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -51,7 +52,7 @@ pub async fn filter_selectivity_sample(
     // Because it's meaningless for filter cardinality by sample in single table query.
     let child = s_expr.child(0)?;
     let child_rel_expr = RelExpr::with_s_expr(child);
-    if let RelOperator::Scan(mut scan) = child.plan().clone() {
+    if let Some(scan) = child.plan.as_ref().as_any().downcast_ref::<Scan>() {
         let num_rows = scan
             .statistics
             .table_stats
@@ -67,9 +68,10 @@ pub async fn filter_selectivity_sample(
                 row_level: Some(SampleRowLevel::RowsNum(sample_size)),
                 block_level: Some(50.0),
             };
+            let mut scan = scan.clone();
             scan.sample = Some(sample_conf);
-            let new_child = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
-            new_s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
+            let new_child = SExpr::create_leaf(scan);
+            new_s_expr = s_expr.replace_children(vec![new_child.into()]);
 
             let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
             let mut collect_statistics_optimizer = CollectStatisticsOptimizer::new(opt_ctx);
@@ -78,14 +80,9 @@ pub async fn filter_selectivity_sample(
                 .await?;
         }
 
-        new_s_expr = SExpr::create_unary(
-            Arc::new(create_count_aggregate(AggregateMode::Partial).into()),
-            Arc::new(new_s_expr),
-        );
-        new_s_expr = SExpr::create_unary(
-            Arc::new(create_count_aggregate(AggregateMode::Final).into()),
-            Arc::new(new_s_expr),
-        );
+        new_s_expr =
+            SExpr::create_unary(create_count_aggregate(AggregateMode::Partial), new_s_expr);
+        new_s_expr = SExpr::create_unary(create_count_aggregate(AggregateMode::Final), new_s_expr);
 
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
         let mut required = ColumnSet::new();

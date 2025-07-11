@@ -4192,6 +4192,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonb",
  "log",
+ "match-template",
  "num-derive",
  "num-traits",
  "opendal",

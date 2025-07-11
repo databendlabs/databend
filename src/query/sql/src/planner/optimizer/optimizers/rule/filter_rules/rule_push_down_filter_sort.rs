@@ -62,16 +62,18 @@ impl Rule for RulePushDownFilterSort {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let sort: Sort = s_expr.child(0)?.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let sort = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_ref::<Sort>()
+            .unwrap();
         let sort_expr = s_expr.child(0)?;
 
         let mut result = SExpr::create_unary(
-            Arc::new(sort.into()),
-            Arc::new(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(sort_expr.child(0)?.clone()),
-            )),
+            sort,
+            SExpr::create_unary(filter, sort_expr.child(0)?.clone()),
         );
         result.set_applied_rule(&self.id);
         state.add_result(result);

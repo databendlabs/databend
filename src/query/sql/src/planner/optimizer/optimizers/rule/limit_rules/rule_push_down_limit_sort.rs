@@ -21,8 +21,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 
 /// Input:  Limit
@@ -68,19 +68,16 @@ impl Rule for RulePushDownLimitSort {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         if let Some(mut count) = limit.limit {
             count += limit.offset;
             let sort = s_expr.child(0)?;
-            let mut sort_limit: Sort = sort.plan().clone().try_into()?;
+            let mut sort_limit = sort.plan().as_any().downcast_ref::<Sort>().unwrap().clone();
             let limit = sort_limit.limit.map_or(count, |c| cmp::max(c, count));
 
             if limit <= self.max_limit {
                 sort_limit.limit = Some(limit);
-                let sort = SExpr::create_unary(
-                    Arc::new(RelOperator::Sort(sort_limit)),
-                    Arc::new(sort.child(0)?.clone()),
-                );
+                let sort = SExpr::create_unary(sort_limit, sort.child(0)?.clone());
 
                 let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
                 result.set_applied_rule(&self.id);

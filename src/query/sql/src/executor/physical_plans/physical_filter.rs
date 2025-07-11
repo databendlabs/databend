@@ -21,6 +21,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
@@ -50,6 +51,25 @@ impl Filter {
             }
         }
         Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for Filter {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::Filter>()
+            .unwrap();
+        builder
+            .build_filter(s_expr, plan, required, stat_info)
+            .await
     }
 }
 

@@ -95,10 +95,7 @@ impl Binder {
 
         let filter = Filter { predicates };
 
-        Ok(SExpr::create_unary(
-            Arc::new(filter.into()),
-            Arc::new(child),
-        ))
+        Ok(SExpr::create_unary(filter, child))
     }
 }
 

@@ -27,7 +27,8 @@ use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFuncType;
 use crate::MetadataRef;
@@ -64,21 +65,29 @@ impl PullUpFilterOptimizer {
             let predicates = InferFilterOptimizer::new(None).optimize(self.predicates.clone())?;
             let predicates = NormalizeDisjunctiveFilterOptimizer::new().optimize(predicates)?;
             let filter = Filter { predicates };
-            Ok(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(s_expr),
-            ))
+            Ok(SExpr::create_unary(filter, s_expr))
         }
     }
 
     #[recursive::recursive]
     pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        match s_expr.plan.as_ref() {
-            RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
-            RelOperator::Join(join) if !join.is_lateral && !join.has_null_equi_condition() => {
-                self.pull_up_join(s_expr, join)
+        match s_expr.plan.rel_op() {
+            RelOp::Filter => {
+                let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+                self.pull_up_filter(s_expr, filter)
             }
-            RelOperator::EvalScalar(eval_scalar) => self.pull_up_eval_scalar(s_expr, eval_scalar),
+            RelOp::Join => {
+                let join = s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
+                if !join.is_lateral && !join.has_null_equi_condition() {
+                    self.pull_up_join(s_expr, join)
+                } else {
+                    self.pull_up_others(s_expr)
+                }
+            }
+            RelOp::EvalScalar => {
+                let eval_scalar = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
+                self.pull_up_eval_scalar(s_expr, eval_scalar)
+            }
             _ => self.pull_up_others(s_expr),
         }
     }
@@ -141,7 +150,7 @@ impl PullUpFilterOptimizer {
             join.non_equi_conditions.clear();
             join.join_type = JoinType::Cross;
         }
-        let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+        let s_expr = s_expr.replace_plan(join);
         Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
     }
 
@@ -151,7 +160,7 @@ impl PullUpFilterOptimizer {
         for predicate in self.predicates.iter_mut() {
             Self::replace_predicate(predicate, &mut eval_scalar.items, &self.metadata)?;
         }
-        let s_expr = s_expr.replace_plan(Arc::new(RelOperator::EvalScalar(eval_scalar)));
+        let s_expr = s_expr.replace_plan(eval_scalar);
         Ok(s_expr.replace_children(vec![Arc::new(child)]))
     }
 

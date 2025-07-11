@@ -22,8 +22,8 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 
 /// Input:      Limit
 ///               |
@@ -69,26 +69,28 @@ impl Rule for RulePushDownLimitOuterJoin {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Limit>()
+            .unwrap()
+            .clone();
         if limit.limit.is_some() {
             let child = s_expr.child(0)?;
-            let join: Join = child.plan().clone().try_into()?;
+            let join = child.plan().as_any().downcast_ref::<Join>().unwrap();
             match join.join_type {
                 JoinType::Left => {
                     let child = child.replace_children(vec![
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Limit(limit.clone())),
-                            Arc::new(child.child(0)?.clone()),
-                        )),
+                        Arc::new(SExpr::create_unary(limit, child.child(0)?.clone())),
                         Arc::new(child.child(1)?.clone()),
                     ]);
                     let mut result = SExpr::create_unary(
-                        Arc::new(RelOperator::Limit(Limit {
+                        Limit {
                             before_exchange: limit.before_exchange,
-                            limit: limit.limit,
+                            limit: limit.limit.clone(),
                             offset: 0,
-                        })),
-                        Arc::new(child),
+                        },
+                        child,
                     );
                     result.set_applied_rule(&self.id);
                     state.add_result(result)
@@ -97,16 +99,20 @@ impl Rule for RulePushDownLimitOuterJoin {
                     let child = Arc::new(child.replace_children(vec![
                         Arc::new(child.child(0)?.clone()),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Limit(limit.clone())),
-                            Arc::new(child.child(1)?.clone()),
+                            Limit {
+                                before_exchange: limit.before_exchange,
+                                limit: limit.limit,
+                                offset: 0,
+                            },
+                            child.child(1)?.clone(),
                         )),
                     ]));
                     let mut result = SExpr::create_unary(
-                        Arc::new(RelOperator::Limit(Limit {
+                        Limit {
                             before_exchange: limit.before_exchange,
                             limit: limit.limit,
                             offset: 0,
-                        })),
+                        },
                         child,
                     );
                     result.set_applied_rule(&self.id);

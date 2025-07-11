@@ -20,6 +20,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
@@ -60,6 +61,25 @@ pub struct AsyncFunctionDesc {
     pub data_type: Box<DataType>,
 
     pub func_arg: AsyncFunctionArgument,
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for AsyncFunction {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::AsyncFunction>()
+            .unwrap();
+        builder
+            .build_async_func(s_expr, plan, required, stat_info)
+            .await
+    }
 }
 
 impl PhysicalPlanBuilder {

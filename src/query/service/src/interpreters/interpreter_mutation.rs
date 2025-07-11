@@ -93,11 +93,15 @@ impl Interpreter for MutationInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
+        let mutation = self
+            .s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Mutation>()
+            .unwrap();
 
         // Build physical plan.
-        let physical_plan = self.build_physical_plan(&mutation, false).await?;
-
+        let physical_plan = self.build_physical_plan(mutation, false).await?;
         let query_plan = physical_plan
             .format(self.metadata.clone(), Default::default())?
             .format_pretty()?;

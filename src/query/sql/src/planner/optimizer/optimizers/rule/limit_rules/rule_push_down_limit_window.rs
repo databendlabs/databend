@@ -22,8 +22,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -69,7 +69,7 @@ impl Rule for RulePushDownLimitWindow {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let Some(mut count) = limit.limit else {
             return Ok(());
         };
@@ -78,7 +78,12 @@ impl Rule for RulePushDownLimitWindow {
             return Ok(());
         }
         let window = s_expr.child(0)?;
-        let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
+        let mut window_limit = window
+            .plan()
+            .as_any()
+            .downcast_ref::<LogicalWindow>()
+            .unwrap()
+            .clone();
         let limit = window_limit.limit.map_or(count, |c| c.max(count));
         if limit > self.max_limit {
             return Ok(());
@@ -88,10 +93,7 @@ impl Rule for RulePushDownLimitWindow {
         }
 
         window_limit.limit = Some(limit);
-        let sort = SExpr::create_unary(
-            Arc::new(RelOperator::Window(window_limit)),
-            Arc::new(window.child(0)?.clone()),
-        );
+        let sort = SExpr::create_unary(window_limit, window.child(0)?.clone());
         let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
@@ -128,9 +130,9 @@ fn is_valid_frame(frame: &WindowFuncFrame) -> bool {
 }
 
 fn child_has_window(child: &SExpr) -> bool {
-    match child.plan() {
-        RelOperator::Window(_) => true,
-        RelOperator::Scan(_) => false, // finish recursion
+    match child.plan_rel_op() {
+        RelOp::Window => true,
+        RelOp::Scan => false, // finish recursion
         _ => child.children().any(child_has_window),
     }
 }

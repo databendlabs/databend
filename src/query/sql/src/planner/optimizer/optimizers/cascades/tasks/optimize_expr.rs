@@ -34,7 +34,8 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::tasks::SharedCounter;
 use crate::optimizer::optimizers::cascades::tasks::TaskManager;
 use crate::optimizer::optimizers::cascades::CascadesOptimizer;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
+use crate::plans::RelOp;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -188,7 +189,7 @@ impl OptimizeExprTask {
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
 
-        if matches!(m_expr.plan.as_ref(), RelOperator::Exchange(_),)
+        if matches!(m_expr.plan.rel_op(), RelOp::Exchange)
             && matches!(self.required_prop.distribution, Distribution::Any)
         {
             return Ok(OptimizeExprEvent::OptimizedSelf);
@@ -412,7 +413,7 @@ impl OptimizeExprTask {
 
         for enforcer in enforcers.iter() {
             let operator = enforcer.enforce()?;
-            let s_expr = SExpr::create_unary(Arc::new(operator), enforcer_child.clone());
+            let s_expr = SExpr::create_unary(operator, enforcer_child.clone());
             optimizer.memo.insert(Some(self.group_index), s_expr)?;
         }
 

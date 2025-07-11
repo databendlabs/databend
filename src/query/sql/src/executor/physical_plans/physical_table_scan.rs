@@ -53,11 +53,14 @@ use rand::thread_rng;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::cast_expr_to_non_null_boolean;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::physical_plans::AddStreamColumn;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::SExpr;
 use crate::plans::FunctionCall;
+use crate::plans::Scan;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -111,6 +114,33 @@ impl TableScan {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
         Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+pub struct DummyTableScan;
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for TableScan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let scan = s_expr.plan().as_any().downcast_ref::<Scan>().unwrap();
+        builder.build_table_scan(scan, required, stat_info).await
+    }
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for DummyTableScan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        _s_expr: &SExpr,
+        _required: ColumnSet,
+        _stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        builder.build_dummy_table_scan().await
     }
 }
 

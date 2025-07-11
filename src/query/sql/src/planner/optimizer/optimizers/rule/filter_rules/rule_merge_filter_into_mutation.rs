@@ -25,8 +25,8 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Filter;
 use crate::plans::MutationSource;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::MetadataRef;
 
 pub struct RuleMergeFilterIntoMutation {
@@ -60,8 +60,14 @@ impl Rule for RuleMergeFilterIntoMutation {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let mut mutation: MutationSource = s_expr.child(0)?.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let mut mutation = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_mut::<MutationSource>()
+            .unwrap();
+
         mutation
             .read_partition_columns
             .extend(filter.predicates.iter().flat_map(|v| v.used_columns()));
@@ -76,7 +82,7 @@ impl Rule for RuleMergeFilterIntoMutation {
             mutation.predicate_column_index = Some(column_index);
         }
 
-        let new_expr = SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation)));
+        let new_expr = SExpr::create_leaf(mutation);
         state.add_result(new_expr);
         Ok(())
     }

@@ -87,8 +87,13 @@ impl Rule for RulePushDownFilterEvalScalar {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
-        let eval_scalar: EvalScalar = s_expr.child(0)?.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
+        let eval_scalar = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_ref::<EvalScalar>()
+            .unwrap();
         let scalar_rel_expr = RelExpr::with_s_expr(s_expr);
         let eval_scalar_prop = scalar_rel_expr.derive_relational_prop_child(0)?;
 
@@ -114,16 +119,16 @@ impl Rule for RulePushDownFilterEvalScalar {
             let pushed_down_filter = Filter {
                 predicates: pushed_down_predicates,
             };
-            result = SExpr::create_unary(Arc::new(pushed_down_filter.into()), Arc::new(result));
+            result = SExpr::create_unary(pushed_down_filter, result);
         }
 
-        result = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(result));
+        result = SExpr::create_unary(eval_scalar, result);
 
         if !remaining_predicates.is_empty() {
             let remaining_filter = Filter {
                 predicates: remaining_predicates,
             };
-            result = SExpr::create_unary(Arc::new(remaining_filter.into()), Arc::new(result));
+            result = SExpr::create_unary(remaining_filter, result);
             result.set_applied_rule(&self.id);
         }
 

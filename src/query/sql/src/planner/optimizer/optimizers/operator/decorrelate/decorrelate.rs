@@ -38,13 +38,15 @@ use crate::optimizer::optimizers::operator::UnnestResult;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
+use crate::plans::Operator;
+use crate::plans::ProjectSet;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
@@ -115,7 +117,11 @@ impl SubqueryDecorrelatorOptimizer {
         let filter_tree = subquery
             .subquery // EvalScalar
             .unary_child(); // Filter
-        let filter: Filter = filter_tree.plan().clone().try_into()?;
+        let filter = filter_tree
+            .plan()
+            .as_any()
+            .downcast_ref::<Filter>()
+            .unwrap();
         let filter_expr = RelExpr::with_s_expr(filter_tree);
 
         let filter_prop = filter_expr.derive_relational_prop()?;
@@ -191,13 +197,10 @@ impl SubqueryDecorrelatorOptimizer {
         let mut left_child = outer.clone();
         if !left_filters.is_empty() {
             left_child = SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: left_filters,
-                    }
-                    .into(),
-                ),
-                Arc::new(left_child),
+                Filter {
+                    predicates: left_filters,
+                },
+                left_child,
             );
         }
 
@@ -207,21 +210,14 @@ impl SubqueryDecorrelatorOptimizer {
             .replace_children(vec![Arc::new(filter_tree.child(0)?.clone())]);
         if !right_filters.is_empty() {
             right_child = SExpr::create_unary(
-                Arc::new(
-                    Filter {
-                        predicates: right_filters,
-                    }
-                    .into(),
-                ),
-                Arc::new(right_child),
+                Filter {
+                    predicates: right_filters,
+                },
+                right_child,
             );
         }
 
-        let result = SExpr::create_binary(
-            Arc::new(join.into()),
-            Arc::new(left_child),
-            Arc::new(right_child),
-        );
+        let result = SExpr::create_binary(join, left_child, right_child);
 
         Ok(Some(result))
     }
@@ -281,11 +277,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                 };
-                let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan.into()),
-                    Arc::new(outer.clone()),
-                    Arc::new(flatten_plan),
-                );
+                let s_expr = SExpr::create_binary(join_plan, outer.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
@@ -346,11 +338,7 @@ impl SubqueryDecorrelatorOptimizer {
                     single_to_inner: None,
                     build_side_cache_info: None,
                 };
-                let s_expr = SExpr::create_binary(
-                    Arc::new(join_plan.into()),
-                    Arc::new(outer.clone()),
-                    Arc::new(flatten_plan),
-                );
+                let s_expr = SExpr::create_binary(join_plan, outer.clone(), flatten_plan);
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
@@ -431,11 +419,7 @@ impl SubqueryDecorrelatorOptimizer {
                 }
                 .into();
                 Ok((
-                    SExpr::create_binary(
-                        Arc::new(mark_join),
-                        Arc::new(outer.clone()),
-                        Arc::new(flatten_plan),
-                    ),
+                    SExpr::create_binary(mark_join, outer.clone(), flatten_plan),
                     UnnestResult::MarkJoin { marker_index },
                 ))
             }
@@ -583,10 +567,16 @@ impl SubqueryDecorrelatorOptimizer {
         }
 
         let child = subquery.subquery.child(0)?;
-        if let RelOperator::DummyTableScan(_) = child.plan() {
+        if let RelOp::DummyTableScan = child.plan_rel_op() {
             // subquery is a simple constant value.
             // for example: `SELECT * FROM t WHERE id = (select 1);`
-            if let RelOperator::EvalScalar(eval) = subquery.subquery.plan() {
+            if let RelOp::EvalScalar = subquery.subquery.plan_rel_op() {
+                let eval = child
+                    .plan
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<EvalScalar>()
+                    .unwrap();
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
@@ -628,7 +618,13 @@ impl SubqueryDecorrelatorOptimizer {
             // subquery is a set returning function return constant values.
             // for example: `SELECT * FROM t WHERE id IN (SELECT * FROM UNNEST(SPLIT('1,2,3', ',')) AS t1);`
             let mut output_column_index = None;
-            if let RelOperator::EvalScalar(eval) = subquery.subquery.plan() {
+            if let Some(eval) = subquery
+                .subquery
+                .plan
+                .as_ref()
+                .as_any()
+                .downcast_ref::<EvalScalar>()
+            {
                 if eval.items.len() != 1 {
                     return Ok(None);
                 }
@@ -642,7 +638,8 @@ impl SubqueryDecorrelatorOptimizer {
             let output_column_index = output_column_index.unwrap();
 
             let mut srf_column_index = None;
-            if let RelOperator::EvalScalar(eval) = child.plan() {
+
+            if let Some(eval) = child.plan.as_ref().as_any().downcast_ref::<EvalScalar>() {
                 if eval.items.len() != 1 || eval.items[0].index != output_column_index {
                     return Ok(None);
                 }
@@ -664,7 +661,12 @@ impl SubqueryDecorrelatorOptimizer {
             let srf_column_index = srf_column_index.unwrap();
 
             let project_set_expr = child.child(0)?;
-            if let RelOperator::ProjectSet(project_set) = project_set_expr.plan() {
+            if let Some(project_set) = project_set_expr
+                .plan
+                .as_ref()
+                .as_any()
+                .downcast_ref::<ProjectSet>()
+            {
                 if project_set.srfs.len() != 1
                     || project_set.srfs[0].index != srf_column_index
                     || !matches!(

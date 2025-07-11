@@ -77,9 +77,20 @@ impl Rule for RulePushDownFilterWindow {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let Filter { predicates } = s_expr.plan().clone().try_into()?;
+        let filter = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Filter>()
+            .unwrap()
+            .clone();
         let window_expr = s_expr.child(0)?;
-        let window: Window = window_expr.plan().clone().try_into()?;
+        let window = window_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Window>()
+            .unwrap()
+            .clone();
+
         let allowed = window.partition_by_columns()?;
         let rejected = ColumnSet::from_iter(
             window
@@ -89,7 +100,7 @@ impl Rule for RulePushDownFilterWindow {
         );
 
         let (pushed_down, remaining): (Vec<_>, Vec<_>) =
-            predicates.into_iter().partition(|predicate| {
+            filter.predicates.into_iter().partition(|predicate| {
                 let used = predicate.used_columns();
                 used.is_subset(&allowed) && used.is_disjoint(&rejected)
             });
@@ -102,25 +113,19 @@ impl Rule for RulePushDownFilterWindow {
         };
         let result = if remaining.is_empty() {
             SExpr::create_unary(
-                Arc::new(window.into()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(pushed_down_filter.into()),
-                    Arc::new(window_expr.child(0)?.clone()),
-                )),
+                window,
+                SExpr::create_unary(pushed_down_filter, window_expr.child(0)?.clone()),
             )
         } else {
             let remaining_filter = Filter {
                 predicates: remaining,
             };
             let mut s_expr = SExpr::create_unary(
-                Arc::new(remaining_filter.into()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(window.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(window_expr.child(0)?.clone()),
-                    )),
-                )),
+                remaining_filter,
+                SExpr::create_unary(
+                    window,
+                    SExpr::create_unary(pushed_down_filter, window_expr.child(0)?.clone()),
+                ),
             );
             s_expr.set_applied_rule(&self.id);
             s_expr

@@ -23,8 +23,8 @@ use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Scan;
 
 /// Input:  Limit
@@ -61,16 +61,21 @@ impl Rule for RulePushDownLimitScan {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let limit: Limit = s_expr.plan().clone().try_into()?;
+        let limit = s_expr.plan().as_any().downcast_ref::<Limit>().unwrap();
         let Some(mut count) = limit.limit else {
             return Ok(());
         };
         count += limit.offset;
 
         let child = s_expr.child(0)?;
-        let mut get: Scan = child.plan().clone().try_into()?;
+        let mut get = child
+            .plan()
+            .as_any()
+            .downcast_ref::<Scan>()
+            .unwrap()
+            .clone();
         get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-        let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+        let get = SExpr::create_leaf(get);
 
         let mut result = s_expr.replace_children(vec![Arc::new(get)]);
         result.set_applied_rule(&self.id);

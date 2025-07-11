@@ -37,8 +37,8 @@ use crate::binder::Binder;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::MatchedEvaluator;
+use crate::plans::Operator;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
 use crate::ColumnEntry;
@@ -287,8 +287,7 @@ impl Binder {
         }
 
         let schema = mutation.schema();
-        let mut s_expr =
-            SExpr::create_unary(Arc::new(RelOperator::Mutation(mutation)), Arc::new(input));
+        let mut s_expr = SExpr::create_unary(mutation, input);
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut bind_context, s_expr)?;

@@ -27,9 +27,13 @@ use databend_common_expression::Scalar;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
+use crate::plans::Aggregate;
 use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
+use crate::plans::RelOp;
+use crate::plans::Scan;
 use crate::Binder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
@@ -47,21 +51,20 @@ pub struct ReclusterPlan {
 }
 
 pub fn set_update_stream_columns(s_expr: &SExpr) -> Result<SExpr> {
-    match s_expr.plan() {
-        RelOperator::Scan(scan) if scan.table_index == 0 => {
+    if let Some(scan) = s_expr.plan().as_any().downcast_ref::<Scan>() {
+        if scan.table_index == 0 {
             let mut scan = scan.clone();
             scan.set_update_stream_columns(true);
-            Ok(SExpr::create_leaf(Arc::new(scan.into())))
-        }
-        _ => {
-            let mut children = Vec::with_capacity(s_expr.arity());
-            for child in s_expr.children() {
-                let child = set_update_stream_columns(child)?;
-                children.push(Arc::new(child));
-            }
-            Ok(s_expr.replace_children(children))
+            return Ok(SExpr::create_leaf(scan));
         }
     }
+
+    let mut children = Vec::with_capacity(s_expr.arity());
+    for child in s_expr.children() {
+        let child = set_update_stream_columns(child)?;
+        children.push(Arc::new(child));
+    }
+    Ok(s_expr.replace_children(children))
 }
 
 #[async_backtrace::framed]
@@ -126,15 +129,17 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
         partitions: u16,
     ) -> SExpr {
         let mut s_expr = s_expr.clone();
-        s_expr.plan = match s_expr.plan.as_ref() {
-            RelOperator::EvalScalar(expr) if !variables.is_empty() => {
+        s_expr.plan = match s_expr.plan.rel_op() {
+            RelOp::EvalScalar if !variables.is_empty() => {
+                let expr = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
                 let mut expr = expr.clone();
                 for item in &mut expr.items {
                     visit_expr_column(&mut item.scalar, variables);
                 }
-                Arc::new(expr.into())
+                Arc::new(expr)
             }
-            RelOperator::Aggregate(aggr) => {
+            RelOp::Aggregate => {
+                let aggr = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
                 let mut aggr = aggr.clone();
                 for item in &mut aggr.aggregate_functions {
                     if let ScalarExpr::AggregateFunction(func) = &mut item.scalar {
@@ -143,7 +148,7 @@ pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partiti
                         }
                     }
                 }
-                Arc::new(aggr.into())
+                Arc::new(aggr)
             }
             _ => s_expr.plan.clone(),
         };

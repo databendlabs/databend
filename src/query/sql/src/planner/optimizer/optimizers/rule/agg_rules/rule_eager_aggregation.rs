@@ -36,8 +36,8 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -298,7 +298,7 @@ impl Rule for RuleEagerAggregation {
             false => extra_eval_scalar_expr,
         };
 
-        let join: Join = join_expr.plan().clone().try_into()?;
+        let join = join_expr.plan().as_any().downcast_ref::<Join>().unwrap();
         // Only supports inner/cross join and equal conditions.
         if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
             | !join.non_equi_conditions.is_empty()
@@ -306,8 +306,16 @@ impl Rule for RuleEagerAggregation {
             return Ok(());
         }
 
-        let eval_scalar: EvalScalar = eval_scalar_expr.plan().clone().try_into()?;
-        let mut final_agg: Aggregate = final_agg_expr.plan().clone().try_into()?;
+        let eval_scalar: EvalScalar = eval_scalar_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<EvalScalar>()
+            .unwrap();
+        let mut final_agg = final_agg_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Aggregate>()
+            .unwrap();
 
         // Get the original column set from the left child and right child of join.
         let mut columns_sets = Vec::with_capacity(2);
@@ -318,7 +326,12 @@ impl Rule for RuleEagerAggregation {
         }
 
         let extra_eval_scalar = if has_extra_eval {
-            extra_eval_scalar_expr.plan().clone().try_into()?
+            extra_eval_scalar_expr
+                .plan()
+                .as_any()
+                .downcast_ref::<EvalScalar>()
+                .unwrap()
+                .clone()
         } else {
             EvalScalar { items: vec![] }
         };
@@ -694,16 +707,12 @@ impl Rule for RuleEagerAggregation {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(
-                                eager_group_by_and_eager_count[d].clone(),
-                            )),
+                            eager_group_by_and_eager_count[d].clone(),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_group_by_count_partial)),
+                                eager_group_by_count_partial,
                                 if !eager_extra_eval_scalar_expr[0].items.is_empty() {
                                     Arc::new(SExpr::create_unary(
-                                        Arc::new(RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[0].clone(),
-                                        )),
+                                        eager_extra_eval_scalar_expr[0].clone(),
                                         Arc::new(join_expr.child(0)?.clone()),
                                     ))
                                 } else {
@@ -713,22 +722,18 @@ impl Rule for RuleEagerAggregation {
                         )),
                         Arc::new(join_expr.child(1)?.clone()),
                     ]))])
-                    .replace_plan(Arc::new(eager_groupby_count_count_sum.into()))
+                    .replace_plan(eager_groupby_count_count_sum)
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                         Arc::new(join_expr.child(0)?.clone()),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(
-                                eager_group_by_and_eager_count[d].clone(),
-                            )),
+                            eager_group_by_and_eager_count[d].clone(),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_group_by_count_partial)),
+                                eager_group_by_count_partial,
                                 if !eager_extra_eval_scalar_expr[1].items.is_empty() {
                                     Arc::new(SExpr::create_unary(
-                                        Arc::new(RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[1].clone(),
-                                        )),
+                                        eager_extra_eval_scalar_expr[1].clone(),
                                         Arc::new(join_expr.child(1)?.clone()),
                                     ))
                                 } else {
@@ -737,7 +742,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(Arc::new(eager_groupby_count_count_sum.into()))
+                    .replace_plan(eager_groupby_count_count_sum)
             });
 
             // Apply eager split on d and d^1.
@@ -759,18 +764,12 @@ impl Rule for RuleEagerAggregation {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(
-                                eager_group_by_and_eager_count[0].clone(),
-                            )),
+                            eager_group_by_and_eager_count[0].clone(),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(
-                                    eager_group_by_and_eager_count_partial[0].clone(),
-                                )),
+                                eager_group_by_and_eager_count_partial[0].clone(),
                                 if !eager_extra_eval_scalar_expr[0].items.is_empty() {
                                     Arc::new(SExpr::create_unary(
-                                        Arc::new(RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[0].clone(),
-                                        )),
+                                        eager_extra_eval_scalar_expr[0].clone(),
                                         Arc::new(join_expr.child(0)?.clone()),
                                     ))
                                 } else {
@@ -779,18 +778,12 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(
-                                eager_group_by_and_eager_count[1].clone(),
-                            )),
+                            eager_group_by_and_eager_count[1].clone(),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(
-                                    eager_group_by_and_eager_count_partial[1].clone(),
-                                )),
+                                eager_group_by_and_eager_count_partial[1].clone(),
                                 if !eager_extra_eval_scalar_expr[1].items.is_empty() {
                                     Arc::new(SExpr::create_unary(
-                                        Arc::new(RelOperator::EvalScalar(
-                                            eager_extra_eval_scalar_expr[1].clone(),
-                                        )),
+                                        eager_extra_eval_scalar_expr[1].clone(),
                                         Arc::new(join_expr.child(1)?.clone()),
                                     ))
                                 } else {
@@ -799,7 +792,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(Arc::new(eager_split_count_sum.into())),
+                    .replace_plan(eager_split_count_sum),
             );
         } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
@@ -968,14 +961,12 @@ impl Rule for RuleEagerAggregation {
             join_exprs.push(if d == 0 {
                 join_expr.replace_children(vec![
                     Arc::new(SExpr::create_unary(
-                        Arc::new(RelOperator::Aggregate(eager_group_by.clone())),
+                        eager_group_by.clone(),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(eager_group_by_partial)),
+                            eager_group_by_partial,
                             if !eager_extra_eval_scalar_expr[0].items.is_empty() {
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::EvalScalar(
-                                        eager_extra_eval_scalar_expr[0].clone(),
-                                    )),
+                                    eager_extra_eval_scalar_expr[0].clone(),
                                     Arc::new(join_expr.child(0)?.clone()),
                                 ))
                             } else {
@@ -989,14 +980,12 @@ impl Rule for RuleEagerAggregation {
                 join_expr.replace_children(vec![
                     Arc::new(join_expr.child(0)?.clone()),
                     Arc::new(SExpr::create_unary(
-                        Arc::new(RelOperator::Aggregate(eager_group_by.clone())),
+                        eager_group_by.clone(),
                         Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(eager_group_by_partial)),
+                            eager_group_by_partial,
                             if !eager_extra_eval_scalar_expr[1].items.is_empty() {
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::EvalScalar(
-                                        eager_extra_eval_scalar_expr[1].clone(),
-                                    )),
+                                    eager_extra_eval_scalar_expr[1].clone(),
                                     Arc::new(join_expr.child(1)?.clone()),
                                 ))
                             } else {
@@ -1023,27 +1012,27 @@ impl Rule for RuleEagerAggregation {
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                             Arc::new(join_expr.child(0)?.clone()),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_count.clone())),
+                                eager_count.clone(),
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::Aggregate(eager_count_partial)),
+                                    eager_count_partial,
                                     Arc::new(join_expr.child(1)?.clone()),
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(eager_count_sum.into()))
+                        .replace_plan(eager_count_sum)
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_count.clone())),
+                                eager_count.clone(),
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::Aggregate(eager_count_partial)),
+                                    eager_count_partial,
                                     Arc::new(join_expr.child(0)?.clone()),
                                 )),
                             )),
                             Arc::new(join_expr.child(1)?.clone()),
                         ]))])
-                        .replace_plan(Arc::new(eager_count_sum.into()))
+                        .replace_plan(eager_count_sum)
                 });
 
                 // Apply double eager on d and d^1.
@@ -1062,14 +1051,12 @@ impl Rule for RuleEagerAggregation {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_group_by)),
+                                eager_group_by,
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::Aggregate(eager_agg_partial)),
+                                    eager_agg_partial,
                                     if !eager_extra_eval_scalar_expr[0].items.is_empty() {
                                         Arc::new(SExpr::create_unary(
-                                            Arc::new(RelOperator::EvalScalar(
-                                                eager_extra_eval_scalar_expr[0].clone(),
-                                            )),
+                                            eager_extra_eval_scalar_expr[0].clone(),
                                             Arc::new(join_expr.child(0)?.clone()),
                                         ))
                                     } else {
@@ -1078,33 +1065,31 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_count)),
+                                eager_count,
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::Aggregate(eager_count_partial)),
+                                    eager_count_partial,
                                     Arc::new(join_expr.child(1)?.clone()),
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(double_eager_count_sum.into()))
+                        .replace_plan(double_eager_count_sum)
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_count)),
+                                eager_count,
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::Aggregate(eager_count_partial)),
+                                    eager_count_partial,
                                     Arc::new(join_expr.child(0)?.clone()),
                                 )),
                             )),
                             Arc::new(SExpr::create_unary(
-                                Arc::new(RelOperator::Aggregate(eager_group_by)),
+                                eager_group_by,
                                 Arc::new(SExpr::create_unary(
-                                    Arc::new(RelOperator::Aggregate(eager_agg_partial)),
+                                    eager_agg_partial,
                                     if !eager_extra_eval_scalar_expr[1].items.is_empty() {
                                         Arc::new(SExpr::create_unary(
-                                            Arc::new(RelOperator::EvalScalar(
-                                                eager_extra_eval_scalar_expr[1].clone(),
-                                            )),
+                                            eager_extra_eval_scalar_expr[1].clone(),
                                             Arc::new(join_expr.child(1)?.clone()),
                                         ))
                                     } else {
@@ -1113,7 +1098,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(Arc::new(double_eager_count_sum.into()))
+                        .replace_plan(double_eager_count_sum)
                 });
             }
         }
@@ -1136,19 +1121,19 @@ impl Rule for RuleEagerAggregation {
                 .replace_children(vec![Arc::new(
                     final_agg_partial_expr
                         .replace_children(vec![Arc::new(join_exprs[idx].clone())])
-                        .replace_plan(Arc::new(final_agg_partials[idx].clone().into())),
+                        .replace_plan(final_agg_partials[idx].clone()),
                 )])
-                .replace_plan(Arc::new(final_agg_finals[idx].clone().into()));
+                .replace_plan(final_agg_finals[idx].clone());
             let mut result = if has_sort {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(
                         sort_expr.replace_children(vec![Arc::new(temp_final_agg_expr)]),
                     )])
-                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().into()))
+                    .replace_plan(final_eval_scalars[idx].clone())
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(temp_final_agg_expr)])
-                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().into()))
+                    .replace_plan(final_eval_scalars[idx].clone())
             };
             result.set_applied_rule(&self.id);
             state.add_result(result);

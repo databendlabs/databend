@@ -65,7 +65,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
-            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
+            new_expr = SExpr::create_unary(eval_scalar, new_expr);
         }
 
         // Like aggregate, we just use scalar directly.
@@ -87,9 +87,6 @@ impl Binder {
             ..Default::default()
         };
 
-        Ok(SExpr::create_unary(
-            Arc::new(distinct_plan.into()),
-            Arc::new(new_expr),
-        ))
+        Ok(SExpr::create_unary(distinct_plan, new_expr))
     }
 }

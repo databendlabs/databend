@@ -55,7 +55,7 @@ impl Rule for RuleEliminateEvalScalar {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         // Eliminate empty EvalScalar
-        let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
+        let eval_scalar = s_expr.plan().as_any().downcast_ref::<EvalScalar>().unwrap();
         if eval_scalar.items.is_empty() {
             state.add_result(s_expr.child(0)?.clone());
             return Ok(());

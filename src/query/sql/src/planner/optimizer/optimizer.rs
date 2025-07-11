@@ -42,14 +42,15 @@ use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::OptimizerContext;
 use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::Exchange;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
+use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::SetScalarsOrQuery;
 use crate::InsertInputSource;
 
@@ -316,7 +317,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
         .optimize_sync(&input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
-    if let &RelOperator::Exchange(_) = input_s_expr.plan() {
+    if let Some(exchange) = input_s_expr.plan().as_any().downcast_ref::<Exchange>() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }
     // If there still exists an Exchange::Merge operator, we should disable distributed optimization and
@@ -326,7 +327,12 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
         input_s_expr = optimize_query(opt_ctx.clone(), s_expr.child(0)?.clone()).await?;
     }
 
-    let mut mutation: Mutation = s_expr.plan().clone().try_into()?;
+    let mut mutation = s_expr
+        .plan()
+        .as_any()
+        .downcast_ref::<Mutation>()
+        .unwrap()
+        .clone();
     mutation.distributed = opt_ctx.get_enable_distributed_optimization();
 
     let schema = mutation.schema();
@@ -337,7 +343,12 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     if !mutation.matched_evaluators.is_empty() {
         match inner_rel_op {
             RelOp::ConstantTableScan => {
-                let constant_table_scan = ConstantTableScan::try_from(input_s_expr.plan().clone())?;
+                let constant_table_scan = input_s_expr
+                    .plan()
+                    .as_any()
+                    .downcast_ref::<ConstantTableScan>()
+                    .unwrap();
+
                 if constant_table_scan.num_rows == 0 {
                     mutation.no_effect = true;
                 }
@@ -350,8 +361,12 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
                     right_child = right_child.child(0)?;
                 }
                 if right_child_rel == RelOp::ConstantTableScan {
-                    let constant_table_scan =
-                        ConstantTableScan::try_from(right_child.plan().clone())?;
+                    let constant_table_scan = right_child
+                        .plan()
+                        .as_any()
+                        .downcast_ref::<ConstantTableScan>()
+                        .unwrap();
+
                     if constant_table_scan.num_rows == 0 {
                         mutation.matched_evaluators = vec![MatchedEvaluator {
                             condition: None,
@@ -368,7 +383,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
     input_s_expr = match mutation.mutation_type {
         MutationType::Merge => {
             if mutation.distributed && inner_rel_op == RelOp::Join {
-                let join = Join::try_from(input_s_expr.plan().clone())?;
+                let join = input_s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
                 let broadcast_to_shuffle = BroadcastToShuffleOptimizer::create();
                 let is_broadcast = broadcast_to_shuffle.matcher.matches(&input_s_expr)
                     && broadcast_to_shuffle.is_broadcast(&input_s_expr)?;
@@ -395,7 +410,11 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
             }
         }
         MutationType::Update | MutationType::Delete => {
-            if let RelOperator::MutationSource(rel) = input_s_expr.plan() {
+            if let Some(rel) = input_s_expr
+                .plan()
+                .as_any()
+                .downcast_ref::<MutationSource>()
+            {
                 if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
                     mutation.truncate_table = true;
                 }
@@ -411,10 +430,7 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
 
     Ok(Plan::DataMutation {
         schema,
-        s_expr: Box::new(SExpr::create_unary(
-            Arc::new(RelOperator::Mutation(mutation)),
-            Arc::new(input_s_expr),
-        )),
+        s_expr: Box::new(SExpr::create_unary(mutation.clone(), input_s_expr)),
         metadata: opt_ctx.get_metadata(),
     })
 }

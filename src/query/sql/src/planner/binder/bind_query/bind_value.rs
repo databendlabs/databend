@@ -41,7 +41,8 @@ use crate::plans::CacheSource;
 use crate::plans::ConstantTableScan;
 use crate::plans::ExpressionScan;
 use crate::plans::HashJoinBuildCacheInfo;
-use crate::plans::RelOperator;
+use crate::plans::Join;
+use crate::plans::Operator;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::Binder;
@@ -215,8 +216,8 @@ impl Binder {
         s_expr: &SExpr,
         metadata: MetadataRef,
     ) -> Result<(SExpr, ColumnSet)> {
-        match s_expr.plan.as_ref() {
-            RelOperator::Join(join) if join.build_side_cache_info.is_some() => {
+        if let Some(join) = s_expr.plan().as_any().downcast_ref::<Join>() {
+            if join.build_side_cache_info.is_some() {
                 let mut join = join.clone();
                 let build_side_cache_info = join.build_side_cache_info.as_mut().unwrap();
 
@@ -248,125 +249,117 @@ impl Binder {
                 }
 
                 let s_expr = s_expr
-                    .replace_plan(Arc::new(RelOperator::Join(join)))
+                    .replace_plan(join)
                     .replace_children(vec![Arc::new(left), Arc::new(right)]);
-                Ok((s_expr, right_correlated_columns))
-            }
-            RelOperator::ExpressionScan(scan) => {
-                // The join condition columns may consist of the following two parts:
-                // (1) expression scan columns.
-                // (2) correlated columns in values.
-                let mut join_condition_columns = ColumnSet::new();
-                for row in scan.values.iter() {
-                    for (scalar, column_index) in row
-                        .iter()
-                        .zip(scan.column_indexes.iter())
-                        .take(scan.num_scalar_columns)
-                    {
-                        join_condition_columns.insert(*column_index);
-                        for index in scalar.used_columns() {
-                            let derived_index = self
-                                .expression_scan_context
-                                .get_derived_column(scan.expression_scan_index, index);
-                            join_condition_columns.insert(derived_index);
-                        }
-                    }
-                }
-
-                let mut scan = scan.clone();
-
-                // Remove ExpressionScan unused cache columns.
-                let mut cache_scan_columns = vec![];
-                let mut cache_scan_column_indexes = vec![];
-                for index in (scan.num_scalar_columns..scan.values[0].len()).rev() {
-                    let column_index = scan.column_indexes[index];
-                    if join_condition_columns.contains(&column_index) {
-                        cache_scan_columns.push(scan.values[0][index].clone());
-                        let original_index = self
-                            .expression_scan_context
-                            .get_original_column(scan.expression_scan_index, column_index);
-                        cache_scan_column_indexes.push(original_index);
-                        self.expression_scan_context
-                            .add_used_cache_column_index(scan.cache_index, original_index)
-                    } else {
-                        scan.remove_cache_column(index);
-                    }
-                }
-
-                // Construct ExpressionScan schema.
-                let mut expression_scan_field = Vec::with_capacity(scan.values[0].len());
-                for (column_index, data_type) in
-                    scan.column_indexes.iter().zip(scan.data_types.iter())
-                {
-                    let field = DataField::new(&column_index.to_string(), data_type.clone());
-                    expression_scan_field.push(field);
-                }
-                let expression_scan_schema = DataSchemaRefExt::create(expression_scan_field);
-                scan.schema = expression_scan_schema;
-
-                // Construct CacheScan.
-                let mut cache_scan_fields = Vec::with_capacity(cache_scan_columns.len());
-                for (column, column_index) in cache_scan_columns
-                    .iter()
-                    .zip(cache_scan_column_indexes.iter())
-                {
-                    let field = DataField::new(&column_index.to_string(), column.data_type()?);
-                    cache_scan_fields.push(field);
-                }
-
-                let cache_source = CacheSource::HashJoinBuild((
-                    scan.cache_index,
-                    cache_scan_column_indexes.clone(),
-                ));
-                let cache_scan = SExpr::create_leaf(Arc::new(RelOperator::CacheScan(CacheScan {
-                    cache_source,
-                    columns: ColumnSet::new(),
-                    schema: DataSchemaRefExt::create(cache_scan_fields),
-                })));
-
-                let mut distinct_columns = Vec::new();
-                for column in scan.values[0].iter().skip(scan.num_scalar_columns) {
-                    distinct_columns.push(column);
-                }
-
-                // Wrap CacheScan with distinct to eliminate duplicates rows.
-                let mut group_items = Vec::with_capacity(cache_scan_column_indexes.len());
-                for (index, column_index) in cache_scan_column_indexes.iter().enumerate() {
-                    group_items.push(ScalarItem {
-                        scalar: cache_scan_columns[index].clone(),
-                        index: *column_index,
-                    });
-                }
-
-                let s_expr = SExpr::create_unary(
-                    Arc::new(RelOperator::ExpressionScan(scan)),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            Aggregate {
-                                mode: AggregateMode::Initial,
-                                group_items,
-                                ..Default::default()
-                            }
-                            .into(),
-                        ),
-                        Arc::new(cache_scan),
-                    )),
-                );
-
-                Ok((s_expr, join_condition_columns))
-            }
-            _ => {
-                let mut correlated_columns = ColumnSet::new();
-                let mut children = Vec::with_capacity(s_expr.arity());
-                for child in s_expr.children() {
-                    let (child, columns) =
-                        self.construct_expression_scan(child, metadata.clone())?;
-                    children.push(Arc::new(child));
-                    correlated_columns.extend(columns);
-                }
-                Ok((s_expr.replace_children(children), correlated_columns))
+                return Ok((s_expr, right_correlated_columns));
             }
         }
+
+        if let Some(scan) = s_expr.plan().as_any().downcast_ref::<ExpressionScan>() {
+            // The join condition columns may consist of the following two parts:
+            // (1) expression scan columns.
+            // (2) correlated columns in values.
+            let mut join_condition_columns = ColumnSet::new();
+            for row in scan.values.iter() {
+                for (scalar, column_index) in row
+                    .iter()
+                    .zip(scan.column_indexes.iter())
+                    .take(scan.num_scalar_columns)
+                {
+                    join_condition_columns.insert(*column_index);
+                    for index in scalar.used_columns() {
+                        let derived_index = self
+                            .expression_scan_context
+                            .get_derived_column(scan.expression_scan_index, index);
+                        join_condition_columns.insert(derived_index);
+                    }
+                }
+            }
+
+            let mut scan = scan.clone();
+
+            // Remove ExpressionScan unused cache columns.
+            let mut cache_scan_columns = vec![];
+            let mut cache_scan_column_indexes = vec![];
+            for index in (scan.num_scalar_columns..scan.values[0].len()).rev() {
+                let column_index = scan.column_indexes[index];
+                if join_condition_columns.contains(&column_index) {
+                    cache_scan_columns.push(scan.values[0][index].clone());
+                    let original_index = self
+                        .expression_scan_context
+                        .get_original_column(scan.expression_scan_index, column_index);
+                    cache_scan_column_indexes.push(original_index);
+                    self.expression_scan_context
+                        .add_used_cache_column_index(scan.cache_index, original_index)
+                } else {
+                    scan.remove_cache_column(index);
+                }
+            }
+
+            // Construct ExpressionScan schema.
+            let mut expression_scan_field = Vec::with_capacity(scan.values[0].len());
+            for (column_index, data_type) in scan.column_indexes.iter().zip(scan.data_types.iter())
+            {
+                let field = DataField::new(&column_index.to_string(), data_type.clone());
+                expression_scan_field.push(field);
+            }
+            let expression_scan_schema = DataSchemaRefExt::create(expression_scan_field);
+            scan.schema = expression_scan_schema;
+
+            // Construct CacheScan.
+            let mut cache_scan_fields = Vec::with_capacity(cache_scan_columns.len());
+            for (column, column_index) in cache_scan_columns
+                .iter()
+                .zip(cache_scan_column_indexes.iter())
+            {
+                let field = DataField::new(&column_index.to_string(), column.data_type()?);
+                cache_scan_fields.push(field);
+            }
+
+            let cache_source =
+                CacheSource::HashJoinBuild((scan.cache_index, cache_scan_column_indexes.clone()));
+            let cache_scan = SExpr::create_leaf(CacheScan {
+                cache_source,
+                columns: ColumnSet::new(),
+                schema: DataSchemaRefExt::create(cache_scan_fields),
+            });
+
+            let mut distinct_columns = Vec::new();
+            for column in scan.values[0].iter().skip(scan.num_scalar_columns) {
+                distinct_columns.push(column);
+            }
+
+            // Wrap CacheScan with distinct to eliminate duplicates rows.
+            let mut group_items = Vec::with_capacity(cache_scan_column_indexes.len());
+            for (index, column_index) in cache_scan_column_indexes.iter().enumerate() {
+                group_items.push(ScalarItem {
+                    scalar: cache_scan_columns[index].clone(),
+                    index: *column_index,
+                });
+            }
+
+            let s_expr = SExpr::create_unary(
+                scan,
+                Arc::new(SExpr::create_unary(
+                    Aggregate {
+                        mode: AggregateMode::Initial,
+                        group_items,
+                        ..Default::default()
+                    },
+                    cache_scan,
+                )),
+            );
+
+            return Ok((s_expr, join_condition_columns));
+        }
+        let mut correlated_columns = ColumnSet::new();
+        let mut children = Vec::with_capacity(s_expr.arity());
+        for child in s_expr.children() {
+            let (child, columns) = self.construct_expression_scan(child, metadata.clone())?;
+            children.push(Arc::new(child));
+            correlated_columns.extend(columns);
+        }
+        Ok((s_expr.replace_children(children), correlated_columns))
     }
 }
 
@@ -604,18 +597,15 @@ pub fn bind_expression_scan(
         );
     }
 
-    let s_expr = SExpr::create_leaf(Arc::new(
-        ExpressionScan {
-            expression_scan_index,
-            values: scalars,
-            num_scalar_columns: num_columns,
-            cache_index,
-            data_types: column_common_type,
-            column_indexes,
-            schema: DataSchemaRefExt::create(vec![]),
-        }
-        .into(),
-    ));
+    let s_expr = SExpr::create_leaf(ExpressionScan {
+        expression_scan_index,
+        values: scalars,
+        num_scalar_columns: num_columns,
+        cache_index,
+        data_types: column_common_type,
+        column_indexes,
+        schema: DataSchemaRefExt::create(vec![]),
+    });
 
     Ok((s_expr, bind_context.clone()))
 }
@@ -705,15 +695,12 @@ pub fn bind_constant_scan(
     }
     let schema = DataSchemaRefExt::create(fields);
 
-    let s_expr = SExpr::create_leaf(Arc::new(
-        ConstantTableScan {
-            values: value_columns,
-            num_rows: num_values,
-            schema,
-            columns,
-        }
-        .into(),
-    ));
+    let s_expr = SExpr::create_leaf(ConstantTableScan {
+        values: value_columns,
+        num_rows: num_values,
+        schema,
+        columns,
+    });
 
     Ok((s_expr, bind_context.clone()))
 }

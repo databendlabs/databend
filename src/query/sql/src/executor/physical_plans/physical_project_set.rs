@@ -21,6 +21,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
@@ -56,6 +57,25 @@ impl ProjectSet {
             )
         }));
         Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for ProjectSet {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::ProjectSet>()
+            .unwrap();
+        builder
+            .build_project_set(s_expr, plan, required, stat_info)
+            .await
     }
 }
 

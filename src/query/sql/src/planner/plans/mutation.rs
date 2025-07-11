@@ -197,7 +197,10 @@ impl std::hash::Hash for Mutation {
 }
 
 impl Operator for Mutation {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn rel_op(&self) -> RelOp {
-        RelOp::MergeInto
+        RelOp::Mutation
     }
 }

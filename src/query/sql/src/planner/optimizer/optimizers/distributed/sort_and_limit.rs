@@ -20,8 +20,8 @@ use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Exchange;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::Sort;
 
 pub struct SortAndLimitPushDownOptimizer {
@@ -104,32 +104,23 @@ impl SortAndLimitPushDownOptimizer {
             return Ok(s_expr.clone());
         }
 
-        let mut sort: Sort = s_expr.plan().clone().try_into()?;
+        let mut sort: Sort = s_expr.plan().as_any().downcast_mut::<Sort>().unwrap();
         sort.after_exchange = Some(false);
         let exchange_sexpr = s_expr.child(0)?;
 
         // this is window shuffle sort
-        if matches!(
-            exchange_sexpr.plan.as_ref(),
-            RelOperator::Exchange(Exchange::Hash(_))
-        ) {
+        if let Some(Exchange::Hash(_)) = exchange_sexpr.plan.as_any().downcast_ref::<Exchange>() {
             return Ok(s_expr.clone());
         }
 
-        debug_assert!(matches!(
-            exchange_sexpr.plan.as_ref(),
-            RelOperator::Exchange(Exchange::Merge) | RelOperator::Exchange(Exchange::MergeSort)
-        ));
-
         debug_assert!(exchange_sexpr.children.len() == 1);
-        let exchange_sexpr = exchange_sexpr.replace_plan(Arc::new(Exchange::MergeSort.into()));
+        let exchange_sexpr = exchange_sexpr.replace_plan(Exchange::MergeSort);
 
         let child = exchange_sexpr.child(0)?.clone();
-        let before_exchange_sort =
-            SExpr::create_unary(Arc::new(sort.clone().into()), Arc::new(child));
+        let before_exchange_sort = SExpr::create_unary(sort.clone(), child);
         let new_exchange = exchange_sexpr.replace_children(vec![Arc::new(before_exchange_sort)]);
         sort.after_exchange = Some(true);
-        let new_plan = SExpr::create_unary(Arc::new(sort.into()), Arc::new(new_exchange));
+        let new_plan = SExpr::create_unary(sort, new_exchange);
         Ok(new_plan)
     }
 
@@ -139,7 +130,7 @@ impl SortAndLimitPushDownOptimizer {
         }
 
         let exchange_sexpr = s_expr.child(0)?;
-        let mut limit: Limit = s_expr.plan().clone().try_into()?;
+        let mut limit: Limit = s_expr.plan().as_any().downcast_mut::<Limit>().unwrap();
 
         if limit.limit.is_none() {
             if limit.offset != 0 {
@@ -157,7 +148,7 @@ impl SortAndLimitPushDownOptimizer {
 
         debug_assert!(exchange_sexpr.children.len() == 1);
         let child = exchange_sexpr.child(0)?.clone();
-        let new_child = SExpr::create_unary(Arc::new(limit.into()), Arc::new(child));
+        let new_child = SExpr::create_unary(limit.clone(), child);
         let new_exchange = exchange_sexpr.replace_children(vec![Arc::new(new_child)]);
         Ok(s_expr.replace_children(vec![Arc::new(new_exchange)]))
     }

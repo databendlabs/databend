@@ -59,7 +59,7 @@ impl Rule for RuleFoldCountAggregate {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let agg: Aggregate = s_expr.plan().clone().try_into()?;
+        let agg = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
 
         if agg.mode == AggregateMode::Final || agg.mode == AggregateMode::Partial {
             return Ok(());
@@ -81,7 +81,7 @@ impl Rule for RuleFoldCountAggregate {
             &input_stat_info.statistics.column_stats,
             &input_stat_info.statistics.precise_cardinality,
         ) {
-            let mut scalars = agg.aggregate_functions;
+            let mut scalars = agg.aggregate_functions.clone();
             for item in scalars.iter_mut() {
                 if let ScalarExpr::AggregateFunction(agg_func) = item.scalar.clone() {
                     if agg_func.args.is_empty() {
@@ -108,10 +108,9 @@ impl Rule for RuleFoldCountAggregate {
                 }
             }
             let eval_scalar = EvalScalar { items: scalars };
-            let dummy_table_scan = DummyTableScan;
             state.add_result(SExpr::create_unary(
-                Arc::new(eval_scalar.into()),
-                Arc::new(SExpr::create_leaf(Arc::new(dummy_table_scan.into()))),
+                eval_scalar,
+                SExpr::create_leaf(DummyTableScan),
             ));
         }
         Ok(())

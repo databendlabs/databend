@@ -25,7 +25,6 @@ use databend_common_sql::plans::AggregateMode;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::plans::Limit;
 use databend_common_sql::plans::Operator;
-use databend_common_sql::plans::RelOperator;
 
 use crate::sql::planner::optimizer::test_utils::ExprBuilder;
 
@@ -227,17 +226,14 @@ fn test_replace_node() {
             self.node_types
                 .push(format!("{:?}", expr.plan.as_ref().rel_op()));
             let op = expr.plan();
-            if let RelOperator::Limit(limit) = op {
+            if let Some(limit) = op.as_any().downcast_ref::<Limit>() {
                 if let Some(limit_value) = limit.limit {
                     let new_limit = Limit {
                         limit: Some(limit_value * 2),
                         offset: limit.offset,
                         before_exchange: limit.before_exchange,
                     };
-                    let replacement = SExpr::create_unary(
-                        Arc::new(RelOperator::Limit(new_limit)),
-                        Arc::new(expr.child(0).unwrap().clone()),
-                    );
+                    let replacement = SExpr::create_unary(new_limit, expr.child(0).unwrap());
                     return Ok(VisitAction::Replace(replacement));
                 }
             }
@@ -267,7 +263,7 @@ fn test_replace_node() {
 
     // Check if the Limit has been doubled
     let op = transformed.plan();
-    if let RelOperator::Limit(limit) = op {
+    if let Some(limit) = op.as_any().downcast_ref::<Limit>() {
         assert_eq!(limit.limit, Some(20));
     } else {
         panic!("Root should be a Limit node");
@@ -344,17 +340,14 @@ async fn test_async_replace_node() {
             self.node_types
                 .push(format!("{:?}", expr.plan.as_ref().rel_op()));
             let op = expr.plan();
-            if let RelOperator::Limit(limit) = op {
+            if let Some(limit) = op.as_any().downcast_ref::<Limit>() {
                 if let Some(limit_value) = limit.limit {
                     let new_limit = Limit {
                         limit: Some(limit_value * 2),
                         offset: limit.offset,
                         before_exchange: limit.before_exchange,
                     };
-                    let replacement = SExpr::create_unary(
-                        Arc::new(RelOperator::Limit(new_limit)),
-                        Arc::new(expr.child(0).unwrap().clone()),
-                    );
+                    let replacement = SExpr::create_unary(new_limit, expr.child(0).unwrap());
                     return Ok(VisitAction::Replace(replacement));
                 }
             }
@@ -384,7 +377,7 @@ async fn test_async_replace_node() {
 
     // Check if the Limit has been doubled
     let op = transformed.plan();
-    if let RelOperator::Limit(limit) = op {
+    if let Some(limit) = op.as_any().downcast_ref::<Limit>() {
         assert_eq!(limit.limit, Some(20));
     } else {
         panic!("Root should be a Limit node");

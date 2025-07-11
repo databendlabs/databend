@@ -56,7 +56,12 @@ impl Rule for RuleCommuteJoin {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut join: Join = s_expr.plan().clone().try_into()?;
+        let mut join = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Join>()
+            .unwrap()
+            .clone();
 
         if join.build_side_cache_info.is_some() {
             return Ok(());
@@ -100,11 +105,7 @@ impl Rule for RuleCommuteJoin {
                     (condition.right.clone(), condition.left.clone());
             }
             join.join_type = join.join_type.opposite();
-            let mut result = SExpr::create_binary(
-                Arc::new(join.into()),
-                Arc::new(right_child.clone()),
-                Arc::new(left_child.clone()),
-            );
+            let mut result = SExpr::create_binary(join, right_child.clone(), left_child.clone());
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

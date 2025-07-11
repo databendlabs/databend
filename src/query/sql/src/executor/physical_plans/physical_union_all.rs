@@ -20,6 +20,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
@@ -46,6 +47,25 @@ pub struct UnionAll {
 impl UnionAll {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for UnionAll {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::UnionAll>()
+            .unwrap();
+        builder
+            .build_union_all(s_expr, plan, required, stat_info)
+            .await
     }
 }
 

@@ -21,7 +21,7 @@ use crate::optimizer::Optimizer;
 use crate::plans::Aggregate;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
-use crate::plans::RelOperator;
+use crate::plans::Operator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::ColumnBinding;
@@ -42,7 +42,7 @@ impl RuleNormalizeAggregateOptimizer {
             children.push(Arc::new(child));
         }
         let s_expr = s_expr.replace_children(children);
-        if let RelOperator::Aggregate(_) = s_expr.plan.as_ref() {
+        if let Some(aggregate) = s_expr.plan.as_ref().as_any().downcast_ref::<Aggregate>() {
             self.normalize_aggregate(&s_expr)
         } else {
             Ok(s_expr)
@@ -50,7 +50,7 @@ impl RuleNormalizeAggregateOptimizer {
     }
 
     fn normalize_aggregate(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let aggregate: Aggregate = s_expr.plan().clone().try_into()?;
+        let aggregate = s_expr.plan().as_any().downcast_ref::<Aggregate>().unwrap();
         let mut work_expr = None;
         let mut alias_functions_index = vec![];
         let mut new_aggregate_functions = Vec::with_capacity(aggregate.aggregate_functions.len());
@@ -125,10 +125,7 @@ impl RuleNormalizeAggregateOptimizer {
             grouping_sets: aggregate.grouping_sets,
         };
 
-        let mut new_aggregate = SExpr::create_unary(
-            Arc::new(new_aggregate.into()),
-            Arc::new(s_expr.child(0)?.clone()),
-        );
+        let mut new_aggregate = SExpr::create_unary(new_aggregate, s_expr.child(0)?.clone());
 
         if let Some((work_index, work_c)) = work_expr {
             if alias_functions_index.len() < 2 {
@@ -158,13 +155,10 @@ impl RuleNormalizeAggregateOptimizer {
                 }
 
                 new_aggregate = SExpr::create_unary(
-                    Arc::new(
-                        EvalScalar {
-                            items: scalar_items,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(new_aggregate),
+                    EvalScalar {
+                        items: scalar_items,
+                    },
+                    new_aggregate,
                 );
             }
             Ok(new_aggregate)

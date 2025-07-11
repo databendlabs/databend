@@ -76,9 +76,13 @@ impl Rule for RulePushDownFilterAggregate {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
         let aggregate_expr = s_expr.child(0)?;
-        let aggregate: Aggregate = aggregate_expr.plan().clone().try_into()?;
+        let aggregate = aggregate_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<Aggregate>()
+            .unwrap();
         let aggregate_child_prop =
             RelExpr::with_s_expr(aggregate_expr).derive_relational_prop_child(0)?;
         let aggregate_group_columns = aggregate.group_columns()?;
@@ -120,25 +124,25 @@ impl Rule for RulePushDownFilterAggregate {
 
             let mut result = if remaining_predicates.is_empty() {
                 SExpr::create_unary(
-                    Arc::new(aggregate.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(pushed_down_filter.into()),
-                        Arc::new(aggregate_expr.child(0)?.clone()),
-                    )),
+                    aggregate.into(),
+                    SExpr::create_unary(
+                        pushed_down_filter.into(),
+                        aggregate_expr.child(0)?.clone(),
+                    ),
                 )
             } else {
                 let remaining_filter = Filter {
                     predicates: remaining_predicates,
                 };
                 SExpr::create_unary(
-                    Arc::new(remaining_filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(aggregate.into()),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(pushed_down_filter.into()),
-                            Arc::new(aggregate_expr.child(0)?.clone()),
-                        )),
-                    )),
+                    remaining_filter.into(),
+                    SExpr::create_unary(
+                        aggregate.into(),
+                        SExpr::create_unary(
+                            pushed_down_filter.into(),
+                            aggregate_expr.child(0)?.clone(),
+                        ),
+                    ),
                 )
             };
             result.set_applied_rule(&self.id);

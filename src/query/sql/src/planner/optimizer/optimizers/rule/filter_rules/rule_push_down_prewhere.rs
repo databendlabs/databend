@@ -130,7 +130,13 @@ impl RulePushDownPrewhere {
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
-        let mut scan: Scan = s_expr.child(0)?.plan().clone().try_into()?;
+        let mut scan = s_expr
+            .child(0)?
+            .plan()
+            .as_any()
+            .downcast_ref::<Scan>()
+            .unwrap()
+            .clone();
         if scan.update_stream_columns {
             return Ok(s_expr.clone());
         }
@@ -141,7 +147,7 @@ impl RulePushDownPrewhere {
             // cannot optimize
             return Ok(s_expr.clone());
         }
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let filter = s_expr.plan().as_any().downcast_ref::<Filter>().unwrap();
 
         let mut prewhere_columns = ColumnSet::new();
         let mut prewhere_pred = Vec::new();
@@ -169,7 +175,7 @@ impl RulePushDownPrewhere {
                 predicates: prewhere_pred,
             });
         }
-        Ok(SExpr::create_leaf(Arc::new(scan.into())))
+        Ok(SExpr::create_leaf(scan))
     }
 }
 

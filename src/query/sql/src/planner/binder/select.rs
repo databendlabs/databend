@@ -105,7 +105,7 @@ impl Binder {
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
         };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
+        let new_expr = SExpr::create_unary(filter_plan, child);
         bind_context.set_expr_context(last_expr_context);
         Ok((new_expr, scalar))
     }
@@ -280,11 +280,7 @@ impl Binder {
             output_indexes,
         };
 
-        let mut new_expr = SExpr::create_binary(
-            Arc::new(union_plan.into()),
-            Arc::new(left_expr),
-            Arc::new(right_expr),
-        );
+        let mut new_expr = SExpr::create_binary(union_plan, left_expr, right_expr);
 
         if distinct {
             let columns = new_bind_context.all_column_bindings().to_vec();

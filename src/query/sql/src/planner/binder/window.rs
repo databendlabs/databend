@@ -622,7 +622,7 @@ pub fn bind_window_function_info(
         let eval_scalar_plan = EvalScalar {
             items: scalar_items,
         };
-        SExpr::create_unary(Arc::new(eval_scalar_plan.into()), Arc::new(child))
+        SExpr::create_unary(eval_scalar_plan, child)
     } else {
         child
     };
@@ -667,15 +667,12 @@ pub fn bind_window_function_info(
                 })
             },
         };
-        SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
+        SExpr::create_unary(sort_plan, child)
     } else {
         child
     };
 
-    Ok(SExpr::create_unary(
-        Arc::new(window_plan.into()),
-        Arc::new(child),
-    ))
+    Ok(SExpr::create_unary(window_plan, child))
 }
 
 impl Binder {

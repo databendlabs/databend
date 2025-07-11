@@ -42,12 +42,25 @@ use crate::ScalarExpr;
 use crate::TypeCheck;
 
 pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(SExpr, bool)> {
-    let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
+    let mut join = s_expr
+        .child(0)?
+        .plan()
+        .as_any()
+        .downcast_ref::<Join>()
+        .unwrap()
+        .clone();
+
     if !join.join_type.is_outer_join() {
         return Ok((s_expr.clone(), false));
     }
 
-    let filter: Filter = s_expr.plan().clone().try_into()?;
+    let filter = s_expr
+        .plan()
+        .as_any()
+        .downcast_ref::<Filter>()
+        .unwrap()
+        .clone();
+
     let join_s_expr = s_expr.child(0)?;
     let join_rel_expr = RelExpr::with_s_expr(join_s_expr);
 
@@ -116,12 +129,12 @@ pub fn outer_join_to_inner_join(s_expr: &SExpr, metadata: MetadataRef) -> Result
     }
 
     let result = SExpr::create_unary(
-        Arc::new(filter.into()),
-        Arc::new(SExpr::create_binary(
-            Arc::new(join.into()),
-            Arc::new(join_s_expr.child(0)?.clone()),
-            Arc::new(join_s_expr.child(1)?.clone()),
-        )),
+        filter,
+        SExpr::create_binary(
+            join,
+            join_s_expr.child(0)?.clone(),
+            join_s_expr.child(1)?.clone(),
+        ),
     );
 
     Ok((result, true))

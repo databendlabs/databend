@@ -37,6 +37,7 @@ use parking_lot::RwLock;
 
 use crate::optimizer::ir::SExpr;
 use crate::plans::Limit;
+use crate::plans::Operator;
 use crate::BindContext;
 use crate::Binder;
 use crate::Metadata;
@@ -338,8 +339,7 @@ impl Dataframe {
             limit,
             offset,
         };
-        self.s_expr =
-            SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(self.s_expr.clone()));
+        self.s_expr = SExpr::create_unary(limit_plan, self.s_expr.clone());
         Ok(self)
     }
 

@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 
 use crate::binder::JoinPredicate;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::RelExpr;
@@ -31,6 +32,19 @@ pub enum PhysicalJoinType {
     // The first arg is range conditions, the second arg is other conditions
     RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
     AsofJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
+}
+
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for PhysicalJoinType {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr.plan().as_any().downcast_ref::<Join>().unwrap();
+        builder.build_join(s_expr, plan, required, stat_info).await
+    }
 }
 
 // Choose physical join type by join conditions

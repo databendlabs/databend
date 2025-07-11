@@ -32,9 +32,9 @@ use crate::optimizer::ir::Matcher;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
+use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
 use crate::BindContext;
@@ -124,9 +124,10 @@ impl Binder {
         let Plan::DataMutation { box s_expr, .. } = &plan else {
             return Ok(plan);
         };
-        let RelOperator::Mutation(mutation) = s_expr.plan() else {
+        if s_expr.plan_rel_op() != RelOp::Mutation {
             return Ok(plan);
-        };
+        }
+
         let matcher = Matcher::MatchOp {
             op_type: RelOp::Filter,
             children: vec![Matcher::MatchOp {
@@ -138,6 +139,7 @@ impl Binder {
             return Ok(plan);
         }
 
+        let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
         let mut mutation = mutation.clone();
 
         let row_id = mutation
@@ -325,10 +327,10 @@ impl Binder {
         let input = if eval_scalar.items.is_empty() {
             aggr_expr
         } else {
-            aggr_expr.build_unary(Arc::new(eval_scalar.into()))
+            aggr_expr.build_unary(eval_scalar)
         };
 
-        let s_expr = Box::new(input.build_unary(Arc::new(mutation.into())));
+        let s_expr = Box::new(input.build_unary(mutation));
         let Plan::DataMutation {
             schema, metadata, ..
         } = plan

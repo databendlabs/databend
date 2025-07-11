@@ -16,8 +16,11 @@ use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 
+use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_plan_builder::BuildPhysicalPlan;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::SExpr;
 use crate::ColumnSet;
 use crate::IndexType;
 
@@ -44,11 +47,31 @@ impl ConstantTableScan {
     }
 }
 
+#[async_trait::async_trait]
+impl BuildPhysicalPlan for ConstantTableScan {
+    async fn build(
+        builder: &mut PhysicalPlanBuilder,
+        s_expr: &SExpr,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let plan = s_expr
+            .plan()
+            .as_any()
+            .downcast_ref::<crate::plans::ConstantTableScan>()
+            .unwrap();
+        builder
+            .build_constant_table_scan(plan, required, stat_info)
+            .await
+    }
+}
+
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_constant_table_scan(
         &mut self,
         scan: &crate::plans::ConstantTableScan,
         required: ColumnSet,
+        _stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         debug_assert!(scan
             .schema

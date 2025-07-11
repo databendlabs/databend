@@ -49,7 +49,7 @@ impl Rule for RuleEliminateSort {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let sort: Sort = s_expr.plan().clone().try_into()?;
+        let sort = s_expr.plan().as_any().downcast_ref::<Sort>().unwrap();
         let input = s_expr.child(0)?;
 
         let rel_expr = RelExpr::with_s_expr(input);

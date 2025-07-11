@@ -23,8 +23,19 @@ use crate::plans::JoinType;
 use crate::ScalarExpr;
 
 pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
-    let mut filter: Filter = s_expr.plan().clone().try_into()?;
-    let mut join: Join = s_expr.child(0)?.plan().clone().try_into()?;
+    let mut filter = s_expr
+        .plan()
+        .as_any()
+        .downcast_ref::<Filter>()
+        .unwrap()
+        .clone();
+    let mut join = s_expr
+        .child(0)?
+        .plan()
+        .as_any()
+        .downcast_ref::<Join>()
+        .unwrap()
+        .clone();
 
     let has_disjunction = filter.predicates.iter().any(
         |predicate| matches!(predicate, ScalarExpr::FunctionCall(func) if func.func_name == "or"),
@@ -72,13 +83,13 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
 
     let s_join_expr = s_expr.child(0)?;
     let mut result = SExpr::create_binary(
-        Arc::new(join.into()),
-        Arc::new(s_join_expr.child(0)?.clone()),
-        Arc::new(s_join_expr.child(1)?.clone()),
+        join,
+        s_join_expr.child(0)?.clone(),
+        s_join_expr.child(1)?.clone(),
     );
 
     if !filter.predicates.is_empty() {
-        result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
+        result = SExpr::create_unary(filter, result);
     }
     Ok((result, true))
 }

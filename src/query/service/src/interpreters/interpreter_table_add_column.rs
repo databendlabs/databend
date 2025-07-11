@@ -176,7 +176,7 @@ impl Interpreter for AddTableColumnInterpreter {
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(&query).await?;
             if let Plan::DataMutation { s_expr, schema, .. } = plan {
-                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let mutation = s_expr.plan().as_any().downcast_ref::<Mutation>().unwrap();
                 let interpreter = MutationInterpreter::try_create(
                     self.ctx.clone(),
                     *s_expr,
