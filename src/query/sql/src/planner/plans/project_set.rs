@@ -23,6 +23,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
+use crate::ScalarExpr;
 
 /// `ProjectSet` is a plan that evaluate a series of
 /// set-returning functions, zip the result together,
@@ -45,6 +46,10 @@ impl ProjectSet {
 impl Operator for ProjectSet {
     fn rel_op(&self) -> RelOp {
         RelOp::ProjectSet
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(self.srfs.iter().map(|expr| &expr.scalar))
     }
 
     fn derive_relational_prop(

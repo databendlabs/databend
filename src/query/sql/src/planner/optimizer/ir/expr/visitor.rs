@@ -140,13 +140,12 @@ pub fn visit_sexpr<V: SExprVisitor>(visitor: &mut V, expr: &SExpr) -> Result<Opt
     let mut children = Vec::with_capacity(expr.arity());
     let mut children_changed = false;
 
-    for i in 0..expr.arity() {
-        let child = expr.child(i)?;
+    for child in expr.children.iter() {
         if let Some(new_child) = visit_sexpr(visitor, child)? {
             children.push(Arc::new(new_child));
             children_changed = true;
         } else {
-            children.push(Arc::new(child.clone()));
+            children.push(child.clone());
         }
     }
 
@@ -209,13 +208,12 @@ pub async fn visit_sexpr_async<T: AsyncSExprVisitor + Send>(
     let mut children = Vec::with_capacity(expr.arity());
     let mut children_changed = false;
 
-    for i in 0..expr.arity() {
-        let child = expr.child(i)?;
+    for child in expr.children.iter() {
         if let Some(new_child) = visit_sexpr_async(visitor, child).await? {
             children.push(Arc::new(new_child));
             children_changed = true;
         } else {
-            children.push(Arc::new(child.clone()));
+            children.push(child.clone());
         }
     }
 

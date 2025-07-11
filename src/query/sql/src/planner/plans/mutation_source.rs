@@ -70,6 +70,10 @@ impl Operator for MutationSource {
         0
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(self.predicates.iter())
+    }
+
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         Ok(Arc::new(RelationalProperty {
             output_columns: self.columns.clone(),

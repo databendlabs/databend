@@ -197,6 +197,34 @@ impl Operator for Scan {
         RelOp::Scan
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let push_down_iter = self.push_down_predicates.iter().flatten();
+
+        let prewhere_iter = self
+            .prewhere
+            .iter()
+            .flat_map(|prewhere| prewhere.predicates.iter());
+
+        let agg_index_pred_iter = self
+            .agg_index
+            .iter()
+            .flat_map(|agg_index| agg_index.predicates.iter());
+
+        let agg_index_selection_iter = self
+            .agg_index
+            .iter()
+            .flat_map(|agg_index| agg_index.selection.iter())
+            .map(|selection| &selection.scalar);
+
+        // Chain all iterators together
+        Box::new(
+            push_down_iter
+                .chain(prewhere_iter)
+                .chain(agg_index_pred_iter)
+                .chain(agg_index_selection_iter),
+        )
+    }
+
     fn arity(&self) -> usize {
         0
     }

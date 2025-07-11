@@ -523,6 +523,17 @@ impl Operator for Join {
         2
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let iter = self.equi_conditions.iter().map(|condition| &condition.left);
+        let iter = iter.chain(
+            self.equi_conditions
+                .iter()
+                .map(|condition| &condition.right),
+        );
+        let iter = iter.chain(self.non_equi_conditions.iter());
+        Box::new(iter)
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
