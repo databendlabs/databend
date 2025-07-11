@@ -37,7 +37,7 @@ fn pack(timestamp: u32, value: u32) -> u64 {
     (timestamp as u64) << TS_SHIFT | (value as u64)
 }
 
-/// Unpacks a u64 into a timestamp (u32) and a value (u32).
+/// Unpacks an u64 into a timestamp (u32) and a value (u32).
 #[inline]
 fn unpack(packed: u64) -> (u32, u32) {
     ((packed >> TS_SHIFT) as u32, (packed & VAL_MASK) as u32)
