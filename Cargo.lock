@@ -13056,9 +13056,9 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rotbl"
-version = "0.2.1"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c41ec40750140065f1a499e159781712b5688a84600fafc6708ee1101037596e"
+checksum = "0beb0fdccf6ea5cfe13a80e00090e71e80e35c6399946a8eb7a8d5e604e5b561"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
@@ -13070,6 +13070,7 @@ dependencies = [
  "log",
  "lru-cache-map",
  "num-format",
+ "seqmarked",
  "serde",
  "serde_json",
  "tokio",
@@ -13580,6 +13581,16 @@ name = "seq-macro"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
+
+[[package]]
+name = "seqmarked"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "359ec9c6a7073d99a286620ee39c370449f4a87c7faeee6424f9b600f6e7cc40"
+dependencies = [
+ "bincode 2.0.1",
+ "serde",
+]
 
 [[package]]
 name = "serde"
