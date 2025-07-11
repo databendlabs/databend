@@ -41,6 +41,7 @@ runs:
 
     - name: Sync normal release to R2
       shell: bash
+      continue-on-error: true
       if: inputs.category == 'default'
       run: |
         aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress --checksum-algorithm=CRC32
