@@ -206,6 +206,8 @@ impl TaskMgr {
         let req = UpsertPB::delete(key).with(MatchSeq::GE(1));
         let res = self.kv_api.upsert_pb(&req).await?;
 
+        self.send(TaskMessage::DeleteTask(task_name.to_string()))
+            .await?;
         if res.is_changed() {
             Ok(res.prev.as_ref().map(|prev| Task::clone(prev)))
         } else {
@@ -313,8 +315,7 @@ impl TaskMgr {
         if !task.after.is_empty() {
             self.send(TaskMessage::AfterTask(task)).await?;
         } else if task.schedule_options.is_some() && !without_schedule {
-            self.send(TaskMessage::ScheduleTask(task))
-                .await?;
+            self.send(TaskMessage::ScheduleTask(task)).await?;
         }
 
         Ok(Ok(()))

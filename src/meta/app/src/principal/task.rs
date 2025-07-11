@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -136,37 +134,5 @@ impl TaskMessage {
 
     pub fn prefix_range() -> (i64, i64) {
         (0, 1)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AfterTaskInfo {
-    pub afters: Arc<Vec<String>>,
-}
-
-pub struct AfterTaskState {
-    waiting: HashSet<String>,
-}
-
-impl From<&Task> for AfterTaskInfo {
-    fn from(value: &Task) -> Self {
-        AfterTaskInfo {
-            afters: Arc::new(value.after.clone()),
-        }
-    }
-}
-
-impl AfterTaskState {
-    pub fn completed_task(&mut self, task_name: &str) -> bool {
-        self.waiting.remove(task_name);
-        self.waiting.is_empty()
-    }
-}
-
-impl From<&AfterTaskInfo> for AfterTaskState {
-    fn from(value: &AfterTaskInfo) -> Self {
-        Self {
-            waiting: HashSet::from_iter(value.afters.to_vec()),
-        }
     }
 }

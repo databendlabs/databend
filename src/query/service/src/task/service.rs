@@ -21,6 +21,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_stream::stream;
 use chrono::DateTime;
 use chrono::Utc;
 use chrono_tz::Tz;
@@ -35,11 +36,9 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_meta_api::kv_pb_api::decode_seqv;
-use databend_common_meta_app::principal::task::AfterTaskInfo;
 use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
-use databend_common_meta_app::principal::AfterTaskState;
 use databend_common_meta_app::principal::ScheduleOptions;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::State;
@@ -58,14 +57,16 @@ use databend_common_meta_types::MetaError;
 use databend_common_sql::Planner;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use futures_util::lock::Mutex;
+use futures::Stream;
 use futures_util::stream::BoxStream;
 use futures_util::TryStreamExt;
+use itertools::Itertools;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
 use crate::interpreters::InterpreterFactory;
+use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
@@ -97,7 +98,7 @@ impl TaskService {
         let create_db = "CREATE DATABASE IF NOT EXISTS system_task";
         self.execute_sql(None, create_db).await?;
 
-        let create_table = "CREATE TABLE IF NOT EXISTS system_task.task_run(\
+        let create_task_run_table = "CREATE TABLE IF NOT EXISTS system_task.task_run(\
         task_id UINT64,\
         task_name TEXT NOT NULL,\
         query_text TEXT NOT NULL,\
@@ -131,7 +132,13 @@ impl TaskService {
         last_suspended_at TIMESTAMP,\
         suspend_task_after_num_failures INTEGER\
         );";
-        self.execute_sql(None, create_table).await?;
+        self.execute_sql(None, create_task_run_table).await?;
+
+        let create_task_after_table = "CREATE TABLE IF NOT EXISTS system_task.task_after(\
+        task_name STRING NOT NULL,\
+        next_task STRING NOT NULL\
+        );";
+        self.execute_sql(None, create_task_after_table).await?;
 
         Ok(())
     }
@@ -152,7 +159,7 @@ impl TaskService {
 
         let instance = TaskService {
             initialized: AtomicBool::new(false),
-            interval: 2,
+            interval: 200,
             tenant: cfg.query.tenant_id.clone(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
@@ -175,20 +182,19 @@ impl TaskService {
             let mut scheduled_tasks: HashMap<String, CancellationToken> = HashMap::new();
             let task_mgr = UserApiProvider::instance().task_api(&tenant);
 
-            // If `task_c` is defined as `AFTER task_a, task_b`, then:
-            //   - task_after_infos["task_c"] = AfterTaskInfo { afters: ["task_a, task_b"] }
-            let mut task_after_infos = HashMap::<String, AfterTaskInfo>::new();
-            //   - task_dep_infos["task_a"]["task_c"] = AfterTaskInfo { ... }
-            //   - task_dep_infos["task_b"]["task_c"] = AfterTaskInfo { ... }
-            let mut task_dep_infos = HashMap::<String, HashMap<String, AfterTaskInfo>>::new();
-            // after task state => [task1 name, task2 name], if task succeeded then remove task name on after task state
-            let task_deps = Arc::new(Mutex::new(HashMap::<AfterTaskInfo, AfterTaskState>::new()));
-
             let mut steam = task_service.subscribe().await?;
 
+            let fn_lock = async |task_service: &TaskService, key: &str| {
+                task_service
+                    .meta_handle
+                    .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
+                    .await
+            };
+
             while let Some(result) = steam.next().await {
-                let (key, task) = result?;
-                match task {
+                let (task_key, task_message) = result?;
+                match task_message {
+                    // ScheduleTask is always monitored by all Query nodes, and ExecuteTask is sent serially to avoid repeated sending.
                     TaskMessage::ScheduleTask(mut task) => {
                         debug_assert!(task.schedule_options.is_some());
                         if let Some(schedule_options) = &task.schedule_options {
@@ -204,6 +210,7 @@ impl TaskService {
                             let token = CancellationToken::new();
                             let child_token = token.child_token();
                             let task_name = task.task_name.to_string();
+                            let task_name_clone = task_name.clone();
                             let task_service = TaskService::instance();
 
                             task_service.update_or_create_task_run(&TaskRun {
@@ -233,6 +240,9 @@ impl TaskService {
                                             loop {
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
+                                                        let Some(_guard) = fn_lock(&task_service, &task_name).await? else {
+                                                            continue;
+                                                        };
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
                                                     _ = child_token.cancelled() => {
@@ -250,6 +260,7 @@ impl TaskService {
                                     let cron_expr = schedule_options.cron.as_ref().unwrap();
                                     let tz = schedule_options.time_zone.as_ref().unwrap().parse::<Tz>().unwrap();
                                     let schedule = Schedule::from_str(cron_expr).unwrap();
+                                    let task_name = task_name.clone();
 
                                     runtime
                                         .spawn(async move {
@@ -264,6 +275,9 @@ impl TaskService {
                                                 task.next_scheduled_at = Some(Utc::now() + duration);
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
+                                                        let Some(_guard) = fn_lock(&task_service, &task_name).await? else {
+                                                            continue;
+                                                        };
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
                                                     _ = child_token.cancelled() => {
@@ -275,15 +289,11 @@ impl TaskService {
                                         });
                                 }
                             }
-                            let _ = scheduled_tasks.insert(task_name, token);
+                            let _ = scheduled_tasks.insert(task_name_clone, token);
                         }
                     }
                     TaskMessage::ExecuteTask(task) => {
-                        let may_permit = task_service
-                            .meta_handle
-                            .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
-                            .await?;
-                        let Some(_guard) = may_permit else {
+                        let Some(_guard) = fn_lock(&task_service, &task.task_name).await? else {
                             continue;
                         };
                         let task_name = task.task_name.clone();
@@ -307,10 +317,8 @@ impl TaskService {
 
                         let task_mgr = task_mgr.clone();
                         let tenant = tenant.clone();
-                        let task_dep_infos = task_dep_infos.clone();
-                        let task_deps = task_deps.clone();
                         let owner = Self::get_task_owner(&task, &tenant).await?;
-                        task_mgr.execute_accept(&key).await?;
+
                         runtime
                             .try_spawn(async move {
                                 while task_run.attempt_number >= 0 {
@@ -322,21 +330,16 @@ impl TaskService {
                                             task_run.completed_at = Some(Utc::now());
                                             task_service.update_or_create_task_run(&task_run).await?;
 
-                                            if let Some(info) = task_dep_infos.get(&task_name) {
-                                                let mut guard = task_deps.lock().await;
+                                            let mut stream = Box::pin(task_service.check_next_tasks(&task_name));
 
-                                                for (dep_name, dep_info) in info {
-                                                    if let Some(after_state) = guard.get_mut(dep_info) {
-                                                        if after_state.completed_task(&task_name) {
-                                                            *after_state = AfterTaskState::from(dep_info);
-                                                            let dep_task = task_mgr.describe_task(dep_name).await??
-                                                                .ok_or_else(|| ErrorCode::UnknownTask(dep_name.clone()))?;
+                                            while let Some(next_task) = stream.next().await {
+                                                let next_task = next_task?;
+                                                let dep_task = task_mgr.describe_task(&next_task).await??
+                                                    .ok_or_else(|| ErrorCode::UnknownTask(next_task))?;
 
-                                                            task_mgr.send(TaskMessage::ExecuteTask(dep_task)).await?;
-                                                        }
-                                                    }
-                                                }
+                                                task_mgr.send(TaskMessage::ExecuteTask(dep_task)).await?;
                                             }
+                                            task_mgr.execute_accept(&task_key).await?;
                                             break;
                                         }
                                         Err(err) => {
@@ -349,6 +352,7 @@ impl TaskService {
                                             task_run.run_id = Self::make_run_id();
                                         }
                                     }
+                                    task_mgr.execute_accept(&task_key).await?;
                                     task_mgr.alter_task(&task.task_name, &AlterTaskOptions::Suspend).await??;
                                 }
 
@@ -357,53 +361,22 @@ impl TaskService {
                             }, None)?;
                     }
                     TaskMessage::DeleteTask(task_name) => {
-                        if let Some(deps) = task_dep_infos.get(&task_name) {
-                            if !deps.is_empty() {
-                                continue;
-                                // TODO: return delete failed error
-                            }
+                        if let Some(_guard) = fn_lock(&task_service, &task_name).await? {
+                            task_service.clean_task_afters(&task_name).await?;
                         }
                         if let Some(token) = scheduled_tasks.remove(&task_name) {
                             token.cancel();
                         }
                     }
                     TaskMessage::AfterTask(task) => {
+                        let Some(_guard) = fn_lock(&task_service, &task.task_name).await? else {
+                            continue;
+                        };
                         match task.status {
                             Status::Suspended => continue,
                             Status::Started => (),
                         }
-                        // after info
-                        if let Some(info) = task_after_infos.remove(&task.task_name) {
-                            // dep info
-                            for after in info.afters.iter() {
-                                if let Some(dep_tasks) = task_dep_infos.get_mut(after) {
-                                    dep_tasks.remove(&task.task_name);
-                                }
-                            }
-                            task_deps
-                                .lock()
-                                .await
-                                .remove(&info);
-                        }
-                        if task.after.is_empty() {
-                            continue;
-                        }
-                        let task_name = task.task_name.clone();
-                        let info = AfterTaskInfo::from(&task);
-                        // after info
-                        task_after_infos.insert(task_name.clone(), info.clone());
-                        // dep info
-                        for after_task in task.after.iter() {
-                            task_dep_infos
-                                .entry(after_task.clone())
-                                .or_default()
-                                .insert(task_name.clone(), info.clone());
-
-                            task_deps
-                                .lock()
-                                .await
-                                .insert(info.clone(), AfterTaskState::from(&info));
-                        }
+                        task_service.update_task_afters(&task).await?;
                     }
                 }
             }
@@ -596,6 +569,75 @@ impl TaskService {
             self.execute_sql(None, &Self::task_run2insert(task_run)?)
                 .await?;
         }
+        Ok(())
+    }
+
+    pub fn check_next_tasks<'a>(
+        &'a self,
+        task_name: &'a str,
+    ) -> impl Stream<Item = Result<String>> + '_ {
+        stream! {
+            let check = format!("WITH latest_task_run AS ( \
+                  SELECT \
+                    ranked.task_name, \
+                    ranked.state, \
+                    ranked.completed_at \
+                  FROM ( \
+                    SELECT \
+                      task_name, \
+                      state, \
+                      completed_at, \
+                      ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn \
+                    FROM system_task.task_run \
+                  ) AS ranked \
+                  WHERE ranked.rn = 1 \
+                ) \
+                SELECT ta.next_task \
+                FROM system_task.task_after ta \
+                JOIN system_task.task_after ta2 \
+                  ON ta.next_task = ta2.next_task \
+                LEFT JOIN latest_task_run tr \
+                  ON ta2.task_name = tr.task_name \
+                     AND tr.state = 'SUCCEEDED' \
+                     AND tr.completed_at IS NOT NULL \
+                WHERE ta.task_name = '{task_name}' \
+                GROUP BY ta.next_task \
+                HAVING COUNT(DISTINCT ta2.task_name) = COUNT(DISTINCT tr.task_name);");
+            if let Some(next_task) = self.execute_sql(None, &check).await?.first().and_then(|block| block.columns()[0].index(0).and_then(|scalar| { scalar.as_string().map(|s| s.to_string()) })) {
+                yield Result::Ok(next_task);
+            }
+        }
+    }
+
+    pub async fn clean_task_afters(&self, task_name: &str) -> Result<()> {
+        self.execute_sql(
+            None,
+            &format!(
+                "DELETE FROM system_task.task_after WHERE next_task = '{}'",
+                task_name
+            ),
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_task_afters(&self, task: &Task) -> Result<()> {
+        self.clean_task_afters(&task.task_name).await?;
+        let values = task
+            .after
+            .iter()
+            .map(|after| format!("('{}', '{}')", after, task.task_name))
+            .join(", ");
+        self.execute_sql(
+            None,
+            &format!(
+                "INSERT INTO system_task.task_after (task_name, next_task) VALUES {}",
+                values
+            ),
+        )
+        .await?;
+
         Ok(())
     }
 
@@ -950,7 +992,12 @@ impl TaskService {
     async fn execute_sql(&self, other_user: Option<UserInfo>, sql: &str) -> Result<Vec<DataBlock>> {
         let context = self.create_context(other_user).await?;
 
-        let mut planner = Planner::new(context.clone());
+        let mut planner = Planner::new_with_query_executor(
+            context.clone(),
+            Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
+                context.as_ref(),
+            ))),
+        );
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
         let stream = executor.execute(context).await?;
