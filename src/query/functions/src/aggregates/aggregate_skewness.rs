@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::compute_view::NumberConvertView;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::*;
@@ -31,7 +30,6 @@ use super::assert_unary_arguments;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_stddev::DecimalFuncData;
 use crate::aggregates::aggregate_unary::AggregateUnaryFunction;
 use crate::aggregates::aggregate_unary::UnaryState;
 
@@ -43,17 +41,25 @@ pub struct SkewnessStateV2 {
     pub sum_cub: F64,
 }
 
-impl SkewnessStateV2 {
-    // Common implementation for adding a value
-    fn add_value(&mut self, value: f64) {
+impl<T> UnaryState<T, Float64Type> for SkewnessStateV2
+where
+    T: AccessType + Sync + Send,
+    T::Scalar: AsPrimitive<f64>,
+{
+    fn add(
+        &mut self,
+        other: T::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let other = T::to_owned_scalar(other).as_();
         self.n += 1;
-        self.sum += value;
-        self.sum_sqr += value.powi(2);
-        self.sum_cub += value.powi(3);
+        self.sum += other;
+        self.sum_sqr += other.powi(2);
+        self.sum_cub += other.powi(3);
+        Ok(())
     }
 
-    // Common implementation for merge method
-    fn merge_impl(&mut self, rhs: &Self) -> Result<()> {
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
         if rhs.n == 0 {
             return Ok(());
         }
@@ -64,8 +70,11 @@ impl SkewnessStateV2 {
         Ok(())
     }
 
-    // Common implementation for merge_result method
-    fn merge_result_impl(&mut self, mut builder: BuilderMut<'_, Float64Type>) -> Result<()> {
+    fn merge_result(
+        &mut self,
+        mut builder: BuilderMut<'_, Float64Type>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
         if self.n <= 2 {
             builder.push(F64::from(0_f64));
             return Ok(());
@@ -92,82 +101,6 @@ impl SkewnessStateV2 {
     }
 }
 
-// Specialized state for regular numeric types
-#[derive(Default, BorshSerialize, BorshDeserialize)]
-struct NumberSkewnessState {
-    state: SkewnessStateV2,
-}
-
-impl<T> UnaryState<T, Float64Type> for NumberSkewnessState
-where
-    T: ValueType + Sync + Send,
-    T::Scalar: AsPrimitive<f64>,
-{
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let value = T::to_owned_scalar(other).as_();
-        self.state.add_value(value);
-        Ok(())
-    }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.state.merge_impl(&rhs.state)
-    }
-
-    fn merge_result(
-        &mut self,
-        builder: BuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        self.state.merge_result_impl(builder)
-    }
-}
-
-// Specialized state for decimal types
-#[derive(Default, BorshSerialize, BorshDeserialize)]
-struct DecimalSkewnessState {
-    state: SkewnessStateV2,
-}
-
-impl<T> UnaryState<T, Float64Type> for DecimalSkewnessState
-where
-    T: ValueType + Sync + Send,
-    T::Scalar: Decimal,
-{
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        let other = T::to_owned_scalar(other);
-        let data = unsafe {
-            function_data
-                .unwrap()
-                .as_any()
-                .downcast_ref_unchecked::<DecimalFuncData>()
-        };
-
-        let value = other.to_float64(data.scale);
-        self.state.add_value(value);
-        Ok(())
-    }
-
-    fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.state.merge_impl(&rhs.state)
-    }
-
-    fn merge_result(
-        &mut self,
-        builder: BuilderMut<'_, Float64Type>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
-        self.state.merge_result_impl(builder)
-    }
-}
-
 pub fn try_create_aggregate_skewness_function(
     display_name: &str,
     params: Vec<Scalar>,
@@ -175,32 +108,30 @@ pub fn try_create_aggregate_skewness_function(
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
+
     let return_type = DataType::Number(NumberDataType::Float64);
-    with_number_mapped_type!(|NUM| match &arguments[0] {
-        DataType::Number(NumberDataType::NUM) => {
+    with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
+        DataType::Number(NumberDataType::NUM_TYPE) => {
             AggregateUnaryFunction::<
-                    NumberSkewnessState,
-                    NumberType<NUM>,
-                    Float64Type,
-                >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+                SkewnessStateV2,
+                NumberConvertView<NUM_TYPE, F64>,
+                Float64Type,
+            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
 
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
-                        DecimalSkewnessState,
-                        DecimalType<DECIMAL>,
+                    AggregateUnaryFunction::<
+                        SkewnessStateV2,
+                        DecimalF64View<DECIMAL>,
                         Float64Type,
-                    >::try_create(
+                    >::try_create_unary(
                         display_name, return_type, params, arguments[0].clone()
                     )
-                    .with_function_data(Box::new(DecimalFuncData { scale: s.scale() }));
-                    Ok(Arc::new(func))
                 }
             })
         }
-
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",
             display_name, arguments[0]
