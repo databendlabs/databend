@@ -71,7 +71,7 @@ impl TaskMetaHandle {
         &self.meta_client
     }
 
-    pub async fn acquire(&self, meta_key: &str, interval: u64) -> Result<Option<Permit>> {
+    pub async fn acquire(&self, meta_key: &str, interval_millis: u64) -> Result<Option<Permit>> {
         let acquired_guard = Semaphore::new_acquired(
             self.meta_client.clone(),
             meta_key,
@@ -81,7 +81,7 @@ impl TaskMetaHandle {
         )
         .await
         .map_err(|_e| "acquire semaphore failed from TaskService")?;
-        if interval == 0 {
+        if interval_millis == 0 {
             return Ok(Some(acquired_guard));
         }
         if match self
@@ -92,7 +92,7 @@ impl TaskMetaHandle {
             Some(v) => {
                 let last: u64 = serde_json::from_slice(&v.data)?;
                 chrono::Utc::now().timestamp_millis() as u64
-                    - Duration::from_secs(interval).as_millis() as u64
+                    - Duration::from_millis(interval_millis).as_millis() as u64
                     > last
             }
             None => true,

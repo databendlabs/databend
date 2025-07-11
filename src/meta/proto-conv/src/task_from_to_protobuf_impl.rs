@@ -64,8 +64,7 @@ impl FromToProto for mt::Task {
                 }
             }
         };
-        
-        
+
         let warehouse = p.warehouse_options.as_ref().map(|w| mt::WarehouseOptions {
             warehouse: w.warehouse.clone(),
             using_warehouse_size: w.using_warehouse_size.clone(),
@@ -114,10 +113,13 @@ impl FromToProto for mt::Task {
                 schedule_type: s.schedule_type as i32,
                 milliseconds_interval: s.milliseconds_interval,
             }),
-            warehouse_options: self.warehouse_options.as_ref().map(|w| pb::WarehouseOptions {
-                warehouse: w.warehouse.clone(),
-                using_warehouse_size: w.using_warehouse_size.clone(),
-            }),
+            warehouse_options: self
+                .warehouse_options
+                .as_ref()
+                .map(|w| pb::WarehouseOptions {
+                    warehouse: w.warehouse.clone(),
+                    using_warehouse_size: w.using_warehouse_size.clone(),
+                }),
             next_scheduled_at: match &self.next_scheduled_at {
                 None => None,
                 Some(d) => Some(d.to_pb()?),

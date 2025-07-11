@@ -42,8 +42,8 @@ pub async fn create_session(
     restricted_role: Option<String>,
 ) -> Result<Arc<Session>> {
     let session_manager = SessionManager::instance();
-    let dummy_session = session_manager.create_session(SessionType::Dummy).await?;
-    let session = session_manager.register_session(dummy_session)?;
+    let session = session_manager.create_session(SessionType::MySQL).await?;
+    let session = session_manager.register_session(session)?;
     session.set_authed_user(user, restricted_role).await?;
     Ok(session)
 }

@@ -89,7 +89,6 @@ pub use role_info::RoleInfo;
 pub use role_info::RoleInfoSerdeError;
 pub use stage_file_ident::StageFileIdent;
 pub use stage_file_path::StageFilePath;
-pub use task::AfterTaskState;
 pub use task::ScheduleOptions;
 pub use task::ScheduleType;
 pub use task::State;
