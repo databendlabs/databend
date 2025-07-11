@@ -24,6 +24,7 @@ pub struct FormatSettings {
     pub geometry_format: GeometryDataType,
     pub enable_dst_hour_fix: bool,
     pub format_null_as_str: bool,
+    pub enable_extended_json_syntax: bool,
 }
 
 // only used for tests
@@ -35,6 +36,7 @@ impl Default for FormatSettings {
             geometry_format: GeometryDataType::default(),
             enable_dst_hour_fix: false,
             format_null_as_str: false,
+            enable_extended_json_syntax: false,
         }
     }
 }

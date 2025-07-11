@@ -41,7 +41,18 @@ STRING
 query TTT
 SELECT json_typeof(parse_json('112')), json_typeof(parse_json('-1.12')), json_typeof(parse_json('1.12e10'))
 ----
+INTEGER DOUBLE DOUBLE
+
+statement ok
+set enable_extended_json_syntax = 1
+
+query TTT
+SELECT json_typeof(parse_json('112')), json_typeof(parse_json('-1.12')), json_typeof(parse_json('1.12e10'))
+----
 INTEGER DECIMAL DOUBLE
+
+statement ok
+set enable_extended_json_syntax = 0
 
 query T
 SELECT json_typeof(parse_json('[1,2,3]'))

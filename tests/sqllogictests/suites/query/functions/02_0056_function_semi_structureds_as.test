@@ -61,6 +61,29 @@ select as_object(parse_json('{"k": 123}'))
 query TTTT
 select to_binary('abc')::variant, to_binary(to_binary('abc')::variant), to_binary(parse_json('"abc"')), as_binary(to_binary('abc')::variant)
 ----
+"616263" 363136323633 616263 NULL
+
+query TTTT
+select to_date('2025-01-01')::variant, to_date(to_date('2025-01-01')::variant), to_date(parse_json('"2025-01-01"')), as_date(to_date('2025-01-01')::variant)
+----
+"2025-01-01" 2025-01-01 2025-01-01 NULL
+
+query TTTT
+select to_timestamp('2025-01-01 10:00:00')::variant, to_timestamp(to_timestamp('2025-01-01 10:00:00')::variant), to_timestamp(parse_json('"2025-01-01 10:00:00"')), as_timestamp(to_timestamp('2025-01-01 10:00:00')::variant)
+----
+"2025-01-01 10:00:00.000000" 2025-01-01 10:00:00.000000 2025-01-01 10:00:00.000000 NULL
+
+query TTTT
+select to_interval('10 months 2 days')::variant, to_interval(to_interval('10 months 2 days')::variant), to_interval(parse_json('"10 months 2 days"')), as_interval(to_interval('10 months 2 days')::variant)
+----
+"10 months 2 days" 10 months 2 days 10 months 2 days NULL
+
+statement ok
+set enable_extended_json_syntax = 1
+
+query TTTT
+select to_binary('abc')::variant, to_binary(to_binary('abc')::variant), to_binary(parse_json('"abc"')), as_binary(to_binary('abc')::variant)
+----
 "616263" 616263 616263 616263
 
 query TTTT
@@ -82,6 +105,9 @@ query TTTT
 select to_decimal(10, 2)(parse_json('3.14')), as_decimal(parse_json('3.14')), as_decimal(10, 2)(parse_json('3.14')), as_decimal(parse_json('3.14'), 10, 2)
 ----
 3.14 3 3.14 3.14
+
+statement ok
+set enable_extended_json_syntax = 0
 
 query B
 select is_null_value(parse_json('null'))
@@ -156,6 +182,29 @@ select is_object(parse_json('["a","b","c"]'))
 query B
 select is_binary(to_binary('abc')::variant)
 ----
+0
+
+query B 
+select is_date(to_date('2025-01-01')::variant)
+----
+0
+
+query B
+select is_timestamp(to_timestamp('2025-01-01 10:00:00')::variant)
+----
+0
+
+query B
+select is_interval(to_interval('10 months 2 days')::variant)
+----
+0
+
+statement ok
+set enable_extended_json_syntax = 1
+
+query B
+select is_binary(to_binary('abc')::variant)
+----
 1
 
 query B 
@@ -173,6 +222,8 @@ select is_interval(to_interval('10 months 2 days')::variant)
 ----
 1
 
+statement ok
+set enable_extended_json_syntax = 0
 
 statement ok
 DROP DATABASE IF EXISTS db1
