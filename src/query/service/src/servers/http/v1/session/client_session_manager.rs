@@ -408,11 +408,15 @@ impl ClientSessionManager {
         }
     }
 
-    pub fn remove_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: TempTblMgrRef) {
+    pub fn remove_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: &TempTblMgrRef) {
         let mut guard = self.session_state.lock();
-        let is_empty = temp_tbl_mgr.lock().is_empty();
+        let is_empty = { temp_tbl_mgr.lock().is_empty() };
         if is_empty {
-            guard.remove(&prefix);
+            let removed_session_state = guard.remove(&prefix);
+            // Defensive check that drop session state contains no temp tables
+            if let Some(removed_session_state) = removed_session_state {
+                assert!({ removed_session_state.temp_tbl_mgr.lock().is_empty() });
+            }
             // all temp table dropped by user, data should have been removed when executing drop.
             info!("[TEMP TABLE] session={prefix} removed from ClientSessionManager");
         }

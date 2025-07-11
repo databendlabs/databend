@@ -33,6 +33,9 @@ runs:
         bash ./tests/logging/test-logs.sh
 
     - name: Run History Tables Tests
+      env:
+        LOG_HISTORY_STORAGE_S3_ACCESS_KEY_ID: 'minioadmin'
+        LOG_HISTORY_STORAGE_S3_SECRET_ACCESS_KEY: 'minioadmin'
       shell: bash
       run: |
         bash ./tests/logging/test-history-tables.sh

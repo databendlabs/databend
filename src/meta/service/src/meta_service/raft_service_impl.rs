@@ -93,7 +93,7 @@ impl RaftServiceImpl {
             &storage_path,
             &temp_rel_path,
             snapshot_meta.snapshot_id.clone(),
-            raft_config,
+            raft_config.to_rotbl_config(),
         )
         .map_err(|e| {
             Status::internal(format!(

@@ -75,11 +75,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
     // This method is not used
     #[fastrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<DB, StorageError> {
-        let ss_store = SnapshotStoreV004::new(self.inner.config.clone());
-        let db = ss_store
-            .new_temp()
-            .map_err(|e| StorageError::write_snapshot(None, &e))?;
-        Ok(db)
+        unreachable!("begin_receiving_snapshot is only required when using OpenRaft Chunked snapshot transmit");
     }
 
     #[fastrace::trace]
@@ -108,7 +104,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
             storage_path,
             rel_path,
             meta.snapshot_id.clone(),
-            &self.inner.config,
+            self.inner.config.to_rotbl_config(),
         )
         .map_err(|e| StorageError::read_snapshot(Some(sig.clone()), &e))?;
 

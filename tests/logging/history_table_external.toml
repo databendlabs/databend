@@ -1,5 +1,6 @@
 [log.history]
 on = true
+storage_on = true
 
 [log.history.storage]
 type = "s3"
@@ -8,8 +9,8 @@ type = "s3"
 bucket = "testbucket"
 root = "history_table_test"
 endpoint_url = "http://127.0.0.1:9900"
-access_key_id = "minioadmin"
-secret_access_key = "minioadmin"
+access_key_id = ""
+secret_access_key = ""
 
 [[log.history.tables]]
 table_name = "query_history"

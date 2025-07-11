@@ -77,7 +77,7 @@ where SD: OpenSnapshot
             storage_path.clone(),
             rel_path,
             snapshot_id.clone(),
-            self.snapshot_config.raft_config(),
+            self.snapshot_config.raft_config().to_rotbl_config(),
         )
         .map_err(|e| {
             error!("failed to open snapshot file({}): {}", storage_path, e);

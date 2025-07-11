@@ -437,7 +437,7 @@ impl Catalog for SessionCatalog {
         .await?
         {
             ClientSessionManager::instance()
-                .remove_temp_tbl_mgr(req.temp_prefix, self.temp_tbl_mgr.clone());
+                .remove_temp_tbl_mgr(req.temp_prefix, &self.temp_tbl_mgr);
             return Ok(reply);
         }
         self.inner.drop_table_by_id(req).await

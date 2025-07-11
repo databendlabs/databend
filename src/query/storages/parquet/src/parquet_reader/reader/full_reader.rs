@@ -179,12 +179,11 @@ impl ParquetWholeFileReader {
 
     /// Read a [`DataBlock`] from bytes.
     pub fn read_blocks_from_binary(&self, bytes: Bytes, path: &str) -> Result<DataBlockIterator> {
-        let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
-            bytes,
-            ArrowReaderOptions::new(),
-        )?
-        .with_projection(self.projection.clone())
-        .with_batch_size(self.batch_size);
+        let mut builder =
+            ParquetRecordBatchReaderBuilder::try_new_with_options(bytes, ArrowReaderOptions::new())
+                .map_err(|e| format!("Invalid Parquet file '{path}': {e}"))?
+                .with_projection(self.projection.clone())
+                .with_batch_size(self.batch_size);
 
         // Prune row groups.
         let file_meta = builder.metadata().clone();
