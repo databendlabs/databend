@@ -57,7 +57,9 @@ use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
+use crate::types::CoreNumber;
 use crate::types::DataType;
+use crate::types::F64;
 use crate::utils::arrow::buffer_into_mut;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
@@ -71,11 +73,15 @@ use crate::Value;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoreDecimal<T: Decimal>(PhantomData<T>);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoreScalarDecimal<T: Decimal>(PhantomData<T>);
+
 pub type Decimal64Type = DecimalType<i64>;
 pub type Decimal128Type = DecimalType<i128>;
 pub type Decimal256Type = DecimalType<i256>;
 
 pub type DecimalType<T> = SimpleValueType<CoreDecimal<T>>;
+pub type DecimalScalarType<T> = SimpleValueType<CoreScalarDecimal<T>>;
 
 impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     type Scalar = Num;
@@ -149,6 +155,95 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     }
 }
 
+impl<Num: Decimal> SimpleType for CoreScalarDecimal<Num> {
+    type Scalar = (Num, DecimalSize);
+    type Domain = SimpleDomain<(Num, DecimalSize)>;
+
+    fn downcast_scalar(scalar: &ScalarRef) -> Option<Self::Scalar> {
+        let scalar = scalar.as_decimal()?;
+        Num::try_downcast_scalar(scalar).map(|v| (v, scalar.size()))
+    }
+
+    fn downcast_column(col: &Column) -> Option<Buffer<Self::Scalar>> {
+        Num::try_downcast_column(col).map(|(col, x)| col.into_iter().map(|v| (v, x)).collect())
+    }
+
+    fn downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        let size = domain.as_decimal()?.decimal_size();
+        let domain = Num::try_downcast_domain(domain.as_decimal()?)?;
+        Some(SimpleDomain {
+            min: (domain.min, size),
+            max: (domain.max, size),
+        })
+    }
+
+    // It's not allowed to call downcast_builder temporarily
+    fn downcast_builder(_builder: &mut ColumnBuilder) -> Option<&mut Vec<Self::Scalar>> {
+        None
+    }
+
+    fn downcast_owned_builder(builder: ColumnBuilder) -> Option<Vec<Self::Scalar>> {
+        let size = builder.as_decimal()?.decimal_size();
+        let b = Num::try_downcast_owned_builder(builder);
+        b.map(|v| v.into_iter().map(|v| (v, size)).collect())
+    }
+
+    fn upcast_column_builder(
+        builder: Vec<Self::Scalar>,
+        data_type: &DataType,
+    ) -> Option<ColumnBuilder> {
+        Some(ColumnBuilder::Decimal(Num::upcast_builder(
+            builder.into_iter().map(|(v, _)| v).collect(),
+            *data_type.as_decimal().unwrap(),
+        )))
+    }
+
+    fn upcast_scalar(scalar: Self::Scalar, data_type: &DataType) -> Scalar {
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_scalar(scalar.0, size)
+    }
+
+    fn upcast_column(col: Buffer<Self::Scalar>, data_type: &DataType) -> Column {
+        let col = col.into_iter().map(|(v, _)| v).collect();
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_column(col, size)
+    }
+
+    fn upcast_domain(domain: Self::Domain, data_type: &DataType) -> Domain {
+        let domain = SimpleDomain {
+            min: domain.min.0,
+            max: domain.max.0,
+        };
+        let size = *data_type.as_decimal().unwrap();
+        Num::upcast_domain(domain, size)
+    }
+
+    #[inline(always)]
+    fn compare(lhs: &Self::Scalar, rhs: &Self::Scalar) -> Ordering {
+        lhs.cmp(rhs)
+    }
+
+    #[inline(always)]
+    fn greater_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: &Self::Scalar, right: &Self::Scalar) -> bool {
+        left <= right
+    }
+}
+
 impl<Num: Decimal> DecimalType<Num> {
     pub fn full_domain(size: &DecimalSize) -> SimpleDomain<Num> {
         SimpleDomain {
@@ -191,6 +286,12 @@ impl DecimalScalar {
     pub fn size(&self) -> DecimalSize {
         with_decimal_type!(|DECIMAL| match self {
             DecimalScalar::DECIMAL(_, size) => *size,
+        })
+    }
+
+    pub fn scale(&self) -> u8 {
+        with_decimal_type!(|DECIMAL| match self {
+            DecimalScalar::DECIMAL(_, size) => size.scale,
         })
     }
 
@@ -243,6 +344,8 @@ impl DecimalDomain {
     Copy,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     Hash,
     Serialize,
     Deserialize,
@@ -252,6 +355,15 @@ impl DecimalDomain {
 pub struct DecimalSize {
     precision: u8,
     scale: u8,
+}
+
+impl Default for DecimalSize {
+    fn default() -> Self {
+        DecimalSize {
+            precision: 15,
+            scale: 2,
+        }
+    }
 }
 
 impl DecimalSize {
@@ -2801,6 +2913,8 @@ impl Ord for i256 {
 }
 
 pub type DecimalView<F, T> = ComputeView<DecimalConvert<F, T>, CoreDecimal<F>, CoreDecimal<T>>;
+pub type DecimalF64View<F> =
+    ComputeView<DecimalConvert<F, F64>, CoreScalarDecimal<F>, CoreNumber<F64>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DecimalConvert<F, T>(std::marker::PhantomData<(F, T)>);
@@ -2823,10 +2937,32 @@ where
     }
 }
 
+impl<F> Compute<CoreScalarDecimal<F>, CoreNumber<F64>> for DecimalConvert<F, F64>
+where F: Decimal
+{
+    #[inline]
+    fn compute(value: &(F, DecimalSize)) -> F64 {
+        value.0.to_float64(value.1.scale()).into()
+    }
+
+    fn compute_domain(domain: &SimpleDomain<(F, DecimalSize)>) -> SimpleDomain<F64> {
+        let min = domain.min.0.to_float64(domain.min.1.scale());
+        let max = domain.max.0.to_float64(domain.max.1.scale());
+
+        SimpleDomain {
+            min: min.into(),
+            max: max.into(),
+        }
+    }
+}
+
+pub type Decimal64AsF64Type = DecimalF64View<i64>;
+pub type Decimal128AsF64Type = DecimalF64View<i128>;
+pub type Decimal256AsF64Type = DecimalF64View<i256>;
+
 macro_rules! decimal_convert_type {
     ($from:ty, $to:ty, $alias:ident, $compat:ident) => {
-        pub type $alias =
-            ComputeView<DecimalConvert<$from, $to>, CoreDecimal<$from>, CoreDecimal<$to>>;
+        pub type $alias = DecimalView<$from, $to>;
         pub type $compat = DecimalConvert<$from, $to>;
     };
 }
