@@ -77,13 +77,38 @@ INSERT INTO t VALUES
 (15, [0.13230447, 0.630588, 0.10812326, 0.21558228, 0.83768057, 0.48870546, 0.65021806, 0.31626541]),
 (16, [0.2667851, 0.01529589, 0.98994706, 0.31870983, 0.31783372, 0.34863699, 0.30254189, 0.84441678])
 
-
 statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int, embedding Vector(8)) Engine = Fuse
 
 statement ok
 INSERT INTO t1 SELECT id, embedding FROM t
 
+query T
+EXPLAIN SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
+----
+RowFetch
+├── output columns: [t._vector_score (#2), t._row_id (#3), t.id (#0)]
+├── columns to fetch: [id]
+├── estimated rows: 5.00
+└── Limit
+    ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+    ├── limit: 5
+    ├── offset: 0
+    ├── estimated rows: 5.00
+    └── Sort
+        ├── output columns: [t._vector_score (#2), t._row_id (#3)]
+        ├── sort keys: [_vector_score ASC NULLS LAST]
+        ├── estimated rows: 16.00
+        └── TableScan
+            ├── table: default.test_vector_index.t
+            ├── output columns: [_vector_score (#2), _row_id (#3)]
+            ├── read rows: 12
+            ├── read size: 0
+            ├── partitions total: 4
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 4 to 4>, blocks: <range pruning: 4 to 4, vector pruning: 4 to 3>]
+            ├── push downs: [filters: [], limit: 5]
+            └── estimated rows: 16.00
 
 query IF
 SELECT id, cosine_distance(embedding, [0.50515236, 0.8561939, 0.87169914, 0.55843271, 0.73689797, 0.49985862, 0.64527255, 0.29313098]::vector(8)) AS similarity FROM t ORDER BY similarity ASC LIMIT 5;
