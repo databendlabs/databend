@@ -190,8 +190,8 @@ static BLOCK_VECTOR_INDEX_GENERATE_MILLISECONDS: LazyLock<Histogram> = LazyLock:
 static BLOCK_VECTOR_INDEX_READ_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
     register_histogram_in_milliseconds("fuse_block_vector_index_read_milliseconds")
 });
-static BLOCK_VECTOR_INDEX_SEARCH_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
-    register_histogram_in_milliseconds("fuse_block_vector_index_search_milliseconds")
+static BLOCK_VECTOR_INDEX_PRUNING_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_vector_index_pruning_milliseconds")
 });
 static BLOCK_VECTOR_INDEX_READ_BYTES: LazyLock<Counter> =
     LazyLock::new(|| register_counter("fuse_block_vector_index_read_bytes"));
@@ -626,8 +626,8 @@ pub fn metrics_inc_block_vector_index_read_milliseconds(c: u64) {
     BLOCK_VECTOR_INDEX_READ_MILLISECONDS.observe(c as f64);
 }
 
-pub fn metrics_inc_block_vector_index_search_milliseconds(c: u64) {
-    BLOCK_VECTOR_INDEX_SEARCH_MILLISECONDS.observe(c as f64);
+pub fn metrics_inc_block_vector_index_pruning_milliseconds(c: u64) {
+    BLOCK_VECTOR_INDEX_PRUNING_MILLISECONDS.observe(c as f64);
 }
 
 pub fn metrics_inc_block_vector_index_read_bytes(c: u64) {

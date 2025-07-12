@@ -256,10 +256,6 @@ impl PushDownInfo {
         }
     }
 
-    pub fn vector_topn(&self) -> bool {
-        !self.order_by.is_empty() && self.limit.is_some() && self.vector_index.is_some()
-    }
-
     pub fn prewhere_of_push_downs(push_downs: Option<&PushDownInfo>) -> Option<PrewhereInfo> {
         if let Some(PushDownInfo { prewhere, .. }) = push_downs {
             prewhere.clone()

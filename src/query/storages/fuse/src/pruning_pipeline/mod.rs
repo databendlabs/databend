@@ -25,6 +25,7 @@ mod segment_prune_transform;
 mod send_part_info_sink;
 mod sync_block_prune_transform;
 mod topn_prune_transform;
+mod vector_index_prune_transform;
 
 pub use async_block_prune_transform::AsyncBlockPruneTransform;
 pub use column_oriented_block_prune::ColumnOrientedBlockPruneSink;
@@ -40,3 +41,4 @@ pub use send_part_info_sink::SendPartInfoSink;
 pub use send_part_info_sink::SendPartState;
 pub use sync_block_prune_transform::SyncBlockPruneTransform;
 pub use topn_prune_transform::TopNPruneTransform;
+pub use vector_index_prune_transform::VectorIndexPruneTransform;

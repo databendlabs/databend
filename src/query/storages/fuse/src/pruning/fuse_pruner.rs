@@ -26,10 +26,6 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_after;
-use databend_common_metrics::storage::metrics_inc_blocks_vector_index_pruning_before;
-use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruning_after;
-use databend_common_metrics::storage::metrics_inc_bytes_block_vector_index_pruning_before;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_storages_common_cache::CacheAccessor;
@@ -566,8 +562,7 @@ impl FusePruner {
             let vector_index = push_down.vector_index.clone().unwrap();
 
             let vector_pruner = VectorIndexPruner::create(
-                self.pruning_ctx.ctx.clone(),
-                self.pruning_ctx.dal.clone(),
+                self.pruning_ctx.clone(),
                 schema,
                 vector_index,
                 filters,
@@ -575,26 +570,7 @@ impl FusePruner {
                 limit,
             )?;
 
-            // Perf.
-            {
-                let block_size = metas.iter().map(|(_, m)| m.block_size).sum();
-                metrics_inc_blocks_vector_index_pruning_before(metas.len() as u64);
-                metrics_inc_bytes_block_vector_index_pruning_before(block_size);
-                self.pruning_ctx
-                    .pruning_stats
-                    .set_blocks_vector_index_pruning_before(metas.len() as u64);
-            }
             let pruned_metas = vector_pruner.prune(metas.clone()).await?;
-
-            // Perf.
-            {
-                let block_size = pruned_metas.iter().map(|(_, m)| m.block_size).sum();
-                metrics_inc_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
-                metrics_inc_bytes_block_vector_index_pruning_after(block_size);
-                self.pruning_ctx
-                    .pruning_stats
-                    .set_blocks_vector_index_pruning_after(pruned_metas.len() as u64);
-            }
             return Ok(pruned_metas);
         }
         Ok(metas)

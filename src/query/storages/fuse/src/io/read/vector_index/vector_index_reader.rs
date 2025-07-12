@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Instant;
-
 use databend_common_exception::Result;
-use databend_common_metrics::storage::metrics_inc_block_vector_index_search_milliseconds;
 use databend_storages_common_index::DistanceType;
 use databend_storages_common_index::HNSWIndex;
 use databend_storages_common_index::ScoredPointOffset;
@@ -61,8 +58,6 @@ impl VectorIndexReader {
         row_count: usize,
         location: &str,
     ) -> Result<Vec<ScoredPointOffset>> {
-        let start = Instant::now();
-
         let binary_columns = load_vector_index_files(
             self.operator.clone(),
             &self.settings,
@@ -72,15 +67,7 @@ impl VectorIndexReader {
         .await?;
 
         let hnsw_index = HNSWIndex::open(self.distance_type, self.dim, row_count, binary_columns)?;
-
-        let res = hnsw_index.search(limit, &self.query_values)?;
-
-        // Perf.
-        {
-            metrics_inc_block_vector_index_search_milliseconds(start.elapsed().as_millis() as u64);
-        }
-
-        Ok(res)
+        hnsw_index.search(limit, &self.query_values)
     }
 
     pub async fn generate_scores(
@@ -88,8 +75,6 @@ impl VectorIndexReader {
         row_count: usize,
         location: &str,
     ) -> Result<Vec<ScoredPointOffset>> {
-        let start = Instant::now();
-
         let binary_columns = load_vector_index_files(
             self.operator.clone(),
             &self.settings,
@@ -99,14 +84,6 @@ impl VectorIndexReader {
         .await?;
 
         let hnsw_index = HNSWIndex::open(self.distance_type, self.dim, row_count, binary_columns)?;
-
-        let res = hnsw_index.generate_scores(row_count as u32, &self.query_values)?;
-
-        // Perf.
-        {
-            metrics_inc_block_vector_index_search_milliseconds(start.elapsed().as_millis() as u64);
-        }
-
-        Ok(res)
+        hnsw_index.generate_scores(row_count as u32, &self.query_values)
     }
 }
