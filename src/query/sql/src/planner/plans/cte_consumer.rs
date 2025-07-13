@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 
+use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -65,7 +66,9 @@ impl Operator for CTEConsumer {
 
     /// Derive physical property
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        RelExpr::with_s_expr(&self.def).derive_physical_prop()
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
     }
 
     /// Compute required property for child with index `child_index`
