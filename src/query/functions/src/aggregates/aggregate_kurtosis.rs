@@ -16,8 +16,10 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::compute_view::NumberConvertView;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
+use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
 use num_traits::AsPrimitive;
@@ -41,7 +43,7 @@ struct KurtosisState {
 
 impl<T> UnaryState<T, Float64Type> for KurtosisState
 where
-    T: ValueType + Sync + Send,
+    T: AccessType + Sync + Send,
     T::Scalar: AsPrimitive<f64>,
 {
     fn add(
@@ -119,15 +121,28 @@ pub fn try_create_aggregate_kurtosis_function(
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
+    let return_type = DataType::Number(NumberDataType::Float64);
 
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            let return_type = DataType::Number(NumberDataType::Float64);
             AggregateUnaryFunction::<
                 KurtosisState,
-                NumberType<NUM_TYPE>,
+                NumberConvertView<NUM_TYPE, F64>,
                 Float64Type,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+        }
+        DataType::Decimal(s) => {
+            with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
+                DecimalDataKind::DECIMAL => {
+                    AggregateUnaryFunction::<
+                        KurtosisState,
+                        DecimalF64View<DECIMAL>,
+                        Float64Type,
+                    >::try_create_unary(
+                        display_name, return_type, params, arguments[0].clone()
+                    )
+                }
+            })
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(

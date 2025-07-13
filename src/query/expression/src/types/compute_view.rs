@@ -18,9 +18,13 @@ use std::marker::PhantomData;
 use std::ops::Range;
 
 use databend_common_column::buffer::Buffer;
+use num_traits::AsPrimitive;
 
 use super::simple_type::SimpleType;
 use super::AccessType;
+use crate::types::CoreNumber;
+use crate::types::Number;
+use crate::types::SimpleDomain;
 use crate::Column;
 use crate::Domain;
 use crate::ScalarRef;
@@ -138,5 +142,27 @@ where
 
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         T::less_than_equal(&left, &right)
+    }
+}
+
+/// For number convert
+pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, CoreNumber<F>, CoreNumber<T>>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumberConvert<F, T>(std::marker::PhantomData<(F, T)>);
+
+impl<F, T> Compute<CoreNumber<F>, CoreNumber<T>> for NumberConvert<F, T>
+where
+    F: Number + AsPrimitive<T>,
+    T: Number,
+{
+    fn compute(value: &F) -> T {
+        value.as_()
+    }
+
+    fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
+        let min = domain.min.as_();
+        let max = domain.max.as_();
+        SimpleDomain { min, max }
     }
 }
