@@ -136,7 +136,7 @@ impl QueryFragmentsActions {
                     fragment_actions.fragment_id
                 )));
             }
-            
+
             let plan = &fragment_actions.fragment_actions[0].physical_plan;
             if !matches!(plan, PhysicalPlan::ExchangeSink(_)) {
                 fragment_ids.push(fragment_actions.fragment_id);
