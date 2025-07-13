@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_statistics;
 mod segment;
 mod snapshot;
 
+pub use block_statistics::BlockStatistics;
 pub use segment::CompactSegmentInfo;
 pub use segment::RawBlockMeta;
 pub use segment::SegmentInfo;

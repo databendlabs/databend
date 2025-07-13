@@ -75,6 +75,10 @@ impl TableMetaFunc for FuseBlock {
                 "virtual_column_size",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
+            TableField::new(
+                "block_stats_size",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 
@@ -99,6 +103,7 @@ impl TableMetaFunc for FuseBlock {
         let mut ngram_index_size = Vec::with_capacity(len);
         let mut vector_index_size = Vec::with_capacity(len);
         let mut virtual_column_size = Vec::with_capacity(len);
+        let mut block_stats_size = Vec::with_capacity(len);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
@@ -134,6 +139,7 @@ impl TableMetaFunc for FuseBlock {
                             .as_ref()
                             .map(|m| m.virtual_column_size),
                     );
+                    block_stats_size.push(block.block_stats_size);
 
                     num_rows += 1;
                     if num_rows >= limit {
@@ -157,6 +163,7 @@ impl TableMetaFunc for FuseBlock {
                 UInt64Type::from_opt_data(ngram_index_size).into(),
                 UInt64Type::from_opt_data(vector_index_size).into(),
                 UInt64Type::from_opt_data(virtual_column_size).into(),
+                UInt64Type::from_data(block_stats_size).into(),
             ],
             num_rows,
         ))

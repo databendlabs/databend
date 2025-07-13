@@ -26,6 +26,8 @@ pub use schema::meta_name;
 pub use schema::segment_schema;
 pub use schema::stat_name;
 pub use schema::BLOCK_SIZE;
+pub use schema::BLOCK_STATS_LOCATION;
+pub use schema::BLOCK_STATS_SIZE;
 pub use schema::BLOOM_FILTER_INDEX_LOCATION;
 pub use schema::BLOOM_FILTER_INDEX_SIZE;
 pub use schema::CLUSTER_STATS;

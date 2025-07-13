@@ -32,7 +32,6 @@ use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_native::write::NativeWriter;
@@ -56,6 +55,7 @@ use crate::io::create_inverted_index_builders;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsBuilder;
 use crate::io::write::stream::cluster_statistics::ClusterStatisticsState;
 use crate::io::write::stream::ColumnStatisticsState;
+use crate::io::write::BlockStatsBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::BlockSerialization;
 use crate::io::BloomIndexState;
@@ -71,6 +71,7 @@ use crate::FuseTable;
 
 pub enum BlockWriterImpl {
     Arrow(ArrowWriter<Vec<u8>>),
+    // Native format doesnot support stream write.
     Native(NativeWriter<Vec<u8>>),
 }
 
@@ -155,6 +156,7 @@ pub struct StreamBlockBuilder {
     bloom_index_builder: BloomIndexBuilder,
     virtual_column_builder: Option<VirtualColumnBuilder>,
     vector_index_builder: Option<VectorIndexBuilder>,
+    block_stats_builder: BlockStatsBuilder,
 
     cluster_stats_state: ClusterStatisticsState,
     column_stats_state: ColumnStatisticsState,
@@ -224,6 +226,7 @@ impl StreamBlockBuilder {
             &properties.table_indexes,
             properties.source_schema.clone(),
         );
+        let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map);
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state =
@@ -236,6 +239,7 @@ impl StreamBlockBuilder {
             bloom_index_builder,
             virtual_column_builder,
             vector_index_builder,
+            block_stats_builder,
             row_count: 0,
             block_size: 0,
             column_stats_state,
@@ -268,6 +272,7 @@ impl StreamBlockBuilder {
         self.column_stats_state
             .add_block(&self.properties.source_schema, &block)?;
         self.bloom_index_builder.add_block(&block)?;
+        self.block_stats_builder.add_block(&block)?;
         for writer in self.inverted_index_writers.iter_mut() {
             writer.add_block(&self.properties.source_schema, &block)?;
         }
@@ -303,11 +308,21 @@ impl StreamBlockBuilder {
         } else {
             None
         };
-        let column_distinct_count = bloom_index_state
+        let bloom_distinct_count = bloom_index_state
             .as_ref()
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
-        let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
+        let block_stats_location = self
+            .properties
+            .meta_locations
+            .block_stats_location(&block_id);
+        let block_stats_state = self.block_stats_builder.finalize(block_stats_location)?;
+        let hll_distinct_count = block_stats_state
+            .as_ref()
+            .map_or(HashMap::new(), |i| i.column_distinct_count.clone());
+        let col_stats = self
+            .column_stats_state
+            .finalize(bloom_distinct_count, hll_distinct_count)?;
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_writers.len());
         for (i, inverted_index_writer) in std::mem::take(&mut self.inverted_index_writers)
@@ -378,6 +393,10 @@ impl StreamBlockBuilder {
                 .map(|v| v.ngram_size)
                 .unwrap_or_default(),
             virtual_block_meta: None,
+            block_stats_location: block_stats_state.as_ref().map(|v| v.location.clone()),
+            block_stats_size: block_stats_state
+                .as_ref()
+                .map_or(0, |v| v.block_stats_size()),
         };
         let serialized = BlockSerialization {
             block_raw_data,
@@ -386,6 +405,7 @@ impl StreamBlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
+            block_stats_state,
         };
         Ok(serialized)
     }
@@ -403,6 +423,7 @@ pub struct StreamBlockProperties {
     stats_columns: Vec<(ColumnId, DataType)>,
     distinct_columns: Vec<(ColumnId, DataType)>,
     bloom_columns_map: BTreeMap<FieldIndex, TableField>,
+    ndv_columns_map: BTreeMap<FieldIndex, TableField>,
     ngram_args: Vec<NgramArgs>,
     inverted_index_builders: Vec<InvertedIndexBuilder>,
     virtual_column_builder: Option<VirtualColumnBuilder>,
@@ -446,8 +467,12 @@ impl StreamBlockProperties {
             &table.table_info.meta,
             &table.table_info.meta.schema,
         )?;
-        let bloom_column_ids = bloom_columns_map
+        let ndv_columns_map = table
+            .approx_distinct_cols
+            .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
+        let bloom_ndv_columns = bloom_columns_map
             .values()
+            .chain(ndv_columns_map.values())
             .map(|v| v.column_id())
             .collect::<HashSet<_>>();
 
@@ -472,10 +497,9 @@ impl StreamBlockProperties {
         for field in leaf_fields.iter() {
             let column_id = field.column_id();
             let data_type = DataType::from(field.data_type());
-            if RangeIndex::supported_type(&data_type) && column_id != ORIGIN_BLOCK_ROW_NUM_COLUMN_ID
-            {
+            if RangeIndex::supported_type(&data_type) {
                 stats_columns.push((column_id, data_type.clone()));
-                if !bloom_column_ids.contains(&column_id) {
+                if !bloom_ndv_columns.contains(&column_id) {
                     distinct_columns.push((column_id, data_type));
                 }
             }
@@ -496,6 +520,7 @@ impl StreamBlockProperties {
             inverted_index_builders,
             table_meta_timestamps,
             table_indexes,
+            ndv_columns_map,
         }))
     }
 }

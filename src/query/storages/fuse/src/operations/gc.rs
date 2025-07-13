@@ -32,6 +32,7 @@ use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_STATS_LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::column_oriented_segment::LOCATION;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -390,6 +391,13 @@ impl FuseTable {
                 purge_files.push(loc.to_string())
             }
 
+            for loc in &locations.stats_location {
+                if locations_referenced_by_root.stats_location.contains(loc) {
+                    continue;
+                }
+                purge_files.push(loc.to_string())
+            }
+
             purge_files.extend(chunk.iter().map(|loc| loc.0.clone()));
         }
         purge_files.extend(ts_to_be_purged.iter().map(|loc| loc.to_string()));
@@ -455,6 +463,14 @@ impl FuseTable {
                 blooms_to_be_purged.insert(loc.to_string());
             }
 
+            let mut stats_to_be_purged = HashSet::new();
+            for loc in &locations.stats_location {
+                if locations_referenced_by_root.stats_location.contains(loc) {
+                    continue;
+                }
+                stats_to_be_purged.insert(loc.to_string());
+            }
+
             let segment_locations_to_be_purged = HashSet::from_iter(
                 chunk
                     .iter()
@@ -481,6 +497,7 @@ impl FuseTable {
                 agg_indexes_to_be_purged,
                 inverted_indexes_to_be_purged,
                 blooms_to_be_purged,
+                stats_to_be_purged,
                 segment_locations_to_be_purged,
             )
             .await?;
@@ -541,6 +558,7 @@ impl FuseTable {
             agg_indexes_to_be_purged,
             inverted_indexes_to_be_purged,
             root_location_tuple.bloom_location,
+            root_location_tuple.stats_location,
             segment_locations_to_be_purged,
         )
         .await?;
@@ -566,6 +584,7 @@ impl FuseTable {
         agg_indexes_to_be_purged: HashSet<String>,
         inverted_indexes_to_be_purged: HashSet<String>,
         blooms_to_be_purged: HashSet<String>,
+        stats_to_be_purged: HashSet<String>,
         segments_to_be_purged: HashSet<String>,
     ) -> Result<()> {
         // 1. Try to purge block file chunks.
@@ -616,7 +635,15 @@ impl FuseTable {
             .await?;
         }
 
-        // 3. Try to purge segment file chunks.
+        // 3. Try to purge block statistic file chunks.
+        let stats_count = stats_to_be_purged.len();
+        if stats_count > 0 {
+            counter.block_stats += stats_count;
+            self.try_purge_location_files(ctx.clone(), stats_to_be_purged)
+                .await?;
+        }
+
+        // 4. Try to purge segment file chunks.
         let segments_count = segments_to_be_purged.len();
         if segments_count > 0 {
             counter.segments += segments_count;
@@ -661,9 +688,10 @@ impl FuseTable {
         // 5. Refresh status.
         {
             let status = format!(
-                "gc: block files purged:{}, bloom files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{:?}",
+                "gc: block files purged:{}, bloom files purged:{}, block stats files purged:{}, segment files purged:{}, table statistic files purged:{}, snapshots purged:{}, take:{:?}",
                 counter.blocks,
                 counter.blooms,
+                counter.block_stats,
                 counter.segments,
                 counter.table_statistics,
                 counter.snapshots,
@@ -714,6 +742,7 @@ impl FuseTable {
     ) -> Result<LocationTuple> {
         let mut blocks = HashSet::new();
         let mut blooms = HashSet::new();
+        let mut stats = HashSet::new();
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
@@ -779,12 +808,14 @@ impl FuseTable {
                 };
                 blocks.extend(location_tuple.block_location.into_iter());
                 blooms.extend(location_tuple.bloom_location.into_iter());
+                stats.extend(location_tuple.stats_location.into_iter());
             }
         }
 
         Ok(LocationTuple {
             block_location: blocks,
             bloom_location: blooms,
+            stats_location: stats,
         })
     }
 
@@ -808,6 +839,7 @@ struct RootSnapshotInfo {
 pub struct LocationTuple {
     pub block_location: HashSet<String>,
     pub bloom_location: HashSet<String>,
+    pub stats_location: HashSet<String>,
 }
 
 impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
@@ -815,16 +847,21 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
     fn try_from(value: Arc<CompactSegmentInfo>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
+        let mut stats_location = HashSet::new();
         let block_metas = value.block_metas()?;
         for block_meta in block_metas.into_iter() {
             block_location.insert(block_meta.location.0.clone());
             if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
                 bloom_location.insert(bloom_loc.0.clone());
             }
+            if let Some(stats_loc) = &block_meta.block_stats_location {
+                stats_location.insert(stats_loc.0.clone());
+            }
         }
         Ok(Self {
             block_location,
             bloom_location,
+            stats_location,
         })
     }
 }
@@ -834,6 +871,7 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
     fn try_from(value: Arc<ColumnOrientedSegment>) -> Result<Self> {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
+        let mut stats_location = HashSet::new();
 
         let location_path = value.location_path_col();
         for path in location_path.iter() {
@@ -846,19 +884,28 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
             .unwrap();
         let column = value.block_metas.get_by_offset(index).to_column();
         for value in column.iter() {
-            match value {
-                ScalarRef::Null => {}
-                ScalarRef::Tuple(values) => {
-                    let path = values[0].as_string().unwrap();
-                    bloom_location.insert(path.to_string());
-                }
-                _ => unreachable!(),
+            if let ScalarRef::Tuple(values) = value {
+                let path = values[0].as_string().unwrap();
+                bloom_location.insert(path.to_string());
+            }
+        }
+
+        let (index, _) = value
+            .segment_schema
+            .column_with_name(BLOCK_STATS_LOCATION)
+            .unwrap();
+        let column = value.block_metas.get_by_offset(index).to_column();
+        for value in column.iter() {
+            if let ScalarRef::Tuple(values) = value {
+                let path = values[0].as_string().unwrap();
+                stats_location.insert(path.to_string());
             }
         }
 
         Ok(Self {
             block_location,
             bloom_location,
+            stats_location,
         })
     }
 }
@@ -870,6 +917,7 @@ struct PurgeCounter {
     agg_indexes: usize,
     inverted_indexes: usize,
     blooms: usize,
+    block_stats: usize,
     segments: usize,
     table_statistics: usize,
     snapshots: usize,
@@ -883,6 +931,7 @@ impl PurgeCounter {
             agg_indexes: 0,
             inverted_indexes: 0,
             blooms: 0,
+            block_stats: 0,
             segments: 0,
             table_statistics: 0,
             snapshots: 0,

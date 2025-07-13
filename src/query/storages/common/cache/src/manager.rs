@@ -1033,6 +1033,8 @@ mod tests {
             vector_index_location: None,
             vector_index_size: None,
             virtual_block_meta: None,
+            block_stats_location: None,
+            block_stats_size: 0,
             compression: Compression::Lz4,
             create_on: None,
         });

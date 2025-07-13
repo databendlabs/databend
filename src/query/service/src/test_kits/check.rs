@@ -24,6 +24,7 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
+use databend_common_storages_fuse::FUSE_TBL_BLOCK_STATISTICS_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
@@ -79,6 +80,7 @@ pub async fn check_data_dir(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
+    block_stat_count: u32,
     check_last_snapshot: Option<()>,
     check_table_statistic_file: Option<()>,
 ) -> Result<()> {
@@ -92,12 +94,14 @@ pub async fn check_data_dir(
     let mut sg_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
+    let mut b_stat_count = 0;
     let mut table_statistic_files = vec![];
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+    let prefix_block_stats = FUSE_TBL_BLOCK_STATISTICS_PREFIX;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
@@ -109,6 +113,8 @@ pub async fn check_data_dir(
                 ss_count += 1;
             } else if path.starts_with(prefix_segment) {
                 sg_count += 1;
+            } else if path.starts_with(prefix_block_stats) {
+                b_stat_count += 1;
             } else if path.starts_with(prefix_block) {
                 b_count += 1;
             } else if path.starts_with(prefix_index) {
@@ -139,6 +145,12 @@ pub async fn check_data_dir(
     assert_eq!(
         b_count, block_count,
         "case [{}], check block count",
+        case_name
+    );
+
+    assert_eq!(
+        b_stat_count, block_stat_count,
+        "case [{}], check block statistics count",
         case_name
     );
 

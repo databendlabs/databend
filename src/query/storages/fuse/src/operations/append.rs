@@ -51,7 +51,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let enable_stream_block_write = self.enable_stream_block_write();
+        let enable_stream_block_write = self.enable_stream_block_write(ctx.clone())?;
         if enable_stream_block_write {
             let properties = StreamBlockProperties::try_create(
                 ctx.clone(),
