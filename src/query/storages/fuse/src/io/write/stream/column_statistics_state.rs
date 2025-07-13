@@ -88,21 +88,29 @@ impl ColumnStatisticsState {
 
     pub fn finalize(
         self,
-        column_distinct_count: HashMap<ColumnId, usize>,
+        bloom_distinct_count: HashMap<ColumnId, usize>,
+        hll_distinct_count: HashMap<ColumnId, usize>,
     ) -> Result<StatisticsOfColumns> {
+        let mut distinct_count =
+            HashMap::with_capacity(self.distinct_columns.len() + hll_distinct_count.len());
+        for (column_id, estimator) in &self.distinct_columns {
+            distinct_count.insert(*column_id, estimator.finalize());
+        }
+        distinct_count.extend(hll_distinct_count);
+
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
         for (id, stats) in self.col_stats {
             let mut col_stats = stats.finalize()?;
-            if let Some(count) = column_distinct_count.get(&id) {
+            if let Some(count) = distinct_count.get(&id) {
+                col_stats.distinct_of_values = Some(*count as u64);
+            } else if let Some(&count) = bloom_distinct_count.get(&id) {
                 // value calculated by xor hash function include NULL, need to subtract one.
-                let distinct_of_values = if col_stats.null_count > 0 {
-                    *count as u64 - 1
+                let distinct_of_values = if col_stats.null_count > 0 && count > 0 {
+                    count as u64 - 1
                 } else {
-                    *count as u64
+                    count as u64
                 };
                 col_stats.distinct_of_values = Some(distinct_of_values);
-            } else if let Some(estimator) = self.distinct_columns.get(&id) {
-                col_stats.distinct_of_values = Some(estimator.finalize());
             } else if col_stats.min == col_stats.max {
                 // Bloom index will skip the large string column, it also no need to calc distinct values.
                 if col_stats.min.is_null() {
@@ -114,5 +122,75 @@ impl ColumnStatisticsState {
             statistics.insert(id, col_stats);
         }
         Ok(statistics)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_expression::types::BinaryType;
+    use databend_common_expression::types::Int64Type;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::StringType;
+    use databend_common_expression::types::UInt64Type;
+    use databend_common_expression::Column;
+    use databend_common_expression::FromData;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchema;
+    use databend_storages_common_index::Index;
+    use databend_storages_common_index::RangeIndex;
+
+    use super::*;
+    use crate::statistics::gen_columns_statistics;
+
+    #[test]
+    fn test_column_stats_state() -> Result<()> {
+        let field1 = TableField::new(
+            "a",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
+        );
+        let field2 = TableField::new("b", TableDataType::String);
+        let field3 = TableField::new("c", TableDataType::Tuple {
+            fields_name: vec!["d".to_string(), "e".to_string()],
+            fields_type: vec![
+                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Binary,
+            ],
+        });
+        let schema = Arc::new(TableSchema::new(vec![field1, field2, field3]));
+        let block = DataBlock::new_from_columns(vec![
+            Int64Type::from_opt_data(vec![Some(1), Some(2), None, Some(4), Some(5)]),
+            StringType::from_data(vec!["a", "b", "c", "d", "e"]),
+            Column::Tuple(vec![
+                UInt64Type::from_data(vec![11, 12, 13, 14, 15]),
+                BinaryType::from_data(vec![
+                    "hello".as_bytes().to_vec(),
+                    "world".as_bytes().to_vec(),
+                    "".as_bytes().to_vec(),
+                    "foo".as_bytes().to_vec(),
+                    "bar".as_bytes().to_vec(),
+                ]),
+            ]),
+        ]);
+
+        let stats_0 = gen_columns_statistics(&block, None, &schema)?;
+
+        let mut stats_columns = vec![];
+        let leaf_fields = schema.leaf_fields();
+        for field in leaf_fields.iter() {
+            let column_id = field.column_id();
+            let data_type = DataType::from(field.data_type());
+            if RangeIndex::supported_type(&data_type) {
+                stats_columns.push((column_id, data_type.clone()));
+            }
+        }
+        let mut column_stats_state = ColumnStatisticsState::new(&stats_columns, &stats_columns);
+        column_stats_state.add_block(&schema, &block)?;
+        let stats_1 = column_stats_state.finalize(HashMap::new(), HashMap::new())?;
+
+        assert_eq!(stats_0, stats_1);
+        Ok(())
     }
 }

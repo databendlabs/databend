@@ -25,6 +25,7 @@ pub use v2::Statistics;
 pub use v2::VirtualBlockMeta;
 pub use v2::VirtualColumnMeta;
 pub use v3::TableSnapshotStatistics;
+pub use v4::BlockStatistics;
 pub use v4::CompactSegmentInfo;
 pub use v4::RawBlockMeta;
 pub use v4::SegmentInfo;

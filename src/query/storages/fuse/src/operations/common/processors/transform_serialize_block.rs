@@ -34,6 +34,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storage::MutationStatus;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
@@ -152,6 +153,9 @@ impl TransformSerializeBlock {
         let bloom_columns_map = table
             .bloom_index_cols
             .bloom_index_fields(source_schema.clone(), BloomIndex::supported_type)?;
+        let ndv_columns_map = table
+            .approx_distinct_cols
+            .distinct_column_fields(source_schema.clone(), RangeIndex::supported_table_type)?;
         let ngram_args = FuseTable::create_ngram_index_args(
             &table.table_info.meta,
             &table.table_info.meta.schema,
@@ -182,6 +186,7 @@ impl TransformSerializeBlock {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
             bloom_columns_map,
+            ndv_columns_map,
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,

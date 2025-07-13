@@ -43,6 +43,7 @@ pub use write::serialize_block;
 pub use write::write_data;
 pub use write::BlockBuilder;
 pub use write::BlockSerialization;
+pub use write::BlockStatisticsState;
 pub use write::BlockWriter;
 pub use write::BloomIndexRebuilder;
 pub use write::BloomIndexState;

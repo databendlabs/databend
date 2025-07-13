@@ -69,6 +69,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -87,6 +88,7 @@ use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -141,6 +143,7 @@ pub struct FuseTable {
     pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
+    pub(crate) approx_distinct_cols: ApproxDistinctColumns,
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
@@ -234,6 +237,12 @@ impl FuseTable {
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
 
+        let approx_distinct_cols = table_info
+            .options()
+            .get(OPT_KEY_APPROX_DISTINCT_COLUMNS)
+            .and_then(|s| s.parse::<ApproxDistinctColumns>().ok())
+            .unwrap_or(ApproxDistinctColumns::All);
+
         let meta_location_generator = TableMetaLocationGenerator::new(storage_prefix);
         if !table_info.meta.part_prefix.is_empty() {
             return Err(ErrorCode::StorageOther(
@@ -246,6 +255,7 @@ impl FuseTable {
             meta_location_generator,
             cluster_key_meta,
             bloom_index_cols,
+            approx_distinct_cols,
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
@@ -458,6 +468,10 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    pub fn approx_distinct_cols(&self) -> ApproxDistinctColumns {
+        self.approx_distinct_cols.clone()
     }
 
     // Check if table is attached.
@@ -746,11 +760,12 @@ impl FuseTable {
             })
     }
 
-    pub fn enable_stream_block_write(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Parquet)
+    pub fn enable_stream_block_write(&self, ctx: Arc<dyn TableContext>) -> Result<bool> {
+        Ok(ctx.get_settings().get_enable_block_stream_write()?
+            && matches!(self.storage_format, FuseStorageFormat::Parquet)
             && self
                 .cluster_type()
-                .is_none_or(|v| matches!(v, ClusterType::Hilbert))
+                .is_none_or(|v| matches!(v, ClusterType::Hilbert)))
     }
 }
 

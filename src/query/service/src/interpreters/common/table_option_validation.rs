@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_settings::Settings;
+use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
@@ -35,6 +36,8 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -68,6 +71,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
+    r.insert(OPT_KEY_APPROX_DISTINCT_COLUMNS);
     r.insert(OPT_KEY_TABLE_COMPRESSION);
     r.insert(OPT_KEY_STORAGE_FORMAT);
     r.insert(OPT_KEY_DATABASE_ID);
@@ -209,6 +213,16 @@ pub fn is_valid_bloom_index_columns(
 ) -> databend_common_exception::Result<()> {
     if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
         BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
+    }
+    Ok(())
+}
+
+pub fn is_valid_approx_distinct_columns(
+    options: &BTreeMap<String, String>,
+    schema: TableSchemaRef,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(OPT_KEY_APPROX_DISTINCT_COLUMNS) {
+        ApproxDistinctColumns::verify_definition(value, schema, RangeIndex::supported_table_type)?;
     }
     Ok(())
 }

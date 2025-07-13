@@ -827,6 +827,8 @@ impl BloomIndexBuilder {
                 index_column.builder.add_digests(digests.iter())
             }
         }
+        // reverse sorting.
+        bloom_keys_to_remove.sort_by(|a, b| b.cmp(a));
         for k in bloom_keys_to_remove {
             self.bloom_columns.remove(k);
         }

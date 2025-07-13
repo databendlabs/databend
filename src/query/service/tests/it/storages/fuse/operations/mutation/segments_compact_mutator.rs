@@ -781,6 +781,8 @@ impl CompactSegmentTestFixture {
                         None,
                         None,
                         None,
+                        None,
+                        0,
                         Compression::Lz4Raw,
                         Some(Utc::now()),
                     );

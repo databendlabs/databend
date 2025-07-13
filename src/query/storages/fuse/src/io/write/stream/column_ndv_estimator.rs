@@ -46,7 +46,8 @@ use enum_dispatch::enum_dispatch;
 pub trait ColumnNDVEstimatorOps: Send + Sync {
     fn update_column(&mut self, column: &Column);
     fn update_scalar(&mut self, scalar: &ScalarRef);
-    fn finalize(&self) -> u64;
+    fn finalize(&self) -> usize;
+    fn hll(self) -> ColumnDistinctHLL;
 }
 
 #[enum_dispatch(ColumnNDVEstimatorOps)]
@@ -176,7 +177,11 @@ where
         self.hll.add_object(&val);
     }
 
-    fn finalize(&self) -> u64 {
-        self.hll.count() as u64
+    fn finalize(&self) -> usize {
+        self.hll.count()
+    }
+
+    fn hll(self) -> ColumnDistinctHLL {
+        self.hll
     }
 }

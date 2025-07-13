@@ -336,6 +336,9 @@ pub async fn do_vacuum2(
         }
         indexes_to_gc
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
+
+        indexes_to_gc
+            .push(TableMetaLocationGenerator::gen_block_stats_location_from_block_location(loc));
     }
 
     ctx.set_status_info(&format!(

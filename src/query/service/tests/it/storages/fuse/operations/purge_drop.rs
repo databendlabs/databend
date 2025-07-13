@@ -46,6 +46,20 @@ async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
 
     // ingests some test data
     append_sample_data(1, &fixture).await?;
+    check_data_dir(
+        &fixture,
+        "drop table: there should be 1 snapshot, 0 segment/block",
+        1, // 1 snapshot
+        0, // 0 snapshot statistic
+        1, // 0 segments
+        1, // 0 blocks
+        1, // 0 index
+        1, // 0 block statistic
+        None,
+        None,
+    )
+    .await?;
+
     // let's Drop
     let qry = format!("drop table {}.{} all", db, tbl);
     fixture.execute_command(qry.as_str()).await?;
@@ -58,6 +72,7 @@ async fn test_fuse_snapshot_truncate_in_drop_all_stmt() -> Result<()> {
         0, // 0 segments
         0, // 0 blocks
         0, // 0 index
+        0, // 0 block statistic
         None,
         None,
     )

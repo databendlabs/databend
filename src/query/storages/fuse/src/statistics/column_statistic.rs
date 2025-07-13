@@ -120,15 +120,15 @@ pub fn gen_columns_statistics(
                 };
 
                 // use distinct count calculated by the xor hash function to avoid repetitive operation.
-                let distinct_of_values = if let Some(value) = column_distinct_count
+                let distinct_of_values = if let Some(&value) = column_distinct_count
                     .as_ref()
                     .and_then(|v| v.get(&column_id))
                 {
                     // value calculated by xor hash function include NULL, need to subtract one.
-                    if unset_bits > 0 {
-                        *value as u64 - 1
+                    if unset_bits > 0 && value > 0 {
+                        value as u64 - 1
                     } else {
-                        *value as u64
+                        value as u64
                     }
                 } else {
                     calc_column_distinct_of_values(&col, rows)?

@@ -49,6 +49,7 @@ pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
 pub(crate) use utils::*;
 pub use v0::ColumnMeta as ColumnMetaV0;
 pub use versions::testify_version;
+pub use versions::BlockStatisticsVersion;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;

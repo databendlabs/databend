@@ -54,6 +54,7 @@ pub async fn do_purge_test(
     segment_count: u32,
     block_count: u32,
     index_count: u32,
+    block_stat_count: u32,
 ) -> Result<()> {
     let fixture = TestFixture::setup().await?;
     fixture.create_default_database().await?;
@@ -81,6 +82,7 @@ pub async fn do_purge_test(
         segment_count,
         block_count,
         index_count,
+        block_stat_count,
         Some(()),
         None,
     )
