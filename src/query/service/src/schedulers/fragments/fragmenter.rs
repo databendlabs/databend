@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
+use databend_common_sql::executor::physical_plans::CTEConsumer;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
@@ -68,6 +69,7 @@ enum State {
     Compact,
     Recluster,
     Other,
+    CTEConsumer,
 }
 
 impl Fragmenter {
@@ -159,6 +161,11 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+        self.state = State::CTEConsumer;
+        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
@@ -311,6 +318,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
+            State::CTEConsumer => FragmentType::Intermediate,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
