@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -272,7 +273,17 @@ impl Interpreter for AnalyzeTableInterpreter {
 fn remove_exchange(plan: Box<dyn IPhysicalPlan>) -> Box<dyn IPhysicalPlan> {
     struct RemoveExchangeHandle;
 
+    impl RemoveExchangeHandle {
+        pub fn new() -> Box<dyn DeriveHandle> {
+            Box::new(RemoveExchangeHandle)
+        }
+    }
+
     impl DeriveHandle for RemoveExchangeHandle {
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
         fn derive(
             &mut self,
             v: &Box<dyn IPhysicalPlan>,
@@ -287,6 +298,5 @@ fn remove_exchange(plan: Box<dyn IPhysicalPlan>) -> Box<dyn IPhysicalPlan> {
         }
     }
 
-    let mut handle = Box::new(RemoveExchangeHandle);
-    plan.derive_with(&mut handle)
+    plan.derive_with(&mut RemoveExchangeHandle::new())
 }

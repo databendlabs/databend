@@ -396,9 +396,8 @@ impl ExplainInterpreter {
 
         let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
 
-        Box::downcast()
         for fragment in fragments {
-            fragment.get_actions(ctx, &mut fragments_actions)?;
+            fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
         }
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();

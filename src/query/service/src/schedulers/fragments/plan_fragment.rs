@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -486,6 +487,11 @@ impl ReadSourceDeriveHandle {
 }
 
 impl DeriveHandle for ReadSourceDeriveHandle {
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -496,8 +502,12 @@ impl DeriveHandle for ReadSourceDeriveHandle {
                 unreachable!("Cannot find data source for table scan plan {}", table_scan.get_id())
             };
 
+            let Ok(source) = DataSourcePlan::try_from(source) else {
+                unreachable!("Cannot create data source plan");
+            };
+
             return Ok(Box::new(TableScan {
-                source: Box::new(DataSourcePlan::try_from(source)?),
+                source: Box::new(source),
                 ..table_scan.clone()
             }));
         } else if let Some(table_scan) = v.downcast_ref::<ConstantTableScan>() {
@@ -531,6 +541,11 @@ impl ReclusterDeriveHandle {
 }
 
 impl DeriveHandle for ReclusterDeriveHandle {
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -558,6 +573,10 @@ impl MutationSourceDeriveHandle {
 }
 
 impl DeriveHandle for MutationSourceDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -585,6 +604,10 @@ impl CompactSourceDeriveHandle {
 }
 
 impl DeriveHandle for CompactSourceDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -623,10 +646,15 @@ impl ReplaceDeriveHandle {
 }
 
 impl DeriveHandle for ReplaceDeriveHandle {
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
+        mut children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
         if let Some(replace_into) = v.downcast_ref::<ReplaceInto>() {
             assert_eq!(children.len(), 1);

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
@@ -220,7 +221,6 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
     Ok(())
 }
 
-#[async_recursion::async_recursion(#[recursive::recursive])]
 async fn create_memory_table_for_cte_scan(
     ctx: &Arc<QueryContext>,
     plan: &Box<dyn IPhysicalPlan>,
@@ -237,9 +237,17 @@ async fn create_memory_table_for_cte_scan(
                 plans: vec![],
             })
         }
+
+        pub fn take(&mut self) -> Vec<CreateTablePlan> {
+            std::mem::take(&mut self.plans)
+        }
     }
 
     impl PhysicalPlanVisitor for CollectMemoryTable {
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
         fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
             if let Some(recursive_cte_scan) = plan.downcast_ref::<RecursiveCteScan>() {
                 let table_fields = recursive_cte_scan
@@ -282,140 +290,19 @@ async fn create_memory_table_for_cte_scan(
         }
     }
 
-    // let mut
-    plan.visit()
-    match plan {
-        PhysicalPlan::Filter(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::EvalScalar(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::ProjectSet(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AggregateExpand(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AggregatePartial(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AggregateFinal(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::Window(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::WindowPartition(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::Sort(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::Limit(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::RowFetch(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::HashJoin(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.build.as_ref()).await?;
-            create_memory_table_for_cte_scan(ctx, plan.probe.as_ref()).await?;
-        }
-        PhysicalPlan::RangeJoin(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.left.as_ref()).await?;
-            create_memory_table_for_cte_scan(ctx, plan.right.as_ref()).await?;
-        }
-        PhysicalPlan::Exchange(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::UnionAll(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.left.as_ref()).await?;
-            create_memory_table_for_cte_scan(ctx, plan.right.as_ref()).await?;
-        }
+    let mut visitor = CollectMemoryTable::new(ctx.clone());
+    plan.visit(&mut visitor)?;
 
-        PhysicalPlan::Udf(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::RecursiveCteScan(plan) => {
-            // Create memory table for cte scan
-            let table_fields = plan
-                .output_schema
-                .fields()
-                .iter()
-                .map(|field| {
-                    Ok(TableField::new(
-                        field.name(),
-                        infer_schema_type(field.data_type())?,
-                    ))
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let schema = TableSchemaRefExt::create(table_fields);
+    let create_table_plans = {
+        let visitor = visitor.as_any().downcast_mut::<CollectMemoryTable>().unwrap();
+        visitor.take()
+    };
 
-            let create_table_plan = CreateTablePlan {
-                create_option: CreateOption::CreateIfNotExists,
-                tenant: Tenant {
-                    tenant: ctx.get_tenant().tenant,
-                },
-                catalog: ctx.get_current_catalog(),
-                database: ctx.get_current_database(),
-                table: plan.table_name.clone(),
-                schema,
-                engine: Engine::Memory,
-                engine_options: Default::default(),
-                table_properties: Default::default(),
-                table_partition: None,
-                storage_params: None,
-                options: Default::default(),
-                field_comments: vec![],
-                cluster_key: None,
-                as_select: None,
-                table_indexes: None,
-                attached_columns: None,
-            };
-            let create_table_interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-            let _ = create_table_interpreter.execute(ctx.clone()).await?;
-        }
-        PhysicalPlan::Shuffle(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::AsyncFunction(plan) => {
-            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
-        }
-        PhysicalPlan::TableScan(_)
-        | PhysicalPlan::ConstantTableScan(_)
-        | PhysicalPlan::ExpressionScan(_)
-        | PhysicalPlan::CacheScan(_)
-        | PhysicalPlan::DistributedInsertSelect(_)
-        | PhysicalPlan::ExchangeSource(_)
-        | PhysicalPlan::ExchangeSink(_)
-        | PhysicalPlan::CopyIntoTable(_)
-        | PhysicalPlan::CopyIntoLocation(_)
-        | PhysicalPlan::ReplaceAsyncSourcer(_)
-        | PhysicalPlan::ReplaceDeduplicate(_)
-        | PhysicalPlan::ReplaceInto(_)
-        | PhysicalPlan::ColumnMutation(_)
-        | PhysicalPlan::MutationSource(_)
-        | PhysicalPlan::Mutation(_)
-        | PhysicalPlan::MutationSplit(_)
-        | PhysicalPlan::MutationManipulate(_)
-        | PhysicalPlan::MutationOrganize(_)
-        | PhysicalPlan::AddStreamColumn(_)
-        | PhysicalPlan::CompactSource(_)
-        | PhysicalPlan::CommitSink(_)
-        | PhysicalPlan::Recluster(_)
-        | PhysicalPlan::HilbertPartition(_)
-        | PhysicalPlan::Duplicate(_)
-        | PhysicalPlan::ChunkFilter(_)
-        | PhysicalPlan::ChunkEvalScalar(_)
-        | PhysicalPlan::ChunkCastSchema(_)
-        | PhysicalPlan::ChunkFillAndReorder(_)
-        | PhysicalPlan::ChunkAppendData(_)
-        | PhysicalPlan::ChunkMerge(_)
-        | PhysicalPlan::ChunkCommitInsert(_)
-        | PhysicalPlan::BroadcastSource(_)
-        | PhysicalPlan::BroadcastSink(_) => {}
+    for create_table_plan in create_table_plans {
+        let create_table_interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+        let _ = create_table_interpreter.execute(ctx.clone()).await?;
     }
+
     Ok(())
 }
 

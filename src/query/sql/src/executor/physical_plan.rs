@@ -107,6 +107,8 @@ impl PhysicalPlanMeta {
 }
 
 pub trait DeriveHandle: Send + Sync + 'static {
+    fn as_any(&mut self) -> &mut dyn Any;
+
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
@@ -220,6 +222,8 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
 }
 
 pub trait PhysicalPlanVisitor {
+    fn as_any(&mut self) -> &mut dyn Any;
+
     fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()>;
 }
 
