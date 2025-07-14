@@ -143,6 +143,7 @@ use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::sessions::ProcessInfo;
@@ -1892,6 +1893,11 @@ impl TableContext for QueryContext {
                 .await?
                 .get_database(&tenant, db_name)
                 .await?;
+            let temp_prefix = table
+                .options()
+                .get(OPT_KEY_TEMP_PREFIX)
+                .cloned()
+                .unwrap_or_default();
             let drop_table_req = DropTableByIdReq {
                 if_exists: true,
                 tenant: tenant.clone(),
@@ -1900,13 +1906,14 @@ impl TableContext for QueryContext {
                 db_id: db.get_db_info().database_id.db_id,
                 db_name: db.name().to_string(),
                 engine: table.engine().to_string(),
-                temp_prefix: table
-                    .options()
-                    .get(OPT_KEY_TEMP_PREFIX)
-                    .cloned()
-                    .unwrap_or_default(),
+                temp_prefix: temp_prefix.clone(),
             };
-            drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req).await?;
+            if drop_table_by_id(temp_tbl_mgr.clone(), drop_table_req)
+                .await?
+                .is_some()
+            {
+                ClientSessionManager::instance().remove_temp_tbl_mgr(temp_prefix, &temp_tbl_mgr);
+            }
         }
         let mut m_cte_temp_table = self.m_cte_temp_table.write();
         m_cte_temp_table.clear();
