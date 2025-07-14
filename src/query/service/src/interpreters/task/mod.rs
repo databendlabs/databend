@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::task_utils;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::AlterTaskPlan;
 use databend_common_sql::plans::CreateTaskPlan;
 use databend_common_sql::plans::DescribeTaskPlan;
@@ -34,11 +37,15 @@ mod private;
 pub(crate) struct TaskInterpreterFactory;
 
 impl TaskInterpreterFactory {
-    pub fn build() -> TaskInterpreterImpl {
+    pub fn build(ctx: &QueryContext) -> Result<TaskInterpreterImpl> {
         if GlobalConfig::instance().task.on {
-            return TaskInterpreterImpl::Private(PrivateTaskInterpreter);
+            LicenseManagerSwitch::instance().check_enterprise_enabled(
+                ctx.get_settings().get_enterprise_license(),
+                Feature::PrivateTask,
+            )?;
+            return Ok(TaskInterpreterImpl::Private(PrivateTaskInterpreter));
         }
-        TaskInterpreterImpl::Cloud(CloudTaskInterpreter)
+        Ok(TaskInterpreterImpl::Cloud(CloudTaskInterpreter))
     }
 }
 

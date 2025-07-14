@@ -48,7 +48,7 @@ impl Interpreter for CreateTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        TaskInterpreterFactory::build()
+        TaskInterpreterFactory::build(&self.ctx)?
             .create_task(&self.ctx, &self.plan)
             .await?;
 
