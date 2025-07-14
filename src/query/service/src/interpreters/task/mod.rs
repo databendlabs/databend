@@ -35,7 +35,7 @@ pub(crate) struct TaskInterpreterFactory;
 
 impl TaskInterpreterFactory {
     pub fn build() -> TaskInterpreterImpl {
-        if GlobalConfig::instance().query.enable_private_task {
+        if GlobalConfig::instance().task.on {
             return TaskInterpreterImpl::Private(PrivateTaskInterpreter);
         }
         TaskInterpreterImpl::Cloud(CloudTaskInterpreter)

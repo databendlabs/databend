@@ -20,7 +20,6 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
-use databend_common_meta_api::kv_pb_api::errors::PbApiReadError;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::task;
@@ -34,7 +33,6 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::With;
@@ -257,10 +255,8 @@ impl TaskMgr {
     /// mark the corresponding execute task as accepted and delete it from the queue
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn execute_accept(&self, key: &str) -> Result<(), MetaError> {
-        let key = TaskMessageIdent::from_str_key(key).map_err(PbApiReadError::from)?;
-
-        let req = UpsertPB::delete(key).with(MatchSeq::GE(1));
+    pub async fn execute_accept(&self, key: &TaskMessageIdent) -> Result<(), MetaError> {
+        let req = UpsertPB::delete(key.clone()).with(MatchSeq::GE(1));
         let _ = self.kv_api.upsert_pb(&req).await?;
 
         Ok(())

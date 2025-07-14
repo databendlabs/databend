@@ -72,6 +72,7 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use super::inner::TaskConfig as InnerTaskConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -113,6 +114,9 @@ pub struct Config {
 
     #[clap(flatten)]
     pub log: LogConfig,
+
+    #[clap(flatten)]
+    pub task: TaskConfig,
 
     // Meta Service config.
     #[clap(flatten)]
@@ -1937,12 +1941,6 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "50")]
     pub max_cached_queries_profiles: usize,
 
-    #[clap(long, value_name = "VALUE", default_value = "false")]
-    pub enable_private_task: bool,
-
-    #[clap(long, value_name = "VALUE", default_value = "1024")]
-    pub tasks_channel_len: usize,
-
     /// A list of network that not to be checked by network policy.
     #[clap(long, value_name = "VALUE")]
     pub network_policy_whitelist: Vec<String>,
@@ -2049,8 +2047,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             max_cached_queries_profiles: self.max_cached_queries_profiles,
-            enable_private_task: self.enable_private_task,
-            tasks_channel_len: self.tasks_channel_len,
             network_policy_whitelist: self.network_policy_whitelist,
             settings: self
                 .settings
@@ -2164,8 +2160,6 @@ impl From<InnerQueryConfig> for QueryConfig {
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
-            enable_private_task: inner.enable_private_task,
-            tasks_channel_len: inner.tasks_channel_len,
             network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
             resources_management: None,
@@ -2349,6 +2343,34 @@ impl From<InnerLogConfig> for LogConfig {
             log_level: None,
             query_enabled: None,
             log_query_enabled: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct TaskConfig {
+    #[clap(
+        long = "private-task-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub private_task_on: bool,
+}
+
+impl TryInto<InnerTaskConfig> for TaskConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerTaskConfig> {
+        Ok(InnerTaskConfig {
+            on: self.private_task_on,
+        })
+    }
+}
+
+impl From<InnerTaskConfig> for TaskConfig {
+    fn from(inner: InnerTaskConfig) -> Self {
+        TaskConfig {
+            private_task_on: inner.on,
         }
     }
 }
@@ -3565,6 +3587,7 @@ mod cache_config_converters {
                 config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
+                task: inner.task.into(),
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
@@ -3589,6 +3612,7 @@ mod cache_config_converters {
                 config_file,
                 query,
                 log,
+                task,
                 meta,
                 storage,
                 catalog,
@@ -3619,6 +3643,7 @@ mod cache_config_converters {
                 config_file,
                 query: query.try_into()?,
                 log: log.try_into()?,
+                task: task.try_into()?,
                 meta: meta.try_into()?,
                 storage: storage.try_into()?,
                 catalogs,
