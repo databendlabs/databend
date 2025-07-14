@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -91,7 +91,10 @@ impl AsyncMpscSink for WriteResultCacheSink {
         let location = self.cache_writer.write_to_storage().await?;
 
         // 2. Set result cache key-value pair to meta.
-        let now = SeqV::<()>::now_ms() / 1000;
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let ttl_sec = self.meta_mgr.get_ttl();
         let ttl_interval = Duration::from_secs(ttl_sec);
 

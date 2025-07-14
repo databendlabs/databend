@@ -82,7 +82,7 @@ impl<const WRITE_PB: bool> QuotaApi for QuotaMgr<WRITE_PB> {
                     .await?;
 
                     // Keep the original seq.
-                    Ok(SeqV::with_meta(seq_value.seq, seq_value.meta, u.data))
+                    Ok(SeqV::new_with_meta(seq_value.seq, seq_value.meta, u.data))
                 }
             },
         }
