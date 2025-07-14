@@ -64,7 +64,7 @@ query error gen
 settings (parquet_fast_read_bytes=0) select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
 
 query error gen
-settings select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
+select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
 
 query error gen
-settings select * from @data/parquet/diff_schema/ (files=>('gen.py', ''f1.parquet'));
+select * from @data/parquet/diff_schema/ (files=>('gen.py', 'f1.parquet'));
