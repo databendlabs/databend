@@ -38,9 +38,6 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
-use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
-use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -61,6 +58,10 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::DistributedInsertSelect;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -227,7 +228,7 @@ impl ModifyTableColumnInterpreter {
                         for (index_name, index) in &table_info.meta.indexes {
                             if index.column_ids.contains(&old_field.column_id)
                                 && old_field.data_type.remove_nullable()
-                                != field.data_type.remove_nullable()
+                                    != field.data_type.remove_nullable()
                             {
                                 return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
                                     "column `{}` is referenced by inverted index, drop inverted index `{}` first",
@@ -289,7 +290,7 @@ impl ModifyTableColumnInterpreter {
                 table_info.meta.clone(),
                 catalog,
             )
-                .await?;
+            .await?;
 
             return Ok(PipelineBuildResult::create());
         }
@@ -452,7 +453,7 @@ impl ModifyTableColumnInterpreter {
             prev_snapshot_id,
             table_meta_timestamps,
         )
-            .await
+        .await
     }
 
     // Set column comment.
@@ -492,7 +493,7 @@ impl ModifyTableColumnInterpreter {
                 table_info.meta.clone(),
                 catalog,
             )
-                .await?;
+            .await?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -650,7 +651,7 @@ impl Interpreter for ModifyTableColumnInterpreter {
                     table_meta,
                     column.to_string(),
                 )
-                    .await?
+                .await?
             }
         };
 
@@ -685,9 +686,9 @@ fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
         ) => {
             old_tys.len() == new_tys.len()
                 && old_tys
-                .iter()
-                .zip(new_tys)
-                .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
+                    .iter()
+                    .zip(new_tys)
+                    .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
         }
         _ => false,
     }

@@ -14,8 +14,8 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::AsyncFunction;
 
+use crate::physical_plans::AsyncFunction;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::PipelineBuilder;
 

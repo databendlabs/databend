@@ -18,10 +18,10 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_pipeline_core::Pipe;
 use databend_common_sql::binder::MutationStrategy;
-use databend_common_sql::executor::physical_plans::MutationManipulate;
 use databend_common_storages_fuse::operations::MatchedSplitProcessor;
 use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 
+use crate::physical_plans::MutationManipulate;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

@@ -14,8 +14,8 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::Udf;
 
+use crate::physical_plans::Udf;
 use crate::pipelines::processors::transforms::TransformUdfScript;
 use crate::pipelines::processors::transforms::TransformUdfServer;
 use crate::pipelines::PipelineBuilder;

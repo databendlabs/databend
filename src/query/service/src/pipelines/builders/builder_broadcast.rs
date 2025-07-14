@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::executor::physical_plans::BroadcastSink;
-use databend_common_sql::executor::physical_plans::BroadcastSource;
 
+use crate::physical_plans::BroadcastSink;
+use crate::physical_plans::BroadcastSource;
 use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
 use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
 use crate::pipelines::PipelineBuilder;

@@ -63,6 +63,8 @@ pub mod test_kits;
 
 mod global_services;
 
+mod physical_plans;
+
 pub use databend_common_sql as sql;
 pub use databend_common_storages_factory as storages;
 pub use global_services::GlobalServices;

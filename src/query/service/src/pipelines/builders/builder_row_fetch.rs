@@ -21,12 +21,11 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
-use databend_common_sql::executor::physical_plans::RowFetch;
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_storages_fuse::operations::row_fetch_processor;
 use databend_common_storages_fuse::TableContext;
 use tokio::sync::Semaphore;
 
+use crate::physical_plans::RowFetch;
 use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {

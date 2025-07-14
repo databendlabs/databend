@@ -23,8 +23,6 @@ use databend_common_exception::Result;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::CompactSource as PhysicalCompactSource;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactLazyPartInfo;
@@ -34,6 +32,8 @@ use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 
+use crate::physical_plans::CompactSource as PhysicalCompactSource;
+use crate::physical_plans::MutationKind;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

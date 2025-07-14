@@ -17,13 +17,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_sql::executor::build_broadcast_plans;
-use databend_common_sql::executor::IPhysicalPlan;
 use databend_common_sql::planner::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
+use crate::physical_plans::build_broadcast_plans;
+use crate::physical_plans::IPhysicalPlan;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -32,7 +32,6 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlan;
 use crate::sql::ColumnBinding;
 use crate::stream::PullingExecutorStream;
 
@@ -139,8 +138,7 @@ impl ServiceQueryExecutor {
     }
 }
 
-#[async_trait]
-impl QueryExecutor for ServiceQueryExecutor {
+impl ServiceQueryExecutor {
     async fn execute_query_with_physical_plan(
         &self,
         plan: &Box<dyn IPhysicalPlan>,
@@ -154,7 +152,10 @@ impl QueryExecutor for ServiceQueryExecutor {
             .try_collect::<Vec<DataBlock>>()
             .await
     }
+}
 
+#[async_trait]
+impl QueryExecutor for ServiceQueryExecutor {
     async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _) = planner.plan_sql(query_sql).await?;

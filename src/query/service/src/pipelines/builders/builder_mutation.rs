@@ -34,13 +34,13 @@ use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
-use databend_common_sql::executor::physical_plans::Mutation;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
+use crate::physical_plans::Mutation;
+use crate::physical_plans::MutationKind;
 use crate::pipelines::processors::transforms::build_cast_exprs;
 use crate::pipelines::processors::transforms::build_expression_transform;
 use crate::pipelines::processors::transforms::AsyncFunctionBranch;

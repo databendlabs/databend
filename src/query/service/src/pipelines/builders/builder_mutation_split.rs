@@ -14,10 +14,10 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipe;
-use databend_common_sql::executor::physical_plans::MutationSplit;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 use databend_common_storages_fuse::TableContext;
 
+use crate::physical_plans::MutationSplit;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

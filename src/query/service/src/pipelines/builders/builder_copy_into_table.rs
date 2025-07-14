@@ -31,14 +31,14 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::TransformNullIf;
 use log::debug;
 use log::info;
 
+use crate::physical_plans::CopyIntoTable;
+use crate::physical_plans::CopyIntoTableSource;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;

@@ -26,10 +26,12 @@ use databend_common_pipeline_core::processors::PlanScopeGuard;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
-use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan};
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
@@ -113,37 +115,29 @@ impl PipelineBuilder {
         })
     }
 
-    pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
-        match plan {
-            PhysicalPlan::EvalScalar(v) if v.exprs.is_empty() => Ok(None),
-
-            // hided plans in profile
-            PhysicalPlan::Shuffle(_) => Ok(None),
-            PhysicalPlan::Exchange(_) => Ok(None),
-            PhysicalPlan::ExchangeSink(_) => Ok(None),
-            PhysicalPlan::ExchangeSource(_) => Ok(None),
-            PhysicalPlan::ChunkCastSchema(_) => Ok(None),
-            PhysicalPlan::ChunkFillAndReorder(_) => Ok(None),
-            PhysicalPlan::ChunkMerge(_) => Ok(None),
-
-            _ => {
-                let desc = plan.get_desc()?;
-                let plan_labels = plan.get_labels()?;
-                let mut profile_labels = Vec::with_capacity(plan_labels.len());
-                for (name, value) in plan_labels {
-                    profile_labels.push(ProfileLabel::create(name, value));
-                }
-
-                let scope = PlanScope::create(
-                    plan.get_id(),
-                    plan.get_name(),
-                    Arc::new(desc),
-                    Arc::new(profile_labels),
-                );
-
-                Ok(Some(scope.enter_scope_guard()))
-            }
+    pub(crate) fn add_plan_scope(
+        &mut self,
+        plan: &Box<dyn IPhysicalPlan>,
+    ) -> Result<Option<PlanScopeGuard>> {
+        if !plan.display_in_profile() {
+            return Ok(None);
         }
+
+        let desc = plan.get_desc()?;
+        let plan_labels = plan.get_labels()?;
+        let mut profile_labels = Vec::with_capacity(plan_labels.len());
+        for (name, value) in plan_labels {
+            profile_labels.push(ProfileLabel::create(name, value));
+        }
+
+        let scope = PlanScope::create(
+            plan.get_id(),
+            plan.get_name(),
+            Arc::new(desc),
+            Arc::new(profile_labels),
+        );
+
+        Ok(Some(scope.enter_scope_guard()))
     }
 
     pub(crate) fn is_exchange_parent(&self) -> bool {
@@ -155,10 +149,10 @@ impl PipelineBuilder {
     }
 
     #[recursive::recursive]
-    pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
+    pub(crate) fn build_pipeline(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
         self.is_exchange_stack
-            .push(matches!(plan, PhysicalPlan::ExchangeSink(_)));
+            .push(plan.downcast_ref::<ExchangeSink>().is_some());
 
         match plan {
             // ==============================

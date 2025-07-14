@@ -1,252 +1,215 @@
-// Copyright 2021 Datafuse Labs
+// // Copyright 2021 Datafuse Labs
+// //
+// // Licensed under the Apache License, Version 2.0 (the "License");
+// // you may not use this file except in compliance with the License.
+// // You may obtain a copy of the License at
+// //
+// //     http://www.apache.org/licenses/LICENSE-2.0
+// //
+// // Unless required by applicable law or agreed to in writing, software
+// // distributed under the License is distributed on an "AS IS" BASIS,
+// // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// // See the License for the specific language governing permissions and
+// // limitations under the License.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// use std::collections::HashMap;
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// use databend_common_ast::ast::FormatTreeNode;
+// use databend_common_base::base::format_byte_size;
+// use databend_common_base::runtime::profile::get_statistics_desc;
+// use databend_common_catalog::plan::PartStatistics;
+// use databend_common_exception::ErrorCode;
+// use databend_common_exception::Result;
+// use databend_common_expression::DataSchemaRef;
+// use databend_common_functions::BUILTIN_FUNCTIONS;
+// use databend_common_pipeline_core::processors::PlanProfile;
+// use itertools::Itertools;
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-use std::collections::HashMap;
-
-use databend_common_ast::ast::FormatTreeNode;
-use databend_common_base::base::format_byte_size;
-use databend_common_base::runtime::profile::get_statistics_desc;
-use databend_common_catalog::plan::PartStatistics;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::PlanProfile;
-use itertools::Itertools;
-
-use super::physical_plans::AddStreamColumn;
-use super::physical_plans::PhysicalRuntimeFilter;
-use crate::binder::MutationType;
-use crate::executor::explain::PlanStatsInfo;
-use crate::executor::physical_plans::AggregateExpand;
-use crate::executor::physical_plans::AggregateFinal;
-use crate::executor::physical_plans::AggregateFunctionDesc;
-use crate::executor::physical_plans::AggregatePartial;
-use crate::executor::physical_plans::AsyncFunction;
-use crate::executor::physical_plans::CacheScan;
-use crate::executor::physical_plans::ColumnMutation;
-use crate::executor::physical_plans::CommitSink;
-use crate::executor::physical_plans::ConstantTableScan;
-use crate::executor::physical_plans::CopyIntoLocation;
-use crate::executor::physical_plans::CopyIntoTable;
-use crate::executor::physical_plans::DistributedInsertSelect;
-use crate::executor::physical_plans::EvalScalar;
-use crate::executor::physical_plans::Exchange;
-use crate::executor::physical_plans::ExchangeSink;
-use crate::executor::physical_plans::ExchangeSource;
-use crate::executor::physical_plans::ExpressionScan;
-use crate::executor::physical_plans::Filter;
-use crate::executor::physical_plans::FragmentKind;
-use crate::executor::physical_plans::HashJoin;
-use crate::executor::physical_plans::Limit;
-use crate::executor::physical_plans::Mutation;
-use crate::executor::physical_plans::MutationManipulate;
-use crate::executor::physical_plans::MutationOrganize;
-use crate::executor::physical_plans::MutationSource;
-use crate::executor::physical_plans::MutationSplit;
-use crate::executor::physical_plans::ProjectSet;
-use crate::executor::physical_plans::RangeJoin;
-use crate::executor::physical_plans::RangeJoinType;
-use crate::executor::physical_plans::RowFetch;
-use crate::executor::physical_plans::Sort;
-use crate::executor::physical_plans::TableScan;
-use crate::executor::physical_plans::Udf;
-use crate::executor::physical_plans::UnionAll;
-use crate::executor::physical_plans::Window;
-use crate::executor::physical_plans::WindowFunction;
-use crate::executor::physical_plans::WindowPartition;
-use crate::executor::PhysicalPlan;
-use crate::planner::Metadata;
-use crate::planner::MetadataRef;
-use crate::planner::DUMMY_TABLE_INDEX;
-use crate::plans::CacheSource;
-use crate::IndexType;
-
-pub struct FormatContext<'a> {
-    pub metadata: &'a Metadata,
-    pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
-}
-
-/// Helper function to add profile info to the format tree.
-fn append_profile_info(
-    children: &mut Vec<FormatTreeNode<String>>,
-    profs: &HashMap<u32, PlanProfile>,
-    plan_id: u32,
-) {
-    if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
-            if prof.statistics[desc.index] != 0 {
-                children.push(FormatTreeNode::new(format!(
-                    "{}: {}",
-                    desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
-                )));
-            }
-        }
-    }
-}
-
-fn append_output_rows_info(
-    children: &mut Vec<FormatTreeNode<String>>,
-    profs: &HashMap<u32, PlanProfile>,
-    plan_id: u32,
-) {
-    if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
-            if desc.display_name != "output rows" {
-                continue;
-            }
-            if prof.statistics[desc.index] != 0 {
-                children.push(FormatTreeNode::new(format!(
-                    "{}: {}",
-                    desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
-                )));
-            }
-            break;
-        }
-    }
-}
-
-pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {
-    format!(
-        "{}({})",
-        desc.sig.name,
-        desc.arg_indices
-            .iter()
-            .map(|&index| { metadata.column(index).name() })
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-}
-
-pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
-    let read_size = format_byte_size(info.read_bytes);
-    let mut items = vec![
-        FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
-        FormatTreeNode::new(format!("read size: {}", read_size)),
-        FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
-        FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
-    ];
-
-    // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
-    let mut blocks_pruning_description = String::new();
-
-    // range pruning status.
-    if info.pruning_stats.blocks_range_pruning_before > 0 {
-        blocks_pruning_description += &format!(
-            "range pruning: {} to {}",
-            info.pruning_stats.blocks_range_pruning_before,
-            info.pruning_stats.blocks_range_pruning_after
-        );
-    }
-
-    // bloom pruning status.
-    if info.pruning_stats.blocks_bloom_pruning_before > 0 {
-        if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
-        }
-        blocks_pruning_description += &format!(
-            "bloom pruning: {} to {}",
-            info.pruning_stats.blocks_bloom_pruning_before,
-            info.pruning_stats.blocks_bloom_pruning_after
-        );
-    }
-
-    // inverted index pruning status.
-    if info.pruning_stats.blocks_inverted_index_pruning_before > 0 {
-        if !blocks_pruning_description.is_empty() {
-            blocks_pruning_description += ", ";
-        }
-        blocks_pruning_description += &format!(
-            "inverted pruning: {} to {}",
-            info.pruning_stats.blocks_inverted_index_pruning_before,
-            info.pruning_stats.blocks_inverted_index_pruning_after
-        );
-    }
-
-    // Combine segment pruning and blocks pruning descriptions if any
-    if info.pruning_stats.segments_range_pruning_before > 0
-        || !blocks_pruning_description.is_empty()
-    {
-        let mut pruning_description = String::new();
-
-        if info.pruning_stats.segments_range_pruning_before > 0 {
-            pruning_description += &format!(
-                "segments: <range pruning: {} to {}>",
-                info.pruning_stats.segments_range_pruning_before,
-                info.pruning_stats.segments_range_pruning_after
-            );
-        }
-
-        if !blocks_pruning_description.is_empty() {
-            if !pruning_description.is_empty() {
-                pruning_description += ", ";
-            }
-            pruning_description += &format!("blocks: <{}>", blocks_pruning_description);
-        }
-
-        items.push(FormatTreeNode::new(format!(
-            "pruning stats: [{}]",
-            pruning_description
-        )));
-    }
-
-    items
-}
-
-pub fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {
-    vec![FormatTreeNode::new(format!(
-        "estimated rows: {0:.2}",
-        info.estimated_rows
-    ))]
-}
-
-pub fn format_output_columns(
-    output_schema: DataSchemaRef,
-    metadata: &Metadata,
-    format_table: bool,
-) -> String {
-    output_schema
-        .fields()
-        .iter()
-        .map(|field| match field.name().parse::<usize>() {
-            Ok(column_index) => {
-                if column_index == usize::MAX {
-                    return String::from("dummy value");
-                }
-                let column_entry = metadata.column(column_index);
-                match column_entry.table_index() {
-                    Some(table_index) if format_table => match metadata
-                        .table(table_index)
-                        .alias_name()
-                    {
-                        Some(alias_name) => {
-                            format!("{}.{} (#{})", alias_name, column_entry.name(), column_index)
-                        }
-                        None => format!(
-                            "{}.{} (#{})",
-                            metadata.table(table_index).name(),
-                            column_entry.name(),
-                            column_index,
-                        ),
-                    },
-                    _ => format!("{} (#{})", column_entry.name(), column_index),
-                }
-            }
-            _ => format!("#{}", field.name()),
-        })
-        .collect::<Vec<_>>()
-        .join(", ")
-}
+// use super::physical_plans::AddStreamColumn;
+// use super::physical_plans::PhysicalRuntimeFilter;
+// use crate::binder::MutationType;
+// use databend_query::physical_plan::explain::PlanStatsInfo;
+// use crate::executor::PhysicalPlan;
+// use crate::planner::Metadata;
+// use crate::planner::MetadataRef;
+// use crate::planner::DUMMY_TABLE_INDEX;
+// use crate::plans::CacheSource;
+// use crate::IndexType;
+//
+// pub struct FormatContext<'a> {
+//     pub metadata: &'a Metadata,
+//     pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
+// }
+//
+// /// Helper function to add profile info to the format tree.
+// fn append_profile_info(
+//     children: &mut Vec<FormatTreeNode<String>>,
+//     profs: &HashMap<u32, PlanProfile>,
+//     plan_id: u32,
+// ) {
+//     if let Some(prof) = profs.get(&plan_id) {
+//         for (_, desc) in get_statistics_desc().iter() {
+//             if prof.statistics[desc.index] != 0 {
+//                 children.push(FormatTreeNode::new(format!(
+//                     "{}: {}",
+//                     desc.display_name.to_lowercase(),
+//                     desc.human_format(prof.statistics[desc.index])
+//                 )));
+//             }
+//         }
+//     }
+// }
+//
+// fn append_output_rows_info(
+//     children: &mut Vec<FormatTreeNode<String>>,
+//     profs: &HashMap<u32, PlanProfile>,
+//     plan_id: u32,
+// ) {
+//     if let Some(prof) = profs.get(&plan_id) {
+//         for (_, desc) in get_statistics_desc().iter() {
+//             if desc.display_name != "output rows" {
+//                 continue;
+//             }
+//             if prof.statistics[desc.index] != 0 {
+//                 children.push(FormatTreeNode::new(format!(
+//                     "{}: {}",
+//                     desc.display_name.to_lowercase(),
+//                     desc.human_format(prof.statistics[desc.index])
+//                 )));
+//             }
+//             break;
+//         }
+//     }
+// }
+//
+// pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {
+//     format!(
+//         "{}({})",
+//         desc.sig.name,
+//         desc.arg_indices
+//             .iter()
+//             .map(|&index| { metadata.column(index).name() })
+//             .collect::<Vec<_>>()
+//             .join(", ")
+//     )
+// }
+//
+// pub fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<String>> {
+//     let read_size = format_byte_size(info.read_bytes);
+//     let mut items = vec![
+//         FormatTreeNode::new(format!("read rows: {}", info.read_rows)),
+//         FormatTreeNode::new(format!("read size: {}", read_size)),
+//         FormatTreeNode::new(format!("partitions total: {}", info.partitions_total)),
+//         FormatTreeNode::new(format!("partitions scanned: {}", info.partitions_scanned)),
+//     ];
+//
+//     // format is like "pruning stats: [segments: <range pruning: x to y>, blocks: <range pruning: x to y>]"
+//     let mut blocks_pruning_description = String::new();
+//
+//     // range pruning status.
+//     if info.pruning_stats.blocks_range_pruning_before > 0 {
+//         blocks_pruning_description += &format!(
+//             "range pruning: {} to {}",
+//             info.pruning_stats.blocks_range_pruning_before,
+//             info.pruning_stats.blocks_range_pruning_after
+//         );
+//     }
+//
+//     // bloom pruning status.
+//     if info.pruning_stats.blocks_bloom_pruning_before > 0 {
+//         if !blocks_pruning_description.is_empty() {
+//             blocks_pruning_description += ", ";
+//         }
+//         blocks_pruning_description += &format!(
+//             "bloom pruning: {} to {}",
+//             info.pruning_stats.blocks_bloom_pruning_before,
+//             info.pruning_stats.blocks_bloom_pruning_after
+//         );
+//     }
+//
+//     // inverted index pruning status.
+//     if info.pruning_stats.blocks_inverted_index_pruning_before > 0 {
+//         if !blocks_pruning_description.is_empty() {
+//             blocks_pruning_description += ", ";
+//         }
+//         blocks_pruning_description += &format!(
+//             "inverted pruning: {} to {}",
+//             info.pruning_stats.blocks_inverted_index_pruning_before,
+//             info.pruning_stats.blocks_inverted_index_pruning_after
+//         );
+//     }
+//
+//     // Combine segment pruning and blocks pruning descriptions if any
+//     if info.pruning_stats.segments_range_pruning_before > 0
+//         || !blocks_pruning_description.is_empty()
+//     {
+//         let mut pruning_description = String::new();
+//
+//         if info.pruning_stats.segments_range_pruning_before > 0 {
+//             pruning_description += &format!(
+//                 "segments: <range pruning: {} to {}>",
+//                 info.pruning_stats.segments_range_pruning_before,
+//                 info.pruning_stats.segments_range_pruning_after
+//             );
+//         }
+//
+//         if !blocks_pruning_description.is_empty() {
+//             if !pruning_description.is_empty() {
+//                 pruning_description += ", ";
+//             }
+//             pruning_description += &format!("blocks: <{}>", blocks_pruning_description);
+//         }
+//
+//         items.push(FormatTreeNode::new(format!(
+//             "pruning stats: [{}]",
+//             pruning_description
+//         )));
+//     }
+//
+//     items
+// }
+//
+// pub fn plan_stats_info_to_format_tree(info: &PlanStatsInfo) -> Vec<FormatTreeNode<String>> {
+//     vec![FormatTreeNode::new(format!(
+//         "estimated rows: {0:.2}",
+//         info.estimated_rows
+//     ))]
+// }
+//
+// pub fn format_output_columns(
+//     output_schema: DataSchemaRef,
+//     metadata: &Metadata,
+//     format_table: bool,
+// ) -> String {
+//     output_schema
+//         .fields()
+//         .iter()
+//         .map(|field| match field.name().parse::<usize>() {
+//             Ok(column_index) => {
+//                 if column_index == usize::MAX {
+//                     return String::from("dummy value");
+//                 }
+//                 let column_entry = metadata.column(column_index);
+//                 match column_entry.table_index() {
+//                     Some(table_index) if format_table => match metadata
+//                         .table(table_index)
+//                         .alias_name()
+//                     {
+//                         Some(alias_name) => {
+//                             format!("{}.{} (#{})", alias_name, column_entry.name(), column_index)
+//                         }
+//                         None => format!(
+//                             "{}.{} (#{})",
+//                             metadata.table(table_index).name(),
+//                             column_entry.name(),
+//                             column_index,
+//                         ),
+//                     },
+//                     _ => format!("{} (#{})", column_entry.name(), column_index),
+//                 }
+//             }
+//             _ => format!("#{}", field.name()),
+//         })
+//         .collect::<Vec<_>>()
+//         .join(", ")
+// }

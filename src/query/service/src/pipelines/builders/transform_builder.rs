@@ -42,13 +42,13 @@ use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
+use crate::physical_plans::MutationKind;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::PipelineBuilder;
-use crate::sql::executor::physical_plans::MutationKind;
 
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(

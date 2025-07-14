@@ -23,18 +23,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_sql::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanDynExt, PhysicalPlanMeta};
-use databend_common_sql::executor::physical_plans::CommitSink;
-use databend_common_sql::executor::physical_plans::CommitType;
-use databend_common_sql::executor::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::OnConflictField;
-use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
-use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
-use databend_common_sql::executor::physical_plans::ReplaceInto;
-use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
-use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
@@ -57,6 +46,19 @@ use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
+use crate::physical_plans::CommitSink;
+use crate::physical_plans::CommitType;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::FragmentKind;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MutationKind;
+use crate::physical_plans::OnConflictField;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::ReplaceAsyncSourcer;
+use crate::physical_plans::ReplaceDeduplicate;
+use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::ReplaceSelectCtx;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -262,7 +264,9 @@ impl ReplaceInterpreter {
         let mut is_exchange = false;
         let is_stage_source = matches!(self.plan.source, InsertInputSource::Stage(_));
 
-        if let Some(exchange) = root.downcast_ref::<Exchange>() && exchange.kind == FragmentKind::Merge {
+        if let Some(exchange) = root.downcast_ref::<Exchange>()
+            && exchange.kind == FragmentKind::Merge
+        {
             is_exchange = true;
             root = exchange.input.clone();
         }
@@ -470,9 +474,7 @@ impl ReplaceInterpreter {
             false,
         )?;
 
-        let physical_plan = select_interpreter
-            .build_physical_plan()
-            .await?;
+        let physical_plan = select_interpreter.build_physical_plan().await?;
         let select_ctx = ReplaceSelectCtx {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),

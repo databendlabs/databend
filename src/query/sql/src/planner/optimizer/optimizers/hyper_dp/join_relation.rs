@@ -21,21 +21,18 @@ use databend_common_exception::Result;
 
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::hyper_dp::dynamic_sample::dynamic_sample;
 use crate::planner::QueryExecutor;
 use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct JoinRelation {
     s_expr: SExpr,
-    sample_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl JoinRelation {
     pub fn new(s_expr: &SExpr, sample_executor: Option<Arc<dyn QueryExecutor>>) -> Self {
         Self {
             s_expr: s_expr.clone(),
-            sample_executor,
         }
     }
 
@@ -45,22 +42,11 @@ impl JoinRelation {
 
     pub async fn cardinality(
         &self,
-        ctx: Arc<dyn TableContext>,
-        metadata: MetadataRef,
+        _ctx: Arc<dyn TableContext>,
+        _metadata: MetadataRef,
     ) -> Result<f64> {
-        let card = if let Some(sample_executor) = &self.sample_executor {
-            dynamic_sample(
-                ctx.clone(),
-                metadata.clone(),
-                &self.s_expr,
-                sample_executor.clone(),
-            )
-            .await?
-            .cardinality
-        } else {
-            let rel_expr = RelExpr::with_s_expr(&self.s_expr);
-            rel_expr.derive_cardinality()?.cardinality
-        };
+        let rel_expr = RelExpr::with_s_expr(&self.s_expr);
+        let card = rel_expr.derive_cardinality()?.cardinality;
         Ok(card)
     }
 }

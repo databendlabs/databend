@@ -20,14 +20,14 @@ use databend_common_exception::Result;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::executor::physical_plans::HilbertPartition;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_storages_common_cache::TempDirManager;
 
+use crate::physical_plans::HilbertPartition;
+use crate::physical_plans::MutationKind;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;

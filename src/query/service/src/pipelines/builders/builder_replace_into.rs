@@ -39,11 +39,6 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::ReplaceAsyncSourcer;
-use databend_common_sql::executor::physical_plans::ReplaceDeduplicate;
-use databend_common_sql::executor::physical_plans::ReplaceInto;
-use databend_common_sql::executor::physical_plans::ReplaceSelectCtx;
 use databend_common_sql::plans::InsertValue;
 use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
@@ -56,6 +51,11 @@ use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 
+use crate::physical_plans::MutationKind;
+use crate::physical_plans::ReplaceAsyncSourcer;
+use crate::physical_plans::ReplaceDeduplicate;
+use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::ReplaceSelectCtx;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
 

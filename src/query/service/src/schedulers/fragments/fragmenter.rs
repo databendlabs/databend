@@ -15,29 +15,32 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::{ErrorCode, Result};
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_functions::aggregates::assert_arguments;
 use databend_common_meta_types::NodeInfo;
-use databend_common_sql::executor::physical_plans::{BroadcastSink, CompactSource};
-use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::executor::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::ExchangeSink;
-use databend_common_sql::executor::physical_plans::ExchangeSource;
-use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::MutationSource;
-use databend_common_sql::executor::physical_plans::Recluster;
-use databend_common_sql::executor::physical_plans::ReplaceInto;
-use databend_common_sql::executor::physical_plans::TableScan;
-use databend_common_sql::executor::physical_plans::UnionAll;
-use databend_common_sql::executor::{DeriveHandle, PhysicalPlanDynExt, PhysicalPlanMeta, PhysicalPlanVisitor};
-use databend_common_sql::executor::IPhysicalPlan;
+use log::kv::Source;
 
 use crate::clusters::ClusterHelper;
+use crate::physical_plans::BroadcastSink;
+use crate::physical_plans::CompactSource;
+use crate::physical_plans::ConstantTableScan;
+use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::ExchangeSource;
+use crate::physical_plans::FragmentKind;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MutationSource;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::PhysicalPlanVisitor;
+use crate::physical_plans::Recluster;
+use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::TableScan;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::servers::flight::v1::exchange::BroadcastExchange;
@@ -45,8 +48,6 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::ShuffleDataExchange;
 use crate::sessions::QueryContext;
-use crate::sql::executor::physical_plans::Mutation;
-use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
 pub struct Fragmenter {
@@ -105,7 +106,10 @@ impl Fragmenter {
         let mut handle = FragmentDeriveHandle::new(self.query_id.clone(), self.ctx.clone());
         let root = plan.derive_with(&mut handle);
         let mut fragments = {
-            let handle = handle.as_any().downcast_mut::<FragmentDeriveHandle>().unwrap();
+            let handle = handle
+                .as_any()
+                .downcast_mut::<FragmentDeriveHandle>()
+                .unwrap();
             handle.take_fragments()
         };
 
@@ -138,10 +142,25 @@ impl Fragmenter {
         Ok(fragments.into_values().collect::<Vec<_>>())
     }
 
-    fn collect_fragments_edge<'a>(iter: impl Iterator<Item=&'a PlanFragment>) -> HashMap<usize, usize> {
+    fn collect_fragments_edge<'a>(
+        iter: impl Iterator<Item = &'a PlanFragment>,
+    ) -> HashMap<usize, usize> {
         struct EdgeVisitor {
             target_fragment_id: usize,
             map: HashMap<usize, usize>,
+        }
+
+        impl EdgeVisitor {
+            pub fn new(target_fragment_id: usize) -> Box<dyn PhysicalPlanVisitor> {
+                Box::new(EdgeVisitor {
+                    target_fragment_id,
+                    map: Default::default(),
+                })
+            }
+
+            pub fn take(&mut self) -> HashMap<usize, usize> {
+                std::mem::take(&mut self.map)
+            }
         }
 
         impl PhysicalPlanVisitor for EdgeVisitor {
@@ -151,7 +170,10 @@ impl Fragmenter {
 
             fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
                 if let Some(v) = plan.downcast_ref::<ExchangeSource>() {
-                    if let Some(v) = self.map.insert(v.source_fragment_id, self.target_fragment_id) {
+                    if let Some(v) = self
+                        .map
+                        .insert(v.source_fragment_id, self.target_fragment_id)
+                    {
                         assert_eq!(v, self.target_fragment_id);
                     }
                 }
@@ -162,9 +184,11 @@ impl Fragmenter {
 
         let mut edges = HashMap::new();
         for fragment in iter {
-            let mut visitor = Box::new(EdgeVisitor { map: HashMap::new(), target_fragment_id: fragment.fragment_id });
+            let mut visitor = EdgeVisitor::new(fragment.fragment_id);
             fragment.plan.visit(&mut visitor).unwrap();
-            edges.extend(visitor.map.into_iter())
+            if let Some(v) = visitor.as_any().downcast_mut::<EdgeVisitor>() {
+                edges.extend(v.take().into_iter())
+            }
         }
 
         edges
@@ -192,7 +216,10 @@ impl FragmentDeriveHandle {
         std::mem::take(&mut self.fragments)
     }
 
-    pub fn get_exchange(cluster: Arc<Cluster>, plan: &Box<dyn IPhysicalPlan>) -> Result<Option<DataExchange>> {
+    pub fn get_exchange(
+        cluster: Arc<Cluster>,
+        plan: &Box<dyn IPhysicalPlan>,
+    ) -> Result<Option<DataExchange>> {
         let Some(exchange_sink) = plan.downcast_ref::<ExchangeSink>() else {
             return Ok(None);
         };
@@ -200,7 +227,11 @@ impl FragmentDeriveHandle {
         let get_executors = |cluster: Arc<Cluster>| {
             let cluster_nodes = cluster.get_nodes();
 
-            cluster_nodes.iter().map(|node| &node.id).cloned().collect::<Vec<_>>()
+            cluster_nodes
+                .iter()
+                .map(|node| &node.id)
+                .cloned()
+                .collect::<Vec<_>>()
         };
 
         Ok(match exchange_sink.kind {
@@ -214,7 +245,7 @@ impl FragmentDeriveHandle {
                 exchange_sink.allow_adjust_parallelism,
             )),
             FragmentKind::Expansive => Some(BroadcastExchange::create(get_executors(cluster))),
-            FragmentKind::Init => None
+            FragmentKind::Init => None,
         })
     }
 }
@@ -223,7 +254,6 @@ impl DeriveHandle for FragmentDeriveHandle {
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
-
 
     fn derive(
         &mut self,
@@ -246,12 +276,12 @@ impl DeriveHandle for FragmentDeriveHandle {
 
         if let Some(exchange) = v.downcast_ref::<Exchange>() {
             let input = children.remove(0);
-            let input_schema = input.output_schema()?;
+            let input_schema = input.output_schema().unwrap();
 
             let plan_id = v.get_id();
             let source_fragment_id = self.ctx.get_fragment_id();
 
-            let plan = Box::new(ExchangeSink {
+            let plan: Box<dyn IPhysicalPlan> = Box::new(ExchangeSink {
                 input,
                 schema: input_schema.clone(),
                 kind: exchange.kind.clone(),

@@ -34,8 +34,6 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::ExplainConfig;
-use databend_common_sql::executor::IPhysicalPlan;
-use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnSet;
@@ -55,6 +53,10 @@ use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MutationBuildInfo;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -64,11 +66,8 @@ use crate::schedulers::build_query_pipeline;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
-use databend_common_sql::executor::PhysicalPlanDynExt;
 
 pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
@@ -141,8 +140,8 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *plan.clone(),
                     )?
-                        .build_physical_plan()
-                        .await?;
+                    .build_physical_plan()
+                    .await?;
                     self.explain_physical_plan(&physical_plan, &plan.meta_data, &None)
                         .await?
                 }
@@ -186,7 +185,7 @@ impl Interpreter for ExplainInterpreter {
                         None,
                         *ignore_result,
                     )
-                        .await?
+                    .await?
                 }
                 Plan::DataMutation { s_expr, .. } => {
                     let plan: Mutation = s_expr.plan().clone().try_into()?;
@@ -199,7 +198,7 @@ impl Interpreter for ExplainInterpreter {
                         Some(mutation_build_info),
                         true,
                     )
-                        .await?
+                    .await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
@@ -246,7 +245,7 @@ impl Interpreter for ExplainInterpreter {
                         metadata.clone(),
                         bind_context.column_set(),
                     )
-                        .await?
+                    .await?
                 }
                 Plan::DataMutation { s_expr, schema, .. } => {
                     self.explain_merge_fragments(*s_expr.clone(), schema.clone())

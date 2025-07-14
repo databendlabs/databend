@@ -18,9 +18,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::CommitSink as PhysicalCommitSink;
-use databend_common_sql::executor::physical_plans::CommitType;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::operations::CommitSink;
 use databend_common_storages_fuse::operations::MutationGenerator;
@@ -31,6 +28,9 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 
+use crate::physical_plans::CommitSink as PhysicalCommitSink;
+use crate::physical_plans::CommitType;
+use crate::physical_plans::MutationKind;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

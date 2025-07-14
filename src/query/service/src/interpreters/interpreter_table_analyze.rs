@@ -20,15 +20,6 @@ use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::executor::physical_plans::{AggregateExpand, Exchange};
-use databend_common_sql::executor::physical_plans::AggregateFinal;
-use databend_common_sql::executor::physical_plans::AggregatePartial;
-use databend_common_sql::executor::physical_plans::EvalScalar;
-use databend_common_sql::executor::physical_plans::Filter;
-use databend_common_sql::executor::physical_plans::Sort;
-use databend_common_sql::executor::physical_plans::Window;
-use databend_common_sql::executor::{DeriveHandle, IPhysicalPlan, PhysicalPlan, PhysicalPlanDynExt};
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BindContext;
@@ -44,6 +35,18 @@ use itertools::Itertools;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::physical_plans::AggregateExpand;
+use crate::physical_plans::AggregateFinal;
+use crate::physical_plans::AggregatePartial;
+use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::EvalScalar;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::Filter;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::Sort;
+use crate::physical_plans::Window;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -235,7 +238,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                         &histogram_plan,
                         false,
                     )
-                        .await?;
+                    .await?;
                     let (tx, rx) = async_channel::unbounded();
                     histogram_build_res.main_pipeline.add_sink(|input_port| {
                         Ok(ProcessorPtr::create(HistogramInfoSink::create(

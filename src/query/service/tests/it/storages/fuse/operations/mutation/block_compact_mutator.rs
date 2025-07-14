@@ -27,6 +27,7 @@ use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_sql::executor::PhysicalPlanMeta;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
@@ -124,17 +125,18 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let table_meta_timestamps =
             ctx.get_table_meta_timestamps(table.as_ref(), Some(snapshot.clone()))?;
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-        let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+        let root = Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
-            plan_id: u32::MAX,
+            meta: PhysicalPlanMeta::new("CompactSource"),
             table_meta_timestamps,
-        }));
+        });
 
-        let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(root),
+        let physical_plan = Box::new(CommitSink {
+            input: root,
             table_info,
+            table_meta_timestamps,
             snapshot: Some(snapshot),
             commit_type: CommitType::Mutation {
                 kind: MutationKind::Compact,
@@ -142,10 +144,9 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             },
             update_stream_meta: vec![],
             deduplicated_label: None,
-            plan_id: u32::MAX,
             recluster_info: None,
-            table_meta_timestamps,
-        }));
+            meta: PhysicalPlanMeta::new("CommitSink"),
+        });
 
         let build_res =
             build_query_pipeline_without_render_result_set(&ctx, &physical_plan).await?;

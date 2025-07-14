@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::executor::physical_plans::Filter;
 
+use crate::physical_plans::Filter;
 use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_filter(&mut self, filter: &Filter) -> Result<()> {

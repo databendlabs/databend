@@ -18,10 +18,9 @@ use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::Sinker;
-use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::RangeJoin;
-use databend_common_sql::executor::PhysicalPlan;
 
+use crate::physical_plans::HashJoin;
+use crate::physical_plans::RangeJoin;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;

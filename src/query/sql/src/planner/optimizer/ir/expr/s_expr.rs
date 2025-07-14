@@ -44,7 +44,7 @@ use crate::IndexType;
 )]
 pub struct SExpr {
     pub plan: Arc<RelOperator>,
-    pub(crate) children: Vec<Arc<SExpr>>,
+    pub children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
 

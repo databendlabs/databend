@@ -14,9 +14,9 @@
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_sql::executor::physical_plans::RecursiveCteScan;
-use databend_common_sql::executor::physical_plans::UnionAll;
 
+use crate::physical_plans::RecursiveCteScan;
+use crate::physical_plans::UnionAll;
 use crate::pipelines::processors::transforms::TransformRecursiveCteScan;
 use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
 use crate::pipelines::PipelineBuilder;

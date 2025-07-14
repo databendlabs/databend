@@ -14,9 +14,9 @@
 
 use databend_common_exception::Result;
 use databend_common_pipeline_core::PlanScope;
-use databend_common_sql::executor::physical_plans::ExchangeSink;
-use databend_common_sql::executor::physical_plans::ExchangeSource;
 
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::ExchangeSource;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

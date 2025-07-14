@@ -37,17 +37,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::bind_table;
-use databend_common_sql::executor::{cast_expr_to_non_null_boolean, IPhysicalPlan, PhysicalPlanDynExt, PhysicalPlanMeta};
-use databend_common_sql::executor::physical_plans::CommitSink;
-use databend_common_sql::executor::physical_plans::CommitType;
-use databend_common_sql::executor::physical_plans::CompactSource;
-use databend_common_sql::executor::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::HilbertPartition;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::Recluster;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::plans::plan_hilbert_sql;
 use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
@@ -74,6 +64,18 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_insert_multi_table::scalar_expr_to_remote_expr;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
+use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::physical_plans::CommitSink;
+use crate::physical_plans::CommitType;
+use crate::physical_plans::CompactSource;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::FragmentKind;
+use crate::physical_plans::HilbertPartition;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MutationKind;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::Recluster;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -423,7 +425,9 @@ impl ReclusterTableInterpreter {
 
         // Check if the plan already has an exchange operator
         let mut is_exchange = false;
-        if let Some(exchange) = plan.downcast_ref::<Exchange>() && exchange.kind == FragmentKind::Merge {
+        if let Some(exchange) = plan.downcast_ref::<Exchange>()
+            && exchange.kind == FragmentKind::Merge
+        {
             is_exchange = true;
             plan = exchange.input.clone();
         }

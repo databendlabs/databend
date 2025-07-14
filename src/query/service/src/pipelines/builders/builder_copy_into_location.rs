@@ -14,9 +14,9 @@
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_sql::executor::physical_plans::CopyIntoLocation;
 use databend_common_storages_stage::StageSinkTable;
 
+use crate::physical_plans::CopyIntoLocation;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

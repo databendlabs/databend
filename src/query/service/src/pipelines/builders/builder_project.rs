@@ -22,9 +22,9 @@ use databend_common_pipeline_sinks::EmptySink;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_sql::executor::physical_plans::ProjectSet;
 use databend_common_sql::ColumnBinding;
 
+use crate::physical_plans::ProjectSet;
 use crate::pipelines::processors::transforms::TransformSRF;
 use crate::pipelines::PipelineBuilder;
 

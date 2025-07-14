@@ -35,11 +35,6 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_sql::executor::physical_plans::TableScan;
-use databend_common_sql::executor::{DeriveHandle, PhysicalPlanDynExt};
-use databend_common_sql::executor::IPhysicalPlan;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::RefreshIndexPlan;
 use databend_common_sql::plans::RelOperator;
@@ -53,6 +48,11 @@ use databend_enterprise_aggregating_index::get_agg_index_handler;
 use databend_storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
+use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -371,13 +371,12 @@ struct ReadSourceDeriveHandle {
 }
 
 impl ReadSourceDeriveHandle {
-    pub fn new(source:DataSourcePlan) -> Box<dyn DeriveHandle> {
+    pub fn new(source: DataSourcePlan) -> Box<dyn DeriveHandle> {
         Box::new(ReadSourceDeriveHandle { source })
     }
 }
 
 impl DeriveHandle for ReadSourceDeriveHandle {
-
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }

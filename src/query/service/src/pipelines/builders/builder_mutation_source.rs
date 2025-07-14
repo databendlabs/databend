@@ -22,7 +22,6 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationType;
-use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::CommitMeta;
 use databend_common_storages_fuse::operations::ConflictResolveContext;
@@ -32,6 +31,7 @@ use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 
+use crate::physical_plans::MutationSource;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 

@@ -14,8 +14,8 @@
 
 use databend_common_exception::Result;
 use databend_common_sql::binder::MutationStrategy;
-use databend_common_sql::executor::physical_plans::MutationOrganize;
 
+use crate::physical_plans::MutationOrganize;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

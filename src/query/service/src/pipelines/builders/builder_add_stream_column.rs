@@ -16,10 +16,10 @@ use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
-use databend_common_sql::executor::physical_plans::AddStreamColumn;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::TableContext;
 
+use crate::physical_plans::AddStreamColumn;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 

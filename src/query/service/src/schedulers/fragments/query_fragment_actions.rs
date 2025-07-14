@@ -24,9 +24,11 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_types::NodeInfo;
-use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlanDynExt};
-use databend_common_sql::executor::physical_plans::ExchangeSink;
+
 use crate::clusters::ClusterHelper;
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -34,7 +36,6 @@ use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlan;
 
 // Query plan fragment with executor name
 #[derive(Debug)]

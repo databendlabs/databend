@@ -21,11 +21,11 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_sql::executor::physical_plans::ColumnMutation;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 
+use crate::physical_plans::ColumnMutation;
+use crate::physical_plans::MutationKind;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

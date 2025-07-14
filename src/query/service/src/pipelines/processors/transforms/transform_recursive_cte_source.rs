@@ -38,8 +38,6 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
-use databend_common_sql::executor::physical_plans::{RecursiveCteScan, UnionAll};
-use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanDynExt, PhysicalPlanVisitor};
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_sql::IndexType;
@@ -49,6 +47,11 @@ use futures_util::TryStreamExt;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanVisitor;
+use crate::physical_plans::RecursiveCteScan;
+use crate::physical_plans::UnionAll;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -232,10 +235,7 @@ async fn create_memory_table_for_cte_scan(
 
     impl CollectMemoryTable {
         pub fn new(ctx: Arc<QueryContext>) -> Box<dyn PhysicalPlanVisitor> {
-            Box::new(CollectMemoryTable {
-                ctx,
-                plans: vec![],
-            })
+            Box::new(CollectMemoryTable { ctx, plans: vec![] })
         }
 
         pub fn take(&mut self) -> Vec<CreateTablePlan> {
@@ -294,12 +294,16 @@ async fn create_memory_table_for_cte_scan(
     plan.visit(&mut visitor)?;
 
     let create_table_plans = {
-        let visitor = visitor.as_any().downcast_mut::<CollectMemoryTable>().unwrap();
+        let visitor = visitor
+            .as_any()
+            .downcast_mut::<CollectMemoryTable>()
+            .unwrap();
         visitor.take()
     };
 
     for create_table_plan in create_table_plans {
-        let create_table_interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
+        let create_table_interpreter =
+            CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
         let _ = create_table_interpreter.execute(ctx.clone()).await?;
     }
 

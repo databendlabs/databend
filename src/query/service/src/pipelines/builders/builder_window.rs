@@ -24,10 +24,11 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
-use databend_common_sql::executor::physical_plans::Window;
-use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
 
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::Window;
+use crate::physical_plans::WindowPartition;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::FrameBound;
 use crate::pipelines::processors::transforms::SortStrategy;

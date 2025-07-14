@@ -15,10 +15,8 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use databend_common_sql::executor::IPhysicalPlan;
-
+use crate::physical_plans::IPhysicalPlan;
 use crate::servers::flight::v1::exchange::DataExchange;
-use crate::sql::executor::PhysicalPlan;
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragment {

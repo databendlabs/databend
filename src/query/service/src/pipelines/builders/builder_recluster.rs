@@ -25,14 +25,14 @@ use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_transforms::processors::build_compact_block_no_split_pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::StreamContext;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 
+use crate::physical_plans::MutationKind;
+use crate::physical_plans::Recluster;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;

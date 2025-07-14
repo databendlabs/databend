@@ -26,14 +26,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::executor::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlan, PhysicalPlanMeta};
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stage::StageTable;
@@ -45,6 +38,14 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
+use crate::physical_plans::CopyIntoTable;
+use crate::physical_plans::CopyIntoTableSource;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::FragmentKind;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::MutationKind;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -318,14 +319,14 @@ impl CopyIntoTableInterpreter {
 
         if self.plan.stage_table_info.copy_into_table_options.purge
             && !self
-            .plan
-            .stage_table_info
-            .duplicated_files_detected
-            .is_empty()
+                .plan
+                .stage_table_info
+                .duplicated_files_detected
+                .is_empty()
             && self
-            .ctx
-            .get_settings()
-            .get_enable_purge_duplicated_files_in_copy()?
+                .ctx
+                .get_settings()
+                .get_enable_purge_duplicated_files_in_copy()?
         {
             info!(
                 "purge_duplicated_files_in_copy enabled, number of duplicated files: {}",
@@ -337,7 +338,7 @@ impl CopyIntoTableInterpreter {
                 self.plan.stage_table_info.duplicated_files_detected.clone(),
                 self.plan.stage_table_info.stage_info.clone(),
             )
-                .await?;
+            .await?;
         }
         Ok(PipelineBuildResult::create())
     }
@@ -406,7 +407,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 self.plan.path_prefix.clone(),
             )
-                .await?;
+            .await?;
         }
 
         // Execute hook.

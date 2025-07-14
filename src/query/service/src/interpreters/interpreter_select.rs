@@ -32,9 +32,6 @@ use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformDummy;
-use databend_common_sql::executor::physical_plans::{Exchange, FragmentKind};
-use databend_common_sql::executor::{IPhysicalPlan, PhysicalPlanDynExt};
-use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::parse_result_scan_args;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::MetadataRef;
@@ -47,11 +44,15 @@ use log::info;
 
 use crate::interpreters::common::query_build_update_stream_req;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::FragmentKind;
+use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::BindContext;
 
@@ -137,7 +138,7 @@ impl SelectInterpreter {
             &physical_plan,
             self.ignore_result,
         )
-            .await?;
+        .await?;
 
         // consume stream
         let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
@@ -289,7 +290,9 @@ impl Interpreter for SelectInterpreter {
 
         let query_plan = {
             let metadata = self.metadata.read();
-            physical_plan.format(&metadata, Default::default())?.format_pretty()?
+            physical_plan
+                .format(&metadata, Default::default())?
+                .format_pretty()?
         };
 
         info!("[SELECT-INTERP] Query physical plan:\n{}", query_plan);
