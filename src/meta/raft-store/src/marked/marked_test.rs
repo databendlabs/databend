@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::marked::Marked;
+use crate::marked::SeqMarked;
 use crate::state_machine::ExpireValue;
 
 // Test From<ExpireValue> for Marked<String>
 #[test]
 fn test_from_expire_value_for_marked() -> anyhow::Result<()> {
-    let m = Marked::new_with_meta(1, "2".to_string(), None);
+    let m = SeqMarked::new_normal(1, "2".to_string());
     let s = ExpireValue::new("2", 1);
     assert_eq!(m, s.into());
 
@@ -28,11 +28,11 @@ fn test_from_expire_value_for_marked() -> anyhow::Result<()> {
 // Test From<Marked<String>> for Option<ExpireValue>
 #[test]
 fn test_from_marked_for_option_expire_value() -> anyhow::Result<()> {
-    let m = Marked::new_with_meta(1, "2".to_string(), None);
+    let m = SeqMarked::new_normal(1, "2".to_string());
     let s: Option<ExpireValue> = Some(ExpireValue::new("2".to_string(), 1));
     assert_eq!(s, ExpireValue::from_marked(m));
 
-    let m = Marked::new_tombstone(1);
+    let m = SeqMarked::new_tombstone(1);
     let s: Option<ExpireValue> = None;
     assert_eq!(s, ExpireValue::from_marked(m));
 

@@ -16,7 +16,6 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MatchSeq;
@@ -27,6 +26,7 @@ use log::info;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
+use crate::testing::since_epoch_sec;
 use crate::tests::meta_node::start_meta_node_leader;
 use crate::tests::meta_node::start_meta_node_non_voter;
 
@@ -54,7 +54,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
 
     let key = "expire-kv";
     let value2 = "value2";
-    let now_sec = SeqV::<()>::now_ms() / 1000;
+    let now_sec = since_epoch_sec();
 
     info!("--- write a kv expiring in 3 sec");
     {

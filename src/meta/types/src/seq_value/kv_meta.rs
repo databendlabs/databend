@@ -16,7 +16,7 @@ use std::fmt;
 use std::time::Duration;
 
 use display_more::DisplayUnixTimeStampExt;
-use map_api::expirable::Expirable;
+use map_api::Expirable;
 use serde::Deserialize;
 use serde::Serialize;
 
