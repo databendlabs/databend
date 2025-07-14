@@ -18,12 +18,13 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-
+use databend_common_pipeline_core::PlanScope;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
@@ -87,5 +88,28 @@ impl IPhysicalPlan for ExchangeSource {
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
         assert!(children.is_empty());
         Box::new(self.clone())
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let exchange_manager = builder.ctx.get_exchange_manager();
+        let build_res = exchange_manager.get_fragment_source(
+            &self.query_id,
+            self.source_fragment_id,
+            builder.exchange_injector.clone(),
+        )?;
+
+        let plan_scope = PlanScope::get_plan_scope();
+        let build_pipeline = build_res.main_pipeline.finalize(plan_scope);
+
+        // add sharing data
+        builder.join_state = build_res.builder_data.input_join_state;
+        builder.merge_into_probe_data_fields = build_res.builder_data.input_probe_schema;
+
+        // Merge pipeline
+        assert_eq!(builder.main_pipeline.output_len(), 0);
+        let sinks = builder.main_pipeline.merge(build_pipeline)?;
+        builder.main_pipeline.extend_sinks(sinks);
+        builder.pipelines.extend(build_res.sources_pipelines);
+        Ok(())
     }
 }

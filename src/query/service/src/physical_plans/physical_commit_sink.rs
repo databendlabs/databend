@@ -17,18 +17,24 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
+use databend_common_pipeline_core::ExecutionInfo;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::{MutationGenerator, TableMutationAggregator, TransformMergeCommitMeta, TruncateGenerator};
+use databend_storages_common_table_meta::meta::{ExtendedBlockMeta, TableMetaTimestamps};
 use databend_storages_common_table_meta::meta::TableSnapshot;
-
-use crate::physical_plans::common::MutationKind;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
@@ -79,6 +85,113 @@ impl IPhysicalPlan for CommitSink {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        builder.main_pipeline.try_resize(1)?;
+        match &self.commit_type {
+            CommitType::Truncate { mode } => {
+                let prev_snapshot_id = match mode {
+                    TruncateMode::Delete => None,
+                    _ => self.snapshot.as_ref().map(|snapshot| snapshot.snapshot_id),
+                };
+                let snapshot_gen = TruncateGenerator::new(mode.clone());
+                if matches!(mode, TruncateMode::Delete) {
+                    let mutation_status = builder.ctx.get_mutation_status();
+                    let deleted_rows = self
+                        .snapshot
+                        .as_ref()
+                        .map_or(0, |snapshot| snapshot.summary.row_count);
+                    builder.main_pipeline
+                        .set_on_finished(move |info: &ExecutionInfo| match &info.res {
+                            Ok(_) => {
+                                mutation_status.write().deleted_rows = deleted_rows;
+                                Ok(())
+                            }
+                            Err(error_code) => Err(error_code.clone()),
+                        });
+                }
+                builder.main_pipeline.add_sink(|input| {
+                    databend_common_storages_fuse::operations::CommitSink::try_create(
+                        table,
+                        builder.ctx.clone(),
+                        None,
+                        self.update_stream_meta.clone(),
+                        snapshot_gen.clone(),
+                        input,
+                        None,
+                        prev_snapshot_id,
+                        self.deduplicated_label.clone(),
+                        self.table_meta_timestamps,
+                    )
+                })
+            }
+            CommitType::Mutation { kind, merge_meta } => {
+                if *merge_meta {
+                    let cluster_key_id = table.cluster_key_id();
+                    builder.main_pipeline.add_accumulating_transformer(|| {
+                        TransformMergeCommitMeta::create(cluster_key_id)
+                    });
+                } else {
+                    builder.main_pipeline.add_async_accumulating_transformer(|| {
+                        let base_segments = if matches!(
+                            kind,
+                            MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
+                        ) {
+                            vec![]
+                        } else {
+                            self.snapshot.segments().to_vec()
+                        };
+
+                        // extract re-cluster related mutations from physical plan
+                        let recluster_info = self.recluster_info.clone().unwrap_or_default();
+
+                        let extended_merged_blocks = recluster_info
+                            .merged_blocks
+                            .iter()
+                            .map(|block_meta| {
+                                Arc::new(ExtendedBlockMeta {
+                                    block_meta: Arc::unwrap_or_clone(block_meta.clone()),
+                                    draft_virtual_block_meta: None,
+                                })
+                            })
+                            .collect::<Vec<Arc<ExtendedBlockMeta>>>();
+
+                        TableMutationAggregator::create(
+                            table,
+                            builder.ctx.clone(),
+                            base_segments,
+                            extended_merged_blocks,
+                            recluster_info.removed_segment_indexes,
+                            recluster_info.removed_statistics,
+                            *kind,
+                            self.table_meta_timestamps,
+                        )
+                    });
+                }
+
+                let snapshot_gen = MutationGenerator::new(self.snapshot.clone(), *kind);
+                builder.main_pipeline.add_sink(|input| {
+                    databend_common_storages_fuse::operations::CommitSink::try_create(
+                        table,
+                        builder.ctx.clone(),
+                        None,
+                        self.update_stream_meta.clone(),
+                        snapshot_gen.clone(),
+                        input,
+                        None,
+                        None,
+                        self.deduplicated_label.clone(),
+                        self.table_meta_timestamps,
+                    )
+                })
+            }
+        }
     }
 }
 

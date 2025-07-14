@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-
+use std::sync::Arc;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
@@ -22,7 +22,13 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use itertools::Itertools;
-
+use tokio::sync::Semaphore;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_pipeline_core::{Pipe, PipeItem};
+use databend_common_pipeline_core::processors::{InputPort, OutputPort};
+use databend_common_pipeline_transforms::create_dummy_item;
+use databend_common_storages_fuse::operations::row_fetch_processor;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -30,6 +36,8 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::{MutationSplit, PhysicalPlanDynExt};
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RowFetch {
@@ -66,13 +74,13 @@ impl IPhysicalPlan for RowFetch {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -124,5 +132,42 @@ impl IPhysicalPlan for RowFetch {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let max_io_requests = builder.settings.get_max_storage_io_requests()? as usize;
+        let row_fetch_runtime = GlobalIORuntime::instance();
+        let row_fetch_semaphore = Arc::new(Semaphore::new(max_io_requests));
+        let processor = row_fetch_processor(
+            builder.ctx.clone(),
+            self.row_id_col_offset,
+            &self.source,
+            self.cols_to_fetch.clone(),
+            self.need_wrap_nullable,
+            row_fetch_semaphore,
+            row_fetch_runtime,
+        )?;
+
+        if self.input.downcast_ref::<MutationSplit>().is_none() {
+            builder.main_pipeline.add_transform(processor)?;
+        } else {
+            let output_len = builder.main_pipeline.output_len();
+            let mut pipe_items = Vec::with_capacity(output_len);
+            for i in 0..output_len {
+                if i % 2 == 0 {
+                    let input = InputPort::create();
+                    let output = OutputPort::create();
+                    let processor_ptr = processor(input.clone(), output.clone())?;
+                    pipe_items.push(PipeItem::create(processor_ptr, vec![input], vec![output]));
+                } else {
+                    pipe_items.push(create_dummy_item());
+                }
+            }
+            builder.main_pipeline.add_pipe(Pipe::create(output_len, output_len, pipe_items));
+        }
+
+        Ok(())
     }
 }

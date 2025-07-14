@@ -24,6 +24,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformCastSchema;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedInsertSelect {
@@ -74,5 +76,50 @@ impl IPhysicalPlan for DistributedInsertSelect {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let select_schema = &self.select_schema;
+        let insert_schema = &self.insert_schema;
+        // should render result for select
+        PipelineBuilder::build_result_projection(
+            &builder.func_ctx,
+            self.input.output_schema()?,
+            &self.select_column_bindings,
+            &mut builder.main_pipeline,
+            false,
+        )?;
+
+        if self.cast_needed {
+            builder.main_pipeline.try_add_transformer(|| {
+                TransformCastSchema::try_new(
+                    select_schema.clone(),
+                    insert_schema.clone(),
+                    builder.func_ctx.clone(),
+                )
+            })?;
+        }
+
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
+
+        let source_schema = insert_schema;
+        Self::fill_and_reorder_columns(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            table.clone(),
+            source_schema.clone(),
+        )?;
+
+        table.append_data(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            self.table_meta_timestamps,
+        )?;
+
+        Ok(())
     }
 }

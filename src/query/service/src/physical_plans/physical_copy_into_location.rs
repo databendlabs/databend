@@ -24,12 +24,14 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::TableSchemaRef;
 use databend_common_sql::ColumnBinding;
+use databend_common_storages_stage::StageSinkTable;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoLocation {
@@ -93,5 +95,31 @@ impl IPhysicalPlan for CopyIntoLocation {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        // Reorder the result for select clause
+        PipelineBuilder::build_result_projection(
+            &builder.func_ctx,
+            self.input.output_schema()?,
+            &self.project_columns,
+            &mut builder.main_pipeline,
+            false,
+        )?;
+
+        let to_table = StageSinkTable::create(self.info.clone(), self.input_table_schema.clone())?;
+        PipelineBuilder::build_append2table_with_commit_pipeline(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            to_table,
+            self.input_data_schema.clone(),
+            None,
+            vec![],
+            false,
+            unsafe { builder.settings.get_deduplicate_label()? },
+            Default::default(),
+        )
     }
 }

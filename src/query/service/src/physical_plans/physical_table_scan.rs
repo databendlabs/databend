@@ -325,7 +325,7 @@ impl IPhysicalPlan for TableScan {
         Box::new(self.clone())
     }
 
-    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let table = builder.ctx.build_table_from_source_plan(&self.source)?;
         builder.ctx.set_partitions(self.source.parts.clone())?;
         builder

@@ -17,8 +17,9 @@ use std::any::Any;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::StageTableInfo;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::{DataField, DataSchemaRef};
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableInfo;
@@ -31,6 +32,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
@@ -110,6 +112,55 @@ impl IPhysicalPlan for CopyIntoTable {
                 Box::new(new_copy_into_table)
             }
         }
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let to_table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+
+        // build_copy_into_table_input
+        let source_schema = match &self.source {
+            CopyIntoTableSource::Query(input) => {
+                input.build_pipeline(builder)?;
+
+                // Reorder the result for select clause
+                PipelineBuilder::build_result_projection(
+                    &builder.func_ctx,
+                    input.output_schema()?,
+                    self.project_columns.as_ref().unwrap(),
+                    &mut builder.main_pipeline,
+                    false,
+                )?;
+                let fields = self
+                    .project_columns
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .map(|column_binding| {
+                        DataField::new(
+                            &column_binding.column_name,
+                            *column_binding.data_type.clone(),
+                        )
+                    })
+                    .collect();
+
+                DataSchemaRefExt::create(fields)
+            }
+            CopyIntoTableSource::Stage(input) => {
+                builder.ctx.set_read_block_thresholds(to_table.get_block_thresholds());
+
+                builder.build_pipeline(input)?;
+                self.required_source_schema.clone()
+            }
+        };
+
+        PipelineBuilder::build_copy_into_table_append(
+            builder.ctx.clone(),
+            &mut builder.main_pipeline,
+            self,
+            source_schema,
+            to_table,
+        )?;
+        Ok(())
     }
 }
 

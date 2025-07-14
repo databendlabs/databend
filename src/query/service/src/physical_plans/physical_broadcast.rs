@@ -24,6 +24,8 @@ use super::FragmentKind;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::{BroadcastSinkProcessor, BroadcastSourceProcessor};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {
@@ -47,6 +49,15 @@ impl IPhysicalPlan for BroadcastSource {
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
         assert!(children.is_empty());
         Box::new(self.clone())
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let receiver = builder.ctx.broadcast_source_receiver(self.broadcast_id);
+
+        builder.main_pipeline.add_source(
+            |output| BroadcastSourceProcessor::create(builder.ctx.clone(), receiver.clone(), output),
+            1,
+        )
     }
 }
 
@@ -98,6 +109,15 @@ impl IPhysicalPlan for BroadcastSink {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        builder.main_pipeline.resize(1, true)?;
+        builder.main_pipeline.add_sink(|input| {
+            BroadcastSinkProcessor::create(input, builder.ctx.broadcast_sink_sender(self.broadcast_id))
+        })
     }
 }
 

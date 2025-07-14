@@ -42,7 +42,8 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::TypeCheck;
 use itertools::Itertools;
-
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::evaluator::{BlockOperator, CompoundBlockOperator};
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -51,6 +52,7 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
@@ -179,6 +181,34 @@ impl IPhysicalPlan for EvalScalar {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let input_schema = self.input.output_schema()?;
+        let exprs = self
+            .exprs
+            .iter()
+            .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
+
+        if exprs.is_empty() {
+            return Ok(());
+        }
+
+        let op = BlockOperator::Map {
+            exprs,
+            projections: Some(self.projections.clone()),
+        };
+
+        let num_input_columns = input_schema.num_fields();
+
+        builder.main_pipeline.add_transformer(|| {
+            CompoundBlockOperator::new(vec![op.clone()], builder.func_ctx.clone(), num_input_columns)
+        });
+
+        Ok(())
     }
 }
 

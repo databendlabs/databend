@@ -17,17 +17,24 @@ use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::evaluator::{BlockOperator, CompoundBlockOperator};
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::MutationKind;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ColumnMutation {
@@ -60,13 +67,13 @@ impl IPhysicalPlan for ColumnMutation {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -85,5 +92,107 @@ impl IPhysicalPlan for ColumnMutation {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        if let Some(mutation_expr) = &self.mutation_expr {
+            let mut block_operators = Vec::new();
+            let mut next_column_offset = self.input_num_columns;
+            let mut schema_offset_to_new_offset = HashMap::new();
+
+            // Build update expression BlockOperator.
+            let mut exprs = Vec::with_capacity(mutation_expr.len());
+            for (id, remote_expr) in mutation_expr {
+                let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
+                let schema_index = self.field_id_to_schema_index.get(&id).unwrap();
+                schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
+                self.field_id_to_schema_index
+                    .entry(*id)
+                    .and_modify(|e| *e = next_column_offset);
+                next_column_offset += 1;
+                exprs.push(expr);
+            }
+            if !exprs.is_empty() {
+                block_operators.push(BlockOperator::Map {
+                    exprs,
+                    projections: None,
+                });
+            }
+
+            // Build computed expression BlockOperator.
+            if let Some(computed_expr) = &self.computed_expr && !computed_expr.is_empty() {
+                let mut exprs = Vec::with_capacity(computed_expr.len());
+                for (id, remote_expr) in computed_expr.into_iter() {
+                    let expr = remote_expr
+                        .as_expr(&BUILTIN_FUNCTIONS)
+                        .project_column_ref(|index| {
+                            *schema_offset_to_new_offset.get(index).unwrap_or(index)
+                        });
+                    let schema_index = self.field_id_to_schema_index.get(id).unwrap();
+                    schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
+                    self.field_id_to_schema_index
+                        .entry(*id)
+                        .and_modify(|e| *e = next_column_offset);
+                    next_column_offset += 1;
+                    exprs.push(expr);
+                }
+                block_operators.push(BlockOperator::Map {
+                    exprs,
+                    projections: None,
+                });
+            }
+
+            // Keep the original order of the columns.
+            let num_output_columns = self.input_num_columns - self.has_filter_column as usize;
+            let mut projection = Vec::with_capacity(num_output_columns);
+            for idx in 0..num_output_columns {
+                if let Some(index) = schema_offset_to_new_offset.get(&idx) {
+                    projection.push(*index);
+                } else {
+                    projection.push(idx);
+                }
+            }
+            block_operators.push(BlockOperator::Project { projection });
+
+            builder.main_pipeline.add_transformer(|| {
+                CompoundBlockOperator::new(
+                    block_operators.clone(),
+                    builder.func_ctx.clone(),
+                    self.input_num_columns,
+                )
+            });
+
+            return Ok(());
+        }
+
+        let table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        let block_thresholds = table.get_block_thresholds();
+        let cluster_stats_gen = if matches!(self.mutation_kind, MutationKind::Delete) {
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?
+        } else {
+            table.cluster_gen_for_append(
+                builder.ctx.clone(),
+                &mut builder.main_pipeline,
+                block_thresholds,
+                None,
+            )?
+        };
+
+        builder.main_pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeBlock::try_create(
+                builder.ctx.clone(),
+                input,
+                output,
+                table,
+                cluster_stats_gen.clone(),
+                self.mutation_kind,
+                self.table_meta_timestamps,
+            )?;
+            proc.into_processor()
+        })
     }
 }

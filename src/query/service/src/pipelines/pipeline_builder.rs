@@ -155,47 +155,14 @@ impl PipelineBuilder {
             .push(plan.downcast_ref::<ExchangeSink>().is_some());
 
         match plan {
-            // ==============================
-            // 1. Data Source Plans
-            // ==============================
-            // Basic table scans - retrieve data from tables
-            PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
-            PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
-            PhysicalPlan::CacheScan(cache_scan) => self.build_cache_scan(cache_scan),
-            PhysicalPlan::ExpressionScan(expression_scan) => {
-                self.build_expression_scan(expression_scan)
-            }
-            PhysicalPlan::RecursiveCteScan(scan) => self.build_recursive_cte_scan(scan),
-
-            // Special source operations
-            PhysicalPlan::MutationSource(mutation_source) => {
-                self.build_mutation_source(mutation_source)
-            }
-
-            // ==============================
-            // 2. Relational Operators
-            // ==============================
-            // Filtering and projection
-            PhysicalPlan::Filter(filter) => self.build_filter(filter),
-            PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
-            PhysicalPlan::ProjectSet(project_set) => self.build_project_set(project_set),
-
-            // Sorting and limiting
-            PhysicalPlan::Sort(sort) => self.build_sort(sort),
-            PhysicalPlan::Limit(limit) => self.build_limit(limit),
-            PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
-
             // Join operations
             PhysicalPlan::HashJoin(join) => self.build_hash_join(join),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
 
             // Aggregation operations
-            PhysicalPlan::AggregateExpand(aggregate) => self.build_aggregate_expand(aggregate),
             PhysicalPlan::AggregatePartial(aggregate) => self.build_aggregate_partial(aggregate),
             PhysicalPlan::AggregateFinal(aggregate) => self.build_aggregate_final(aggregate),
 
-            // Window functions
-            PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::WindowPartition(window_partition) => {
                 self.build_window_partition(window_partition)
             }
@@ -274,14 +241,6 @@ impl PipelineBuilder {
             // ==============================
             PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
             PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
-            PhysicalPlan::HilbertPartition(partition) => self.build_hilbert_partition(partition),
-
-            // ==============================
-            // 6. Special Processing Operations
-            // ==============================
-            // User-defined functions and async operations
-            PhysicalPlan::Udf(udf) => self.build_udf(udf),
-            PhysicalPlan::AsyncFunction(async_func) => self.build_async_function(async_func),
 
             // ==============================
             // 7. Invalid Plans

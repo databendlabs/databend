@@ -21,6 +21,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::plans::GroupingSets;
 use databend_common_sql::IndexType;
 
@@ -30,6 +31,8 @@ use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
 
 /// Add dummy data before `GROUPING SETS`.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -153,5 +156,51 @@ impl IPhysicalPlan for AggregateExpand {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let input_schema = self.input.output_schema()?;
+        let group_bys = self
+            .group_bys
+            .iter()
+            .take(self.group_bys.len() - 1) // The last group-by will be virtual column `_grouping_id`
+            .map(|i| input_schema.index_of(&i.to_string()))
+            .collect::<Result<Vec<_>>>()?;
+        let grouping_sets = self
+            .grouping_sets
+            .sets
+            .iter()
+            .map(|sets| {
+                sets.iter()
+                    .map(|i| {
+                        let i = input_schema.index_of(&i.to_string())?;
+                        let offset = group_bys.iter().position(|j| *j == i).unwrap();
+                        Ok(offset)
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let mut grouping_ids = Vec::with_capacity(grouping_sets.len());
+        let mask = (1 << group_bys.len()) - 1;
+        for set in grouping_sets {
+            let mut id = 0;
+            for i in set {
+                id |= 1 << i;
+            }
+            // For element in `group_bys`,
+            // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
+            // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
+            // group_bys: [a, b]
+            // grouping_sets: [[0, 1], [0], [1], []]
+            // grouping_ids: 00, 01, 10, 11
+            grouping_ids.push(!id & mask);
+        }
+
+        builder.main_pipeline.add_transformer(|| {
+            TransformExpandGroupingSets::new(group_bys.clone(), grouping_ids.clone())
+        });
+        Ok(())
     }
 }

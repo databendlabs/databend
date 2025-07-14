@@ -23,6 +23,7 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationOrganize {
@@ -69,5 +70,77 @@ impl IPhysicalPlan for MutationOrganize {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        // The complete pipeline:
+        // -----------------------------------------------------------------------------------------
+        // row_id port0_1               row_id port0_1              row_id port0_1
+        // matched data port0_2              .....                  row_id port1_1         row_id port
+        // unmatched port0_3            data port0_2                    ......
+        // row_id port1_1       ====>   row_id port1_1    ====>     data port0_2    ====>  data port0
+        // matched data port1_2              .....                  data port1_2           data port1
+        // unmatched port1_3            data port1_2                    ......
+        // ......                            .....
+        // -----------------------------------------------------------------------------------------
+        // 1. matched only or complete pipeline are same with above
+        // 2. for unmatched only, there are no row_id port
+
+        let mut ranges = Vec::with_capacity(builder.main_pipeline.output_len());
+        let mut rules = Vec::with_capacity(builder.main_pipeline.output_len());
+        match self.strategy {
+            MutationStrategy::MixedMatched => {
+                assert_eq!(builder.main_pipeline.output_len() % 3, 0);
+                // merge matched update ports and not matched ports ===> data ports
+                for idx in (0..builder.main_pipeline.output_len()).step_by(3) {
+                    ranges.push(vec![idx]);
+                    ranges.push(vec![idx + 1, idx + 2]);
+                }
+                builder.main_pipeline.resize_partial_one(ranges.clone())?;
+                assert_eq!(builder.main_pipeline.output_len() % 2, 0);
+                let row_id_len = builder.main_pipeline.output_len() / 2;
+                for idx in 0..row_id_len {
+                    rules.push(idx);
+                    rules.push(idx + row_id_len);
+                }
+                builder.main_pipeline.reorder_inputs(rules);
+                self.resize_row_id(2, builder)?;
+            }
+            MutationStrategy::MatchedOnly => {
+                assert_eq!(builder.main_pipeline.output_len() % 2, 0);
+                let row_id_len = builder.main_pipeline.output_len() / 2;
+                for idx in 0..row_id_len {
+                    rules.push(idx);
+                    rules.push(idx + row_id_len);
+                }
+                builder.main_pipeline.reorder_inputs(rules);
+                self.resize_row_id(2, builder)?;
+            }
+            MutationStrategy::NotMatchedOnly => {}
+            MutationStrategy::Direct => unreachable!(),
+        }
+        Ok(())
+    }
+}
+
+impl MutationOrganize {
+    fn resize_row_id(&mut self, step: usize, builder: &mut PipelineBuilder) -> Result<()> {
+        // resize row_id
+        let row_id_len = builder.main_pipeline.output_len() / step;
+        let mut ranges = Vec::with_capacity(builder.main_pipeline.output_len());
+        let mut vec = Vec::with_capacity(row_id_len);
+        for idx in 0..row_id_len {
+            vec.push(idx);
+        }
+        ranges.push(vec.clone());
+
+        // data ports
+        for idx in 0..row_id_len {
+            ranges.push(vec![idx + row_id_len]);
+        }
+
+        builder.main_pipeline.resize_partial_one(ranges.clone())
     }
 }

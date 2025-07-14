@@ -18,7 +18,7 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::DataField;
+use databend_common_expression::{DataField, SortColumnDescription};
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -28,7 +28,7 @@ use databend_common_sql::plans::WindowFuncType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
-
+use databend_common_sql::evaluator::{BlockOperator, CompoundBlockOperator};
 use crate::physical_plans::common::SortDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
@@ -41,6 +41,8 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::WindowPartition;
 use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
+use crate::pipelines::builders::SortPipelineBuilder;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sort {
@@ -109,13 +111,13 @@ impl IPhysicalPlan for Sort {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -186,6 +188,94 @@ impl IPhysicalPlan for Sort {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let input_schema = self.input.output_schema()?;
+
+        if !matches!(self.after_exchange, Some(true)) {
+            // If the Sort plan is after exchange, we don't need to do a projection,
+            // because the data is already projected in each cluster node.
+            if let Some(proj) = &self.pre_projection {
+                // Do projection to reduce useless data copying during sorting.
+                let projection = proj
+                    .iter()
+                    .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
+                    .collect::<Vec<_>>();
+
+                if projection.len() < input_schema.fields().len() {
+                    // Only if the projection is not a full projection, we need to add a projection transform.
+                    builder.main_pipeline.add_transformer(|| {
+                        CompoundBlockOperator::new(
+                            vec![BlockOperator::Project {
+                                projection: projection.clone(),
+                            }],
+                            builder.func_ctx.clone(),
+                            input_schema.num_fields(),
+                        )
+                    });
+                }
+            }
+        }
+
+        let plan_schema = self.output_schema()?;
+
+        let sort_desc = self
+            .order_by
+            .iter()
+            .map(|desc| {
+                let offset = plan_schema.index_of(&desc.order_by.to_string())?;
+                Ok(SortColumnDescription {
+                    offset,
+                    asc: desc.asc,
+                    nulls_first: desc.nulls_first,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let max_threads = builder.settings.get_max_threads()? as usize;
+        let sort_desc = sort_desc.into();
+
+        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+        if builder.main_pipeline.output_len() == 1 || max_threads == 1 {
+            builder.main_pipeline.try_resize(max_threads)?;
+        }
+
+        let sort_builder = SortPipelineBuilder::create(builder.ctx.clone(), plan_schema, sort_desc)?
+            .with_limit(self.limit);
+
+        match self.after_exchange {
+            Some(true) => {
+                // Build for the coordinator node.
+                // We only build a `MultiSortMergeTransform`,
+                // as the data is already sorted in each cluster node.
+                // The input number of the transform is equal to the number of cluster nodes.
+                if builder.main_pipeline.output_len() > 1 {
+                    sort_builder
+                        .remove_order_col_at_last()
+                        .build_multi_merge(&mut builder.main_pipeline)
+                } else {
+                    sort_builder
+                        .remove_order_col_at_last()
+                        .build_merge_sort_pipeline(&mut builder.main_pipeline, true)
+                }
+            }
+            Some(false) => {
+                // Build for each cluster node.
+                // We build the full sort pipeline for it.
+                // Don't remove the order column at last.
+                sort_builder.build_full_sort_pipeline(&mut builder.main_pipeline)
+            }
+            None => {
+                // Build for single node mode.
+                // We build the full sort pipeline for it.
+                sort_builder
+                    .remove_order_col_at_last()
+                    .build_full_sort_pipeline(&mut builder.main_pipeline)
+            }
+        }
     }
 }
 

@@ -68,26 +68,4 @@ impl PipelineBuilder {
 
         Ok(())
     }
-
-    pub(crate) fn build_project_set(&mut self, project_set: &ProjectSet) -> Result<()> {
-        self.build_pipeline(&project_set.input)?;
-
-        let srf_exprs = project_set
-            .srf_exprs
-            .iter()
-            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
-            .collect::<Vec<_>>();
-        let max_block_size = self.settings.get_max_block_size()? as usize;
-
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformSRF::try_create(
-                input,
-                output,
-                self.func_ctx.clone(),
-                project_set.projections.clone(),
-                srf_exprs.clone(),
-                max_block_size,
-            )))
-        })
-    }
 }

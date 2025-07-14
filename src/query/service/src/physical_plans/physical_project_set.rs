@@ -28,7 +28,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::TypeCheck;
 use itertools::Itertools;
-
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -37,6 +37,8 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformSRF;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ProjectSet {
@@ -138,6 +140,28 @@ impl IPhysicalPlan for ProjectSet {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let srf_exprs = self
+            .srf_exprs
+            .iter()
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
+            .collect::<Vec<_>>();
+        let max_block_size = builder.settings.get_max_block_size()? as usize;
+
+        builder.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(TransformSRF::try_create(
+                input,
+                output,
+                builder.func_ctx.clone(),
+                self.projections.clone(),
+                srf_exprs.clone(),
+                max_block_size,
+            )))
+        })
     }
 }
 

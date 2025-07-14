@@ -28,7 +28,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
-
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -36,6 +36,8 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformAsyncFunction;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsyncFunction {
@@ -120,6 +122,24 @@ impl IPhysicalPlan for AsyncFunction {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let operators = TransformAsyncFunction::init_operators(&self.async_func_descs)?;
+        let sequence_counters = TransformAsyncFunction::create_sequence_counters(self.async_func_descs.len());
+
+        builder.main_pipeline.add_async_transformer(|| {
+            TransformAsyncFunction::new(
+                builder.ctx.clone(),
+                self.async_func_descs.clone(),
+                operators.clone(),
+                sequence_counters.clone(),
+            )
+        });
+
+        Ok(())
     }
 }
 

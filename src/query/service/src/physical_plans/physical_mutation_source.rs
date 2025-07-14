@@ -15,26 +15,32 @@
 use std::any::Any;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_base::runtime::Runtime;
+use databend_common_catalog::plan::{DataSourcePlan, PartInfoType, Projection};
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
-use databend_common_expression::ConstantFolder;
+use databend_common_expression::{ConstantFolder, DataBlock};
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_sources::OneBlockSource;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::ColumnSet;
+use databend_common_sql::{ColumnSet, StreamContext};
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
-
+use databend_common_storages_fuse::{FuseLazyPartInfo, FuseTable, SegmentLocation};
+use databend_common_storages_fuse::operations::{CommitMeta, ConflictResolveContext, MutationAction, MutationBlockPruningContext};
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
@@ -42,6 +48,8 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
@@ -120,6 +128,115 @@ impl IPhysicalPlan for MutationSource {
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
         assert!(children.is_empty());
         Box::new(self.clone())
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
+
+        let table = FuseTable::try_from_table(table.as_ref())?.clone();
+        let is_delete = self.input_type == MutationType::Delete;
+        if self.truncate_table {
+            // There is no filter and the mutation type is delete,
+            // we can truncate the table directly.
+            debug_assert!(self.partitions.is_empty() && is_delete);
+            return builder.main_pipeline.add_source(
+                |output| {
+                    let meta = CommitMeta {
+                        conflict_resolve_context: ConflictResolveContext::None,
+                        new_segment_locs: vec![],
+                        table_id: table.get_id(),
+                        virtual_schema: None,
+                    };
+                    let block = DataBlock::empty_with_meta(Box::new(meta));
+                    OneBlockSource::create(output, block)
+                },
+                1,
+            );
+        }
+
+        let read_partition_columns: Vec<usize> = self
+            .read_partition_columns
+            .clone()
+            .into_iter()
+            .collect();
+
+        let is_lazy =
+            self.partitions.partitions_type() == PartInfoType::LazyLevel && is_delete;
+        if is_lazy {
+            let ctx = builder.ctx.clone();
+            let table_clone = table.clone();
+            let ctx_clone = builder.ctx.clone();
+            let filters_clone = self.filters.clone();
+            let projection = Projection::Columns(read_partition_columns.clone());
+            let mut segment_locations =
+                Vec::with_capacity(self.partitions.partitions.len());
+            for part in &self.partitions.partitions {
+                // Safe to downcast because we know the partition is lazy
+                let part: &FuseLazyPartInfo = FuseLazyPartInfo::from_part(part)?;
+                segment_locations.push(SegmentLocation {
+                    segment_idx: part.segment_index,
+                    location: part.segment_location.clone(),
+                    snapshot_loc: None,
+                });
+            }
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations,
+                block_count: None,
+            };
+            Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
+                .block_on(async move {
+                    let (_, partitions) = table_clone
+                        .do_mutation_block_pruning(
+                            ctx_clone,
+                            filters_clone,
+                            projection,
+                            prune_ctx,
+                            true,
+                        )
+                        .await?;
+                    ctx.set_partitions(partitions)?;
+                    Ok(())
+                })?;
+        } else {
+            builder.ctx
+                .set_partitions(self.partitions.clone())?;
+        }
+
+        let filter = self.filters.clone().map(|v| v.filter);
+        let mutation_action = if is_delete {
+            MutationAction::Deletion
+        } else {
+            MutationAction::Update
+        };
+        let col_indices = self
+            .read_partition_columns
+            .clone()
+            .into_iter()
+            .collect();
+        let update_mutation_with_filter =
+            self.input_type == MutationType::Update && filter.is_some();
+        table.add_mutation_source(
+            builder.ctx.clone(),
+            filter,
+            col_indices,
+            &mut builder.main_pipeline,
+            mutation_action,
+        )?;
+
+        if table.change_tracking_enabled() {
+            let stream_ctx = StreamContext::try_create(
+                builder.ctx.get_function_context()?,
+                table.schema_with_stream(),
+                table.get_table_info().ident.seq,
+                is_delete,
+                update_mutation_with_filter,
+            )?;
+            builder.main_pipeline.add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
+        }
+
+        Ok(())
     }
 }
 

@@ -24,6 +24,8 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformRecursiveCteScan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RecursiveCteScan {
@@ -53,6 +55,21 @@ impl IPhysicalPlan for RecursiveCteScan {
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
         assert!(children.is_empty());
         Box::new(self.clone())
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let max_threads = builder.ctx.get_settings().get_max_threads()?;
+        builder.main_pipeline.add_source(
+            |output_port| {
+                TransformRecursiveCteScan::create(
+                    builder.ctx.clone(),
+                    output_port.clone(),
+                    self.table_name.clone(),
+                )
+            },
+            1,
+        )?;
+        builder.main_pipeline.resize(max_threads as usize, true)
     }
 }
 

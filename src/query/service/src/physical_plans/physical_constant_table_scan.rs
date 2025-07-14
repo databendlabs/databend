@@ -87,7 +87,7 @@ impl IPhysicalPlan for ConstantTableScan {
         Box::new(self.clone())
     }
 
-    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         builder.main_pipeline.add_source(
             |output| {
                 let block = if !self.values.is_empty() {

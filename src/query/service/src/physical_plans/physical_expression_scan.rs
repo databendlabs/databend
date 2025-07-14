@@ -104,7 +104,7 @@ impl IPhysicalPlan for ExpressionScan {
         Box::new(new_physical_plan)
     }
 
-    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
         let values = self

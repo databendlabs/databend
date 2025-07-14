@@ -19,7 +19,7 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::type_check;
+use databend_common_expression::{type_check, with_number_mapped_type};
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -32,6 +32,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::{Processor, ProcessorPtr};
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncFrame;
@@ -53,6 +54,8 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::{FrameBound, TransformWindow, WindowFunctionInfo, WindowSortDesc};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
@@ -186,6 +189,102 @@ impl IPhysicalPlan for Window {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let input_schema = self.input.output_schema()?;
+        let partition_by = self
+            .partition_by
+            .iter()
+            .map(|p| {
+                let offset = input_schema.index_of(&p.to_string())?;
+                Ok(offset)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let order_by = self
+            .order_by
+            .iter()
+            .map(|o| {
+                let offset = input_schema.index_of(&o.order_by.to_string())?;
+                Ok(WindowSortDesc {
+                    offset,
+                    asc: o.asc,
+                    nulls_first: o.nulls_first,
+                    is_nullable: input_schema.field(offset).is_nullable(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let old_output_len = builder.main_pipeline.output_len();
+        // `TransformWindow` is a pipeline breaker.
+        if partition_by.is_empty() {
+            builder.main_pipeline.try_resize(1)?;
+        }
+        let func = WindowFunctionInfo::try_create(&self.func, &input_schema)?;
+        // Window
+        builder.main_pipeline.add_transform(|input, output| {
+            // The transform can only be created here, because it cannot be cloned.
+
+            let transform = if self.window_frame.units.is_rows() {
+                let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u64>::try_create_rows(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            } else {
+                if order_by.len() == 1 {
+                    // If the length of order_by is 1, there may be a RANGE frame.
+                    let data_type = input_schema
+                        .field(order_by[0].offset)
+                        .data_type()
+                        .remove_nullable();
+                    with_number_mapped_type!(|NUM_TYPE| match data_type {
+                        DataType::Number(NumberDataType::NUM_TYPE) => {
+                            let start_bound =
+                                FrameBound::try_from(&self.window_frame.start_bound)?;
+                            let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
+                            return Ok(ProcessorPtr::create(Box::new(
+                                TransformWindow::<NUM_TYPE>::try_create_range(
+                                    input,
+                                    output,
+                                    func.clone(),
+                                    partition_by.clone(),
+                                    order_by.clone(),
+                                    (start_bound, end_bound),
+                                )?,
+                            )
+                                as Box<dyn Processor>));
+                        }
+                        _ => {}
+                    })
+                }
+
+                // There is no offset in the RANGE frame. (just CURRENT ROW or UNBOUNDED)
+                // So we can use any number type to create the transform.
+                let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
+                let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
+                Box::new(TransformWindow::<u8>::try_create_range(
+                    input,
+                    output,
+                    func.clone(),
+                    partition_by.clone(),
+                    order_by.clone(),
+                    (start_bound, end_bound),
+                )?) as Box<dyn Processor>
+            };
+            Ok(ProcessorPtr::create(transform))
+        })?;
+        if partition_by.is_empty() {
+            builder.main_pipeline.try_resize(old_output_len)?;
+        }
+        Ok(())
     }
 }
 

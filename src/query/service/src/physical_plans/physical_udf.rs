@@ -31,7 +31,7 @@ use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
-
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -40,6 +40,8 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::{TransformUdfScript, TransformUdfServer};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Udf {
@@ -137,6 +139,32 @@ impl IPhysicalPlan for Udf {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        if self.script_udf {
+            let runtimes = TransformUdfScript::init_runtime(&self.udf_funcs)?;
+            builder.main_pipeline.try_add_transformer(|| {
+                Ok(TransformUdfScript::new(
+                    builder.func_ctx.clone(),
+                    self.udf_funcs.clone(),
+                    runtimes.clone(),
+                ))
+            })
+        } else {
+            let semaphore = TransformUdfServer::init_semaphore(builder.ctx.clone())?;
+            let endpoints = TransformUdfServer::init_endpoints(builder.ctx.clone(), &self.udf_funcs)?;
+            builder.main_pipeline.try_add_async_transformer(|| {
+                TransformUdfServer::new(
+                    builder.ctx.clone(),
+                    self.udf_funcs.clone(),
+                    semaphore.clone(),
+                    endpoints.clone(),
+                )
+            })
+        }
     }
 }
 

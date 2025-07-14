@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ROW_ID_COL_NAME;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
@@ -35,6 +36,8 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_row_fetch::RowFetch;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::TransformLimit;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Limit {
@@ -127,6 +130,24 @@ impl IPhysicalPlan for Limit {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        if self.limit.is_some() || self.offset != 0 {
+            builder.main_pipeline.try_resize(1)?;
+            return builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(TransformLimit::try_create(
+                    self.limit,
+                    self.offset,
+                    input,
+                    output,
+                )?))
+            });
+        }
+
+        Ok(())
     }
 }
 

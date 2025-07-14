@@ -14,10 +14,10 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-
+use std::sync::Arc;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
+use databend_common_expression::{DataSchema, DataSchemaRef};
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -25,11 +25,13 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::MatchExpr;
 use itertools::Itertools;
-
+use databend_common_pipeline_core::Pipe;
+use databend_common_storages_fuse::operations::{MatchedSplitProcessor, MergeIntoNotMatchedProcessor};
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationManipulate {
@@ -172,5 +174,77 @@ impl IPhysicalPlan for MutationManipulate {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    // Handle matched and unmatched data separately.
+    // This is a complete pipeline with matched and not matched clauses, for matched only or unmatched only
+    // we will delicate useless pipeline and processor
+    //                                                                                 +-----------------------------+-+
+    //                                    +-----------------------+     Matched        |                             +-+
+    //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+    //                                    |                       |   |                |                             +-+
+    // +----------------------+           |                       +---+                +-----------------------------+-+
+    // |      MergeInto       +---------->|MutationSplitProcessor |
+    // +----------------------+           |                       +---+                +-----------------------------+
+    //                                    |                       |   | NotMatched     |                             +-+
+    //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+    //                                    +-----------------------+                    |                             +-+
+    //                                                                                 +-----------------------------+
+    // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
+    // (0) -> output_port_row_id
+    // (1) -> output_port_updated
+
+    // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
+    // receive matched data and not matched data parallelly.
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let (step, need_match, need_unmatch) = match self.strategy {
+            MutationStrategy::MatchedOnly => (1, true, false),
+            MutationStrategy::NotMatchedOnly => (1, false, true),
+            MutationStrategy::MixedMatched => (2, true, true),
+            MutationStrategy::Direct => unreachable!(),
+        };
+
+        let tbl = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
+
+        let input_schema = self.input.output_schema()?;
+        let mut pipe_items = Vec::with_capacity(builder.main_pipeline.output_len());
+        for _ in (0..builder.main_pipeline.output_len()).step_by(step) {
+            if need_match {
+                let matched_split_processor = MatchedSplitProcessor::create(
+                    builder.ctx.clone(),
+                    self.row_id_idx,
+                    self.matched.clone(),
+                    self.field_index_of_input_schema.clone(),
+                    input_schema.clone(),
+                    Arc::new(DataSchema::from(tbl.schema_with_stream())),
+                    false,
+                    self.can_try_update_column_only,
+                )?;
+                pipe_items.push(matched_split_processor.into_pipe_item());
+            }
+
+            if need_unmatch {
+                let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+                    self.unmatched.clone(),
+                    self.unmatched_schema.clone(),
+                    builder.func_ctx.clone(),
+                    builder.ctx.clone(),
+                )?;
+                pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+            }
+        }
+
+        let output_len = pipe_items.iter().map(|item| item.outputs_port.len()).sum();
+        builder.main_pipeline.add_pipe(Pipe::create(
+            builder.main_pipeline.output_len(),
+            output_len,
+            pipe_items.clone(),
+        ));
+
+        Ok(())
     }
 }

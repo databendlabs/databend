@@ -90,7 +90,7 @@ impl IPhysicalPlan for CacheScan {
         Box::new(self.clone())
     }
 
-    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let max_threads = builder.settings.get_max_threads()?;
         let max_block_size = builder.settings.get_max_block_size()? as usize;
         let cache_source_state = match &self.cache_source {
