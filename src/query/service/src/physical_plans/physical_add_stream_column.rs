@@ -27,22 +27,24 @@ use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
-use databend_common_sql::{Binder, StreamContext};
+use databend_common_sql::Binder;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::StreamContext;
 use databend_common_sql::Visibility;
 use databend_common_sql::CURRENT_BLOCK_ID_COL_NAME;
 use databend_common_sql::CURRENT_BLOCK_ROW_NUM_COL_NAME;
-use databend_common_sql::evaluator::BlockOperator;
+
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AddStreamColumn {
@@ -118,7 +120,8 @@ impl IPhysicalPlan for AddStreamColumn {
             func_ctx: builder.ctx.get_function_context()?,
         };
 
-        builder.main_pipeline
+        builder
+            .main_pipeline
             .add_transformer(|| TransformAddStreamColumns::new(stream_context.clone()));
 
         Ok(())

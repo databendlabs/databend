@@ -17,26 +17,30 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{DataSchema, DataSchemaRef, LimitType, SortColumnDescription};
+use databend_common_expression::DataSchema;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::LimitType;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::SortColumnDescription;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
-use databend_common_sql::ColumnSet;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use itertools::Itertools;
-use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_pipeline_core::DynTransformBuilder;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::DynTransformBuilder;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_common_pipeline_transforms::TransformSortPartial;
 use databend_common_sql::evaluator::CompoundBlockOperator;
-use databend_common_storages_fuse::FuseTable;
+use databend_common_sql::ColumnSet;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use itertools::Itertools;
+
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -159,7 +163,8 @@ impl IPhysicalPlan for Shuffle {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        builder.main_pipeline
+        builder
+            .main_pipeline
             .reorder_inputs(self.strategy.shuffle(builder.main_pipeline.output_len())?);
         Ok(())
     }
@@ -610,7 +615,9 @@ impl IPhysicalPlan for ChunkAppendData {
                 .ctx
                 .build_table_by_table_info(&append_data.target_table_info, None)?;
             let block_thresholds = table.get_block_thresholds();
-            compact_task_builders.push(Box::new(builder.block_compact_task_builder(block_thresholds)?));
+            compact_task_builders.push(Box::new(
+                builder.block_compact_task_builder(block_thresholds)?,
+            ));
             compact_transform_builders.push(Box::new(builder.block_compact_transform_builder()?));
             let schema: Arc<DataSchema> = DataSchema::from(table.schema()).into();
             let num_input_columns = schema.num_fields();
@@ -671,19 +678,29 @@ impl IPhysicalPlan for ChunkAppendData {
                 )?,
             ));
         }
-        builder.main_pipeline.add_transforms_by_chunk(compact_task_builders)?;
+        builder
+            .main_pipeline
+            .add_transforms_by_chunk(compact_task_builders)?;
 
-        builder.main_pipeline.add_transforms_by_chunk(compact_transform_builders)?;
+        builder
+            .main_pipeline
+            .add_transforms_by_chunk(compact_transform_builders)?;
 
         if eval_cluster_key_num > 0 {
-            builder.main_pipeline.add_transforms_by_chunk(eval_cluster_key_builders)?;
+            builder
+                .main_pipeline
+                .add_transforms_by_chunk(eval_cluster_key_builders)?;
         }
 
         if sort_num > 0 {
-            builder.main_pipeline.add_transforms_by_chunk(sort_builders)?;
+            builder
+                .main_pipeline
+                .add_transforms_by_chunk(sort_builders)?;
         }
 
-        builder.main_pipeline.add_transforms_by_chunk(serialize_block_builders)
+        builder
+            .main_pipeline
+            .add_transforms_by_chunk(serialize_block_builders)
     }
 }
 
@@ -824,11 +841,13 @@ impl IPhysicalPlan for ChunkCommitInsert {
                 .ctx
                 .build_table_by_table_info(&target.target_table_info, None)?;
             let block_thresholds = table.get_block_thresholds();
-            serialize_segment_builders.push(Box::new(builder.serialize_segment_transform_builder(
-                table.clone(),
-                block_thresholds,
-                target.table_meta_timestamps,
-            )?));
+            serialize_segment_builders.push(Box::new(
+                builder.serialize_segment_transform_builder(
+                    table.clone(),
+                    block_thresholds,
+                    target.table_meta_timestamps,
+                )?,
+            ));
             mutation_aggregator_builders.push(Box::new(
                 builder.mutation_aggregator_transform_builder(
                     table.clone(),
@@ -839,8 +858,12 @@ impl IPhysicalPlan for ChunkCommitInsert {
             tables.insert(table.get_id(), table);
         }
 
-        builder.main_pipeline.add_transforms_by_chunk(serialize_segment_builders)?;
-        builder.main_pipeline.add_transforms_by_chunk(mutation_aggregator_builders)?;
+        builder
+            .main_pipeline
+            .add_transforms_by_chunk(serialize_segment_builders)?;
+        builder
+            .main_pipeline
+            .add_transforms_by_chunk(mutation_aggregator_builders)?;
         builder.main_pipeline.try_resize(1)?;
 
         let catalog = CatalogManager::instance().build_catalog(

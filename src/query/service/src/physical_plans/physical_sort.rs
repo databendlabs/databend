@@ -18,17 +18,20 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_expression::{DataField, SortColumnDescription};
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::sort::utils::ORDER_COL_NAME;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
-use databend_common_sql::evaluator::{BlockOperator, CompoundBlockOperator};
+
 use crate::physical_plans::common::SortDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
@@ -111,13 +114,13 @@ impl IPhysicalPlan for Sort {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -243,8 +246,9 @@ impl IPhysicalPlan for Sort {
             builder.main_pipeline.try_resize(max_threads)?;
         }
 
-        let sort_builder = SortPipelineBuilder::create(builder.ctx.clone(), plan_schema, sort_desc)?
-            .with_limit(self.limit);
+        let sort_builder =
+            SortPipelineBuilder::create(builder.ctx.clone(), plan_schema, sort_desc)?
+                .with_limit(self.limit);
 
         match self.after_exchange {
             Some(true) => {

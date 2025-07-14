@@ -31,8 +31,8 @@ use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
+use crate::pipelines::PipelineBuilder;
 
 /// Add dummy data before `GROUPING SETS`.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

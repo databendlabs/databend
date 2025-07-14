@@ -14,23 +14,32 @@
 
 use std::any::Any;
 use std::collections::HashSet;
+
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::plan::{DataSourcePlan, PartitionsShuffleKind, Projection};
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::table::{Table, TableExt};
+use databend_common_catalog::plan::PartitionsShuffleKind;
+use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_sources::{EmptySource, PrefetchAsyncSourcer};
+use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
+use databend_common_storages_fuse::operations::BlockCompactMutator;
+use databend_common_storages_fuse::operations::CompactLazyPartInfo;
+use databend_common_storages_fuse::operations::CompactTransform;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::{BlockCompactMutator, CompactLazyPartInfo, CompactTransform, TableMutationAggregator, TransformSerializeBlock};
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::DeriveHandle;
@@ -113,7 +122,7 @@ impl IPhysicalPlan for CompactSource {
                                 thresholds,
                                 lazy_parts,
                             )
-                                .await?;
+                            .await?;
 
                             Result::<_>::Ok(partitions)
                         })?;
@@ -185,18 +194,20 @@ impl IPhysicalPlan for CompactSource {
 
         if is_lazy {
             builder.main_pipeline.try_resize(1)?;
-            builder.main_pipeline.add_async_accumulating_transformer(|| {
-                TableMutationAggregator::create(
-                    table,
-                    builder.ctx.clone(),
-                    vec![],
-                    vec![],
-                    vec![],
-                    Default::default(),
-                    MutationKind::Compact,
-                    self.table_meta_timestamps,
-                )
-            });
+            builder
+                .main_pipeline
+                .add_async_accumulating_transformer(|| {
+                    TableMutationAggregator::create(
+                        table,
+                        builder.ctx.clone(),
+                        vec![],
+                        vec![],
+                        vec![],
+                        Default::default(),
+                        MutationKind::Compact,
+                        self.table_meta_timestamps,
+                    )
+                });
         }
         Ok(())
     }

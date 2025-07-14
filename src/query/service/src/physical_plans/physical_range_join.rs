@@ -24,6 +24,8 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_sinks::Sinker;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::binder::JoinPredicate;
 use databend_common_sql::optimizer::ir::RelExpr;
@@ -43,6 +45,10 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::range_join::RangeJoinState;
+use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
+use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RangeJoin {
@@ -180,6 +186,58 @@ impl IPhysicalPlan for RangeJoin {
         new_range_join.right = children.pop().unwrap();
         new_range_join.left = children.pop().unwrap();
         Box::new(new_range_join)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let state = Arc::new(RangeJoinState::new(builder.ctx.clone(), self));
+        self.build_right_side(state.clone(), builder)?;
+        self.build_left_side(state, builder)
+    }
+}
+
+impl RangeJoin {
+    // Build the left-side pipeline for Range Join
+    fn build_left_side(
+        &mut self,
+        state: Arc<RangeJoinState>,
+        builder: &mut PipelineBuilder,
+    ) -> Result<()> {
+        self.left.build_pipeline(builder)?;
+
+        let max_threads = builder.settings.get_max_threads()? as usize;
+        builder.main_pipeline.try_resize(max_threads)?;
+        builder.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(TransformRangeJoinLeft::create(
+                input,
+                output,
+                state.clone(),
+            )))
+        })
+    }
+
+    // Build the right-side pipeline for Range Join
+    fn build_right_side(
+        &mut self,
+        state: Arc<RangeJoinState>,
+        builder: &mut PipelineBuilder,
+    ) -> Result<()> {
+        let right_side_builder = builder.create_sub_pipeline_builder();
+
+        let mut right_res = right_side_builder.finalize(&self.right)?;
+        right_res.main_pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(
+                Sinker::<TransformRangeJoinRight>::create(
+                    input,
+                    TransformRangeJoinRight::create(state.clone()),
+                ),
+            ))
+        })?;
+
+        builder
+            .pipelines
+            .push(right_res.main_pipeline.finalize(None));
+        builder.pipelines.extend(right_res.sources_pipelines);
+        Ok(())
     }
 }
 

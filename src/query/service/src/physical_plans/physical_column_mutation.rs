@@ -24,10 +24,11 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::evaluator::{BlockOperator, CompoundBlockOperator};
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::FormatContext;
@@ -67,13 +68,13 @@ impl IPhysicalPlan for ColumnMutation {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -122,14 +123,17 @@ impl IPhysicalPlan for ColumnMutation {
             }
 
             // Build computed expression BlockOperator.
-            if let Some(computed_expr) = &self.computed_expr && !computed_expr.is_empty() {
+            if let Some(computed_expr) = &self.computed_expr
+                && !computed_expr.is_empty()
+            {
                 let mut exprs = Vec::with_capacity(computed_expr.len());
                 for (id, remote_expr) in computed_expr.into_iter() {
-                    let expr = remote_expr
-                        .as_expr(&BUILTIN_FUNCTIONS)
-                        .project_column_ref(|index| {
-                            *schema_offset_to_new_offset.get(index).unwrap_or(index)
-                        });
+                    let expr =
+                        remote_expr
+                            .as_expr(&BUILTIN_FUNCTIONS)
+                            .project_column_ref(|index| {
+                                *schema_offset_to_new_offset.get(index).unwrap_or(index)
+                            });
                     let schema_index = self.field_id_to_schema_index.get(id).unwrap();
                     schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
                     self.field_id_to_schema_index
@@ -167,7 +171,9 @@ impl IPhysicalPlan for ColumnMutation {
             return Ok(());
         }
 
-        let table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         let block_thresholds = table.get_block_thresholds();

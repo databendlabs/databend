@@ -15,33 +15,47 @@
 use std::any::Any;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
-use databend_common_catalog::plan::{DataSourceInfo, DataSourcePlan};
+
+use databend_common_catalog::plan::DataSourceInfo;
+use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::{ErrorCode, Result};
-use databend_common_expression::{DataSchemaRef, DataSchemaRefExt, SortColumnDescription};
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::SortColumnDescription;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_metrics::storage::{metrics_inc_recluster_block_bytes_to_read, metrics_inc_recluster_block_nums_to_read, metrics_inc_recluster_row_nums_to_read};
+use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
+use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
+use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sources::EmptySource;
-use databend_common_pipeline_transforms::{build_compact_block_no_split_pipeline, MemorySettings, TransformPipelineHelper};
+use databend_common_pipeline_transforms::build_compact_block_no_split_pipeline;
+use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
-use databend_common_storages_fuse::{FuseTable, FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD};
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
+use crate::pipelines::processors::transforms::CompactStrategy;
+use crate::pipelines::processors::transforms::HilbertPartitionExchange;
+use crate::pipelines::processors::transforms::TransformAddStreamColumns;
+use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::processors::transforms::{CompactStrategy, HilbertPartitionExchange, TransformAddStreamColumns, TransformWindowPartitionCollect};
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -134,7 +148,12 @@ impl IPhysicalPlan for Recluster {
 
                 builder.ctx.set_partitions(plan.parts.clone())?;
 
-                table.read_data(builder.ctx.clone(), &plan, &mut builder.main_pipeline, false)?;
+                table.read_data(
+                    builder.ctx.clone(),
+                    &plan,
+                    &mut builder.main_pipeline,
+                    false,
+                )?;
 
                 let num_input_columns = schema.fields().len();
                 if table.change_tracking_enabled() {
@@ -146,7 +165,9 @@ impl IPhysicalPlan for Recluster {
                         false,
                     )?;
 
-                    builder.main_pipeline.add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
+                    builder
+                        .main_pipeline
+                        .add_transformer(|| TransformAddStreamColumns::new(stream_ctx.clone()));
                 }
 
                 let cluster_stats_gen = table.get_cluster_stats_gen(
@@ -202,8 +223,8 @@ impl IPhysicalPlan for Recluster {
                     max_threads,
                 )?;
 
-                builder.main_pipeline
-                    .add_transform(|transform_input_port, transform_output_port| {
+                builder.main_pipeline.add_transform(
+                    |transform_input_port, transform_output_port| {
                         let proc = TransformSerializeBlock::try_create(
                             builder.ctx.clone(),
                             transform_input_port,
@@ -214,7 +235,8 @@ impl IPhysicalPlan for Recluster {
                             self.table_meta_timestamps,
                         )?;
                         proc.into_processor()
-                    })
+                    },
+                )
             }
             _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),
@@ -317,7 +339,8 @@ impl IPhysicalPlan for HilbertPartition {
             )))
         })?;
 
-        builder.main_pipeline
+        builder
+            .main_pipeline
             .add_transform(|transform_input_port, transform_output_port| {
                 let proc = TransformSerializeBlock::try_create(
                     builder.ctx.clone(),

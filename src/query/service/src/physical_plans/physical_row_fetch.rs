@@ -14,21 +14,25 @@
 
 use std::any::Any;
 use std::sync::Arc;
+
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use itertools::Itertools;
-use tokio::sync::Semaphore;
-use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_pipeline_core::{Pipe, PipeItem};
-use databend_common_pipeline_core::processors::{InputPort, OutputPort};
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_transforms::create_dummy_item;
 use databend_common_storages_fuse::operations::row_fetch_processor;
+use itertools::Itertools;
+use tokio::sync::Semaphore;
+
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -36,7 +40,8 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::{MutationSplit, PhysicalPlanDynExt};
+use crate::physical_plans::MutationSplit;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -74,13 +79,13 @@ impl IPhysicalPlan for RowFetch {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -165,7 +170,9 @@ impl IPhysicalPlan for RowFetch {
                     pipe_items.push(create_dummy_item());
                 }
             }
-            builder.main_pipeline.add_pipe(Pipe::create(output_len, output_len, pipe_items));
+            builder
+                .main_pipeline
+                .add_pipe(Pipe::create(output_len, output_len, pipe_items));
         }
 
         Ok(())

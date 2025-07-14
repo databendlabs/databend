@@ -50,7 +50,6 @@ use crate::pipelines::processors::transforms::aggregator::TransformPartialAggreg
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-
     pub(crate) fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
         self.contain_sink_processor = true;
         self.build_pipeline(&aggregate.input)?;

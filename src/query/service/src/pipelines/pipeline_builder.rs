@@ -84,7 +84,7 @@ impl PipelineBuilder {
     }
 
     pub fn finalize(mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<PipelineBuildResult> {
-        // self.build_pipeline(plan)?;
+        self.build_pipeline(plan)?;
 
         for source_pipeline in &self.pipelines {
             if !source_pipeline.is_complete_pipeline()? {

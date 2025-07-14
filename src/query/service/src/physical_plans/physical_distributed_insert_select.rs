@@ -24,8 +24,8 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformCastSchema;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedInsertSelect {

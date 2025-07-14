@@ -172,7 +172,7 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
 
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan>;
 
-    fn build_pipeline(&self, builder:&mut PipelineBuilder) -> Result<()> {
+    fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.build_pipeline2(builder)
     }
 

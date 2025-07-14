@@ -36,8 +36,8 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_row_fetch::RowFetch;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformLimit;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Limit {

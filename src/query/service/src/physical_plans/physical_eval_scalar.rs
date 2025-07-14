@@ -28,6 +28,9 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::optimizer::ir::Matcher;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Filter;
@@ -42,8 +45,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::TypeCheck;
 use itertools::Itertools;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
-use databend_common_sql::evaluator::{BlockOperator, CompoundBlockOperator};
+
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -205,7 +207,11 @@ impl IPhysicalPlan for EvalScalar {
         let num_input_columns = input_schema.num_fields();
 
         builder.main_pipeline.add_transformer(|| {
-            CompoundBlockOperator::new(vec![op.clone()], builder.func_ctx.clone(), num_input_columns)
+            CompoundBlockOperator::new(
+                vec![op.clone()],
+                builder.func_ctx.clone(),
+                num_input_columns,
+            )
         });
 
         Ok(())

@@ -26,11 +26,16 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
+use databend_common_storages_fuse::operations::MutationGenerator;
+use databend_common_storages_fuse::operations::TableMutationAggregator;
+use databend_common_storages_fuse::operations::TransformMergeCommitMeta;
+use databend_common_storages_fuse::operations::TruncateGenerator;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::{MutationGenerator, TableMutationAggregator, TransformMergeCommitMeta, TruncateGenerator};
-use databend_storages_common_table_meta::meta::{ExtendedBlockMeta, TableMetaTimestamps};
+use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
@@ -90,7 +95,9 @@ impl IPhysicalPlan for CommitSink {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        let table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
         builder.main_pipeline.try_resize(1)?;
@@ -107,7 +114,8 @@ impl IPhysicalPlan for CommitSink {
                         .snapshot
                         .as_ref()
                         .map_or(0, |snapshot| snapshot.summary.row_count);
-                    builder.main_pipeline
+                    builder
+                        .main_pipeline
                         .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                             Ok(_) => {
                                 mutation_status.write().deleted_rows = deleted_rows;
@@ -138,41 +146,45 @@ impl IPhysicalPlan for CommitSink {
                         TransformMergeCommitMeta::create(cluster_key_id)
                     });
                 } else {
-                    builder.main_pipeline.add_async_accumulating_transformer(|| {
-                        let base_segments = if matches!(
-                            kind,
-                            MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
-                        ) {
-                            vec![]
-                        } else {
-                            self.snapshot.segments().to_vec()
-                        };
+                    builder
+                        .main_pipeline
+                        .add_async_accumulating_transformer(|| {
+                            let base_segments = if matches!(
+                                kind,
+                                MutationKind::Compact
+                                    | MutationKind::Insert
+                                    | MutationKind::Recluster
+                            ) {
+                                vec![]
+                            } else {
+                                self.snapshot.segments().to_vec()
+                            };
 
-                        // extract re-cluster related mutations from physical plan
-                        let recluster_info = self.recluster_info.clone().unwrap_or_default();
+                            // extract re-cluster related mutations from physical plan
+                            let recluster_info = self.recluster_info.clone().unwrap_or_default();
 
-                        let extended_merged_blocks = recluster_info
-                            .merged_blocks
-                            .iter()
-                            .map(|block_meta| {
-                                Arc::new(ExtendedBlockMeta {
-                                    block_meta: Arc::unwrap_or_clone(block_meta.clone()),
-                                    draft_virtual_block_meta: None,
+                            let extended_merged_blocks = recluster_info
+                                .merged_blocks
+                                .iter()
+                                .map(|block_meta| {
+                                    Arc::new(ExtendedBlockMeta {
+                                        block_meta: Arc::unwrap_or_clone(block_meta.clone()),
+                                        draft_virtual_block_meta: None,
+                                    })
                                 })
-                            })
-                            .collect::<Vec<Arc<ExtendedBlockMeta>>>();
+                                .collect::<Vec<Arc<ExtendedBlockMeta>>>();
 
-                        TableMutationAggregator::create(
-                            table,
-                            builder.ctx.clone(),
-                            base_segments,
-                            extended_merged_blocks,
-                            recluster_info.removed_segment_indexes,
-                            recluster_info.removed_statistics,
-                            *kind,
-                            self.table_meta_timestamps,
-                        )
-                    });
+                            TableMutationAggregator::create(
+                                table,
+                                builder.ctx.clone(),
+                                base_segments,
+                                extended_merged_blocks,
+                                recluster_info.removed_segment_indexes,
+                                recluster_info.removed_statistics,
+                                *kind,
+                                self.table_meta_timestamps,
+                            )
+                        });
                 }
 
                 let snapshot_gen = MutationGenerator::new(self.snapshot.clone(), *kind);

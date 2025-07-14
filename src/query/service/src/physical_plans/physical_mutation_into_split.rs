@@ -20,6 +20,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::Pipe;
 use databend_common_sql::IndexType;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
+
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -46,13 +47,13 @@ impl IPhysicalPlan for MutationSplit {
         &mut self.meta
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -76,17 +77,22 @@ impl IPhysicalPlan for MutationSplit {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        builder.main_pipeline.try_resize(builder.settings.get_max_threads()? as usize)?;
+        builder
+            .main_pipeline
+            .try_resize(builder.settings.get_max_threads()? as usize)?;
 
         // The MutationStrategy is FullOperation, use row_id_idx to split
         let mut items = Vec::with_capacity(builder.main_pipeline.output_len());
         let output_len = builder.main_pipeline.output_len();
         for _ in 0..output_len {
-            let merge_into_split_processor = MutationSplitProcessor::create(self.split_index as u32)?;
+            let merge_into_split_processor =
+                MutationSplitProcessor::create(self.split_index as u32)?;
             items.push(merge_into_split_processor.into_pipe_item());
         }
 
-        builder.main_pipeline.add_pipe(Pipe::create(output_len, output_len * 2, items));
+        builder
+            .main_pipeline
+            .add_pipe(Pipe::create(output_len, output_len * 2, items));
         Ok(())
     }
 }

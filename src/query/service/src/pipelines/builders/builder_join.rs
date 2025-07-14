@@ -35,7 +35,7 @@ use crate::sessions::QueryContext;
 
 impl PipelineBuilder {
     // Create a new pipeline builder with the same context as the current builder
-    fn create_sub_pipeline_builder(&self) -> PipelineBuilder {
+    pub fn create_sub_pipeline_builder(&self) -> PipelineBuilder {
         let sub_context = QueryContext::create_from(self.ctx.as_ref());
         let mut sub_builder =
             PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), sub_context);
@@ -170,54 +170,6 @@ impl PipelineBuilder {
             self.merge_into_probe_data_fields = Some(projected_fields);
         }
 
-        Ok(())
-    }
-
-    pub(crate) fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
-        let state = Arc::new(RangeJoinState::new(self.ctx.clone(), range_join));
-        self.build_range_join_right_side(range_join, state.clone())?;
-        self.build_range_join_left_side(range_join, state)?;
-        Ok(())
-    }
-
-    // Build the left-side pipeline for Range Join
-    fn build_range_join_left_side(
-        &mut self,
-        range_join: &RangeJoin,
-        state: Arc<RangeJoinState>,
-    ) -> Result<()> {
-        self.build_pipeline(&range_join.left)?;
-        let max_threads = self.settings.get_max_threads()? as usize;
-        self.main_pipeline.try_resize(max_threads)?;
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformRangeJoinLeft::create(
-                input,
-                output,
-                state.clone(),
-            )))
-        })?;
-        Ok(())
-    }
-
-    // Build the right-side pipeline for Range Join
-    fn build_range_join_right_side(
-        &mut self,
-        range_join: &RangeJoin,
-        state: Arc<RangeJoinState>,
-    ) -> Result<()> {
-        let right_side_builder = self.create_sub_pipeline_builder();
-
-        let mut right_res = right_side_builder.finalize(&range_join.right)?;
-        right_res.main_pipeline.add_sink(|input| {
-            Ok(ProcessorPtr::create(
-                Sinker::<TransformRangeJoinRight>::create(
-                    input,
-                    TransformRangeJoinRight::create(state.clone()),
-                ),
-            ))
-        })?;
-        self.pipelines.push(right_res.main_pipeline.finalize(None));
-        self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }
 }

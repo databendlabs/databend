@@ -22,13 +22,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
-use databend_common_pipeline_transforms::TransformPipelineHelper;
+
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -36,8 +37,8 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsyncFunction {
@@ -128,7 +129,8 @@ impl IPhysicalPlan for AsyncFunction {
         self.input.build_pipeline(builder)?;
 
         let operators = TransformAsyncFunction::init_operators(&self.async_func_descs)?;
-        let sequence_counters = TransformAsyncFunction::create_sequence_counters(self.async_func_descs.len());
+        let sequence_counters =
+            TransformAsyncFunction::create_sequence_counters(self.async_func_descs.len());
 
         builder.main_pipeline.add_async_transformer(|| {
             TransformAsyncFunction::new(

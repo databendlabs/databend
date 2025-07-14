@@ -20,11 +20,8 @@ mod builder_join;
 mod builder_mutation;
 mod builder_on_finished;
 mod builder_project;
-mod builder_recursive_cte;
 mod builder_replace_into;
 mod builder_sort;
-mod builder_union_all;
-mod builder_window;
 mod merge_into_join_optimizations;
 mod transform_builder;
 

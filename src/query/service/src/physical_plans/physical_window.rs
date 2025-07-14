@@ -19,10 +19,11 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::{type_check, with_number_mapped_type};
+use databend_common_expression::type_check;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
@@ -32,7 +33,8 @@ use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_pipeline_core::processors::{Processor, ProcessorPtr};
+use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncFrame;
@@ -54,8 +56,11 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::FrameBound;
+use crate::pipelines::processors::transforms::TransformWindow;
+use crate::pipelines::processors::transforms::WindowFunctionInfo;
+use crate::pipelines::processors::transforms::WindowSortDesc;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::processors::transforms::{FrameBound, TransformWindow, WindowFunctionInfo, WindowSortDesc};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
@@ -247,8 +252,7 @@ impl IPhysicalPlan for Window {
                         .remove_nullable();
                     with_number_mapped_type!(|NUM_TYPE| match data_type {
                         DataType::Number(NumberDataType::NUM_TYPE) => {
-                            let start_bound =
-                                FrameBound::try_from(&self.window_frame.start_bound)?;
+                            let start_bound = FrameBound::try_from(&self.window_frame.start_bound)?;
                             let end_bound = FrameBound::try_from(&self.window_frame.end_bound)?;
                             return Ok(ProcessorPtr::create(Box::new(
                                 TransformWindow::<NUM_TYPE>::try_create_range(

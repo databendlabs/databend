@@ -19,7 +19,8 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::{DataField, DataSchemaRef};
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableInfo;
@@ -115,7 +116,9 @@ impl IPhysicalPlan for CopyIntoTable {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let to_table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let to_table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
 
         // build_copy_into_table_input
         let source_schema = match &self.source {
@@ -146,7 +149,9 @@ impl IPhysicalPlan for CopyIntoTable {
                 DataSchemaRefExt::create(fields)
             }
             CopyIntoTableSource::Stage(input) => {
-                builder.ctx.set_read_block_thresholds(to_table.get_block_thresholds());
+                builder
+                    .ctx
+                    .set_read_block_thresholds(to_table.get_block_thresholds());
 
                 builder.build_pipeline(input)?;
                 self.required_source_schema.clone()

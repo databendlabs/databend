@@ -21,6 +21,10 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
@@ -36,6 +40,8 @@ use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
@@ -118,6 +124,94 @@ impl IPhysicalPlan for UnionAll {
         new_union_all.right = children.pop().unwrap();
         new_union_all.left = children.pop().unwrap();
         Box::new(new_union_all)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        if !self.cte_scan_names.is_empty() {
+            return self.build_recursive_cte_source(builder);
+        }
+
+        self.left.build_pipeline(builder)?;
+        self.project_input(self.left.output_schema()?, &self.left_outputs, builder)?;
+        let left_sinks = builder.main_pipeline.take_sinks();
+
+        self.right.build_pipeline(builder)?;
+        self.project_input(self.right.output_schema()?, &self.right_outputs, builder)?;
+        let right_sinks = builder.main_pipeline.take_sinks();
+
+        let outputs = std::cmp::max(left_sinks.len(), right_sinks.len());
+        let sequence_groups = vec![(left_sinks.len(), false), (right_sinks.len(), false)];
+
+        builder.main_pipeline.extend_sinks(left_sinks);
+        builder.main_pipeline.extend_sinks(right_sinks);
+
+        match builder.settings.get_enable_parallel_union_all()? {
+            true => builder.main_pipeline.resize(outputs, false),
+            false => builder
+                .main_pipeline
+                .sequence_group(sequence_groups, outputs),
+        }
+    }
+}
+
+impl UnionAll {
+    fn project_input(
+        &mut self,
+        schema: DataSchemaRef,
+        projection: &[(IndexType, Option<RemoteExpr>)],
+        builder: &mut PipelineBuilder,
+    ) -> Result<()> {
+        let mut expr_offset = schema.num_fields();
+        let mut new_projection = Vec::with_capacity(projection.len());
+        let mut exprs = Vec::with_capacity(projection.len());
+        for (idx, expr) in projection {
+            let Some(expr) = expr else {
+                new_projection.push(schema.index_of(&idx.to_string())?);
+                continue;
+            };
+
+            exprs.push(expr.as_expr(&BUILTIN_FUNCTIONS));
+            new_projection.push(expr_offset);
+            expr_offset += 1;
+        }
+
+        let mut operators = Vec::with_capacity(2);
+        if !exprs.is_empty() {
+            operators.push(BlockOperator::Map {
+                exprs,
+                projections: None,
+            });
+        }
+
+        operators.push(BlockOperator::Project {
+            projection: new_projection,
+        });
+
+        builder.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                input,
+                output,
+                schema.num_fields(),
+                builder.func_ctx.clone(),
+                operators.clone(),
+            )))
+        })
+    }
+
+    fn build_recursive_cte_source(&mut self, builder: &mut PipelineBuilder) -> Result<()> {
+        let max_threads = builder.settings.get_max_threads()?;
+        builder.main_pipeline.add_source(
+            |output_port| {
+                TransformRecursiveCteSource::try_create(
+                    builder.ctx.clone(),
+                    output_port.clone(),
+                    self.clone(),
+                )
+            },
+            1,
+        )?;
+
+        builder.main_pipeline.resize(max_threads as usize, true)
     }
 }
 
