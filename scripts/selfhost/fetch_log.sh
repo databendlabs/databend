@@ -299,7 +299,7 @@ main() {
 	log INFO "Fetch Databend query logs..."
 	execute_query "REMOVE @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;"
 
-	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE event_date = '$FORMATTED_DATE');"
+	execute_query "COPY INTO @a5c7667401c0c728c2ef9703bdaea66d9ae2d906 FROM (SELECT * FROM system_history.query_history WHERE to_date(event_time) = '$FORMATTED_DATE');"
 
 	file_list=$(execute_query "list @a5c7667401c0c728c2ef9703bdaea66d9ae2d906;" | awk '{print $1}')
 	[[ -z "$file_list" ]] && {
