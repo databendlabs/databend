@@ -16,6 +16,9 @@ insert into t2 select * from numbers(8);
 statement ok
 set disable_join_reorder = 1;
 
+statement ok
+set enable_shuffle_sort = 0;
+
 query T
 explain select * from (select t1.number, t2.number from t1 right outer join (SELECT number FROM t2 QUALIFY row_number() OVER (PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number) as tt(a, b) order by a;
 ----
