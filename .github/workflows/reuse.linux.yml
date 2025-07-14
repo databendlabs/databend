@@ -183,6 +183,24 @@ jobs:
       - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
+  test_tasks:
+    needs: [ build, check ]
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c8g
+      - "${{ inputs.runner_provider }}"
+      - "${{ inputs.runner_capacity }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup_license
+        with:
+          runner_provider: ${{ inputs.runner_provider }}
+          type: ${{ inputs.license_type }}
+      - uses: ./.github/actions/test_tasks
+        timeout-minutes: 20
+
   test_meta_cluster:
     needs: [build, check]
     runs-on:

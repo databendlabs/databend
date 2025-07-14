@@ -48,6 +48,7 @@ impl Config {
             config_file: self.config_file,
             query: self.query.mask_display(),
             log: self.log,
+            task: self.task,
             meta: self.meta.mask_display(),
             storage: self.storage.mask_display(),
             catalog: self.catalog,

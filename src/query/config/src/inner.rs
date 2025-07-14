@@ -53,6 +53,8 @@ pub struct InnerConfig {
 
     pub log: LogConfig,
 
+    pub task: TaskConfig,
+
     // Meta Service config.
     pub meta: MetaConfig,
 
@@ -252,9 +254,6 @@ pub struct QueryConfig {
     pub cloud_control_grpc_timeout: u64,
     pub max_cached_queries_profiles: usize,
 
-    pub enable_private_task: bool,
-    pub tasks_channel_len: usize,
-
     pub network_policy_whitelist: Vec<String>,
 
     pub settings: HashMap<String, UserSettingValue>,
@@ -345,8 +344,6 @@ impl Default for QueryConfig {
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
             max_cached_queries_profiles: 50,
-            enable_private_task: false,
-            tasks_channel_len: 1024,
             network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
             resources_management: None,
@@ -503,6 +500,11 @@ impl Debug for MetaConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogConfig {
     Hive(CatalogHiveConfig),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct TaskConfig {
+    pub on: bool,
 }
 
 // TODO: add compat protocol support

@@ -175,7 +175,9 @@ impl GlobalServices {
         if config.log.history.on {
             GlobalHistoryLog::init(config).await?;
         }
-        TaskService::init(config).await?;
+        if config.task.on {
+            TaskService::init(config).await?;
+        }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
 

@@ -202,7 +202,7 @@ impl TaskService {
 
         let mut steam = self.subscribe().await?;
 
-        let fn_lock = async |task_service: &TaskService, key: &str| {
+        let fn_lock = async |task_service: &TaskService, key: &TaskMessageIdent| {
             task_service
                 .meta_handle
                 .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
@@ -211,6 +211,7 @@ impl TaskService {
 
         while let Some(result) = steam.next().await {
             let (task_key, task_message) = result?;
+            let task_key = TaskMessageIdent::new(tenant, task_key);
             match task_message {
                 // ScheduleTask is always monitored by all Query nodes, and ExecuteTask is sent serially to avoid repeated sending.
                 TaskMessage::ScheduleTask(mut task) => {
@@ -263,7 +264,7 @@ impl TaskService {
                                             loop {
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
-                                                        let Some(_guard) = fn_lock(&task_service, &task_name).await? else {
+                                                        let Some(_guard) = fn_lock(&task_service, &task_key).await? else {
                                                             continue;
                                                         };
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
@@ -291,7 +292,6 @@ impl TaskService {
                                     .parse::<Tz>()
                                     .unwrap();
                                 let schedule = Schedule::from_str(cron_expr).unwrap();
-                                let task_name = task_name.clone();
 
                                 runtime
                                     .spawn(async move {
@@ -307,7 +307,7 @@ impl TaskService {
                                                 task.next_scheduled_at = Some(Utc::now() + duration);
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
-                                                        let Some(_guard) = fn_lock(&task_service, &task_name).await? else {
+                                                        let Some(_guard) = fn_lock(&task_service, &task_key).await? else {
                                                             continue;
                                                         };
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
@@ -329,7 +329,7 @@ impl TaskService {
                     }
                 }
                 TaskMessage::ExecuteTask(task) => {
-                    let Some(_guard) = fn_lock(self, &task.task_name).await? else {
+                    let Some(_guard) = fn_lock(self, &task_key).await? else {
                         continue;
                     };
                     let task_name = task.task_name.clone();
@@ -376,16 +376,17 @@ impl TaskService {
 
                                             while let Some(next_task) = stream.next().await {
                                                 let next_task = next_task?;
-                                                let dep_task = task_mgr
+                                                let next_task = task_mgr
                                                     .describe_task(&next_task)
                                                     .await??
                                                     .ok_or_else(|| {
                                                         ErrorCode::UnknownTask(next_task)
                                                     })?;
-
-                                                task_mgr
-                                                    .send(TaskMessage::ExecuteTask(dep_task))
-                                                    .await?;
+                                                if let Some(_guard) = fn_lock(&TaskService::instance(), &TaskMessageIdent::new(tenant.clone(), format!("check_{}", task_name))).await? {
+                                                    task_mgr
+                                                        .send(TaskMessage::ExecuteTask(next_task))
+                                                        .await?;
+                                                }
                                             }
                                             task_mgr.execute_accept(&task_key).await?;
                                             break;
@@ -418,7 +419,7 @@ impl TaskService {
                     )?;
                 }
                 TaskMessage::DeleteTask(task_name) => {
-                    if let Some(_guard) = fn_lock(self, &task_name).await? {
+                    if let Some(_guard) = fn_lock(self, &task_key).await? {
                         self.clean_task_afters(&task_name).await?;
                     }
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
@@ -426,7 +427,7 @@ impl TaskService {
                     }
                 }
                 TaskMessage::AfterTask(task) => {
-                    let Some(_guard) = fn_lock(self, &task.task_name).await? else {
+                    let Some(_guard) = fn_lock(self, &task_key).await? else {
                         continue;
                     };
                     match task.status {
@@ -630,32 +631,46 @@ impl TaskService {
         task_name: &'a str,
     ) -> impl Stream<Item = Result<String>> + '_ {
         stream! {
-            let check = format!("WITH latest_task_run AS ( \
-                  SELECT \
-                    ranked.task_name, \
-                    ranked.state, \
-                    ranked.completed_at \
-                  FROM ( \
-                    SELECT \
-                      task_name, \
-                      state, \
-                      completed_at, \
-                      ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn \
-                    FROM system_task.task_run \
-                  ) AS ranked \
-                  WHERE ranked.rn = 1 \
-                ) \
-                SELECT ta.next_task \
-                FROM system_task.task_after ta \
-                JOIN system_task.task_after ta2 \
-                  ON ta.next_task = ta2.next_task \
-                LEFT JOIN latest_task_run tr \
-                  ON ta2.task_name = tr.task_name \
-                     AND tr.state = 'SUCCEEDED' \
-                     AND tr.completed_at IS NOT NULL \
-                WHERE ta.task_name = '{task_name}' \
-                GROUP BY ta.next_task \
-                HAVING COUNT(DISTINCT ta2.task_name) = COUNT(DISTINCT tr.task_name);");
+            let check = format!("
+            WITH latest_task_run AS (
+    SELECT
+        task_name,
+        state,
+        completed_at
+    FROM (
+        SELECT
+            task_name,
+            state,
+            completed_at,
+            ROW_NUMBER() OVER (PARTITION BY task_name ORDER BY completed_at DESC) AS rn
+        FROM system_task.task_run
+    ) ranked
+    WHERE rn = 1
+),
+next_task_time AS (
+    SELECT
+        task_name AS next_task,
+        completed_at
+    FROM latest_task_run
+)
+SELECT DISTINCT ta.next_task
+FROM system_task.task_after ta
+WHERE ta.task_name = '{task_name}'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM system_task.task_after ta_dep
+    LEFT JOIN latest_task_run tr
+      ON ta_dep.task_name = tr.task_name
+    LEFT JOIN next_task_time nt
+      ON ta_dep.next_task = nt.next_task
+    WHERE ta_dep.next_task = ta.next_task
+      AND (
+        tr.task_name IS NULL
+        OR tr.state != 'SUCCEEDED'
+        OR tr.completed_at IS NULL
+        OR (nt.completed_at IS NOT NULL AND tr.completed_at <= nt.completed_at)
+      )
+  );");
             if let Some(next_task) = self.execute_sql(None, &check).await?.first().and_then(|block| block.columns()[0].index(0).and_then(|scalar| { scalar.as_string().map(|s| s.to_string()) })) {
                 yield Result::Ok(next_task);
             }

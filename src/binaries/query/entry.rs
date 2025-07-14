@@ -303,7 +303,9 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         }
         println!("    system history tables: {}", conf.log.history);
     }
-    TaskService::instance().initialized();
+    if conf.task.on {
+        TaskService::instance().initialized();
+    }
 
     println!();
     println!(
