@@ -54,8 +54,7 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
-use databend_common_expression::ROW_VERSION_COL_NAME;
-use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
+use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
@@ -767,7 +766,7 @@ impl Table for FuseTable {
     }
 
     fn supported_internal_column(&self, column_id: ColumnId) -> bool {
-        column_id >= SEARCH_SCORE_COLUMN_ID
+        column_id >= VECTOR_SCORE_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {
@@ -805,9 +804,6 @@ impl Table for FuseTable {
                     .unwrap(),
                 STREAM_COLUMN_FACTORY
                     .get_stream_column(ORIGIN_BLOCK_ROW_NUM_COL_NAME)
-                    .unwrap(),
-                STREAM_COLUMN_FACTORY
-                    .get_stream_column(ROW_VERSION_COL_NAME)
                     .unwrap(),
             ]
         } else {
@@ -1204,7 +1200,19 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Parquet)
+        if matches!(self.storage_format, FuseStorageFormat::Parquet)
+            && matches!(self.table_type, FuseTableType::Standard)
+        {
+            // ignore persistent system tables {
+            if let Ok(database_name) = self.table_info.database_name() {
+                if database_name == "persistent_system" {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
 
     fn result_can_be_cached(&self) -> bool {

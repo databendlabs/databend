@@ -42,6 +42,8 @@ use crate::caches::PrunePartitionsCache;
 use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::caches::VectorIndexFileCache;
+use crate::caches::VectorIndexMetaCache;
 use crate::providers::HybridCache;
 use crate::providers::HybridCacheExt;
 use crate::CacheAccessor;
@@ -104,6 +106,8 @@ pub struct CacheManager {
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
+    vector_index_meta_cache: CacheSlot<VectorIndexMetaCache>,
+    vector_index_file_cache: CacheSlot<VectorIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
     parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
@@ -223,6 +227,8 @@ impl CacheManager {
                 column_oriented_segment_info_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
                 inverted_index_file_cache: CacheSlot::new(None),
+                vector_index_meta_cache: CacheSlot::new(None),
+                vector_index_file_cache: CacheSlot::new(None),
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
                 table_statistic_cache: CacheSlot::new(None),
@@ -302,6 +308,25 @@ impl CacheManager {
                 MEMORY_CACHE_INVERTED_INDEX_FILE,
                 inverted_index_file_size,
             );
+
+            let vector_index_meta_cache = Self::new_items_cache_slot(
+                MEMORY_CACHE_VECTOR_INDEX_FILE_META_DATA,
+                config.vector_index_meta_count as usize,
+            );
+
+            // setup in-memory vector index filter cache
+            let vector_index_file_size = if config.vector_index_filter_memory_ratio != 0 {
+                (*max_server_memory_usage as usize)
+                    * config.vector_index_filter_memory_ratio as usize
+                    / 100
+            } else {
+                config.vector_index_filter_size as usize
+            };
+            let vector_index_file_cache = Self::new_bytes_cache_slot(
+                MEMORY_CACHE_VECTOR_INDEX_FILE,
+                vector_index_file_size,
+            );
+
             let prune_partitions_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_PRUNE_PARTITIONS,
                 config.table_prune_partitions_count as usize,
@@ -335,6 +360,8 @@ impl CacheManager {
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
                 inverted_index_file_cache,
+                vector_index_meta_cache,
+                vector_index_file_cache,
                 prune_partitions_cache,
                 table_statistic_cache,
                 in_memory_table_data_cache,
@@ -415,6 +442,14 @@ impl CacheManager {
             }
             MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA => {
                 let cache = &self.inverted_index_meta_cache;
+                Self::set_items_capacity(cache, new_capacity, name);
+            }
+            MEMORY_CACHE_VECTOR_INDEX_FILE => {
+                let cache = &self.vector_index_file_cache;
+                Self::set_bytes_capacity(cache, new_capacity, name);
+            }
+            MEMORY_CACHE_VECTOR_INDEX_FILE_META_DATA => {
+                let cache = &self.vector_index_meta_cache;
                 Self::set_items_capacity(cache, new_capacity, name);
             }
             HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA
@@ -593,6 +628,14 @@ impl CacheManager {
         self.inverted_index_file_cache.get()
     }
 
+    pub fn get_vector_index_meta_cache(&self) -> Option<VectorIndexMetaCache> {
+        self.vector_index_meta_cache.get()
+    }
+
+    pub fn get_vector_index_file_cache(&self) -> Option<VectorIndexFileCache> {
+        self.vector_index_file_cache.get()
+    }
+
     pub fn get_prune_partitions_cache(&self) -> Option<PrunePartitionsCache> {
         self.prune_partitions_cache.get()
     }
@@ -736,6 +779,8 @@ const MEMORY_CACHE_PRUNE_PARTITIONS: &str = "memory_cache_prune_partitions";
 const MEMORY_CACHE_INVERTED_INDEX_FILE: &str = "memory_cache_inverted_index_file";
 const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
     "memory_cache_inverted_index_file_meta_data";
+const MEMORY_CACHE_VECTOR_INDEX_FILE: &str = "memory_cache_vector_index_file";
+const MEMORY_CACHE_VECTOR_INDEX_FILE_META_DATA: &str = "memory_cache_vector_index_file_meta_data";
 
 const HYBRID_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "cache_bloom_index_file_meta_data";
 const HYBRID_CACHE_COLUMN_DATA: &str = "cache_column_data";
@@ -985,6 +1030,8 @@ mod tests {
             bloom_filter_index_size: 0,
             inverted_index_size: None,
             ngram_filter_index_size: None,
+            vector_index_location: None,
+            vector_index_size: None,
             virtual_block_meta: None,
             compression: Compression::Lz4,
             create_on: None,

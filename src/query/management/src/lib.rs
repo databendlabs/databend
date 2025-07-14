@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(let_chains)]
+#![feature(get_mut_unchecked)]
 #![allow(clippy::uninlined_format_args)]
 
 mod connection;

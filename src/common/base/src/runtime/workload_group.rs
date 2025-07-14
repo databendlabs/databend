@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -62,14 +63,20 @@ pub struct WorkloadGroupResource {
     pub meta: WorkloadGroup,
     pub queue_key: String,
     pub mem_stat: Arc<MemStat>,
+    pub max_memory_usage: Arc<AtomicUsize>,
     #[allow(clippy::type_complexity)]
-    pub destroy_fn: Option<Box<dyn FnOnce(&str) + Send + Sync + 'static>>,
+    pub destroy_fn: Option<Box<dyn FnOnce(&str, Option<usize>) + Send + Sync + 'static>>,
 }
 
 impl Drop for WorkloadGroupResource {
     fn drop(&mut self) {
         if let Some(destroy_fn) = self.destroy_fn.take() {
-            destroy_fn(&self.meta.id);
+            let mut mem_percentage = None;
+            if let Some(QuotaValue::Percentage(v)) = self.meta.quotas.get(MEMORY_QUOTA_KEY) {
+                mem_percentage = Some(*v);
+            }
+
+            destroy_fn(&self.meta.id, mem_percentage);
         }
     }
 }

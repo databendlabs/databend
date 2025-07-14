@@ -19,3 +19,4 @@ mod license;
 mod ngram_index;
 mod storages;
 mod stream;
+mod vector_index;

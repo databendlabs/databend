@@ -34,6 +34,7 @@ mod limit;
 mod mutation;
 mod mutation_source;
 mod operator;
+mod operator_macros;
 mod optimize;
 mod plan;
 mod presign;

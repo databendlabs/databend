@@ -114,7 +114,6 @@ impl StreamContext {
                         .build(),
                     })
                 }
-                StreamColumnType::RowVersion => unreachable!(),
             };
 
             let new_stream_column_scalar_expr = ScalarExpr::FunctionCall(FunctionCall {

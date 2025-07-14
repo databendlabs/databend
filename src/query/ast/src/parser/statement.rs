@@ -435,6 +435,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let set_secondary_specify_roles = map(
+        rule! {
+            SET ~ SECONDARY ~ ROLES ~ #comma_separated_list1(role_name)
+        },
+        |(_, _, _, roles)| Statement::SetSecondaryRoles {
+            option: SecondaryRolesOption::SpecifyRole(roles),
+        },
+    );
+
     let set_stmt = alt((
         map(
             rule! {
@@ -1895,6 +1904,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let vacuum_temporary_tables = map(
+        rule! {
+            VACUUM ~ TEMPORARY ~ TABLES ~ ( LIMIT ~ ^#literal_u64 )?
+        },
+        |(_, _, _, opt_limit)| {
+            Statement::Call(CallStmt {
+                name: "fuse_vacuum_temporary_table".to_string(),
+                args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
+            })
+        },
+    );
+
     let presign = map(
         rule! {
             PRESIGN ~ ( #presign_action )?
@@ -2576,6 +2597,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
+            | #set_secondary_specify_roles: "`SET SECONDARY ROLES [role_name,...]`"
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
         ),
         rule!(
@@ -2716,6 +2738,7 @@ AS
             | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
         rule!(#comment),
+        rule!(#vacuum_temporary_tables),
     ))(i)
 }
 

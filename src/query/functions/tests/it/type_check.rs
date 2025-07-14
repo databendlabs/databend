@@ -220,6 +220,21 @@ fn test_find_leveled_eq_filters() {
             ],
             vec![],
         ),
+
+        (
+            "not (database = 'default')",
+            vec![],
+            vec![],
+            vec![],
+        ),
+
+
+        (
+            "not (database = 'default' or database = 'abcd')",
+            vec![],
+            vec![],
+            vec![],
+        ),
     ];
 
     let cols = vec![

@@ -38,6 +38,14 @@ impl Operator for Exchange {
         RelOp::Exchange
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        if let Exchange::Hash(hash_keys) = self {
+            Box::new(hash_keys.iter())
+        } else {
+            Box::new(std::iter::empty())
+        }
+    }
+
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         rel_expr.derive_relational_prop_child(0)
     }

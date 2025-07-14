@@ -157,8 +157,8 @@ impl ClientSessionManager {
 
             if !(remained.is_empty() && num_expired == 0) {
                 info!(
-                    "[TEMP TABLE] cleanup {num_expired} sessions in {} secs, {} remained: {:?}",
-                    elapsed.as_secs(),
+                    "[TEMP TABLE] cleanup {num_expired} sessions in {} millisecond, {} remained: {:?}",
+                    elapsed.as_millis(),
                     remained.len(),
                     remained
                 );
@@ -372,7 +372,7 @@ impl ClientSessionManager {
         Ok(())
     }
 
-    fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) -> bool {
+    pub fn refresh_in_memory_states(&self, client_session_id: &str, user_name: &str) -> bool {
         let key = Self::state_key(client_session_id, user_name);
         let mut guard = self.session_state.lock();
         match guard.entry(key) {
@@ -408,49 +408,18 @@ impl ClientSessionManager {
         }
     }
 
-    pub fn remove_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: TempTblMgrRef) {
+    pub fn remove_temp_tbl_mgr(&self, prefix: String, temp_tbl_mgr: &TempTblMgrRef) {
         let mut guard = self.session_state.lock();
-        let is_empty = temp_tbl_mgr.lock().is_empty();
+        let is_empty = { temp_tbl_mgr.lock().is_empty() };
         if is_empty {
-            guard.remove(&prefix);
+            let removed_session_state = guard.remove(&prefix);
+            // Defensive check that drop session state contains no temp tables
+            if let Some(removed_session_state) = removed_session_state {
+                assert!({ removed_session_state.temp_tbl_mgr.lock().is_empty() });
+            }
             // all temp table dropped by user, data should have been removed when executing drop.
             info!("[TEMP TABLE] session={prefix} removed from ClientSessionManager");
         }
-    }
-
-    pub async fn refresh_state(
-        &self,
-        tenant: Tenant,
-        client_session_id: &str,
-        user_name: &str,
-        last_refresh_time: &SystemTime,
-    ) -> Result<bool> {
-        match last_refresh_time.elapsed() {
-            Ok(elapsed) => {
-                if elapsed > self.min_refresh_interval {
-                    info!(
-                        "[HTTP-SESSION] refreshing session {client_session_id} after {} seconds",
-                        elapsed.as_secs(),
-                    );
-                    if self.refresh_in_memory_states(client_session_id, user_name) {
-                        self.refresh_session_handle(
-                            tenant,
-                            user_name.to_string(),
-                            client_session_id,
-                        )
-                        .await?;
-                    }
-                    return Ok(true);
-                }
-            }
-            Err(err) => {
-                log::error!(
-                        "[HTTP-SESSION] Invalid last_refresh_time: detected clock drift or incorrect timestamp, difference: {:?}",
-                        err.duration()
-                    );
-            }
-        }
-        Ok(false)
     }
 
     /// Get all temporary tables from all sessions

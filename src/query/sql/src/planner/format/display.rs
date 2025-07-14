@@ -157,7 +157,7 @@ where
             tree.children.extend(stats);
         }
 
-        let subquerys = op.get_subquery(vec![]);
+        let subquerys = op.collect_subquery();
         if !subquerys.is_empty() {
             let subquerys = subquerys
                 .into_iter()

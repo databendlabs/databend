@@ -7,7 +7,7 @@ export TEST_USER_NAME="u1"
 export TEST_USER_PASSWORD="password"
 export TEST_USER_CONNECT="bendsql --user=u1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export USER_B_CONNECT="bendsql --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export RM_UUID="sed -E ""s/[a-z0-9]{32}/UUID/g"""
+export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 echo "drop table if exists test_table;" | $BENDSQL_CLIENT_CONNECT
 echo "drop user if exists u1;" | $BENDSQL_CLIENT_CONNECT

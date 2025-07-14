@@ -658,7 +658,7 @@ build_exceptions! {
     UnknownWorkloadQuotas(3144),
 }
 
-// Transaction and Processing Errors [4001-4004, 4012, 4021]
+// Transaction and Processing Errors [4001-4004, 4012]
 build_exceptions! {
     /// Unresolvable conflict
     UnresolvableConflict(4001),
@@ -666,12 +666,8 @@ build_exceptions! {
     CurrentTransactionIsAborted(4002),
     /// Transaction timeout
     TransactionTimeout(4003),
-    /// Invalid session state
-    InvalidSessionState(4004),
     /// No need to compact
     NoNeedToCompact(4012),
-    /// Refresh table info failure
-    RefreshTableInfoFailure(4021),
 }
 
 // Service Status Errors [5002]
@@ -692,6 +688,16 @@ build_exceptions! {
     SessionTokenNotFound(5103),
     /// Refresh token not found
     RefreshTokenNotFound(5104),
+}
+
+// Client Session Errors [5110-5115]
+build_exceptions! {
+    /// Session Idle too long, only used for worksheet for now
+    SessionTimeout(5110),
+    /// Server side state lost, mainly because server restarted
+    SessionLost(5111),
+    /// Unexpected session state, maybe bug of client or server
+    InvalidSessionState(5112),
 }
 
 #[cfg(test)]

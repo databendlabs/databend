@@ -248,13 +248,13 @@ impl RaftStoreInner {
                 raft_metrics::storage::incr_snapshot_written_entries();
             }
 
-            tx.send(WriteEntry::Finish(sys_data))
+            tx.send(WriteEntry::Finish((snapshot_id.clone(), sys_data)))
                 .await
                 .map_err(|e| StorageError::write_snapshot(Some(signature.clone()), &e))?;
         }
 
         // Get snapshot write result
-        let temp_snapshot_data = th
+        let db = th
             .await
             .map_err(|e| {
                 error!(error :% = e; "snapshot writer thread error");
@@ -262,13 +262,6 @@ impl RaftStoreInner {
             })?
             .map_err(|e| {
                 error!(error :% = e; "snapshot writer thread error");
-                StorageError::write_snapshot(Some(signature.clone()), &e)
-            })?;
-
-        let db = temp_snapshot_data
-            .move_to_final_path(snapshot_id.to_string())
-            .map_err(|e| {
-                error!(error :% = e; "move temp snapshot to final path error");
                 StorageError::write_snapshot(Some(signature.clone()), &e)
             })?;
 

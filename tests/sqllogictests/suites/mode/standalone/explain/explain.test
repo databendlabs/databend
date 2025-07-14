@@ -1023,7 +1023,7 @@ explain select * from t1 where a not in (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 1
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
 ├── filters: [is_true(NOT 3 (#3))]
-├── estimated rows: 0.00
+├── estimated rows: 3.00
 └── HashJoin
     ├── output columns: [t1.a (#0), t1.b (#1), marker (#3)]
     ├── join type: LEFT MARK
@@ -1260,23 +1260,23 @@ HashJoin: RIGHT OUTER
 query T
 explain join SELECT c.customer_name FROM customers c WHERE NOT EXISTS ( SELECT category FROM products WHERE category NOT IN ( SELECT p.category FROM sales s JOIN products p ON s.product_id = p.product_id WHERE s.customer_id = c.customer_id ) ) ORDER BY c.customer_name;
 ----
-HashJoin: RIGHT MARK
+HashJoin: LEFT MARK
 ├── Build
-│   └── HashJoin: RIGHT MARK
-│       ├── Build
-│       │   └── HashJoin: INNER
-│       │       ├── Build
-│       │       │   └── Scan: default.default.products (#3) (read rows: 10)
-│       │       └── Probe
-│       │           └── Scan: default.default.sales (#2) (read rows: 500)
-│       └── Probe
-│           └── HashJoin: CROSS
-│               ├── Build
-│               │   └── Scan: default.default.products (#1) (read rows: 10)
-│               └── Probe
-│                   └── Scan: default.default.customers (#0) (read rows: 100)
+│   └── Scan: default.default.customers (#0) (read rows: 100)
 └── Probe
-    └── Scan: default.default.customers (#0) (read rows: 100)
+    └── HashJoin: RIGHT MARK
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── Scan: default.default.products (#3) (read rows: 10)
+        │       └── Probe
+        │           └── Scan: default.default.sales (#2) (read rows: 500)
+        └── Probe
+            └── HashJoin: CROSS
+                ├── Build
+                │   └── Scan: default.default.products (#1) (read rows: 10)
+                └── Probe
+                    └── Scan: default.default.customers (#0) (read rows: 100)
 
 statement ok
 drop table customers;
@@ -1664,3 +1664,45 @@ Filter
 
 statement ok
 DROP TABLE IF EXISTS t;
+
+query T
+EXPLAIN SELECT a.number FROM numbers(10) AS a INNER JOIN (SELECT * FROM numbers(10) WHERE NOT number) AS b ON a.number = b.number
+----
+HashJoin
+├── output columns: [a.number (#0)]
+├── join type: INNER
+├── build keys: [numbers.number (#1)]
+├── probe keys: [a.number (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:numbers.number (#1), probe key:a.number (#0), filter type:inlist,min_max
+├── estimated rows: 100.00
+├── Filter(Build)
+│   ├── output columns: [numbers.number (#1)]
+│   ├── filters: [NOT CAST(numbers.number (#1) AS Boolean)]
+│   ├── estimated rows: 10.00
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#1)]
+│       ├── read rows: 10
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [NOT CAST(numbers.number (#1) AS Boolean)], limit: NONE]
+│       └── estimated rows: 10.00
+└── Filter(Probe)
+    ├── output columns: [a.number (#0)]
+    ├── filters: [NOT CAST(a.number (#0) AS Boolean)]
+    ├── estimated rows: 10.00
+    └── TableScan
+        ├── table: default.system.numbers
+        ├── output columns: [number (#0)]
+        ├── read rows: 10
+        ├── read size: < 1 KiB
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── push downs: [filters: [NOT CAST(numbers.number (#0) AS Boolean)], limit: NONE]
+        ├── apply join filters: [#0]
+        └── estimated rows: 10.00
+

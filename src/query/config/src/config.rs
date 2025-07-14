@@ -2794,12 +2794,17 @@ pub struct HistoryLogConfig {
     #[serde(rename = "tables")]
     pub log_history_tables: Vec<HistoryLogTableConfig>,
 
-    /// Specifies the storage parameters for the history log
+    /// Specifies whether enable external storage
+    /// If set to false (default), the default storage parameters from `[storage]` will be used.
+    #[clap(skip)]
+    #[serde(rename = "storage_on", default)]
+    pub log_history_external_storage_on: bool,
+
+    /// Specifies the external storage parameters for the history log
     /// This is used to configure how the history log data is stored.
-    /// If not specified, the default storage parameters from `[storage]` will be used.
     #[clap(skip)]
     #[serde(rename = "storage")]
-    pub log_history_storage_params: Option<StorageConfig>,
+    pub log_history_storage_params: StorageConfig,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -2849,12 +2854,11 @@ impl TryInto<InnerHistoryConfig> for HistoryLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerHistoryConfig> {
-        let storage_params: Option<InnerStorageConfig> =
-            if self.log_history_storage_params.is_some() {
-                Some(self.log_history_storage_params.unwrap().try_into()?)
-            } else {
-                None
-            };
+        let storage_params: Option<InnerStorageConfig> = if self.log_history_external_storage_on {
+            Some(self.log_history_storage_params.try_into()?)
+        } else {
+            None
+        };
         Ok(InnerHistoryConfig {
             on: self.log_history_on,
             log_only: self.log_history_log_only,
@@ -2887,7 +2891,8 @@ impl From<InnerHistoryConfig> for HistoryLogConfig {
             log_history_level: inner.level,
             log_history_retention_interval: inner.retention_interval,
             log_history_tables: inner.tables.into_iter().map(Into::into).collect(),
-            log_history_storage_params: inner_storage_config.map(Into::into),
+            log_history_external_storage_on: inner_storage_config.is_some(),
+            log_history_storage_params: inner_storage_config.map(Into::into).unwrap_or_default(),
         }
     }
 }
@@ -3280,6 +3285,30 @@ pub struct CacheConfig {
     )]
     pub inverted_index_filter_memory_ratio: u64,
 
+    /// Max number of cached vector index meta objects. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-vector-index-meta-count",
+        value_name = "VALUE",
+        default_value = "3000"
+    )]
+    pub vector_index_meta_count: u64,
+
+    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    #[clap(
+        long = "cache-vector-index-filter-size",
+        value_name = "VALUE",
+        default_value = "2147483648"
+    )]
+    pub vector_index_filter_size: u64,
+
+    /// Max percentage of in memory vector index filter cache relative to whole memory. By default it is 0 (disabled).
+    #[clap(
+        long = "cache-vector-index-filter-memory-ratio",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub vector_index_filter_memory_ratio: u64,
+
     #[clap(
         long = "cache-table-prune-partitions-count",
         value_name = "VALUE",
@@ -3604,6 +3633,9 @@ mod cache_config_converters {
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
+                vector_index_meta_count: value.vector_index_meta_count,
+                vector_index_filter_size: value.vector_index_filter_size,
+                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -3640,6 +3672,9 @@ mod cache_config_converters {
                 inverted_index_meta_count: value.inverted_index_meta_count,
                 inverted_index_filter_size: value.inverted_index_filter_size,
                 inverted_index_filter_memory_ratio: value.inverted_index_filter_memory_ratio,
+                vector_index_meta_count: value.vector_index_meta_count,
+                vector_index_filter_size: value.vector_index_filter_size,
+                vector_index_filter_memory_ratio: value.vector_index_filter_memory_ratio,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 data_cache_key_reload_policy: value.data_cache_key_reload_policy.into(),
