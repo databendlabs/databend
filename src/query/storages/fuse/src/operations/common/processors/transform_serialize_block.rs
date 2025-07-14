@@ -41,6 +41,7 @@ use crate::io::create_inverted_index_builders;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
 use crate::io::BlockWriter;
+use crate::io::VectorIndexBuilder;
 use crate::io::VirtualColumnBuilder;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -168,6 +169,11 @@ impl TransformSerializeBlock {
         } else {
             None
         };
+        let vector_index_builder = VectorIndexBuilder::try_create(
+            ctx.clone(),
+            &table.table_info.meta.indexes,
+            source_schema.clone(),
+        );
 
         let block_builder = BlockBuilder {
             ctx,
@@ -179,6 +185,7 @@ impl TransformSerializeBlock {
             ngram_args,
             inverted_index_builders,
             virtual_column_builder,
+            vector_index_builder,
             table_meta_timestamps,
         };
         Ok(TransformSerializeBlock {

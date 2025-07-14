@@ -20,6 +20,7 @@ pub mod meta;
 mod segment_reader;
 mod snapshot_history_reader;
 mod utils;
+mod vector_index;
 mod virtual_column;
 
 pub use agg_index::AggIndexReader;
@@ -38,5 +39,6 @@ pub use segment_reader::RowOrientedSegmentReader;
 pub use segment_reader::SegmentReader;
 pub use snapshot_history_reader::SnapshotHistoryReader;
 pub use utils::build_columns_meta;
+pub use vector_index::VectorIndexReader;
 pub use virtual_column::VirtualBlockReadResult;
 pub use virtual_column::VirtualColumnReader;

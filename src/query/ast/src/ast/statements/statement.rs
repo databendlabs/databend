@@ -675,6 +675,8 @@ impl Display for Statement {
                         unreachable!();
                     }
                     write!(f, ") ")?;
+                } else {
+                    write!(f, "SETTINGS ")?;
                 }
                 write!(f, "{stmt}")?;
             }

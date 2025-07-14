@@ -17,6 +17,7 @@ mod bloom_index_writer;
 mod inverted_index_writer;
 mod meta_writer;
 mod stream;
+mod vector_index_writer;
 mod virtual_column_builder;
 mod write_settings;
 
@@ -37,6 +38,8 @@ pub use meta_writer::CachedMetaWriter;
 pub use meta_writer::MetaWriter;
 pub(crate) use stream::StreamBlockBuilder;
 pub(crate) use stream::StreamBlockProperties;
+pub use vector_index_writer::VectorIndexBuilder;
+pub(crate) use vector_index_writer::VectorIndexState;
 pub use virtual_column_builder::VirtualColumnBuilder;
 pub use write_settings::WriteSettings;
 pub use write_settings::MAX_BLOCK_UNCOMPRESSED_SIZE;

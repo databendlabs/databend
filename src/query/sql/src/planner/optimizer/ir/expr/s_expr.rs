@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use educe::Educe;
@@ -229,11 +230,13 @@ impl SExpr {
         table_index: IndexType,
         column_index: IndexType,
         inverted_index: &Option<InvertedIndexInfo>,
+        vector_index: &Option<VectorIndexInfo>,
     ) -> SExpr {
         struct Visitor<'a> {
             table_index: IndexType,
             column_index: IndexType,
             inverted_index: &'a Option<InvertedIndexInfo>,
+            vector_index: &'a Option<VectorIndexInfo>,
         }
 
         impl<'a> SExprVisitor for Visitor<'a> {
@@ -244,6 +247,9 @@ impl SExpr {
                         p.columns.insert(self.column_index);
                         if self.inverted_index.is_some() {
                             p.inverted_index = self.inverted_index.clone();
+                        }
+                        if self.vector_index.is_some() {
+                            p.vector_index = self.vector_index.clone();
                         }
                         let expr = expr.replace_plan(p);
                         return Ok(VisitAction::Replace(expr));
@@ -259,6 +265,7 @@ impl SExpr {
             table_index,
             column_index,
             inverted_index,
+            vector_index,
         };
         let expr = self.accept(&mut visitor);
         if let Ok(Some(expr)) = expr {
