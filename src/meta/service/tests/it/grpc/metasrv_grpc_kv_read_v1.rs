@@ -23,7 +23,6 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
 use databend_common_meta_types::protobuf as pb;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
@@ -35,12 +34,13 @@ use pretty_assertions::assert_eq;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;
+use crate::testing::since_epoch_sec;
 use crate::tests::service::make_grpc_client;
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
-    let now_sec = SeqV::<()>::now_sec();
+    let now_sec = since_epoch_sec();
 
     let (tc, _addr) = crate::tests::start_metasrv().await?;
 
@@ -56,7 +56,7 @@ async fn test_kv_read_v1_on_leader() -> anyhow::Result<()> {
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_kv_read_v1_on_follower() -> anyhow::Result<()> {
-    let now_sec = SeqV::<()>::now_sec();
+    let now_sec = since_epoch_sec();
 
     let tcs = crate::tests::start_metasrv_cluster(&[0, 1, 2]).await?;
 

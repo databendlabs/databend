@@ -28,6 +28,7 @@ use test_harness::test;
 use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
+use crate::testing::since_epoch_millis;
 use crate::tests::meta_node::start_meta_node_cluster;
 use crate::tests::meta_node::timeout;
 
@@ -47,7 +48,7 @@ use crate::tests::meta_node::timeout;
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
 async fn test_meta_node_log_time_revert_cross_snapshot_boundary() -> anyhow::Result<()> {
-    let now_ms = SeqV::<()>::now_ms();
+    let now_ms = since_epoch_millis();
 
     // Log with later timestamp (T+180s) - will be included in snapshot
     let log_later = LogEntry {
