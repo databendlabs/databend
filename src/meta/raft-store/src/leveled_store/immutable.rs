@@ -20,7 +20,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_meta_types::KVMeta;
 use map_api::map_api_ro::MapApiRO;
 
 use crate::leveled_store::level::Level;
@@ -28,8 +27,9 @@ use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKV;
-use crate::leveled_store::map_api::MarkedOf;
+use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::state_machine::ExpireKey;
+use crate::state_machine::UserKey;
 
 /// A single **immutable** level of state machine data.
 ///
@@ -86,10 +86,10 @@ impl Deref for Immutable {
 
 impl Immutable {
     /// Build a static stream that yields key values for primary index
-    #[futures_async_stream::try_stream(boxed, ok = MapKV<String>, error = io::Error)]
+    #[futures_async_stream::try_stream(boxed, ok = MapKV<UserKey>, error = io::Error)]
     async fn str_range<Q, R>(self: Immutable, range: R)
     where
-        String: Borrow<Q>,
+        UserKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync + 'static,
     {
@@ -117,22 +117,22 @@ impl Immutable {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<String, KVMeta> for Immutable {
-    async fn get(&self, key: &String) -> Result<MarkedOf<String>, io::Error> {
+impl MapApiRO<UserKey> for Immutable {
+    async fn get(&self, key: &UserKey) -> Result<SeqMarkedOf<UserKey>, io::Error> {
         // get() is just delegated
-        self.as_ref().str_map().get(key).await
+        self.as_ref().user_map().get(key).await
     }
 
-    async fn range<R>(&self, range: R) -> Result<KVResultStream<String>, io::Error>
-    where R: RangeBounds<String> + Clone + Send + Sync + 'static {
+    async fn range<R>(&self, range: R) -> Result<KVResultStream<UserKey>, io::Error>
+    where R: RangeBounds<UserKey> + Clone + Send + Sync + 'static {
         let strm = self.clone().str_range(range);
         Ok(strm)
     }
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<ExpireKey, KVMeta> for Immutable {
-    async fn get(&self, key: &ExpireKey) -> Result<MarkedOf<ExpireKey>, io::Error> {
+impl MapApiRO<ExpireKey> for Immutable {
+    async fn get(&self, key: &ExpireKey) -> Result<SeqMarkedOf<ExpireKey>, io::Error> {
         // get() is just delegated
         self.as_ref().expire_map().get(key).await
     }
