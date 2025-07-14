@@ -139,6 +139,7 @@ impl PipelineBuilder {
             self.func_ctx.clone(),
             state.clone(),
             &join.probe_projections,
+            &join.build_projections,
             &join.probe_keys,
             join.probe.output_schema()?,
             &join.join_type,

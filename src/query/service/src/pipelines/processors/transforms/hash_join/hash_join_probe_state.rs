@@ -81,6 +81,8 @@ pub struct HashJoinProbeState {
     /// `probe_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in probe schema.
     pub(crate) probe_projections: ColumnSet,
+    // used in cross join
+    pub(crate) build_projections: ColumnSet,
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
@@ -99,6 +101,7 @@ impl HashJoinProbeState {
         func_ctx: FunctionContext,
         hash_join_state: Arc<HashJoinState>,
         probe_projections: &ColumnSet,
+        build_projections: &ColumnSet,
         probe_keys: &[RemoteExpr],
         mut probe_schema: DataSchemaRef,
         join_type: &JoinType,
@@ -138,6 +141,7 @@ impl HashJoinProbeState {
             merge_into_final_partial_unmodified_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
+            build_projections: build_projections.clone(),
         })
     }
 
