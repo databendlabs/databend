@@ -50,7 +50,7 @@ impl Interpreter for AlterTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        TaskInterpreterFactory::build()
+        TaskInterpreterFactory::build(&self.ctx)?
             .alter_task(&self.ctx, &self.plan)
             .await?;
 

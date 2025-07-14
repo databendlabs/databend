@@ -49,7 +49,7 @@ impl Interpreter for DescribeTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let Some(task) = TaskInterpreterFactory::build()
+        let Some(task) = TaskInterpreterFactory::build(&self.ctx)?
             .describe_task(&self.ctx, &self.plan)
             .await?
         else {

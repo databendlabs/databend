@@ -382,7 +382,15 @@ impl TaskService {
                                                     .ok_or_else(|| {
                                                         ErrorCode::UnknownTask(next_task)
                                                     })?;
-                                                if let Some(_guard) = fn_lock(&TaskService::instance(), &TaskMessageIdent::new(tenant.clone(), format!("check_{}", task_name))).await? {
+                                                if let Some(_guard) = fn_lock(
+                                                    &TaskService::instance(),
+                                                    &TaskMessageIdent::new(
+                                                        tenant.clone(),
+                                                        format!("check_{}", task_name),
+                                                    ),
+                                                )
+                                                .await?
+                                                {
                                                     task_mgr
                                                         .send(TaskMessage::ExecuteTask(next_task))
                                                         .await?;
