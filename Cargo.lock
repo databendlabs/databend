@@ -10026,13 +10026,13 @@ dependencies = [
 [[package]]
 name = "map-api"
 version = "0.2.3"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.3#e4de1786b63d2c401413413ac8069f305c849c06"
 dependencies = [
  "async-trait",
  "deepsize",
  "futures",
  "futures-util",
  "log",
+ "seqmarked",
  "serde",
  "stream-more",
  "thiserror 1.0.69",
@@ -13069,8 +13069,6 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 [[package]]
 name = "rotbl"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0beb0fdccf6ea5cfe13a80e00090e71e80e35c6399946a8eb7a8d5e604e5b561"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
@@ -13603,8 +13601,6 @@ checksum = "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc"
 [[package]]
 name = "seqmarked"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "359ec9c6a7073d99a286620ee39c370449f4a87c7faeee6424f9b600f6e7cc40"
 dependencies = [
  "bincode 2.0.1",
  "serde",

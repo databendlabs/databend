@@ -106,7 +106,10 @@ impl<'a> DBExporter<'a> {
         let kv_strm = strm.try_filter_map(|(str_k, marked)| {
             // Tombstone will be converted to None and be ignored.
             let seqv: Option<SeqV<_>> = marked.into();
-            let ent = seqv.map(|value| SMEntry::GenericKV { key: str_k, value });
+            let ent = seqv.map(|value| SMEntry::GenericKV {
+                key: str_k.to_string(),
+                value,
+            });
             future::ready(Ok(ent))
         });
 

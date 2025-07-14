@@ -23,8 +23,8 @@ use rotbl::v001::SeqMarked;
 
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
-use crate::marked::Marked;
 use crate::state_machine::StateMachineMetaKey;
+use crate::state_machine::UserKey;
 
 /// Convert V002 snapshot lines in json of [`SMEntry`]
 /// to V004 rotbl key-value pairs. `(String, SeqMarked)`,
@@ -82,13 +82,13 @@ impl SMEntryV002ToV004 {
                     value.seq = 1;
                 }
 
-                let marked = Marked::from(value);
+                let marked = SeqMarked::from(value);
                 let (k, v) = RotblCodec::encode_key_seq_marked(&key, marked)?;
                 return Ok(Some((k, v)));
             }
             SMEntry::GenericKV { key, value } => {
-                let marked = Marked::from(value);
-                let (k, v) = RotblCodec::encode_key_seq_marked(&key, marked)?;
+                let marked = SeqMarked::from(value);
+                let (k, v) = RotblCodec::encode_key_seq_marked(UserKey::from_str(&key), marked)?;
                 return Ok(Some((k, v)));
             }
             SMEntry::Sequences { key: _, value } => {
