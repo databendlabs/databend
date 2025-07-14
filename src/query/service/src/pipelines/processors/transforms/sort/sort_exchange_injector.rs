@@ -20,7 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::FlightCompression;
 
-use crate::pipelines::processors::transforms::SortBound;
+use super::SortBound;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
 use crate::servers::flight::v1::exchange::ExchangeInjector;

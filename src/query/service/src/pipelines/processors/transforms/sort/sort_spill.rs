@@ -314,7 +314,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
     }
 }
 
-pub struct OutputData {
+pub(super) struct OutputData {
     pub block: Option<DataBlock>,
     pub bound: (u32, Option<Scalar>),
     pub finish: bool,

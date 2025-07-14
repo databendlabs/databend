@@ -5302,6 +5302,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "derive-visitor",
+ "enum-as-inner",
  "ethnum",
  "fastrace",
  "flatbuffers",

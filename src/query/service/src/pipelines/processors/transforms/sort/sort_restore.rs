@@ -26,11 +26,12 @@ use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgori
 use databend_common_pipeline_transforms::HookTransform;
 use databend_common_pipeline_transforms::HookTransformer;
 
+use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::SortBound;
+use super::SortBoundNext;
 use super::SortCollectedMeta;
-use crate::pipelines::processors::transforms::sort::sort_spill::OutputData;
 
 pub struct TransformSortRestore<A: SortAlgorithm> {
     input: Vec<SortCollectedMeta>,
@@ -121,7 +122,8 @@ where
             finish,
         } = spill_sort.on_restore().await?;
         if let Some(block) = block {
-            let mut block = block.add_meta(Some(SortBound::create(bound_index, None)))?;
+            let mut block =
+                block.add_meta(Some(SortBound::create(bound_index, SortBoundNext::More)))?;
             if self.remove_order_col {
                 block.pop_columns(1);
             }
@@ -188,7 +190,7 @@ impl Processor for SortBoundEdge {
                 .take_meta()
                 .and_then(SortBound::downcast_from)
                 .expect("require a SortBound");
-            meta.next = None;
+            meta.next = SortBoundNext::Last;
             self.output
                 .push_data(Ok(block.add_meta(Some(meta.boxed()))?));
             self.output.finish();
@@ -212,7 +214,7 @@ impl Processor for SortBoundEdge {
             .and_then(SortBound::downcast_mut)
             .expect("require a SortBound");
 
-        output_meta.next = Some(incoming_index);
+        output_meta.next = SortBoundNext::Next(incoming_index);
 
         log::debug!("output_meta: {:?}", output_meta);
 

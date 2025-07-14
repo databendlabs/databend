@@ -57,11 +57,7 @@ pub fn try_add_multi_sort_merge(
     remove_order_col: bool,
     enable_loser_tree: bool,
 ) -> Result<()> {
-    debug_assert!(if !remove_order_col {
-        schema.has_field(ORDER_COL_NAME)
-    } else {
-        !schema.has_field(ORDER_COL_NAME)
-    });
+    debug_assert!(remove_order_col == schema.has_field(ORDER_COL_NAME));
 
     if pipeline.is_empty() {
         return Err(ErrorCode::Internal("Cannot resize empty pipe."));

@@ -20,6 +20,8 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort::Rows;
 use databend_common_pipeline_transforms::HookTransform;
@@ -27,9 +29,7 @@ use databend_common_pipeline_transforms::HookTransformer;
 
 use super::bounds::Bounds;
 use super::SortCollectedMeta;
-use crate::pipelines::processors::transforms::sort::SortExchangeMeta;
-use crate::pipelines::processors::InputPort;
-use crate::pipelines::processors::OutputPort;
+use super::SortExchangeMeta;
 use crate::sessions::QueryContext;
 
 pub struct TransformSortBoundBroadcast<R: Rows> {

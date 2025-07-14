@@ -21,6 +21,7 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_transforms::SortSpillParams;
+use enum_as_inner::EnumAsInner;
 use sort_spill::SpillableBlock;
 
 use crate::spillers::Spiller;
@@ -95,11 +96,19 @@ impl BlockMetaInfo for SortExchangeMeta {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SortBound {
     index: u32,
-    next: Option<u32>,
+    next: SortBoundNext,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, EnumAsInner)]
+pub enum SortBoundNext {
+    More,
+    Next(u32),
+    Skip,
+    Last,
 }
 
 impl SortBound {
-    fn create(index: u32, next: Option<u32>) -> Box<dyn BlockMetaInfo> {
+    fn create(index: u32, next: SortBoundNext) -> Box<dyn BlockMetaInfo> {
         debug_assert!(index != u32::MAX);
         SortBound { index, next }.boxed()
     }

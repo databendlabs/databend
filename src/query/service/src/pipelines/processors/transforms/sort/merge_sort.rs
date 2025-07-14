@@ -37,10 +37,10 @@ use databend_common_pipeline_transforms::TransformSortMergeLimit;
 
 use super::sort_spill::create_memory_merger;
 use super::sort_spill::MemoryMerger;
+use super::sort_spill::OutputData;
 use super::sort_spill::SortSpill;
 use super::Base;
 use super::MemoryRows;
-use crate::pipelines::processors::transforms::sort::sort_spill::OutputData;
 use crate::spillers::Spiller;
 
 #[derive(Debug)]

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -31,6 +32,7 @@ use databend_common_pipeline_transforms::sort::Rows;
 use databend_common_pipeline_transforms::sort::SortedStream;
 
 use super::SortBound;
+use super::SortBoundNext;
 
 type Stream<A> = BoundedInputStream<<A as SortAlgorithm>::Rows>;
 
@@ -42,8 +44,9 @@ where A: SortAlgorithm
     schema: DataSchemaRef,
     block_size: usize,
 
-    output_data: Option<DataBlock>,
+    output_data: VecDeque<DataBlock>,
     cur_index: u32,
+    cur_finished: bool,
     inner: std::result::Result<Merger<A, Stream<A>>, Vec<Stream<A>>>,
 }
 
@@ -56,6 +59,8 @@ where A: SortAlgorithm
         schema: DataSchemaRef,
         block_size: usize,
     ) -> Result<Self> {
+        assert!(inputs.len() != 1);
+
         let streams = inputs
             .iter()
             .map(|input| BoundedInputStream {
@@ -73,8 +78,9 @@ where A: SortAlgorithm
             output,
             schema,
             block_size,
-            output_data: None,
+            output_data: VecDeque::new(),
             cur_index: 0,
+            cur_finished: false,
             inner: Err(streams),
         })
     }
@@ -103,7 +109,7 @@ where A: SortAlgorithm + 'static
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(block) = self.output_data.take() {
+        if let Some(block) = self.output_data.pop_front() {
             self.output.push_data(Ok(block));
             return Ok(Event::NeedConsume);
         }
@@ -114,10 +120,17 @@ where A: SortAlgorithm + 'static
     fn process(&mut self) -> Result<()> {
         let merger = self.inner.as_mut().ok().unwrap();
         if let Some(block) = merger.next_block()? {
-            self.output_data = Some(block.add_meta(Some(SortBound::create(
-                self.cur_index,
-                (!merger.is_finished()).then_some(self.cur_index),
-            )))?);
+            let finished = merger.is_finished();
+            self.cur_finished = finished;
+            self.output_data
+                .push_back(block.add_meta(Some(SortBound::create(
+                    self.cur_index,
+                    if finished {
+                        SortBoundNext::Last
+                    } else {
+                        SortBoundNext::More
+                    },
+                )))?);
         };
         Ok(())
     }
@@ -128,13 +141,28 @@ where A: SortAlgorithm + 'static
 {
     fn next_event(&mut self) -> Result<Event> {
         let streams = match &mut self.inner {
-            inner @ Ok(_) => {
-                let merger = inner.as_ref().ok().unwrap();
+            Ok(merger) => {
+                merger.poll_pending_stream()?;
                 if !merger.is_finished() {
                     return Ok(Event::Sync);
                 }
+
+                if !self.cur_finished {
+                    let empty = DataBlock::empty_with_schema(self.schema.clone());
+                    self.output_data.push_back(
+                        empty.add_meta(Some(SortBound::create(
+                            self.cur_index,
+                            SortBoundNext::Skip,
+                        )))?,
+                    );
+                } else {
+                    self.cur_finished = false;
+                }
+
                 self.cur_index += 1;
-                let merger = std::mem::replace(inner, Err(vec![])).ok().unwrap();
+                let merger = std::mem::replace(&mut self.inner, Err(vec![]))
+                    .ok()
+                    .unwrap();
                 self.inner = Err(merger.streams());
                 self.inner.as_mut().err().unwrap()
             }
@@ -235,7 +263,11 @@ impl<R: Rows> BoundedInputStream<R> {
             "meta: {meta:?}, bound: {bound:?}",
         );
         if meta.index == bound.bound_index {
-            bound.more = meta.next.is_some_and(|next| next == meta.index);
+            bound.more = match meta.next {
+                SortBoundNext::Next(next) => meta.index == next,
+                SortBoundNext::Last => false,
+                _ => unreachable!(),
+            };
             self.data.take().map(|mut data| {
                 data.take_meta().unwrap();
                 data
@@ -268,11 +300,11 @@ mod tests {
 
     use super::*;
 
-    fn create_block(empty: bool, index: u32, next: Option<u32>) -> DataBlock {
+    fn create_block(empty: bool, index: u32, next: u32) -> DataBlock {
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3])]);
         let block = if empty { block.slice(0..0) } else { block };
         block
-            .add_meta(Some(SortBound::create(index, next)))
+            .add_meta(Some(SortBound::create(index, SortBoundNext::Next(next))))
             .unwrap()
     }
 
@@ -311,7 +343,7 @@ mod tests {
         }
 
         {
-            let block = create_block(true, 0, Some(0));
+            let block = create_block(true, 0, 0);
             output.push_data(Ok(block));
 
             let (_, pending) = stream.next().unwrap();
@@ -321,7 +353,7 @@ mod tests {
         }
 
         {
-            let block = create_block(false, 0, Some(0));
+            let block = create_block(false, 0, 0);
             output.push_data(Ok(block));
 
             let (data, pending) = stream.next().unwrap();
@@ -332,7 +364,7 @@ mod tests {
         }
 
         {
-            let block = create_block(true, 0, Some(1));
+            let block = create_block(true, 0, 1);
             output.push_data(Ok(block));
 
             let (data, pending) = stream.next().unwrap();
@@ -341,7 +373,7 @@ mod tests {
             assert!(!stream.bound.unwrap().more);
             assert!(pending);
 
-            let block = create_block(false, 1, Some(1));
+            let block = create_block(false, 1, 1);
             output.push_data(Ok(block));
 
             let (data, pending) = stream.next().unwrap();
