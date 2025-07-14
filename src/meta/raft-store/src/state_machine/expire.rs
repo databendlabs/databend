@@ -31,10 +31,14 @@ use databend_common_meta_sled_store::sled::IVec;
 use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
+use rotbl::v001::Marked;
 
-use crate::marked::Marked;
+use crate::marked::SeqMarked;
 
 /// The identifier of the index for kv with expiration.
+///
+/// Encoding to `exp-/<timestamp>/<primary_key_seq>`.
+/// The encoded value is `<ver=1>null<string_key>`. The `null` is json string for empty meta
 #[derive(
     Default,
     Debug,
@@ -81,14 +85,12 @@ impl ExpireValue {
     /// `Marked<String>` is the value of an expire-index in the state machine.
     /// `ExpireValue.seq` equals to the seq of the str-map record,
     /// i.e., when an expire-index is inserted, the seq does not increase.
-    pub fn from_marked(m: Marked<String>) -> Option<Self> {
-        match m {
-            Marked::TombStone { internal_seq: _ } => None,
-            Marked::Normal {
-                internal_seq: seq,
-                value,
-                meta: _,
-            } => Some(ExpireValue::new(value, seq)),
+    pub fn from_marked(seq_marked: SeqMarked<String>) -> Option<Self> {
+        let (seq, mm) = seq_marked.into_parts();
+
+        match mm {
+            Marked::TombStone => None,
+            Marked::Normal(s) => Some(ExpireValue::new(s, seq)),
         }
     }
 }

@@ -89,7 +89,7 @@ where
     if let Some(pb_seqv) = resp.value {
         let seqv = SeqV::from(pb_seqv);
         let value = deserialize_struct::<K::ValueType>(&seqv.data)?;
-        let seqv = SeqV::with_meta(seqv.seq, seqv.meta, value);
+        let seqv = SeqV::new_with_meta(seqv.seq, seqv.meta, value);
         Ok((key, Some(seqv)))
     } else {
         Ok((key, None))
@@ -111,7 +111,7 @@ where K: kvapi::Key {
     if let Some(pb_seqv) = resp.value {
         let seqv = SeqV::from(pb_seqv);
         let id = deserialize_u64(&seqv.data)?;
-        let seqv = SeqV::with_meta(seqv.seq, seqv.meta, id);
+        let seqv = SeqV::new_with_meta(seqv.seq, seqv.meta, id);
         Ok((key, Some(seqv)))
     } else {
         Ok((key, None))

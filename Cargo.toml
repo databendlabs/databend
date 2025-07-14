@@ -381,7 +381,7 @@ logforth = { git = "https://github.com/datafuse-extras/logforth", branch = "glob
     'fastrace',
 ] }
 lz4 = "1.24.0"
-map-api = { version = "0.2.3" }
+map-api = { version = "0.2.4" }
 maplit = "1.0.2"
 match-template = "0.0.1"
 md-5 = "0.10.5"
@@ -466,7 +466,7 @@ reqwest-hickory-resolver = "0.2"
 ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
 roaring = { version = "^0.10", features = ["serde"] }
-rotbl = { version = "0.2.3", features = [] }
+rotbl = { version = "0.2.4", features = [] }
 rust_decimal = "1.26"
 rustix = "0.38.37"
 rustls = { version = "0.23.27", features = ["ring", "tls12"], default-features = false }

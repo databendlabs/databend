@@ -16,7 +16,6 @@ use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
-use databend_common_meta_types::seq_value::KVMeta;
 use map_api::compact::compacted_get;
 use map_api::compact::compacted_range;
 use map_api::map_api::MapApi;
@@ -31,20 +30,20 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::leveled_store::map_api::MarkedOf;
-use crate::marked::Marked;
+use crate::leveled_store::map_api::SeqMarkedOf;
+use crate::marked::SeqMarked;
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K, KVMeta> for LeveledMap
+impl<K> MapApiRO<K> for LeveledMap
 where
-    K: MapKey<KVMeta> + fmt::Debug,
+    K: MapKey + fmt::Debug,
     K: MapKeyEncode,
     K: MapKeyDecode,
-    Level: MapApiRO<K, KVMeta>,
-    Immutable: MapApiRO<K, KVMeta>,
-    for<'a> MapView<'a>: MapApiRO<K, KVMeta>,
+    Level: MapApiRO<K>,
+    Immutable: MapApiRO<K>,
+    for<'a> MapView<'a>: MapApiRO<K>,
 {
-    async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
+    async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
         let levels = self.iter_levels();
         let persisted = self.persisted.as_ref().map(MapView).into_iter();
         compacted_get(key, levels, persisted).await
@@ -59,20 +58,20 @@ where
 }
 
 #[async_trait::async_trait]
-impl<K> MapApi<K, KVMeta> for LeveledMap
+impl<K> MapApi<K> for LeveledMap
 where
-    K: MapKey<KVMeta>,
+    K: MapKey,
     K: MapKeyEncode,
     K: MapKeyDecode,
-    Level: MapApi<K, KVMeta>,
-    Immutable: MapApiRO<K, KVMeta>,
-    for<'a> MapView<'a>: MapApiRO<K, KVMeta>,
+    Level: MapApi<K>,
+    Immutable: MapApiRO<K>,
+    for<'a> MapView<'a>: MapApiRO<K>,
 {
     async fn set(
         &mut self,
         key: K,
-        value: Option<(K::V, Option<KVMeta>)>,
-    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
+        value: Option<K::V>,
+    ) -> Result<BeforeAfter<SeqMarkedOf<K>>, io::Error>
     where
         K: Ord,
     {
@@ -81,7 +80,7 @@ where
 
         // No such entry at all, no need to create a tombstone for delete
         if prev.is_not_found() && value.is_none() {
-            return Ok((prev, Marked::new_tombstone(0)));
+            return Ok((prev, SeqMarked::new_tombstone(0)));
         }
 
         // `writeable` is a single level map and the returned `_prev` is only from that level.

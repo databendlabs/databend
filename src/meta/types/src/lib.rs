@@ -76,7 +76,7 @@ pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
 pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
-pub use map_api::expirable::Expirable;
+pub use map_api::Expirable;
 pub mod match_seq {
     pub use map_api::match_seq::errors::ConflictSeq;
     pub use map_api::match_seq::MatchSeq;
