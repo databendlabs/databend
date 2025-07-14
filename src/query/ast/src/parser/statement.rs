@@ -1904,6 +1904,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let vacuum_temporary_tables = map(
+        rule! {
+            VACUUM ~ TEMPORARY ~ TABLES ~ ( LIMIT ~ ^#literal_u64 )?
+        },
+        |(_, _, _, opt_limit)| {
+            Statement::Call(CallStmt {
+                name: "fuse_vacuum_temporary_table".to_string(),
+                args: opt_limit.map(|v| v.1.to_string()).into_iter().collect(),
+            })
+        },
+    );
+
     let presign = map(
         rule! {
             PRESIGN ~ ( #presign_action )?
@@ -2726,6 +2738,7 @@ AS
             | #call_procedure : "`CALL PROCEDURE <procedure_name>()`"
         ),
         rule!(#comment),
+        rule!(#vacuum_temporary_tables),
     ))(i)
 }
 
