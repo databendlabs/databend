@@ -119,15 +119,6 @@ pub fn bool_value(value: &Scalar) -> Result<bool> {
     }
 }
 
-pub fn u64_value(value: &Scalar) -> Result<u64> {
-    match value {
-        Scalar::Number(NumberScalar::UInt64(val)) => Ok(*val),
-        _ => Err(ErrorCode::BadArguments(format!(
-            "invalid value {value} expect to be u64 literal."
-        ))),
-    }
-}
-
 pub fn string_literal(val: &str) -> Scalar {
     Scalar::String(val.to_string())
 }
