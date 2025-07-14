@@ -179,6 +179,12 @@ impl Operator for Aggregate {
         RelOp::Aggregate
     }
 
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let iter = self.group_items.iter().map(|expr| &expr.scalar);
+        let iter = iter.chain(self.aggregate_functions.iter().map(|expr| &expr.scalar));
+        Box::new(iter)
+    }
+
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let input_physical_prop = rel_expr.derive_physical_prop_child(0)?;
 

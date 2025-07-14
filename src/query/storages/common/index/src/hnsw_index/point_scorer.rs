@@ -161,7 +161,7 @@ fn calculate_score(distance_type: DistanceType, lhs: ScalarRef, rhs: ScalarRef) 
     }
 }
 
-pub fn dot_similarity(v1: &[f32], v2: &[f32]) -> f32 {
+fn dot_similarity(v1: &[f32], v2: &[f32]) -> f32 {
     v1.iter().zip(v2).map(|(a, b)| a * b).sum()
 }
 
