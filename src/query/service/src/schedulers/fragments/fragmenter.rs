@@ -69,7 +69,6 @@ enum State {
     Compact,
     Recluster,
     Other,
-    CTEConsumer,
 }
 
 impl Fragmenter {
@@ -164,7 +163,6 @@ impl PhysicalPlanReplacer for Fragmenter {
     }
 
     fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
-        self.state = State::CTEConsumer;
         Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
     }
 
@@ -318,7 +316,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
             State::Recluster => FragmentType::Recluster,
-            State::CTEConsumer => FragmentType::Intermediate,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
