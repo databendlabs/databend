@@ -18,15 +18,10 @@ use std::io::Read;
 use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
 use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
-use databend_common_meta_sled_store::openraft::error::SnapshotMismatch;
 use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
-use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
-use databend_common_meta_types::raft_types::InstallSnapshotError;
-use databend_common_meta_types::raft_types::InstallSnapshotRequest;
-use databend_common_meta_types::raft_types::RaftError;
 use databend_common_meta_types::raft_types::SnapshotMeta;
 use databend_common_meta_types::raft_types::SnapshotResponse;
 use databend_common_meta_types::raft_types::StoredMembership;
@@ -160,117 +155,6 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
 #[test(harness = meta_service_test_harness)]
 #[fastrace::trace]
-async fn test_raft_service_snapshot_id_mismatch() -> anyhow::Result<()> {
-    // Test SnapshotIdMismatch error should be responded.
-
-    let (mut _nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
-    let tc0 = tcs.remove(0);
-
-    let mut client0 = tc0.raft_client().await?;
-    let mut r1 = InstallSnapshotRequest {
-        vote: Vote::new_committed(10, 2),
-        meta: SnapshotMeta {
-            last_log_id: None,
-            last_membership: StoredMembership::default(),
-            snapshot_id: MetaSnapshotId::new(None, 1).to_string(),
-        },
-        offset: 0,
-        data: vec![1, 2, 3],
-        done: false,
-    };
-
-    let req = SnapshotChunkRequest::new_v1(r1.clone());
-    client0.install_snapshot_v1(req).await?;
-
-    r1.meta.snapshot_id = MetaSnapshotId::new(None, 2).to_string();
-    r1.offset = 3;
-    let req = SnapshotChunkRequest::new_v1(r1);
-    let resp = client0.install_snapshot_v1(req).await?;
-
-    let reply = resp.into_inner();
-
-    let err: RaftError<InstallSnapshotError> = serde_json::from_str(&reply.error)?;
-
-    assert_eq!(
-        err.api_error().unwrap(),
-        &InstallSnapshotError::SnapshotMismatch(SnapshotMismatch {
-            expect: (MetaSnapshotId::new(None, 2), 0).into(),
-            got: (MetaSnapshotId::new(None, 2), 3).into(),
-        })
-    );
-
-    Ok(())
-}
-
-#[test(harness = meta_service_test_harness)]
-#[fastrace::trace]
-async fn test_raft_service_install_snapshot_v1() -> anyhow::Result<()> {
-    // Transmit snapshot via install_snapshot_v1.
-    // Assert the server is compatible with the old API.
-
-    let (_nlog, mut tcs) = start_meta_node_cluster(btreeset![0], btreeset![]).await?;
-    let tc0 = tcs.remove(0);
-
-    let mut client0 = tc0.raft_client().await?;
-
-    let last_log_id = log_id(10, 2, 4);
-
-    let snapshot_meta = SnapshotMeta {
-        last_log_id: Some(last_log_id),
-        last_membership: StoredMembership::default(),
-        snapshot_id: MetaSnapshotId::new(Some(last_log_id), 1).to_string(),
-    };
-
-    let snapshot_data = [
-        r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":10,"node_id":2},"index":4}}}}"#,
-        r#"{"StateMachineMeta":{"key":"LastMembership","value":{"Membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}}}}}"#,
-    ];
-
-    // transmit
-
-    let vote = Vote::new_committed(10, 2);
-    let mut offset = 0;
-
-    for (i, line) in snapshot_data.into_iter().enumerate() {
-        let mut chunk = line.as_bytes().to_vec();
-        let done = i == snapshot_data.len() - 1;
-        if !done {
-            chunk.push(b'\n');
-        }
-
-        let chunk_len = chunk.len();
-
-        let r = InstallSnapshotRequest {
-            vote,
-            meta: snapshot_meta.clone(),
-            offset,
-            data: chunk,
-            done,
-        };
-        offset += chunk_len as u64;
-
-        let req = SnapshotChunkRequest::new_v1(r);
-        let resp = client0.install_snapshot_v1(req).await?;
-        let reply = resp.into_inner();
-        let resp: SnapshotResponse = serde_json::from_str(&reply.data)?;
-        if done {
-            assert_eq!(resp.vote, Vote::new_committed(10, 2));
-        } else {
-            assert_eq!(resp.vote, Vote::new_committed(1, 0));
-        }
-    }
-
-    let meta_node = tc0.meta_node.as_ref().unwrap();
-    let m = meta_node.raft.metrics().borrow().clone();
-
-    assert_eq!(Some(last_log_id), m.snapshot);
-
-    Ok(())
-}
-
-#[test(harness = meta_service_test_harness)]
-#[fastrace::trace]
 async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     // Transmit snapshot in one-piece in a stream via API install_snapshot_v003.
 
@@ -281,10 +165,12 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
 
     let last_log_id = log_id(10, 2, 4);
 
+    let snapshot_id = MetaSnapshotId::new(Some(last_log_id), 1);
+
     let snapshot_meta = SnapshotMeta {
         last_log_id: Some(last_log_id),
         last_membership: StoredMembership::default(),
-        snapshot_id: MetaSnapshotId::new(Some(last_log_id), 1).to_string(),
+        snapshot_id: snapshot_id.to_string(),
     };
 
     // build a temp snapshot data
@@ -296,7 +182,7 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
         let strm = futures::stream::iter([]);
         let mut sys_data = SysData::default();
         *sys_data.last_applied_mut() = Some(last_log_id);
-        let db = writer.write_kv_stream(strm, sys_data).await?;
+        let db = writer.write_kv_stream(strm, snapshot_id, sys_data).await?;
 
         // read the snapshot data
         let mut f = fs::File::open(db.path())?;

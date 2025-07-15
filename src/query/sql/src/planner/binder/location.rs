@@ -20,6 +20,7 @@ use std::io::Result;
 use anyhow::anyhow;
 use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::UriLocation;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -39,6 +40,7 @@ use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use databend_common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use databend_common_storage::STDIN_FD;
+use log::LevelFilter;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 use opendal::Scheme;
@@ -167,8 +169,15 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     .to_string();
 
     // If role_arn is empty and we don't allow allow insecure, we should disable credential loader.
-    let disable_credential_loader =
+    let mut disable_credential_loader =
         role_arn.is_empty() && !GlobalConfig::instance().storage.allow_insecure;
+
+    // If we are in history table scope, we allow credential loader to be enabled
+    let in_history_table_scope = ThreadTracker::capture_log_settings()
+        .is_some_and(|settings| settings.level == LevelFilter::Off);
+    if in_history_table_scope {
+        disable_credential_loader = false;
+    }
 
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),

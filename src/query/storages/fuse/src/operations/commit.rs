@@ -306,7 +306,7 @@ impl FuseTable {
             .await
     }
 
-    // TODO refactor, it is called by segment compaction
+    // TODO use commit sink instead
     #[async_backtrace::framed]
     pub async fn commit_mutation(
         &self,
@@ -314,6 +314,7 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
         base_segments: &[Location],
         base_summary: Statistics,
+        table_meta_timestamps: TableMetaTimestamps,
         max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
@@ -331,8 +332,6 @@ impl FuseTable {
 
         // Status
         ctx.set_status_info("mutation: begin try to commit");
-        let table_meta_timestamps =
-            ctx.get_table_meta_timestamps(self, Some(base_snapshot.clone()))?;
 
         loop {
             let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
@@ -342,6 +341,11 @@ impl FuseTable {
             )?;
 
             let schema = self.schema();
+            if schema != latest_table_info.schema() {
+                return Err(ErrorCode::StorageOther(
+                    "The schema of the table has changed",
+                ));
+            }
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
                 ctx.clone(),
                 self.operator.clone(),

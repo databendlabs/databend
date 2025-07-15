@@ -25,7 +25,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::type_check::check_string;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
@@ -34,8 +36,8 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::Constant;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
@@ -60,8 +62,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
-use crate::util::find_eq_or_filter;
+use crate::util::extract_leveled_strings;
 use crate::util::generate_catalog_meta;
 
 pub struct TablesTable<const WITH_HISTORY: bool, const WITHOUT_VIEW: bool> {
@@ -175,8 +176,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .disable_table_info_refresh()?;
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
+        let func_ctx = ctx.get_function_context()?;
         if let Some((catalog_name, db_name)) =
-            self.is_external_show_tables_query(&push_downs, &catalog)
+            self.is_external_show_tables_query(&func_ctx, &push_downs, &catalog)
         {
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
@@ -312,7 +314,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         let mut dbs = Vec::new();
         let mut tables_names: BTreeSet<String> = BTreeSet::new();
-        let mut invalid_tables_ids = false;
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
         let mut catalog_name: Vec<String> = Vec::new();
@@ -345,7 +346,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         }
 
-        let mut invalid_optimize = false;
+        let func_ctx = ctx.get_function_context()?;
         if let Some(push_downs) = &push_downs {
             if let Some(Projection::Columns(v)) = push_downs.projection.as_ref() {
                 if v.len() == 1 && v[0] == name_field_index {
@@ -361,51 +362,58 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                invalid_optimize = find_eq_or_filter(
+
+                let leveld_results = FilterHelpers::find_leveled_eq_filters(
                     &expr,
-                    &mut |col_name, scalar| {
-                        if col_name == "catalog" {
-                            if let Scalar::String(catalog) = scalar {
-                                if !catalog_name.contains(catalog) {
-                                    catalog_name.push(catalog.clone());
-                                }
-                            }
-                        } else if col_name == "database" {
-                            if let Scalar::String(database) = scalar {
-                                if !db_name.contains(database) {
-                                    db_name.push(database.clone());
-                                }
-                            }
-                        } else if col_name == "table_id" {
-                            match check_number::<u64, usize>(
-                                None,
-                                &FunctionContext::default(),
-                                &Constant {
-                                    span: None,
-                                    scalar: scalar.clone(),
-                                    data_type: scalar.as_ref().infer_data_type(),
-                                }
-                                .into(),
-                                &BUILTIN_FUNCTIONS,
-                            ) {
-                                Ok(id) => tables_ids.push(id),
-                                Err(_) => invalid_tables_ids = true,
-                            }
-                        } else if col_name == "name" {
-                            if let Scalar::String(t_name) = scalar {
-                                tables_names.insert(t_name.clone());
+                    &["catalog", "database", "name", "table_id"],
+                    &func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+
+                for (i, scalars) in leveld_results.iter().enumerate() {
+                    if i == 3 {
+                        for r in scalars.iter() {
+                            let e = Expr::Constant(Constant {
+                                span: None,
+                                scalar: r.clone(),
+                                data_type: r.as_ref().infer_data_type(),
+                            });
+
+                            if let Ok(s) =
+                                check_number::<u64, usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                            {
+                                tables_ids.push(s);
                             }
                         }
-                        Ok(())
-                    },
-                    invalid_optimize,
-                );
+                    } else {
+                        for r in scalars.iter() {
+                            let e = Expr::Constant(Constant {
+                                span: None,
+                                scalar: r.clone(),
+                                data_type: r.as_ref().infer_data_type(),
+                            });
+
+                            if let Ok(s) =
+                                check_string::<usize>(None, &func_ctx, &e, &BUILTIN_FUNCTIONS)
+                            {
+                                match i {
+                                    0 => catalog_name.push(s),
+                                    1 => db_name.push(s),
+                                    2 => {
+                                        let _ = tables_names.insert(s);
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
         let ctl_name = catalog_impl.name();
 
-        let ctls = if !catalog_name.is_empty() && !invalid_optimize {
+        let ctls = if !catalog_name.is_empty() {
             let mut res = vec![];
             for name in &catalog_name {
                 if *name == ctl_name {
@@ -421,12 +429,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
         // from system.tables where database = 'db' and name = 'name'
         // from system.tables where database = 'db' and table_id = 123
-        if db_name.len() == 1
-            && !invalid_optimize
-            && tables_names.len() + tables_ids.len() == 1
-            && !invalid_tables_ids
-            && !WITH_HISTORY
-        {
+        if db_name.len() == 1 && tables_names.len() + tables_ids.len() == 1 && !WITH_HISTORY {
             for (ctl_name, ctl) in ctls.iter() {
                 for db in &db_name {
                     match ctl.get_database(&tenant, db.as_str()).await {
@@ -565,7 +568,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     }
                 }
 
-                if dbs.is_empty() || invalid_optimize {
+                if dbs.is_empty() {
                     // Only Default catalog can use mget api
                     dbs = if catalog_dbs.is_some() && default_catalog {
                         let catalog_dbs = catalog_dbs.as_ref().unwrap();
@@ -648,11 +651,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 for db in final_dbs {
                     let db_id = db.get_db_info().database_id.db_id;
                     let db_name = db.name();
-                    let tables = if tables_names.is_empty()
-                        || tables_names.len() > 10
-                        || invalid_tables_ids
-                        || invalid_optimize
-                    {
+                    let tables = if tables_names.is_empty() || tables_names.len() > 10 {
                         match Self::list_tables(
                             ctl,
                             &tenant,
@@ -1049,11 +1048,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
 
     fn is_external_show_tables_query(
         &self,
+        func_ctx: &FunctionContext,
         push_downs: &Option<PushDownInfo>,
         catalog: &Arc<dyn Catalog>,
     ) -> Option<(String, String)> {
         if !WITH_HISTORY && WITHOUT_VIEW {
-            let mut database_name = None;
             // Check projection
             if let Some(push_downs) = push_downs {
                 if let Some(Projection::Columns(projection_indices)) = &push_downs.projection {
@@ -1076,34 +1075,26 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         return None;
                     }
 
-                    // Check filters (catalog name)
-                    let mut catalog_name = None;
+                    let mut filtered_catalog_names = vec![];
+                    let mut filtered_db_names = vec![];
 
                     if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                         let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                        find_eq_filter(&expr, &mut |col_name, scalar| {
-                            if col_name == "catalog" {
-                                if let Scalar::String(catalog) = scalar {
-                                    catalog_name = Some(catalog.to_string());
-                                }
-                            }
-                            if col_name == "database" {
-                                if let Scalar::String(db) = scalar {
-                                    database_name = Some(db.to_string());
-                                }
-                            }
-                            Ok(())
-                        });
+                        (filtered_catalog_names, filtered_db_names) =
+                            extract_leveled_strings(&expr, &["catalog", "database"], func_ctx)
+                                .ok()?;
                     }
 
                     // Check iceberg catalog existence
-                    if let Some(catalog_name) = catalog_name {
-                        if let Some(database_name) = database_name {
-                            if catalog.name() == catalog_name {
-                                if let CatalogType::Iceberg = catalog.info().catalog_type() {
-                                    return Some((catalog_name, database_name));
-                                }
-                            }
+                    if filtered_catalog_names.len() == 1
+                        && filtered_db_names.len() == 1
+                        && catalog.name() == filtered_catalog_names[0].clone()
+                    {
+                        if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                            return Some((
+                                filtered_catalog_names[0].clone(),
+                                filtered_db_names[0].clone(),
+                            ));
                         }
                     }
                 }

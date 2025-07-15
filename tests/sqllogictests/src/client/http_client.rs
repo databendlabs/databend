@@ -13,28 +13,29 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
 use reqwest::ClientBuilder;
+use reqwest::Response;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
-use url::Url;
 
-use crate::client::global_cookie_store::GlobalCookieStore;
+use crate::error::DSqlLogicTestError::Databend;
 use crate::error::Result;
 use crate::util::parser_rows;
 use crate::util::HttpSessionConf;
 
+const SESSION_HEADER: &str = "X-DATABEND-SESSION";
+
 pub struct HttpClient {
     pub client: Client,
     pub session_token: String,
+    pub session_headers: HeaderMap,
     pub debug: bool,
     pub session: Option<HttpSessionConf>,
     pub port: u16,
@@ -83,29 +84,57 @@ impl HttpClient {
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
-        let cookie_provider = GlobalCookieStore::new();
-        let cookie = HeaderValue::from_str("cookie_enabled=true").unwrap();
-        let mut initial_cookies = [&cookie].into_iter();
-        cookie_provider.set_cookies(&mut initial_cookies, &Url::parse("https://a.com").unwrap());
         let client = ClientBuilder::new()
-            .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)
             // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
             .http2_keep_alive_timeout(Duration::from_secs(15))
             .pool_max_idle_per_host(0)
             .build()?;
+        let mut session_headers = HeaderMap::new();
+        session_headers.insert(SESSION_HEADER, HeaderValue::from_str("").unwrap());
+        let mut res = Self {
+            client,
+            session_token: "".to_string(),
+            session_headers,
+            session: None,
+            debug: false,
+            port,
+        };
+        res.login().await?;
+        Ok(res)
+    }
 
-        let url = format!("http://127.0.0.1:{}/v1/session/login", port);
+    async fn update_session_header(&mut self, response: Response) -> Result<Response> {
+        if let Some(value) = response.headers().get(SESSION_HEADER) {
+            let session_header = value.to_str().unwrap().to_owned();
+            if !session_header.is_empty() {
+                self.session_headers
+                    .insert(SESSION_HEADER, value.to_owned());
+                return Ok(response);
+            }
+        }
+        let meta = format!("response={response:?}");
+        let data = response.text().await.unwrap();
+        Err(Databend(
+            format!("{} is empty, {meta}, {data}", SESSION_HEADER,).into(),
+        ))
+    }
 
-        let session_token = client
+    async fn login(&mut self) -> Result<()> {
+        let url = format!("http://127.0.0.1:{}/v1/session/login", self.port);
+        let response = self
+            .client
             .post(&url)
+            .headers(self.session_headers.clone())
             .body("{}")
             .basic_auth("root", Some(""))
             .send()
             .await
             .inspect_err(|e| {
                 println!("fail to send to {}: {:?}", url, e);
-            })?
+            })?;
+        let response = self.update_session_header(response).await?;
+        self.session_token = response
             .json::<LoginResponse>()
             .await
             .inspect_err(|e| {
@@ -114,14 +143,7 @@ impl HttpClient {
             .tokens
             .unwrap()
             .session_token;
-
-        Ok(Self {
-            client,
-            session_token,
-            session: None,
-            debug: false,
-            port,
-        })
+        Ok(())
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
@@ -178,43 +200,43 @@ impl HttpClient {
     }
 
     // Send request and get response by json format
-    async fn post_query(&self, sql: &str, url: &str) -> Result<QueryResponse> {
+    async fn post_query(&mut self, sql: &str, url: &str) -> Result<QueryResponse> {
         let mut query = HashMap::new();
         query.insert("sql", serde_json::to_value(sql)?);
         if let Some(session) = &self.session {
             query.insert("session", serde_json::to_value(session)?);
         }
-        Ok(self
+        let response = self
             .client
             .post(url)
+            .headers(self.session_headers.clone())
             .json(&query)
             .bearer_auth(&self.session_token)
             .send()
             .await
             .inspect_err(|e| {
                 println!("fail to send to {}: {:?}", url, e);
-            })?
-            .json::<QueryResponse>()
-            .await
-            .inspect_err(|e| {
-                println!("fail to decode json when call {}: {:?}", url, e);
-            })?)
+            })?;
+        let response = self.update_session_header(response).await?;
+        Ok(response.json::<QueryResponse>().await.inspect_err(|e| {
+            println!("fail to decode json when call {}: {:?}", url, e);
+        })?)
     }
 
-    async fn poll_query_result(&self, url: &str) -> Result<QueryResponse> {
-        Ok(self
+    async fn poll_query_result(&mut self, url: &str) -> Result<QueryResponse> {
+        let response = self
             .client
             .get(url)
             .bearer_auth(&self.session_token)
+            .headers(self.session_headers.clone())
             .send()
             .await
             .inspect_err(|e| {
                 println!("fail to send to {}: {:?}", url, e);
-            })?
-            .json::<QueryResponse>()
-            .await
-            .inspect_err(|e| {
-                println!("fail to decode json when call {}: {:?}", url, e);
-            })?)
+            })?;
+        let response = self.update_session_header(response).await?;
+        Ok(response.json::<QueryResponse>().await.inspect_err(|e| {
+            println!("fail to decode json when call {}: {:?}", url, e);
+        })?)
     }
 }

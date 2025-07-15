@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 
 #[derive(Clone)]
@@ -34,8 +35,18 @@ impl ExecutorSettings {
         let max_threads = settings.get_max_threads()?;
         let max_execute_time_in_seconds = settings.get_max_execute_time_in_seconds()?;
 
+        let config_enable_queries_executor = GlobalConfig::instance().query.enable_queries_executor;
+        let setting_use_legacy_query_executor = settings.get_use_legacy_query_executor()?;
+        // If `use_legacy_query_executor` is set to 1, we disable the queries executor
+        // Otherwise, we all follow configuration
+        let enable_queries_executor = if setting_use_legacy_query_executor {
+            false
+        } else {
+            config_enable_queries_executor
+        };
+
         Ok(ExecutorSettings {
-            enable_queries_executor: settings.get_enable_experimental_queries_executor()?,
+            enable_queries_executor,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,

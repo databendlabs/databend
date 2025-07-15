@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::SampleConfig;
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -104,6 +105,7 @@ pub struct Scan {
     // Whether to update stream columns.
     pub update_stream_columns: bool,
     pub inverted_index: Option<InvertedIndexInfo>,
+    pub vector_index: Option<VectorIndexInfo>,
     // Lazy row fetch.
     pub is_lazy_table: bool,
     pub sample: Option<SampleConfig>,
@@ -146,6 +148,7 @@ impl Scan {
             change_type: self.change_type.clone(),
             update_stream_columns: self.update_stream_columns,
             inverted_index: self.inverted_index.clone(),
+            vector_index: self.vector_index.clone(),
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
             scan_id: self.scan_id,
@@ -195,6 +198,34 @@ impl std::hash::Hash for Scan {
 impl Operator for Scan {
     fn rel_op(&self) -> RelOp {
         RelOp::Scan
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        let push_down_iter = self.push_down_predicates.iter().flatten();
+
+        let prewhere_iter = self
+            .prewhere
+            .iter()
+            .flat_map(|prewhere| prewhere.predicates.iter());
+
+        let agg_index_pred_iter = self
+            .agg_index
+            .iter()
+            .flat_map(|agg_index| agg_index.predicates.iter());
+
+        let agg_index_selection_iter = self
+            .agg_index
+            .iter()
+            .flat_map(|agg_index| agg_index.selection.iter())
+            .map(|selection| &selection.scalar);
+
+        // Chain all iterators together
+        Box::new(
+            push_down_iter
+                .chain(prewhere_iter)
+                .chain(agg_index_pred_iter)
+                .chain(agg_index_selection_iter),
+        )
     }
 
     fn arity(&self) -> usize {

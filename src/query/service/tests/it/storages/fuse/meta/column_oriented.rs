@@ -89,7 +89,12 @@ async fn generate_column_oriented_segment(
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for block in data_blocks {
         let col_stats = gen_columns_statistics(&block, None, &table_schema).unwrap();
-        let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
+        let block_writer = BlockWriter::new(
+            &operator,
+            &loc_generator,
+            TestFixture::default_table_meta_timestamps(),
+            true,
+        );
         let (block_meta, _index_meta) = block_writer
             .write(
                 FuseStorageFormat::Parquet,
@@ -346,7 +351,8 @@ async fn test_segment_cache() -> Result<()> {
         .unwrap()
         .finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
-    let location = loc_generator.gen_segment_info_location(Default::default(), true);
+    let location =
+        loc_generator.gen_segment_info_location(TestFixture::default_table_meta_timestamps(), true);
     let (column_oriented_segment, block_metas, table_schema) =
         generate_column_oriented_segment().await?;
     operator

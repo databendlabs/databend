@@ -54,7 +54,7 @@ async fn test_virtual_column_builder() -> Result<()> {
         0,
     ); // Dummy location
 
-    let builder = VirtualColumnBuilder::try_create(ctx, fuse_table, schema).unwrap();
+    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
 
     let block = DataBlock::new(
         vec![
@@ -83,7 +83,8 @@ async fn test_virtual_column_builder() -> Result<()> {
         3,
     );
 
-    let result = builder.add_block(&block, &write_settings, &location)?;
+    builder.add_block(&block)?;
+    let result = builder.finalize(&write_settings, &location)?;
 
     assert!(!result.data.is_empty());
     assert_eq!(
@@ -195,7 +196,8 @@ async fn test_virtual_column_builder() -> Result<()> {
         8,
     );
 
-    let result = builder.add_block(&block, &write_settings, &location)?;
+    builder.add_block(&block)?;
+    let result = builder.finalize(&write_settings, &location)?;
 
     // Expected columns: id, create, text, user.id, replies, geo.lat
     assert_eq!(
@@ -245,7 +247,7 @@ async fn test_virtual_column_builder() -> Result<()> {
         "['geo']['lat']",
     )
     .unwrap();
-    assert_eq!(meta_geo_lat.data_type, VariantDataType::Float64);
+    assert_eq!(meta_geo_lat.data_type, VariantDataType::Jsonb);
 
     let entries = vec![
         Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8]).into(),
@@ -302,10 +304,192 @@ async fn test_virtual_column_builder() -> Result<()> {
         entries, 8, // Number of rows
     );
 
-    let result = builder.add_block(&block, &write_settings, &location)?;
+    builder.add_block(&block)?;
+    let result = builder.finalize(&write_settings, &location)?;
 
     // all columns should be discarded due to > 70% nulls
     assert!(result.data.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_virtual_column_builder_stream_write() -> Result<()> {
+    let fixture = TestFixture::setup_with_custom(EESetup::new()).await?;
+
+    fixture
+        .default_session()
+        .get_settings()
+        .set_enable_experimental_virtual_column(1)?;
+    fixture.create_default_database().await?;
+    fixture.create_variant_table().await?;
+
+    let ctx = fixture.new_query_ctx().await?;
+
+    let table = fixture.latest_default_table().await?;
+    let table_info = table.get_table_info();
+    let schema = table_info.meta.schema.clone();
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+
+    let write_settings = fuse_table.get_write_settings();
+    let location = (
+        "_b/h0196236b460676369cfcf6fec0dedefa_v2.parquet".to_string(),
+        0,
+    ); // Dummy location
+
+    let mut builder = VirtualColumnBuilder::try_create(ctx, schema).unwrap();
+
+    // Create blocks with consistent schema across all blocks
+    let blocks = vec![
+        // Block 1: Simple nested structure
+        DataBlock::new(
+            vec![
+                (Int32Type::from_data(vec![1, 2, 3])).into(),
+                (VariantType::from_opt_data(vec![
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 1, "name": "Alice"}, "score": 100}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 2, "name": "Bob"}, "score": 85}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 3, "name": "Charlie"}, "score": 92}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                ]))
+                .into(),
+            ],
+            3,
+        ),
+        // Block 2: Same structure, different values
+        DataBlock::new(
+            vec![
+                (Int32Type::from_data(vec![4, 5, 6])).into(),
+                (VariantType::from_opt_data(vec![
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 4, "name": "Dave"}, "score": 78}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 5, "name": "Eve"}, "score": 95}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 6, "name": "Frank"}, "score": 88}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                ]))
+                .into(),
+            ],
+            3,
+        ),
+        // Block 3: Same structure with additional fields
+        DataBlock::new(
+            vec![
+                (Int32Type::from_data(vec![7, 8, 9])).into(),
+                (VariantType::from_opt_data(vec![
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 7, "name": "Grace", "active": true}, "score": 91, "tags": ["expert"]}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 8, "name": "Heidi", "active": false}, "score": 75, "tags": ["novice"]}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                    Some(
+                        OwnedJsonb::from_str(r#"{"user": {"id": 9, "name": "Ivan", "active": true}, "score": 89, "tags": ["intermediate"]}"#)
+                            .unwrap()
+                            .to_vec(),
+                    ),
+                ]))
+                .into(),
+            ],
+            3,
+        ),
+    ];
+
+    // Stream write: add each block to the builder
+    for block in &blocks {
+        builder.add_block(block)?;
+    }
+
+    // Finalize once after adding all blocks
+    let result = builder.finalize(&write_settings, &location)?;
+
+    // Verify the result
+    assert!(!result.data.is_empty());
+
+    // We expect virtual columns for user.id, user.name, user.active, score, and tags[0]
+    assert_eq!(
+        result.draft_virtual_block_meta.virtual_column_metas.len(),
+        5
+    );
+
+    // Check user.id column
+    let meta_user_id = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['user']['id']",
+    )
+    .expect("Virtual column ['user']['id'] not found");
+    assert_eq!(meta_user_id.source_column_id, 1);
+    assert_eq!(meta_user_id.name, "['user']['id']");
+    assert_eq!(meta_user_id.data_type, VariantDataType::UInt64);
+
+    // Check user.name column
+    let meta_user_name = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['user']['name']",
+    )
+    .expect("Virtual column ['user']['name'] not found");
+    assert_eq!(meta_user_name.source_column_id, 1);
+    assert_eq!(meta_user_name.name, "['user']['name']");
+    assert_eq!(meta_user_name.data_type, VariantDataType::String);
+
+    // Check score column
+    let meta_score = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['score']",
+    )
+    .expect("Virtual column ['score'] not found");
+    assert_eq!(meta_score.source_column_id, 1);
+    assert_eq!(meta_score.name, "['score']");
+    assert_eq!(meta_score.data_type, VariantDataType::UInt64);
+
+    // Check user.active column (only present in the third block)
+    let meta_user_active = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['user']['active']",
+    )
+    .expect("Virtual column ['user']['active'] not found");
+    assert_eq!(meta_user_active.source_column_id, 1);
+    assert_eq!(meta_user_active.name, "['user']['active']");
+    assert_eq!(meta_user_active.data_type, VariantDataType::Boolean);
+
+    // Check tags[0] column (only present in the third block)
+    let meta_tags = find_virtual_col(
+        &result.draft_virtual_block_meta.virtual_column_metas,
+        1,
+        "['tags'][0]",
+    )
+    .expect("Virtual column ['tags'][0] not found");
+    assert_eq!(meta_tags.source_column_id, 1);
+    assert_eq!(meta_tags.name, "['tags'][0]");
+    assert_eq!(meta_tags.data_type, VariantDataType::String);
 
     Ok(())
 }

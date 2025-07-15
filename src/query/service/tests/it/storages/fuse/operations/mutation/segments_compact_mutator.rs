@@ -89,7 +89,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?;
     assert!(mutator.is_some());
     let mutator = mutator.unwrap();
-    mutator.try_commit(table.clone()).await?;
+    mutator.try_commit(fuse_table).await?;
 
     // check segment count
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -134,7 +134,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let num_inserts = 9;
     fixture.append_rows(num_inserts).await?;
 
-    mutator.try_commit(table.clone()).await?;
+    mutator.try_commit(fuse_table).await?;
 
     // check segment count
     let count_seg = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
@@ -194,7 +194,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     }
 
     // the compact operation committed latter should be failed.
-    let r = mutator.try_commit(table.clone()).await;
+    let r = mutator.try_commit(fuse_table).await;
     assert!(r.is_err());
     assert_eq!(r.err().unwrap().code(), ErrorCode::UNRESOLVABLE_CONFLICT);
 
@@ -232,7 +232,7 @@ async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
 pub async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mutator = build_mutator(fuse_table, ctx.clone(), None).await?.unwrap();
-    mutator.try_commit(table.clone()).await
+    mutator.try_commit(fuse_table).await
 }
 
 async fn build_mutator(
@@ -252,6 +252,8 @@ async fn build_mutator(
         return Ok(None);
     }
 
+    let table_meta_timestamps = ctx.get_table_meta_timestamps(tbl, Some(base_snapshot.clone()))?;
+
     let block_per_seg = tbl.get_option("block_per_segment", 1000);
 
     let compact_params = CompactOptions {
@@ -267,6 +269,7 @@ async fn build_mutator(
         tbl.meta_location_generator().clone(),
         tbl.get_operator(),
         tbl.cluster_key_id(),
+        table_meta_timestamps,
     )?;
 
     if segment_mutator.target_select().await? {
@@ -669,6 +672,7 @@ impl CompactSegmentTestFixture {
             &fuse_segment_io,
             data_accessor,
             location_gen,
+            TestFixture::default_table_meta_timestamps(),
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -746,7 +750,8 @@ impl CompactSegmentTestFixture {
                         })
                     };
 
-                    let (location, _) = location_gen.gen_block_location(Default::default());
+                    let (location, _) = location_gen
+                        .gen_block_location(TestFixture::default_table_meta_timestamps());
                     let row_count = block.num_rows() as u64;
                     let block_size = block.memory_size() as u64;
 
@@ -774,6 +779,8 @@ impl CompactSegmentTestFixture {
                         None,
                         None,
                         None,
+                        None,
+                        None,
                         Compression::Lz4Raw,
                         Some(Utc::now()),
                     );
@@ -782,7 +789,8 @@ impl CompactSegmentTestFixture {
                     stats_acc.add_block(block_meta).unwrap();
                 }
                 let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
-                let path = location_gen.gen_segment_info_location(Default::default(), false);
+                let path = location_gen
+                    .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
             });
@@ -1028,6 +1036,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             &fuse_segment_io,
             &data_accessor,
             &location_gen,
+            TestFixture::default_table_meta_timestamps(),
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

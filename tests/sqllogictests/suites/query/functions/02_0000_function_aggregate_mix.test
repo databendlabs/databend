@@ -304,6 +304,11 @@ select kurtosis(k), kurtosis(v), kurtosis(v2) from aggr;
 ----
 10.99999999999836	-1.9614277138467147	-1.4451196915855287
 
+query III
+select kurtosis(cast(k as decimal(10,2)) ), kurtosis(cast(v as decimal(38,2)) ), kurtosis(cast(v2 as decimal(76,2)) ) from aggr;
+----
+10.99999999999836	-1.9614277138467147	-1.4451196915855287
+
 query I
 select  kurtosis(v2) from aggr group by v order by v;
 ----
@@ -329,6 +334,11 @@ NaN NaN
 
 query III
 select skewness(k), skewness(v), skewness(v2) from aggr
+----
+-3.316624790355393	-0.16344366935199225	0.3654008511025841
+
+query III
+select skewness(cast(k as decimal(10,2)) ), skewness(cast(v as decimal(38,2)) ), skewness(cast(v2 as decimal(76,2)) ) from aggr
 ----
 -3.316624790355393	-0.16344366935199225	0.3654008511025841
 
@@ -505,12 +515,12 @@ NULL
 query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
-[20.0,10.0,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
+[20.00,10.00,4.23,5.99] ["abc","de","xyz"] [100,200,300] [{"k":"v"},null,"uvw",[1,2,3]] [["a","b"],[],["x","y"],["z"]] ["a","a","a","a"]
 
 query TTTTT
 select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json_object_agg(b, e), json_object_agg(b, 'a') from d
 ----
-{"abc":20.0,"de":10.0,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
+{"abc":20.00,"de":10.00,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
 
 query TTTTT
 select array_agg(a), array_agg(b), array_agg(c), array_agg(d), array_agg(e), array_agg('a') from d

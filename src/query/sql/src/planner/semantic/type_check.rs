@@ -56,6 +56,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -77,6 +78,7 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -90,6 +92,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_functions::ASYNC_FUNCTIONS;
@@ -99,6 +102,8 @@ use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
@@ -108,6 +113,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -118,6 +124,8 @@ use itertools::Itertools;
 use jsonb::keypath::parse_key_paths;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
+use serde_json::json;
+use serde_json::to_string;
 use simsearch::SimSearch;
 use unicase::Ascii;
 
@@ -2703,6 +2711,9 @@ impl<'a> TypeChecker<'a> {
         let mut index_schema = None;
         let mut index_options = BTreeMap::new();
         for table_index in table_indexes.values() {
+            if table_index.index_type != TableIndexType::Inverted {
+                continue;
+            }
             if column_ids
                 .iter()
                 .all(|id| table_index.column_ids.contains(id))
@@ -2871,9 +2882,9 @@ impl<'a> TypeChecker<'a> {
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if let Some(rewritten_func_result) =
-            self.try_rewrite_sugar_function(span, func_name, arguments)
-        {
+        if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
+            self.try_rewrite_sugar_function(span, func_name, arguments),
+        ) {
             return rewritten_func_result;
         }
 
@@ -2919,6 +2930,11 @@ impl<'a> TypeChecker<'a> {
             self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
         {
             return rewritten_variant_expr;
+        }
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &args)
+        {
+            return rewritten_vector_expr;
         }
 
         self.resolve_scalar_function_call(span, func_name, params, args)
@@ -3610,7 +3626,10 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("currentuser"),
             Ascii::new("current_user"),
             Ascii::new("current_role"),
+            Ascii::new("current_secondary_roles"),
+            Ascii::new("current_available_roles"),
             Ascii::new("connection_id"),
+            Ascii::new("client_session_id"),
             Ascii::new("timezone"),
             Ascii::new("nullif"),
             Ascii::new("iff"),
@@ -3633,11 +3652,12 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
+            Ascii::new("equal_null"),
         ];
         FUNCTIONS
     }
 
-    fn try_rewrite_sugar_function(
+    async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -3676,9 +3696,69 @@ impl<'a> TypeChecker<'a> {
                     ),
                 }),
             ),
+            ("current_secondary_roles", &[]) => {
+                let mut res = self
+                    .ctx
+                    .get_all_effective_roles()
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<String>>();
+                res.sort();
+                let roles_comma_separated_string = res.iter().join(",");
+                let res = if self.ctx.get_secondary_roles().is_none() {
+                    json!({
+                        "roles": roles_comma_separated_string,
+                        "value": "ALL"
+                    })
+                } else {
+                    json!({
+                        "roles": roles_comma_separated_string,
+                        "value": "None"
+                    })
+                };
+                match to_string(&res) {
+                    Ok(res) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(res),
+                    })),
+                    Err(e) => Some(Err(ErrorCode::IllegalRole(format!(
+                        "Failed to serialize secondary roles into JSON string: {}",
+                        e
+                    )))),
+                }
+            }
+            ("current_available_roles", &[]) => {
+                let mut res = self
+                    .ctx
+                    .get_all_available_roles()
+                    .await
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<String>>();
+                res.sort();
+                match to_string(&res) {
+                    Ok(res) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(res),
+                    })),
+                    Err(e) => Some(Err(ErrorCode::IllegalRole(format!(
+                        "Failed to serialize available roles into JSON string: {}",
+                        e
+                    )))),
+                }
+            }
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
                 value: Literal::String(self.ctx.get_connection_id()),
+            })),
+            ("client_session_id", &[]) => Some(self.resolve(&Expr::Literal {
+                span,
+                value: Literal::String(
+                    self.ctx.get_current_client_session_id().unwrap_or_default(),
+                ),
             })),
             ("timezone", &[]) => {
                 let tz = self.ctx.get_settings().get_timezone().unwrap();
@@ -3702,6 +3782,49 @@ impl<'a> TypeChecker<'a> {
                     },
                     arg_x,
                 ]))
+            }
+            ("equal_null", &[arg_x, arg_y]) => {
+                // Rewrite equal_null(x, y) to ifnull(x = y, false) or (x is null and y is null)
+                let eq_expr = Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::Eq,
+                    left: Box::new(arg_x.clone()),
+                    right: Box::new(arg_y.clone()),
+                };
+                let ifnull_expr = Expr::FunctionCall {
+                    span,
+                    func: ASTFunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(span, "ifnull"),
+                        args: vec![eq_expr, Expr::Literal {
+                            span,
+                            value: Literal::Boolean(false),
+                        }],
+                        params: vec![],
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                };
+
+                let is_null_x = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_x.clone()),
+                    not: false,
+                };
+                let is_null_y = Expr::IsNull {
+                    span,
+                    expr: Box::new(arg_y.clone()),
+                    not: false,
+                };
+                let and_expr = Expr::BinaryOp {
+                    span,
+                    op: BinaryOperator::And,
+                    left: Box::new(is_null_x),
+                    right: Box::new(is_null_y),
+                };
+
+                Some(self.resolve_function(span, "or", vec![], &[&ifnull_expr, &and_expr]))
             }
             ("iff", args) => Some(self.resolve_function(span, "if", vec![], args)),
             ("ifnull" | "nvl", args) => {
@@ -4259,6 +4382,189 @@ impl<'a> TypeChecker<'a> {
         None
     }
 
+    fn vector_functions() -> &'static [Ascii<&'static str>] {
+        static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("cosine_distance"),
+            Ascii::new("l1_distance"),
+            Ascii::new("l2_distance"),
+        ];
+        VECTOR_FUNCTIONS
+    }
+
+    fn try_rewrite_vector_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[ScalarExpr],
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        // Try rewrite vector distance function to vector score internal column,
+        // so that the vector index can be used to accelerate the query.
+        let uni_case_func_name = Ascii::new(func_name);
+        if Self::vector_functions().contains(&uni_case_func_name) {
+            match args {
+                [ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column:
+                        ColumnBinding {
+                            table_index,
+                            database_name,
+                            table_name,
+                            column_name,
+                            data_type,
+                            ..
+                        },
+                    ..
+                }), ScalarExpr::CastExpr(CastExpr {
+                    argument,
+                    target_type,
+                    ..
+                })]
+                | [ScalarExpr::CastExpr(CastExpr {
+                    argument,
+                    target_type,
+                    ..
+                }), ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column:
+                        ColumnBinding {
+                            table_index,
+                            database_name,
+                            table_name,
+                            column_name,
+                            data_type,
+                            ..
+                        },
+                    ..
+                })] => {
+                    let col_data_type = data_type.remove_nullable();
+                    if table_index.is_some()
+                        && matches!(col_data_type, DataType::Vector(_))
+                        && matches!(&**argument, ScalarExpr::ConstantExpr(_))
+                        && matches!(&**target_type, DataType::Vector(_))
+                        && LicenseManagerSwitch::instance()
+                            .check_enterprise_enabled(
+                                self.ctx.get_license_key(),
+                                Feature::VectorIndex,
+                            )
+                            .is_ok()
+                    {
+                        let table_index = table_index.unwrap();
+                        let table_entry = self.metadata.read().table(table_index).clone();
+                        let table = table_entry.table();
+                        let table_info = table.get_table_info();
+                        let table_schema = table_info.schema();
+                        let table_indexes = &table_info.meta.indexes;
+                        if self
+                            .bind_context
+                            .vector_index_map
+                            .contains_key(&table_index)
+                        {
+                            return None;
+                        }
+                        let Ok(column_id) = table_schema.column_id_of(column_name) else {
+                            return None;
+                        };
+                        for vector_index in table_indexes.values() {
+                            if vector_index.index_type != TableIndexType::Vector {
+                                continue;
+                            }
+                            let Some(distances) = vector_index.options.get("distance") else {
+                                continue;
+                            };
+                            // distance_type must match function name
+                            let mut matched_distance = false;
+                            let distance_types: Vec<&str> = distances.split(',').collect();
+                            for distance_type in distance_types {
+                                if func_name.starts_with(distance_type) {
+                                    matched_distance = true;
+                                    break;
+                                }
+                            }
+                            if !matched_distance {
+                                continue;
+                            }
+                            if vector_index.column_ids.contains(&column_id) {
+                                let internal_column = InternalColumn::new(
+                                    VECTOR_SCORE_COL_NAME,
+                                    InternalColumnType::VectorScore,
+                                );
+                                let internal_column_binding = InternalColumnBinding {
+                                    database_name: database_name.clone(),
+                                    table_name: table_name.clone(),
+                                    internal_column,
+                                };
+                                let Ok(column_binding) =
+                                    self.bind_context.add_internal_column_binding(
+                                        &internal_column_binding,
+                                        self.metadata.clone(),
+                                        Some(table_index),
+                                        false,
+                                    )
+                                else {
+                                    return None;
+                                };
+
+                                let new_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                    span,
+                                    column: column_binding,
+                                });
+
+                                let arg = ConstantExpr::try_from(*argument.clone()).unwrap();
+                                let Scalar::Array(arg_col) = arg.value else {
+                                    return None;
+                                };
+
+                                let col_vector_type = col_data_type.as_vector().unwrap();
+                                let col_dimension = col_vector_type.dimension() as usize;
+                                let arg_vector_type = target_type.as_vector().unwrap();
+                                let arg_dimension = arg_vector_type.dimension() as usize;
+                                if col_dimension != arg_dimension || arg_col.len() != col_dimension
+                                {
+                                    return None;
+                                }
+                                let mut query_values = Vec::with_capacity(arg_col.len());
+                                match arg_col {
+                                    Column::Number(num_col) => {
+                                        for i in 0..num_col.len() {
+                                            let num = unsafe { num_col.index_unchecked(i) };
+                                            query_values.push(num.to_f32());
+                                        }
+                                    }
+                                    Column::Decimal(dec_col) => {
+                                        for i in 0..dec_col.len() {
+                                            let dec = unsafe { dec_col.index_unchecked(i) };
+                                            query_values.push(F32::from(dec.to_float32()));
+                                        }
+                                    }
+                                    _ => {
+                                        return None;
+                                    }
+                                }
+
+                                let index_info = VectorIndexInfo {
+                                    index_name: vector_index.name.clone(),
+                                    index_version: vector_index.version.clone(),
+                                    index_options: vector_index.options.clone(),
+                                    column_id,
+                                    func_name: func_name.to_string(),
+                                    query_values,
+                                };
+                                self.bind_context
+                                    .vector_index_map
+                                    .insert(table_index, index_info);
+
+                                return Some(Ok(Box::new((
+                                    new_column,
+                                    DataType::Number(NumberDataType::Float32),
+                                ))));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
     fn resolve_trim_function(
         &mut self,
         span: Span,
@@ -4376,7 +4682,15 @@ impl<'a> TypeChecker<'a> {
         } else {
             Cow::Borrowed(like_str)
         };
-        if check_const(&new_like_str) {
+        if check_percent(&new_like_str) {
+            // Convert to `a is not null`
+            let is_not_null = Expr::IsNull {
+                span: None,
+                expr: Box::new(left.clone()),
+                not: true,
+            };
+            self.resolve(&is_not_null)
+        } else if check_const(&new_like_str) {
             // Convert to equal comparison
             self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
         } else if check_prefix(&new_like_str) {
@@ -5702,6 +6016,11 @@ pub fn validate_function_arg(
             }
         }
     }
+}
+
+// optimize special cases for like expression
+fn check_percent(like_str: &str) -> bool {
+    !like_str.is_empty() && like_str.chars().all(|c| c == '%')
 }
 
 // Some check functions for like expression

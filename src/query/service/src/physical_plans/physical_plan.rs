@@ -185,7 +185,7 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
     }
 }
 
-pub trait PhysicalPlanVisitor {
+pub trait PhysicalPlanVisitor: Send + Sync + 'static {
     fn as_any(&mut self) -> &mut dyn Any;
 
     fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()>;
@@ -264,6 +264,7 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
         unsafe {
             match self.downcast_ref::<To>() {
                 None => None,
+                #[allow(invalid_reference_casting)]
                 Some(v) => Some(&mut *(v as *const To as *mut To))
             }
         }

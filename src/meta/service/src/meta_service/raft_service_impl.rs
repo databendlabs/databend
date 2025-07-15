@@ -17,12 +17,8 @@
 
 use std::io;
 use std::sync::Arc;
-use std::time::Duration;
 
-use databend_common_base::base::tokio::sync::Mutex;
-use databend_common_base::future::TimedFutureExt;
 use databend_common_meta_client::MetaGrpcReadReq;
-use databend_common_meta_raft_store::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003_or_v004;
 use databend_common_meta_raft_store::sm_v003::open_snapshot::OpenSnapshot;
 use databend_common_meta_raft_store::sm_v003::received::Received;
 use databend_common_meta_sled_store::openraft::MessageSummary;
@@ -31,24 +27,15 @@ use databend_common_meta_types::protobuf::raft_service_server::RaftService;
 use databend_common_meta_types::protobuf::Empty;
 use databend_common_meta_types::protobuf::RaftReply;
 use databend_common_meta_types::protobuf::RaftRequest;
-use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
 use databend_common_meta_types::protobuf::SnapshotResponseV003;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::raft_types::AppendEntriesRequest;
-use databend_common_meta_types::raft_types::InstallSnapshotError;
-use databend_common_meta_types::raft_types::InstallSnapshotRequest;
-use databend_common_meta_types::raft_types::InstallSnapshotResponse;
-use databend_common_meta_types::raft_types::RaftError;
 use databend_common_meta_types::raft_types::Snapshot;
-use databend_common_meta_types::raft_types::SnapshotMeta;
-use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::raft_types::TransferLeaderRequest;
-use databend_common_meta_types::raft_types::Vote;
 use databend_common_meta_types::raft_types::VoteRequest;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::GrpcHelper;
-use databend_common_meta_types::SnapshotData;
 use databend_common_metrics::count::Count;
 use fastrace::func_path;
 use fastrace::prelude::*;
@@ -64,24 +51,16 @@ use tonic::Streaming;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
-use crate::meta_service::snapshot_receiver_v1;
-use crate::meta_service::snapshot_receiver_v1::ReceiverV1;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
-
-    /// The receiver for install-snapshot v1 RPC.
-    receiver_v1: Mutex<Option<ReceiverV1>>,
 }
 
 impl RaftServiceImpl {
     pub fn create(meta_node: Arc<MetaNode>) -> Self {
-        Self {
-            meta_node,
-            receiver_v1: Mutex::new(None),
-        }
+        Self { meta_node }
     }
 
     fn incr_meta_metrics_recv_bytes_from_peer(&self, request: &Request<RaftRequest>) {
@@ -89,93 +68,6 @@ impl RaftServiceImpl {
             let message: &RaftRequest = request.get_ref();
             let bytes = message.data.len() as u64;
             raft_metrics::network::incr_recvfrom_bytes(addr.to_string(), bytes);
-        }
-    }
-
-    async fn do_install_snapshot_v1(
-        &self,
-        request: Request<SnapshotChunkRequest>,
-    ) -> Result<Response<RaftReply>, Status> {
-        let addr = remote_addr(&request);
-
-        let snapshot_req = request.into_inner();
-        raft_metrics::network::incr_recvfrom_bytes(addr.clone(), snapshot_req.data_len());
-
-        let _g = snapshot_recv_inflight(&addr).counter_guard();
-
-        let chunk = snapshot_req
-            .chunk
-            .ok_or_else(|| GrpcHelper::invalid_arg("SnapshotChunkRequest.chunk is None"))?;
-
-        let (vote, snapshot_meta): (Vote, SnapshotMeta) =
-            GrpcHelper::parse(&snapshot_req.rpc_meta)?;
-
-        let install_snapshot_req = InstallSnapshotRequest {
-            vote,
-            meta: snapshot_meta,
-            offset: chunk.offset,
-            data: chunk.data,
-            done: chunk.done,
-        };
-
-        let res = self
-            .receive_chunked_snapshot_v1(install_snapshot_req)
-            .with_timing(observe_snapshot_recv_spent(&addr))
-            .await;
-
-        raft_metrics::network::incr_snapshot_recvfrom_result(addr.clone(), res.is_ok());
-
-        GrpcHelper::make_grpc_result(res)
-    }
-
-    /// Receive a chunk based snapshot from the leader.
-    async fn receive_chunked_snapshot_v1(
-        &self,
-        req: InstallSnapshotRequest,
-    ) -> Result<InstallSnapshotResponse, RaftError<InstallSnapshotError>> {
-        let raft = &self.meta_node.raft;
-
-        let req_vote = req.vote;
-        let my_vote = raft.with_raft_state(|state| *state.vote_ref()).await?;
-        let snapshot_meta = req.meta.clone();
-        let snapshot_id = snapshot_meta.snapshot_id.clone();
-        let sig = snapshot_meta.signature();
-
-        let io_err_to_read_snap_err = |e: io::Error| {
-            let io_err = StorageError::read_snapshot(Some(sig.clone()), &e);
-            StorageError::from(io_err)
-        };
-
-        let resp = InstallSnapshotResponse { vote: my_vote };
-
-        let ss_store = self.meta_node.raft_store.snapshot_store();
-
-        let finished_snapshot = {
-            let mut receiver_v1 = self.receiver_v1.lock().await;
-            snapshot_receiver_v1::receive_snapshot_v1(&mut receiver_v1, &ss_store, req).await?
-        };
-
-        if let Some(temp_path) = finished_snapshot {
-            let snapshot_data_v1 =
-                SnapshotData::open_temp(temp_path).map_err(io_err_to_read_snap_err)?;
-
-            let db = upgrade_snapshot_data_v002_to_v003_or_v004(
-                &ss_store,
-                Box::new(snapshot_data_v1),
-                snapshot_id,
-            )
-            .await
-            .map_err(io_err_to_read_snap_err)?;
-
-            let snapshot = Snapshot {
-                meta: snapshot_meta.clone(),
-                snapshot: db,
-            };
-
-            let resp = raft.install_full_snapshot(req_vote, snapshot).await?;
-            Ok(resp.into())
-        } else {
-            Ok(resp)
         }
     }
 
@@ -190,19 +82,25 @@ impl RaftServiceImpl {
         let Received {
             vote: req_vote,
             snapshot_meta,
-            temp_path,
+            storage_path,
+            temp_rel_path,
             ..
         } = received;
 
         let raft_config = &self.meta_node.raft_store.config;
 
-        let db = DB::open_snapshot(&temp_path, snapshot_meta.snapshot_id.clone(), raft_config)
-            .map_err(|e| {
-                Status::internal(format!(
-                    "Fail to open snapshot: {:?}, snapshot_meta:{:?} path: {}",
-                    e, &snapshot_meta, temp_path
-                ))
-            })?;
+        let db = DB::open_snapshot(
+            &storage_path,
+            &temp_rel_path,
+            snapshot_meta.snapshot_id.clone(),
+            raft_config.to_rotbl_config(),
+        )
+        .map_err(|e| {
+            Status::internal(format!(
+                "Fail to open snapshot: {:?}, snapshot_meta:{:?} path: {}/{}",
+                e, &snapshot_meta, storage_path, temp_rel_path
+            ))
+        })?;
 
         let snapshot = Snapshot {
             meta: snapshot_meta,
@@ -354,14 +252,6 @@ impl RaftService for RaftServiceImpl {
         .await
     }
 
-    async fn install_snapshot_v1(
-        &self,
-        request: Request<SnapshotChunkRequest>,
-    ) -> Result<Response<RaftReply>, Status> {
-        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
-        self.do_install_snapshot_v1(request).in_span(root).await
-    }
-
     async fn install_snapshot_v003(
         &self,
         request: Request<Streaming<SnapshotChunkRequestV003>>,
@@ -444,16 +334,6 @@ fn remote_addr<T>(request: &Request<T>) -> String {
         addr.to_string()
     } else {
         "unknown address".to_string()
-    }
-}
-
-/// Create a function record the time cost of snapshot receiving.
-fn observe_snapshot_recv_spent<T>(addr: &str) -> impl Fn(&T, Duration, Duration) + '_ {
-    |_output, t, _b| {
-        raft_metrics::network::observe_snapshot_recvfrom_spent(
-            addr.to_string(),
-            t.as_secs() as f64,
-        );
     }
 }
 

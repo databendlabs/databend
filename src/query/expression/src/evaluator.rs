@@ -49,6 +49,10 @@ use crate::types::ReturnType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::types::VectorColumn;
+use crate::types::VectorDataType;
+use crate::types::VectorScalar;
+use crate::types::F32;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
@@ -912,6 +916,88 @@ impl<'a> Evaluator<'a> {
                             })
                             .collect::<Result<_>>()?;
                         Ok(Value::Column(Column::Tuple(new_fields)))
+                    }
+                    other => unreachable!("source: {}", other),
+                }
+            }
+            (DataType::Array(inner_src_ty), DataType::Vector(inner_dest_ty)) => {
+                if !matches!(
+                    inner_src_ty.remove_nullable(),
+                    DataType::Number(_) | DataType::Decimal(_)
+                ) || matches!(inner_dest_ty, VectorDataType::Int8(_))
+                {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
+                    ))
+                    .set_span(span));
+                }
+                let dimension = inner_dest_ty.dimension() as usize;
+                match value {
+                    Value::Scalar(Scalar::Array(col)) => {
+                        if col.len() != dimension {
+                            return Err(ErrorCode::BadArguments(
+                                "Array value cast to a vector has incorrect dimension".to_string(),
+                            )
+                            .set_span(span));
+                        }
+                        let mut vals = Vec::with_capacity(dimension);
+                        match col {
+                            Column::Number(num_col) => {
+                                for i in 0..dimension {
+                                    let num = unsafe { num_col.index_unchecked(i) };
+                                    vals.push(num.to_f32());
+                                }
+                            }
+                            Column::Decimal(dec_col) => {
+                                for i in 0..dimension {
+                                    let dec = unsafe { dec_col.index_unchecked(i) };
+                                    vals.push(F32::from(dec.to_float32()));
+                                }
+                            }
+                            _ => {
+                                return Err(ErrorCode::BadArguments(
+                                    "Array value cast to a vector has invalid value".to_string(),
+                                )
+                                .set_span(span));
+                            }
+                        }
+                        Ok(Value::Scalar(Scalar::Vector(VectorScalar::Float32(vals))))
+                    }
+                    Value::Column(Column::Array(array_col)) => {
+                        let mut vals = Vec::with_capacity(dimension * array_col.len());
+                        for col in array_col.iter() {
+                            if col.len() != dimension {
+                                return Err(ErrorCode::BadArguments(
+                                    "Array value cast to a vector has incorrect dimension"
+                                        .to_string(),
+                                )
+                                .set_span(span));
+                            }
+                            let col = col.remove_nullable();
+                            match col {
+                                Column::Number(num_col) => {
+                                    for i in 0..dimension {
+                                        let num = unsafe { num_col.index_unchecked(i) };
+                                        vals.push(num.to_f32());
+                                    }
+                                }
+                                Column::Decimal(dec_col) => {
+                                    for i in 0..dimension {
+                                        let dec = unsafe { dec_col.index_unchecked(i) };
+                                        vals.push(F32::from(dec.to_float32()));
+                                    }
+                                }
+                                _ => {
+                                    return Err(ErrorCode::BadArguments(
+                                        "Array value cast to a vector has invalid value"
+                                            .to_string(),
+                                    )
+                                    .set_span(span));
+                                }
+                            }
+                        }
+                        let vector_col = VectorColumn::Float32((vals.into(), dimension));
+                        Ok(Value::Column(Column::Vector(vector_col)))
                     }
                     other => unreachable!("source: {}", other),
                 }

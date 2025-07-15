@@ -14,10 +14,19 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [Insert] is req
 0
 -- test 5: set role as testrole3, secondary roles as NONE, can access table2, can not access table1, because role3 inherited from role2
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Insert] is required on 'default'.'default'.'t20_0015_table1' for user 'testuser1'@'%' with roles [testrole3,public,testrole2]
+"{""roles"":""public"",""value"":""None""}"
+"[""public"",""testrole1"",""testrole2"",""testrole3""]"
 0
 -- test 6: set role as testrole1, secondary roles as ALL, can access both table1 and table2
 0
+"{""roles"":""public,testrole1,testrole2,testrole3"",""value"":""ALL""}"
+"[""public"",""testrole1"",""testrole2"",""testrole3""]"
 0
+-- test 6.1: set secondary roles as testrole3, can access table2(because testrole2 can access table2, testrole2 is child of testrole3), can not access table1
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Insert] is required on 'default'.'default'.'t20_0015_table1' for user 'testuser1'@'%' with roles [public,testrole3,testrole2]
+"{""roles"":""public,testrole2,testrole3"",""value"":""None""}"
+"[""public"",""testrole1"",""testrole2"",""testrole3""]"
+Error: APIError: QueryFailed: [2206]object is invalid
 -- test 7: set role as testrole1, testrole2, secondary roles defaults as ALL, can both table1 and table2
 0
 0

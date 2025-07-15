@@ -449,19 +449,14 @@ impl NestedValues {
         reader.must_ignore_byte(b'[')?;
         let dimension = column.dimension();
         let mut values = Vec::with_capacity(dimension);
-        for _ in 0..dimension {
+        for idx in 0..dimension {
             let _ = reader.ignore_white_spaces_or_comments();
-            reader.must_ignore_byte(b',')?;
-            let _ = reader.ignore_white_spaces_or_comments();
-            let res: Result<f32> = reader.read_float_text();
-            match res {
-                Ok(v) => {
-                    values.push(v.into());
-                }
-                Err(err) => {
-                    return Err(err);
-                }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
             }
+            let _ = reader.ignore_white_spaces_or_comments();
+            let v: f32 = reader.read_float_text()?;
+            values.push(v.into());
         }
         reader.must_ignore_byte(b']')?;
         column.push(&VectorScalarRef::Float32(&values));

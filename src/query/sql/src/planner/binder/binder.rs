@@ -64,7 +64,6 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUserPlan;
 use crate::plans::Plan;
-use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
@@ -106,7 +105,7 @@ pub struct Binder {
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
-impl<'a> Binder {
+impl Binder {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         catalogs: Arc<CatalogManager>,
@@ -952,110 +951,6 @@ impl<'a> Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn check_sexpr_top(&self, s_expr: &SExpr) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::UDFCall(_));
-        let mut finder = Finder::new(&f);
-        Self::check_sexpr(s_expr, &mut finder)
-    }
-
-    #[recursive::recursive]
-    pub(crate) fn check_sexpr<F>(s_expr: &'a SExpr, f: &'a mut Finder<'a, F>) -> Result<bool>
-    where F: Fn(&ScalarExpr) -> bool {
-        let result = match s_expr.plan.as_ref() {
-            RelOperator::Scan(scan) => {
-                f.reset_finder();
-                if let Some(agg_info) = &scan.agg_index {
-                    for predicate in &agg_info.predicates {
-                        f.visit(predicate)?;
-                    }
-                    for selection in &agg_info.selection {
-                        f.visit(&selection.scalar)?;
-                    }
-                }
-                if let Some(predicates) = &scan.push_down_predicates {
-                    for predicate in predicates {
-                        f.visit(predicate)?;
-                    }
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Join(join) => {
-                f.reset_finder();
-                for condition in join.equi_conditions.iter() {
-                    f.visit(&condition.left)?;
-                    f.visit(&condition.right)?;
-                }
-                for condition in &join.non_equi_conditions {
-                    f.visit(condition)?;
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::EvalScalar(eval) => {
-                f.reset_finder();
-                for item in &eval.items {
-                    f.visit(&item.scalar)?;
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Filter(filter) => {
-                f.reset_finder();
-                for predicate in &filter.predicates {
-                    f.visit(predicate)?;
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Aggregate(aggregate) => {
-                f.reset_finder();
-                for item in &aggregate.group_items {
-                    f.visit(&item.scalar)?;
-                }
-                for item in &aggregate.aggregate_functions {
-                    f.visit(&item.scalar)?;
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Exchange(exchange) => {
-                f.reset_finder();
-                if let crate::plans::Exchange::Hash(hash) = exchange {
-                    for scalar in hash {
-                        f.visit(scalar)?;
-                    }
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Window(window) => {
-                f.reset_finder();
-                for scalar_item in &window.arguments {
-                    f.visit(&scalar_item.scalar)?;
-                }
-                for scalar_item in &window.partition_by {
-                    f.visit(&scalar_item.scalar)?;
-                }
-                for info in &window.order_by {
-                    f.visit(&info.order_by_item.scalar)?;
-                }
-                f.scalars().is_empty()
-            }
-            RelOperator::Udf(_) => false,
-            _ => true,
-        };
-
-        match result {
-            true => {
-                for child in &s_expr.children {
-                    let mut finder = Finder::new(f.find_fn());
-                    let flag = Self::check_sexpr(child.as_ref(), &mut finder)?;
-                    if !flag {
-                        return Ok(false);
-                    }
-                }
-                Ok(true)
-            }
-            false => Ok(false),
-        }
-    }
-
     pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
         &self,
         scalar: &ScalarExpr,
@@ -1105,13 +1000,20 @@ impl<'a> Binder {
                     .to_string(),
             ));
         }
+        let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
 
         for ((table_index, _), column_index) in bound_internal_columns.iter() {
             let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
                 i.has_score = has_score;
                 i
             });
-            s_expr = s_expr.add_column_index_to_scans(*table_index, *column_index, &inverted_index);
+            let vector_index = vector_index_map.shift_remove(table_index);
+            s_expr = s_expr.add_column_index_to_scans(
+                *table_index,
+                *column_index,
+                &inverted_index,
+                &vector_index,
+            );
         }
         Ok(s_expr)
     }

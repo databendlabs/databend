@@ -836,20 +836,28 @@ pub fn calc_date_to_timestamp(val: i32, tz: TimeZone) -> std::result::Result<i64
     let ts = (val as i64) * 24 * 3600 * MICROS_PER_SEC;
     let z = ts.to_timestamp(tz.clone());
 
+    let tomorrow = z.date().tomorrow();
+    let yesterday = z.date().yesterday();
+
+    // If there were no yesterday or tomorrow, it might be the limit value.
+    // e.g. 9999-12-31
+    if tomorrow.is_err() || yesterday.is_err() {
+        let tz_offset_micros = tz
+            .to_timestamp(date(1970, 1, 1).at(0, 0, 0, 0))
+            .unwrap()
+            .as_microsecond();
+        return Ok(ts + tz_offset_micros);
+    }
+
     // tomorrow midnight
-    let tomorrow_date = z
-        .date()
-        .tomorrow()
-        .map_err(|e| format!("Calc tomorrow midnight with error {}", e))?;
+    let tomorrow_date = tomorrow.map_err(|e| format!("Calc tomorrow midnight with error {}", e))?;
 
     let tomorrow_zoned = tomorrow_date.to_zoned(tz.clone()).unwrap_or(z.clone());
     let tomorrow_is_dst = tz.to_offset_info(tomorrow_zoned.timestamp()).dst().is_dst();
 
     // yesterday midnight
-    let yesterday_date = z
-        .date()
-        .yesterday()
-        .map_err(|e| format!("Calc yesterday midnight with error {}", e))?;
+    let yesterday_date =
+        yesterday.map_err(|e| format!("Calc yesterday midnight with error {}", e))?;
     let yesterday_zoned = yesterday_date.to_zoned(tz.clone()).unwrap_or(z.clone());
     let yesterday_is_std = tz
         .to_offset_info(yesterday_zoned.timestamp())

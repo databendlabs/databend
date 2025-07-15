@@ -1,0 +1,49 @@
+statement ok
+CREATE OR REPLACE SEQUENCE test_seq;
+
+statement ok
+CREATE OR REPLACE TABLE target_table (id int default nextval(test_seq),id1 BIGINT UNSIGNED NOT NULL DEFAULT nextval(test_seq), name varchar(50), value int);
+
+statement ok
+CREATE OR REPLACE TABLE source_table (id INT, name VARCHAR(50), value bigint not null);
+
+statement ok
+INSERT INTO source_table (name, value) VALUES ('Item1', 100),('Item2', 200);
+
+statement ok
+MERGE INTO target_table AS target 
+USING source_table AS source 
+ON target.id = source.id 
+WHEN MATCHED THEN 
+   UPDATE SET target.name = source.name, target.value = source.value 
+WHEN NOT MATCHED THEN 
+   INSERT (name, value) VALUES (source.name, source.value);
+
+query I
+select count(*) from target_table;
+----
+2
+
+statement ok
+MERGE INTO target_table AS target 
+USING source_table AS source 
+ON target.id = source.id 
+WHEN MATCHED THEN 
+   UPDATE SET target.name = source.name, target.value = source.value 
+WHEN NOT MATCHED THEN 
+   INSERT (name, value) VALUES (source.name, source.value);
+
+query I
+select count(*) from target_table;
+----
+4
+
+query I
+select COUNT_DISTINCT(id) from target_table;
+----
+4
+
+query I
+select COUNT_DISTINCT(id1) from target_table;
+----
+4

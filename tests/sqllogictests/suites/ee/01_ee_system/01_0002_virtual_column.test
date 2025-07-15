@@ -262,7 +262,7 @@ query TTTITT
 show virtual columns where table='tweets';
 ----
 test_virtual_column tweets data 3000000000 ['create'] String
-test_virtual_column tweets data 3000000001 ['geo']['lat'] Float64
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Jsonb
 test_virtual_column tweets data 3000000002 ['id'] UInt64
 test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String
@@ -289,7 +289,7 @@ query TTTITT
 show virtual columns where table='tweets';
 ----
 test_virtual_column tweets data 3000000000 ['create'] String
-test_virtual_column tweets data 3000000001 ['geo']['lat'] Float64
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Jsonb
 test_virtual_column tweets data 3000000002 ['id'] UInt64
 test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String
@@ -612,6 +612,66 @@ SELECT * FROM STUDENT_GRADES ORDER BY school_id;
 S001 ST001 A Excellent Y
 S002 ST002 B Good Y
 S003 ST003 C Average N
+
+statement ok
+set enable_block_stream_write = 1
+
+statement ok
+CREATE OR REPLACE TABLE test_stream (
+    id INT,
+    data1 VARIANT,
+    data2 VARIANT
+);
+
+statement ok
+INSERT INTO test_stream (id, data1, data2) VALUES 
+(1, '{"name": "John", "age": 25, "address": {"city": "New York", "district": "Manhattan"}}', '{"scores": [85, 90, 78], "hobbies": ["reading", "swimming"]}'),
+(2, '{"name": "Alice", "age": 30, "address": {"city": "San Francisco", "district": "Mission"}}', '{"scores": [92, 88, 95], "hobbies": ["basketball", "music"]}'),
+(3, '{"name": "Bob", "age": 28, "address": {"city": "Chicago", "district": "Loop"}}', '{"scores": [76, 82, 90], "hobbies": ["travel", "photography"]}'),
+(4, '{"name": "Emma", "age": 22, "address": {"city": "New York", "district": "Brooklyn"}}', '{"scores": [88, 91, 85], "hobbies": ["coding", "movies"]}'),
+(5, '{"name": "Michael", "age": 35, "address": {"city": "Seattle", "district": "Downtown"}}', '{"scores": [95, 93, 97], "hobbies": ["golf", "cooking"]}'),
+(6, '{"name": "Sarah", "age": 27, "address": {"city": "Boston", "district": "Back Bay"}}', '{"scores": [82, 85, 80], "hobbies": ["fishing", "painting"]}'),
+(7, '{"name": "David", "age": 31, "address": {"city": "New York", "district": "Queens"}}', '{"scores": [79, 88, 92], "hobbies": ["soccer", "chess"]}'),
+(8, '{"name": "Jennifer", "age": 29, "address": {"city": "San Francisco", "district": "Marina"}}', '{"scores": [86, 89, 84], "hobbies": ["yoga", "dancing"]}'),
+(9, '{"name": "Richard", "age": 33, "address": {"city": "Austin", "district": "Downtown"}}', '{"scores": [91, 87, 93], "hobbies": ["hiking", "cycling"]}'),
+(10, '{"name": "Lisa", "age": 26, "address": {"city": "Chicago", "district": "River North"}}', '{"scores": [83, 81, 89], "hobbies": ["gaming", "reading"]}');
+
+query TTT
+show virtual columns from test_stream;
+----
+test_virtual_column test_stream data1 3000000000 ['address']['city'] String
+test_virtual_column test_stream data1 3000000001 ['address']['district'] String
+test_virtual_column test_stream data1 3000000002 ['age'] UInt64
+test_virtual_column test_stream data1 3000000003 ['name'] String
+test_virtual_column test_stream data2 3000000004 ['hobbies'][0] String
+test_virtual_column test_stream data2 3000000005 ['hobbies'][1] String
+test_virtual_column test_stream data2 3000000006 ['scores'][0] UInt64
+test_virtual_column test_stream data2 3000000007 ['scores'][1] UInt64
+test_virtual_column test_stream data2 3000000008 ['scores'][2] UInt64
+
+query ITTTTT
+SELECT 
+    id,
+    data1:name AS name,
+    data1:age AS age,
+    data1:address:city AS city,
+    data2:hobbies[0] AS first_hobby,
+    data2:hobbies[1] AS second_hobby
+FROM test_stream;
+----
+1 "John" 25 "New York" "reading" "swimming"
+2 "Alice" 30 "San Francisco" "basketball" "music"
+3 "Bob" 28 "Chicago" "travel" "photography"
+4 "Emma" 22 "New York" "coding" "movies"
+5 "Michael" 35 "Seattle" "golf" "cooking"
+6 "Sarah" 27 "Boston" "fishing" "painting"
+7 "David" 31 "New York" "soccer" "chess"
+8 "Jennifer" 29 "San Francisco" "yoga" "dancing"
+9 "Richard" 33 "Austin" "hiking" "cycling"
+10 "Lisa" 26 "Chicago" "gaming" "reading"
+
+statement ok
+set enable_block_stream_write = 0
 
 statement ok
 set enable_experimental_virtual_column = 0;

@@ -256,6 +256,8 @@ pub struct QueryConfig {
 
     pub settings: HashMap<String, UserSettingValue>,
     pub resources_management: Option<ResourcesManagementConfig>,
+
+    pub enable_queries_executor: bool,
 }
 
 impl Default for QueryConfig {
@@ -281,7 +283,7 @@ impl Default for QueryConfig {
             http_handler_host: "127.0.0.1".to_string(),
             http_handler_port: 8000,
             http_handler_result_timeout_secs: 60,
-            http_session_timeout_secs: 3600,
+            http_session_timeout_secs: 14400,
             flight_api_address: "127.0.0.1:9090".to_string(),
             flight_sql_handler_host: "127.0.0.1".to_string(),
             flight_sql_handler_port: 8900,
@@ -343,6 +345,7 @@ impl Default for QueryConfig {
             network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
             resources_management: None,
+            enable_queries_executor: false,
         }
     }
 }
@@ -613,6 +616,15 @@ pub struct CacheConfig {
     /// Max percentage of in memory inverted index filters cache relative to whole memory. By default it is 0 (disabled).
     pub inverted_index_filter_memory_ratio: u64,
 
+    /// Max number of cached vector index meta objects. Set it to 0 to disable it.
+    pub vector_index_meta_count: u64,
+
+    /// Max bytes of cached vector index filters used. Set it to 0 to disable it.
+    pub vector_index_filter_size: u64,
+
+    /// Max percentage of in memory vector index filters cache relative to whole memory. By default it is 0 (disabled).
+    pub vector_index_filter_memory_ratio: u64,
+
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -746,6 +758,9 @@ impl Default for CacheConfig {
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
+            vector_index_meta_count: 3000,
+            vector_index_filter_size: 2147483648,
+            vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 0,

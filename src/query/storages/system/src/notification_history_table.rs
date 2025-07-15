@@ -31,7 +31,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
-use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -40,11 +39,9 @@ use databend_common_sql::plans::notification_history_schema;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_filter;
+use crate::util::extract_leveled_strings;
 
-fn parse_history_to_block(
-    histories: Vec<NotificationHistory>,
-) -> databend_common_exception::Result<DataBlock> {
+fn parse_history_to_block(histories: Vec<NotificationHistory>) -> Result<DataBlock> {
     let mut created_on: Vec<i64> = Vec::with_capacity(histories.len());
     let mut processed: Vec<Option<i64>> = Vec::with_capacity(histories.len());
     let mut message_source: Vec<String> = Vec::with_capacity(histories.len());
@@ -112,14 +109,13 @@ impl AsyncSystemTable for NotificationHistoryTable {
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_filter(&expr, &mut |col_name, scalar| {
-                    if col_name == "integration_name" {
-                        if let Scalar::String(s) = scalar {
-                            notification_name = Some(s.clone());
-                        }
-                    }
-                    Ok(())
-                });
+                let func_ctx = ctx.get_function_context()?;
+                let (name, _) = extract_leveled_strings(&expr, &["integration_name"], &func_ctx)?;
+                // find_filters will collect integration_name = xx or integration_name = yy.
+                // So if name.len() != 1 integration_name should be None.
+                if name.len() == 1 {
+                    notification_name = Some(name[0].clone())
+                };
             }
         }
 

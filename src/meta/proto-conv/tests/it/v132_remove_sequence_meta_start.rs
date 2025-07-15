@@ -33,6 +33,7 @@ fn test_decode_v132_remove_sequence_meta_step() -> anyhow::Result<()> {
         comment: Some("seq".to_string()),
         step: 5,
         current: 10,
+        storage_version: 0,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), sequence_meta_v132.as_slice(), 132, want())?;

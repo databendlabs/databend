@@ -163,6 +163,10 @@ impl MemStat {
         }
     }
 
+    pub fn get_limit(&self) -> i64 {
+        self.memory_limit.limit.load(Ordering::Relaxed)
+    }
+
     /// Feed memory usage stat to MemStat and return if it exceeds the limit.
     ///
     /// It feeds `state` to the this tracker and all of its ancestors, including GLOBAL_TRACKER.

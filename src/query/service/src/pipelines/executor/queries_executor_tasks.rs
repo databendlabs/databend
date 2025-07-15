@@ -49,6 +49,15 @@ impl WorkersTasks {
     pub fn swap_tasks(&mut self) {
         mem::swap(&mut self.current_tasks, &mut self.next_tasks);
     }
+
+    pub fn wakeup_all_waiting_workers(&mut self, condvar: &WorkersCondvar) {
+        for worker_id in 0..self.workers_waiting_status.total_size() {
+            if self.workers_waiting_status.is_waiting(worker_id) {
+                self.workers_waiting_status.wakeup_worker(worker_id);
+                condvar.wakeup(worker_id);
+            }
+        }
+    }
 }
 
 pub struct QueriesExecutorTasksQueue {
@@ -163,19 +172,18 @@ impl QueriesExecutorTasksQueue {
             workers_tasks
                 .next_tasks
                 .push_task(worker_id, ExecutorTask::Sync(proc));
-
             worker_id += 1;
+
             if worker_id == workers_tasks.next_tasks.workers_sync_tasks.len() {
                 worker_id = 0;
             }
-
-            if workers_tasks.workers_waiting_status.is_waiting(worker_id) {
-                workers_tasks
-                    .workers_waiting_status
-                    .wakeup_worker(worker_id);
-                condvar.wakeup(worker_id);
-            }
         }
+
+        // Wake up all workers that is waiting
+        // Only check one worker and wake it up is not enough,
+        // in queries executor, this worker may be blocked and wait for a result
+        // e.g. TransformRecursiveCteSource
+        workers_tasks.wakeup_all_waiting_workers(&condvar);
     }
 
     pub fn init_async_tasks(
@@ -190,19 +198,13 @@ impl QueriesExecutorTasksQueue {
             workers_tasks
                 .next_tasks
                 .push_task(worker_id, ExecutorTask::Async(proc));
-
             worker_id += 1;
             if worker_id == workers_tasks.next_tasks.workers_sync_tasks.len() {
                 worker_id = 0;
             }
-
-            if workers_tasks.workers_waiting_status.is_waiting(worker_id) {
-                workers_tasks
-                    .workers_waiting_status
-                    .wakeup_worker(worker_id);
-                condvar.wakeup(worker_id);
-            }
         }
+
+        workers_tasks.wakeup_all_waiting_workers(&condvar);
     }
 
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {

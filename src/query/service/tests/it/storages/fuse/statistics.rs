@@ -321,7 +321,12 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
-        let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
+        let block_writer = BlockWriter::new(
+            &operator,
+            &loc_generator,
+            TestFixture::default_table_meta_timestamps(),
+            true,
+        );
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
@@ -627,6 +632,8 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             location.clone(),
             None,
             bloom_filter_index_size,
+            None,
+            None,
             None,
             None,
             None,

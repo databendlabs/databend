@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ComputedExpr;
@@ -99,8 +100,13 @@ pub async fn do_refresh_virtual_column(
         fields,
         ..fuse_table.schema().as_ref().clone()
     });
-    let virtual_column_builder =
-        VirtualColumnBuilder::try_create(ctx.clone(), fuse_table, source_schema)?;
+
+    if !fuse_table.support_virtual_columns() {
+        return Err(ErrorCode::VirtualColumnError(
+            "table don't support virtual column".to_string(),
+        ));
+    }
+    let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 
     let projection = Projection::Columns(field_indices);
     let block_reader =
@@ -299,11 +305,10 @@ impl AsyncTransform for VirtualColumnTransform {
             .and_then(BlockMeta::downcast_ref_from)
             .unwrap();
 
-        let virtual_column_state = self.virtual_column_builder.add_block(
-            &data_block,
-            &self.write_settings,
-            &block_meta.location,
-        )?;
+        self.virtual_column_builder.add_block(&data_block)?;
+        let virtual_column_state = self
+            .virtual_column_builder
+            .finalize(&self.write_settings, &block_meta.location)?;
 
         if virtual_column_state
             .draft_virtual_block_meta

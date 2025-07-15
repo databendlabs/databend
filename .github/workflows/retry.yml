@@ -5,6 +5,8 @@ on:
     workflows:
       - Dev
       - Main
+      - Cloud
+      - Release
     types:
       - completed
 

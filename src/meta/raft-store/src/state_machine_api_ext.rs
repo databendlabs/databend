@@ -73,11 +73,12 @@ pub trait StateMachineApiExt: StateMachineApi {
         };
 
         let expire_ms = kv_meta.expires_at_ms();
-        if expire_ms < self.get_expire_cursor().time_ms {
+        let curr_time_ms = cmd_ctx.time().millis();
+        if expire_ms < curr_time_ms {
             warn!(
-                "upsert_kv_primary_index: expired key inserted: {} < expire-cursor: {}; key: {}",
+                "upsert_kv_primary_index: expired key inserted: {} < timestamp in log entry: {}; key: {}",
                 Duration::from_millis(expire_ms).display_unix_timestamp_short(),
-                Duration::from_millis(self.get_expire_cursor().time_ms)
+                Duration::from_millis(curr_time_ms)
                     .display_unix_timestamp_short(),
                 upsert_kv.key
             );
@@ -177,40 +178,19 @@ pub trait StateMachineApiExt: StateMachineApi {
         &self,
         curr_time_ms: u64,
     ) -> Result<IOResultStream<(ExpireKey, String)>, io::Error> {
-        let start = self.get_expire_cursor();
-
         // curr_time > expire_at => expired
         let end = ExpireKey::new(curr_time_ms, 0);
 
-        // There is chance the raft leader produce smaller timestamp for later logs.
-        if start >= end {
-            return Ok(futures::stream::empty().boxed());
-        }
+        let strm = self.map_ref().expire_map().range(..end).await?;
 
-        let strm = self.map_ref().expire_map().range(start..end).await?;
-
-        let strm =
-            add_cooperative_yielding(strm, format!("list_expire_index since {start} to {end}"))
-                // Return only non-deleted records
-                .try_filter_map(|(k, marked)| {
-                    let expire_entry = marked.unpack().map(|(v, _v_meta)| (k, v));
-                    future::ready(Ok(expire_entry))
-                });
+        let strm = add_cooperative_yielding(strm, format!("list_expire_index up to {end}"))
+            // Return only non-deleted records
+            .try_filter_map(|(k, marked)| {
+                let expire_entry = marked.unpack().map(|(v, _v_meta)| (k, v));
+                future::ready(Ok(expire_entry))
+            });
 
         Ok(strm.boxed())
-    }
-
-    fn update_expire_cursor(&mut self, log_time_ms: u64) {
-        if log_time_ms < self.get_expire_cursor().time_ms {
-            warn!(
-                "update_last_cleaned: log_time_ms {} < last_cleaned_expire.time_ms {}",
-                log_time_ms,
-                self.get_expire_cursor().time_ms
-            );
-            return;
-        }
-
-        self.set_expire_cursor(ExpireKey::new(log_time_ms, 0));
     }
 
     /// Get a cloned value by key.

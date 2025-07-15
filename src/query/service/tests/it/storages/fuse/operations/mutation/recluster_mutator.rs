@@ -52,6 +52,7 @@ use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::verify_compact_tasks;
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
+use crate::storages::fuse::utils::new_empty_snapshot;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_block_select() -> Result<()> {
@@ -78,6 +79,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             None,
             None,
             None,
+            None,
+            None,
             meta::Compression::Lz4Raw,
             Some(Utc::now()),
         ));
@@ -89,8 +92,8 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        let segment_location =
-            location_generator.gen_segment_info_location(Default::default(), false);
+        let segment_location = location_generator
+            .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
         segment
             .write_meta(&data_accessor, &segment_location)
             .await?;
@@ -133,7 +136,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     test_segment_locations.push(segment_location);
     test_block_locations.push(block_location);
     // unused snapshot.
-    let snapshot = TableSnapshot::new_empty_snapshot(schema.as_ref().clone(), None);
+    let snapshot = new_empty_snapshot(schema.as_ref().clone(), None);
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
@@ -248,7 +251,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             summary,
             locations.clone(),
             None,
-            Default::default(),
+            TestFixture::default_table_meta_timestamps(),
         )?);
 
         let mut block_ids = HashSet::new();

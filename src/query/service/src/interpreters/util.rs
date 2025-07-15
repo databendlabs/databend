@@ -18,6 +18,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataBlock;
@@ -25,6 +26,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_script::ir::ColumnAccess;
 use databend_common_script::Client;
 use databend_common_sql::Planner;
@@ -33,6 +35,18 @@ use itertools::Itertools;
 
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
+
+pub fn check_system_history(
+    catalog: &Arc<dyn Catalog>,
+    db_name: &str,
+) -> databend_common_exception::Result<()> {
+    if !catalog.is_external() && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE) {
+        return Err(ErrorCode::IllegalGrant(
+            "Can not modify system_history ownership",
+        ));
+    }
+    Ok(())
+}
 
 #[allow(clippy::type_complexity)]
 pub fn generate_desc_schema(

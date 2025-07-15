@@ -111,15 +111,15 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
         //
         (
             s("a"),
-            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expire(15)))
+            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expires_at(15)))
         ),
         (
             s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expire(5)))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expires_at(5)))
         ),
         (
             s("c"),
-            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expire(20)))
+            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expires_at(20)))
         ),
     ]);
 
@@ -156,8 +156,12 @@ async fn test_compact() -> anyhow::Result<()> {
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-compacted");
-    compact(&mut lm, path.as_os_str().to_str().unwrap()).await?;
+    compact(
+        &mut lm,
+        path.as_os_str().to_str().unwrap(),
+        "temp-compacted",
+    )
+    .await?;
 
     let db = lm.persisted().unwrap();
 
@@ -208,8 +212,12 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-compacted");
-    compact(&mut lm, path.as_os_str().to_str().unwrap()).await?;
+    compact(
+        &mut lm,
+        path.as_os_str().to_str().unwrap(),
+        "temp-compacted",
+    )
+    .await?;
 
     let db = lm.persisted().unwrap();
 
@@ -231,15 +239,15 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             s("a"),
-            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expire(15)))
+            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expires_at(15)))
         ),
         (
             s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expire(5)))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expires_at(5)))
         ),
         (
             s("c"),
-            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expire(20)))
+            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expires_at(20)))
         ),
     ]);
 
@@ -359,8 +367,7 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     // Move the bottom level to db
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-db");
-    move_bottom_to_db(&mut lm, path.to_str().unwrap()).await?;
+    move_bottom_to_db(&mut lm, path.to_str().unwrap(), "temp-db").await?;
 
     Ok((lm, temp_dir))
 }
@@ -393,13 +400,16 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-db");
-    move_bottom_to_db(lm, path.to_str().unwrap()).await?;
+    move_bottom_to_db(lm, path.to_str().unwrap(), "temp-db").await?;
     Ok((sm, temp_dir))
 }
 
 /// Build a DB from the bottom level of the immutable levels.
-async fn move_bottom_to_db(lm: &mut LeveledMap, path: &str) -> Result<(), io::Error> {
+async fn move_bottom_to_db(
+    lm: &mut LeveledMap,
+    base_path: &str,
+    rel_path: &str,
+) -> Result<(), io::Error> {
     let mut immutables = lm.immutable_levels_ref().clone();
     let bottom = immutables.levels().remove(0);
     lm.replace_immutable_levels(immutables);
@@ -408,14 +418,14 @@ async fn move_bottom_to_db(lm: &mut LeveledMap, path: &str) -> Result<(), io::Er
     let mut lm2 = LeveledMap::default();
     lm2.replace_immutable_levels(bottom);
 
-    compact(&mut lm2, path).await?;
+    compact(&mut lm2, base_path, rel_path).await?;
 
     *lm.persisted_mut() = lm2.persisted_mut().clone();
     Ok(())
 }
 
-async fn compact(lm: &mut LeveledMap, path: &str) -> Result<(), io::Error> {
-    let db_builder = DBBuilder::new_with_default_config(path)?;
+async fn compact(lm: &mut LeveledMap, base_path: &str, rel_path: &str) -> Result<(), io::Error> {
+    let db_builder = DBBuilder::new(base_path, rel_path, rotbl::v001::Config::default())?;
 
     let db = db_builder
         .build_from_leveled_map(lm, |_sys_data| "1-1-1-1.snap".to_string())

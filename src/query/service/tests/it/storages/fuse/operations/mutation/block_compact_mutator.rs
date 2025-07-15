@@ -232,7 +232,7 @@ async fn test_safety() -> Result<()> {
             summary,
             locations.clone(),
             None,
-            Default::default(),
+            TestFixture::default_table_meta_timestamps(),
         )?;
 
         let limit: usize = rand.gen_range(1..15);

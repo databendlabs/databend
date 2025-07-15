@@ -15,6 +15,24 @@ abcd[
 abcde
 
 query T
+explain select * from t1 where s like '%';
+----
+Filter
+├── output columns: [t1.s (#0)]
+├── filters: [is_not_null(t1.s (#0))]
+├── estimated rows: 5.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [s (#0)]
+    ├── read rows: 5
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [is_not_null(t1.s (#0))], limit: NONE]
+    └── estimated rows: 5.00
+
+query T
 explain select * from t1 where s like 'abcd%' order by s;
 ----
 Sort
@@ -161,3 +179,27 @@ Filter
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true(like_any(t1.s (#0), '%b$%c%', '$'))], limit: NONE]
     └── estimated rows: 5.00
+
+
+statement ok
+create or replace table t1 (c varchar not null, c3 variant not null, c5 int);
+
+statement ok
+insert into t1 values('c',parse_json('[1,2,3,["a","b","c"],{"k":"v"}]'), 1),('c1',parse_json('[1,2,3,["a","b","c"],{"k":"v1"}]'), 2)
+
+query T
+explain select c from t1 where c like '%'
+----
+TableScan
+├── table: default.default.t1
+├── output columns: [c (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 2.00
+
+statement ok
+drop table if exists t1;

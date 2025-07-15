@@ -16,69 +16,101 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use ndarray::ArrayView;
 
-pub fn cosine_distance(from: &[f32], to: &[f32]) -> Result<f32> {
-    if from.len() != to.len() {
+pub fn cosine_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
+    if lhs.len() != rhs.len() {
         return Err(ErrorCode::InvalidArgument(format!(
             "Vector length not equal: {:} != {:}",
-            from.len(),
-            to.len(),
+            lhs.len(),
+            rhs.len(),
         )));
     }
 
-    let a = ArrayView::from(from);
-    let b = ArrayView::from(to);
+    let a = ArrayView::from(lhs);
+    let b = ArrayView::from(rhs);
     let aa_sum = (&a * &a).sum();
     let bb_sum = (&b * &b).sum();
 
     Ok(1.0 - (&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
 }
 
-pub fn l2_distance(from: &[f32], to: &[f32]) -> Result<f32> {
-    if from.len() != to.len() {
+pub fn l1_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
+    if lhs.len() != rhs.len() {
         return Err(ErrorCode::InvalidArgument(format!(
             "Vector length not equal: {:} != {:}",
-            from.len(),
-            to.len(),
+            lhs.len(),
+            rhs.len(),
         )));
     }
 
-    Ok(from
+    Ok(lhs
         .iter()
-        .zip(to.iter())
+        .zip(rhs.iter())
+        .map(|(a, b)| (a - b).abs())
+        .sum::<f32>())
+}
+
+pub fn l2_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
+    if lhs.len() != rhs.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            lhs.len(),
+            rhs.len(),
+        )));
+    }
+
+    Ok(lhs
+        .iter()
+        .zip(rhs.iter())
         .map(|(a, b)| (a - b).powi(2))
         .sum::<f32>()
         .sqrt())
 }
 
-pub fn cosine_distance_64(from: &[f64], to: &[f64]) -> Result<f64> {
-    if from.len() != to.len() {
+pub fn cosine_distance_64(lhs: &[f64], rhs: &[f64]) -> Result<f64> {
+    if lhs.len() != rhs.len() {
         return Err(ErrorCode::InvalidArgument(format!(
             "Vector length not equal: {:} != {:}",
-            from.len(),
-            to.len(),
+            lhs.len(),
+            rhs.len(),
         )));
     }
 
-    let a = ArrayView::from(from);
-    let b = ArrayView::from(to);
+    let a = ArrayView::from(lhs);
+    let b = ArrayView::from(rhs);
     let aa_sum = (&a * &a).sum();
     let bb_sum = (&b * &b).sum();
 
     Ok(1.0 - (&a * &b).sum() / ((aa_sum).sqrt() * (bb_sum).sqrt()))
 }
 
-pub fn l2_distance_64(from: &[f64], to: &[f64]) -> Result<f64> {
-    if from.len() != to.len() {
+pub fn l1_distance_64(lhs: &[f64], rhs: &[f64]) -> Result<f64> {
+    if lhs.len() != rhs.len() {
         return Err(ErrorCode::InvalidArgument(format!(
             "Vector length not equal: {:} != {:}",
-            from.len(),
-            to.len(),
+            lhs.len(),
+            rhs.len(),
         )));
     }
 
-    Ok(from
+    Ok(lhs
         .iter()
-        .zip(to.iter())
+        .zip(rhs.iter())
+        .map(|(a, b)| (a - b).abs())
+        .sum::<f64>())
+}
+
+pub fn l2_distance_64(lhs: &[f64], rhs: &[f64]) -> Result<f64> {
+    if lhs.len() != rhs.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            lhs.len(),
+            rhs.len(),
+        )));
+    }
+
+    Ok(lhs
+        .iter()
+        .zip(rhs.iter())
         .map(|(a, b)| (a - b).powi(2))
         .sum::<f64>()
         .sqrt())

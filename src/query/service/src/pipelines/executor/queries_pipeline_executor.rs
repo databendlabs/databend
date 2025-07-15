@@ -109,7 +109,7 @@ impl QueriesPipelineExecutor {
         for thread_num in 0..threads {
             let this = self.clone();
             #[allow(unused_mut)]
-            let mut name = format!("PipelineExecutor-{}", thread_num);
+            let mut name = format!("QueriesPipelineExecutor-{}", thread_num);
 
             #[cfg(debug_assertions)]
             {

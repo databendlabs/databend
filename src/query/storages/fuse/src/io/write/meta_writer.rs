@@ -97,10 +97,11 @@ impl Marshal for TableSnapshotStatistics {
 
 #[cfg(test)]
 mod tests {
-
+    use chrono::Duration;
     use databend_common_base::runtime::catch_unwind;
     use databend_common_expression::TableSchema;
     use databend_storages_common_table_meta::meta::Statistics;
+    use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
     use super::*;
 
@@ -133,7 +134,8 @@ mod tests {
                     Statistics::default(),
                     vec![],
                     None,
-                    Default::default(),
+                    // Dummy timestamps for test
+                    TableMetaTimestamps::new(None, Duration::hours(1)),
                 )
                 .unwrap();
                 snapshot.format_version = v;
@@ -150,7 +152,8 @@ mod tests {
             Statistics::default(),
             vec![],
             None,
-            Default::default(),
+            // Dummy timestamps for test
+            TableMetaTimestamps::new(None, Duration::hours(1)),
         )
         .unwrap();
         snapshot.marshal().unwrap();

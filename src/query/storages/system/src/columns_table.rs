@@ -19,6 +19,7 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -28,7 +29,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
@@ -50,7 +51,7 @@ use log::warn;
 use crate::generate_catalog_meta;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
-use crate::util::find_eq_or_filter;
+use crate::util::extract_leveled_strings;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -272,10 +273,7 @@ impl ColumnsTable {
                     _ => {
                         let schema = table.schema();
                         let field_comments = table.field_comments();
-                        let columns_statistics =
-                            table.column_statistics_provider(ctx.clone()).await?;
 
-                        let row_count = columns_statistics.num_rows();
                         for (idx, field) in schema.fields().iter().enumerate() {
                             let comment = if field_comments.len() == schema.fields.len()
                                 && !field_comments[idx].is_empty()
@@ -286,6 +284,33 @@ impl ColumnsTable {
                                 "".to_string()
                             };
 
+                            // attach table should not collect statistics, source table column already collect them.
+                            let columns_statistics = if ctx
+                                .get_settings()
+                                .get_enable_collect_column_statistics()?
+                                && !FuseTable::is_table_attached(
+                                    &table.get_table_info().meta.options,
+                                ) {
+                                table
+                                    .column_statistics_provider(ctx.clone())
+                                    .await
+                                    .unwrap_or_else(|e| {
+                                        let msg = format!(
+                                            "Collect {}.{}.{} column statistics with error: {}",
+                                            catalog.name(),
+                                            database,
+                                            table.name(),
+                                            e
+                                        );
+                                        warn!("{}", msg);
+                                        ctx.push_warning(msg);
+                                        Box::new(DummyColumnStatisticsProvider)
+                                    })
+                            } else {
+                                Box::new(DummyColumnStatisticsProvider)
+                            };
+
+                            let row_count = columns_statistics.num_rows();
                             let column_statistics =
                                 columns_statistics.column_statistics(field.column_id);
                             rows.push(TableColumnInfo {
@@ -319,42 +344,15 @@ pub(crate) async fn dump_tables(
     // - for read-only attached tables, the data may be outdated
     let catalog = catalog.clone().disable_table_info_refresh()?;
 
-    let mut filtered_db_names: Option<Vec<String>> = None;
-    let mut filtered_table_names: Option<Vec<String>> = None;
-    let mut invalid_optimize = false;
+    let mut filtered_db_names = vec![];
+    let mut filtered_table_names = vec![];
+    let func_ctx = ctx.get_function_context()?;
 
     if let Some(push_downs) = push_downs {
         if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            let mut databases: Vec<String> = Vec::new();
-            let mut tables: Vec<String> = Vec::new();
-
-            invalid_optimize = find_eq_or_filter(
-                &expr,
-                &mut |col_name, scalar| {
-                    if col_name == "database" {
-                        if let Scalar::String(database) = scalar {
-                            if !databases.contains(database) {
-                                databases.push(database.clone());
-                            }
-                        }
-                    } else if col_name == "table" {
-                        if let Scalar::String(table) = scalar {
-                            if !tables.contains(table) {
-                                tables.push(table.clone());
-                            }
-                        }
-                    }
-                    Ok(())
-                },
-                invalid_optimize,
-            );
-            if !databases.is_empty() {
-                filtered_db_names = Some(databases);
-            }
-            if !tables.is_empty() {
-                filtered_table_names = Some(tables);
-            }
+            (filtered_db_names, filtered_table_names) =
+                extract_leveled_strings(&expr, &["database", "table"], &func_ctx)?;
         }
     }
 
@@ -366,10 +364,17 @@ pub(crate) async fn dump_tables(
 
     let mut final_dbs: Vec<Arc<dyn Database>> = Vec::new();
 
-    if invalid_optimize {
-        filtered_db_names = None;
-        filtered_table_names = None;
-    }
+    let filtered_db_names = if filtered_db_names.is_empty() {
+        None
+    } else {
+        Some(filtered_db_names)
+    };
+
+    let filtered_table_names = if filtered_table_names.is_empty() {
+        None
+    } else {
+        Some(filtered_table_names)
+    };
 
     match (filtered_db_names, &visibility_checker) {
         (Some(db_names), Some(checker)) => {

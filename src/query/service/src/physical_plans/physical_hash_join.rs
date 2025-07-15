@@ -367,7 +367,7 @@ impl HashJoin {
             builder.func_ctx.clone(),
             state.clone(),
             &self.probe_projections,
-            &self.build_projections
+            &self.build_projections,
             &self.probe_keys,
             self.probe.output_schema()?,
             &self.join_type,

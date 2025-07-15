@@ -302,8 +302,8 @@ impl PhysicalPlanBuilder {
 
         Ok(Box::new(UnionAll {
             meta: PhysicalPlanMeta::new("UnionAll"),
-            left: Box::new(left_plan),
-            right: Box::new(right_plan),
+            left: left_plan,
+            right: right_plan,
             left_outputs,
             right_outputs,
             schema: DataSchemaRefExt::create(fields),

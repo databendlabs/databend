@@ -23,7 +23,6 @@ mod key_parser;
 mod message;
 mod pair;
 mod prefix;
-mod test_suite;
 mod value;
 mod value_with_name;
 
@@ -52,6 +51,5 @@ pub use pair::BasicPair;
 pub use pair::Pair;
 pub use pair::SeqPair;
 pub use prefix::prefix_to_range;
-pub use test_suite::TestSuite;
 pub use value::Value;
 pub use value_with_name::ValueWithName;

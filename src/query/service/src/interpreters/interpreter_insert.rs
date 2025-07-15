@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
@@ -31,6 +32,7 @@ use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::NameResolutionContext;
 use databend_common_storages_stage::build_streaming_load_pipeline;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -120,7 +122,9 @@ impl Interpreter for InsertInterpreter {
             self.ctx
                 .get_table_meta_timestamps(table.as_ref(), snapshot)?
         } else {
-            Default::default()
+            // For non-fuse table, the table meta timestamps does not matter,
+            // just passes a placeholder value here
+            TableMetaTimestamps::new(None, Duration::hours(1))
         };
 
         let mut build_res = PipelineBuildResult::create();
@@ -262,7 +266,6 @@ impl Interpreter for InsertInterpreter {
                     plan.required_source_schema.clone(),
                     plan.default_exprs.clone(),
                     plan.block_thresholds,
-                    plan.on_error_mode.clone(),
                 )?;
                 if !plan.values_consts.is_empty() {
                     let input_schema = Arc::new(DataSchema::from(&plan.required_source_schema));

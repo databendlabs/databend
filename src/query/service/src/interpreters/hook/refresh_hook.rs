@@ -83,6 +83,8 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
         .await?;
     let table_id = table.get_id();
 
+    ctx.clear_table_meta_timestamps_cache();
+
     let mut plans = Vec::new();
 
     // Generate sync aggregating indexes.
