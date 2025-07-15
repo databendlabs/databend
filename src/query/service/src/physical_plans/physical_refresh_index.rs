@@ -23,7 +23,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::ColumnBinding;
 
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

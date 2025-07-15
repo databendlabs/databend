@@ -238,7 +238,6 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
                         desc.human_format(prof.statistics[desc.index])
                     )));
                 }
-                break;
             }
 
             children.append(&mut format_tree_node.children);

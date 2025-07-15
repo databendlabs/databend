@@ -44,7 +44,6 @@ use databend_common_sql::DerivedColumn;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
 
-use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 

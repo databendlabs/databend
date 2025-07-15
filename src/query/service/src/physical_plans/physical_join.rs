@@ -23,7 +23,6 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::ScalarExpr;
 
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 

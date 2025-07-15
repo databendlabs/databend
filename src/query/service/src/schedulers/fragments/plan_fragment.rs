@@ -33,6 +33,7 @@ use crate::physical_plans::CompactSource;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;

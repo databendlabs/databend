@@ -31,7 +31,7 @@ use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::physical_plans::CommitSink;
 use databend_query::physical_plans::CommitType;
 use databend_query::physical_plans::CompactSource;
-use databend_query::physical_plans::IPhysicalPlan;
+use databend_query::physical_plans::PhysicalPlan;
 use databend_query::physical_plans::PhysicalPlanMeta;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
