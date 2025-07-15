@@ -139,6 +139,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::MaterializedCteData;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
@@ -583,6 +584,32 @@ impl QueryContext {
 
     pub fn clear_table_meta_timestamps_cache(&self) {
         self.shared.table_meta_timestamps.lock().clear();
+    }
+
+    pub fn get_materialized_cte_sender(
+        &self,
+        cte_name: &str,
+    ) -> tokio::sync::watch::Sender<Arc<MaterializedCteData>> {
+        self.shared
+            .materialized_cte_channels
+            .lock()
+            .entry(cte_name.to_string())
+            .or_default()
+            .sender
+            .clone()
+    }
+
+    pub fn get_materialized_cte_receiver(
+        &self,
+        cte_name: &str,
+    ) -> tokio::sync::watch::Receiver<Arc<MaterializedCteData>> {
+        self.shared
+            .materialized_cte_channels
+            .lock()
+            .entry(cte_name.to_string())
+            .or_default()
+            .receiver
+            .clone()
     }
 }
 

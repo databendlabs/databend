@@ -1,13 +1,3 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::sync::Mutex;
-
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,10 +11,23 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::Sink;
 use databend_common_pipeline_sinks::Sinker;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_storages_fuse::TableContext;
+use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
 use tokio::sync::watch::Sender;
 
@@ -33,32 +36,17 @@ pub struct MaterializedCteSink {
     blocks: Vec<DataBlock>,
 }
 
-#[derive(Default)]
 pub struct MaterializedCteData {
     blocks: Vec<DataBlock>,
-    // consumer_id -> current_index
-    consumer_states: Arc<Mutex<HashMap<usize, usize>>>,
 }
 
 impl MaterializedCteData {
     pub fn new(blocks: Vec<DataBlock>) -> Self {
-        Self {
-            blocks,
-            consumer_states: Arc::new(Mutex::new(HashMap::new())),
-        }
+        Self { blocks }
     }
 
-    pub fn get_next_block(&self, consumer_id: usize) -> Option<DataBlock> {
-        let mut states = self.consumer_states.lock().unwrap();
-        let current_index = states.get(&consumer_id).copied().unwrap_or(0);
-
-        if current_index < self.blocks.len() {
-            let block = self.blocks[current_index].clone();
-            states.insert(consumer_id, current_index + 1);
-            Some(block)
-        } else {
-            None
-        }
+    pub fn get_data_block_at(&self, index: usize) -> Option<DataBlock> {
+        self.blocks.get(index).cloned()
     }
 }
 
@@ -84,7 +72,9 @@ impl Sink for MaterializedCteSink {
 
     fn on_finish(&mut self) -> Result<()> {
         self.sender
-            .send(Arc::new(MaterializedCteData::new(self.blocks.clone())))
+            .send(Arc::new(MaterializedCteData::new(std::mem::take(
+                &mut self.blocks,
+            ))))
             .map_err(|_| {
                 ErrorCode::Internal("Failed to send blocks to materialized cte consumer")
             })?;
@@ -95,20 +85,19 @@ impl Sink for MaterializedCteSink {
 pub struct CTESource {
     receiver: Receiver<Arc<MaterializedCteData>>,
     data: Option<Arc<MaterializedCteData>>,
-    consumer_id: usize,
+    next_block_id: Arc<AtomicUsize>,
 }
 
 impl CTESource {
     pub fn create(
-        ctx: Arc<dyn databend_common_catalog::table_context::TableContext>,
+        ctx: Arc<dyn TableContext>,
         output_port: Arc<OutputPort>,
         receiver: Receiver<Arc<MaterializedCteData>>,
-        consumer_id: usize,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
             receiver,
             data: None,
-            consumer_id,
+            next_block_id: Arc::new(AtomicUsize::new(0)),
         })
     }
 }
@@ -127,10 +116,29 @@ impl AsyncSource for CTESource {
         }
 
         if let Some(data) = &self.data {
-            if let Some(block) = data.get_next_block(self.consumer_id) {
+            let id = self.next_block_id.fetch_add(1, Ordering::Relaxed);
+            if let Some(block) = data.get_data_block_at(id) {
                 return Ok(Some(block));
             }
         }
         Ok(None)
+    }
+}
+
+pub struct MaterializedCteChannel {
+    pub sender: Sender<Arc<MaterializedCteData>>,
+    pub receiver: Receiver<Arc<MaterializedCteData>>,
+}
+
+impl MaterializedCteChannel {
+    pub fn new() -> Self {
+        let (sender, receiver) = watch::channel(Arc::new(MaterializedCteData::new(vec![])));
+        Self { sender, receiver }
+    }
+}
+
+impl Default for MaterializedCteChannel {
+    fn default() -> Self {
+        Self::new()
     }
 }

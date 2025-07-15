@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CTEConsumer;
 use databend_common_storages_fuse::TableContext;
@@ -22,32 +21,10 @@ use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
     pub(crate) fn build_cte_consumer(&mut self, cte: &CTEConsumer) -> Result<()> {
-        let receiver = self
-            .cte_receivers
-            .get(&cte.cte_name)
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!("CTE receiver not found for name: {}", cte.cte_name))
-            })?
-            .clone();
-
-        let mut next_cte_consumer_id = self.next_cte_consumer_id.lock();
-        let current_consumer_id = *next_cte_consumer_id.get(&cte.cte_name).ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "CTE consumer id not found for name: {}",
-                cte.cte_name
-            ))
-        })?;
-
-        next_cte_consumer_id.insert(cte.cte_name.clone(), current_consumer_id + 1);
-
+        let receiver = self.ctx.get_materialized_cte_receiver(&cte.cte_name);
         self.main_pipeline.add_source(
             |output_port| {
-                CTESource::create(
-                    self.ctx.clone(),
-                    output_port.clone(),
-                    receiver.clone(),
-                    current_consumer_id,
-                )
+                CTESource::create(self.ctx.clone(), output_port.clone(), receiver.clone())
             },
             self.ctx.get_settings().get_max_threads()? as usize,
         )?;
