@@ -19,9 +19,9 @@ use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
 use pretty_assertions::assert_eq;
+use seq_marked::SeqMarked;
 
 use crate::leveled_store::map_api::AsMap;
-use crate::marked::SeqMarked;
 use crate::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
 use crate::state_machine_api::StateMachineApi;
