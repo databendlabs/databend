@@ -49,6 +49,7 @@ use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
+use databend_common_storages_system::PrivateTaskHistoryTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::QueryCacheTable;
@@ -153,8 +154,6 @@ impl SystemDatabase {
                 IndexesTable::create(sys_db_meta.next_table_id()),
                 BacktraceTable::create(sys_db_meta.next_table_id()),
                 TempFilesTable::create(sys_db_meta.next_table_id()),
-                TasksTable::create(sys_db_meta.next_table_id()),
-                TaskHistoryTable::create(sys_db_meta.next_table_id()),
                 LocksTable::create(sys_db_meta.next_table_id(), ctl_name),
                 NotificationsTable::create(sys_db_meta.next_table_id()),
                 NotificationHistoryTable::create(sys_db_meta.next_table_id()),
@@ -166,6 +165,12 @@ impl SystemDatabase {
                     config.query.max_query_log_size,
                 )),
             ]);
+            if config.task.on {
+                table_list.push(PrivateTaskHistoryTable::create(sys_db_meta.next_table_id()));
+            } else {
+                table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
+                table_list.push(TaskHistoryTable::create(sys_db_meta.next_table_id()));
+            }
             disable_system_table_load = config.query.disable_system_table_load;
         } else {
             disable_system_table_load = false;

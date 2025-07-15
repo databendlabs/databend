@@ -255,11 +255,11 @@ impl TaskMgr {
     /// mark the corresponding execute task as accepted and delete it from the queue
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn accept(&self, key: &TaskMessageIdent) -> Result<(), MetaError> {
+    pub async fn accept(&self, key: &TaskMessageIdent) -> Result<bool, MetaError> {
         let req = UpsertPB::delete(key.clone()).with(MatchSeq::GE(1));
-        let _ = self.kv_api.upsert_pb(&req).await?;
+        let change = self.kv_api.upsert_pb(&req).await?;
 
-        Ok(())
+        Ok(change.is_changed())
     }
 
     async fn create_task_inner(

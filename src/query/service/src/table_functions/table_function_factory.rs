@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
@@ -295,24 +296,26 @@ impl TableFunctionFactory {
             ),
         );
 
-        creators.insert(
-            "task_dependents".to_string(),
-            (next_id(), Arc::new(TaskDependentsTable::create)),
-        );
+        if !GlobalConfig::instance().task.on {
+            creators.insert(
+                "task_dependents".to_string(),
+                (next_id(), Arc::new(TaskDependentsTable::create)),
+            );
 
-        creators.insert(
-            "task_dependents_enable".to_string(),
-            (next_id(), Arc::new(TaskDependentsEnableTable::create)),
-        );
+            creators.insert(
+                "task_dependents_enable".to_string(),
+                (next_id(), Arc::new(TaskDependentsEnableTable::create)),
+            );
+
+            creators.insert(
+                "task_history".to_string(),
+                (next_id(), Arc::new(TaskHistoryTable::create)),
+            );
+        }
 
         creators.insert(
             "show_grants".to_string(),
             (next_id(), Arc::new(ShowGrants::create)),
-        );
-
-        creators.insert(
-            "task_history".to_string(),
-            (next_id(), Arc::new(TaskHistoryTable::create)),
         );
 
         creators.insert(

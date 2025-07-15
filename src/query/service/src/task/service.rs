@@ -81,7 +81,6 @@ pub type TaskMessageStream = BoxStream<'static, Result<(String, TaskMessage)>>;
 /// The init type key of watch is used to let the Service load the Schedule, and TaskService will delete the corresponding key (TaskMgr::accept) when processing Execute & After & Delete TaskMessage to avoid repeated processing
 pub struct TaskService {
     initialized: AtomicBool,
-    interval: u64,
     tenant: Tenant,
     node_id: String,
     cluster_id: String,
@@ -166,7 +165,6 @@ impl TaskService {
 
         let instance = TaskService {
             initialized: AtomicBool::new(false),
-            interval: 300,
             tenant: cfg.query.tenant_id.clone(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
@@ -203,13 +201,6 @@ impl TaskService {
 
         let mut steam = self.subscribe().await?;
 
-        let fn_lock = async |task_service: &TaskService, key: &TaskMessageIdent| {
-            task_service
-                .meta_handle
-                .acquire_with_guard(&format!("{}/lock", key), task_service.interval)
-                .await
-        };
-
         while let Some(result) = steam.next().await {
             let (_, task_message) = result?;
             let task_key = TaskMessageIdent::new(tenant, task_message.key());
@@ -232,6 +223,16 @@ impl TaskService {
                         let task_name = task.task_name.to_string();
                         let task_name_clone = task_name.clone();
                         let task_service = TaskService::instance();
+
+                        let fn_lock =
+                            async |task_service: &TaskService,
+                                   key: &TaskMessageIdent,
+                                   interval_millis: u64| {
+                                task_service
+                                    .meta_handle
+                                    .acquire_with_guard(&format!("{}/lock", key), interval_millis)
+                                    .await
+                            };
 
                         task_service
                             .update_or_create_task_run(&TaskRun {
@@ -265,7 +266,7 @@ impl TaskService {
                                             loop {
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
-                                                        let Some(_guard) = fn_lock(&task_service, &task_key).await? else {
+                                                        let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
@@ -308,7 +309,7 @@ impl TaskService {
                                                 task.next_scheduled_at = Some(Utc::now() + duration);
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
-                                                        let Some(_guard) = fn_lock(&task_service, &task_key).await? else {
+                                                        let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
@@ -330,9 +331,9 @@ impl TaskService {
                     }
                 }
                 TaskMessage::ExecuteTask(task) => {
-                    let Some(_guard) = fn_lock(self, &task_key).await? else {
+                    if !task_mgr.accept(&task_key).await? {
                         continue;
-                    };
+                    }
                     let task_name = task.task_name.clone();
                     let task_service = TaskService::instance();
 
@@ -383,21 +384,10 @@ impl TaskService {
                                                     .ok_or_else(|| {
                                                         ErrorCode::UnknownTask(next_task)
                                                     })?;
-                                                if let Some(_guard) = fn_lock(
-                                                    &TaskService::instance(),
-                                                    &TaskMessageIdent::new(
-                                                        tenant.clone(),
-                                                        format!("check_{}", task_name),
-                                                    ),
-                                                )
-                                                .await?
-                                                {
-                                                    task_mgr
-                                                        .send(TaskMessage::ExecuteTask(next_task))
-                                                        .await?;
-                                                }
+                                                task_mgr
+                                                    .send(TaskMessage::ExecuteTask(next_task))
+                                                    .await?;
                                             }
-                                            task_mgr.accept(&task_key).await?;
                                             break;
                                         }
                                         Err(err) => {
@@ -415,7 +405,6 @@ impl TaskService {
                                     task_mgr
                                         .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
                                         .await??;
-                                    task_mgr.accept(&task_key).await?;
                                 }
 
                                 Result::Ok(())
@@ -428,13 +417,12 @@ impl TaskService {
                     )?;
                 }
                 TaskMessage::DeleteTask(task_name) => {
-                    if let Some(_guard) = fn_lock(self, &task_key).await? {
+                    if task_mgr.accept(&task_key).await? {
                         self.clean_task_afters(&task_name).await?;
                     }
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
                         token.cancel();
                     }
-                    task_mgr.accept(&task_key).await?;
                     task_mgr
                         .accept(&TaskMessageIdent::new(
                             tenant,
@@ -443,15 +431,14 @@ impl TaskService {
                         .await?;
                 }
                 TaskMessage::AfterTask(task) => {
-                    let Some(_guard) = fn_lock(self, &task_key).await? else {
+                    if !task_mgr.accept(&task_key).await? {
                         continue;
-                    };
+                    }
                     match task.status {
                         Status::Suspended => continue,
                         Status::Started => (),
                     }
                     self.update_task_afters(&task).await?;
-                    task_mgr.accept(&task_key).await?;
                 }
             }
         }

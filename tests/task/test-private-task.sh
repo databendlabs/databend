@@ -166,7 +166,7 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
 
 echo "Started 2-node cluster with private task enabled..."
 
-sleep 9
+sleep 7
 
 response9=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 
@@ -180,4 +180,51 @@ else
     echo "Expected: $expected"
     echo "Actual  : $actual"
     exit 1
+fi
+
+# Show Task
+response10=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"Describe Task my_task_1\"}")
+state10=$(echo "$response10" | jq -r '.state')
+if [ "$state10" != "Succeeded" ]; then
+  echo "❌ Failed"
+  exit 1
+fi
+actual=$(echo "$response10" | jq -c '.data')
+echo "\n\nDescribe Task my_task_1: $actual"
+
+response11=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SHOW TASKS\"}")
+state11=$(echo "$response11" | jq -r '.state')
+if [ "$state10" != "Succeeded" ]; then
+  echo "❌ Failed"
+  exit 1
+fi
+actual=$(echo "$response11" | jq -c '.data')
+echo "\n\nSHOW TASKS: $actual"
+
+response12=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM system.task_history\"}")
+state12=$(echo "$response12" | jq -r '.state')
+if [ "$state10" != "Succeeded" ]; then
+  echo "❌ Failed"
+  exit 1
+fi
+actual=$(echo "$response12" | jq -c '.data')
+echo "\n\nSELECT * FROM system.task_history: $actual"
+
+# Drop Task
+response13=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"DROP TASK my_task_1\"}")
+state13=$(echo "$response13" | jq -r '.state')
+if [ "$state13" != "Succeeded" ]; then
+  echo "❌ Failed"
+  exit 1
+else
+  echo "✅ Passed"
+fi
+
+response14=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_task_1\"}")
+state14=$(echo "$response14" | jq -r '.state')
+if [ "$state14" = "Succeeded" ]; then
+  echo "❌ Failed"
+  exit 1
+else
+  echo "✅ Passed"
 fi
