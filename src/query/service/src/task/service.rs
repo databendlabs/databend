@@ -396,7 +396,7 @@ impl TaskService {
                                                         .await?;
                                                 }
                                             }
-                                            task_mgr.execute_accept(&task_key).await?;
+                                            task_mgr.accept(&task_key).await?;
                                             break;
                                         }
                                         Err(err) => {
@@ -411,7 +411,7 @@ impl TaskService {
                                             task_run.run_id = Self::make_run_id();
                                         }
                                     }
-                                    task_mgr.execute_accept(&task_key).await?;
+                                    task_mgr.accept(&task_key).await?;
                                     task_mgr
                                         .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
                                         .await??;
@@ -433,6 +433,13 @@ impl TaskService {
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
                         token.cancel();
                     }
+                    task_mgr.accept(&task_key).await?;
+                    task_mgr
+                        .accept(&TaskMessageIdent::new(
+                            tenant,
+                            TaskMessage::schedule_key(&task_name),
+                        ))
+                        .await?;
                 }
                 TaskMessage::AfterTask(task) => {
                     let Some(_guard) = fn_lock(self, &task_key).await? else {
@@ -443,6 +450,7 @@ impl TaskService {
                         Status::Started => (),
                     }
                     self.update_task_afters(&task).await?;
+                    task_mgr.accept(&task_key).await?;
                 }
             }
         }
