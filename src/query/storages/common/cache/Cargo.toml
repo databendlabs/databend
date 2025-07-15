@@ -29,6 +29,7 @@ parquet = { workspace = true }
 rayon = { workspace = true }
 rustix = { workspace = true }
 siphasher = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
 
 [dev-dependencies]
 divan = { workspace = true }

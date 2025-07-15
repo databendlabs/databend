@@ -33,6 +33,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 toml = { workspace = true }
 tonic = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 

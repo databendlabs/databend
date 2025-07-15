@@ -74,6 +74,7 @@ simsearch = { workspace = true }
 tokio = { workspace = true }
 unicase = { workspace = true }
 url = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

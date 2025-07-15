@@ -8,6 +8,7 @@ edition = { workspace = true }
 
 [dependencies]
 semver = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 databend-common-building = { workspace = true }

@@ -15,6 +15,7 @@ databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

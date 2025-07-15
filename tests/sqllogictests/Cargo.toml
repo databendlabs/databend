@@ -35,6 +35,7 @@ testcontainers-modules = { workspace = true, features = ["mysql", "redis"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
 
 [lints]
 workspace = true

@@ -12,6 +12,7 @@ async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-license = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [build-dependencies]
 

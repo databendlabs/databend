@@ -22,6 +22,7 @@ openraft = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

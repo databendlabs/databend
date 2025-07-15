@@ -13,6 +13,7 @@ path = "src/bin/codegen.rs"
 [dependencies]
 databend-common-expression = { workspace = true }
 itertools = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

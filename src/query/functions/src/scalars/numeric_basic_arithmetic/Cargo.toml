@@ -8,6 +8,7 @@ databend-common-expression = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }
 strength_reduce = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../../../databend-workspace-hack" }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]

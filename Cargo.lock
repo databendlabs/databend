@@ -1362,6 +1362,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-users",
  "databend-query",
+ "databend-workspace-hack",
  "pyo3",
  "pyo3-build-config",
  "tempfile",
@@ -2991,6 +2992,7 @@ dependencies = [
  "databend-enterprise-query",
  "databend-meta",
  "databend-query",
+ "databend-workspace-hack",
  "form_urlencoded",
  "futures",
  "http 1.3.1",
@@ -3018,6 +3020,7 @@ dependencies = [
  "databend-enterprise-query",
  "databend-query",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "limits-rs",
  "log",
  "opendal",
@@ -3032,6 +3035,7 @@ name = "databend-codegen"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
+ "databend-workspace-hack",
  "itertools 0.13.0",
 ]
 
@@ -3039,6 +3043,7 @@ dependencies = [
 name = "databend-common-ast"
 version = "0.2.1"
 dependencies = [
+ "databend-workspace-hack",
  "databend_educe",
  "derive-visitor",
  "divan",
@@ -3074,6 +3079,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "databend-common-base",
+ "databend-workspace-hack",
  "http 1.3.1",
  "tempfile",
 ]
@@ -3095,6 +3101,7 @@ dependencies = [
  "crc32fast",
  "ctrlc",
  "databend-common-exception",
+ "databend-workspace-hack",
  "enquote",
  "fastrace",
  "futures",
@@ -3138,6 +3145,7 @@ dependencies = [
  "base64 0.22.1",
  "cargo-license",
  "cargo_metadata",
+ "databend-workspace-hack",
  "gix",
  "log",
  "vergen",
@@ -3147,6 +3155,7 @@ dependencies = [
 name = "databend-common-cache"
 version = "0.1.0"
 dependencies = [
+ "databend-workspace-hack",
  "hashbrown 0.15.3",
  "hashlink 0.8.4",
 ]
@@ -3176,6 +3185,7 @@ dependencies = [
  "databend-common-users",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "dyn-clone",
  "goldenfile",
  "log",
@@ -3199,6 +3209,7 @@ dependencies = [
  "chrono",
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "hyper-util",
  "lenient_semver",
  "prost",
@@ -3221,6 +3232,7 @@ dependencies = [
  "bytemuck",
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "either",
  "ethnum",
  "foreign_vec",
@@ -3243,6 +3255,7 @@ dependencies = [
  "brotli 3.5.0",
  "bytes",
  "databend-common-exception",
+ "databend-workspace-hack",
  "env_logger 0.11.8",
  "futures",
  "log",
@@ -3266,6 +3279,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-tracing",
  "databend-common-version",
+ "databend-workspace-hack",
  "log",
  "pretty_assertions",
  "serde",
@@ -3280,6 +3294,7 @@ dependencies = [
 name = "databend-common-datavalues"
 version = "0.1.0"
 dependencies = [
+ "databend-workspace-hack",
  "enum-as-inner",
  "enum_dispatch",
  "serde",
@@ -3297,6 +3312,7 @@ dependencies = [
  "bincode 2.0.1",
  "cidr",
  "databend-common-ast",
+ "databend-workspace-hack",
  "geozero",
  "gimli 0.31.1",
  "http 1.3.1",
@@ -3345,6 +3361,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
+ "databend-workspace-hack",
  "databend_educe",
  "divan",
  "either",
@@ -3402,6 +3419,7 @@ dependencies = [
  "databend-functions-scalar-datetime",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "geozero",
  "goldenfile",
  "hex",
@@ -3446,6 +3464,7 @@ dependencies = [
  "databend-functions-scalar-integer-basic-arithmetic",
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
+ "databend-workspace-hack",
  "divan",
  "geo",
  "geohash",
@@ -3493,6 +3512,7 @@ dependencies = [
  "anyerror",
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "hickory-resolver",
  "hyper 1.6.0",
  "hyper-util",
@@ -3513,6 +3533,7 @@ dependencies = [
  "cfg-if",
  "databend-common-base",
  "databend-common-column",
+ "databend-workspace-hack",
  "ethnum",
  "rand 0.8.5",
 ]
@@ -3524,6 +3545,7 @@ dependencies = [
  "anyerror",
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "futures",
  "http 1.3.1",
  "log",
@@ -3546,6 +3568,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "enquote",
  "enumflags2",
  "ethnum",
@@ -3568,6 +3591,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "display-more",
  "jwt-simple",
  "serde",
@@ -3593,6 +3617,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-proto-conv",
  "databend-common-version",
+ "databend-workspace-hack",
  "enumflags2",
  "fastrace",
  "futures",
@@ -3619,6 +3644,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-proto-conv",
+ "databend-workspace-hack",
  "display-more",
  "fastrace",
  "futures",
@@ -3650,6 +3676,7 @@ dependencies = [
  "databend-common-meta-app-types",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "derive_more",
  "display-more",
  "enumflags2",
@@ -3673,6 +3700,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
  "opendal",
  "serde",
 ]
@@ -3682,6 +3710,7 @@ name = "databend-common-meta-app-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "databend-workspace-hack",
  "num-derive",
  "prost",
  "serde",
@@ -3696,6 +3725,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-meta-client",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "futures",
  "log",
  "pretty_assertions",
@@ -3721,6 +3751,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-tracing",
  "databend-common-version",
+ "databend-workspace-hack",
  "derive_more",
  "display-more",
  "fastrace",
@@ -3753,6 +3784,7 @@ dependencies = [
  "databend-common-meta-types",
  "databend-common-tracing",
  "databend-meta",
+ "databend-workspace-hack",
  "futures",
  "raft-log",
  "reqwest",
@@ -3771,6 +3803,7 @@ dependencies = [
  "async-trait",
  "databend-common-meta-app-types",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "display-more",
  "futures-util",
  "log",
@@ -3785,6 +3818,7 @@ dependencies = [
  "anyhow",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "display-more",
  "fastrace",
  "log",
@@ -3805,6 +3839,7 @@ dependencies = [
  "databend-common-proto-conv",
  "databend-common-protos",
  "databend-common-tracing",
+ "databend-workspace-hack",
  "openraft",
  "prost",
  "serde",
@@ -3828,6 +3863,7 @@ dependencies = [
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-version",
+ "databend-workspace-hack",
  "deepsize",
  "derive_more",
  "display-more",
@@ -3867,6 +3903,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "display-more",
  "futures",
  "itertools 0.13.0",
@@ -3885,6 +3922,7 @@ dependencies = [
  "byteorder",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "fastrace",
  "log",
  "openraft",
@@ -3901,6 +3939,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "databend-common-exception",
+ "databend-workspace-hack",
  "serde_json",
  "sled",
  "thiserror 1.0.69",
@@ -3920,6 +3959,7 @@ dependencies = [
  "databend-common-meta-semaphore",
  "databend-common-meta-types",
  "databend-meta",
+ "databend-workspace-hack",
  "log",
  "tempfile",
  "tokio",
@@ -3936,6 +3976,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
+ "databend-workspace-hack",
  "deepsize",
  "derive_more",
  "display-more",
@@ -3962,6 +4003,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "databend-common-base",
+ "databend-workspace-hack",
  "procfs",
  "prometheus-client 0.22.3",
 ]
@@ -3977,6 +4019,7 @@ dependencies = [
  "bytes",
  "databend-common-column",
  "databend-common-expression",
+ "databend-workspace-hack",
  "env_logger 0.11.8",
  "hashbrown 0.14.5",
  "log",
@@ -3999,6 +4042,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-exception",
  "databend-common-metrics",
+ "databend-workspace-hack",
  "log",
  "openai_api_rust",
 ]
@@ -4012,6 +4056,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-workspace-hack",
  "fastrace",
  "futures",
  "log",
@@ -4031,6 +4076,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
+ "databend-workspace-hack",
  "tokio",
 ]
 
@@ -4045,6 +4091,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
+ "databend-workspace-hack",
  "futures",
  "parking_lot 0.12.3",
 ]
@@ -4059,6 +4106,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-pipeline-core",
+ "databend-workspace-hack",
  "itertools 0.13.0",
  "jsonb",
  "log",
@@ -4082,6 +4130,7 @@ dependencies = [
  "databend-common-meta-app-types",
  "databend-common-meta-types",
  "databend-common-protos",
+ "databend-workspace-hack",
  "enumflags2",
  "fastrace",
  "maplit",
@@ -4095,6 +4144,7 @@ dependencies = [
 name = "databend-common-protos"
 version = "0.1.0"
 dependencies = [
+ "databend-workspace-hack",
  "lenient_semver",
  "num-derive",
  "num-traits",
@@ -4111,6 +4161,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-ast",
  "databend-common-exception",
+ "databend-workspace-hack",
  "derive-visitor",
  "fastrace",
  "goldenfile",
@@ -4133,6 +4184,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-users",
  "databend-common-version",
+ "databend-workspace-hack",
  "itertools 0.13.0",
  "log",
  "num_cpus",
@@ -4183,6 +4235,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "databend_educe",
  "derive-visitor",
  "enum-as-inner",
@@ -4230,6 +4283,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-native",
  "databend-enterprise-storage-encryption",
+ "databend-workspace-hack",
  "futures",
  "http 1.3.1",
  "iceberg",
@@ -4263,6 +4317,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "deltalake",
  "fastrace",
  "object_store_opendal",
@@ -4292,6 +4347,7 @@ dependencies = [
  "databend-common-storages-stream",
  "databend-common-storages-view",
  "databend-storages-common-index",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4337,6 +4393,7 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "divan",
  "enum-as-inner",
  "fastrace",
@@ -4388,6 +4445,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "fastrace",
  "faststr",
  "futures",
@@ -4425,6 +4483,7 @@ dependencies = [
  "databend-storages-common-cache",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "databend_educe",
  "fastrace",
  "futures",
@@ -4448,6 +4507,7 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-storages-system",
  "databend-common-storages-view",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4467,6 +4527,7 @@ dependencies = [
  "databend-common-storage",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "parking_lot 0.12.3",
  "serde",
  "typetag",
@@ -4486,6 +4547,7 @@ dependencies = [
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4511,6 +4573,7 @@ dependencies = [
  "databend-common-storage",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "futures-util",
  "log",
  "opendal",
@@ -4547,6 +4610,7 @@ dependencies = [
  "databend-storages-common-pruner",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "futures",
  "jiff 0.2.13",
  "log",
@@ -4571,6 +4635,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sources",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "serde",
  "typetag",
 ]
@@ -4595,6 +4660,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "opendal",
  "parquet",
  "serde",
@@ -4635,6 +4701,7 @@ dependencies = [
  "databend-common-version",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "enum-as-inner",
  "futures",
  "jsonb",
@@ -4667,6 +4734,7 @@ dependencies = [
  "databend-common-sql",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "fastrace",
  "futures",
  "log",
@@ -4702,6 +4770,7 @@ dependencies = [
  "databend-common-users",
  "databend-storages-common-cache",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "futures",
  "itertools 0.13.0",
  "jiff 0.2.13",
@@ -4727,6 +4796,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4743,6 +4813,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-meta-app-storage",
+ "databend-workspace-hack",
  "defer",
  "fastrace",
  "fastrace-opentelemetry",
@@ -4782,6 +4853,7 @@ dependencies = [
  "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
+ "databend-workspace-hack",
  "enumflags2",
  "itertools 0.13.0",
  "jwt-simple",
@@ -4802,6 +4874,7 @@ version = "0.1.0"
 dependencies = [
  "approx",
  "databend-common-exception",
+ "databend-workspace-hack",
  "ndarray",
 ]
 
@@ -4810,6 +4883,7 @@ name = "databend-common-version"
 version = "0.1.0"
 dependencies = [
  "databend-common-building",
+ "databend-workspace-hack",
  "semver",
 ]
 
@@ -4823,6 +4897,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4835,6 +4910,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-sql",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4846,6 +4922,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-store",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4857,6 +4934,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-meta-app",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4869,11 +4947,15 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-exception",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
 ]
 
 [[package]]
 name = "databend-enterprise-meta"
 version = "0.1.0"
+dependencies = [
+ "databend-workspace-hack",
+]
 
 [[package]]
 name = "databend-enterprise-query"
@@ -4924,6 +5006,7 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-pruner",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "derive-visitor",
  "futures",
  "futures-util",
@@ -4946,6 +5029,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-management",
  "databend-common-meta-types",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4955,6 +5039,7 @@ dependencies = [
  "async-trait",
  "databend-common-base",
  "databend-common-exception",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4965,6 +5050,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-license",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4978,6 +5064,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-sql",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -4994,6 +5081,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -5005,6 +5093,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -5018,6 +5107,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
+ "databend-workspace-hack",
 ]
 
 [[package]]
@@ -5026,6 +5116,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-expression",
  "databend-functions-scalar-decimal",
+ "databend-workspace-hack",
  "lexical-core",
  "match-template",
  "num-traits",
@@ -5039,6 +5130,7 @@ dependencies = [
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
+ "databend-workspace-hack",
  "dtparse",
  "jiff 0.2.13",
  "num-traits",
@@ -5050,6 +5142,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-base",
  "databend-common-expression",
+ "databend-workspace-hack",
  "jsonb",
  "match-template",
  "num-traits",
@@ -5062,6 +5155,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
+ "databend-workspace-hack",
  "geo",
  "geohash",
  "geozero",
@@ -5079,6 +5173,7 @@ version = "0.1.0"
 dependencies = [
  "databend-common-expression",
  "databend-functions-scalar-numeric-basic-arithmetic",
+ "databend-workspace-hack",
  "match-template",
  "num-traits",
 ]
@@ -5091,6 +5186,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-expression",
  "databend-functions-scalar-decimal",
+ "databend-workspace-hack",
  "match-template",
  "num-traits",
 ]
@@ -5100,6 +5196,7 @@ name = "databend-functions-scalar-numeric-basic-arithmetic"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
+ "databend-workspace-hack",
  "match-template",
  "num-traits",
  "strength_reduce",
@@ -5131,6 +5228,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-tracing",
  "databend-common-version",
+ "databend-workspace-hack",
  "deepsize",
  "derive_more",
  "display-more",
@@ -5190,6 +5288,7 @@ dependencies = [
  "databend-common-tracing",
  "databend-common-version",
  "databend-meta",
+ "databend-workspace-hack",
  "display-more",
  "fastrace",
  "futures",
@@ -5301,6 +5400,7 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "derive-visitor",
  "ethnum",
  "fastrace",
@@ -5383,6 +5483,7 @@ dependencies = [
  "bollard",
  "clap",
  "databend-common-exception",
+ "databend-workspace-hack",
  "env_logger 0.11.8",
  "futures-util",
  "mysql_async",
@@ -5415,6 +5516,7 @@ dependencies = [
  "databend-common-functions",
  "databend-common-io",
  "databend-common-sql",
+ "databend-workspace-hack",
  "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
@@ -5437,6 +5539,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "parking_lot 0.12.3",
  "parquet",
 ]
@@ -5459,6 +5562,7 @@ dependencies = [
  "databend-common-metrics",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "divan",
  "hex",
  "libc",
@@ -5487,6 +5591,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "divan",
  "fastrace",
  "feistel-permutation-rs",
@@ -5526,6 +5631,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-metrics",
+ "databend-workspace-hack",
  "fastrace",
  "futures",
  "log",
@@ -5541,6 +5647,7 @@ dependencies = [
  "databend-common-functions",
  "databend-storages-common-index",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "log",
  "serde",
  "typetag",
@@ -5557,6 +5664,7 @@ dependencies = [
  "databend-common-storage",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "databend-workspace-hack",
  "log",
  "parking_lot 0.12.3",
  "serde",
@@ -5573,6 +5681,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
+ "databend-workspace-hack",
  "serde",
  "typetag",
 ]
@@ -5594,6 +5703,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-native",
  "databend-common-storage",
+ "databend-workspace-hack",
  "enum-as-inner",
  "log",
  "parquet",
@@ -5604,6 +5714,175 @@ dependencies = [
  "snap",
  "typetag",
  "zstd 0.12.4",
+]
+
+[[package]]
+name = "databend-workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.12",
+ "aho-corasick",
+ "anstream",
+ "anyhow",
+ "apache-avro",
+ "approx",
+ "arrayvec",
+ "arrow",
+ "arrow-array",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-udf-runtime",
+ "backtrace",
+ "base64 0.22.1",
+ "bigdecimal",
+ "bitflags 2.9.0",
+ "brotli 8.0.1",
+ "bstr",
+ "bytemuck",
+ "byteorder",
+ "bytes",
+ "bzip2 0.4.4",
+ "bzip2-sys",
+ "cc",
+ "chrono",
+ "clap",
+ "clap_builder",
+ "comfy-table",
+ "concurrent-queue",
+ "console",
+ "crossbeam-epoch",
+ "crossbeam-queue",
+ "crossbeam-utils",
+ "crypto-common",
+ "dashmap 6.1.0",
+ "deranged",
+ "either",
+ "env_filter",
+ "ethnum",
+ "event-listener-strategy",
+ "fastrace",
+ "flatbuffers",
+ "flate2",
+ "form_urlencoded",
+ "frunk_core",
+ "futures-channel",
+ "futures-executor",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+ "generic-array",
+ "geo-types",
+ "getrandom 0.2.16",
+ "getrandom 0.3.3",
+ "gimli 0.31.1",
+ "hashbrown 0.14.5",
+ "hashbrown 0.15.3",
+ "hmac",
+ "hyper 1.6.0",
+ "hyper-rustls 0.27.5",
+ "hyper-util",
+ "indexmap 2.9.0",
+ "instant",
+ "ipnet",
+ "itertools 0.13.0",
+ "jiff 0.2.13",
+ "lexical-core",
+ "lexical-parse-float",
+ "lexical-parse-integer",
+ "lexical-util",
+ "lexical-write-float",
+ "lexical-write-integer",
+ "libc",
+ "libflate",
+ "log",
+ "lz4_flex",
+ "lzma-sys",
+ "md-5",
+ "memchr",
+ "mysql_common",
+ "nom 7.1.3",
+ "num",
+ "num-bigint",
+ "num-format",
+ "num-integer",
+ "num-iter",
+ "num-traits",
+ "object",
+ "object_store",
+ "once_cell",
+ "ordered-float 4.6.0",
+ "parquet",
+ "percent-encoding",
+ "phf",
+ "phf_shared",
+ "pkcs8",
+ "portable-atomic",
+ "proc-macro2",
+ "prost",
+ "prost-types",
+ "pyo3",
+ "pyo3-build-config",
+ "pyo3-ffi",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "regex",
+ "regex-automata 0.4.9",
+ "regex-lite",
+ "regex-syntax 0.8.5",
+ "reqwest",
+ "ring",
+ "rquickjs-core",
+ "rsa",
+ "rust_decimal",
+ "rustc-hash 2.1.1",
+ "rustls 0.23.27",
+ "rustls-pemfile 2.2.0",
+ "rustls-webpki 0.103.3",
+ "scopeguard",
+ "semver",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "simdutf8",
+ "similar",
+ "smallvec",
+ "spin 0.9.8",
+ "sqlx-core",
+ "sqlx-mysql",
+ "stable_deref_trait",
+ "strum 0.26.3",
+ "subtle",
+ "syn 1.0.109",
+ "syn 2.0.101",
+ "sync_wrapper",
+ "thrift",
+ "tikv-jemalloc-sys",
+ "time",
+ "time-macros",
+ "tokio",
+ "tokio-rustls 0.26.2",
+ "tokio-stream",
+ "toml_datetime",
+ "toml_edit 0.19.15",
+ "toml_edit 0.22.26",
+ "tracing",
+ "tracing-core",
+ "twox-hash 1.6.3",
+ "unicode-normalization",
+ "url",
+ "uuid",
+ "wasmparser 0.219.2",
+ "xz2",
+ "zeroize",
+ "zstd 0.12.4",
+ "zstd 0.13.3",
+ "zstd-safe 6.0.6",
+ "zstd-safe 7.2.4",
+ "zstd-sys",
 ]
 
 [[package]]

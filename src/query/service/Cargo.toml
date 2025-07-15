@@ -176,6 +176,7 @@ url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }

@@ -19,6 +19,7 @@ fastrace = { workspace = true }
 num = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 

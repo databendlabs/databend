@@ -66,6 +66,7 @@ strength_reduce = { workspace = true }
 stringslice = { workspace = true }
 twox-hash = { workspace = true }
 unicase = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 comfy-table = { workspace = true }

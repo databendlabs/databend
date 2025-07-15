@@ -8,6 +8,7 @@ edition = "2021"
 [workspace]
 resolver = "2"
 members = [
+    "databend-workspace-hack",
     "src/binaries",
     "src/common/auth",
     "src/common/base",

@@ -36,6 +36,7 @@ sqlx = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

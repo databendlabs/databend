@@ -31,6 +31,7 @@ serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
 snap = { workspace = true }
 zstd = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 # used to test async readers

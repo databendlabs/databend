@@ -13,6 +13,7 @@ databend-common-exception = { workspace = true }
 databend-common-metrics = { workspace = true }
 log = { workspace = true }
 openai_api_rust = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 

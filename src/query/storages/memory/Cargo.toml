@@ -23,6 +23,7 @@ databend-storages-common-table-meta = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

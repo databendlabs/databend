@@ -36,6 +36,7 @@ recursive = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 volo-thrift = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

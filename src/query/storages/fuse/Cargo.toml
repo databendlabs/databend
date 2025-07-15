@@ -74,6 +74,7 @@ thrift = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
 xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [dev-dependencies]
 divan = { workspace = true }

@@ -20,6 +20,7 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
 tower-service = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 
