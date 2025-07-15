@@ -500,9 +500,9 @@ async fn test_2_level_same_tombstone() -> anyhow::Result<()> {
 
     assert_eq!(
         vec![
-            "a=Normal { internal_seq: 1, value: [97, 48], meta: None }",
-            "b=TombStone { internal_seq: 3 }",
-            "c=Normal { internal_seq: 4, value: [99, 49], meta: None }"
+            "a=SeqMarked { seq: 1, marked: Normal((None, [97, 48])) }",
+            "b=SeqMarked { seq: 3, marked: TombStone }",
+            "c=SeqMarked { seq: 4, marked: Normal((None, [99, 49])) }"
         ],
         got
     );
