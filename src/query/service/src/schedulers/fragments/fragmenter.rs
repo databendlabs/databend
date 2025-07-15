@@ -353,6 +353,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         let left = self.replace(plan.left.as_ref())?;
 
         fragments.append(&mut self.fragments);
+        self.state = State::Other;
         let right = self.replace(plan.right.as_ref())?;
         fragments.append(&mut self.fragments);
 
