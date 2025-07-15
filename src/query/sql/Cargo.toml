@@ -47,7 +47,6 @@ chrono-tz = { workspace = true }
 cidr = { workspace = true }
 cron = { workspace = true }
 ctor = { workspace = true }
-typetag = { workspace = true }
 dashmap = { workspace = true }
 derive-visitor = { workspace = true }
 educe = { workspace = true }
@@ -63,7 +62,6 @@ num-traits = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 prqlc = { workspace = true }
-rand = { workspace = true }
 recursive = { workspace = true }
 regex = { workspace = true }
 roaring = { workspace = true }
