@@ -115,24 +115,27 @@ impl TaskInterpreter for PrivateTaskInterpreter {
             session_params: plan.session_parameters.clone(),
         };
         UserApiProvider::instance()
-            .create_task(&plan.tenant, task, &plan.create_option)
-            .await?;
+            .task_api(&plan.tenant)
+            .create_task(task, &plan.create_option)
+            .await??;
 
         Ok(())
     }
 
     async fn execute_task(&self, _ctx: &Arc<QueryContext>, plan: &ExecuteTaskPlan) -> Result<()> {
         UserApiProvider::instance()
-            .execute_task(&plan.tenant, &plan.task_name)
-            .await?;
+            .task_api(&plan.tenant)
+            .execute_task(&plan.task_name)
+            .await??;
 
         Ok(())
     }
 
     async fn alter_task(&self, _ctx: &Arc<QueryContext>, plan: &AlterTaskPlan) -> Result<()> {
         UserApiProvider::instance()
-            .alter_task(&plan.tenant, &plan.task_name, &plan.alter_options)
-            .await?;
+            .task_api(&plan.tenant)
+            .alter_task(&plan.task_name, &plan.alter_options)
+            .await??;
 
         Ok(())
     }
@@ -143,14 +146,16 @@ impl TaskInterpreter for PrivateTaskInterpreter {
         plan: &DescribeTaskPlan,
     ) -> Result<Option<task_utils::Task>> {
         let task = UserApiProvider::instance()
-            .describe_task(&plan.tenant, &plan.task_name)
-            .await?;
+            .task_api(&plan.tenant)
+            .describe_task(&plan.task_name)
+            .await??;
         task.map(Self::task_trans).transpose()
     }
 
     async fn drop_task(&self, _ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()> {
         UserApiProvider::instance()
-            .drop_task(&plan.tenant, &plan.task_name)
+            .task_api(&plan.tenant)
+            .drop_task(&plan.task_name)
             .await?;
 
         Ok(())
@@ -161,7 +166,10 @@ impl TaskInterpreter for PrivateTaskInterpreter {
         _ctx: &Arc<QueryContext>,
         plan: &ShowTasksPlan,
     ) -> Result<Vec<task_utils::Task>> {
-        let tasks = UserApiProvider::instance().show_tasks(&plan.tenant).await?;
+        let tasks = UserApiProvider::instance()
+            .task_api(&plan.tenant)
+            .list_task()
+            .await?;
 
         tasks.into_iter().map(Self::task_trans).try_collect()
     }
