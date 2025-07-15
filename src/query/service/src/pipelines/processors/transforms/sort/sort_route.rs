@@ -24,6 +24,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_transforms::Transform;
 
 use super::SortBound;
 use super::SortBoundNext;
@@ -207,5 +208,19 @@ impl Processor for TransformSortRoute {
         }
 
         self.process()
+    }
+}
+
+pub struct SortDummyRoute {}
+
+impl Transform for SortDummyRoute {
+    const NAME: &'static str = "SortDummyRoute";
+
+    fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
+        data.take_meta()
+            .and_then(SortBound::downcast_from)
+            .expect("require a SortBound");
+        data.pop_columns(1);
+        Ok(data)
     }
 }

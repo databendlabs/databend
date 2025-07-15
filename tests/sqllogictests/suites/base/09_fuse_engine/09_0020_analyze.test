@@ -1,3 +1,7 @@
+# SortBoundBroadcast deadlock
+statement ok
+set enable_shuffle_sort = 0;
+
 statement ok
 DROP DATABASE IF EXISTS db_09_0020
 

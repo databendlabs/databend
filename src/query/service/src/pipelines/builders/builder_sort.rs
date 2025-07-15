@@ -107,8 +107,8 @@ impl PipelineBuilder {
             SortStep::Single => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
-                if max_threads == 1 {
-                    self.main_pipeline.try_resize(1)?;
+                if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+                    self.main_pipeline.try_resize(max_threads)?;
                 }
                 builder
                     .remove_order_col_at_last()
@@ -119,34 +119,32 @@ impl PipelineBuilder {
                 // Build for each cluster node.
                 // We build the full sort pipeline for it.
                 // Don't remove the order column at last.
-                if max_threads == 1 {
-                    self.main_pipeline.try_resize(1)?;
+                if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+                    self.main_pipeline.try_resize(max_threads)?;
                 }
                 builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
             SortStep::Final => {
+                // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+                if max_threads == 1 && self.main_pipeline.output_len() > 1 {
+                    self.main_pipeline.try_resize(1)?;
+                    return builder
+                        .remove_order_col_at_last()
+                        .build_merge_sort_pipeline(&mut self.main_pipeline, true);
+                }
+
                 // Build for the coordinator node.
                 // We only build a `MultiSortMergeTransform`,
                 // as the data is already sorted in each cluster node.
                 // The input number of the transform is equal to the number of cluster nodes.
-                if self.main_pipeline.output_len() > 1 {
-                    if self.main_pipeline.output_len() != 1 && max_threads == 1 {
-                        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-                        self.main_pipeline.try_resize(1)?;
-                    }
-                    builder
-                        .remove_order_col_at_last()
-                        .build_multi_merge(&mut self.main_pipeline)
-                } else {
-                    builder
-                        .remove_order_col_at_last()
-                        .build_merge_sort_pipeline(&mut self.main_pipeline, true)
-                }
+                builder
+                    .remove_order_col_at_last()
+                    .build_multi_merge(&mut self.main_pipeline)
             }
 
             SortStep::Sample => {
-                if max_threads == 1 {
-                    self.main_pipeline.try_resize(1)?;
+                if self.main_pipeline.output_len() == 1 || max_threads == 1 {
+                    self.main_pipeline.try_resize(max_threads)?;
                 }
                 builder.build_sample(&mut self.main_pipeline)?;
                 self.exchange_injector = TransformSortBuilder::exchange_injector();
@@ -162,7 +160,10 @@ impl PipelineBuilder {
                     self.build_pipeline(&sort.input)?;
                 }
 
-                if self.main_pipeline.output_len() != 1 && max_threads == 1 {
+                if self.main_pipeline.output_len() == 1 {
+                    return Ok(());
+                }
+                if max_threads == 1 {
                     // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
                     unimplemented!();
                 }
@@ -170,7 +171,15 @@ impl PipelineBuilder {
                     .remove_order_col_at_last()
                     .build_bounded_merge_sort(&mut self.main_pipeline)
             }
-            SortStep::Route => TransformSortBuilder::add_route(&mut self.main_pipeline),
+            SortStep::Route => {
+                if self.main_pipeline.output_len() == 1 {
+                    self.main_pipeline
+                        .add_transformer(TransformSortBuilder::build_dummy_route);
+                    Ok(())
+                } else {
+                    TransformSortBuilder::add_route(&mut self.main_pipeline)
+                }
+            }
         }
     }
 }

@@ -263,6 +263,10 @@ impl TransformSortBuilder {
         Ok(())
     }
 
+    pub fn build_dummy_route() -> SortDummyRoute {
+        SortDummyRoute {}
+    }
+
     pub fn exchange_injector() -> Arc<dyn ExchangeInjector> {
         Arc::new(SortInjector {})
     }
