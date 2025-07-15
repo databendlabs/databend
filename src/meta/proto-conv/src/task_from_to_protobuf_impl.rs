@@ -40,30 +40,27 @@ impl FromToProto for mt::Task {
                 return Err(Incompatible::new(format!("Status can not be {s}")));
             }
         };
-        let schedule = match p.schedule_options {
-            None => None,
-            Some(ref s) => {
-                if !p.after.is_empty() {
-                    None
-                } else {
-                    let schedule_type = match s.schedule_type {
-                        0 => mt::ScheduleType::IntervalType,
-                        1 => mt::ScheduleType::CronType,
-                        s => {
-                            return Err(Incompatible::new(format!("ScheduleType can not be {s}")));
-                        }
-                    };
+        let schedule = p
+            .schedule_options
+            .as_ref()
+            .map(|s| {
+                let schedule_type = match s.schedule_type {
+                    0 => mt::ScheduleType::IntervalType,
+                    1 => mt::ScheduleType::CronType,
+                    s => {
+                        return Err(Incompatible::new(format!("ScheduleType can not be {s}")));
+                    }
+                };
 
-                    Some(mt::ScheduleOptions {
-                        interval: s.interval,
-                        cron: s.cron.clone(),
-                        time_zone: s.time_zone.clone(),
-                        schedule_type,
-                        milliseconds_interval: s.milliseconds_interval,
-                    })
-                }
-            }
-        };
+                Ok(mt::ScheduleOptions {
+                    interval: s.interval,
+                    cron: s.cron.clone(),
+                    time_zone: s.time_zone.clone(),
+                    schedule_type,
+                    milliseconds_interval: s.milliseconds_interval,
+                })
+            })
+            .transpose()?;
 
         let warehouse = p.warehouse_options.as_ref().map(|w| mt::WarehouseOptions {
             warehouse: w.warehouse.clone(),

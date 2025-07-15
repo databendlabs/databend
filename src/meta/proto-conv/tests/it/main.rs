@@ -127,3 +127,4 @@ mod v132_remove_sequence_meta_start;
 mod v133_stage_file_compression;
 mod v134_add_sequence_meta_storage_version;
 mod v135_udf_immutable;
+mod v135_add_task;

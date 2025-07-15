@@ -33,7 +33,6 @@ pub mod connection;
 pub mod file_format;
 pub mod role_cache_mgr;
 pub mod role_util;
-mod user_task;
 
 pub use jwt::*;
 pub use password_policy::*;
