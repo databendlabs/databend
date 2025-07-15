@@ -21,7 +21,7 @@ Limit
                 ├── estimated rows: 143057683321996.78
                 └── Exchange
                     ├── output columns: [SUM(ss_ext_sales_price) (#73), dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
-                    ├── exchange type: Hash(0, 1, 2)
+                    ├── exchange type: Hash(0: Int32 NULL, 1: String NULL, 2: Int32 NULL)
                     └── AggregatePartial
                         ├── group by: [d_year, i_brand, i_brand_id]
                         ├── aggregate functions: [sum(ss_ext_sales_price)]
@@ -29,12 +29,12 @@ Limit
                         └── HashJoin
                             ├── output columns: [store_sales.ss_ext_sales_price (#43), item.i_brand_id (#58), item.i_brand (#59), dt.d_year (#6)]
                             ├── join type: INNER
-                            ├── build keys: [dt.d_date_sk (#0)]
-                            ├── probe keys: [store_sales.ss_sold_date_sk (#28)]
+                            ├── build keys: [dt.d_date_sk (#0): Int32 NULL]
+                            ├── probe keys: [store_sales.ss_sold_date_sk (#28): Int32 NULL]
                             ├── keys is null equal: [false]
                             ├── filters: []
                             ├── build join filters:
-                            │   └── filter id:1, build key:dt.d_date_sk (#0), probe key:store_sales.ss_sold_date_sk (#28), filter type:inlist,min_max
+                            │   └── filter id:1, build key:dt.d_date_sk (#0): Int32 NULL, probe key:store_sales.ss_sold_date_sk (#28): Int32 NULL, filter type:inlist,min_max
                             ├── estimated rows: 143057683321996.78
                             ├── Exchange(Build)
                             │   ├── output columns: [dt.d_date_sk (#0), dt.d_year (#6)]
@@ -46,17 +46,17 @@ Limit
                             │       ├── read size: 0
                             │       ├── partitions total: 0
                             │       ├── partitions scanned: 0
-                            │       ├── push downs: [filters: [is_true(date_dim.d_moy (#8) = 11)], limit: NONE]
+                            │       ├── push downs: [filters: [is_true(date_dim.d_moy (#8) = 11): Boolean], limit: NONE]
                             │       └── estimated rows: 6087.42
                             └── HashJoin(Probe)
                                 ├── output columns: [store_sales.ss_sold_date_sk (#28), store_sales.ss_ext_sales_price (#43), item.i_brand_id (#58), item.i_brand (#59)]
                                 ├── join type: INNER
-                                ├── build keys: [item.i_item_sk (#51)]
-                                ├── probe keys: [store_sales.ss_item_sk (#30)]
+                                ├── build keys: [item.i_item_sk (#51): Int32 NULL]
+                                ├── probe keys: [store_sales.ss_item_sk (#30): Int32 NULL]
                                 ├── keys is null equal: [false]
                                 ├── filters: []
                                 ├── build join filters:
-                                │   └── filter id:0, build key:item.i_item_sk (#51), probe key:store_sales.ss_item_sk (#30), filter type:inlist,min_max
+                                │   └── filter id:0, build key:item.i_item_sk (#51): Int32 NULL, probe key:store_sales.ss_item_sk (#30): Int32 NULL, filter type:inlist,min_max
                                 ├── estimated rows: 23500557158.40
                                 ├── Exchange(Build)
                                 │   ├── output columns: [item.i_item_sk (#51), item.i_brand_id (#58), item.i_brand (#59)]
@@ -68,7 +68,7 @@ Limit
                                 │       ├── read size: 0
                                 │       ├── partitions total: 0
                                 │       ├── partitions scanned: 0
-                                │       ├── push downs: [filters: [is_true(item.i_manufact_id (#64) = 128)], limit: NONE]
+                                │       ├── push downs: [filters: [is_true(item.i_manufact_id (#64) = 128): Boolean], limit: NONE]
                                 │       └── estimated rows: 81.60
                                 └── TableScan(Probe)
                                     ├── table: default.default.store_sales
