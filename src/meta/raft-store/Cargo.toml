@@ -42,6 +42,7 @@ raft-log = { workspace = true }
 rmp-serde = { workspace = true }
 rotbl = { workspace = true }
 semver = { workspace = true }
+seq-marked = { workspace = true, features = [ "seq-marked-serde", "seq-marked-bincode", "seqv-serde" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 stream-more = { workspace = true }
@@ -53,7 +54,6 @@ tokio = { workspace = true }
 [dev-dependencies]
 databend-common-base = { workspace = true }
 pretty_assertions = { workspace = true }
-seq-marked = { workspace = true, features = [ "seq-marked-serde", "seq-marked-bincode", "seqv-serde" ] }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 

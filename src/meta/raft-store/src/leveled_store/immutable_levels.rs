@@ -18,6 +18,7 @@ use std::ops::RangeBounds;
 use map_api::compact::compacted_get;
 use map_api::compact::compacted_range;
 use map_api::map_api_ro::MapApiRO;
+use seq_marked::SeqMarked;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;
@@ -25,7 +26,6 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
-use crate::marked::SeqMarked;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]

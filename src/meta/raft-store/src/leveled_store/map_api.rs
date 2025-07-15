@@ -25,9 +25,9 @@ pub use map_api::map_key::MapKey;
 pub use map_api::map_value::MapValue;
 pub use map_api::BeforeAfter;
 pub use map_api::IOResultStream;
+use seq_marked::SeqMarked;
 
 use crate::marked::MetaValue;
-use crate::marked::SeqMarked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::UserKey;
 

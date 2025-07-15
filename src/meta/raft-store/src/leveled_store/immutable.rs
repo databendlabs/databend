@@ -21,6 +21,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use map_api::map_api_ro::MapApiRO;
+use seq_marked::SeqMarked;
 
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
@@ -29,7 +30,6 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKV;
 use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::marked::MetaValue;
-use crate::marked::SeqMarked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::UserKey;
 
