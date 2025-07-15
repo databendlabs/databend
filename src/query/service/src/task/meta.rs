@@ -107,9 +107,9 @@ impl TaskMetaHandle {
     pub async fn acquire_with_guard(
         &self,
         meta_key: &str,
-        interval: u64,
+        interval_millis: u64,
     ) -> Result<Option<PermitGuard>> {
-        if let Some(permit) = self.acquire(meta_key, interval).await? {
+        if let Some(permit) = self.acquire(meta_key, interval_millis).await? {
             Ok(Some(PermitGuard::new(
                 permit,
                 Arc::new(TaskMetaHandle {
