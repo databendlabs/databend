@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::CTEConsumer;
 use databend_common_storages_fuse::TableContext;
@@ -22,9 +25,15 @@ use crate::pipelines::PipelineBuilder;
 impl PipelineBuilder {
     pub(crate) fn build_cte_consumer(&mut self, cte: &CTEConsumer) -> Result<()> {
         let receiver = self.ctx.get_materialized_cte_receiver(&cte.cte_name);
+        let next_block_id = Arc::new(AtomicUsize::new(0));
         self.main_pipeline.add_source(
             |output_port| {
-                CTESource::create(self.ctx.clone(), output_port.clone(), receiver.clone())
+                CTESource::create(
+                    self.ctx.clone(),
+                    output_port.clone(),
+                    receiver.clone(),
+                    next_block_id.clone(),
+                )
             },
             self.ctx.get_settings().get_max_threads()? as usize,
         )?;

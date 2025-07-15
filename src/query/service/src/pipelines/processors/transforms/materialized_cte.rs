@@ -93,11 +93,12 @@ impl CTESource {
         ctx: Arc<dyn TableContext>,
         output_port: Arc<OutputPort>,
         receiver: Receiver<Arc<MaterializedCteData>>,
+        next_block_id: Arc<AtomicUsize>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(ctx, output_port, Self {
             receiver,
             data: None,
-            next_block_id: Arc::new(AtomicUsize::new(0)),
+            next_block_id,
         })
     }
 }
