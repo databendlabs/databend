@@ -276,7 +276,10 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
             children.push(child.derive_with(handle));
         }
 
-        self.derive(children)
+        match handle.derive(self, children) {
+            Ok(v) => v,
+            Err(children) => self.derive(children),
+        }
     }
 
     fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()> {
