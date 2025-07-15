@@ -879,6 +879,7 @@ impl PhysicalPlanBuilder {
             agg_index: None,
             change_type: scan.change_type.clone(),
             inverted_index: scan.inverted_index.clone(),
+            vector_index: scan.vector_index.clone(),
             sample: scan.sample.clone(),
         })
     }

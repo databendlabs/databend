@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
-
+use chrono::Duration;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
@@ -26,7 +26,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_sql::ColumnBinding;
 use databend_common_storages_stage::StageSinkTable;
 use databend_storages_common_stage::CopyIntoLocationInfo;
-
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
@@ -109,7 +109,11 @@ impl IPhysicalPlan for CopyIntoLocation {
             false,
         )?;
 
+        // The stage table that copying into
         let to_table = StageSinkTable::create(self.info.clone(), self.input_table_schema.clone())?;
+
+        // StageSinkTable needs not to hold the table meta timestamps invariants, just pass a dummy one
+        let dummy_table_meta_timestamps = TableMetaTimestamps::new(None, Duration::hours(1));
         PipelineBuilder::build_append2table_with_commit_pipeline(
             builder.ctx.clone(),
             &mut builder.main_pipeline,
@@ -119,7 +123,7 @@ impl IPhysicalPlan for CopyIntoLocation {
             vec![],
             false,
             unsafe { builder.settings.get_deduplicate_label()? },
-            Default::default(),
+            dummy_table_meta_timestamps,
         )
     }
 }

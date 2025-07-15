@@ -74,13 +74,13 @@ impl IPhysicalPlan for UnionAll {
         Ok(self.schema.clone())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
@@ -228,41 +228,47 @@ impl PhysicalPlanBuilder {
         let lazy_columns = metadata.lazy_columns();
         required.extend(lazy_columns);
 
+        // Use left's output columns as the offset indices
         // if the union has a CTE, the output columns are not filtered
         // otherwise, if the output columns of the union do not contain the columns used by the plan in the union, the expression will fail to obtain data.
-        let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
-            let left: ColumnSet = union_all
-                .left_outputs
-                .iter()
-                .map(|(index, _)| *index)
-                .collect();
-            let right: ColumnSet = union_all
-                .right_outputs
-                .iter()
-                .map(|(index, _)| *index)
-                .collect();
+        let (offset_indices, left_required, right_required) =
+            if !union_all.cte_scan_names.is_empty() {
+                let left: ColumnSet = union_all
+                    .left_outputs
+                    .iter()
+                    .map(|(index, _)| *index)
+                    .collect();
+                let right: ColumnSet = union_all
+                    .right_outputs
+                    .iter()
+                    .map(|(index, _)| *index)
+                    .collect();
 
-            (left, right)
-        } else {
-            let indices: Vec<usize> = (0..union_all.left_outputs.len())
-                .filter(|index| required.contains(&union_all.output_indexes[*index]))
-                .collect();
-            if indices.is_empty() {
-                (
-                    ColumnSet::from([union_all.left_outputs[0].0]),
-                    ColumnSet::from([union_all.right_outputs[0].0]),
-                )
+                let offset_indices: Vec<usize> = (0..union_all.left_outputs.len()).collect();
+                (offset_indices, left, right)
             } else {
-                indices.iter().fold(
-                    (ColumnSet::default(), ColumnSet::default()),
-                    |(mut left, mut right), &index| {
-                        left.insert(union_all.left_outputs[index].0);
-                        right.insert(union_all.right_outputs[index].0);
-                        (left, right)
-                    },
-                )
-            }
-        };
+                let offset_indices: Vec<usize> = (0..union_all.left_outputs.len())
+                    .filter(|index| required.contains(&union_all.output_indexes[*index]))
+                    .collect();
+
+                if offset_indices.is_empty() {
+                    (
+                        vec![0],
+                        ColumnSet::from([union_all.left_outputs[0].0]),
+                        ColumnSet::from([union_all.right_outputs[0].0]),
+                    )
+                } else {
+                    offset_indices.iter().fold(
+                        (vec![], ColumnSet::default(), ColumnSet::default()),
+                        |(mut offset_indices, mut left, mut right), &index| {
+                            left.insert(union_all.left_outputs[index].0);
+                            right.insert(union_all.right_outputs[index].0);
+                            offset_indices.push(index);
+                            (offset_indices, left, right)
+                        },
+                    )
+                }
+            };
 
         // 2. Build physical plan.
         let left_plan = self.build(s_expr.child(0)?, left_required.clone()).await?;
@@ -271,36 +277,37 @@ impl PhysicalPlanBuilder {
         let left_schema = left_plan.output_schema()?;
         let right_schema = right_plan.output_schema()?;
 
-        let fields = union_all
-            .left_outputs
-            .iter()
-            .enumerate()
-            .filter(|(_, (index, _))| left_required.contains(index))
-            .map(|(i, (index, expr))| {
-                let data_type = if let Some(expr) = expr {
-                    expr.data_type()?
-                } else {
-                    left_schema
-                        .field_with_name(&index.to_string())?
-                        .data_type()
-                        .clone()
-                };
-                let output_index = union_all.output_indexes[i];
-                Ok(DataField::new(&output_index.to_string(), data_type))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let left_outputs = process_outputs(&union_all.left_outputs, &left_required, &left_schema)?;
+        let left_outputs = process_outputs(&union_all.left_outputs, &offset_indices, &left_schema)?;
         let right_outputs =
-            process_outputs(&union_all.right_outputs, &right_required, &right_schema)?;
+            process_outputs(&union_all.right_outputs, &offset_indices, &right_schema)?;
+
+        let mut fields = Vec::with_capacity(offset_indices.len());
+        for offset in offset_indices {
+            let index = union_all.output_indexes[offset];
+            let data_type = if let Some(scalar_expr) = &union_all.left_outputs[offset].1 {
+                let expr = scalar_expr
+                    .type_check(left_schema.as_ref())?
+                    .project_column_ref(|idx| left_schema.index_of(&idx.to_string()).unwrap());
+                expr.data_type().clone()
+            } else {
+                let col_index = union_all.left_outputs[offset].0;
+                left_schema
+                    .field_with_name(&col_index.to_string())?
+                    .data_type()
+                    .clone()
+            };
+
+            fields.push(DataField::new(&index.to_string(), data_type));
+        }
 
         Ok(Box::new(UnionAll {
-            left: left_plan,
-            right: right_plan,
+            meta: PhysicalPlanMeta::new("UnionAll"),
+            left: Box::new(left_plan),
+            right: Box::new(right_plan),
             left_outputs,
             right_outputs,
             schema: DataSchemaRefExt::create(fields),
-            meta: PhysicalPlanMeta::new("UnionAll"),
+
             cte_scan_names: union_all.cte_scan_names.clone(),
             stat_info: Some(stat_info),
         }))
@@ -309,21 +316,20 @@ impl PhysicalPlanBuilder {
 
 fn process_outputs(
     outputs: &[(IndexType, Option<ScalarExpr>)],
-    required: &ColumnSet,
+    offset_indices: &[usize],
     schema: &DataSchema,
 ) -> Result<Vec<(IndexType, Option<RemoteExpr>)>> {
-    outputs
-        .iter()
-        .filter(|(index, _)| required.contains(index))
-        .map(|(index, scalar_expr)| {
-            if let Some(scalar_expr) = scalar_expr {
-                let expr = scalar_expr
-                    .type_check(schema)?
-                    .project_column_ref(|idx| schema.index_of(&idx.to_string()).unwrap());
-                Ok((*index, Some(expr.as_remote_expr())))
-            } else {
-                Ok((*index, None))
-            }
-        })
-        .collect()
+    let mut results = Vec::with_capacity(offset_indices.len());
+    for index in offset_indices {
+        let output = &outputs[*index];
+        if let Some(scalar_expr) = &output.1 {
+            let expr = scalar_expr
+                .type_check(schema)?
+                .project_column_ref(|idx| schema.index_of(&idx.to_string()).unwrap());
+            results.push((output.0, Some(expr.as_remote_expr())));
+        } else {
+            results.push((output.0, None));
+        }
+    }
+    Ok(results)
 }
