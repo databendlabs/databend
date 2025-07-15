@@ -128,6 +128,10 @@ impl TaskMessage {
         format!("{}-{}-{}", TaskMessage::prefix(), ty, self.task_name())
     }
 
+    pub fn schedule_key(task_name: &str) -> String {
+        format!("{}-1-{task_name}", TaskMessage::prefix())
+    }
+
     pub fn prefix() -> i64 {
         0
     }
