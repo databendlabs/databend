@@ -185,7 +185,7 @@ impl WorkloadGroupResourceManagerInner {
                 (None, None) => {
                     return Ok(workload_resource);
                 }
-                (None, Some(QuotaValue::Bytes(v))) => {
+                (None, Some(QuotaValue::Bytes(_v))) => {
                     self.update_mem_usage(&online_workload_group);
                     return Ok(workload_resource);
                 }
@@ -216,7 +216,7 @@ impl WorkloadGroupResourceManagerInner {
                     self.percent_normalizer.update(*v);
                     self.update_mem_usage(&online_workload_group);
                 }
-                (Some(QuotaValue::Bytes(_old)), Some(QuotaValue::Bytes(new))) => {
+                (Some(QuotaValue::Bytes(_old)), Some(QuotaValue::Bytes(_new))) => {
                     self.update_mem_usage(&online_workload_group);
                     return Ok(workload_resource);
                 }
@@ -255,7 +255,9 @@ impl WorkloadGroupResourceManagerInner {
                         memory_usage = std::cmp::min(max_memory_usage, memory_usage);
                     }
 
-                    workload_group.max_memory_usage.store(*v, Ordering::Relaxed);
+                    workload_group
+                        .max_memory_usage
+                        .store(memory_usage, Ordering::Relaxed);
                 } else {
                     workload_group.max_memory_usage.store(0, Ordering::Relaxed)
                 }
