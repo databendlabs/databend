@@ -133,6 +133,7 @@ impl QuotaValueStmt {
             "query_timeout" => Self::parse_human_timeout(&v).ok_or("Invalid query timeout value, expected duration (e.g. '30s', '5min', '1h')"),
             "max_concurrency" => Self::parse_number(&v).filter(|x| !matches!(x, QuotaValueStmt::Number(0))).ok_or("Invalid max concurrency value, expected positive integer"),
             "query_queued_timeout" => Self::parse_human_timeout(&v).ok_or("Invalid queued query timeout value, expected duration (e.g. '30s', '5min', '1h')"),
+            "max_memory_usage_ratio" => Self::parse_percentage(&v).ok_or("Invalid max_memory_usage_ratio value, expected percentage (e.g. '50%') between 0-100"),
             _ => Err("Unknown quota key"),
         }
     }

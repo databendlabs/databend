@@ -26,6 +26,9 @@ pub const MEMORY_QUOTA_KEY: &str = "memory_quota";
 pub const QUERY_TIMEOUT_QUOTA_KEY: &str = "query_timeout";
 pub const MAX_CONCURRENCY_QUOTA_KEY: &str = "max_concurrency";
 pub const QUERY_QUEUED_TIMEOUT_QUOTA_KEY: &str = "query_queued_timeout";
+pub const MAX_MEMORY_USAGE_RATIO: &str = "max_memory_usage_ratio";
+
+pub const DEFAULT_MAX_MEMORY_USAGE_RATIO: usize = 25;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Debug)]
 pub enum QuotaValue {
@@ -56,6 +59,18 @@ pub struct WorkloadGroup {
 impl WorkloadGroup {
     pub fn get_quota(&self, key: &'static str) -> Option<QuotaValue> {
         self.quotas.get(key).cloned()
+    }
+
+    pub fn get_max_memory_usage_ratio(&self) -> usize {
+        let QuotaValue::Percentage(v) = self.quotas.get(MAX_MEMORY_USAGE_RATIO) else {
+            return DEFAULT_MAX_MEMORY_USAGE_RATIO;
+        };
+
+        if v == 0 {
+            return DEFAULT_MAX_MEMORY_USAGE_RATIO;
+        }
+
+        std::cmp::min(v, 100)
     }
 }
 

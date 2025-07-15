@@ -186,9 +186,7 @@ impl WorkloadGroupResourceManagerInner {
                     return Ok(workload_resource);
                 }
                 (None, Some(QuotaValue::Bytes(v))) => {
-                    workload_resource
-                        .max_memory_usage
-                        .store(*v, Ordering::Relaxed);
+                    self.update_mem_usage(&online_workload_group);
                     return Ok(workload_resource);
                 }
                 (None, Some(QuotaValue::Percentage(v))) => {
@@ -219,9 +217,7 @@ impl WorkloadGroupResourceManagerInner {
                     self.update_mem_usage(&online_workload_group);
                 }
                 (Some(QuotaValue::Bytes(_old)), Some(QuotaValue::Bytes(new))) => {
-                    workload_resource
-                        .max_memory_usage
-                        .store(*new, Ordering::Relaxed);
+                    self.update_mem_usage(&online_workload_group);
                     return Ok(workload_resource);
                 }
                 _ => {}
@@ -239,15 +235,26 @@ impl WorkloadGroupResourceManagerInner {
                 {
                     if let Some(v) = self.percent_normalizer.get_normalized(*v) {
                         let limit = self.global_mem_stat.get_limit();
+                        let usage_ratio = workload_group.meta.get_max_memory_usage_ratio();
                         if limit > 0 {
-                            workload_group
-                                .max_memory_usage
-                                .store(limit as usize / 100 * v, Ordering::Relaxed);
+                            workload_group.max_memory_usage.store(
+                                limit as usize / 100 * usage_ratio / 100 * v,
+                                Ordering::Relaxed,
+                            );
                         }
                     }
                 } else if let Some(QuotaValue::Bytes(v)) =
                     workload_group.meta.quotas.get(MEMORY_QUOTA_KEY)
                 {
+                    let limit = self.global_mem_stat.get_limit();
+                    let usage_ratio = workload_group.meta.get_max_memory_usage_ratio();
+
+                    let mut memory_usage = *v;
+                    if limit > 0 {
+                        let max_memory_usage = limit as usize / 100 * usage_ratio;
+                        memory_usage = std::cmp::min(max_memory_usage, memory_usage);
+                    }
+
                     workload_group.max_memory_usage.store(*v, Ordering::Relaxed);
                 } else {
                     workload_group.max_memory_usage.store(0, Ordering::Relaxed)
