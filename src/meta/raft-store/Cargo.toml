@@ -53,6 +53,7 @@ tokio = { workspace = true }
 [dev-dependencies]
 databend-common-base = { workspace = true }
 pretty_assertions = { workspace = true }
+seq-marked = { workspace = true, features = [ "seq-marked-serde", "seq-marked-bincode", "seqv-serde" ] }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 
