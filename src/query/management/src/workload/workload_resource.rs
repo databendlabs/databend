@@ -393,7 +393,7 @@ mod tests {
             // Check memory usage was calculated (100% since it's the only workload)
             assert_eq!(
                 workload1.max_memory_usage.load(Ordering::Relaxed),
-                (LIMIT / 100 * 100) as usize
+                (LIMIT / 100 * 25 / 100 * 100) as usize
             );
         }
 
@@ -430,11 +430,11 @@ mod tests {
         // Check memory allocations are calculated correctly
         assert_eq!(
             resource1.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 30) as usize
+            (LIMIT / 100 * 25 / 100 * 30) as usize
         ); // 30% of total 100
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 70) as usize
+            (LIMIT / 100 * 25 / 100 * 70) as usize
         ); // 70% of total 100
 
         // Drop first workload
@@ -445,7 +445,7 @@ mod tests {
         assert_eq!(inner.percent_normalizer.sum.load(Ordering::Relaxed), 70);
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 100) as usize
+            (LIMIT / 100 * 25 / 100 * 100) as usize
         ); // Now 100% of remaining 70
 
         Ok(())
@@ -471,11 +471,11 @@ mod tests {
 
         assert_eq!(
             resource1.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 50) as usize
+            (LIMIT / 100 * 25 / 100 * 50) as usize
         );
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 50) as usize
+            (LIMIT / 100 * 25 / 100 * 50) as usize
         );
 
         workload_mgr
@@ -500,15 +500,15 @@ mod tests {
         // Memory usage should be recalculated
         assert_eq!(
             resource1.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * (70 * 100 / (70 + 50))) as usize
+            (LIMIT / 100 * 25 / 100 * (70 * 100 / (70 + 50))) as usize
         );
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * (50 * 100 / (70 + 50))) as usize
+            (LIMIT / 100 * 25 / 100 * (50 * 100 / (70 + 50))) as usize
         );
         assert_eq!(
             updated_resource.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * (70 * 100 / (70 + 50))) as usize
+            (LIMIT / 100 * 25 / 100 * (70 * 100 / (70 + 50))) as usize
         );
 
         Ok(())

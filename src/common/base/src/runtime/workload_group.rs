@@ -62,15 +62,15 @@ impl WorkloadGroup {
     }
 
     pub fn get_max_memory_usage_ratio(&self) -> usize {
-        let QuotaValue::Percentage(v) = self.quotas.get(MAX_MEMORY_USAGE_RATIO) else {
+        let Some(QuotaValue::Percentage(v)) = self.quotas.get(MAX_MEMORY_USAGE_RATIO) else {
             return DEFAULT_MAX_MEMORY_USAGE_RATIO;
         };
 
-        if v == 0 {
+        if *v == 0 {
             return DEFAULT_MAX_MEMORY_USAGE_RATIO;
         }
 
-        std::cmp::min(v, 100)
+        std::cmp::min(*v, 100)
     }
 }
 
