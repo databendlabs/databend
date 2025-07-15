@@ -18,7 +18,6 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -26,7 +25,6 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::AsyncFunctionDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
 
@@ -90,7 +88,7 @@ impl IPhysicalPlan for AsyncFunction {
     ) -> Result<FormatTreeNode<String>> {
         let mut node_children = vec![FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            format_output_columns(self.output_schema()?, ctx.metadata, true)
         ))];
 
         if let Some(info) = &self.stat_info {

@@ -64,7 +64,7 @@ impl IPhysicalPlan for CacheScan {
         let mut children = Vec::with_capacity(2);
         children.push(FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            format_output_columns(self.output_schema()?, ctx.metadata, true)
         )));
 
         match &self.cache_source {

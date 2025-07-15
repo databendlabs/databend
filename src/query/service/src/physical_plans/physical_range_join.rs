@@ -41,7 +41,6 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -86,13 +85,13 @@ impl IPhysicalPlan for RangeJoin {
         Ok(self.output_schema.clone())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
@@ -132,7 +131,7 @@ impl IPhysicalPlan for RangeJoin {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("join type: {}", self.join_type)),
             FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
@@ -342,10 +341,10 @@ fn resolve_range_condition(
                 let common_type =
                     common_super_type(arg1_data_type.clone(), arg2_data_type.clone(), cast_rules)
                         .ok_or_else(|| {
-                            ErrorCode::IllegalDataType(format!(
-                                "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
-                            ))
-                        })?;
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
+                        ))
+                    })?;
                 arg1 = wrap_cast(&arg1, &common_type);
                 arg2 = wrap_cast(&arg2, &common_type);
             };

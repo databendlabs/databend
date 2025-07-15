@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashSet;
 
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
@@ -27,11 +26,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
-use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_sources::EmptySource;
 use databend_common_pipeline_sources::PrefetchAsyncSourcer;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
@@ -48,7 +47,6 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 
@@ -157,7 +155,11 @@ impl IPhysicalPlan for CompactSource {
         // Add source pipe.
         builder.main_pipeline.add_source(
             |output| {
-                let source = databend_common_storages_fuse::operations::CompactSource::create(builder.ctx.clone(), block_reader.clone(), 1);
+                let source = databend_common_storages_fuse::operations::CompactSource::create(
+                    builder.ctx.clone(),
+                    block_reader.clone(),
+                    1,
+                );
                 PrefetchAsyncSourcer::create(builder.ctx.clone(), output, source)
             },
             max_threads,

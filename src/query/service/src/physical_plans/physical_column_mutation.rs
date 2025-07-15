@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
@@ -32,7 +31,6 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
@@ -108,7 +106,7 @@ impl IPhysicalPlan for ColumnMutation {
             let mut exprs = Vec::with_capacity(mutation_expr.len());
             for (id, remote_expr) in mutation_expr {
                 let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-                let schema_index = field_id_to_schema_index.get(&id).unwrap();
+                let schema_index = field_id_to_schema_index.get(id).unwrap();
                 schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
                 field_id_to_schema_index
                     .entry(*id)
@@ -128,7 +126,7 @@ impl IPhysicalPlan for ColumnMutation {
                 && !computed_expr.is_empty()
             {
                 let mut exprs = Vec::with_capacity(computed_expr.len());
-                for (id, remote_expr) in computed_expr.into_iter() {
+                for (id, remote_expr) in computed_expr.iter() {
                     let expr =
                         remote_expr
                             .as_expr(&BUILTIN_FUNCTIONS)

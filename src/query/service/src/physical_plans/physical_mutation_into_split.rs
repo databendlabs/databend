@@ -16,13 +16,11 @@ use std::any::Any;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::Pipe;
 use databend_common_sql::IndexType;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;

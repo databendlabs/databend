@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::new_serialize_segment_processor;
@@ -42,7 +43,6 @@ use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
-use databend_common_sql::executor::physical_plans::MutationKind;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::transforms::TransformResortAddOn;

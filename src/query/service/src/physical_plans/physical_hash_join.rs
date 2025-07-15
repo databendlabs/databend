@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,6 +29,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinType;
@@ -38,22 +40,25 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use itertools::Itertools;
 use tokio::sync::Barrier;
-use databend_common_pipeline_core::processors::ProcessorPtr;
+
 use super::physical_join_filter::PhysicalRuntimeFilters;
 use super::JoinRuntimeFilter;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanDynExt;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::HashJoinProbeState;
+use crate::pipelines::processors::transforms::TransformHashJoinBuild;
+use crate::pipelines::processors::transforms::TransformHashJoinProbe;
+use crate::pipelines::processors::HashJoinBuildState;
+use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::processors::{HashJoinBuildState, HashJoinDesc, HashJoinState};
-use crate::pipelines::processors::transforms::{HashJoinProbeState, TransformHashJoinBuild, TransformHashJoinProbe};
 
 // Type aliases to simplify complex return types
 type JoinConditionsResult = (
@@ -137,13 +142,13 @@ impl IPhysicalPlan for HashJoin {
         Ok(self.output_schema.clone())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item=&'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&self.probe).chain(std::iter::once(&self.build)))
     }
 
     fn children_mut<'a>(
         &'a mut self,
-    ) -> Box<dyn Iterator<Item=&'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
         Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
     }
 
@@ -210,7 +215,7 @@ impl IPhysicalPlan for HashJoin {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("join type: {}", self.join_type)),
             FormatTreeNode::new(format!("build keys: [{build_keys}]")),
@@ -329,7 +334,9 @@ impl IPhysicalPlan for HashJoin {
         let state = self.build_state(builder)?;
 
         if let Some((build_cache_index, _)) = self.build_side_cache_info {
-            builder.hash_join_states.insert(build_cache_index, state.clone());
+            builder
+                .hash_join_states
+                .insert(build_cache_index, state.clone());
         }
 
         // Build both phases of the Hash Join
@@ -338,7 +345,9 @@ impl IPhysicalPlan for HashJoin {
 
         // In the case of spilling, we need to share state among multiple threads
         // Quickly fetch all data from this round to quickly start the next round
-        builder.main_pipeline.resize(builder.main_pipeline.output_len(), true)
+        builder
+            .main_pipeline
+            .resize(builder.main_pipeline.output_len(), true)
     }
 }
 
@@ -432,7 +441,9 @@ impl HashJoin {
         }
         build_res.main_pipeline.add_sink(create_sink_processor)?;
 
-        builder.pipelines.push(build_res.main_pipeline.finalize(None));
+        builder
+            .pipelines
+            .push(build_res.main_pipeline.finalize(None));
         builder.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }
@@ -568,12 +579,12 @@ impl PhysicalPlanBuilder {
                 build_expr.data_type().clone(),
                 cast_rules,
             )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for probe key {:?} and build key {:?}",
-                        &probe_expr, &build_expr
-                    ))
-                })?;
+            .ok_or_else(|| {
+                ErrorCode::IllegalDataType(format!(
+                    "Cannot find common type for probe key {:?} and build key {:?}",
+                    &probe_expr, &build_expr
+                ))
+            })?;
             *probe_key = check_cast(
                 probe_expr.span(),
                 false,
@@ -581,7 +592,7 @@ impl PhysicalPlanBuilder {
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
             )?
-                .as_remote_expr();
+            .as_remote_expr();
             *build_key = check_cast(
                 build_expr.span(),
                 false,
@@ -589,7 +600,7 @@ impl PhysicalPlanBuilder {
                 &common_ty,
                 &BUILTIN_FUNCTIONS,
             )?
-                .as_remote_expr();
+            .as_remote_expr();
         }
 
         Ok(())
@@ -677,9 +688,9 @@ impl PhysicalPlanBuilder {
                         .data_type()
                         .remove_nullable()
                         == build_schema
-                        .field(build_index)
-                        .data_type()
-                        .remove_nullable()
+                            .field(build_index)
+                            .data_type()
+                            .remove_nullable()
                     {
                         probe_to_build_index.push(((probe_index, false), build_index));
                         if !pre_column_projections.contains(&left.column.index) {
@@ -1282,6 +1293,6 @@ impl PhysicalPlanBuilder {
             build_keys,
             probe_keys,
         )
-            .await
+        .await
     }
 }

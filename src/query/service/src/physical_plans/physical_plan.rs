@@ -13,20 +13,16 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::runtime::profile::get_statistics_desc;
-use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
-use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_sql::Metadata;
 use itertools::Itertools;
@@ -101,11 +97,11 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         }
     }
 
-    fn children(&self) -> Box<dyn Iterator<Item=&'_ Box<dyn IPhysicalPlan>> + '_> {
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
-    fn children_mut(&mut self) -> Box<dyn Iterator<Item=&'_ mut Box<dyn IPhysicalPlan>> + '_> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
@@ -265,7 +261,7 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
             match self.downcast_ref::<To>() {
                 None => None,
                 #[allow(invalid_reference_casting)]
-                Some(v) => Some(&mut *(v as *const To as *mut To))
+                Some(v) => Some(&mut *(v as *const To as *mut To)),
             }
         }
     }

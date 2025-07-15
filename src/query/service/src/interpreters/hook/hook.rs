@@ -18,6 +18,7 @@ use std::time::Instant;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_pipeline_core::Pipeline;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use log::info;
 use log::warn;
 
@@ -26,7 +27,6 @@ use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
 use crate::interpreters::hook::compact_hook::CompactTargetTableDescription;
 use crate::interpreters::hook::refresh_hook::hook_refresh;
 use crate::interpreters::hook::refresh_hook::RefreshDesc;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use crate::sessions::QueryContext;
 
 /// Hook operator.

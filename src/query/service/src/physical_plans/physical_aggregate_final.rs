@@ -17,13 +17,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
+use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Aggregate;
 use databend_common_sql::plans::AggregateMode;
@@ -32,11 +35,12 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::executor::physical_plans::{AggregateFunctionDesc, AggregateFunctionSignature, SortDesc};
-use super::{AggregateExpand, ExchangeSource, PhysicalPlanDynExt};
+
+use super::AggregateExpand;
 use super::AggregatePartial;
 use super::Exchange;
+use super::ExchangeSource;
+use super::PhysicalPlanDynExt;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -45,8 +49,10 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
+use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::processors::transforms::aggregator::{build_partition_bucket, AggregateInjector, FinalSingleStateAggregator};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -119,14 +125,14 @@ impl IPhysicalPlan for AggregateFinal {
         let agg_funcs = self
             .agg_funcs
             .iter()
-            .map(|agg| pretty_display_agg_desc(agg, &ctx.metadata))
+            .map(|agg| pretty_display_agg_desc(agg, ctx.metadata))
             .collect::<Vec<_>>()
             .join(", ");
 
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("group by: [{group_by}]")),
             FormatTreeNode::new(format!("aggregate functions: [{agg_funcs}]")),
@@ -180,7 +186,7 @@ impl IPhysicalPlan for AggregateFinal {
         let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
 
         let mut is_cluster_aggregate = false;
-        if let Some(_) = self.input.downcast_ref::<ExchangeSource>() {
+        if self.input.downcast_ref::<ExchangeSource>().is_some() {
             is_cluster_aggregate = true;
         }
 
@@ -209,14 +215,19 @@ impl IPhysicalPlan for AggregateFinal {
 
         let old_inject = builder.exchange_injector.clone();
 
-        if let Some(_) = self.input.downcast_ref::<ExchangeSource>() {
-            builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
+        if self.input.downcast_ref::<ExchangeSource>().is_some() {
+            builder.exchange_injector =
+                AggregateInjector::create(builder.ctx.clone(), params.clone());
         }
 
         self.input.build_pipeline(builder)?;
 
         builder.exchange_injector = old_inject;
-        build_partition_bucket(&mut builder.main_pipeline, params.clone(), max_restore_worker)
+        build_partition_bucket(
+            &mut builder.main_pipeline,
+            params.clone(),
+            max_restore_worker,
+        )
     }
 }
 
@@ -469,38 +480,36 @@ impl PhysicalPlanBuilder {
                         meta: PhysicalPlanMeta::new("Exchange"),
                         input: aggregate_partial,
                     })
-                } else {
-                    if let Some(grouping_sets) = agg.grouping_sets {
-                        let expand = AggregateExpand {
-                            input,
-                            grouping_sets,
-                            group_bys: group_items.clone(),
-                            stat_info: Some(stat_info.clone()),
-                            meta: PhysicalPlanMeta::new("AggregateExpand"),
-                        };
+                } else if let Some(grouping_sets) = agg.grouping_sets {
+                    let expand = AggregateExpand {
+                        input,
+                        grouping_sets,
+                        group_bys: group_items.clone(),
+                        stat_info: Some(stat_info.clone()),
+                        meta: PhysicalPlanMeta::new("AggregateExpand"),
+                    };
 
-                        Box::new(AggregatePartial {
-                            agg_funcs,
-                            group_by_display,
-                            enable_experimental_aggregate_hashtable,
-                            rank_limit: None,
-                            group_by: group_items,
-                            input: Box::new(expand),
-                            stat_info: Some(stat_info),
-                            meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        })
-                    } else {
-                        Box::new(AggregatePartial {
-                            input,
-                            agg_funcs,
-                            enable_experimental_aggregate_hashtable,
-                            group_by_display,
-                            group_by: group_items,
-                            stat_info: Some(stat_info),
-                            rank_limit,
-                            meta: PhysicalPlanMeta::new("AggregatePartial"),
-                        })
-                    }
+                    Box::new(AggregatePartial {
+                        agg_funcs,
+                        group_by_display,
+                        enable_experimental_aggregate_hashtable,
+                        rank_limit: None,
+                        group_by: group_items,
+                        input: Box::new(expand),
+                        stat_info: Some(stat_info),
+                        meta: PhysicalPlanMeta::new("AggregatePartial"),
+                    })
+                } else {
+                    Box::new(AggregatePartial {
+                        input,
+                        agg_funcs,
+                        enable_experimental_aggregate_hashtable,
+                        group_by_display,
+                        group_by: group_items,
+                        stat_info: Some(stat_info),
+                        rank_limit,
+                        meta: PhysicalPlanMeta::new("AggregatePartial"),
+                    })
                 }
             }
 

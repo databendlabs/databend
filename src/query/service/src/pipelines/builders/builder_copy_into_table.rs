@@ -20,10 +20,8 @@ use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
@@ -38,7 +36,6 @@ use log::debug;
 use log::info;
 
 use crate::physical_plans::CopyIntoTable;
-use crate::physical_plans::CopyIntoTableSource;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;

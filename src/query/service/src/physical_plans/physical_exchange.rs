@@ -18,17 +18,15 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
-use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::TypeCheck;
 
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -64,7 +62,7 @@ impl IPhysicalPlan for Exchange {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("exchange type: {}", match self.kind {
                 FragmentKind::Init => "Init-Partition".to_string(),

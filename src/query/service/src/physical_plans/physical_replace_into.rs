@@ -14,25 +14,28 @@
 
 use std::any::Any;
 use std::sync::Arc;
-use tokio::sync::Semaphore;
-use databend_common_catalog::plan::DataSourcePlan;
+
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
-use databend_common_expression::{BlockThresholds, DataSchema};
+use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::processors::{InputPort, OutputPort};
 use databend_common_pipeline_transforms::create_dummy_item;
-use databend_common_sql::executor::physical_plans::{MutationKind, OnConflictField};
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_common_storages_fuse::operations::BroadcastProcessor;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::{BroadcastProcessor, TransformSerializeBlock};
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use tokio::sync::Semaphore;
 
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
@@ -90,10 +93,17 @@ impl IPhysicalPlan for ReplaceInto {
 
         let max_threads = builder.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(self.segments.len(), max_threads as usize);
-        let table = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let table = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let schema = DataSchema::from(table.schema()).into();
-        let cluster_stats_gen = table.get_cluster_stats_gen(builder.ctx.clone(), 0, self.block_thresholds, Some(schema))?;
+        let cluster_stats_gen = table.get_cluster_stats_gen(
+            builder.ctx.clone(),
+            0,
+            self.block_thresholds,
+            Some(schema),
+        )?;
 
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -113,7 +123,8 @@ impl IPhysicalPlan for ReplaceInto {
                 return Ok(());
             }
             let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
-            builder.main_pipeline
+            builder
+                .main_pipeline
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
@@ -163,7 +174,8 @@ impl IPhysicalPlan for ReplaceInto {
             //                      └──────────────────────┘            └──────────────────┘
             let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
             // wrap them into pipeline, order matters!
-            builder.main_pipeline
+            builder
+                .main_pipeline
                 .add_pipe(Pipe::create(2, segment_partition_num + 1, vec![
                     serialize_block_transform.into_pipe_item(),
                     broadcast_processor.into_pipe_item(),
@@ -216,7 +228,8 @@ impl IPhysicalPlan for ReplaceInto {
             // extend the pipeline
             assert_eq!(builder.main_pipeline.output_len(), item_size);
             assert_eq!(pipe_items.len(), item_size);
-            builder.main_pipeline
+            builder
+                .main_pipeline
                 .add_pipe(Pipe::create(item_size, item_size, pipe_items));
         }
         Ok(())

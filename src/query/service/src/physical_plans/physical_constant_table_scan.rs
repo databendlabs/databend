@@ -26,7 +26,6 @@ use itertools::Itertools;
 
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -69,7 +68,7 @@ impl IPhysicalPlan for ConstantTableScan {
         let mut children = Vec::with_capacity(self.values.len() + 1);
         children.push(FormatTreeNode::new(format!(
             "output columns: [{}]",
-            format_output_columns(self.output_schema()?, &ctx.metadata, true)
+            format_output_columns(self.output_schema()?, ctx.metadata, true)
         )));
         for (i, value) in self.values.iter().enumerate() {
             let column = value.iter().map(|val| format!("{val}")).join(", ");

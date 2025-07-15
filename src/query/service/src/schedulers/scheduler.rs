@@ -81,7 +81,8 @@ pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &Box<dyn IPhysicalPlan>,
 ) -> Result<PipelineBuildResult> {
-    let pipeline = PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
+    let pipeline =
+        PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
     let mut build_res = pipeline.finalize(plan)?;
 
     let settings = ctx.get_settings();

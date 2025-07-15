@@ -36,18 +36,11 @@ use itertools::Itertools;
 use log::info;
 
 use crate::interpreters::Interpreter;
-use crate::physical_plans::AggregateExpand;
-use crate::physical_plans::AggregateFinal;
-use crate::physical_plans::AggregatePartial;
 use crate::physical_plans::DeriveHandle;
-use crate::physical_plans::EvalScalar;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::Filter;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
-use crate::physical_plans::Sort;
-use crate::physical_plans::Window;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;

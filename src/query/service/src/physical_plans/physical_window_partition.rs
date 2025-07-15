@@ -20,10 +20,10 @@ use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::IndexType;
 use databend_storages_common_cache::TempDirManager;
 
@@ -31,10 +31,8 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use databend_common_sql::executor::physical_plans::SortDesc;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
@@ -93,7 +91,7 @@ impl IPhysicalPlan for WindowPartition {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("hash keys: [{partition_by}]")),
         ];

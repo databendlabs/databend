@@ -32,7 +32,6 @@ use databend_common_storages_fuse::operations::MergeIntoNotMatchedProcessor;
 use itertools::Itertools;
 
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;

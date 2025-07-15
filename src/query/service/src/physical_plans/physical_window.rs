@@ -36,6 +36,9 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::binder::wrap_cast;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
+use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncFrame;
 use databend_common_sql::plans::WindowFuncFrameBound;
@@ -45,14 +48,10 @@ use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 
-use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
-use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
-use databend_common_sql::executor::physical_plans::SortDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -130,14 +129,14 @@ impl IPhysicalPlan for Window {
         let frame = self.window_frame.to_string();
 
         let func = match &self.func {
-            WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, &ctx.metadata),
+            WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, ctx.metadata),
             func => format!("{}", func),
         };
 
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("aggregate function: [{func}]")),
             FormatTreeNode::new(format!("partition by: [{partition_by}]")),

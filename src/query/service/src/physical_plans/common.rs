@@ -11,14 +11,3 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-use std::fmt::Display;
-use std::fmt::Formatter;
-
-use databend_common_expression::types::DataType;
-use databend_common_expression::Scalar;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_sql::plans::UDFField;
-use databend_common_sql::plans::UDFType;
-use databend_common_sql::IndexType;
-

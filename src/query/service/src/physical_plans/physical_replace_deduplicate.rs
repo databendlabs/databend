@@ -15,28 +15,31 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use databend_common_catalog::plan::DataSourcePlan;
+
 use databend_common_catalog::table::Table;
-use databend_common_exception::{ErrorCode, Result};
-use databend_common_expression::{ColumnId, DataSchema};
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_pipeline_transforms::{build_compact_block_pipeline, TransformPipelineHelper};
-use databend_common_sql::ColumnBinding;
+use databend_common_pipeline_transforms::build_compact_block_pipeline;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::OnConflictField;
+use databend_common_sql::ColumnBinding;
+use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
+use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::{ReplaceIntoProcessor, UnbranchedReplaceIntoProcessor};
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformCastSchema;
+use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceDeduplicate {
@@ -90,15 +93,17 @@ impl IPhysicalPlan for ReplaceDeduplicate {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        let tbl = builder.ctx.build_table_by_table_info(&self.table_info, None)?;
+        let tbl = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
 
         let mut delete_column_idx = 0;
         let mut modified_schema = DataSchema::from(self.target_schema.clone()).into();
         if let Some(ReplaceSelectCtx {
-                        select_column_bindings,
-                        select_schema,
-                    }) = &self.select_ctx
+            select_column_bindings,
+            select_schema,
+        }) = &self.select_ctx
         {
             PipelineBuilder::build_result_projection(
                 &builder.func_ctx,
@@ -187,7 +192,8 @@ impl IPhysicalPlan for ReplaceDeduplicate {
                 self.table_level_range_index.clone(),
                 delete_when.map(|(expr, _)| (expr, delete_column_idx)),
             )?;
-            builder.main_pipeline
+            builder
+                .main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
         } else {
             let replace_into_processor = UnbranchedReplaceIntoProcessor::create(
@@ -200,7 +206,8 @@ impl IPhysicalPlan for ReplaceDeduplicate {
                 self.table_level_range_index.clone(),
                 delete_when.map(|_| delete_column_idx),
             )?;
-            builder.main_pipeline
+            builder
+                .main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
         }
         Ok(())

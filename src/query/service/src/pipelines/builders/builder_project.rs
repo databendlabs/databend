@@ -15,7 +15,6 @@
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FunctionContext;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_sinks::EmptySink;
@@ -24,8 +23,6 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::ColumnBinding;
 
-use crate::physical_plans::ProjectSet;
-use crate::pipelines::processors::transforms::TransformSRF;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

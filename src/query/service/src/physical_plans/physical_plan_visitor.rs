@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::physical_plans::physical_plan::IPhysicalPlan;
-
 // pub trait PhysicalPlanReplacer {
 //     fn replace(&mut self, plan: &PhysicalPlan) -> Result<PhysicalPlan> {
 //         match plan {

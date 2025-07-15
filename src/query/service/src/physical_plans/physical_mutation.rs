@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,9 +40,14 @@ use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipe;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
+use databend_common_sql::executor::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::parse_computed_expr;
 use databend_common_sql::plans::BoundColumnRef;
@@ -59,27 +64,22 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::Visibility;
 use databend_common_sql::DUMMY_COLUMN_INDEX;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
+use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
 use tokio::sync::Semaphore;
-use databend_common_catalog::table::Table;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::processors::{InputPort, OutputPort};
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::TransformSerializeBlock;
+
 use super::ColumnMutation;
 use super::CommitType;
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::MutationManipulate;
 use crate::physical_plans::MutationOrganize;
 use crate::physical_plans::MutationSplit;
@@ -171,7 +171,8 @@ impl IPhysicalPlan for Mutation {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
 
-        let cluster_stats_gen = table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?;
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?;
 
         let max_threads = builder.settings.get_max_threads()? as usize;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));

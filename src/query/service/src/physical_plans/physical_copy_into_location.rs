@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+
 use chrono::Duration;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -27,8 +28,8 @@ use databend_common_sql::ColumnBinding;
 use databend_common_storages_stage::StageSinkTable;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+
 use crate::physical_plans::format::FormatContext;
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;

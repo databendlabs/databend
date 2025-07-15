@@ -18,10 +18,9 @@ use std::sync::Arc;
 
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_functions::aggregates::assert_arguments;
 use databend_common_meta_types::NodeInfo;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use log::kv::Source;
 
 use crate::clusters::ClusterHelper;
@@ -32,7 +31,6 @@ use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
-use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlanDynExt;
@@ -102,7 +100,7 @@ impl Fragmenter {
         ctx.get_cluster().local_id()
     }
 
-    pub fn build_fragment(mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<Vec<PlanFragment>> {
+    pub fn build_fragment(self, plan: &Box<dyn IPhysicalPlan>) -> Result<Vec<PlanFragment>> {
         let mut handle = FragmentDeriveHandle::new(self.query_id.clone(), self.ctx.clone());
         let root = plan.derive_with(&mut handle);
         let mut fragments = {

@@ -118,7 +118,7 @@ impl IPhysicalPlan for AggregateExpand {
         let mut node_children = vec![
             FormatTreeNode::new(format!(
                 "output columns: [{}]",
-                format_output_columns(self.output_schema()?, &ctx.metadata, true)
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
             )),
             FormatTreeNode::new(format!("grouping sets: [{sets}]")),
         ];

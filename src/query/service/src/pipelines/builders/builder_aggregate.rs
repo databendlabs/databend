@@ -14,38 +14,19 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::HashTableConfig;
-use databend_common_expression::LimitType;
-use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_pipeline_transforms::processors::TransformSortPartial;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::plans::UDFType;
 use databend_common_sql::IndexType;
-use databend_common_storage::DataOperator;
 use itertools::Itertools;
-use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
-use crate::physical_plans::AggregateExpand;
-use crate::physical_plans::AggregateFinal;
-use crate::physical_plans::AggregatePartial;
-use crate::physical_plans::ExchangeSource;
-use crate::physical_plans::PhysicalPlanDynExt;
-use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
+
 use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
-use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
-use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
-use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {

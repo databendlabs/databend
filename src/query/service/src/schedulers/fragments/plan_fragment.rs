@@ -31,8 +31,6 @@ use databend_storages_common_table_meta::meta::Location;
 
 use crate::physical_plans::CompactSource;
 use crate::physical_plans::ConstantTableScan;
-use crate::physical_plans::CopyIntoTable;
-use crate::physical_plans::CopyIntoTableSource;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::IPhysicalPlan;

@@ -15,30 +15,39 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+
 use databend_common_ast::ast::FormatTreeNode;
-use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
-use databend_common_expression::{DataField, HashTableConfig, LimitType, SortColumnDescription};
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_sql::IndexType;
-use itertools::Itertools;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_expression::HashTableConfig;
+use databend_common_expression::LimitType;
+use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::{TransformPipelineHelper, TransformSortPartial};
-use databend_common_sql::executor::physical_plans::{AggregateFunctionDesc, SortDesc};
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_pipeline_transforms::TransformSortPartial;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
+use databend_common_sql::executor::physical_plans::SortDesc;
+use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
+use itertools::Itertools;
+
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
+use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
+use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::processors::transforms::aggregator::{AggregateInjector, PartialSingleStateAggregator, TransformAggregateSpillWriter, TransformPartialAggregate};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -113,7 +122,7 @@ impl IPhysicalPlan for AggregatePartial {
         let agg_funcs = self
             .agg_funcs
             .iter()
-            .map(|agg| pretty_display_agg_desc(agg, &ctx.metadata))
+            .map(|agg| pretty_display_agg_desc(agg, ctx.metadata))
             .collect::<Vec<_>>()
             .join(", ");
 

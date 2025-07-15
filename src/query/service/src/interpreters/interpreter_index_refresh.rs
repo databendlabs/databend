@@ -56,7 +56,6 @@ use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::test_kits::query_count;
 
 pub struct RefreshIndexInterpreter {
     ctx: Arc<QueryContext>,
