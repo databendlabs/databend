@@ -147,3 +147,37 @@ else
     echo "Actual  : $actual"
     exit 1
 fi
+
+# Test whether the schedule can be restored after restart
+
+killall -9 databend-query || true
+
+echo 'Start databend-query node-1'
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+
+echo "Waiting on node-1..."
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
+
+echo 'Start databend-query node-2'
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+
+echo "Waiting on node-2..."
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
+
+echo "Started 2-node cluster with private task enabled..."
+
+sleep 9
+
+response9=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
+
+actual=$(echo "$response9" | jq -c '.data')
+expected='[["0"],["0"],["1"],["1"],["1"],["2"],["2"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
