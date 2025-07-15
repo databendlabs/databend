@@ -32,8 +32,7 @@ use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use rotbl::v001::Marked;
-
-use crate::marked::SeqMarked;
+use seq_marked::SeqMarked;
 
 /// The identifier of the index for kv with expiration.
 ///

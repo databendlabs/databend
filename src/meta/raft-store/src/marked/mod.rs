@@ -19,10 +19,9 @@
 mod marked_test;
 
 use databend_common_meta_types::KVMeta;
+use seq_marked::SeqMarked;
 
 use crate::state_machine::ExpireValue;
-
-pub type SeqMarked<T = Vec<u8>> = map_api::SeqMarked<T>;
 
 pub type MetaValue<T = Vec<u8>> = (Option<KVMeta>, T);
 
