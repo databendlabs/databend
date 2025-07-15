@@ -23,7 +23,6 @@ use std::time::Duration;
 
 use async_stream::stream;
 use chrono::DateTime;
-use chrono::Local;
 use chrono::Utc;
 use chrono_tz::Tz;
 use cron::Schedule;

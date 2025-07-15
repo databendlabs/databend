@@ -34,9 +34,9 @@ use crate::sessions::QueryContext;
 mod cloud;
 mod private;
 
-pub(crate) struct TaskInterpreterFactory;
+pub(crate) struct TaskInterpreterManager;
 
-impl TaskInterpreterFactory {
+impl TaskInterpreterManager {
     pub fn build(ctx: &QueryContext) -> Result<TaskInterpreterImpl> {
         if GlobalConfig::instance().task.on {
             LicenseManagerSwitch::instance().check_enterprise_enabled(

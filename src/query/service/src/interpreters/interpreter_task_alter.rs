@@ -18,7 +18,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::AlterTaskPlan;
 
 use crate::interpreters::task::TaskInterpreter;
-use crate::interpreters::task::TaskInterpreterFactory;
+use crate::interpreters::task::TaskInterpreterManager;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -50,7 +50,7 @@ impl Interpreter for AlterTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        TaskInterpreterFactory::build(&self.ctx)?
+        TaskInterpreterManager::build(&self.ctx)?
             .alter_task(&self.ctx, &self.plan)
             .await?;
 
