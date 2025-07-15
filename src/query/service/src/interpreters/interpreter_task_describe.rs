@@ -19,7 +19,7 @@ use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_storages_system::parse_tasks_to_datablock;
 
 use crate::interpreters::task::TaskInterpreter;
-use crate::interpreters::task::TaskInterpreterFactory;
+use crate::interpreters::task::TaskInterpreterManager;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -49,7 +49,7 @@ impl Interpreter for DescribeTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let Some(task) = TaskInterpreterFactory::build(&self.ctx)?
+        let Some(task) = TaskInterpreterManager::build(&self.ctx)?
             .describe_task(&self.ctx, &self.plan)
             .await?
         else {
