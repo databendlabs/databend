@@ -21,7 +21,6 @@ use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -125,16 +124,8 @@ impl QueryExecutionTable {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
-                "process_rows_percentage",
-                TableDataType::Number(NumberDataType::Float64),
-            ),
-            TableField::new(
                 "process_time_in_micros",
                 TableDataType::Number(NumberDataType::UInt64),
-            ),
-            TableField::new(
-                "process_time_percentage",
-                TableDataType::Number(NumberDataType::Float64),
             ),
         ]);
 
@@ -177,17 +168,12 @@ impl QueryExecutionTable {
         let mut timestamps = Vec::new();
         let mut query_ids = Vec::new();
         let mut process_rows = Vec::new();
-        let mut process_rows_percentage = Vec::new();
         let mut process_times = Vec::new();
-        let mut process_time_percentage = Vec::new();
 
         let empty_map = HashMap::new();
         for timestamp in valid_time_range {
             let rows_for_timestamp = rows_by_timestamp.get(&timestamp).unwrap_or(&empty_map);
             let times_for_timestamp = times_by_timestamp.get(&timestamp).unwrap_or(&empty_map);
-
-            let rows_percentage = calculate_percentage(rows_for_timestamp);
-            let times_percentage = calculate_percentage(times_for_timestamp);
 
             let mut all_query_ids = std::collections::HashSet::new();
             all_query_ids.extend(rows_for_timestamp.keys());
@@ -198,10 +184,7 @@ impl QueryExecutionTable {
                 timestamps.push(timestamp as i64 * 1_000_000);
                 query_ids.push(query_id.clone());
                 process_rows.push(rows_for_timestamp.get(query_id).copied().unwrap_or(0));
-                process_rows_percentage.push(rows_percentage.get(query_id).copied().unwrap_or(0.0));
                 process_times.push(times_for_timestamp.get(query_id).copied().unwrap_or(0));
-                process_time_percentage
-                    .push(times_percentage.get(query_id).copied().unwrap_or(0.0));
             }
         }
 
@@ -210,26 +193,8 @@ impl QueryExecutionTable {
             TimestampType::from_data(timestamps),
             StringType::from_data(query_ids),
             UInt32Type::from_data(process_rows),
-            Float64Type::from_data(process_rows_percentage),
             UInt32Type::from_data(process_times),
-            Float64Type::from_data(process_time_percentage),
         ])
-    }
-}
-
-fn calculate_percentage(data: &HashMap<String, u32>) -> HashMap<String, f64> {
-    let total: u32 = data.values().sum();
-    if total > 0 {
-        data.iter()
-            .map(|(k, v)| {
-                (
-                    k.clone(),
-                    ((*v as f64 / total as f64) * 10000.0).round() / 100.0,
-                )
-            })
-            .collect()
-    } else {
-        HashMap::new()
     }
 }
 
