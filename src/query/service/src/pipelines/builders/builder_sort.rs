@@ -94,13 +94,6 @@ impl PipelineBuilder {
             });
         }
 
-        let max_threads = self.settings.get_max_threads()? as usize;
-
-        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
-        if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-            self.main_pipeline.try_resize(max_threads)?;
-        }
-
         let builder = SortPipelineBuilder::create(
             self.ctx.clone(),
             output_schema,
@@ -109,10 +102,14 @@ impl PipelineBuilder {
         )?
         .with_limit(sort.limit);
 
+        let max_threads = self.settings.get_max_threads()? as usize;
         match sort.step {
             SortStep::Single => {
                 // Build for single node mode.
                 // We build the full sort pipeline for it.
+                if max_threads == 1 {
+                    self.main_pipeline.try_resize(1)?;
+                }
                 builder
                     .remove_order_col_at_last()
                     .build_full_sort_pipeline(&mut self.main_pipeline)
@@ -122,6 +119,9 @@ impl PipelineBuilder {
                 // Build for each cluster node.
                 // We build the full sort pipeline for it.
                 // Don't remove the order column at last.
+                if max_threads == 1 {
+                    self.main_pipeline.try_resize(1)?;
+                }
                 builder.build_full_sort_pipeline(&mut self.main_pipeline)
             }
             SortStep::Final => {
@@ -130,6 +130,10 @@ impl PipelineBuilder {
                 // as the data is already sorted in each cluster node.
                 // The input number of the transform is equal to the number of cluster nodes.
                 if self.main_pipeline.output_len() > 1 {
+                    if self.main_pipeline.output_len() != 1 && max_threads == 1 {
+                        // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+                        self.main_pipeline.try_resize(1)?;
+                    }
                     builder
                         .remove_order_col_at_last()
                         .build_multi_merge(&mut self.main_pipeline)
@@ -141,6 +145,9 @@ impl PipelineBuilder {
             }
 
             SortStep::Sample => {
+                if max_threads == 1 {
+                    self.main_pipeline.try_resize(1)?;
+                }
                 builder.build_sample(&mut self.main_pipeline)?;
                 self.exchange_injector = TransformSortBuilder::exchange_injector();
                 Ok(())
@@ -155,6 +162,10 @@ impl PipelineBuilder {
                     self.build_pipeline(&sort.input)?;
                 }
 
+                if self.main_pipeline.output_len() != 1 && max_threads == 1 {
+                    // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
+                    unimplemented!();
+                }
                 builder
                     .remove_order_col_at_last()
                     .build_bounded_merge_sort(&mut self.main_pipeline)
