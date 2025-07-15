@@ -294,7 +294,7 @@ impl TestSuite {
                         .with(MetaSpec::new_expire(now_sec - 1)),
                 )
                 .await?;
-            // dbg!("update expired k1", _res);
+            // dbg!("update on expired k1", _res);
 
             let _res = kv
                 .upsert_kv(
@@ -306,8 +306,14 @@ impl TestSuite {
             // dbg!("update non expired k2", _res);
 
             info!("--- mget should not return expired");
-            let mut res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
             {
+                // let got = kv.get_kv("k1").await?;
+                // dbg!("k1", got);
+                // let got = kv.get_kv("k2").await?;
+                // dbg!("k2", got);
+
+                let mut res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
+                // dbg!(&res);
                 assert_eq!(res[0], None);
 
                 let v2 = res.remove(1).unwrap();

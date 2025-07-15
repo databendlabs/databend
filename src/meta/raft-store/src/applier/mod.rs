@@ -675,6 +675,7 @@ where SM: StateMachineApi + 'static
 
         for (expire_key, key) in to_clean {
             let curr = self.sm.get_maybe_expired_kv(&key).await?;
+
             if let Some(seq_v) = &curr {
                 assert_eq!(expire_key.seq, seq_v.seq);
                 info!("clean expired: {}, {}", key, expire_key);
