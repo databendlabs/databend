@@ -48,7 +48,7 @@ use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_storage::Datum;
 use databend_query::clusters::ClusterHelper;
-use databend_query::physical_plans::PhysicalPlanBuilder;
+use databend_query::physical_plans::{PhysicalPlanBuilder, PhysicalPlanDynExt};
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use goldenfile::Mint;
@@ -588,11 +588,12 @@ async fn run_test_case(
         let physical = builder.build(&s_expr, bind_context.column_set()).await?;
 
         write_result(mint, &format!("{}_physical.txt", case.stem), |f| {
+            let metadata = metadata.read();
             writeln!(
                 f,
                 "{}",
                 physical
-                    .format(metadata, Default::default())?
+                    .format(&metadata, Default::default())?
                     .format_pretty()?
             )
             .map_err(|e| ErrorCode::Internal(format!("Failed to write: {}", e)))

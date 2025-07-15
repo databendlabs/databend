@@ -28,7 +28,7 @@ use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
 use databend_common_storages_fuse::operations::CompactOptions;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use databend_query::physical_plans::CommitSink;
+use databend_query::physical_plans::{CommitSink, IPhysicalPlan};
 use databend_query::physical_plans::CommitType;
 use databend_query::physical_plans::CompactSource;
 use databend_query::physical_plans::PhysicalPlanMeta;
@@ -132,7 +132,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             table_meta_timestamps,
         });
 
-        let physical_plan = Box::new(CommitSink {
+        let physical_plan: Box<dyn IPhysicalPlan> = Box::new(CommitSink {
             input: root,
             table_info,
             table_meta_timestamps,
