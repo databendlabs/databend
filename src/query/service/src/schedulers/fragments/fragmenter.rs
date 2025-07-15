@@ -32,7 +32,7 @@ use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
-use crate::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
 use crate::physical_plans::PhysicalPlanDynExt;
@@ -258,7 +258,7 @@ impl DeriveHandle for FragmentDeriveHandle {
     fn derive(
         &mut self,
         v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
+        mut children: Vec<Box<dyn IPhysicalPlan>>,
     ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
         if let Some(_recluster) = v.downcast_ref::<Recluster>() {
             self.state = State::Recluster;
@@ -308,7 +308,7 @@ impl DeriveHandle for FragmentDeriveHandle {
 
             self.state = State::Other;
             let cluster = self.ctx.get_cluster();
-            let exchange = Self::get_exchange(cluster, &plan)?;
+            let exchange = Self::get_exchange(cluster, &plan).unwrap();
 
             let source_fragment = PlanFragment {
                 plan,

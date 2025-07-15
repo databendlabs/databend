@@ -32,13 +32,11 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use itertools::Itertools;
-
-use super::AggregateExpand;
-use super::AggregateFunctionDesc;
-use super::AggregateFunctionSignature;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::executor::physical_plans::{AggregateFunctionDesc, AggregateFunctionSignature, SortDesc};
+use super::{AggregateExpand, ExchangeSource, PhysicalPlanDynExt};
 use super::AggregatePartial;
 use super::Exchange;
-use super::SortDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
@@ -47,6 +45,8 @@ use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::aggregator::{build_partition_bucket, AggregateInjector, FinalSingleStateAggregator};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {
@@ -169,6 +169,54 @@ impl IPhysicalPlan for AggregateFinal {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        let max_block_size = builder.settings.get_max_block_size()?;
+        let enable_experimental_aggregate_hashtable = builder
+            .settings
+            .get_enable_experimental_aggregate_hashtable()?;
+        let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
+        let max_restore_worker = builder.settings.get_max_aggregate_restore_worker()?;
+
+        let mut is_cluster_aggregate = false;
+        if let Some(_) = self.input.downcast_ref::<ExchangeSource>() {
+            is_cluster_aggregate = true;
+        }
+
+        let params = PipelineBuilder::build_aggregator_params(
+            self.before_group_by_schema.clone(),
+            &self.group_by,
+            &self.agg_funcs,
+            enable_experimental_aggregate_hashtable,
+            is_cluster_aggregate,
+            max_block_size as usize,
+            max_spill_io_requests as usize,
+        )?;
+
+        if params.group_columns.is_empty() {
+            self.input.build_pipeline(builder)?;
+
+            builder.main_pipeline.try_resize(1)?;
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    FinalSingleStateAggregator::try_create(input, output, &params)?,
+                ))
+            })?;
+
+            return Ok(());
+        }
+
+        let old_inject = builder.exchange_injector.clone();
+
+        if let Some(_) = self.input.downcast_ref::<ExchangeSource>() {
+            builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
+        }
+
+        self.input.build_pipeline(builder)?;
+
+        builder.exchange_injector = old_inject;
+        build_partition_bucket(&mut builder.main_pipeline, params.clone(), max_restore_worker)
     }
 }
 

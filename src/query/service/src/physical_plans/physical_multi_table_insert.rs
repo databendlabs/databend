@@ -273,12 +273,12 @@ impl IPhysicalPlan for ChunkFilter {
         let projection: ColumnSet = (0..self.input.output_schema()?.fields.len()).collect();
         for predicate in self.predicates.iter() {
             if let Some(predicate) = predicate {
-                f.push(Box::new(self.filter_transform_builder(
+                f.push(Box::new(builder.filter_transform_builder(
                     &[predicate.clone()],
                     projection.clone(),
                 )?));
             } else {
-                f.push(Box::new(self.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()?));
             }
         }
 
@@ -367,13 +367,13 @@ impl IPhysicalPlan for ChunkEvalScalar {
         let mut f: Vec<DynTransformBuilder> = Vec::with_capacity(self.eval_scalars.len());
         for eval_scalar in self.eval_scalars.iter() {
             if let Some(eval_scalar) = eval_scalar {
-                f.push(Box::new(self.map_transform_builder(
+                f.push(Box::new(builder.map_transform_builder(
                     num_input_columns,
                     eval_scalar.remote_exprs.clone(),
                     Some(eval_scalar.projection.clone()),
                 )?));
             } else {
-                f.push(Box::new(self.dummy_transform_builder()?));
+                f.push(Box::new(builder.dummy_transform_builder()?));
             }
         }
 
@@ -836,7 +836,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
             Vec::with_capacity(self.targets.len());
         let mut tables = HashMap::new();
 
-        for target in self.targets {
+        for target in &self.targets {
             let table = builder
                 .ctx
                 .build_table_by_table_info(&target.target_table_info, None)?;
@@ -877,7 +877,7 @@ impl IPhysicalPlan for ChunkCommitInsert {
                 CommitMultiTableInsert::create(
                     tables.clone(),
                     builder.ctx.clone(),
-                    *self.overwrite,
+                    self.overwrite,
                     self.update_stream_meta.clone(),
                     self.deduplicated_label.clone(),
                     catalog.clone(),

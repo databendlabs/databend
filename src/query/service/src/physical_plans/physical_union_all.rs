@@ -156,7 +156,7 @@ impl IPhysicalPlan for UnionAll {
 
 impl UnionAll {
     fn project_input(
-        &mut self,
+        &self,
         schema: DataSchemaRef,
         projection: &[(IndexType, Option<RemoteExpr>)],
         builder: &mut PipelineBuilder,
@@ -198,7 +198,7 @@ impl UnionAll {
         })
     }
 
-    fn build_recursive_cte_source(&mut self, builder: &mut PipelineBuilder) -> Result<()> {
+    fn build_recursive_cte_source(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let max_threads = builder.settings.get_max_threads()?;
         builder.main_pipeline.add_source(
             |output_port| {

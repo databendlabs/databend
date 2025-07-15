@@ -16,11 +16,15 @@ use std::any::Any;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_sql::NameResolutionContext;
 use databend_common_sql::plans::InsertValue;
 
+use databend_common_exception::Result;
 use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::{PipelineBuilder, RawValueSource, ValueSource};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {
@@ -45,5 +49,30 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
     fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
         assert!(children.is_empty());
         Box::new(self.clone())
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        builder.main_pipeline.add_source(
+            |output| {
+                let name_resolution_ctx = NameResolutionContext::try_from(builder.settings.as_ref())?;
+                match &self.source {
+                    InsertValue::Values { rows } => {
+                        let inner = ValueSource::new(rows.clone(), self.schema.clone());
+                        AsyncSourcer::create(builder.ctx.clone(), output, inner)
+                    }
+                    InsertValue::RawValues { data, start } => {
+                        let inner = RawValueSource::new(
+                            data.clone(),
+                            builder.ctx.clone(),
+                            name_resolution_ctx,
+                            self.schema.clone(),
+                            *start,
+                        );
+                        AsyncSourcer::create(builder.ctx.clone(), output, inner)
+                    }
+                }
+            },
+            1,
+        )
     }
 }

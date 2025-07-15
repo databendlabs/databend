@@ -64,7 +64,13 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
-
+use tokio::sync::Semaphore;
+use databend_common_catalog::table::Table;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::processors::{InputPort, OutputPort};
+use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use super::ColumnMutation;
 use super::CommitType;
 use crate::physical_plans::format::FormatContext;
@@ -73,13 +79,13 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::FragmentKind;
-use crate::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::MutationManipulate;
 use crate::physical_plans::MutationOrganize;
 use crate::physical_plans::MutationSplit;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::RowFetch;
+use crate::pipelines::PipelineBuilder;
 
 // The predicate_column_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
@@ -153,6 +159,86 @@ impl IPhysicalPlan for Mutation {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let tbl = builder
+            .ctx
+            .build_table_by_table_info(&self.table_info, None)?;
+
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+        let block_thresholds = table.get_block_thresholds();
+
+        let cluster_stats_gen = table.get_cluster_stats_gen(builder.ctx.clone(), 0, block_thresholds, None)?;
+
+        let max_threads = builder.settings.get_max_threads()? as usize;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
+
+        // For row_id port, create rowid_aggregate_mutator
+        // For matched data port and unmatched port, do serialize
+        let serialize_len = match self.strategy {
+            MutationStrategy::NotMatchedOnly => builder.main_pipeline.output_len(),
+            MutationStrategy::MixedMatched | MutationStrategy::MatchedOnly => {
+                // remove row id port
+                builder.main_pipeline.output_len() - 1
+            }
+            MutationStrategy::Direct => unreachable!(),
+        };
+
+        // 1. Fill default and computed columns
+        builder.build_fill_columns_in_merge_into(
+            tbl.clone(),
+            serialize_len,
+            self.need_match,
+            self.unmatched.clone(),
+        )?;
+
+        // 2. Add cluster‘s blocksort if it's a cluster table
+        builder.build_compact_and_cluster_sort_in_merge_into(
+            table,
+            self.need_match,
+            serialize_len,
+            block_thresholds,
+        )?;
+
+        let mut pipe_items = Vec::with_capacity(builder.main_pipeline.output_len());
+
+        // 3.1 Add rowid_aggregate_mutator for row_id port
+        if self.need_match {
+            pipe_items.push(table.rowid_aggregate_mutator(
+                builder.ctx.clone(),
+                cluster_stats_gen.clone(),
+                io_request_semaphore,
+                self.segments.clone(),
+                false,
+                self.table_meta_timestamps,
+            )?);
+        }
+
+        // 3.2 Add serialize_block_transform for data port
+        for _ in 0..serialize_len {
+            let serialize_block_transform = TransformSerializeBlock::try_create(
+                builder.ctx.clone(),
+                InputPort::create(),
+                OutputPort::create(),
+                table,
+                cluster_stats_gen.clone(),
+                MutationKind::MergeInto,
+                self.table_meta_timestamps,
+            )?;
+            pipe_items.push(serialize_block_transform.into_pipe_item());
+        }
+
+        let output_len = pipe_items.iter().map(|item| item.outputs_port.len()).sum();
+        builder.main_pipeline.add_pipe(Pipe::create(
+            builder.main_pipeline.output_len(),
+            output_len,
+            pipe_items,
+        ));
+
+        Ok(())
     }
 }
 

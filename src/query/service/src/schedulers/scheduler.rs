@@ -81,14 +81,12 @@ pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &Box<dyn IPhysicalPlan>,
 ) -> Result<PipelineBuildResult> {
-    let pipeline =
-        PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
-    // let mut build_res = pipeline.finalize(plan)?;
+    let pipeline = PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
+    let mut build_res = pipeline.finalize(plan)?;
 
-    // let settings = ctx.get_settings();
-    // build_res.set_max_threads(settings.get_max_threads()? as usize);
-    // Ok(build_res)
-    unimplemented!()
+    let settings = ctx.get_settings();
+    build_res.set_max_threads(settings.get_max_threads()? as usize);
+    Ok(build_res)
 }
 
 /// Build distributed pipeline via fragment and actions.
@@ -139,7 +137,7 @@ impl ServiceQueryExecutor {
 }
 
 impl ServiceQueryExecutor {
-    async fn execute_query_with_physical_plan(
+    pub async fn execute_query_with_physical_plan(
         &self,
         plan: &Box<dyn IPhysicalPlan>,
     ) -> Result<Vec<DataBlock>> {

@@ -45,7 +45,7 @@ use log::info;
 use crate::interpreters::common::query_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;

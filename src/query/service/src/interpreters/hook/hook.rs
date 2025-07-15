@@ -26,7 +26,7 @@ use crate::interpreters::hook::compact_hook::CompactHookTraceCtx;
 use crate::interpreters::hook::compact_hook::CompactTargetTableDescription;
 use crate::interpreters::hook::refresh_hook::hook_refresh;
 use crate::interpreters::hook::refresh_hook::RefreshDesc;
-use crate::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use crate::sessions::QueryContext;
 
 /// Hook operator.

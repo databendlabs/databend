@@ -126,7 +126,7 @@ impl IPhysicalPlan for MutationOrganize {
 }
 
 impl MutationOrganize {
-    fn resize_row_id(&mut self, step: usize, builder: &mut PipelineBuilder) -> Result<()> {
+    fn resize_row_id(&self, step: usize, builder: &mut PipelineBuilder) -> Result<()> {
         // resize row_id
         let row_id_len = builder.main_pipeline.output_len() / step;
         let mut ranges = Vec::with_capacity(builder.main_pipeline.output_len());

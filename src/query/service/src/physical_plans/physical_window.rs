@@ -45,9 +45,9 @@ use databend_common_sql::IndexType;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeCheck;
 
-use crate::physical_plans::common::AggregateFunctionDesc;
-use crate::physical_plans::common::AggregateFunctionSignature;
-use crate::physical_plans::common::SortDesc;
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
+use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::pretty_display_agg_desc;

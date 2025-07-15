@@ -23,9 +23,9 @@ use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::TypeCheck;
 
-use crate::physical_plans::common::FragmentKind;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::DeriveHandle;

@@ -48,7 +48,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::FragmentKind;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
 
@@ -157,7 +157,7 @@ impl IPhysicalPlan for CompactSource {
         // Add source pipe.
         builder.main_pipeline.add_source(
             |output| {
-                let source = CompactSource::create(builder.ctx.clone(), block_reader.clone(), 1);
+                let source = databend_common_storages_fuse::operations::CompactSource::create(builder.ctx.clone(), block_reader.clone(), 1);
                 PrefetchAsyncSourcer::create(builder.ctx.clone(), output, source)
             },
             max_threads,

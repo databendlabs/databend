@@ -31,8 +31,8 @@ use databend_common_sql::plans::WindowFuncType;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
-
-use crate::physical_plans::common::SortDesc;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::executor::physical_plans::SortDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;

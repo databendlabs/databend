@@ -42,7 +42,7 @@ use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::Statistics;
 use meta::TableMetaTimestamps;
 
-use crate::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::processors::transforms::TransformFilter;
 use crate::pipelines::processors::transforms::TransformResortAddOn;

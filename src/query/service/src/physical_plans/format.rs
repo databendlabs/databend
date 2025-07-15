@@ -23,9 +23,8 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
 use itertools::Itertools;
-
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use crate::physical_plans::explain::PlanStatsInfo;
-use crate::physical_plans::AggregateFunctionDesc;
 use crate::physical_plans::PhysicalRuntimeFilter;
 
 pub struct FormatContext<'a> {

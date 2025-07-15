@@ -303,7 +303,7 @@ impl IPhysicalPlan for HilbertPartition {
             HilbertPartitionExchange::create(self.num_partitions),
         );
 
-        let settings = builder.settings;
+        let settings = builder.settings.clone();
         let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
         let temp_dir_manager = TempDirManager::instance();
 

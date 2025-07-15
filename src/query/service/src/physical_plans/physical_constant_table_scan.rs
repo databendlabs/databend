@@ -34,7 +34,7 @@ use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ConstantTableScan {
-    meta: PhysicalPlanMeta,
+    pub meta: PhysicalPlanMeta,
     pub values: Vec<Column>,
     pub num_rows: usize,
     pub output_schema: DataSchemaRef,

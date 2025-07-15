@@ -101,11 +101,11 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         }
     }
 
-    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
+    fn children(&self) -> Box<dyn Iterator<Item=&'_ Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
-    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item=&'_ mut Box<dyn IPhysicalPlan>> + '_> {
         Box::new(std::iter::empty())
     }
 
@@ -261,8 +261,12 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
     }
 
     fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To> {
-        // self.as_any().downcast_mut()
-        unimplemented!()
+        unsafe {
+            match self.downcast_ref::<To>() {
+                None => None,
+                Some(v) => Some(&mut *(v as *const To as *mut To))
+            }
+        }
     }
 
     fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> Box<dyn IPhysicalPlan> {
@@ -293,152 +297,3 @@ impl Clone for Box<dyn IPhysicalPlan> {
         self.derive(children)
     }
 }
-
-// #[derive(serde::Serialize, serde::Deserialize, Educe, EnumAsInner)]
-// #[educe(
-//     Clone(bound = false, attrs = "#[recursive::recursive]"),
-//     Debug(bound = false, attrs = "#[recursive::recursive]")
-// )]
-// #[allow(clippy::large_enum_variant)]
-// pub enum PhysicalPlan {
-//     /// Query
-//     TableScan(TableScan),
-//     Filter(Filter),
-//     EvalScalar(EvalScalar),
-//     ProjectSet(ProjectSet),
-//     AggregateExpand(AggregateExpand),
-//     AggregatePartial(AggregatePartial),
-//     AggregateFinal(AggregateFinal),
-//     Window(Window),
-//     Sort(Sort),
-//     WindowPartition(WindowPartition),
-//     Limit(Limit),
-//     RowFetch(RowFetch),
-//     HashJoin(HashJoin),
-//     RangeJoin(RangeJoin),
-//     Exchange(Exchange),
-//     UnionAll(UnionAll),
-//     ConstantTableScan(ConstantTableScan),
-//     ExpressionScan(ExpressionScan),
-//     CacheScan(CacheScan),
-//     Udf(Udf),
-//     RecursiveCteScan(RecursiveCteScan),
-//
-//     /// For insert into ... select ... in cluster
-//     DistributedInsertSelect(Box<DistributedInsertSelect>),
-//
-//     /// Synthesized by fragmented
-//     ExchangeSource(ExchangeSource),
-//     ExchangeSink(ExchangeSink),
-//
-//     /// Copy into table
-//     CopyIntoTable(Box<CopyIntoTable>),
-//     CopyIntoLocation(Box<CopyIntoLocation>),
-//
-//     /// Replace
-//     ReplaceAsyncSourcer(ReplaceAsyncSourcer),
-//     ReplaceDeduplicate(Box<ReplaceDeduplicate>),
-//     ReplaceInto(Box<ReplaceInto>),
-//
-//     /// Mutation
-//     Mutation(Box<Mutation>),
-//     MutationSplit(Box<MutationSplit>),
-//     MutationManipulate(Box<MutationManipulate>),
-//     MutationOrganize(Box<MutationOrganize>),
-//     AddStreamColumn(Box<AddStreamColumn>),
-//     ColumnMutation(ColumnMutation),
-//     MutationSource(MutationSource),
-//
-//     /// Compact
-//     CompactSource(Box<CompactSource>),
-//
-//     /// Commit
-//     CommitSink(Box<CommitSink>),
-//
-//     /// Recluster
-//     Recluster(Box<Recluster>),
-//     HilbertPartition(Box<HilbertPartition>),
-//
-//     /// Multi table insert
-//     Duplicate(Box<Duplicate>),
-//     Shuffle(Box<Shuffle>),
-//     ChunkFilter(Box<ChunkFilter>),
-//     ChunkEvalScalar(Box<ChunkEvalScalar>),
-//     ChunkCastSchema(Box<ChunkCastSchema>),
-//     ChunkFillAndReorder(Box<ChunkFillAndReorder>),
-//     ChunkAppendData(Box<ChunkAppendData>),
-//     ChunkMerge(Box<ChunkMerge>),
-//     ChunkCommitInsert(Box<ChunkCommitInsert>),
-//
-//     // async function call
-//     AsyncFunction(AsyncFunction),
-//
-//     // broadcast
-//     BroadcastSource(BroadcastSource),
-//     BroadcastSink(BroadcastSink),
-// }
-//
-// impl PhysicalPlan {
-//     pub fn name(&self) -> String {
-//         match self {
-//             PhysicalPlan::TableScan(v) => match &v.source.source_info {
-//                 DataSourceInfo::TableSource(_) => "TableScan".to_string(),
-//                 DataSourceInfo::StageSource(_) => "StageScan".to_string(),
-//                 DataSourceInfo::ParquetSource(_) => "ParquetScan".to_string(),
-//                 DataSourceInfo::ResultScanSource(_) => "ResultScan".to_string(),
-//                 DataSourceInfo::ORCSource(_) => "OrcScan".to_string(),
-//             },
-//             PhysicalPlan::AsyncFunction(_) => "AsyncFunction".to_string(),
-//             PhysicalPlan::Filter(_) => "Filter".to_string(),
-//             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
-//             PhysicalPlan::AggregateExpand(_) => "AggregateExpand".to_string(),
-//             PhysicalPlan::AggregatePartial(_) => "AggregatePartial".to_string(),
-//             PhysicalPlan::AggregateFinal(_) => "AggregateFinal".to_string(),
-//             PhysicalPlan::Window(_) => "Window".to_string(),
-//             PhysicalPlan::WindowPartition(_) => "WindowPartition".to_string(),
-//             PhysicalPlan::Sort(_) => "Sort".to_string(),
-//             PhysicalPlan::Limit(_) => "Limit".to_string(),
-//             PhysicalPlan::RowFetch(_) => "RowFetch".to_string(),
-//             PhysicalPlan::HashJoin(_) => "HashJoin".to_string(),
-//             PhysicalPlan::Exchange(_) => "Exchange".to_string(),
-//             PhysicalPlan::UnionAll(_) => "UnionAll".to_string(),
-//             PhysicalPlan::DistributedInsertSelect(_) => "DistributedInsertSelect".to_string(),
-//             PhysicalPlan::ExchangeSource(_) => "Exchange Source".to_string(),
-//             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
-//             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
-//             PhysicalPlan::CompactSource(_) => "CompactBlock".to_string(),
-//             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
-//             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
-//             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
-//             PhysicalPlan::CopyIntoLocation(_) => "CopyIntoLocation".to_string(),
-//             PhysicalPlan::ReplaceAsyncSourcer(_) => "ReplaceAsyncSourcer".to_string(),
-//             PhysicalPlan::ReplaceDeduplicate(_) => "ReplaceDeduplicate".to_string(),
-//             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
-//             PhysicalPlan::MutationSource(_) => "MutationSource".to_string(),
-//             PhysicalPlan::ColumnMutation(_) => "ColumnMutation".to_string(),
-//             PhysicalPlan::Mutation(_) => "MergeInto".to_string(),
-//             PhysicalPlan::MutationSplit(_) => "MutationSplit".to_string(),
-//             PhysicalPlan::MutationManipulate(_) => "MutationManipulate".to_string(),
-//             PhysicalPlan::MutationOrganize(_) => "MutationOrganize".to_string(),
-//             PhysicalPlan::AddStreamColumn(_) => "AddStreamColumn".to_string(),
-//             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
-//             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
-//             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
-//             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
-//             PhysicalPlan::Recluster(_) => "Recluster".to_string(),
-//             PhysicalPlan::HilbertPartition(_) => "HilbertPartition".to_string(),
-//             PhysicalPlan::Udf(_) => "Udf".to_string(),
-//             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
-//             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
-//             PhysicalPlan::ChunkFilter(_) => "Filter".to_string(),
-//             PhysicalPlan::ChunkEvalScalar(_) => "EvalScalar".to_string(),
-//             PhysicalPlan::ChunkCastSchema(_) => "CastSchema".to_string(),
-//             PhysicalPlan::ChunkFillAndReorder(_) => "FillAndReorder".to_string(),
-//             PhysicalPlan::ChunkAppendData(_) => "WriteData".to_string(),
-//             PhysicalPlan::ChunkMerge(_) => "ChunkMerge".to_string(),
-//             PhysicalPlan::ChunkCommitInsert(_) => "Commit".to_string(),
-//             PhysicalPlan::BroadcastSource(_) => "RuntimeFilterSource".to_string(),
-//             PhysicalPlan::BroadcastSink(_) => "RuntimeFilterSink".to_string(),
-//         }
-//     }
-// }

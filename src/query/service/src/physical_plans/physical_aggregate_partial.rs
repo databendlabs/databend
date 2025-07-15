@@ -14,27 +14,31 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-
+use std::sync::Arc;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
+use databend_common_expression::{DataField, HashTableConfig, LimitType, SortColumnDescription};
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
-
-use super::AggregateFunctionDesc;
-use super::SortDesc;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::{TransformPipelineHelper, TransformSortPartial};
+use databend_common_sql::executor::physical_plans::{AggregateFunctionDesc, SortDesc};
+use databend_common_storage::DataOperator;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::processors::transforms::aggregator::{AggregateInjector, PartialSingleStateAggregator, TransformAggregateSpillWriter, TransformPartialAggregate};
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -160,5 +164,97 @@ impl IPhysicalPlan for AggregatePartial {
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
         Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        builder.contain_sink_processor = true;
+        self.input.build_pipeline(builder)?;
+
+        let max_block_size = builder.settings.get_max_block_size()?;
+        let max_threads = builder.settings.get_max_threads()?;
+        let max_spill_io_requests = builder.settings.get_max_spill_io_requests()?;
+
+        let enable_experimental_aggregate_hashtable = builder
+            .settings
+            .get_enable_experimental_aggregate_hashtable()?;
+
+        let params = PipelineBuilder::build_aggregator_params(
+            self.input.output_schema()?,
+            &self.group_by,
+            &self.agg_funcs,
+            enable_experimental_aggregate_hashtable,
+            builder.is_exchange_parent(),
+            max_block_size as usize,
+            max_spill_io_requests as usize,
+        )?;
+
+        if params.group_columns.is_empty() {
+            return builder.main_pipeline.try_add_accumulating_transformer(|| {
+                PartialSingleStateAggregator::try_new(&params)
+            });
+        }
+
+        let schema_before_group_by = params.input_schema.clone();
+
+        // Need a global atomic to read the max current radix bits hint
+        let partial_agg_config = if !builder.is_exchange_parent() {
+            HashTableConfig::default().with_partial(true, max_threads as usize)
+        } else {
+            HashTableConfig::default()
+                .cluster_with_partial(true, builder.ctx.get_cluster().nodes.len())
+        };
+
+        // For rank limit, we can filter data using sort with rank before partial
+        if let Some(rank_limit) = &self.rank_limit {
+            let sort_desc = rank_limit
+                .0
+                .iter()
+                .map(|desc| {
+                    let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
+                    Ok(SortColumnDescription {
+                        offset,
+                        asc: desc.asc,
+                        nulls_first: desc.nulls_first,
+                    })
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let sort_desc: Arc<[_]> = sort_desc.into();
+
+            builder.main_pipeline.add_transformer(|| {
+                TransformSortPartial::new(LimitType::LimitRank(rank_limit.1), sort_desc.clone())
+            });
+        }
+
+        builder.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
+                builder.ctx.clone(),
+                input,
+                output,
+                params.clone(),
+                partial_agg_config.clone(),
+            )?))
+        })?;
+
+        // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
+        if !builder.is_exchange_parent() {
+            let operator = DataOperator::instance().spill_operator();
+            let location_prefix = builder.ctx.query_id_spill_prefix();
+
+            builder.main_pipeline.add_transform(|input, output| {
+                Ok(ProcessorPtr::create(
+                    TransformAggregateSpillWriter::try_create(
+                        builder.ctx.clone(),
+                        input,
+                        output,
+                        operator.clone(),
+                        params.clone(),
+                        location_prefix.clone(),
+                    )?,
+                ))
+            })?;
+        }
+
+        builder.exchange_injector = AggregateInjector::create(builder.ctx.clone(), params.clone());
+        Ok(())
     }
 }

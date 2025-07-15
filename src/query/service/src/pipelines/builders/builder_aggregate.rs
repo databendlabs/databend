@@ -31,10 +31,9 @@ use databend_common_sql::plans::UDFType;
 use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
 use itertools::Itertools;
-
+use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use crate::physical_plans::AggregateExpand;
 use crate::physical_plans::AggregateFinal;
-use crate::physical_plans::AggregateFunctionDesc;
 use crate::physical_plans::AggregatePartial;
 use crate::physical_plans::ExchangeSource;
 use crate::physical_plans::PhysicalPlanDynExt;
@@ -50,145 +49,7 @@ use crate::pipelines::processors::transforms::aggregator::TransformPartialAggreg
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_aggregate_partial(&mut self, aggregate: &AggregatePartial) -> Result<()> {
-        self.contain_sink_processor = true;
-        self.build_pipeline(&aggregate.input)?;
-
-        let max_block_size = self.settings.get_max_block_size()?;
-        let max_threads = self.settings.get_max_threads()?;
-        let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
-
-        let enable_experimental_aggregate_hashtable = self
-            .settings
-            .get_enable_experimental_aggregate_hashtable()?;
-
-        let params = Self::build_aggregator_params(
-            aggregate.input.output_schema()?,
-            &aggregate.group_by,
-            &aggregate.agg_funcs,
-            enable_experimental_aggregate_hashtable,
-            self.is_exchange_parent(),
-            max_block_size as usize,
-            max_spill_io_requests as usize,
-        )?;
-
-        if params.group_columns.is_empty() {
-            return self.main_pipeline.try_add_accumulating_transformer(|| {
-                PartialSingleStateAggregator::try_new(&params)
-            });
-        }
-
-        let schema_before_group_by = params.input_schema.clone();
-
-        // Need a global atomic to read the max current radix bits hint
-        let partial_agg_config = if !self.is_exchange_parent() {
-            HashTableConfig::default().with_partial(true, max_threads as usize)
-        } else {
-            HashTableConfig::default()
-                .cluster_with_partial(true, self.ctx.get_cluster().nodes.len())
-        };
-
-        // For rank limit, we can filter data using sort with rank before partial
-        if let Some(rank_limit) = &aggregate.rank_limit {
-            let sort_desc = rank_limit
-                .0
-                .iter()
-                .map(|desc| {
-                    let offset = schema_before_group_by.index_of(&desc.order_by.to_string())?;
-                    Ok(SortColumnDescription {
-                        offset,
-                        asc: desc.asc,
-                        nulls_first: desc.nulls_first,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let sort_desc: Arc<[_]> = sort_desc.into();
-
-            self.main_pipeline.add_transformer(|| {
-                TransformSortPartial::new(LimitType::LimitRank(rank_limit.1), sort_desc.clone())
-            });
-        }
-
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
-                self.ctx.clone(),
-                input,
-                output,
-                params.clone(),
-                partial_agg_config.clone(),
-            )?))
-        })?;
-
-        // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !self.is_exchange_parent() {
-            let operator = DataOperator::instance().spill_operator();
-            let location_prefix = self.ctx.query_id_spill_prefix();
-
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    TransformAggregateSpillWriter::try_create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    )?,
-                ))
-            })?;
-        }
-
-        self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
-        Ok(())
-    }
-
-    pub(crate) fn build_aggregate_final(&mut self, aggregate: &AggregateFinal) -> Result<()> {
-        let max_block_size = self.settings.get_max_block_size()?;
-        let enable_experimental_aggregate_hashtable = self
-            .settings
-            .get_enable_experimental_aggregate_hashtable()?;
-        let max_spill_io_requests = self.settings.get_max_spill_io_requests()?;
-        let max_restore_worker = self.settings.get_max_aggregate_restore_worker()?;
-
-        let mut is_cluster_aggregate = false;
-        if let Some(_) = aggregate.input.downcast_ref::<ExchangeSource>() {
-            is_cluster_aggregate = true;
-        }
-
-        let params = Self::build_aggregator_params(
-            aggregate.before_group_by_schema.clone(),
-            &aggregate.group_by,
-            &aggregate.agg_funcs,
-            enable_experimental_aggregate_hashtable,
-            is_cluster_aggregate,
-            max_block_size as usize,
-            max_spill_io_requests as usize,
-        )?;
-
-        if params.group_columns.is_empty() {
-            self.build_pipeline(&aggregate.input)?;
-            self.main_pipeline.try_resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    FinalSingleStateAggregator::try_create(input, output, &params)?,
-                ))
-            })?;
-
-            return Ok(());
-        }
-
-        let old_inject = self.exchange_injector.clone();
-
-        if let Some(_) = aggregate.input.downcast_ref::<ExchangeSource>() {
-            self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
-        }
-
-        self.build_pipeline(&aggregate.input)?;
-        self.exchange_injector = old_inject;
-        build_partition_bucket(&mut self.main_pipeline, params.clone(), max_restore_worker)
-    }
-
-    fn build_aggregator_params(
+    pub fn build_aggregator_params(
         input_schema: DataSchemaRef,
         group_by: &[IndexType],
         agg_funcs: &[AggregateFunctionDesc],

@@ -38,7 +38,7 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::OptimizeCompactBlockInterpreter;
 use crate::interpreters::ReclusterTableInterpreter;
-use crate::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;

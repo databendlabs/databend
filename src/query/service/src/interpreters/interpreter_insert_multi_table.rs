@@ -52,7 +52,7 @@ use crate::physical_plans::Duplicate;
 use crate::physical_plans::FillAndReorder;
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MultiInsertEvalScalar;
-use crate::physical_plans::MutationKind;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::SerializableTable;

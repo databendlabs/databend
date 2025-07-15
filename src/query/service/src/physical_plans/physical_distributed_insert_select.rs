@@ -18,6 +18,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::ColumnBinding;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
@@ -107,7 +108,7 @@ impl IPhysicalPlan for DistributedInsertSelect {
             .build_table_by_table_info(&self.table_info, None)?;
 
         let source_schema = insert_schema;
-        Self::fill_and_reorder_columns(
+        PipelineBuilder::fill_and_reorder_columns(
             builder.ctx.clone(),
             &mut builder.main_pipeline,
             table.clone(),

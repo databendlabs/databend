@@ -98,6 +98,7 @@ impl IPhysicalPlan for ColumnMutation {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
+        let mut field_id_to_schema_index = self.field_id_to_schema_index.clone();
         if let Some(mutation_expr) = &self.mutation_expr {
             let mut block_operators = Vec::new();
             let mut next_column_offset = self.input_num_columns;
@@ -107,9 +108,9 @@ impl IPhysicalPlan for ColumnMutation {
             let mut exprs = Vec::with_capacity(mutation_expr.len());
             for (id, remote_expr) in mutation_expr {
                 let expr = remote_expr.as_expr(&BUILTIN_FUNCTIONS);
-                let schema_index = self.field_id_to_schema_index.get(&id).unwrap();
+                let schema_index = field_id_to_schema_index.get(&id).unwrap();
                 schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
-                self.field_id_to_schema_index
+                field_id_to_schema_index
                     .entry(*id)
                     .and_modify(|e| *e = next_column_offset);
                 next_column_offset += 1;
@@ -134,9 +135,9 @@ impl IPhysicalPlan for ColumnMutation {
                             .project_column_ref(|index| {
                                 *schema_offset_to_new_offset.get(index).unwrap_or(index)
                             });
-                    let schema_index = self.field_id_to_schema_index.get(id).unwrap();
+                    let schema_index = field_id_to_schema_index.get(id).unwrap();
                     schema_offset_to_new_offset.insert(*schema_index, next_column_offset);
-                    self.field_id_to_schema_index
+                    field_id_to_schema_index
                         .entry(*id)
                         .and_modify(|e| *e = next_column_offset);
                     next_column_offset += 1;
