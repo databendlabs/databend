@@ -179,12 +179,12 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         if let Some(exp_ms) = removed.expires_at_ms_opt() {
             self.map_mut()
-                .set(ExpireKey::new(exp_ms, removed.order_key().seq()), None)
+                .set(ExpireKey::new(exp_ms, *removed.internal_seq()), None)
                 .await?;
         }
 
         if let Some(exp_ms) = added.expires_at_ms_opt() {
-            let k = ExpireKey::new(exp_ms, added.order_key().seq());
+            let k = ExpireKey::new(exp_ms, *added.internal_seq());
             let v = key.to_string();
             self.map_mut().set(k, Some(v)).await?;
         }
