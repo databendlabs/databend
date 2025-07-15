@@ -35,6 +35,7 @@ impl HashJoinProbeState {
         }
         let mut probe_block = input.project(&self.probe_projections);
         let build_block = DataBlock::concat(build_blocks)?;
+        let build_block = build_block.project(&self.build_projections);
         if build_num_rows == 1 {
             for col in build_block.columns() {
                 let scalar = unsafe { col.index_unchecked(0) };

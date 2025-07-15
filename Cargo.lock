@@ -5478,6 +5478,8 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "bincode 2.0.1",
+ "bitvec",
+ "bytemuck",
  "bytes",
  "cbordata",
  "databend-common-ast",
@@ -5487,20 +5489,30 @@ dependencies = [
  "databend-storages-common-table-meta",
  "divan",
  "fastrace",
+ "feistel-permutation-rs",
  "goldenfile",
+ "itertools 0.13.0",
  "jsonb",
  "levenshtein_automata",
  "log",
  "match-template",
+ "num-traits",
+ "num_cpus",
+ "ordered-float 5.0.0",
+ "parking_lot 0.12.3",
  "parquet",
  "rand 0.8.5",
+ "rayon",
  "roaring",
+ "self_cell",
  "serde",
+ "serde_json",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
  "thiserror 1.0.69",
  "xorfilter-rs",
+ "zerocopy",
 ]
 
 [[package]]
@@ -6544,6 +6556,12 @@ dependencies = [
  "chrono",
  "semver",
 ]
+
+[[package]]
+name = "feistel-permutation-rs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6db6c829a796418de937efceee04e784abd1c756a82037d84a26f868bc2279f2"
 
 [[package]]
 name = "ff"
@@ -8253,12 +8271,6 @@ checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "hermit-abi"
-version = "0.3.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
 
 [[package]]
 name = "hermit-abi"
@@ -10733,11 +10745,11 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.16.0"
+version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
 dependencies = [
- "hermit-abi 0.3.9",
+ "hermit-abi 0.5.1",
  "libc",
 ]
 
@@ -13566,6 +13578,12 @@ dependencies = [
  "core-foundation-sys",
  "libc",
 ]
+
+[[package]]
+name = "self_cell"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f7d95a54511e0c7be3f51e8867aa8cf35148d7b9445d44de2f943e2b206e749"
 
 [[package]]
 name = "semver"
@@ -17458,18 +17476,18 @@ checksum = "9b3a41ce106832b4da1c065baa4c31cf640cf965fa1483816402b7f6b96f0a64"
 
 [[package]]
 name = "zerocopy"
-version = "0.8.25"
+version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1702d9583232ddb9174e01bb7c15a2ab8fb1bc6f227aa1233858c351a3ba0cb"
+checksum = "1039dd0d3c310cf05de012d8a39ff557cb0d23087fd44cad61df08fc31907a2f"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.25"
+version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28a6e20d751156648aa063f3800b706ee209a32c0b4d9f24be3d980b01be55ef"
+checksum = "9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181"
 dependencies = [
  "proc-macro2",
  "quote",

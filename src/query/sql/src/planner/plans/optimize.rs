@@ -47,4 +47,8 @@ impl Operator for OptimizeCompactBlock {
     fn rel_op(&self) -> RelOp {
         RelOp::CompactBlock
     }
+
+    fn arity(&self) -> usize {
+        0
+    }
 }

@@ -157,8 +157,8 @@ impl ClientSessionManager {
 
             if !(remained.is_empty() && num_expired == 0) {
                 info!(
-                    "[TEMP TABLE] cleanup {num_expired} sessions in {} secs, {} remained: {:?}",
-                    elapsed.as_secs(),
+                    "[TEMP TABLE] cleanup {num_expired} sessions in {} millisecond, {} remained: {:?}",
+                    elapsed.as_millis(),
                     remained.len(),
                     remained
                 );

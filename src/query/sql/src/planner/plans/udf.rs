@@ -25,6 +25,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::ColumnSet;
+use crate::ScalarExpr;
 
 /// `Udf` is a plan that evaluate a series of udf functions.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -47,6 +48,10 @@ impl Udf {
 impl Operator for Udf {
     fn rel_op(&self) -> RelOp {
         RelOp::Udf
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(self.items.iter().map(|expr| &expr.scalar))
     }
 
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {

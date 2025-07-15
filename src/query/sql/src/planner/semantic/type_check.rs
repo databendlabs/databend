@@ -56,6 +56,7 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -77,6 +78,7 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
@@ -90,6 +92,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_functions::ASYNC_FUNCTIONS;
@@ -99,6 +102,8 @@ use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
@@ -108,6 +113,7 @@ use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
@@ -2705,6 +2711,9 @@ impl<'a> TypeChecker<'a> {
         let mut index_schema = None;
         let mut index_options = BTreeMap::new();
         for table_index in table_indexes.values() {
+            if table_index.index_type != TableIndexType::Inverted {
+                continue;
+            }
             if column_ids
                 .iter()
                 .all(|id| table_index.column_ids.contains(id))
@@ -2921,6 +2930,11 @@ impl<'a> TypeChecker<'a> {
             self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
         {
             return rewritten_variant_expr;
+        }
+        if let Some(rewritten_vector_expr) =
+            self.try_rewrite_vector_function(span, func_name, &args)
+        {
+            return rewritten_vector_expr;
         }
 
         self.resolve_scalar_function_call(span, func_name, params, args)
@@ -4363,6 +4377,189 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     return Some(Ok(Box::new((scalar, data_type))));
                 }
+            }
+        }
+        None
+    }
+
+    fn vector_functions() -> &'static [Ascii<&'static str>] {
+        static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("cosine_distance"),
+            Ascii::new("l1_distance"),
+            Ascii::new("l2_distance"),
+        ];
+        VECTOR_FUNCTIONS
+    }
+
+    fn try_rewrite_vector_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[ScalarExpr],
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        // Try rewrite vector distance function to vector score internal column,
+        // so that the vector index can be used to accelerate the query.
+        let uni_case_func_name = Ascii::new(func_name);
+        if Self::vector_functions().contains(&uni_case_func_name) {
+            match args {
+                [ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column:
+                        ColumnBinding {
+                            table_index,
+                            database_name,
+                            table_name,
+                            column_name,
+                            data_type,
+                            ..
+                        },
+                    ..
+                }), ScalarExpr::CastExpr(CastExpr {
+                    argument,
+                    target_type,
+                    ..
+                })]
+                | [ScalarExpr::CastExpr(CastExpr {
+                    argument,
+                    target_type,
+                    ..
+                }), ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    column:
+                        ColumnBinding {
+                            table_index,
+                            database_name,
+                            table_name,
+                            column_name,
+                            data_type,
+                            ..
+                        },
+                    ..
+                })] => {
+                    let col_data_type = data_type.remove_nullable();
+                    if table_index.is_some()
+                        && matches!(col_data_type, DataType::Vector(_))
+                        && matches!(&**argument, ScalarExpr::ConstantExpr(_))
+                        && matches!(&**target_type, DataType::Vector(_))
+                        && LicenseManagerSwitch::instance()
+                            .check_enterprise_enabled(
+                                self.ctx.get_license_key(),
+                                Feature::VectorIndex,
+                            )
+                            .is_ok()
+                    {
+                        let table_index = table_index.unwrap();
+                        let table_entry = self.metadata.read().table(table_index).clone();
+                        let table = table_entry.table();
+                        let table_info = table.get_table_info();
+                        let table_schema = table_info.schema();
+                        let table_indexes = &table_info.meta.indexes;
+                        if self
+                            .bind_context
+                            .vector_index_map
+                            .contains_key(&table_index)
+                        {
+                            return None;
+                        }
+                        let Ok(column_id) = table_schema.column_id_of(column_name) else {
+                            return None;
+                        };
+                        for vector_index in table_indexes.values() {
+                            if vector_index.index_type != TableIndexType::Vector {
+                                continue;
+                            }
+                            let Some(distances) = vector_index.options.get("distance") else {
+                                continue;
+                            };
+                            // distance_type must match function name
+                            let mut matched_distance = false;
+                            let distance_types: Vec<&str> = distances.split(',').collect();
+                            for distance_type in distance_types {
+                                if func_name.starts_with(distance_type) {
+                                    matched_distance = true;
+                                    break;
+                                }
+                            }
+                            if !matched_distance {
+                                continue;
+                            }
+                            if vector_index.column_ids.contains(&column_id) {
+                                let internal_column = InternalColumn::new(
+                                    VECTOR_SCORE_COL_NAME,
+                                    InternalColumnType::VectorScore,
+                                );
+                                let internal_column_binding = InternalColumnBinding {
+                                    database_name: database_name.clone(),
+                                    table_name: table_name.clone(),
+                                    internal_column,
+                                };
+                                let Ok(column_binding) =
+                                    self.bind_context.add_internal_column_binding(
+                                        &internal_column_binding,
+                                        self.metadata.clone(),
+                                        Some(table_index),
+                                        false,
+                                    )
+                                else {
+                                    return None;
+                                };
+
+                                let new_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                    span,
+                                    column: column_binding,
+                                });
+
+                                let arg = ConstantExpr::try_from(*argument.clone()).unwrap();
+                                let Scalar::Array(arg_col) = arg.value else {
+                                    return None;
+                                };
+
+                                let col_vector_type = col_data_type.as_vector().unwrap();
+                                let col_dimension = col_vector_type.dimension() as usize;
+                                let arg_vector_type = target_type.as_vector().unwrap();
+                                let arg_dimension = arg_vector_type.dimension() as usize;
+                                if col_dimension != arg_dimension || arg_col.len() != col_dimension
+                                {
+                                    return None;
+                                }
+                                let mut query_values = Vec::with_capacity(arg_col.len());
+                                match arg_col {
+                                    Column::Number(num_col) => {
+                                        for i in 0..num_col.len() {
+                                            let num = unsafe { num_col.index_unchecked(i) };
+                                            query_values.push(num.to_f32());
+                                        }
+                                    }
+                                    Column::Decimal(dec_col) => {
+                                        for i in 0..dec_col.len() {
+                                            let dec = unsafe { dec_col.index_unchecked(i) };
+                                            query_values.push(F32::from(dec.to_float32()));
+                                        }
+                                    }
+                                    _ => {
+                                        return None;
+                                    }
+                                }
+
+                                let index_info = VectorIndexInfo {
+                                    index_name: vector_index.name.clone(),
+                                    index_version: vector_index.version.clone(),
+                                    index_options: vector_index.options.clone(),
+                                    column_id,
+                                    func_name: func_name.to_string(),
+                                    query_values,
+                                };
+                                self.bind_context
+                                    .vector_index_map
+                                    .insert(table_index, index_info);
+
+                                return Some(Ok(Box::new((
+                                    new_column,
+                                    DataType::Number(NumberDataType::Float32),
+                                ))));
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         None

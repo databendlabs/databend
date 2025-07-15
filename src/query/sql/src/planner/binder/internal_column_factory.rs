@@ -27,6 +27,7 @@ use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_expression::SNAPSHOT_NAME_COL_NAME;
+use databend_common_expression::VECTOR_SCORE_COL_NAME;
 
 #[ctor]
 pub static INTERNAL_COLUMN_FACTORY: InternalColumnFactory = InternalColumnFactory::init();
@@ -77,6 +78,11 @@ impl InternalColumnFactory {
         internal_columns.insert(
             SEARCH_SCORE_COL_NAME.to_string(),
             InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore),
+        );
+
+        internal_columns.insert(
+            VECTOR_SCORE_COL_NAME.to_string(),
+            InternalColumn::new(VECTOR_SCORE_COL_NAME, InternalColumnType::VectorScore),
         );
 
         internal_columns.insert(

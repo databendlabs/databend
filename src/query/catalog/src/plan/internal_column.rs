@@ -42,6 +42,7 @@ use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
 use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
 use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
@@ -106,6 +107,8 @@ pub struct InternalColumnMeta {
     pub inner: Option<BlockMetaInfoPtr>,
     // The search matched rows and optional scores in the block.
     pub matched_rows: Option<Vec<(usize, Option<F32>)>>,
+    // The vector topn rows and scores in the block.
+    pub vector_scores: Option<Vec<(usize, F32)>>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
@@ -142,6 +145,9 @@ pub enum InternalColumnType {
     SearchMatched,
     SearchScore,
 
+    // vector columns
+    VectorScore,
+
     FileName,
     FileRowNumber,
 }
@@ -176,6 +182,7 @@ impl InternalColumn {
             )),
             InternalColumnType::SearchMatched => TableDataType::Boolean,
             InternalColumnType::SearchScore => TableDataType::Number(NumberDataType::Float32),
+            InternalColumnType::VectorScore => TableDataType::Number(NumberDataType::Float32),
             InternalColumnType::FileName => TableDataType::String,
             InternalColumnType::FileRowNumber => TableDataType::Number(NumberDataType::UInt64),
         }
@@ -200,6 +207,7 @@ impl InternalColumn {
             InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
             InternalColumnType::SearchMatched => SEARCH_MATCHED_COLUMN_ID,
             InternalColumnType::SearchScore => SEARCH_SCORE_COLUMN_ID,
+            InternalColumnType::VectorScore => VECTOR_SCORE_COLUMN_ID,
             InternalColumnType::FileName => FILENAME_COLUMN_ID,
             InternalColumnType::FileRowNumber => FILE_ROW_NUMBER_COLUMN_ID,
         }
@@ -287,6 +295,20 @@ impl InternalColumn {
                     if let Some(val) = scores.get_mut(*idx) {
                         assert!(score.is_some());
                         *val = F32::from(*score.unwrap());
+                    }
+                }
+                Float32Type::from_data(scores).into()
+            }
+            InternalColumnType::VectorScore => {
+                assert!(meta.vector_scores.is_some());
+                let vector_scores = meta.vector_scores.as_ref().unwrap();
+
+                // The smaller the score, the closer the distance.
+                // Fill other rows with the maximum value and they will be filtered out.
+                let mut scores = vec![F32::from(f32::MAX); num_rows];
+                for (idx, score) in vector_scores.iter() {
+                    if let Some(val) = scores.get_mut(*idx) {
+                        *val = *score;
                     }
                 }
                 Float32Type::from_data(scores).into()
