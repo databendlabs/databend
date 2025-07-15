@@ -53,6 +53,7 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::pretty_display_agg_desc;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::FrameBound;
@@ -65,7 +66,7 @@ use crate::pipelines::PipelineBuilder;
 pub struct Window {
     pub meta: PhysicalPlanMeta,
     pub index: IndexType,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub func: WindowFunction,
     pub partition_by: Vec<IndexType>,
     pub order_by: Vec<SortDesc>,
@@ -97,13 +98,11 @@ impl IPhysicalPlan for Window {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -188,7 +187,7 @@ impl IPhysicalPlan for Window {
         ))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -375,7 +374,7 @@ impl PhysicalPlanBuilder {
         window: &databend_common_sql::plans::Window,
         mut required: ColumnSet,
         _stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. DO NOT Prune unused Columns cause window may not in required, eg:
         // select s1.a from ( select t1.a as a, dense_rank() over(order by t1.a desc) as rk
         // from (select 'a1' as a) t1 ) s1

@@ -44,7 +44,7 @@ use crate::interpreters::SelectInterpreter;
 use crate::physical_plans::CopyIntoTable;
 use crate::physical_plans::CopyIntoTableSource;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
@@ -103,7 +103,7 @@ impl CopyIntoTableInterpreter {
         table_info: TableInfo,
         plan: &CopyIntoTablePlan,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Result<(Box<dyn IPhysicalPlan>, Vec<UpdateStreamMetaReq>)> {
+    ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
@@ -147,7 +147,7 @@ impl CopyIntoTableInterpreter {
             )
         };
 
-        let mut root: Box<dyn IPhysicalPlan> = Box::new(CopyIntoTable {
+        let mut root: PhysicalPlan = Box::new(CopyIntoTable {
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),

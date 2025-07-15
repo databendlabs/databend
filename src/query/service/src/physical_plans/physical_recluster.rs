@@ -47,6 +47,7 @@ use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -78,7 +79,7 @@ impl IPhysicalPlan for Recluster {
         &mut self.meta
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -247,7 +248,7 @@ impl IPhysicalPlan for Recluster {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct HilbertPartition {
     pub meta: PhysicalPlanMeta,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub table_info: TableInfo,
     pub num_partitions: usize,
     pub table_meta_timestamps: TableMetaTimestamps,
@@ -271,17 +272,15 @@ impl IPhysicalPlan for HilbertPartition {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();

@@ -71,7 +71,7 @@ use crate::physical_plans::CommitType;
 use crate::physical_plans::CompactSource;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::HilbertPartition;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::Recluster;
@@ -300,7 +300,7 @@ impl ReclusterTableInterpreter {
         tbl: &Arc<dyn Table>,
         push_downs: &mut Option<PushDownInfo>,
         hilbert_info: &mut Option<HilbertBuildInfo>,
-    ) -> Result<Option<Box<dyn IPhysicalPlan>>> {
+    ) -> Result<Option<PhysicalPlan>> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
         let handler = get_hilbert_clustering_handler();
@@ -492,7 +492,7 @@ impl ReclusterTableInterpreter {
         tbl: &Arc<dyn Table>,
         push_downs: &mut Option<PushDownInfo>,
         limit: Option<usize>,
-    ) -> Result<Option<Box<dyn IPhysicalPlan>>> {
+    ) -> Result<Option<PhysicalPlan>> {
         let Some((parts, snapshot)) = tbl
             .recluster(self.ctx.clone(), push_downs.clone(), limit)
             .await?
@@ -704,14 +704,14 @@ impl ReclusterTableInterpreter {
     }
 
     fn add_commit_sink(
-        mut input: Box<dyn IPhysicalPlan>,
+        mut input: PhysicalPlan,
         is_distributed: bool,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
         merge_meta: bool,
         recluster_info: Option<ReclusterInfoSideCar>,
         table_meta_timestamps: TableMetaTimestamps,
-    ) -> Box<dyn IPhysicalPlan> {
+    ) -> PhysicalPlan {
         if is_distributed {
             input = Box::new(Exchange {
                 input,

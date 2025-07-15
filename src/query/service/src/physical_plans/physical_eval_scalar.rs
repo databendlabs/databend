@@ -51,6 +51,7 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
@@ -59,7 +60,7 @@ use crate::pipelines::PipelineBuilder;
 pub struct EvalScalar {
     meta: PhysicalPlanMeta,
     pub projections: ColumnSet,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
 
     /// Only used for explain
@@ -103,13 +104,11 @@ impl IPhysicalPlan for EvalScalar {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -177,7 +176,7 @@ impl IPhysicalPlan for EvalScalar {
         )]))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -224,7 +223,7 @@ impl PhysicalPlanBuilder {
         eval_scalar: &databend_common_sql::plans::EvalScalar,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let column_projections = required.clone();
         let mut used = vec![];
@@ -263,9 +262,9 @@ impl PhysicalPlanBuilder {
         &mut self,
         eval_scalar: &databend_common_sql::plans::EvalScalar,
         column_projections: Vec<IndexType>,
-        input: Box<dyn IPhysicalPlan>,
+        input: PhysicalPlan,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
         let exprs = eval_scalar
             .items

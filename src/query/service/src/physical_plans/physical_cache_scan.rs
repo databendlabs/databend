@@ -25,6 +25,7 @@ use databend_common_sql::ColumnSet;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::CacheSourceState;
@@ -85,7 +86,7 @@ impl IPhysicalPlan for CacheScan {
         ))
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -125,7 +126,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         scan: &databend_common_sql::plans::CacheScan,
         required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let used: ColumnSet = required.intersection(&scan.columns).cloned().collect();
         let (cache_source, fields) = if used == scan.columns {

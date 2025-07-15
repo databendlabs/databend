@@ -33,8 +33,8 @@ use crate::physical_plans::CompactSource;
 use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::ExchangeSink;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::Recluster;
@@ -70,7 +70,7 @@ pub enum FragmentType {
 
 #[derive(Clone)]
 pub struct PlanFragment {
-    pub plan: Box<dyn IPhysicalPlan>,
+    pub plan: PhysicalPlan,
     pub fragment_type: FragmentType,
     pub fragment_id: usize,
     pub exchange: Option<DataExchange>,
@@ -214,7 +214,7 @@ impl PlanFragment {
 
         for (executor, sources) in executor_partitions {
             // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
-            let mut handle = ReadSourceDeriveHandle::new(sources);
+            let mut handle = ReadSourceDeriveHandle::create(sources);
             let plan = self.plan.derive_with(&mut handle);
 
             fragment_actions.add_action(QueryFragmentAction::create(executor.clone(), plan));
@@ -232,7 +232,7 @@ impl PlanFragment {
             unreachable!("logic error");
         };
 
-        let plan: Box<dyn IPhysicalPlan> = Box::new(plan.clone());
+        let plan: PhysicalPlan = Box::new(plan.clone());
         let mutation_source = plan.try_find_mutation_source().unwrap();
 
         let partitions: &Partitions = &mutation_source.partitions;
@@ -241,7 +241,7 @@ impl PlanFragment {
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
         for (executor, parts) in partition_reshuffle.into_iter() {
-            let mut handle = MutationSourceDeriveHandle::new(parts);
+            let mut handle = MutationSourceDeriveHandle::create(parts);
             let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -259,7 +259,7 @@ impl PlanFragment {
         }
 
         impl PartitionsCollector {
-            pub fn new() -> Box<dyn PhysicalPlanVisitor> {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
                 Box::new(PartitionsCollector { partitions: vec![] })
             }
 
@@ -273,7 +273,7 @@ impl PlanFragment {
                 self
             }
 
-            fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
                 if let Some(v) = plan.downcast_ref::<ReplaceInto>() {
                     assert!(self.partitions.is_empty());
                     self.partitions = v.segments.clone();
@@ -283,7 +283,7 @@ impl PlanFragment {
             }
         }
 
-        let mut visitor = PartitionsCollector::new();
+        let mut visitor = PartitionsCollector::create();
         self.plan.visit(&mut visitor)?;
 
         let mut partitions = vec![];
@@ -301,7 +301,7 @@ impl PlanFragment {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
 
-                    let mut handle = ReplaceDeriveHandle::new(parts, None, need_insert);
+                    let mut handle = ReplaceDeriveHandle::create(parts, None, need_insert);
                     plan = plan.derive_with(&mut handle);
                     fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
@@ -312,7 +312,7 @@ impl PlanFragment {
                 // but for each segment, one executor only need to take part of the blocks
                 for (executor_idx, executor) in executors.into_iter().enumerate() {
                     let need_insert = executor == local_id;
-                    let mut handle = ReplaceDeriveHandle::new(
+                    let mut handle = ReplaceDeriveHandle::create(
                         partitions.clone(),
                         Some(BlockSlotDescription {
                             num_slots,
@@ -340,7 +340,7 @@ impl PlanFragment {
         }
 
         impl SourceCollector {
-            pub fn new() -> Box<dyn PhysicalPlanVisitor> {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
                 Box::new(SourceCollector { partitions: None })
             }
 
@@ -354,7 +354,7 @@ impl PlanFragment {
                 self
             }
 
-            fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
                 if let Some(v) = plan.downcast_ref::<CompactSource>() {
                     assert!(self.partitions.is_none());
                     self.partitions = Some(v.parts.clone());
@@ -364,7 +364,7 @@ impl PlanFragment {
             }
         }
 
-        let mut visitor = SourceCollector::new();
+        let mut visitor = SourceCollector::create();
         self.plan.visit(&mut visitor)?;
 
         let partitions = visitor
@@ -377,7 +377,7 @@ impl PlanFragment {
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
         for (executor, parts) in partition_reshuffle.into_iter() {
-            let mut handle = CompactSourceDeriveHandle::new(parts);
+            let mut handle = CompactSourceDeriveHandle::create(parts);
             let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -395,7 +395,7 @@ impl PlanFragment {
         }
 
         impl TasksCollector {
-            pub fn new() -> Box<dyn PhysicalPlanVisitor> {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
                 Box::new(TasksCollector { tasks: Vec::new() })
             }
 
@@ -409,7 +409,7 @@ impl PlanFragment {
                 self
             }
 
-            fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
                 if let Some(recluster) = plan.downcast_ref::<Recluster>() {
                     if !self.tasks.is_empty() {
                         unreachable!("logic error, expect only one recluster");
@@ -422,7 +422,7 @@ impl PlanFragment {
             }
         }
 
-        let mut visitor = TasksCollector::new();
+        let mut visitor = TasksCollector::create();
         self.plan.visit(&mut visitor)?;
 
         let mut tasks = vec![];
@@ -441,7 +441,7 @@ impl PlanFragment {
 
         let task_reshuffle = Self::reshuffle(executors, tasks)?;
         for (executor, tasks) in task_reshuffle.into_iter() {
-            let mut handle = ReclusterDeriveHandle::new(tasks);
+            let mut handle = ReclusterDeriveHandle::create(tasks);
             let plan = self.plan.derive_with(&mut handle);
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -501,7 +501,7 @@ impl PlanFragment {
         }
 
         impl DataSourceVisitor {
-            pub fn new() -> Box<dyn PhysicalPlanVisitor> {
+            pub fn create() -> Box<dyn PhysicalPlanVisitor> {
                 Box::new(DataSourceVisitor {
                     data_sources: HashMap::new(),
                 })
@@ -517,7 +517,7 @@ impl PlanFragment {
                 self
             }
 
-            fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
                 if let Some(scan) = plan.downcast_ref::<TableScan>() {
                     self.data_sources
                         .insert(plan.get_id(), DataSource::Table(*scan.source.clone()));
@@ -535,14 +535,14 @@ impl PlanFragment {
             }
         }
 
-        let mut visitor = DataSourceVisitor::new();
+        let mut visitor = DataSourceVisitor::create();
         self.plan.visit(&mut visitor)?;
 
         let data_sources = visitor
             .as_any()
             .downcast_mut::<DataSourceVisitor>()
             .unwrap();
-        Ok(std::mem::take(&mut data_sources.data_sources))
+        Ok(data_sources.take())
     }
 }
 
@@ -588,7 +588,7 @@ struct ReadSourceDeriveHandle {
 }
 
 impl ReadSourceDeriveHandle {
-    pub fn new(sources: HashMap<u32, DataSource>) -> Box<dyn DeriveHandle> {
+    pub fn create(sources: HashMap<u32, DataSource>) -> Box<dyn DeriveHandle> {
         Box::new(ReadSourceDeriveHandle { sources })
     }
 }
@@ -600,9 +600,9 @@ impl DeriveHandle for ReadSourceDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         if let Some(table_scan) = v.downcast_ref::<TableScan>() {
             let Some(source) = self.sources.remove(&table_scan.get_id()) else {
                 unreachable!(
@@ -647,7 +647,7 @@ struct ReclusterDeriveHandle {
 }
 
 impl ReclusterDeriveHandle {
-    pub fn new(tasks: Vec<ReclusterTask>) -> Box<dyn DeriveHandle> {
+    pub fn create(tasks: Vec<ReclusterTask>) -> Box<dyn DeriveHandle> {
         Box::new(ReclusterDeriveHandle { tasks })
     }
 }
@@ -659,9 +659,9 @@ impl DeriveHandle for ReclusterDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         let Some(recluster) = v.downcast_ref::<Recluster>() else {
             return Err(children);
         };
@@ -678,7 +678,7 @@ struct MutationSourceDeriveHandle {
 }
 
 impl MutationSourceDeriveHandle {
-    pub fn new(partitions: Partitions) -> Box<dyn DeriveHandle> {
+    pub fn create(partitions: Partitions) -> Box<dyn DeriveHandle> {
         Box::new(MutationSourceDeriveHandle { partitions })
     }
 }
@@ -690,9 +690,9 @@ impl DeriveHandle for MutationSourceDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         let Some(mutation_source) = v.downcast_ref::<MutationSource>() else {
             return Err(children);
         };
@@ -709,7 +709,7 @@ struct CompactSourceDeriveHandle {
 }
 
 impl CompactSourceDeriveHandle {
-    pub fn new(partitions: Partitions) -> Box<dyn DeriveHandle> {
+    pub fn create(partitions: Partitions) -> Box<dyn DeriveHandle> {
         Box::new(CompactSourceDeriveHandle { partitions })
     }
 }
@@ -721,9 +721,9 @@ impl DeriveHandle for CompactSourceDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         let Some(compact_source) = v.downcast_ref::<CompactSource>() else {
             return Err(children);
         };
@@ -743,7 +743,7 @@ struct ReplaceDeriveHandle {
 }
 
 impl ReplaceDeriveHandle {
-    pub fn new(
+    pub fn create(
         partitions: Vec<(usize, Location)>,
         slot: Option<BlockSlotDescription>,
         need_insert: bool,
@@ -763,9 +763,9 @@ impl DeriveHandle for ReplaceDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        mut children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        mut children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         if let Some(replace_into) = v.downcast_ref::<ReplaceInto>() {
             assert_eq!(children.len(), 1);
             return Ok(Box::new(ReplaceInto {

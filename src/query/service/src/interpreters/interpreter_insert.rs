@@ -44,6 +44,7 @@ use crate::interpreters::InterpreterPtr;
 use crate::physical_plans::DistributedInsertSelect;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;

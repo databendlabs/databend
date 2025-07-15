@@ -31,6 +31,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,
@@ -62,11 +63,7 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    pub async fn build(
-        &mut self,
-        s_expr: &SExpr,
-        required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
         let mut plan = self.build_physical_plan(s_expr, required).await?;
         plan.adjust_plan_id(&mut 0);
 
@@ -78,7 +75,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
         match s_expr.plan() {

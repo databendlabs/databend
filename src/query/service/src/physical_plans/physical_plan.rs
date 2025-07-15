@@ -25,7 +25,6 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_sql::Metadata;
-use itertools::Itertools;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::MutationSource;
@@ -55,9 +54,9 @@ pub trait DeriveHandle: Send + Sync + 'static {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>>;
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>>;
 }
 
 #[typetag::serde]
@@ -97,11 +96,11 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         }
     }
 
-    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
         Box::new(std::iter::empty())
     }
 
-    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
         Box::new(std::iter::empty())
     }
 
@@ -166,7 +165,7 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
         Ok(HashMap::new())
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan>;
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan;
 
     fn build_pipeline(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.build_pipeline2(builder)
@@ -184,7 +183,7 @@ pub trait IPhysicalPlan: Debug + Send + Sync + 'static {
 pub trait PhysicalPlanVisitor: Send + Sync + 'static {
     fn as_any(&mut self) -> &mut dyn Any;
 
-    fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()>;
+    fn visit(&mut self, plan: &PhysicalPlan) -> Result<()>;
 }
 
 pub trait PhysicalPlanDynExt {
@@ -211,7 +210,7 @@ pub trait PhysicalPlanDynExt {
 
     fn downcast_mut_ref<To: 'static>(&mut self) -> Option<&mut To>;
 
-    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> Box<dyn IPhysicalPlan>;
+    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan;
 
     fn visit(&self, visitor: &mut Box<dyn PhysicalPlanVisitor>) -> Result<()>;
 }
@@ -232,9 +231,6 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
         if let Some(prof) = profs.get(&self.get_id()) {
             let mut children = Vec::with_capacity(format_tree_node.children.len() + 10);
             for (_, desc) in get_statistics_desc().iter() {
-                if desc.display_name != "output rows" {
-                    continue;
-                }
                 if prof.statistics[desc.index] != 0 {
                     children.push(FormatTreeNode::new(format!(
                         "{}: {}",
@@ -266,7 +262,7 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
         }
     }
 
-    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> Box<dyn IPhysicalPlan> {
+    fn derive_with(&self, handle: &mut Box<dyn DeriveHandle>) -> PhysicalPlan {
         let mut children = vec![];
         for child in self.children() {
             children.push(child.derive_with(handle));
@@ -287,7 +283,7 @@ impl PhysicalPlanDynExt for Box<dyn IPhysicalPlan + 'static> {
     }
 }
 
-impl Clone for Box<dyn IPhysicalPlan> {
+impl Clone for PhysicalPlan {
     fn clone(&self) -> Self {
         let mut children = vec![];
         for child in self.children() {
@@ -297,3 +293,5 @@ impl Clone for Box<dyn IPhysicalPlan> {
         self.derive(children)
     }
 }
+
+pub type PhysicalPlan = Box<dyn IPhysicalPlan>;

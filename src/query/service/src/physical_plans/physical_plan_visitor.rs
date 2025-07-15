@@ -74,7 +74,7 @@
 //         Ok(PhysicalPlan::BroadcastSource(plan.clone()))
 //     }
 //
-//     fn replace_runtime_filter_sink(&mut self, plan: &BroadcastSink) -> Result<Box<dyn IPhysicalPlan>> {
+//     fn replace_runtime_filter_sink(&mut self, plan: &BroadcastSink) -> Result<PhysicalPlan> {
 //         let input = self.replace(&plan.input)?;
 //         Ok(Box::new(BroadcastSink {
 //             broadcast_id: plan.broadcast_id,
@@ -590,10 +590,10 @@
 
 // impl PhysicalPlan {
 //     pub fn traverse<'a, 'b>(
-//         plan: &'a Box<dyn IPhysicalPlan>,
-//         pre_visit: &'b mut dyn FnMut(&'a Box<dyn IPhysicalPlan>) -> bool,
-//         visit: &'b mut dyn FnMut(&'a Box<dyn IPhysicalPlan>),
-//         post_visit: &'b mut dyn FnMut(&'a Box<dyn IPhysicalPlan>),
+//         plan: &'a PhysicalPlan,
+//         pre_visit: &'b mut dyn FnMut(&'a PhysicalPlan) -> bool,
+//         visit: &'b mut dyn FnMut(&'a PhysicalPlan),
+//         post_visit: &'b mut dyn FnMut(&'a PhysicalPlan),
 //     ) {
 //         if pre_visit(plan) {
 //             visit(plan);

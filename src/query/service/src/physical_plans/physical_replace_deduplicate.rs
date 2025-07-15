@@ -37,6 +37,7 @@ use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
@@ -44,7 +45,7 @@ use crate::pipelines::PipelineBuilder;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceDeduplicate {
     pub meta: PhysicalPlanMeta,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub on_conflicts: Vec<OnConflictField>,
     pub bloom_filter_column_indexes: Vec<FieldIndex>,
     pub table_is_empty: bool,
@@ -73,17 +74,15 @@ impl IPhysicalPlan for ReplaceDeduplicate {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();

@@ -30,7 +30,7 @@ use databend_common_settings::Settings;
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::physical_plans::ExchangeSink;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::HashJoinState;
@@ -83,7 +83,7 @@ impl PipelineBuilder {
         }
     }
 
-    pub fn finalize(mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<PipelineBuildResult> {
+    pub fn finalize(mut self, plan: &PhysicalPlan) -> Result<PipelineBuildResult> {
         self.build_pipeline(plan)?;
 
         for source_pipeline in &self.pipelines {
@@ -115,10 +115,7 @@ impl PipelineBuilder {
         })
     }
 
-    pub(crate) fn add_plan_scope(
-        &mut self,
-        plan: &Box<dyn IPhysicalPlan>,
-    ) -> Result<Option<PlanScopeGuard>> {
+    pub(crate) fn add_plan_scope(&mut self, plan: &PhysicalPlan) -> Result<Option<PlanScopeGuard>> {
         if !plan.display_in_profile() {
             return Ok(None);
         }
@@ -149,7 +146,7 @@ impl PipelineBuilder {
     }
 
     #[recursive::recursive]
-    pub(crate) fn build_pipeline(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+    pub(crate) fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         let _guard = self.add_plan_scope(plan)?;
         self.is_exchange_stack
             .push(plan.downcast_ref::<ExchangeSink>().is_some());

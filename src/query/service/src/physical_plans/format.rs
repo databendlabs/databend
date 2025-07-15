@@ -16,14 +16,11 @@ use std::collections::HashMap;
 
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::base::format_byte_size;
-use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_expression::DataSchemaRef;
-use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::IndexType;
 use databend_common_sql::Metadata;
-use itertools::Itertools;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::PhysicalRuntimeFilter;
@@ -31,47 +28,6 @@ use crate::physical_plans::PhysicalRuntimeFilter;
 pub struct FormatContext<'a> {
     pub metadata: &'a Metadata,
     pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
-}
-
-/// Helper function to add profile info to the format tree.
-fn append_profile_info(
-    children: &mut Vec<FormatTreeNode<String>>,
-    profs: &HashMap<u32, PlanProfile>,
-    plan_id: u32,
-) {
-    if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
-            if prof.statistics[desc.index] != 0 {
-                children.push(FormatTreeNode::new(format!(
-                    "{}: {}",
-                    desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
-                )));
-            }
-        }
-    }
-}
-
-fn append_output_rows_info(
-    children: &mut Vec<FormatTreeNode<String>>,
-    profs: &HashMap<u32, PlanProfile>,
-    plan_id: u32,
-) {
-    if let Some(prof) = profs.get(&plan_id) {
-        for (_, desc) in get_statistics_desc().iter() {
-            if desc.display_name != "output rows" {
-                continue;
-            }
-            if prof.statistics[desc.index] != 0 {
-                children.push(FormatTreeNode::new(format!(
-                    "{}: {}",
-                    desc.display_name.to_lowercase(),
-                    desc.human_format(prof.statistics[desc.index])
-                )));
-            }
-            break;
-        }
-    }
 }
 
 pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {

@@ -59,7 +59,7 @@ use crate::interpreters::common::check_referenced_computed_columns;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::DistributedInsertSelect;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
@@ -728,7 +728,7 @@ pub(crate) async fn build_select_insert_plan(
     let new_table = FuseTable::try_create(table_info)?;
 
     // 4. build DistributedInsertSelect plan
-    let mut insert_plan: Box<dyn IPhysicalPlan> = Box::new(DistributedInsertSelect {
+    let mut insert_plan: PhysicalPlan = Box::new(DistributedInsertSelect {
         input: select_plan,
         table_info: new_table.get_table_info().clone(),
         select_schema,

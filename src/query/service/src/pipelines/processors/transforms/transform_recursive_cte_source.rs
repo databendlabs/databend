@@ -48,7 +48,7 @@ use futures_util::TryStreamExt;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::DropTableInterpreter;
 use crate::interpreters::Interpreter;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::RecursiveCteScan;
@@ -230,7 +230,7 @@ async fn drop_tables(ctx: Arc<QueryContext>, table_names: Vec<String>) -> Result
 
 async fn create_memory_table_for_cte_scan(
     ctx: &Arc<QueryContext>,
-    plan: &Box<dyn IPhysicalPlan>,
+    plan: &PhysicalPlan,
 ) -> Result<()> {
     struct CollectMemoryTable {
         ctx: Arc<QueryContext>,
@@ -238,7 +238,7 @@ async fn create_memory_table_for_cte_scan(
     }
 
     impl CollectMemoryTable {
-        pub fn new(ctx: Arc<QueryContext>) -> Box<dyn PhysicalPlanVisitor> {
+        pub fn create(ctx: Arc<QueryContext>) -> Box<dyn PhysicalPlanVisitor> {
             Box::new(CollectMemoryTable { ctx, plans: vec![] })
         }
 
@@ -252,7 +252,7 @@ async fn create_memory_table_for_cte_scan(
             self
         }
 
-        fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+        fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
             if let Some(recursive_cte_scan) = plan.downcast_ref::<RecursiveCteScan>() {
                 let table_fields = recursive_cte_scan
                     .output_schema
@@ -294,7 +294,7 @@ async fn create_memory_table_for_cte_scan(
         }
     }
 
-    let mut visitor = CollectMemoryTable::new(ctx.clone());
+    let mut visitor = CollectMemoryTable::create(ctx.clone());
     plan.visit(&mut visitor)?;
 
     let create_table_plans = {

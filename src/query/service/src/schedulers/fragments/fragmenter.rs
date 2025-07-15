@@ -21,7 +21,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use log::kv::Source;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::BroadcastSink;
@@ -31,8 +30,8 @@ use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::ExchangeSource;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationSource;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanVisitor;
@@ -50,7 +49,6 @@ use crate::sessions::QueryContext;
 /// Visitor to split a `PhysicalPlan` into fragments.
 pub struct Fragmenter {
     ctx: Arc<QueryContext>,
-    state: State,
     query_id: String,
     fragments: Vec<PlanFragment>,
 }
@@ -79,7 +77,6 @@ impl Fragmenter {
         Ok(Self {
             ctx,
             fragments: vec![],
-            state: State::Other,
             query_id,
         })
     }
@@ -100,8 +97,8 @@ impl Fragmenter {
         ctx.get_cluster().local_id()
     }
 
-    pub fn build_fragment(self, plan: &Box<dyn IPhysicalPlan>) -> Result<Vec<PlanFragment>> {
-        let mut handle = FragmentDeriveHandle::new(self.query_id.clone(), self.ctx.clone());
+    pub fn build_fragment(self, plan: &PhysicalPlan) -> Result<Vec<PlanFragment>> {
+        let mut handle = FragmentDeriveHandle::create(self.query_id.clone(), self.ctx.clone());
         let root = plan.derive_with(&mut handle);
         let mut fragments = {
             let handle = handle
@@ -149,7 +146,7 @@ impl Fragmenter {
         }
 
         impl EdgeVisitor {
-            pub fn new(target_fragment_id: usize) -> Box<dyn PhysicalPlanVisitor> {
+            pub fn create(target_fragment_id: usize) -> Box<dyn PhysicalPlanVisitor> {
                 Box::new(EdgeVisitor {
                     target_fragment_id,
                     map: Default::default(),
@@ -166,7 +163,7 @@ impl Fragmenter {
                 self
             }
 
-            fn visit(&mut self, plan: &Box<dyn IPhysicalPlan>) -> Result<()> {
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
                 if let Some(v) = plan.downcast_ref::<ExchangeSource>() {
                     if let Some(v) = self
                         .map
@@ -182,7 +179,7 @@ impl Fragmenter {
 
         let mut edges = HashMap::new();
         for fragment in iter {
-            let mut visitor = EdgeVisitor::new(fragment.fragment_id);
+            let mut visitor = EdgeVisitor::create(fragment.fragment_id);
             fragment.plan.visit(&mut visitor).unwrap();
             if let Some(v) = visitor.as_any().downcast_mut::<EdgeVisitor>() {
                 edges.extend(v.take().into_iter())
@@ -201,7 +198,7 @@ struct FragmentDeriveHandle {
 }
 
 impl FragmentDeriveHandle {
-    pub fn new(query_id: String, ctx: Arc<QueryContext>) -> Box<dyn DeriveHandle> {
+    pub fn create(query_id: String, ctx: Arc<QueryContext>) -> Box<dyn DeriveHandle> {
         Box::new(FragmentDeriveHandle {
             ctx,
             query_id,
@@ -216,7 +213,7 @@ impl FragmentDeriveHandle {
 
     pub fn get_exchange(
         cluster: Arc<Cluster>,
-        plan: &Box<dyn IPhysicalPlan>,
+        plan: &PhysicalPlan,
     ) -> Result<Option<DataExchange>> {
         let Some(exchange_sink) = plan.downcast_ref::<ExchangeSink>() else {
             return Ok(None);
@@ -255,9 +252,9 @@ impl DeriveHandle for FragmentDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        mut children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        mut children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         if let Some(_recluster) = v.downcast_ref::<Recluster>() {
             self.state = State::Recluster;
         } else if let Some(_table_scan) = v.downcast_ref::<TableScan>() {
@@ -279,7 +276,7 @@ impl DeriveHandle for FragmentDeriveHandle {
             let plan_id = v.get_id();
             let source_fragment_id = self.ctx.get_fragment_id();
 
-            let plan: Box<dyn IPhysicalPlan> = Box::new(ExchangeSink {
+            let plan: PhysicalPlan = Box::new(ExchangeSink {
                 input,
                 schema: input_schema.clone(),
                 kind: exchange.kind.clone(),

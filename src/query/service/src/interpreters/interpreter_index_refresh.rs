@@ -49,7 +49,7 @@ use databend_storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
 use crate::physical_plans::DeriveHandle;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::TableScan;
@@ -122,7 +122,7 @@ impl RefreshIndexInterpreter {
     #[async_backtrace::framed]
     async fn get_read_source(
         &self,
-        query_plan: &Box<dyn IPhysicalPlan>,
+        query_plan: &PhysicalPlan,
         fuse_table: Arc<FuseTable>,
         segments: Option<Vec<Location>>,
     ) -> Result<Option<DataSourcePlan>> {
@@ -268,7 +268,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let new_index_meta = self.update_index_meta(&new_read_source)?;
 
-        let mut handle = ReadSourceDeriveHandle::new(new_read_source);
+        let mut handle = ReadSourceDeriveHandle::create(new_read_source);
         query_plan = query_plan.derive_with(&mut handle);
 
         let mut build_res =
@@ -370,7 +370,7 @@ struct ReadSourceDeriveHandle {
 }
 
 impl ReadSourceDeriveHandle {
-    pub fn new(source: DataSourcePlan) -> Box<dyn DeriveHandle> {
+    pub fn create(source: DataSourcePlan) -> Box<dyn DeriveHandle> {
         Box::new(ReadSourceDeriveHandle { source })
     }
 }
@@ -382,9 +382,9 @@ impl DeriveHandle for ReadSourceDeriveHandle {
 
     fn derive(
         &mut self,
-        v: &Box<dyn IPhysicalPlan>,
-        children: Vec<Box<dyn IPhysicalPlan>>,
-    ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+        v: &PhysicalPlan,
+        children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
         let Some(table_scan) = v.downcast_ref::<TableScan>() else {
             return Err(children);
         };

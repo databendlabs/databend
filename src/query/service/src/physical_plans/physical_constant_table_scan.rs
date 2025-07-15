@@ -27,6 +27,7 @@ use itertools::Itertools;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
@@ -81,7 +82,7 @@ impl IPhysicalPlan for ConstantTableScan {
         ))
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -116,7 +117,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         scan: &databend_common_sql::plans::ConstantTableScan,
         required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         debug_assert!(scan
             .schema
             .fields

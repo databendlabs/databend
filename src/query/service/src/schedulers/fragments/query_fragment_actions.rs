@@ -27,7 +27,7 @@ use databend_common_meta_types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
 use crate::physical_plans::ExchangeSink;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
@@ -41,11 +41,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct QueryFragmentAction {
     pub executor: String,
-    pub physical_plan: Box<dyn IPhysicalPlan>,
+    pub physical_plan: PhysicalPlan,
 }
 
 impl QueryFragmentAction {
-    pub fn create(executor: String, physical_plan: Box<dyn IPhysicalPlan>) -> QueryFragmentAction {
+    pub fn create(executor: String, physical_plan: PhysicalPlan) -> QueryFragmentAction {
         QueryFragmentAction {
             executor,
             physical_plan,

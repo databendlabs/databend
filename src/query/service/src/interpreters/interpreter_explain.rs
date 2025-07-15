@@ -53,8 +53,8 @@ use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationBuildInfo;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::executor::ExecutorSettings;
@@ -73,7 +73,6 @@ pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     config: ExplainConfig,
     kind: ExplainKind,
-    partial: bool,
     graphical: bool,
     plan: Plan,
 }
@@ -288,7 +287,6 @@ impl ExplainInterpreter {
         plan: Plan,
         kind: ExplainKind,
         config: ExplainConfig,
-        partial: bool,
         graphical: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
@@ -296,7 +294,6 @@ impl ExplainInterpreter {
             plan,
             kind,
             config,
-            partial,
             graphical,
         })
     }
@@ -313,7 +310,7 @@ impl ExplainInterpreter {
 
     pub async fn explain_physical_plan(
         &self,
-        plan: &Box<dyn IPhysicalPlan>,
+        plan: &PhysicalPlan,
         metadata: &MetadataRef,
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
@@ -570,7 +567,7 @@ impl ExplainInterpreter {
 
     fn inject_pruned_partitions_stats(
         &self,
-        plan: &mut Box<dyn IPhysicalPlan>,
+        plan: &mut PhysicalPlan,
         metadata: &MetadataRef,
     ) -> Result<()> {
         let mut sources = vec![];

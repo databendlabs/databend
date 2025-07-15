@@ -77,6 +77,7 @@ use super::ColumnMutation;
 use super::CommitType;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::Exchange;
@@ -89,12 +90,11 @@ use crate::pipelines::PipelineBuilder;
 
 // The predicate_column_index should not be conflict with update expr's column_binding's index.
 pub const PREDICATE_COLUMN_INDEX: IndexType = u64::MAX as usize;
-pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mutation {
     pub meta: PhysicalPlanMeta,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub table_info: TableInfo,
     // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
     pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
@@ -124,13 +124,11 @@ impl IPhysicalPlan for Mutation {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -154,7 +152,7 @@ impl IPhysicalPlan for Mutation {
         ))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -249,7 +247,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         mutation: &databend_common_sql::plans::Mutation,
         required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let databend_common_sql::plans::Mutation {
             bind_context,
             metadata,
@@ -654,12 +652,12 @@ impl PhysicalPlanBuilder {
 }
 
 pub fn build_block_id_shuffle_exchange(
-    plan: Box<dyn IPhysicalPlan>,
+    plan: PhysicalPlan,
     bind_context: &BindContext,
     mutation_input_schema: Arc<DataSchema>,
     database_name: &str,
     table_name: &str,
-) -> Result<Box<dyn IPhysicalPlan>> {
+) -> Result<PhysicalPlan> {
     let mut row_id_column = None;
     for column_binding in bind_context.columns.iter() {
         if BindContext::match_column_binding(
@@ -720,14 +718,14 @@ pub fn build_block_id_shuffle_exchange(
 }
 
 fn build_mutation_row_fetch(
-    plan: Box<dyn IPhysicalPlan>,
+    plan: PhysicalPlan,
     metadata: MetadataRef,
     mutation_input_schema: Arc<DataSchema>,
     strategy: MutationStrategy,
     lazy_columns: ColumnSet,
     target_table_index: usize,
     row_id_offset: usize,
-) -> Box<dyn IPhysicalPlan> {
+) -> PhysicalPlan {
     let metadata = metadata.read();
 
     let lazy_columns = lazy_columns

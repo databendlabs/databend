@@ -34,6 +34,7 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuilder;
@@ -42,7 +43,7 @@ use crate::pipelines::PipelineBuilder;
 pub struct Filter {
     meta: PhysicalPlanMeta,
     pub projections: ColumnSet,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
 
@@ -74,13 +75,11 @@ impl IPhysicalPlan for Filter {
         Ok(DataSchemaRefExt::create(fields))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -136,7 +135,7 @@ impl IPhysicalPlan for Filter {
         )]))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -159,7 +158,7 @@ impl PhysicalPlanBuilder {
         filter: &databend_common_sql::plans::Filter,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let used = filter.predicates.iter().fold(required.clone(), |acc, v| {
             acc.union(&v.used_columns()).cloned().collect()

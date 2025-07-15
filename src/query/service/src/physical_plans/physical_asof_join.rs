@@ -45,6 +45,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Visibility;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan_builder::PhysicalPlanBuilder;
 
 impl PhysicalPlanBuilder {
@@ -55,7 +56,7 @@ impl PhysicalPlanBuilder {
         required: (ColumnSet, ColumnSet),
         mut range_conditions: Vec<ScalarExpr>,
         mut other_conditions: Vec<ScalarExpr>,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let mut window_index: usize = 0;
 
         if range_conditions.is_empty() {

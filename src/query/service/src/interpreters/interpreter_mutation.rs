@@ -46,8 +46,8 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::HookOperator;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::create_push_down_filters;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MutationBuildInfo;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
@@ -171,7 +171,7 @@ impl MutationInterpreter {
         &self,
         mutation: &Mutation,
         dry_run: bool,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
         let mutation_build_info = build_mutation_info(self.ctx.clone(), mutation, dry_run).await?;
         // Build physical plan.

@@ -24,10 +24,11 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::ColumnBinding;
 
 use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RefreshIndex {
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub index_id: u64,
     pub table_info: TableInfo,
     pub select_schema: DataSchemaRef,

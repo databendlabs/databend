@@ -28,13 +28,14 @@ use databend_common_sql::TypeCheck;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
     pub meta: PhysicalPlanMeta,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
     pub ignore_exchange: bool,
@@ -86,11 +87,11 @@ impl IPhysicalPlan for Exchange {
         ))
     }
 
-    fn children(&self) -> Box<dyn Iterator<Item = &'_ Box<dyn IPhysicalPlan>> + '_> {
+    fn children(&self) -> Box<dyn Iterator<Item = &'_ PhysicalPlan> + '_> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut Box<dyn IPhysicalPlan>> + '_> {
+    fn children_mut(&mut self) -> Box<dyn Iterator<Item = &'_ mut PhysicalPlan> + '_> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -107,7 +108,7 @@ impl IPhysicalPlan for Exchange {
         false
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -121,7 +122,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         exchange: &databend_common_sql::plans::Exchange,
         mut required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         if let databend_common_sql::plans::Exchange::Hash(exprs) = exchange {
             for expr in exprs {

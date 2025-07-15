@@ -83,6 +83,7 @@ use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::AddStreamColumn;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -319,7 +320,7 @@ impl IPhysicalPlan for TableScan {
         ]))
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -378,14 +379,14 @@ impl IPhysicalPlan for TableScan {
 }
 
 impl TableScan {
-    pub fn new(
+    pub fn create(
         scan_id: usize,
         name_mapping: BTreeMap<String, IndexType>,
         source: Box<DataSourcePlan>,
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-    ) -> Box<dyn IPhysicalPlan> {
+    ) -> PhysicalPlan {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
             DataSourceInfo::StageSource(_) => "StageScan".to_string(),
@@ -435,7 +436,7 @@ impl PhysicalPlanBuilder {
         scan: &databend_common_sql::plans::Scan,
         required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         // Some table may not have any column,
         // e.g. `system.sync_crash_me`
@@ -623,7 +624,7 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
-        let mut plan = TableScan::new(
+        let mut plan = TableScan::create(
             scan.scan_id,
             name_mapping,
             Box::new(source),
@@ -634,7 +635,7 @@ impl PhysicalPlanBuilder {
 
         // Update stream columns if needed.
         if scan.update_stream_columns {
-            plan = AddStreamColumn::new(
+            plan = AddStreamColumn::create(
                 &self.metadata,
                 plan,
                 scan.table_index,
@@ -645,7 +646,7 @@ impl PhysicalPlanBuilder {
         Ok(plan)
     }
 
-    pub async fn build_dummy_table_scan(&mut self) -> Result<Box<dyn IPhysicalPlan>> {
+    pub async fn build_dummy_table_scan(&mut self) -> Result<PhysicalPlan> {
         let catalogs = CatalogManager::instance();
         let table = catalogs
             .get_default_catalog(self.ctx.session_state())?
@@ -660,7 +661,7 @@ impl PhysicalPlanBuilder {
             .read_plan(self.ctx.clone(), None, None, false, self.dry_run)
             .await?;
 
-        Ok(TableScan::new(
+        Ok(TableScan::create(
             DUMMY_TABLE_INDEX,
             BTreeMap::from([("dummy".to_string(), DUMMY_COLUMN_INDEX)]),
             Box::new(source),

@@ -48,6 +48,7 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanDynExt;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::Exchange;
@@ -93,8 +94,8 @@ pub struct HashJoin {
     pub probe_projections: ColumnSet,
     pub build_projections: ColumnSet,
 
-    pub build: Box<dyn IPhysicalPlan>,
-    pub probe: Box<dyn IPhysicalPlan>,
+    pub build: PhysicalPlan,
+    pub probe: PhysicalPlan,
     pub build_keys: Vec<RemoteExpr>,
     pub probe_keys: Vec<RemoteExpr>,
     pub is_null_equal: Vec<bool>,
@@ -142,13 +143,11 @@ impl IPhysicalPlan for HashJoin {
         Ok(self.output_schema.clone())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.probe).chain(std::iter::once(&self.build)))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.probe).chain(std::iter::once(&mut self.build)))
     }
 
@@ -321,7 +320,7 @@ impl IPhysicalPlan for HashJoin {
         Ok(labels)
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_hash_join = self.clone();
         assert_eq!(children.len(), 2);
         new_hash_join.build = children.pop().unwrap();
@@ -456,7 +455,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         left_required: ColumnSet,
         right_required: ColumnSet,
-    ) -> Result<(Box<dyn IPhysicalPlan>, Box<dyn IPhysicalPlan>)> {
+    ) -> Result<(PhysicalPlan, PhysicalPlan)> {
         let probe_side = self.build(s_expr.child(0)?, left_required).await?;
         let build_side = self.build(s_expr.child(1)?, right_required).await?;
 
@@ -490,7 +489,7 @@ impl PhysicalPlanBuilder {
     pub fn prepare_build_schema(
         &self,
         join_type: &JoinType,
-        build_side: &Box<dyn IPhysicalPlan>,
+        build_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::LeftAsof | JoinType::Full => {
@@ -526,7 +525,7 @@ impl PhysicalPlanBuilder {
     pub fn prepare_probe_schema(
         &self,
         join_type: &JoinType,
-        probe_side: &Box<dyn IPhysicalPlan>,
+        probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
             JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
@@ -554,8 +553,8 @@ impl PhysicalPlanBuilder {
     /// * `build_side` - The build side physical plan
     fn unify_keys(
         &self,
-        probe_side: &mut Box<dyn IPhysicalPlan>,
-        build_side: &mut Box<dyn IPhysicalPlan>,
+        probe_side: &mut PhysicalPlan,
+        build_side: &mut PhysicalPlan,
     ) -> Result<()> {
         // Unify the data types of the left and right exchange keys
         let Some(probe_exchange) = probe_side.downcast_mut_ref::<Exchange>() else {
@@ -1127,8 +1126,8 @@ impl PhysicalPlanBuilder {
         &self,
         s_expr: &SExpr,
         join: &Join,
-        probe_side: Box<dyn IPhysicalPlan>,
-        build_side: Box<dyn IPhysicalPlan>,
+        probe_side: PhysicalPlan,
+        build_side: PhysicalPlan,
         projections: ColumnSet,
         probe_projections: ColumnSet,
         build_projections: ColumnSet,
@@ -1141,7 +1140,7 @@ impl PhysicalPlanBuilder {
         build_side_cache_info: Option<(usize, HashMap<IndexType, usize>)>,
         runtime_filter: PhysicalRuntimeFilters,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let build_side_data_distribution = s_expr.build_side_child().get_data_distribution()?;
         let broadcast_id = if build_side_data_distribution
             .as_ref()
@@ -1185,7 +1184,7 @@ impl PhysicalPlanBuilder {
         left_required: ColumnSet,
         right_required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // Step 1: Build probe and build sides
         let (mut probe_side, mut build_side) = self
             .build_join_sides(s_expr, left_required, right_required)

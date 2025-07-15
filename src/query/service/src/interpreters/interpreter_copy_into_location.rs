@@ -28,7 +28,7 @@ use crate::interpreters::common::dml_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::physical_plans::CopyIntoLocation;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -90,7 +90,7 @@ impl CopyIntoLocationInterpreter {
         let query_result_schema = query_interpreter.get_result_schema();
         let table_schema = infer_table_schema(&query_result_schema)?;
 
-        let mut physical_plan: Box<dyn IPhysicalPlan> = Box::new(CopyIntoLocation {
+        let mut physical_plan: PhysicalPlan = Box::new(CopyIntoLocation {
             input: query_physical_plan,
             project_columns: query_interpreter.get_result_columns(),
             input_data_schema: query_result_schema,

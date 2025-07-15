@@ -38,7 +38,7 @@ use log::info;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::DeriveHandle;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
@@ -57,7 +57,7 @@ impl AnalyzeTableInterpreter {
         Ok(AnalyzeTableInterpreter { ctx, plan })
     }
 
-    async fn plan_sql(&self, sql: String) -> Result<(Box<dyn IPhysicalPlan>, BindContext)> {
+    async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, BindContext)> {
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _) = planner.plan_sql(&sql).await?;
         let (select_plan, bind_context) = match &plan {
@@ -275,11 +275,11 @@ impl Interpreter for AnalyzeTableInterpreter {
     }
 }
 
-fn remove_exchange(plan: Box<dyn IPhysicalPlan>) -> Box<dyn IPhysicalPlan> {
+fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
     struct RemoveExchangeHandle;
 
     impl RemoveExchangeHandle {
-        pub fn new() -> Box<dyn DeriveHandle> {
+        pub fn create() -> Box<dyn DeriveHandle> {
             Box::new(RemoveExchangeHandle)
         }
     }
@@ -291,9 +291,9 @@ fn remove_exchange(plan: Box<dyn IPhysicalPlan>) -> Box<dyn IPhysicalPlan> {
 
         fn derive(
             &mut self,
-            v: &Box<dyn IPhysicalPlan>,
-            mut children: Vec<Box<dyn IPhysicalPlan>>,
-        ) -> std::result::Result<Box<dyn IPhysicalPlan>, Vec<Box<dyn IPhysicalPlan>>> {
+            v: &PhysicalPlan,
+            mut children: Vec<PhysicalPlan>,
+        ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
             let Some(_) = v.downcast_ref::<Exchange>() else {
                 return Err(children);
             };
@@ -303,5 +303,5 @@ fn remove_exchange(plan: Box<dyn IPhysicalPlan>) -> Box<dyn IPhysicalPlan> {
         }
     }
 
-    plan.derive_with(&mut RemoveExchangeHandle::new())
+    plan.derive_with(&mut RemoveExchangeHandle::create())
 }

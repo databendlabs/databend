@@ -24,6 +24,7 @@ use databend_common_sql::ScalarExpr;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 
 pub enum PhysicalJoinType {
@@ -131,7 +132,7 @@ impl PhysicalPlanBuilder {
         join: &databend_common_sql::plans::Join,
         required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let mut others_required = join
             .non_equi_conditions

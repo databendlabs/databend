@@ -21,6 +21,7 @@ use databend_common_sql::plans::InsertValue;
 use databend_common_sql::NameResolutionContext;
 
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
@@ -46,7 +47,7 @@ impl IPhysicalPlan for ReplaceAsyncSourcer {
         &mut self.meta
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }

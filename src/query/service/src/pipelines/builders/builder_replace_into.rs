@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

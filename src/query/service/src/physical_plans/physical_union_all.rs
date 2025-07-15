@@ -37,6 +37,7 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::plan_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::TransformRecursiveCteSource;
@@ -45,8 +46,8 @@ use crate::pipelines::PipelineBuilder;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
     meta: PhysicalPlanMeta,
-    pub left: Box<dyn IPhysicalPlan>,
-    pub right: Box<dyn IPhysicalPlan>,
+    pub left: PhysicalPlan,
+    pub right: PhysicalPlan,
     pub left_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub right_outputs: Vec<(IndexType, Option<RemoteExpr>)>,
     pub schema: DataSchemaRef,
@@ -73,13 +74,11 @@ impl IPhysicalPlan for UnionAll {
         Ok(self.schema.clone())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.left).chain(std::iter::once(&self.right)))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.left).chain(std::iter::once(&mut self.right)))
     }
 
@@ -117,7 +116,7 @@ impl IPhysicalPlan for UnionAll {
             .join(", "))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_union_all = self.clone();
         assert_eq!(children.len(), 2);
         new_union_all.right = children.pop().unwrap();
@@ -221,7 +220,7 @@ impl PhysicalPlanBuilder {
         union_all: &databend_common_sql::plans::UnionAll,
         mut required: ColumnSet,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
         let metadata = self.metadata.read().clone();
         let lazy_columns = metadata.lazy_columns();

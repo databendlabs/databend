@@ -51,8 +51,8 @@ use crate::physical_plans::ChunkFilter;
 use crate::physical_plans::ChunkMerge;
 use crate::physical_plans::Duplicate;
 use crate::physical_plans::FillAndReorder;
-use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::MultiInsertEvalScalar;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::SerializableTable;
@@ -131,7 +131,7 @@ impl Interpreter for InsertMultiTableInterpreter {
 }
 
 impl InsertMultiTableInterpreter {
-    pub async fn build_physical_plan(&self) -> Result<Box<dyn IPhysicalPlan>> {
+    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let (mut root, _) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let source_schema = root.output_schema()?;
@@ -239,7 +239,7 @@ impl InsertMultiTableInterpreter {
         Ok(root)
     }
 
-    async fn build_source_physical_plan(&self) -> Result<(Box<dyn IPhysicalPlan>, MetadataRef)> {
+    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,

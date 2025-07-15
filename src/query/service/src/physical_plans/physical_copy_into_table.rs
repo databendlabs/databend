@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 
@@ -67,16 +68,14 @@ impl IPhysicalPlan for CopyIntoTable {
         Ok(DataSchemaRefExt::create(vec![]))
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match &self.source {
             CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
             CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
         }
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         match &mut self.source {
             CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v)),
             CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v)),
@@ -94,7 +93,7 @@ impl IPhysicalPlan for CopyIntoTable {
         ))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         match &self.source {
             CopyIntoTableSource::Query(_) => {
                 let mut new_copy_into_table = self.clone();
@@ -169,6 +168,6 @@ impl IPhysicalPlan for CopyIntoTable {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum CopyIntoTableSource {
-    Query(Box<dyn IPhysicalPlan>),
-    Stage(Box<dyn IPhysicalPlan>),
+    Query(PhysicalPlan),
+    Stage(PhysicalPlan),
 }

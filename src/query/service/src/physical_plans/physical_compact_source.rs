@@ -41,8 +41,8 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::physical_plans::physical_plan::DeriveHandle;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
@@ -72,7 +72,7 @@ impl IPhysicalPlan for CompactSource {
         &mut self.meta
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -219,7 +219,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_compact_block(
         &mut self,
         compact_block: &databend_common_sql::plans::OptimizeCompactBlock,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let databend_common_sql::plans::OptimizeCompactBlock {
             catalog,
             database,
@@ -247,7 +247,7 @@ impl PhysicalPlanBuilder {
             .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-        let mut root: Box<dyn IPhysicalPlan> = Box::new(CompactSource {
+        let mut root: PhysicalPlan = Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),

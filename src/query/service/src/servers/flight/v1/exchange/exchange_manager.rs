@@ -53,7 +53,7 @@ use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -964,7 +964,7 @@ impl QueryCoordinator {
 struct FragmentCoordinator {
     initialized: bool,
     fragment_id: usize,
-    physical_plan: Box<dyn IPhysicalPlan>,
+    physical_plan: PhysicalPlan,
     data_exchange: Option<DataExchange>,
     pipeline_build_res: Option<PipelineBuildResult>,
 }

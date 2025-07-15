@@ -21,6 +21,7 @@ use databend_common_expression::DataSchemaRefExt;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::TransformRecursiveCteScan;
@@ -51,7 +52,7 @@ impl IPhysicalPlan for RecursiveCteScan {
         Ok(self.output_schema.clone())
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -77,7 +78,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         recursive_cte_scan: &databend_common_sql::plans::RecursiveCteScan,
         stat_info: PlanStatsInfo,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         Ok(Box::new(RecursiveCteScan {
             meta: PhysicalPlanMeta::new("RecursiveCteScan"),
             output_schema: DataSchemaRefExt::create(recursive_cte_scan.fields.clone()),

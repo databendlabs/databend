@@ -23,7 +23,7 @@ use futures_util::TryStreamExt;
 
 use crate::interpreters::InterpreterFactory;
 use crate::physical_plans::build_broadcast_plans;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -42,7 +42,7 @@ use crate::stream::PullingExecutorStream;
 pub async fn build_query_pipeline(
     ctx: &Arc<QueryContext>,
     result_columns: &[ColumnBinding],
-    plan: &Box<dyn IPhysicalPlan>,
+    plan: &PhysicalPlan,
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
@@ -61,7 +61,7 @@ pub async fn build_query_pipeline(
 #[async_backtrace::framed]
 pub async fn build_query_pipeline_without_render_result_set(
     ctx: &Arc<QueryContext>,
-    plan: &Box<dyn IPhysicalPlan>,
+    plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
@@ -79,7 +79,7 @@ pub async fn build_query_pipeline_without_render_result_set(
 #[async_backtrace::framed]
 pub async fn build_local_pipeline(
     ctx: &Arc<QueryContext>,
-    plan: &Box<dyn IPhysicalPlan>,
+    plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let pipeline =
         PipelineBuilder::create(ctx.get_function_context()?, ctx.get_settings(), ctx.clone());
@@ -94,7 +94,7 @@ pub async fn build_local_pipeline(
 #[async_backtrace::framed]
 pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
-    plan: &Box<dyn IPhysicalPlan>,
+    plan: &PhysicalPlan,
 ) -> Result<PipelineBuildResult> {
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     for plan in build_broadcast_plans(ctx.as_ref())?
@@ -140,7 +140,7 @@ impl ServiceQueryExecutor {
 impl ServiceQueryExecutor {
     pub async fn execute_query_with_physical_plan(
         &self,
-        plan: &Box<dyn IPhysicalPlan>,
+        plan: &PhysicalPlan,
     ) -> Result<Vec<DataBlock>> {
         let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;

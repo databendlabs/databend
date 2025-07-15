@@ -29,6 +29,7 @@ use itertools::Itertools;
 use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::TransformExpressionScan;
@@ -38,7 +39,7 @@ use crate::pipelines::PipelineBuilder;
 pub struct ExpressionScan {
     pub meta: PhysicalPlanMeta,
     pub values: Vec<Vec<RemoteExpr>>,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub output_schema: DataSchemaRef,
 }
 
@@ -59,13 +60,11 @@ impl IPhysicalPlan for ExpressionScan {
         Ok(self.output_schema.clone())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -96,7 +95,7 @@ impl IPhysicalPlan for ExpressionScan {
         ))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -137,7 +136,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         scan: &databend_common_sql::plans::ExpressionScan,
         required: ColumnSet,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let input = self.build(s_expr.child(0)?, required).await?;
         let input_schema = input.output_schema()?;
 

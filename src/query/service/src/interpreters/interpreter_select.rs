@@ -46,7 +46,7 @@ use log::info;
 use crate::interpreters::common::query_build_update_stream_req;
 use crate::interpreters::Interpreter;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
@@ -112,7 +112,7 @@ impl SelectInterpreter {
 
     #[inline]
     #[async_backtrace::framed]
-    pub async fn build_physical_plan(&self) -> Result<Box<dyn IPhysicalPlan>> {
+    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         self.ctx
             .set_status_info("[SELECT-INTERP] Building physical plan");
@@ -124,7 +124,7 @@ impl SelectInterpreter {
     #[async_backtrace::framed]
     pub async fn build_pipeline(
         &self,
-        mut physical_plan: Box<dyn IPhysicalPlan>,
+        mut physical_plan: PhysicalPlan,
     ) -> Result<PipelineBuildResult> {
         if let Some(exchange) = physical_plan.downcast_mut_ref::<Exchange>() {
             if exchange.kind == FragmentKind::Merge && self.ignore_result {

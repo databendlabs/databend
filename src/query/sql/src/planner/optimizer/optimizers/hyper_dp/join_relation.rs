@@ -30,7 +30,7 @@ pub struct JoinRelation {
 }
 
 impl JoinRelation {
-    pub fn new(s_expr: &SExpr, sample_executor: Option<Arc<dyn QueryExecutor>>) -> Self {
+    pub fn new(s_expr: &SExpr, _sample_executor: Option<Arc<dyn QueryExecutor>>) -> Self {
         Self {
             s_expr: s_expr.clone(),
         }

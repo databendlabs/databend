@@ -54,6 +54,7 @@ use crate::physical_plans::format::format_output_columns;
 use crate::physical_plans::format::part_stats_info_to_format_tree;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
@@ -133,7 +134,7 @@ impl IPhysicalPlan for MutationSource {
         Some(self.clone())
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -244,7 +245,7 @@ impl PhysicalPlanBuilder {
     pub async fn build_mutation_source(
         &mut self,
         mutation_source: &databend_common_sql::plans::MutationSource,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let filters = if !mutation_source.predicates.is_empty() {
             Some(create_push_down_filters(
                 &self.ctx.get_function_context()?,

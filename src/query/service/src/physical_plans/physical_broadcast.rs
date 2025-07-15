@@ -23,6 +23,7 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use super::Exchange;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
 use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
@@ -47,7 +48,7 @@ impl IPhysicalPlan for BroadcastSource {
         &mut self.meta
     }
 
-    fn derive(&self, children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
         assert!(children.is_empty());
         Box::new(self.clone())
     }
@@ -68,7 +69,7 @@ impl IPhysicalPlan for BroadcastSource {
 pub struct BroadcastSink {
     pub meta: PhysicalPlanMeta,
     pub broadcast_id: u32,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
 }
 
 #[typetag::serde]
@@ -88,13 +89,11 @@ impl IPhysicalPlan for BroadcastSink {
         Ok(DataSchemaRef::default())
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -107,7 +106,7 @@ impl IPhysicalPlan for BroadcastSink {
         Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -127,8 +126,8 @@ impl IPhysicalPlan for BroadcastSink {
     }
 }
 
-pub fn build_broadcast_plan(broadcast_id: u32) -> Result<Box<dyn IPhysicalPlan>> {
-    let broadcast_source: Box<dyn IPhysicalPlan> = Box::new(BroadcastSource {
+pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
+    let broadcast_source: PhysicalPlan = Box::new(BroadcastSource {
         meta: PhysicalPlanMeta::new("BroadcastSource"),
         broadcast_id,
     });
@@ -149,7 +148,7 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<Box<dyn IPhysicalPlan>>
     }))
 }
 
-pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<Box<dyn IPhysicalPlan>>> {
+pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>> {
     let mut plans = vec![];
     let next_broadcast_id = ctx.get_next_broadcast_id();
     ctx.reset_broadcast_id();

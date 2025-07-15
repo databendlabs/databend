@@ -53,7 +53,7 @@ use crate::interpreters::SelectInterpreter;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
 use crate::physical_plans::Exchange;
-use crate::physical_plans::IPhysicalPlan;
+use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanDynExt;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::ReplaceAsyncSourcer;
@@ -134,7 +134,7 @@ impl ReplaceInterpreter {
     async fn build_physical_plan(
         &self,
     ) -> Result<(
-        Box<dyn IPhysicalPlan>,
+        PhysicalPlan,
         Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     )> {
         let plan = &self.plan;
@@ -441,7 +441,7 @@ impl ReplaceInterpreter {
         &self,
         schema: DataSchemaRef,
         source: &InsertValue,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         Ok(Box::new(ReplaceAsyncSourcer {
             schema,
             source: source.clone(),
@@ -492,7 +492,7 @@ impl ReplaceInterpreter {
 }
 
 struct ReplaceSourceCtx {
-    root: Box<dyn IPhysicalPlan>,
+    root: PhysicalPlan,
     select_ctx: Option<ReplaceSelectCtx>,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     bind_context: Option<BindContext>,

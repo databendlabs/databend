@@ -41,6 +41,7 @@ use databend_common_sql::CURRENT_BLOCK_ROW_NUM_COL_NAME;
 
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::processors::transforms::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
@@ -48,7 +49,7 @@ use crate::pipelines::PipelineBuilder;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AddStreamColumn {
     pub meta: PhysicalPlanMeta,
-    pub input: Box<dyn IPhysicalPlan>,
+    pub input: PhysicalPlan,
     pub exprs: Vec<RemoteExpr>,
     pub projections: Vec<usize>,
     pub stream_columns: Vec<StreamColumn>,
@@ -67,13 +68,11 @@ impl IPhysicalPlan for AddStreamColumn {
         &mut self.meta
     }
 
-    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a Box<dyn IPhysicalPlan>> + 'a> {
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&self.input))
     }
 
-    fn children_mut<'a>(
-        &'a mut self,
-    ) -> Box<dyn Iterator<Item = &'a mut Box<dyn IPhysicalPlan>> + 'a> {
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
         Box::new(std::iter::once(&mut self.input))
     }
 
@@ -87,7 +86,7 @@ impl IPhysicalPlan for AddStreamColumn {
         Ok(children.pop().unwrap())
     }
 
-    fn derive(&self, mut children: Vec<Box<dyn IPhysicalPlan>>) -> Box<dyn IPhysicalPlan> {
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
         let mut new_physical_plan = self.clone();
         assert_eq!(children.len(), 1);
         new_physical_plan.input = children.pop().unwrap();
@@ -128,12 +127,12 @@ impl IPhysicalPlan for AddStreamColumn {
 }
 
 impl AddStreamColumn {
-    pub fn new(
+    pub fn create(
         metadata: &MetadataRef,
-        input: Box<dyn IPhysicalPlan>,
+        input: PhysicalPlan,
         table_index: usize,
         table_version: u64,
-    ) -> Result<Box<dyn IPhysicalPlan>> {
+    ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;
         let num_fields = input_schema.fields().len();
         let column_entries = metadata.read().columns_by_table_index(table_index);
