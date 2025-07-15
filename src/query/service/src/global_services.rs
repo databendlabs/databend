@@ -166,7 +166,9 @@ impl GlobalServices {
             DummyResourcesManagement::init()?;
         }
 
-        GlobalQueriesExecutor::init()?;
+        if config.query.enable_queries_executor {
+            GlobalQueriesExecutor::init()?;
+        }
 
         Self::init_workload_mgr(config).await?;
 
