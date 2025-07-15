@@ -23,6 +23,7 @@ use std::time::Duration;
 
 use async_stream::stream;
 use chrono::DateTime;
+use chrono::Local;
 use chrono::Utc;
 use chrono_tz::Tz;
 use cron::Schedule;
@@ -75,9 +76,10 @@ use crate::task::session::get_task_user;
 
 pub type TaskMessageStream = BoxStream<'static, Result<(String, TaskMessage)>>;
 
-/// - Multiple Query nodes can send the same Task at the same time, and the key will be distinguished by node_id
-/// - Each Query node will grab the corresponding task through acquire task_name.
-/// - Tasks with the same task_name cannot be executed at the same time.
+/// Currently, query uses the watch in meta to imitate channel to obtain tasks. When task messages are sent to channels, they are stored in meta using TaskMessage::key.
+/// TaskMessage::key is divided into only 4 types of keys that will overwrite each other to avoid repeated storage and repeated processing.
+/// Whenever a new key is inserted for overwriting, each query will receive the corresponding key change and process it, thus realizing the channel
+/// The init type key of watch is used to let the Service load the Schedule, and TaskService will delete the corresponding key (TaskMgr::accept) when processing Execute & After & Delete TaskMessage to avoid repeated processing
 pub struct TaskService {
     initialized: AtomicBool,
     interval: u64,
@@ -165,7 +167,7 @@ impl TaskService {
 
         let instance = TaskService {
             initialized: AtomicBool::new(false),
-            interval: 200,
+            interval: 300,
             tenant: cfg.query.tenant_id.clone(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
@@ -210,8 +212,8 @@ impl TaskService {
         };
 
         while let Some(result) = steam.next().await {
-            let (task_key, task_message) = result?;
-            let task_key = TaskMessageIdent::new(tenant, task_key);
+            let (_, task_message) = result?;
+            let task_key = TaskMessageIdent::new(tenant, task_message.key());
             match task_message {
                 // ScheduleTask is always monitored by all Query nodes, and ExecuteTask is sent serially to avoid repeated sending.
                 TaskMessage::ScheduleTask(mut task) => {
@@ -411,10 +413,10 @@ impl TaskService {
                                             task_run.run_id = Self::make_run_id();
                                         }
                                     }
-                                    task_mgr.accept(&task_key).await?;
                                     task_mgr
                                         .alter_task(&task.task_name, &AlterTaskOptions::Suspend)
                                         .await??;
+                                    task_mgr.accept(&task_key).await?;
                                 }
 
                                 Result::Ok(())
