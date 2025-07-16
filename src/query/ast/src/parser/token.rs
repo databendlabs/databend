@@ -1136,6 +1136,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("ACCESS", ignore(ascii_case))]
+    ACCESS,
     #[token("USE_LOGIC_TYPE", ignore(ascii_case))]
     USE_LOGIC_TYPE,
     #[token("USE_RAW_PATH", ignore(ascii_case))]
