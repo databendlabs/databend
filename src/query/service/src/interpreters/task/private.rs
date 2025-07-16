@@ -17,69 +17,24 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_ast::ast::TaskSql;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_cloud_control::pb;
 use databend_common_cloud_control::task_utils;
 use databend_common_exception::Result;
 use databend_common_management::task::TaskMgr;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::Status;
-use databend_common_meta_app::principal::Task;
 use databend_common_sql::plans::AlterTaskPlan;
 use databend_common_sql::plans::CreateTaskPlan;
 use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_sql::plans::DropTaskPlan;
 use databend_common_sql::plans::ExecuteTaskPlan;
 use databend_common_sql::plans::ShowTasksPlan;
+use databend_common_storages_system::PrivateTasksTable;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::task::TaskInterpreter;
 use crate::sessions::QueryContext;
 
 pub(crate) struct PrivateTaskInterpreter;
-
-impl PrivateTaskInterpreter {
-    fn task_trans(task: Task) -> Result<task_utils::Task> {
-        Ok(task_utils::Task {
-            task_id: task.task_id,
-            task_name: task.task_name,
-            query_text: task.query_text,
-            condition_text: task.when_condition.unwrap_or_default(),
-            after: task.after,
-            comment: task.comment,
-            owner: task.owner,
-            schedule_options: task
-                .schedule_options
-                .map(|schedule_options| {
-                    let options = pb::ScheduleOptions {
-                        interval: schedule_options.interval,
-                        cron: schedule_options.cron,
-                        time_zone: schedule_options.time_zone,
-                        schedule_type: schedule_options.schedule_type as i32,
-                        milliseconds_interval: schedule_options.milliseconds_interval,
-                    };
-                    task_utils::format_schedule_options(&options)
-                })
-                .transpose()?,
-            warehouse_options: task.warehouse_options.map(|warehouse_options| {
-                pb::WarehouseOptions {
-                    warehouse: warehouse_options.warehouse,
-                    using_warehouse_size: warehouse_options.using_warehouse_size,
-                }
-            }),
-            next_scheduled_at: task.next_scheduled_at,
-            suspend_task_after_num_failures: task.suspend_task_after_num_failures.map(|i| i as i32),
-            error_integration: task.error_integration,
-            status: match task.status {
-                Status::Suspended => task_utils::Status::Suspended,
-                Status::Started => task_utils::Status::Started,
-            },
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            last_suspended_at: task.last_suspended_at,
-            session_params: task.session_params,
-        })
-    }
-}
 
 impl TaskInterpreter for PrivateTaskInterpreter {
     async fn create_task(&self, ctx: &Arc<QueryContext>, plan: &CreateTaskPlan) -> Result<()> {
@@ -149,7 +104,7 @@ impl TaskInterpreter for PrivateTaskInterpreter {
             .task_api(&plan.tenant)
             .describe_task(&plan.task_name)
             .await??;
-        task.map(Self::task_trans).transpose()
+        task.map(PrivateTasksTable::task_trans).transpose()
     }
 
     async fn drop_task(&self, _ctx: &Arc<QueryContext>, plan: &DropTaskPlan) -> Result<()> {
@@ -171,6 +126,9 @@ impl TaskInterpreter for PrivateTaskInterpreter {
             .list_task()
             .await?;
 
-        tasks.into_iter().map(Self::task_trans).try_collect()
+        tasks
+            .into_iter()
+            .map(PrivateTasksTable::task_trans)
+            .try_collect()
     }
 }

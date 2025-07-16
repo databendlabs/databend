@@ -203,7 +203,7 @@ echo "\n\nSHOW TASKS: $actual"
 
 response12=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM system.task_history\"}")
 state12=$(echo "$response12" | jq -r '.state')
-if [ "$state10" != "Succeeded" ]; then
+if [ "$state12" != "Succeeded" ]; then
   echo "❌ Failed"
   exit 1
 fi
@@ -258,3 +258,12 @@ else
     echo "Actual  : $actual"
     exit 1
 fi
+
+response19=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM system.tasks\"}")
+state19=$(echo "$response19" | jq -r '.state')
+if [ "$state19" != "Succeeded" ]; then
+  echo "❌ Failed"
+  exit 1
+fi
+actual=$(echo "$response19" | jq -c '.data')
+echo "\n\nSELECT * FROM system.tasks: $actual"
