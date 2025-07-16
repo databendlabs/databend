@@ -381,8 +381,6 @@ impl Acquirer {
         cancel: impl Future<Output = ()> + Send + 'static,
         ctx: impl ToString,
     ) -> Result<(), ConnectionClosed> {
-        let ctx = ctx.to_string();
-
         let sleep_time = ttl / 3;
         let sleep_time = std::cmp::min(sleep_time, Duration::from_millis(2_000));
 
