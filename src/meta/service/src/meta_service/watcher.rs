@@ -19,13 +19,10 @@ use std::future::Future;
 use std::io::Error;
 use std::ops::Deref;
 
-use databend_common_meta_raft_store::state_machine_api::SMEventSender;
 use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::SeqV;
-use futures::future::BoxFuture;
 use log::debug;
 use tonic::Status;
-use watcher::dispatch::Command;
 use watcher::dispatch::DispatcherHandle as GenericDispatcherHandle;
 use watcher::type_config::KVChange;
 use watcher::type_config::KeyOf;
@@ -107,15 +104,5 @@ impl DispatcherHandle {
         };
         debug!("{}: new", h);
         h
-    }
-}
-
-impl SMEventSender for DispatcherHandle {
-    fn send(&self, change: KVChange<WatchTypes>) {
-        self.send_change(change);
-    }
-
-    fn send_future(&self, fut: BoxFuture<'static, ()>) {
-        self.send_command(Command::Future(fut));
     }
 }
