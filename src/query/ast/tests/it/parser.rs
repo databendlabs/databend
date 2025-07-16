@@ -89,6 +89,9 @@ fn test_statement() {
     let cases = &[
         r#"show databases"#,
         r#"show drop databases"#,
+        r#"SET SECONDARY ROLES ALL"#,
+        r#"SET SECONDARY ROLES NONE"#,
+        r#"SET SECONDARY ROLES role1, role2"#,
         r#"show drop databases like 'db%'"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
@@ -964,6 +967,7 @@ fn test_statement_error() {
 
     let cases = &[
         r#"create table a.b (c integer not null 1, b float(10))"#,
+        r#"SET SECONDARY ROLES"#,
         r#"create table a (c float(10))"#,
         r#"create table a (c varch)"#,
         r#"create table a (c tuple())"#,

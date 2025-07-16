@@ -22,46 +22,40 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures::Stream;
 use futures_util::TryStreamExt;
+use rotbl::storage::impls::fs::FsStorage;
 use rotbl::v001::Rotbl;
 use rotbl::v001::RotblMeta;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v003::open_snapshot::OpenSnapshot;
+#[cfg(doc)]
+use crate::sm_v003::SnapshotStoreV004;
+use crate::snapshot_config::SnapshotConfig;
+use crate::state_machine::MetaSnapshotId;
 
 /// Builds a snapshot from series of key-value in `(String, SeqMarked)`
 pub(crate) struct DBBuilder {
-    path: String,
-    rotbl_builder: rotbl::v001::Builder,
+    rotbl_builder: rotbl::v001::Builder<FsStorage>,
 }
 
 impl DBBuilder {
     pub fn new<P: AsRef<Path>>(
-        path: P,
+        storage_path: P,
+        rel_path: &str,
         rotbl_config: rotbl::v001::Config,
     ) -> Result<Self, io::Error> {
-        let p = path.as_ref().to_str().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("invalid path: {:?}", path.as_ref()),
-            )
-        })?;
+        let storage = FsStorage::new(storage_path.as_ref().to_path_buf());
 
-        let inner = rotbl::v001::Builder::new(rotbl_config, path.as_ref())?;
+        let rel_path = rel_path.to_string();
+
+        let inner = rotbl::v001::Builder::new(storage, rotbl_config, &rel_path)?;
 
         let b = Self {
-            path: p.to_string(),
             rotbl_builder: inner,
         };
 
         Ok(b)
-    }
-
-    /// This method is only used for test.
-    #[allow(dead_code)]
-    pub fn new_with_default_config<P: AsRef<Path>>(path: P) -> Result<Self, io::Error> {
-        let mut config = rotbl::v001::Config::default();
-        config.fill_default_values();
-        Self::new(path, config)
     }
 
     /// Append a key-value pair to the builder, the keys must be sorted.
@@ -82,8 +76,39 @@ impl DBBuilder {
         Ok(())
     }
 
-    /// Flush the data to disk and return a read-only table [`Rotbl`] instance.
-    pub fn flush(self, sys_data: SysData) -> Result<(String, Rotbl), io::Error> {
+    /// Commit the building to the provided [`SnapshotStoreV004`].
+    pub fn commit_to_snapshot_store(
+        self,
+        snapshot_config: &SnapshotConfig,
+        snapshot_id: MetaSnapshotId,
+        sys_data: SysData,
+    ) -> Result<DB, io::Error> {
+        let config = self.rotbl_builder.config().clone();
+        let storage_path = self.rotbl_builder.storage().base_dir_str().to_string();
+
+        let (current_rel_path, _r) = self.commit(sys_data)?;
+
+        let current_path = format!("{}/{}", storage_path, current_rel_path);
+
+        let (_, rel_path) =
+            snapshot_config.move_to_final_path(&current_path, snapshot_id.to_string())?;
+
+        let db = DB::open_snapshot(&storage_path, &rel_path, snapshot_id.to_string(), config)
+            .map_err(|e| {
+                io::Error::new(
+                    e.kind(),
+                    format!(
+                        "{}; when:(open snapshot at: {}/{})",
+                        e, storage_path, rel_path
+                    ),
+                )
+            })?;
+
+        Ok(db)
+    }
+
+    /// Commit the building.
+    pub(crate) fn commit(self, sys_data: SysData) -> Result<(String, Rotbl), io::Error> {
         let meta = serde_json::to_string(&sys_data).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -94,8 +119,12 @@ impl DBBuilder {
         // the first arg `seq` is not used.
         let rotbl_meta = RotblMeta::new(0, meta);
 
+        // The relative path of the built rotbl.
+        let rel_path = self.rotbl_builder.rel_path().to_string();
+
         let r = self.rotbl_builder.commit(rotbl_meta)?;
-        Ok((self.path, r))
+
+        Ok((rel_path, r))
     }
 
     /// Build a [`DB`] from a leveled map.
@@ -115,10 +144,17 @@ impl DBBuilder {
 
         self.append_kv_stream(strm).await?;
 
+        let storage_path = self.storage_path().to_string();
+
         let snapshot_id = make_snapshot_id(&sys_data);
-        let (path, r) = self.flush(sys_data)?;
-        let db = DB::new(path, snapshot_id, Arc::new(r))?;
+        let (rel_path, r) = self.commit(sys_data)?;
+        let db = DB::new(storage_path, rel_path, snapshot_id, Arc::new(r))?;
 
         Ok(db)
+    }
+
+    /// Returns the base dir of the internal FS-storage.
+    fn storage_path(&self) -> &str {
+        self.rotbl_builder.storage().base_dir_str()
     }
 }

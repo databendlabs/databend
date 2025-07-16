@@ -25,6 +25,7 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_ast::Span;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InvertedIndexInfo;
+use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -143,6 +144,8 @@ pub struct BindContext {
 
     pub inverted_index_map: Box<IndexMap<IndexType, InvertedIndexInfo>>,
 
+    pub vector_index_map: Box<IndexMap<IndexType, VectorIndexInfo>>,
+
     /// Whether allow rewrite as virtual column and pushdown.
     pub allow_virtual_column: bool,
 
@@ -215,6 +218,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
             planning_agg_index: false,
@@ -259,6 +263,7 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
+            vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
             planning_agg_index: false,

@@ -18,7 +18,6 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 
 use databend_common_meta_types::snapshot_db::DB;
-use databend_common_meta_types::sys_data::SysData;
 
 use crate::config::RaftConfig;
 use crate::ondisk::DataVersion;
@@ -84,7 +83,8 @@ impl SnapshotStoreV004 {
     pub fn new_receiver(&self, remote_addr: impl ToString) -> Result<ReceiverV003, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
 
-        let temp_path = self.snapshot_config.snapshot_temp_path();
+        let (storage_path, temp_rel_path) = self.snapshot_config.snapshot_temp_dir_fn();
+        let temp_path = format!("{}/{}", storage_path, temp_rel_path);
 
         let f = fs::OpenOptions::new()
             .create_new(true)
@@ -99,7 +99,7 @@ impl SnapshotStoreV004 {
                 )
             })?;
 
-        let r = ReceiverV003::new(remote_addr, temp_path, f);
+        let r = ReceiverV003::new(remote_addr, storage_path, temp_rel_path, f);
         Ok(r)
     }
 
@@ -112,41 +112,5 @@ impl SnapshotStoreV004 {
     pub fn new_writer(&self) -> Result<WriterV003, io::Error> {
         self.snapshot_config.ensure_snapshot_dir()?;
         WriterV003::new(&self.snapshot_config)
-    }
-
-    /// Create a new temp file to receive snapshot data in binary format
-    pub fn new_temp_file(&self) -> Result<(String, fs::File), io::Error> {
-        self.snapshot_config.ensure_snapshot_dir()?;
-
-        let temp_path = self.snapshot_config.snapshot_temp_path();
-
-        let f = fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .read(true)
-            .open(&temp_path)
-            .map_err(|e| {
-                io::Error::new(
-                    e.kind(),
-                    format!(
-                        "{}: while(SnapshotStoreV003::new_temp_file(); path: {})",
-                        e, temp_path
-                    ),
-                )
-            })?;
-
-        Ok((temp_path, f))
-    }
-
-    /// This method is only used to pass openraft test.
-    pub fn new_temp(&self) -> Result<DB, io::Error> {
-        self.snapshot_config.ensure_snapshot_dir()?;
-
-        let w = self.new_writer()?;
-        let temp_data = w.flush(SysData::default())?;
-
-        let temp_id = self.snapshot_config.temp_snapshot_id();
-        let db = temp_data.move_to_final_path(temp_id.clone())?;
-        Ok(db)
     }
 }

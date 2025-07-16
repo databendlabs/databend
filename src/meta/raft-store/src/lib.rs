@@ -31,6 +31,7 @@ pub mod state;
 pub mod state_machine;
 pub mod state_machine_api;
 pub mod state_machine_api_ext;
+pub(crate) mod testing;
 pub mod utils;
 
 mod state_machine_features;

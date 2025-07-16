@@ -1760,6 +1760,18 @@ fn part_stats_info_to_format_tree(info: &PartStatistics) -> Vec<FormatTreeNode<S
         );
     }
 
+    // vector index pruning status.
+    if info.pruning_stats.blocks_vector_index_pruning_before > 0 {
+        if !blocks_pruning_description.is_empty() {
+            blocks_pruning_description += ", ";
+        }
+        blocks_pruning_description += &format!(
+            "vector pruning: {} to {}",
+            info.pruning_stats.blocks_vector_index_pruning_before,
+            info.pruning_stats.blocks_vector_index_pruning_after
+        );
+    }
+
     // Combine segment pruning and blocks pruning descriptions if any
     if info.pruning_stats.segments_range_pruning_before > 0
         || !blocks_pruning_description.is_empty()

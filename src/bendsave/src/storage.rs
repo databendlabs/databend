@@ -236,9 +236,9 @@ mod tests {
         assert_eq!(op.info().name(), "bendsave");
         assert_eq!(op.info().root(), "/tmp/");
 
-        let op = load_bendsave_storage("fs://tmp").await?;
+        let op = load_bendsave_storage("fs://opt").await?;
         assert_eq!(op.info().scheme(), Scheme::Fs);
-        assert_eq!(op.info().root(), "/tmp");
+        assert_eq!(op.info().root(), "/opt");
         Ok(())
     }
 }

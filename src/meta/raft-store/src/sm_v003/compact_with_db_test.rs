@@ -26,6 +26,7 @@ use map_api::map_api_ro::MapApiRO;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
+use seq_marked::SeqMarked;
 
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
@@ -33,9 +34,9 @@ use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::leveled_store::MapView;
-use crate::marked::Marked;
 use crate::sm_v003::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
+use crate::state_machine::UserKey;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_leveled_query_with_db() -> anyhow::Result<()> {
@@ -56,25 +57,28 @@ async fn test_leveled_query_with_db() -> anyhow::Result<()> {
     );
 
     let got = lm
-        .str_map()
+        .user_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
     assert_eq!(got, vec![
         //
-        (s("a"), Marked::new_with_meta(1, b("a0"), None)),
-        (s("b"), Marked::new_tombstone(4)),
-        (s("c"), Marked::new_tombstone(6)),
-        (s("d"), Marked::new_with_meta(7, b("d2"), None)),
-        (s("e"), Marked::new_with_meta(6, b("e1"), None)),
+        (user_key("a"), SeqMarked::new_normal(1, (None, b("a0")))),
+        (user_key("b"), SeqMarked::new_tombstone(4)),
+        (user_key("c"), SeqMarked::new_tombstone(6)),
+        (user_key("d"), SeqMarked::new_normal(7, (None, b("d2")))),
+        (user_key("e"), SeqMarked::new_normal(6, (None, b("e1")))),
     ]);
 
     assert_eq!(
-        lm.str_map().get(&s("a")).await?,
-        Marked::new_with_meta(1, b("a0"), None)
+        lm.user_map().get(&user_key("a")).await?,
+        SeqMarked::new_normal(1, (None, b("a0")))
     );
-    assert_eq!(lm.str_map().get(&s("b")).await?, Marked::new_tombstone(4));
+    assert_eq!(
+        lm.user_map().get(&user_key("b")).await?,
+        SeqMarked::new_tombstone(4)
+    );
 
     let got = lm
         .expire_map()
@@ -102,7 +106,7 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
     assert_eq!(lm.nodes_ref(), &btreemap! {});
 
     let got = lm
-        .str_map()
+        .user_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -110,16 +114,16 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (
-            s("a"),
-            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expires_at(15)))
+            user_key("a"),
+            SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(15)), b("a1")))
         ),
         (
-            s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expires_at(5)))
+            user_key("b"),
+            SeqMarked::new_normal(2, (Some(KVMeta::new_expires_at(5)), b("b0")))
         ),
         (
-            s("c"),
-            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expires_at(20)))
+            user_key("c"),
+            SeqMarked::new_normal(3, (Some(KVMeta::new_expires_at(20)), b("c0")))
         ),
     ]);
 
@@ -131,19 +135,10 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
         .await?;
     assert_eq!(got, vec![
         //
-        (
-            ExpireKey::new(5_000, 2),
-            Marked::new_with_meta(2, s("b"), None)
-        ),
-        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
-        (
-            ExpireKey::new(15_000, 4),
-            Marked::new_with_meta(4, s("a"), None)
-        ),
-        (
-            ExpireKey::new(20_000, 3),
-            Marked::new_with_meta(3, s("c"), None)
-        ),
+        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+        (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
+        (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),
+        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
     ]);
 
     Ok(())
@@ -156,8 +151,12 @@ async fn test_compact() -> anyhow::Result<()> {
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-compacted");
-    compact(&mut lm, path.as_os_str().to_str().unwrap()).await?;
+    compact(
+        &mut lm,
+        path.as_os_str().to_str().unwrap(),
+        "temp-compacted",
+    )
+    .await?;
 
     let db = lm.persisted().unwrap();
 
@@ -176,16 +175,16 @@ async fn test_compact() -> anyhow::Result<()> {
     );
 
     let got = MapView(db)
-        .str_map()
+        .user_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
     assert_eq!(got, vec![
         //
-        (s("a"), Marked::new_with_meta(1, b("a0"), None)),
-        (s("d"), Marked::new_with_meta(7, b("d2"), None)),
-        (s("e"), Marked::new_with_meta(6, b("e1"), None)),
+        (user_key("a"), SeqMarked::new_normal(1, (None, b("a0")))),
+        (user_key("d"), SeqMarked::new_normal(7, (None, b("d2")))),
+        (user_key("e"), SeqMarked::new_normal(6, (None, b("e1")))),
     ]);
 
     let got = MapView(db)
@@ -208,8 +207,12 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-compacted");
-    compact(&mut lm, path.as_os_str().to_str().unwrap()).await?;
+    compact(
+        &mut lm,
+        path.as_os_str().to_str().unwrap(),
+        "temp-compacted",
+    )
+    .await?;
 
     let db = lm.persisted().unwrap();
 
@@ -222,7 +225,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(db.nodes_ref(), &btreemap! {});
 
     let got = MapView(db)
-        .str_map()
+        .user_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -230,16 +233,16 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (
-            s("a"),
-            Marked::new_with_meta(4, b("a1"), Some(KVMeta::new_expires_at(15)))
+            user_key("a"),
+            SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(15)), b("a1")))
         ),
         (
-            s("b"),
-            Marked::new_with_meta(2, b("b0"), Some(KVMeta::new_expires_at(5)))
+            user_key("b"),
+            SeqMarked::new_normal(2, (Some(KVMeta::new_expires_at(5)), b("b0")))
         ),
         (
-            s("c"),
-            Marked::new_with_meta(3, b("c0"), Some(KVMeta::new_expires_at(20)))
+            user_key("c"),
+            SeqMarked::new_normal(3, (Some(KVMeta::new_expires_at(20)), b("c0")))
         ),
     ]);
 
@@ -251,18 +254,9 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         .await?;
     assert_eq!(got, vec![
         //
-        (
-            ExpireKey::new(5_000, 2),
-            Marked::new_with_meta(2, s("b"), None)
-        ),
-        (
-            ExpireKey::new(15_000, 4),
-            Marked::new_with_meta(4, s("a"), None)
-        ),
-        (
-            ExpireKey::new(20_000, 3),
-            Marked::new_with_meta(3, s("c"), None)
-        ),
+        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+        (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),
+        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
     ]);
 
     Ok(())
@@ -322,10 +316,18 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    lm.str_map_mut().set(s("a"), Some((b("a0"), None))).await?;
-    lm.str_map_mut().set(s("b"), Some((b("b0"), None))).await?;
-    lm.str_map_mut().set(s("c"), Some((b("c0"), None))).await?;
-    lm.str_map_mut().set(s("d"), Some((b("d0"), None))).await?;
+    lm.user_map_mut()
+        .set(user_key("a"), Some((None, b("a0"))))
+        .await?;
+    lm.user_map_mut()
+        .set(user_key("b"), Some((None, b("b0"))))
+        .await?;
+    lm.user_map_mut()
+        .set(user_key("c"), Some((None, b("c0"))))
+        .await?;
+    lm.user_map_mut()
+        .set(user_key("d"), Some((None, b("d0"))))
+        .await?;
 
     lm.freeze_writable();
     let sd = lm.writable_mut().sys_data_mut();
@@ -338,9 +340,13 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    lm.str_map_mut().set(s("b"), None).await?;
-    lm.str_map_mut().set(s("c"), Some((b("c1"), None))).await?;
-    lm.str_map_mut().set(s("e"), Some((b("e1"), None))).await?;
+    lm.user_map_mut().set(user_key("b"), None).await?;
+    lm.user_map_mut()
+        .set(user_key("c"), Some((None, b("c1"))))
+        .await?;
+    lm.user_map_mut()
+        .set(user_key("e"), Some((None, b("e1"))))
+        .await?;
 
     lm.freeze_writable();
     let sd = lm.writable_mut().sys_data_mut();
@@ -353,14 +359,15 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    lm.str_map_mut().set(s("c"), None).await?;
-    lm.str_map_mut().set(s("d"), Some((b("d2"), None))).await?;
+    lm.user_map_mut().set(user_key("c"), None).await?;
+    lm.user_map_mut()
+        .set(user_key("d"), Some((None, b("d2"))))
+        .await?;
 
     // Move the bottom level to db
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-db");
-    move_bottom_to_db(&mut lm, path.to_str().unwrap()).await?;
+    move_bottom_to_db(&mut lm, path.to_str().unwrap(), "temp-db").await?;
 
     Ok((lm, temp_dir))
 }
@@ -393,13 +400,16 @@ async fn build_sm_with_expire() -> anyhow::Result<(SMV003, impl Drop)> {
 
     let temp_dir = tempfile::tempdir()?;
     let path = temp_dir.path();
-    let path = path.join("temp-db");
-    move_bottom_to_db(lm, path.to_str().unwrap()).await?;
+    move_bottom_to_db(lm, path.to_str().unwrap(), "temp-db").await?;
     Ok((sm, temp_dir))
 }
 
 /// Build a DB from the bottom level of the immutable levels.
-async fn move_bottom_to_db(lm: &mut LeveledMap, path: &str) -> Result<(), io::Error> {
+async fn move_bottom_to_db(
+    lm: &mut LeveledMap,
+    base_path: &str,
+    rel_path: &str,
+) -> Result<(), io::Error> {
     let mut immutables = lm.immutable_levels_ref().clone();
     let bottom = immutables.levels().remove(0);
     lm.replace_immutable_levels(immutables);
@@ -408,14 +418,14 @@ async fn move_bottom_to_db(lm: &mut LeveledMap, path: &str) -> Result<(), io::Er
     let mut lm2 = LeveledMap::default();
     lm2.replace_immutable_levels(bottom);
 
-    compact(&mut lm2, path).await?;
+    compact(&mut lm2, base_path, rel_path).await?;
 
     *lm.persisted_mut() = lm2.persisted_mut().clone();
     Ok(())
 }
 
-async fn compact(lm: &mut LeveledMap, path: &str) -> Result<(), io::Error> {
-    let db_builder = DBBuilder::new_with_default_config(path)?;
+async fn compact(lm: &mut LeveledMap, base_path: &str, rel_path: &str) -> Result<(), io::Error> {
+    let db_builder = DBBuilder::new(base_path, rel_path, rotbl::v001::Config::default())?;
 
     let db = db_builder
         .build_from_leveled_map(lm, |_sys_data| "1-1-1-1.snap".to_string())
@@ -432,4 +442,8 @@ fn s(x: impl ToString) -> String {
 
 fn b(x: impl ToString) -> Vec<u8> {
     x.to_string().as_bytes().to_vec()
+}
+
+fn user_key(s: impl ToString) -> UserKey {
+    UserKey::new(s)
 }

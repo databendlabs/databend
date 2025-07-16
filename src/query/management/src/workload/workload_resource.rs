@@ -185,10 +185,8 @@ impl WorkloadGroupResourceManagerInner {
                 (None, None) => {
                     return Ok(workload_resource);
                 }
-                (None, Some(QuotaValue::Bytes(v))) => {
-                    workload_resource
-                        .max_memory_usage
-                        .store(*v, Ordering::Relaxed);
+                (None, Some(QuotaValue::Bytes(_v))) => {
+                    self.update_mem_usage(&online_workload_group);
                     return Ok(workload_resource);
                 }
                 (None, Some(QuotaValue::Percentage(v))) => {
@@ -218,10 +216,8 @@ impl WorkloadGroupResourceManagerInner {
                     self.percent_normalizer.update(*v);
                     self.update_mem_usage(&online_workload_group);
                 }
-                (Some(QuotaValue::Bytes(_old)), Some(QuotaValue::Bytes(new))) => {
-                    workload_resource
-                        .max_memory_usage
-                        .store(*new, Ordering::Relaxed);
+                (Some(QuotaValue::Bytes(_old)), Some(QuotaValue::Bytes(_new))) => {
+                    self.update_mem_usage(&online_workload_group);
                     return Ok(workload_resource);
                 }
                 _ => {}
@@ -239,16 +235,29 @@ impl WorkloadGroupResourceManagerInner {
                 {
                     if let Some(v) = self.percent_normalizer.get_normalized(*v) {
                         let limit = self.global_mem_stat.get_limit();
+                        let usage_ratio = workload_group.meta.get_max_memory_usage_ratio();
                         if limit > 0 {
-                            workload_group
-                                .max_memory_usage
-                                .store(limit as usize / 100 * v, Ordering::Relaxed);
+                            workload_group.max_memory_usage.store(
+                                limit as usize / 100 * usage_ratio / 100 * v,
+                                Ordering::Relaxed,
+                            );
                         }
                     }
                 } else if let Some(QuotaValue::Bytes(v)) =
                     workload_group.meta.quotas.get(MEMORY_QUOTA_KEY)
                 {
-                    workload_group.max_memory_usage.store(*v, Ordering::Relaxed);
+                    let limit = self.global_mem_stat.get_limit();
+                    let usage_ratio = workload_group.meta.get_max_memory_usage_ratio();
+
+                    let mut memory_usage = *v;
+                    if limit > 0 {
+                        let max_memory_usage = limit as usize / 100 * usage_ratio;
+                        memory_usage = std::cmp::min(max_memory_usage, memory_usage);
+                    }
+
+                    workload_group
+                        .max_memory_usage
+                        .store(memory_usage, Ordering::Relaxed);
                 } else {
                     workload_group.max_memory_usage.store(0, Ordering::Relaxed)
                 }
@@ -386,7 +395,7 @@ mod tests {
             // Check memory usage was calculated (100% since it's the only workload)
             assert_eq!(
                 workload1.max_memory_usage.load(Ordering::Relaxed),
-                (LIMIT / 100 * 100) as usize
+                (LIMIT / 100 * 25 / 100 * 100) as usize
             );
         }
 
@@ -423,11 +432,11 @@ mod tests {
         // Check memory allocations are calculated correctly
         assert_eq!(
             resource1.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 30) as usize
+            (LIMIT / 100 * 25 / 100 * 30) as usize
         ); // 30% of total 100
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 70) as usize
+            (LIMIT / 100 * 25 / 100 * 70) as usize
         ); // 70% of total 100
 
         // Drop first workload
@@ -438,7 +447,7 @@ mod tests {
         assert_eq!(inner.percent_normalizer.sum.load(Ordering::Relaxed), 70);
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 100) as usize
+            (LIMIT / 100 * 25 / 100 * 100) as usize
         ); // Now 100% of remaining 70
 
         Ok(())
@@ -464,11 +473,11 @@ mod tests {
 
         assert_eq!(
             resource1.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 50) as usize
+            (LIMIT / 100 * 25 / 100 * 50) as usize
         );
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * 50) as usize
+            (LIMIT / 100 * 25 / 100 * 50) as usize
         );
 
         workload_mgr
@@ -493,15 +502,15 @@ mod tests {
         // Memory usage should be recalculated
         assert_eq!(
             resource1.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * (70 * 100 / (70 + 50))) as usize
+            (LIMIT / 100 * 25 / 100 * (70 * 100 / (70 + 50))) as usize
         );
         assert_eq!(
             resource2.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * (50 * 100 / (70 + 50))) as usize
+            (LIMIT / 100 * 25 / 100 * (50 * 100 / (70 + 50))) as usize
         );
         assert_eq!(
             updated_resource.max_memory_usage.load(Ordering::Relaxed),
-            (LIMIT / 100 * (70 * 100 / (70 + 50))) as usize
+            (LIMIT / 100 * 25 / 100 * (70 * 100 / (70 + 50))) as usize
         );
 
         Ok(())

@@ -41,7 +41,7 @@ use databend_storages_common_pruner::PagePruner;
 use databend_storages_common_pruner::PagePrunerCreator;
 use databend_storages_common_pruner::RangePruner;
 use databend_storages_common_pruner::RangePrunerCreator;
-use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -64,6 +64,7 @@ use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::InvertedIndexPruner;
 use crate::pruning::SegmentLocation;
+use crate::pruning::VectorIndexPruner;
 use crate::pruning::VirtualColumnPruner;
 
 const SMALL_DATASET_SAMPLE_THRESHOLD: usize = 100;
@@ -447,7 +448,8 @@ impl FusePruner {
             // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
             // will get here, we can prevent other mutations like update and so on.
             // TopN pruner.
-            self.topn_pruning(metas)
+            let metas = self.topn_pruning(metas)?;
+            self.vector_pruning(metas).await
         }
     }
 
@@ -516,7 +518,8 @@ impl FusePruner {
             let res = worker?;
             metas.extend(res);
         }
-        self.topn_pruning(metas)
+        let metas = self.topn_pruning(metas)?;
+        self.vector_pruning(metas).await
     }
 
     // topn pruner:
@@ -535,8 +538,40 @@ impl FusePruner {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPrunner::create(schema, sort, limit);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             return Ok(topn_pruner.prune(metas.clone()).unwrap_or(metas));
+        }
+        Ok(metas)
+    }
+
+    async fn vector_pruning(
+        &self,
+        metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let push_down = self.push_down.clone();
+        if push_down
+            .as_ref()
+            .filter(|p| p.vector_index.is_some())
+            .is_some()
+        {
+            let schema = self.table_schema.clone();
+            let push_down = push_down.as_ref().unwrap();
+            let filters = push_down.filters.clone();
+            let sort = push_down.order_by.clone();
+            let limit = push_down.limit;
+            let vector_index = push_down.vector_index.clone().unwrap();
+
+            let vector_pruner = VectorIndexPruner::create(
+                self.pruning_ctx.clone(),
+                schema,
+                vector_index,
+                filters,
+                sort,
+                limit,
+            )?;
+
+            let pruned_metas = vector_pruner.prune(metas.clone()).await?;
+            return Ok(pruned_metas);
         }
         Ok(metas)
     }
@@ -559,6 +594,11 @@ impl FusePruner {
         let blocks_inverted_index_pruning_after =
             stats.get_blocks_inverted_index_pruning_after() as usize;
 
+        let blocks_vector_index_pruning_before =
+            stats.get_blocks_vector_index_pruning_before() as usize;
+        let blocks_vector_index_pruning_after =
+            stats.get_blocks_vector_index_pruning_after() as usize;
+
         databend_common_catalog::plan::PruningStatistics {
             segments_range_pruning_before,
             segments_range_pruning_after,
@@ -568,6 +608,8 @@ impl FusePruner {
             blocks_bloom_pruning_after,
             blocks_inverted_index_pruning_before,
             blocks_inverted_index_pruning_after,
+            blocks_vector_index_pruning_before,
+            blocks_vector_index_pruning_after,
         }
     }
 

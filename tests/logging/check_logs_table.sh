@@ -18,7 +18,7 @@ function check_query_log() {
   echo $full_sql_query
   response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" \
     -H 'Content-Type: application/json' \
-    -d "{\"sql\": \"$full_sql_query\"}")
+    -d "{\"sql\": \"$full_sql_query\", \"pagination\": {\"wait_time_secs\": 10}}")
 
   result=$(echo $response | jq -r '.data[0][0]' | tr -d '"')
   if [ "$result" != "$expected_result" ]; then
@@ -46,9 +46,11 @@ echo "Create VIEW Query ID: $create_view_query_id"
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "insert into t values (1),(2),(3)"}')
 insert_query_id=$(echo $response | jq -r '.id')
 echo "Insert Query ID: $insert_query_id"
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select * from t"}')
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json'  -H 'X-Databend-Session:new' -d '{"sql": "select * from t"}')
 select_query_id=$(echo $response | jq -r '.id')
+select_session_id=$(echo $response | jq -r '.session_id')
 echo "Select Query ID: $select_query_id"
+echo "Select Session ID: $select_session_id"
 
 sleep 2
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d '{"sql": "select 123"}')
@@ -83,6 +85,9 @@ check_query_log "basic-9" "$select_query_id" "SELECT base_objects_accessed[0]['o
 # Test 10
 check_query_log "basic-10" $create_view_query_id "select query_text from system_history.query_history where" "CREATE VIEW v AS SELECT a FROM t"
 
+# Test 11
+check_query_log "basic-11" null "SELECT count(*) FROM system_history.login_history WHERE session_id = '$select_session_id' " "1"
+
 # Check timezone, regression test for https://github.com/databendlabs/databend/pull/18059
 check_query_log "t-1" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, timestamp, now()) FROM system_history.log_history WHERE target = 'databend::log::profile' and" "0"
 
@@ -90,7 +95,7 @@ check_query_log "t-2" "$select_query_id" "settings (timezone='Asia/Shanghai') SE
 
 check_query_log "t-3" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, timestamp, now()) FROM system_history.profile_history WHERE" "0"
 
-check_query_log "t-4" null "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, event_time, now()) FROM system_history.login_history limit 1" "0"
+check_query_log "t-4" null "settings (timezone='Asia/Shanghai') SELECT sum(DATE_DIFF(hour, event_time, now())) FROM system_history.login_history" "0"
 
 check_query_log "t-5" "$select_query_id" "settings (timezone='Asia/Shanghai') SELECT DATE_DIFF(hour, query_start, now()) FROM system_history.access_history WHERE" "0"
 

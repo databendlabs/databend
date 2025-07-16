@@ -50,6 +50,8 @@ pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
 // internal search column id.
 pub const SEARCH_MATCHED_COLUMN_ID: u32 = u32::MAX - 7;
 pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
+// internal vector score column id.
+pub const VECTOR_SCORE_COLUMN_ID: u32 = u32::MAX - 9;
 
 pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_000;
 pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 3_000_001_000;
@@ -66,6 +68,8 @@ pub const BASE_BLOCK_IDS_COL_NAME: &str = "_base_block_ids";
 // internal search column name.
 pub const SEARCH_MATCHED_COL_NAME: &str = "_search_matched";
 pub const SEARCH_SCORE_COL_NAME: &str = "_search_score";
+// internal vector score column name.
+pub const VECTOR_SCORE_COL_NAME: &str = "_vector_score";
 
 pub const CHANGE_ACTION_COL_NAME: &str = "change$action";
 pub const CHANGE_IS_UPDATE_COL_NAME: &str = "change$is_update";
@@ -100,6 +104,7 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         BASE_BLOCK_IDS_COL_NAME,
         SEARCH_MATCHED_COL_NAME,
         SEARCH_SCORE_COL_NAME,
+        VECTOR_SCORE_COL_NAME,
         CHANGE_ACTION_COL_NAME,
         CHANGE_IS_UPDATE_COL_NAME,
         CHANGE_ROW_ID_COL_NAME,
@@ -114,7 +119,7 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
-    column_id >= SEARCH_SCORE_COLUMN_ID
+    column_id >= VECTOR_SCORE_COLUMN_ID
         || (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
@@ -670,7 +675,10 @@ impl TableSchema {
                     }
                 }
                 (
-                    TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_),
+                    TableDataType::Tuple { .. }
+                    | TableDataType::Array(_)
+                    | TableDataType::Map(_)
+                    | TableDataType::Vector(_),
                     _,
                 ) => {
                     // ignore leaf columns

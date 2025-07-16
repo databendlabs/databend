@@ -59,6 +59,12 @@ echo "SET SECONDARY ROLES ALL;select parse_json(current_secondary_roles())" | $T
 echo "select current_available_roles()" | $TEST_USER_CONNECT
 echo "SET ROLE testrole1; SET SECONDARY ROLES ALL; INSERT INTO t20_0015_table2 VALUES (1);" | $TEST_USER_CONNECT
 
+echo '-- test 6.1: set secondary roles as testrole3, can access table2(because testrole2 can access table2, testrole2 is child of testrole3), can not access table1'
+echo "SET SECONDARY ROLES testrole3; INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT
+echo "SET SECONDARY ROLES testrole3; select parse_json(current_secondary_roles())" | $TEST_USER_CONNECT
+echo "SET SECONDARY ROLES testrole3; select current_available_roles()" | $TEST_USER_CONNECT
+echo "SET SECONDARY ROLES testrole4; select count(*) from t20_0015_table2;" | $TEST_USER_CONNECT
+
 echo '-- test 7: set role as testrole1, testrole2, secondary roles defaults as ALL, can both table1 and table2'
 echo "SET ROLE testrole1; INSERT INTO t20_0015_table1 VALUES (1);" | $TEST_USER_CONNECT
 echo "SET ROLE testrole1; INSERT INTO t20_0015_table2 VALUES (1);" | $TEST_USER_CONNECT

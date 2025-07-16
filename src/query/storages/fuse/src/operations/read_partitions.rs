@@ -51,7 +51,7 @@ use databend_storages_common_cache::CachedObject;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_pruner::BlockMetaIndex;
-use databend_storages_common_pruner::TopNPrunner;
+use databend_storages_common_pruner::TopNPruner;
 use databend_storages_common_table_meta::meta::column_oriented_segment::meta_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::stat_name;
 use databend_storages_common_table_meta::meta::column_oriented_segment::BLOCK_SIZE;
@@ -83,6 +83,7 @@ use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
+use crate::pruning::VectorIndexPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
@@ -95,6 +96,7 @@ use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
+use crate::pruning_pipeline::VectorIndexPruneTransform;
 use crate::segment_format_from_location;
 use crate::FuseLazyPartInfo;
 use crate::FuseSegmentFormat;
@@ -476,10 +478,31 @@ impl FuseTable {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
-            let topn_pruner = TopNPrunner::create(schema, sort, limit);
+            let topn_pruner = TopNPruner::create(schema, sort, limit);
             prune_pipeline.resize(1, false)?;
             prune_pipeline.add_transform(move |input, output| {
                 TopNPruneTransform::create(input, output, topn_pruner.clone())
+            })?;
+        }
+
+        if push_down
+            .as_ref()
+            .filter(|p| p.vector_index.is_some())
+            .is_some()
+        {
+            let pruning_ctx = pruner.pruning_ctx.clone();
+            let schema = pruner.table_schema.clone();
+            let push_down = push_down.as_ref().unwrap();
+            let filters = push_down.filters.clone();
+            let sort = push_down.order_by.clone();
+            let limit = push_down.limit;
+            let vector_index = push_down.vector_index.clone().unwrap();
+
+            let vector_index_pruner =
+                VectorIndexPruner::create(pruning_ctx, schema, vector_index, filters, sort, limit)?;
+            prune_pipeline.resize(1, false)?;
+            prune_pipeline.add_transform(move |input, output| {
+                VectorIndexPruneTransform::create(input, output, vector_index_pruner.clone())
             })?;
         }
 

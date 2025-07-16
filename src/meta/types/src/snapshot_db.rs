@@ -18,6 +18,7 @@ use std::io::BufReader;
 use std::sync::Arc;
 
 use futures_util::stream::BoxStream;
+use log::info;
 use openraft::SnapshotId;
 use rotbl::v001::stat::RotblStat;
 use rotbl::v001::Rotbl;
@@ -29,7 +30,8 @@ use crate::sys_data::SysData;
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Clone)]
 pub struct DB {
-    pub path: String,
+    pub storage_path: String,
+    pub rel_path: String,
     pub meta: SnapshotMeta,
     pub sys_data: SysData,
     pub rotbl: Arc<Rotbl>,
@@ -43,7 +45,8 @@ impl AsRef<SysData> for DB {
 
 impl DB {
     pub fn new(
-        path: impl ToString,
+        storage_path: impl ToString,
+        rel_path: impl ToString,
         snapshot_id: SnapshotId,
         r: Arc<Rotbl>,
     ) -> Result<Self, io::Error> {
@@ -57,7 +60,8 @@ impl DB {
         };
 
         let s = Self {
-            path: path.to_string(),
+            storage_path: storage_path.to_string(),
+            rel_path: rel_path.to_string(),
             meta: snapshot_meta,
             sys_data,
             rotbl: r,
@@ -67,11 +71,15 @@ impl DB {
 
     /// Create an `BufReader<std::fs::File>` pointing to the same file of this db
     pub fn open_file(&self) -> Result<BufReader<fs::File>, io::Error> {
+        info!("Opening file for DB at path: {}", self.path());
         let f = fs::OpenOptions::new()
             .create(false)
             .create_new(false)
             .read(true)
-            .open(self.path())?;
+            .open(self.path())
+            .map_err(|e| {
+                io::Error::new(e.kind(), format!("{}; when:(open: {})", e, self.path()))
+            })?;
 
         let buf_f = BufReader::with_capacity(16 * 1024 * 1024, f);
         Ok(buf_f)
@@ -85,8 +93,8 @@ impl DB {
         &self.rotbl
     }
 
-    pub fn path(&self) -> &str {
-        &self.path
+    pub fn path(&self) -> String {
+        format!("{}/{}", self.storage_path, self.rel_path)
     }
 
     pub fn snapshot_meta(&self) -> &SnapshotMeta {

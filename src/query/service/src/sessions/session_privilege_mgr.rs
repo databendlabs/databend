@@ -171,16 +171,9 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     ///    `secondary_roles` will be set to None, which is default.
     /// 2. NONE: only the current_role has effects on validate_privilge, `secondary_roles`
     ///    will be set to Some([]).
-    /// We can release this restriction in the future if any user needed. If an user want to set
-    /// secondary_roles to be a subset of the roles granted to the current user, he can pass
-    /// `secondary_roles` as Some([role1, role2, .. etc.]).
+    /// 3. SpecifyRoles: Some([role1, role2, .. etc.]).
     #[async_backtrace::framed]
     async fn set_secondary_roles(&self, secondary_roles: Option<Vec<String>>) -> Result<()> {
-        if secondary_roles.is_some() && !secondary_roles.as_ref().unwrap().is_empty() {
-            return Err(ErrorCode::InvalidArgument(
-                "only ALL or NONE is allowed on setting secondary roles",
-            ));
-        }
         self.session_ctx.set_secondary_roles(secondary_roles);
         Ok(())
     }
@@ -206,7 +199,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         let secondary_roles = self.session_ctx.get_secondary_roles();
 
-        // if secondary_roles is not set, return all the available roles
+        // SET SECONDARY ROLES ALL, return all the available roles
         if secondary_roles.is_none() {
             let available_roles = self.get_all_available_roles().await?;
             return Ok(available_roles);

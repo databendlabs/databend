@@ -59,3 +59,12 @@ query I
 select count() from @data/parquet/no-stats.parquet (pattern => '') where line_item_usage_start_date < '2024-09-11 06:00:00'
 ----
 0
+
+query error gen
+settings (parquet_fast_read_bytes=0) select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
+
+query error gen
+select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
+
+query error gen
+select * from @data/parquet/diff_schema/ (files=>('gen.py', 'f1.parquet'));

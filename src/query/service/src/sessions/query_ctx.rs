@@ -141,6 +141,7 @@ use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::processors::transforms::MaterializedCteData;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::sessions::ProcessInfo;
