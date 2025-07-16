@@ -2816,6 +2816,10 @@ pub struct HistoryLogTableConfig {
     /// The retention period (in hours) for history logs.
     /// Data older than this period will be deleted during retention tasks.
     pub retention: usize,
+
+    /// Whether this history table is invisible for querying.
+    /// Default is true.
+    pub invisible: bool,
 }
 
 impl Default for HistoryLogConfig {
@@ -2837,6 +2841,7 @@ impl TryInto<InnerHistoryTableConfig> for HistoryLogTableConfig {
         Ok(InnerHistoryTableConfig {
             table_name: self.table_name,
             retention: self.retention,
+            invisible: self.invisible,
         })
     }
 }
@@ -2846,6 +2851,7 @@ impl From<InnerHistoryTableConfig> for HistoryLogTableConfig {
         Self {
             table_name: inner.table_name,
             retention: inner.retention,
+            invisible: inner.invisible,
         }
     }
 }

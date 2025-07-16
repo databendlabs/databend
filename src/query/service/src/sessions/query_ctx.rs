@@ -1190,6 +1190,13 @@ impl TableContext for QueryContext {
                 self.get_settings().get_enterprise_license(),
                 Feature::SystemHistory,
             )?;
+
+            if GlobalConfig::instance().log.history.is_invisible(table) {
+                return Err(ErrorCode::UnknownTable(format!(
+                    "history table `{}` is configured as invisible",
+                    table
+                )));
+            }
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
