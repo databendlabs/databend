@@ -2818,7 +2818,7 @@ pub struct HistoryLogTableConfig {
     pub retention: usize,
 
     /// Whether this history table is invisible for querying.
-    /// Default is true.
+    /// Default is false.
     pub invisible: bool,
 }
 
