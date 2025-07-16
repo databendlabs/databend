@@ -183,7 +183,7 @@ jobs:
       - uses: ./.github/actions/test_logs
         timeout-minutes: 20
 
-  test_tasks:
+  test_private_tasks:
     needs: [ build, check ]
     runs-on:
       - self-hosted
@@ -198,7 +198,7 @@ jobs:
         with:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
-      - uses: ./.github/actions/test_tasks
+      - uses: ./.github/actions/test_private_tasks
         timeout-minutes: 20
 
   test_meta_cluster:

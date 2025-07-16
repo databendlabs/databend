@@ -1,5 +1,5 @@
-name: "Test task for databend query"
-description: "Test task for databend query"
+name: "Test private task for databend query"
+description: "Test private task for databend query"
 runs:
   using: "composite"
   steps:
@@ -27,7 +27,7 @@ runs:
         aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
         aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data s3://testbucket/data  --recursive --no-progress
 
-    - name: Run Task Tests
+    - name: Run Private Task Tests
       shell: bash
       run: |
         bash ./tests/task/test-private-task.sh
