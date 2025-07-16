@@ -255,5 +255,7 @@ impl_try_from_rel_operator! {
     AsyncFunction,
     Mutation,
     CompactBlock,
-    MutationSource
+    MutationSource,
+    MaterializedCTE,
+    CTEConsumer
 }
