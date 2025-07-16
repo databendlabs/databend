@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_types::MetaId;
@@ -99,7 +99,7 @@ pub struct TableFunctionFactory {
 }
 
 impl TableFunctionFactory {
-    pub fn create() -> Self {
+    pub fn create(config: &InnerConfig) -> Self {
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
         let mut next_id = || -> MetaId {
             if id >= SYS_TBL_FUC_ID_END {
@@ -296,7 +296,7 @@ impl TableFunctionFactory {
             ),
         );
 
-        if !GlobalConfig::instance().task.on {
+        if !config.task.on {
             creators.insert(
                 "task_dependents".to_string(),
                 (next_id(), Arc::new(TaskDependentsTable::create)),
