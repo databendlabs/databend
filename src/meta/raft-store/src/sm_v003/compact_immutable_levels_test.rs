@@ -64,7 +64,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     );
 
     let got = d
-        .user_map()
+        .as_user_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -79,7 +79,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     ]);
 
     let got = d
-        .expire_map()
+        .as_expire_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -103,7 +103,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     let d = compacted.newest().unwrap().as_ref();
 
     let got = d
-        .user_map()
+        .as_user_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -125,7 +125,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     ]);
 
     let got = d
-        .expire_map()
+        .as_expire_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
@@ -216,16 +216,16 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    lm.user_map_mut()
+    lm.as_user_map_mut()
         .set(user_key("a"), Some((None, b("a0"))))
         .await?;
-    lm.user_map_mut()
+    lm.as_user_map_mut()
         .set(user_key("b"), Some((None, b("b0"))))
         .await?;
-    lm.user_map_mut()
+    lm.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c0"))))
         .await?;
-    lm.user_map_mut()
+    lm.as_user_map_mut()
         .set(user_key("d"), Some((None, b("d0"))))
         .await?;
 
@@ -240,11 +240,11 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    lm.user_map_mut().set(user_key("b"), None).await?;
-    lm.user_map_mut()
+    lm.as_user_map_mut().set(user_key("b"), None).await?;
+    lm.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c1"))))
         .await?;
-    lm.user_map_mut()
+    lm.as_user_map_mut()
         .set(user_key("e"), Some((None, b("e1"))))
         .await?;
 
@@ -259,8 +259,8 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    lm.user_map_mut().set(user_key("c"), None).await?;
-    lm.user_map_mut()
+    lm.as_user_map_mut().set(user_key("c"), None).await?;
+    lm.as_user_map_mut()
         .set(user_key("d"), Some((None, b("d2"))))
         .await?;
 

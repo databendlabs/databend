@@ -131,7 +131,7 @@ impl MapApi<UserKey> for Level {
             SeqMarked::new_tombstone(seq)
         };
 
-        let prev = (*self).user_map().get(&key).await?;
+        let prev = (*self).as_user_map().get(&key).await?;
         self.kv.insert(key, marked.clone());
         Ok((prev, marked))
     }
@@ -184,7 +184,7 @@ impl MapApi<ExpireKey> for Level {
             SeqMarked::new_tombstone(seq)
         };
 
-        let prev = (*self).expire_map().get(&key).await?;
+        let prev = (*self).as_expire_map().get(&key).await?;
         self.expire.insert(key, marked.clone());
         Ok((prev, marked))
     }

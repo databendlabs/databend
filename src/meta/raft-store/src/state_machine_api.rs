@@ -48,13 +48,14 @@ where T: SMEventSender
 /// The state machine is responsible for managing the application's persistent state,
 /// including application kv data and expired key data.
 pub trait StateMachineApi: Send + Sync {
-    type Map: MapApi<UserKey> + MapApi<ExpireKey> + 'static;
+    /// The map that stores application data.
+    type UserMap: MapApi<UserKey> + 'static;
 
     /// Returns a reference to the map that stores application data.
     ///
     /// This method provides read-only access to the underlying key-value store
     /// that contains the application's persistent state, including application kv data and expired key data.
-    fn map_ref(&self) -> &Self::Map;
+    fn user_map(&self) -> &Self::UserMap;
 
     /// Returns a mutable reference to the map that stores application data.
     ///
@@ -62,7 +63,16 @@ pub trait StateMachineApi: Send + Sync {
     /// that contains the application's persistent state, including application kv data and expired key data.
     /// Changes made through this reference will be persisted according to the state machine's replication
     /// protocol.
-    fn map_mut(&mut self) -> &mut Self::Map;
+    fn user_map_mut(&mut self) -> &mut Self::UserMap;
+
+    /// The map that stores expired key data.
+    type ExpireMap: MapApi<ExpireKey> + 'static;
+
+    /// Returns a reference to the map that stores expired key data.
+    fn expire_map(&self) -> &Self::ExpireMap;
+
+    /// Returns a mutable reference to the map that stores expired key data.
+    fn expire_map_mut(&mut self) -> &mut Self::ExpireMap;
 
     /// Returns a mutable reference to the system data.
     ///

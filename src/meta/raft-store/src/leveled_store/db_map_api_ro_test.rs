@@ -68,7 +68,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
     // Test kv map
 
     let binding = MapView(&db);
-    let smap = binding.user_map();
+    let smap = binding.as_user_map();
     assert_eq!(
         SeqMarked::new_normal(4, (Some(KVMeta::new(Some(15))), b("a1"))),
         smap.get(&user_key("a")).await?
@@ -102,7 +102,7 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
     // Test expire index
 
     let binding = MapView(&db);
-    let emap = binding.expire_map();
+    let emap = binding.as_expire_map();
 
     assert_eq!(
         SeqMarked::new_normal(4, s("a")),

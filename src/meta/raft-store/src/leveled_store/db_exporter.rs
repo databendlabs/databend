@@ -92,7 +92,7 @@ impl<'a> DBExporter<'a> {
 
         // expire index
 
-        let strm = MapView(self.db).expire_map().range(..).await?;
+        let strm = MapView(self.db).as_expire_map().range(..).await?;
         let expire_strm = strm.try_filter_map(|(exp_k, marked)| {
             // Tombstone will be converted to None and be ignored.
             let exp_val = ExpireValue::from_marked(marked);
@@ -102,7 +102,7 @@ impl<'a> DBExporter<'a> {
 
         // kv
 
-        let strm = MapView(self.db).user_map().range(..).await?;
+        let strm = MapView(self.db).as_user_map().range(..).await?;
         let kv_strm = strm.try_filter_map(|(user_key, seq_marked)| {
             // Tombstone will be converted to None and be ignored.
             let seqv: Option<SeqV<_>> = seq_marked.into();
