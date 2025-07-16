@@ -76,7 +76,10 @@ impl Processor {
     ) -> Result<(), ConnectionClosed> {
         log::debug!(
             "{} processing kv change: {}: {:?} -> {:?}",
-            self.ctx, sem_key, prev, current
+            self.ctx,
+            sem_key,
+            prev,
+            current
         );
         // Update local queue to update the acquired/released state.
         let state_changes = match (prev, current) {
