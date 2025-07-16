@@ -274,12 +274,14 @@ impl TaskMgr {
             match schedule_options.schedule_type {
                 ScheduleType::IntervalType => (),
                 ScheduleType::CronType => {
-                    if let Err(e) = schedule_options.time_zone.as_ref().unwrap().parse::<Tz>() {
-                        return Ok(Err(TaskError::InvalidTimezone {
-                            tenant: self.tenant.tenant_name().to_string(),
-                            name: task.task_name.to_string(),
-                            reason: e.to_string(),
-                        }));
+                    if let Some(tz) = &schedule_options.time_zone {
+                        if let Err(e) = tz.parse::<Tz>() {
+                            return Ok(Err(TaskError::InvalidTimezone {
+                                tenant: self.tenant.tenant_name().to_string(),
+                                name: task.task_name.to_string(),
+                                reason: e.to_string(),
+                            }));
+                        }
                     }
                     if let Err(e) = Schedule::from_str(schedule_options.cron.as_ref().unwrap()) {
                         return Ok(Err(TaskError::InvalidCron {
