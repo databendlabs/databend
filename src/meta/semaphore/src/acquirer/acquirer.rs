@@ -381,6 +381,8 @@ impl Acquirer {
         cancel: impl Future<Output = ()> + Send + 'static,
         ctx: impl ToString,
     ) -> Result<(), ConnectionClosed> {
+        let ctx = ctx.to_string();
+
         let sleep_time = ttl / 3;
         let sleep_time = std::cmp::min(sleep_time, Duration::from_millis(2_000));
 
@@ -395,6 +397,10 @@ impl Acquirer {
                     // Extend the lease only if the entry still exists. If the entry has been removed,
                     // it means the semaphore has been released. Re-inserting it would cause confusion
                     // in the semaphore state and potentially lead to inconsistent behavior.
+                    log::debug!(
+                        "{}: About to extend semaphore permit lease: {} ttl: {:?}",
+                        ctx, key_str, ttl
+                    );
 
                     let upsert = UpsertKV::update(&key_str, &val_bytes)
                         .with(MatchSeq::GE(1))

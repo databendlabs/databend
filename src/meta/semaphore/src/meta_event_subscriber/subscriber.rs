@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use display_more::DisplayOptionExt;
 use futures::FutureExt;
 use futures::Stream;
 use futures::TryStreamExt;
@@ -121,8 +122,17 @@ impl MetaEventSubscriber {
                 }
             };
 
-            if let Err(e) = &watch_result {
-                info!("{} received event from watch-stream: Err({})", self.ctx, e);
+            match &watch_result {
+                Ok(t) => {
+                    log::debug!(
+                        "{} received event from watch-stream: Ok({})",
+                        self.ctx,
+                        t.display()
+                    );
+                }
+                Err(e) => {
+                    info!("{} received event from watch-stream: Err({})", self.ctx, e);
+                }
             }
 
             let Some(watch_response) = watch_result? else {
