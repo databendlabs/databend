@@ -409,7 +409,7 @@ impl HistoryConfig {
     pub fn is_invisible(&self, table_name: &str) -> bool {
         self.tables
             .iter()
-            .find(|table| table.table_name == table_name)
+            .find(|table| table.table_name.eq_ignore_ascii_case(table_name))
             .map_or(false, |table| table.invisible)
     }
 }

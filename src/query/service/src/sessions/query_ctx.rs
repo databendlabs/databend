@@ -1192,7 +1192,7 @@ impl TableContext for QueryContext {
             )?;
 
             if GlobalConfig::instance().log.history.is_invisible(table) {
-                return Err(ErrorCode::UnknownTable(format!(
+                return Err(ErrorCode::InvalidArgument(format!(
                     "history table `{}` is configured as invisible",
                     table
                 )));
