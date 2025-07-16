@@ -531,6 +531,14 @@ pub(crate) async fn query_handler(
                 }
             };
 
+            log::info!(
+                "[Workload-Group] attach workload group {}({}) for query {}, quotas: {:?}",
+                workload_group.meta.name,
+                workload_group.meta.id,
+                ctx.query_id,
+                workload_group.meta.quotas
+            );
+
             parent_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
             tracking_workload_group = Some(workload_group);
         }
