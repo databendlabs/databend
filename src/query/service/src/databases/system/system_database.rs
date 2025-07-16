@@ -50,6 +50,7 @@ use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
 use databend_common_storages_system::PrivateTaskHistoryTable;
+use databend_common_storages_system::PrivateTasksTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::QueryCacheTable;
@@ -166,6 +167,7 @@ impl SystemDatabase {
                 )),
             ]);
             if config.task.on {
+                table_list.push(PrivateTasksTable::create(sys_db_meta.next_table_id()));
                 table_list.push(PrivateTaskHistoryTable::create(sys_db_meta.next_table_id()));
             } else {
                 table_list.push(TasksTable::create(sys_db_meta.next_table_id()));
