@@ -131,8 +131,14 @@ pub async fn should_reset(
     if let Some(c) = connection {
         let uri = format!("{}{}/", c.uri, "log_history");
         let mut uri_location = UriLocation::from_uri(uri, c.params.clone())?;
-        let (new_storage_params, _) =
-            parse_uri_location(&mut uri_location, Some(context.as_ref())).await?;
+        let mut payload = ThreadTracker::new_tracking_payload();
+        payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
+        let _guard = ThreadTracker::tracking(payload);
+        let (new_storage_params, _) = ThreadTracker::tracking_future(parse_uri_location(
+            &mut uri_location,
+            Some(context.as_ref()),
+        ))
+        .await?;
 
         // External1 -> External2
         // return error to prevent cyclic conversion
