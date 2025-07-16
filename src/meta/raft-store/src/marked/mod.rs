@@ -18,14 +18,15 @@
 #[cfg(test)]
 mod marked_test;
 
-use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_types::KVMeta;
+use seq_marked::SeqMarked;
 
 use crate::state_machine::ExpireValue;
 
-pub type Marked<T = Vec<u8>> = map_api::marked::Marked<KVMeta, T>;
+pub type MetaValue<T = Vec<u8>> = (Option<KVMeta>, T);
 
-impl From<ExpireValue> for Marked<String> {
+impl From<ExpireValue> for SeqMarked<String> {
     fn from(value: ExpireValue) -> Self {
-        Marked::new_with_meta(value.seq, value.key, None)
+        SeqMarked::new_normal(value.seq, value.key)
     }
 }

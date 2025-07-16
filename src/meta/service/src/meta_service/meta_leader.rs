@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::time::Duration;
+use std::time::SystemTime;
 
 use anyerror::AnyError;
 use databend_common_base::base::tokio::sync::RwLockReadGuard;
@@ -27,7 +29,6 @@ use databend_common_meta_types::raft_types::ClientWriteError;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftError;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
@@ -268,7 +269,7 @@ impl<'a> MetaLeader<'a> {
         mut entry: LogEntry,
     ) -> Result<AppliedState, RaftError<ClientWriteError>> {
         // Add consistent clock time to log entry.
-        entry.time_ms = Some(SeqV::<()>::now_ms());
+        entry.time_ms = Some(since_epoch().as_millis() as u64);
 
         // report metrics
         let _guard = ProposalPending::guard();
@@ -317,4 +318,10 @@ impl<'a> MetaLeader<'a> {
     async fn get_state_machine(&self) -> RwLockReadGuard<'_, SMV003> {
         self.sto.state_machine.read().await
     }
+}
+
+fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
 }

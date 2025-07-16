@@ -16,12 +16,12 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
 use futures::future::BoxFuture;
 use map_api::map_api::MapApi;
 
 use crate::state_machine::ExpireKey;
+use crate::state_machine::UserKey;
 
 /// Send a key-value change event to subscribers.
 pub trait SMEventSender: Debug + Sync + Send {
@@ -48,7 +48,7 @@ where T: SMEventSender
 /// The state machine is responsible for managing the application's persistent state,
 /// including application kv data and expired key data.
 pub trait StateMachineApi: Send + Sync {
-    type Map: MapApi<String, KVMeta> + MapApi<ExpireKey, KVMeta> + 'static;
+    type Map: MapApi<UserKey> + MapApi<ExpireKey> + 'static;
 
     /// Returns a reference to the map that stores application data.
     ///
