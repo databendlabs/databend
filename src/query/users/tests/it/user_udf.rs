@@ -134,6 +134,7 @@ async fn test_user_udf_server() -> Result<()> {
         arg_types.clone(),
         return_type.clone(),
         description,
+        None,
     );
     user_mgr
         .add_udf(&tenant, isempty_udf.clone(), &CreateOption::Create)
@@ -149,6 +150,7 @@ async fn test_user_udf_server() -> Result<()> {
         arg_types.clone(),
         return_type.clone(),
         description,
+        None,
     );
     user_mgr
         .add_udf(&tenant, isnotempty_udf.clone(), &CreateOption::Create)

@@ -21,6 +21,7 @@ use maplit::btreemap;
 
 use crate::common;
 
+// These bytes are built when a new version in introduced,
 // and are kept for backward compatibility test.
 //
 // *************************************************************

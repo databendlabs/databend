@@ -18,10 +18,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use arrow_array::LargeStringArray;
-use arrow_array::RecordBatch;
-use arrow_schema::Field;
-use arrow_schema::Schema;
 use chrono::DateTime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfo;
@@ -37,8 +33,10 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
@@ -149,29 +147,31 @@ impl Table for UdfEchoTable {
             request_timeout,
             UDF_CLIENT_USER_AGENT.as_str(),
         )?;
-        let mut client = UDFFlightClient::connect(endpoint, connect_timeout, 65536)
+        let name = "builtin_echo";
+        let mut client = UDFFlightClient::connect(name, endpoint, connect_timeout, 65536)
             .await?
             .with_tenant(ctx.get_tenant().tenant_name())?
-            .with_func_name("builtin_echo")?
-            .with_handler_name("builtin_echo")?
+            .with_func_name(name)?
+            .with_handler_name(name)?
             .with_query_id(&ctx.get_id())?;
 
-        let array = arrow_array::LargeStringArray::from(vec![self.arg.clone()]);
-        let schema = Schema::new(vec![Field::new(
-            "id",
-            arrow_schema::DataType::LargeUtf8,
-            false,
-        )]);
+        let num_rows = 1;
+        let block_entries = vec![BlockEntry::new_const_column(
+            DataType::String,
+            Scalar::String(self.arg.clone()),
+            1,
+        )];
+        let return_type = DataType::Nullable(Box::new(DataType::String));
 
-        let batch = RecordBatch::try_new(Arc::new(schema), vec![Arc::new(array)]).unwrap();
-        let result_batch = client.do_exchange("builtin_echo", batch).await?;
-        let result = result_batch
-            .column(0)
-            .as_any()
-            .downcast_ref::<LargeStringArray>()
-            .unwrap();
-        let result = result.value(0).to_string();
-        let parts = vec![Arc::new(Box::new(StringPart { value: result }) as _)];
+        let result = client
+            .do_exchange(name, name, num_rows, block_entries, &return_type)
+            .await?;
+
+        let scalar = unsafe { result.index_unchecked(0) };
+        let value = scalar.as_string().unwrap();
+        let parts = vec![Arc::new(Box::new(StringPart {
+            value: value.to_string(),
+        }) as _)];
         Ok((
             PartStatistics::new_exact(1, 1, 1, 1),
             Partitions::create(PartitionsShuffleKind::Seq, parts),

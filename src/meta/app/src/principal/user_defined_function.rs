@@ -35,6 +35,7 @@ pub struct UDFServer {
     pub language: String,
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
+    pub immutable: Option<bool>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -47,6 +48,7 @@ pub struct UDFScript {
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
     pub runtime_version: String,
+    pub immutable: Option<bool>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,6 +137,7 @@ impl UserDefinedFunction {
         arg_types: Vec<DataType>,
         return_type: DataType,
         description: &str,
+        immutable: Option<bool>,
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -146,6 +149,7 @@ impl UserDefinedFunction {
                 language: language.to_string(),
                 arg_types,
                 return_type,
+                immutable,
             }),
             created_on: Utc::now(),
         }
@@ -160,6 +164,7 @@ impl UserDefinedFunction {
         return_type: DataType,
         runtime_version: &str,
         description: &str,
+        immutable: Option<bool>,
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -173,6 +178,7 @@ impl UserDefinedFunction {
                 runtime_version: runtime_version.to_string(),
                 imports: vec![],
                 packages: vec![],
+                immutable,
             }),
             created_on: Utc::now(),
         }
@@ -202,6 +208,7 @@ impl Display for UDFDefinition {
                 handler,
                 headers,
                 language,
+                immutable,
             }) => {
                 for (i, item) in arg_types.iter().enumerate() {
                     if i > 0 {
@@ -209,10 +216,15 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{item}")?;
                 }
-                write!(
-                    f,
-                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler}"
-                )?;
+                write!(f, ") RETURNS {return_type} LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
+                write!(f, " HANDLER = '{handler}'")?;
                 if !headers.is_empty() {
                     write!(f, " HEADERS = (")?;
                     for (i, (key, value)) in headers.iter().enumerate() {
@@ -234,6 +246,7 @@ impl Display for UDFDefinition {
                 runtime_version,
                 imports,
                 packages,
+                immutable,
             }) => {
                 for (i, item) in arg_types.iter().enumerate() {
                     if i > 0 {
@@ -241,9 +254,17 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{item}")?;
                 }
+                write!(f, ") RETURNS {return_type} LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
                 write!(
                     f,
-                    ") RETURNS {return_type} LANGUAGE {language} IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
+                    " IMPORTS = {imports:?} PACKAGES = {packages:?} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
             }
             UDFDefinition::UDAFScript(UDAFScript {

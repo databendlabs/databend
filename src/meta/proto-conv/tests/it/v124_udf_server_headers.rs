@@ -49,6 +49,7 @@ fn test_decode_v124_udf_server_headers() -> anyhow::Result<()> {
         language: "python".to_string(),
         arg_types: vec![DataType::String],
         return_type: DataType::Boolean,
+        immutable: None,
     };
 
     common::test_load_old(

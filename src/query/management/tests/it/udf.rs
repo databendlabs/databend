@@ -218,6 +218,7 @@ fn create_test_udf_server() -> UserDefinedFunction {
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "This is a description",
+        None,
     )
 }
 
@@ -231,6 +232,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
         DataType::Number(NumberDataType::Int64),
         "3.12.0",
         "This is a description",
+        None,
     )
 }
 

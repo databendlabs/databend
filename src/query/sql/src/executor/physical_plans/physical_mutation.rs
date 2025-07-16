@@ -100,7 +100,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         mutation: &crate::plans::Mutation,
-        required: ColumnSet,
+        mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let crate::plans::Mutation {
             bind_context,
@@ -122,8 +122,32 @@ impl PhysicalPlanBuilder {
             can_try_update_column_only,
             no_effect,
             truncate_table,
+            direct_filter,
             ..
         } = mutation;
+
+        // add required columns
+        for matched_evaluator in matched_evaluators {
+            if let Some(condition) = &matched_evaluator.condition {
+                required.extend(condition.used_columns());
+            }
+            if let Some(update_list) = &matched_evaluator.update {
+                for update_scalar in update_list.values() {
+                    required.extend(update_scalar.used_columns());
+                }
+            }
+        }
+        for unmatched_evaluator in unmatched_evaluators {
+            if let Some(condition) = &unmatched_evaluator.condition {
+                required.extend(condition.used_columns());
+            }
+            for value in &unmatched_evaluator.values {
+                required.extend(value.used_columns());
+            }
+        }
+        for filter_value in direct_filter {
+            required.extend(filter_value.used_columns());
+        }
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
         if *no_effect {
