@@ -228,3 +228,33 @@ if [ "$state14" = "Succeeded" ]; then
 else
   echo "✅ Passed"
 fi
+
+response15=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t2 (c1 int)\"}")
+create_table_query_id_1=$(echo $response15 | jq -r '.id')
+echo "Create Table Query ID: $create_table_query_id_1"
+
+response16=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 WAREHOUSE = 'mywh' SCHEDULE = USING CRON '*/5 * * * * ?' AS insert into t2 values(0)\"}")
+create_task_4_query_id=$(echo $response16 | jq -r '.id')
+echo "Create Task 4 Query ID: $create_task_4_query_id"
+
+sleep 1
+
+response17=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_4 RESUME\"}")
+alter_task_4_query_id=$(echo $response17 | jq -r '.id')
+echo "Resume Task 4 ID: $alter_task_4_query_id"
+
+sleep 11
+
+response18=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t2 ORDER BY c1\"}")
+
+actual=$(echo "$response18" | jq -c '.data')
+expected='[["0"],["0"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi

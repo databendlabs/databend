@@ -290,9 +290,9 @@ impl TaskService {
                                 let tz = schedule_options
                                     .time_zone
                                     .as_ref()
-                                    .unwrap()
-                                    .parse::<Tz>()
-                                    .unwrap();
+                                    .map(|tz| tz.parse::<Tz>())
+                                    .transpose()?
+                                    .unwrap_or(Tz::UCT);
                                 let schedule = Schedule::from_str(cron_expr).unwrap();
 
                                 runtime
