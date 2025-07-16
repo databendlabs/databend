@@ -234,21 +234,24 @@ impl TaskService {
                                     .await
                             };
 
-                        task_service
-                            .update_or_create_task_run(&TaskRun {
-                                task: task.clone(),
-                                run_id: Self::make_run_id(),
-                                attempt_number: task.suspend_task_after_num_failures.unwrap_or(0)
-                                    as i32,
-                                state: State::Scheduled,
-                                scheduled_at: Utc::now(),
-                                completed_at: None,
-                                error_code: 0,
-                                error_message: None,
-                                root_task_id: EMPTY_TASK_ID,
-                            })
-                            .await?;
-
+                        let fn_new_task_run = async |task_service: &TaskService, task: &Task| {
+                            task_service
+                                .update_or_create_task_run(&TaskRun {
+                                    task: task.clone(),
+                                    run_id: Self::make_run_id(),
+                                    attempt_number: task
+                                        .suspend_task_after_num_failures
+                                        .unwrap_or(0)
+                                        as i32,
+                                    state: State::Scheduled,
+                                    scheduled_at: Utc::now(),
+                                    completed_at: None,
+                                    error_code: 0,
+                                    error_message: None,
+                                    root_task_id: EMPTY_TASK_ID,
+                                })
+                                .await
+                        };
                         match schedule_options.schedule_type {
                             ScheduleType::IntervalType => {
                                 let task_mgr = task_mgr.clone();
@@ -269,6 +272,7 @@ impl TaskService {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
+                                                        fn_new_task_run(&task_service, &task).await?;
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
                                                     _ = child_token.cancelled() => {
@@ -312,6 +316,7 @@ impl TaskService {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
+                                                        fn_new_task_run(&task_service, &task).await?;
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
                                                     _ = child_token.cancelled() => {
