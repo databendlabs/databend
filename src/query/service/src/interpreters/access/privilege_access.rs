@@ -157,6 +157,9 @@ impl PrivilegeAccess {
                 name: name.to_string(),
             },
             GrantObject::Warehouse(id) => OwnershipObject::Warehouse { id: id.to_string() },
+            GrantObject::Connection(name) => OwnershipObject::Connection {
+                name: name.to_string(),
+            },
             GrantObject::Global => return Ok(None),
         };
 
@@ -469,6 +472,38 @@ impl PrivilegeAccess {
         }
     }
 
+    async fn validate_connection_access(
+        &self,
+        connection: String,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            return self
+                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                .await;
+        }
+
+        if self
+            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        self.validate_access(
+            &GrantObject::Connection(connection),
+            privilege,
+            false,
+            false,
+        )
+        .await
+    }
+
     async fn has_ownership(
         &self,
         session: &Arc<Session>,
@@ -533,6 +568,7 @@ impl PrivilegeAccess {
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
             | GrantObject::Warehouse(_)
+            | GrantObject::Connection(_)
             | GrantObject::TableById(_, _, _) => true,
             GrantObject::Global => false,
         };
@@ -584,11 +620,12 @@ impl PrivilegeAccess {
                     GrantObject::Global
                     | GrantObject::UDF(_)
                     | GrantObject::Warehouse(_)
+                    | GrantObject::Connection(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -1289,6 +1326,31 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
+            // Connection
+            Plan::CreateConnection(_) => {
+                let super_privilege_check_result = self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await;
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_connection_privilege_check()?
+                {
+                    return super_privilege_check_result;
+                }
+                if super_privilege_check_result.is_err() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, true, false)
+                        .await?
+                }
+            }
+            Plan::DescConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
+            Plan::DropConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -1305,10 +1367,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterPasswordPolicy(_)
             | Plan::DropPasswordPolicy(_)
             | Plan::DescPasswordPolicy(_)
-            | Plan::CreateConnection(_)
-            | Plan::ShowConnections(_)
-            | Plan::DescConnection(_)
-            | Plan::DropConnection(_)
             | Plan::CreateIndex(_)
             | Plan::CreateTableIndex(_)
             | Plan::CreateNotification(_)
@@ -1365,6 +1423,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ShowConnections(_) => {}
             Plan::ShowWarehouses => {
                 // check privilege in interpreter
             }
@@ -1463,7 +1522,8 @@ fn check_db_tb_ownership_access(
                 }
                 OwnershipObject::UDF { .. }
                 | OwnershipObject::Stage { .. }
-                | OwnershipObject::Warehouse { .. } => {}
+                | OwnershipObject::Warehouse { .. }
+                | OwnershipObject::Connection { .. } => {}
             }
         }
     }

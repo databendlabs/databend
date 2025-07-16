@@ -119,6 +119,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Warehouse(id) => Ok(OwnershipObject::Warehouse {
                 id: id.to_string(),
             }),
+            GrantObject::Connection(name) => Ok(OwnershipObject::Connection {
+                name: name.to_string(),
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
@@ -260,7 +263,7 @@ pub fn validate_grant_privileges(object: &GrantObject, privileges: UserPrivilege
         .iter()
         .all(|p| available_privileges.has_privilege(p));
     if !ok {
-        return Err(databend_common_exception::ErrorCode::IllegalGrant(
+        return Err(ErrorCode::IllegalGrant(
             "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
         ));
     }
