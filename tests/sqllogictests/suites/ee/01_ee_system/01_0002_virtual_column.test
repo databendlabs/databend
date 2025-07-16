@@ -262,7 +262,7 @@ query TTTITT
 show virtual columns where table='tweets';
 ----
 test_virtual_column tweets data 3000000000 ['create'] String
-test_virtual_column tweets data 3000000001 ['geo']['lat'] Jsonb
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Float64
 test_virtual_column tweets data 3000000002 ['id'] UInt64
 test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String
@@ -289,7 +289,7 @@ query TTTITT
 show virtual columns where table='tweets';
 ----
 test_virtual_column tweets data 3000000000 ['create'] String
-test_virtual_column tweets data 3000000001 ['geo']['lat'] Jsonb
+test_virtual_column tweets data 3000000001 ['geo']['lat'] Float64
 test_virtual_column tweets data 3000000002 ['id'] UInt64
 test_virtual_column tweets data 3000000003 ['replies'] UInt64
 test_virtual_column tweets data 3000000004 ['text'] String

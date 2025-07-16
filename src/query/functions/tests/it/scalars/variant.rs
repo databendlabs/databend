@@ -16,17 +16,22 @@ use std::io::Write;
 
 use databend_common_expression::types::*;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
 use goldenfile::Mint;
 
 use super::run_ast;
+use super::run_ast_with_context;
+use super::TestContext;
 
 #[test]
 fn test_variant() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("variant.txt").unwrap();
 
-    test_parse_json(file);
-    test_try_parse_json(file);
+    test_parse_json(file, false, false);
+    test_parse_json(file, false, true);
+    test_parse_json(file, true, false);
+    test_parse_json(file, true, true);
     test_check_json(file);
     test_length(file);
     test_object_keys(file);
@@ -34,8 +39,10 @@ fn test_variant() {
     test_get_ignore_case(file);
     test_get_path(file);
     test_json_extract_path_text(file);
-    test_as_type(file);
-    test_is_type(file);
+    test_as_type(file, false);
+    test_as_type(file, true);
+    test_is_type(file, false);
+    test_is_type(file, true);
     test_to_type(file);
     test_try_to_type(file);
     test_object_construct(file);
@@ -45,7 +52,8 @@ fn test_variant() {
     test_json_to_string(file);
     test_json_pretty(file);
     test_json_strip_nulls(file);
-    test_json_typeof(file);
+    test_json_typeof(file, false);
+    test_json_typeof(file, true);
     test_array_construct(file);
     test_json_path_exists(file);
     test_get_arrow_op(file);
@@ -87,87 +95,113 @@ fn test_variant() {
     test_array_slice(file);
 }
 
-fn test_parse_json(file: &mut impl Write) {
-    run_ast(file, "parse_json(NULL)", &[]);
-    run_ast(file, "parse_json('nuLL')", &[]);
-    run_ast(file, "parse_json('null')", &[]);
-    run_ast(file, "parse_json('  ')", &[]);
-    run_ast(file, "parse_json('true')", &[]);
-    run_ast(file, "parse_json('false')", &[]);
-    run_ast(file, "parse_json('\"测试\"')", &[]);
-    run_ast(file, "parse_json('1234')", &[]);
-    run_ast(file, "parse_json('[1,2,3,4]')", &[]);
-    run_ast(file, "parse_json('{\"a\":\"b\",\"c\":\"d\"}')", &[]);
+fn test_parse_json(file: &mut impl Write, is_try: bool, enable_extended_json_syntax: bool) {
+    let prefix = if is_try { "try_" } else { "" };
+    let func_ctx = FunctionContext {
+        enable_extended_json_syntax,
+        ..FunctionContext::default()
+    };
+    let test_ctx = TestContext {
+        func_ctx: func_ctx.clone(),
+        ..TestContext::default()
+    };
+    run_ast_with_context(file, format!("{prefix}parse_json(NULL)"), test_ctx.clone());
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('nuLL')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('null')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(file, format!("{prefix}parse_json('  ')"), test_ctx.clone());
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('true')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('false')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('\"测试\"')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('1234')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('[1,2,3,4]')"),
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('{{\"a\":\"b\",\"c\":\"d\"}}')"),
+        test_ctx.clone(),
+    );
 
-    run_ast(file, "parse_json(s)", &[(
-        "s",
-        StringType::from_data(vec![
-            r#"null"#,
-            r#"true"#,
-            r#"9223372036854775807"#,
-            r#"-32768"#,
-            r#"1234.5678"#,
-            r#"1.912e2"#,
-            r#""\\\"abc\\\"""#,
-            r#""databend""#,
-            r#"{"k":"v","a":"b"}"#,
-            r#"[1,2,3,["a","b","c"]]"#,
-        ]),
-    )]);
+    let test_ctx_with_column = TestContext {
+        columns: &[(
+            "s",
+            StringType::from_data(vec![
+                r#"null"#,
+                r#"true"#,
+                r#"9223372036854775807"#,
+                r#"-32768"#,
+                r#"1234.5678"#,
+                r#"1.912e2"#,
+                r#""\\\"abc\\\"""#,
+                r#""databend""#,
+                r#"{"k":"v","a":"b"}"#,
+                r#"[1,2,3,["a","b","c"]]"#,
+            ]),
+        )],
+        func_ctx: FunctionContext {
+            enable_extended_json_syntax,
+            ..FunctionContext::default()
+        },
+        ..TestContext::default()
+    };
+    run_ast_with_context(file, format!("{prefix}parse_json(s)"), test_ctx_with_column);
 
-    run_ast(file, "parse_json(s)", &[(
-        "s",
-        StringType::from_data_with_validity(vec!["true", "false", "", "1234"], vec![
-            true, true, false, true,
-        ]),
-    )]);
+    let test_ctx_with_column = TestContext {
+        columns: &[(
+            "s",
+            StringType::from_data_with_validity(vec!["true", "false", "", "1234"], vec![
+                true, true, false, true,
+            ]),
+        )],
+        func_ctx: FunctionContext {
+            enable_extended_json_syntax,
+            ..FunctionContext::default()
+        },
+        ..TestContext::default()
+    };
+    run_ast_with_context(file, format!("{prefix}parse_json(s)"), test_ctx_with_column);
 
     // json extension syntax
-    run_ast(file, "parse_json('+10')", &[]);
-    run_ast(file, "parse_json('001')", &[]);
-    run_ast(file, "parse_json('.12')", &[]);
-    run_ast(file, "parse_json('12.')", &[]);
-    run_ast(
+    run_ast_with_context(file, format!("{prefix}parse_json('+10')"), test_ctx.clone());
+    run_ast_with_context(file, format!("{prefix}parse_json('001')"), test_ctx.clone());
+    run_ast_with_context(file, format!("{prefix}parse_json('.12')"), test_ctx.clone());
+    run_ast_with_context(file, format!("{prefix}parse_json('12.')"), test_ctx.clone());
+    run_ast_with_context(
         file,
-        "parse_json('99999999999999999999999999999999999999')",
-        &[],
+        format!("{prefix}parse_json('99999999999999999999999999999999999999')"),
+        test_ctx.clone(),
     );
-    run_ast(file, "parse_json('[1,2,,4]')", &[]);
-}
-
-fn test_try_parse_json(file: &mut impl Write) {
-    run_ast(file, "try_parse_json(NULL)", &[]);
-    run_ast(file, "try_parse_json('nuLL')", &[]);
-    run_ast(file, "try_parse_json('null')", &[]);
-    run_ast(file, "try_parse_json('true')", &[]);
-    run_ast(file, "try_parse_json('false')", &[]);
-    run_ast(file, "try_parse_json('\"测试\"')", &[]);
-    run_ast(file, "try_parse_json('1234')", &[]);
-    run_ast(file, "try_parse_json('[1,2,3,4]')", &[]);
-    run_ast(file, "try_parse_json('{\"a\":\"b\",\"c\":\"d\"}')", &[]);
-
-    run_ast(file, "try_parse_json(s)", &[(
-        "s",
-        StringType::from_data(vec![
-            r#"null"#,
-            r#"true"#,
-            r#"9223372036854775807"#,
-            r#"-32768"#,
-            r#"1234.5678"#,
-            r#"1.912e2"#,
-            r#""\\\"abc\\\"""#,
-            r#""databend""#,
-            r#"{"k":"v","a":"b"}"#,
-            r#"[1,2,3,["a","b","c"]]"#,
-        ]),
-    )]);
-
-    run_ast(file, "try_parse_json(s)", &[(
-        "s",
-        StringType::from_data_with_validity(vec!["true", "ttt", "", "1234"], vec![
-            true, true, false, true,
-        ]),
-    )]);
+    run_ast_with_context(
+        file,
+        format!("{prefix}parse_json('[1,2,,4]')"),
+        test_ctx.clone(),
+    );
 }
 
 fn test_check_json(file: &mut impl Write) {
@@ -521,107 +555,217 @@ fn test_json_extract_path_text(file: &mut impl Write) {
     ]);
 }
 
-fn test_as_type(file: &mut impl Write) {
-    run_ast(file, "as_boolean(parse_json('true'))", &[]);
-    run_ast(file, "as_boolean(parse_json('123'))", &[]);
-    run_ast(file, "as_integer(parse_json('true'))", &[]);
-    run_ast(file, "as_integer(parse_json('123'))", &[]);
-    run_ast(file, "as_float(parse_json('\"ab\"'))", &[]);
-    run_ast(file, "as_float(parse_json('12.34'))", &[]);
-    run_ast(file, "as_decimal(parse_json('12.34'))", &[]);
-    run_ast(file, "as_decimal(10, 2)(parse_json('12.34'))", &[]);
-    run_ast(file, "as_string(parse_json('\"ab\"'))", &[]);
-    run_ast(file, "as_string(parse_json('12.34'))", &[]);
-    run_ast(file, "as_array(parse_json('[1,2,3]'))", &[]);
-    run_ast(file, "as_array(parse_json('{\"a\":\"b\"}'))", &[]);
-    run_ast(file, "as_object(parse_json('[1,2,3]'))", &[]);
-    run_ast(file, "as_object(parse_json('{\"a\":\"b\"}'))", &[]);
-    run_ast(file, "as_binary(to_binary('abcd')::variant)", &[]);
-    run_ast(file, "as_date(to_date('2025-10-11')::variant)", &[]);
-    run_ast(
+fn test_as_type(file: &mut impl Write, enable_extended_json_syntax: bool) {
+    let func_ctx = FunctionContext {
+        enable_extended_json_syntax,
+        ..FunctionContext::default()
+    };
+    let test_ctx = TestContext {
+        func_ctx: func_ctx.clone(),
+        ..TestContext::default()
+    };
+    run_ast_with_context(file, "as_boolean(parse_json('true'))", test_ctx.clone());
+    run_ast_with_context(file, "as_boolean(parse_json('123'))", test_ctx.clone());
+    run_ast_with_context(file, "as_integer(parse_json('true'))", test_ctx.clone());
+    run_ast_with_context(file, "as_integer(parse_json('123'))", test_ctx.clone());
+    run_ast_with_context(file, "as_float(parse_json('\"ab\"'))", test_ctx.clone());
+    run_ast_with_context(file, "as_float(parse_json('12.34'))", test_ctx.clone());
+    run_ast_with_context(file, "as_decimal(parse_json('12.34'))", test_ctx.clone());
+    run_ast_with_context(
+        file,
+        "as_decimal(10, 2)(parse_json('12.34'))",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(file, "as_string(parse_json('\"ab\"'))", test_ctx.clone());
+    run_ast_with_context(file, "as_string(parse_json('12.34'))", test_ctx.clone());
+    run_ast_with_context(file, "as_array(parse_json('[1,2,3]'))", test_ctx.clone());
+    run_ast_with_context(
+        file,
+        "as_array(parse_json('{\"a\":\"b\"}'))",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(file, "as_object(parse_json('[1,2,3]'))", test_ctx.clone());
+    run_ast_with_context(
+        file,
+        "as_object(parse_json('{\"a\":\"b\"}'))",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "as_binary(to_binary('abcd')::variant)",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "as_date(to_date('2025-10-11')::variant)",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
         file,
         "as_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)",
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(
+    run_ast_with_context(
         file,
         "as_interval(to_interval('1 year 2 month')::variant)",
-        &[],
+        test_ctx.clone(),
     );
 
-    let columns = &[(
-        "s",
-        StringType::from_data(vec![
-            "null",
-            "true",
-            "123",
-            "12.34",
-            "\"ab\"",
-            "[1,2,3]",
-            "{\"a\":\"b\"}",
-        ]),
-    )];
-    run_ast(file, "as_boolean(parse_json(s))", columns);
-    run_ast(file, "as_integer(parse_json(s))", columns);
-    run_ast(file, "as_float(parse_json(s))", columns);
-    run_ast(file, "as_string(parse_json(s))", columns);
-    run_ast(file, "as_array(parse_json(s))", columns);
-    run_ast(file, "as_object(parse_json(s))", columns);
+    let test_ctx_with_column = TestContext {
+        columns: &[(
+            "s",
+            StringType::from_data(vec![
+                "null",
+                "true",
+                "123",
+                "12.34",
+                "\"ab\"",
+                "[1,2,3]",
+                "{\"a\":\"b\"}",
+            ]),
+        )],
+        func_ctx: FunctionContext {
+            enable_extended_json_syntax,
+            ..FunctionContext::default()
+        },
+        ..TestContext::default()
+    };
+    run_ast_with_context(
+        file,
+        "as_boolean(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "as_integer(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "as_float(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "as_string(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "as_array(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(file, "as_object(parse_json(s))", test_ctx_with_column);
 }
 
-fn test_is_type(file: &mut impl Write) {
-    run_ast(file, "is_null_value(parse_json('null'))", &[]);
-    run_ast(file, "is_null_value(parse_json('[1,2]'))", &[]);
-    run_ast(file, "is_boolean(parse_json('true'))", &[]);
-    run_ast(file, "is_boolean(parse_json('123'))", &[]);
-    run_ast(file, "is_integer(parse_json('true'))", &[]);
-    run_ast(file, "is_integer(parse_json('123'))", &[]);
-    run_ast(file, "is_float(parse_json('\"ab\"'))", &[]);
-    run_ast(file, "is_float(parse_json('12.34'))", &[]);
-    run_ast(
+fn test_is_type(file: &mut impl Write, enable_extended_json_syntax: bool) {
+    let func_ctx = FunctionContext {
+        enable_extended_json_syntax,
+        ..FunctionContext::default()
+    };
+    let test_ctx = TestContext {
+        func_ctx: func_ctx.clone(),
+        ..TestContext::default()
+    };
+    run_ast_with_context(file, "is_null_value(parse_json('null'))", test_ctx.clone());
+    run_ast_with_context(file, "is_null_value(parse_json('[1,2]'))", test_ctx.clone());
+    run_ast_with_context(file, "is_boolean(parse_json('true'))", test_ctx.clone());
+    run_ast_with_context(file, "is_boolean(parse_json('123'))", test_ctx.clone());
+    run_ast_with_context(file, "is_integer(parse_json('true'))", test_ctx.clone());
+    run_ast_with_context(file, "is_integer(parse_json('123'))", test_ctx.clone());
+    run_ast_with_context(file, "is_float(parse_json('\"ab\"'))", test_ctx.clone());
+    run_ast_with_context(file, "is_float(parse_json('12.34'))", test_ctx.clone());
+    run_ast_with_context(
         file,
         "is_decimal(parse_json('99999999999999999999999999999999999999'))",
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(file, "is_decimal(parse_json('99999999999999999999999999999999999999999999999999999999999999999999999999991'))", &[]);
-    run_ast(file, "is_string(parse_json('\"ab\"'))", &[]);
-    run_ast(file, "is_string(parse_json('12.34'))", &[]);
-    run_ast(file, "is_array(parse_json('[1,2,3]'))", &[]);
-    run_ast(file, "is_array(parse_json('{\"a\":\"b\"}'))", &[]);
-    run_ast(file, "is_object(parse_json('[1,2,3]'))", &[]);
-    run_ast(file, "is_object(parse_json('{\"a\":\"b\"}'))", &[]);
-    run_ast(file, "is_binary(to_binary('abcd')::variant)", &[]);
-    run_ast(file, "is_date(to_date('2025-10-11')::variant)", &[]);
-    run_ast(
+    run_ast_with_context(file, "is_decimal(parse_json('99999999999999999999999999999999999999999999999999999999999999999999999999991'))", test_ctx.clone());
+    run_ast_with_context(file, "is_string(parse_json('\"ab\"'))", test_ctx.clone());
+    run_ast_with_context(file, "is_string(parse_json('12.34'))", test_ctx.clone());
+    run_ast_with_context(file, "is_array(parse_json('[1,2,3]'))", test_ctx.clone());
+    run_ast_with_context(
+        file,
+        "is_array(parse_json('{\"a\":\"b\"}'))",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(file, "is_object(parse_json('[1,2,3]'))", test_ctx.clone());
+    run_ast_with_context(
+        file,
+        "is_object(parse_json('{\"a\":\"b\"}'))",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_binary(to_binary('abcd')::variant)",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_date(to_date('2025-10-11')::variant)",
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
         file,
         "is_timestamp(to_timestamp('2025-05-01 10:00:00')::variant)",
-        &[],
+        test_ctx.clone(),
     );
-    run_ast(
+    run_ast_with_context(
         file,
         "is_interval(to_interval('1 year 2 month')::variant)",
-        &[],
+        test_ctx.clone(),
     );
 
-    let columns = &[(
-        "s",
-        StringType::from_data(vec![
-            "null",
-            "true",
-            "123",
-            "12.34",
-            "\"ab\"",
-            "[1,2,3]",
-            "{\"a\":\"b\"}",
-        ]),
-    )];
-    run_ast(file, "is_null_value(parse_json(s))", columns);
-    run_ast(file, "is_boolean(parse_json(s))", columns);
-    run_ast(file, "is_integer(parse_json(s))", columns);
-    run_ast(file, "is_float(parse_json(s))", columns);
-    run_ast(file, "is_string(parse_json(s))", columns);
-    run_ast(file, "is_array(parse_json(s))", columns);
-    run_ast(file, "is_object(parse_json(s))", columns);
+    let test_ctx_with_column = TestContext {
+        columns: &[(
+            "s",
+            StringType::from_data(vec![
+                "null",
+                "true",
+                "123",
+                "12.34",
+                "\"ab\"",
+                "[1,2,3]",
+                "{\"a\":\"b\"}",
+            ]),
+        )],
+        func_ctx: FunctionContext {
+            enable_extended_json_syntax,
+            ..FunctionContext::default()
+        },
+        ..TestContext::default()
+    };
+    run_ast_with_context(
+        file,
+        "is_null_value(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_boolean(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_integer(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_float(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_string(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(
+        file,
+        "is_array(parse_json(s))",
+        test_ctx_with_column.clone(),
+    );
+    run_ast_with_context(file, "is_object(parse_json(s))", test_ctx_with_column);
 }
 
 fn test_to_type(file: &mut impl Write) {
@@ -1097,16 +1241,44 @@ fn test_json_strip_nulls(file: &mut impl Write) {
     );
 }
 
-fn test_json_typeof(file: &mut impl Write) {
-    run_ast(file, r#"json_typeof(NULL)"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('null'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('true'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('"test"'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('123'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('-1.12'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('1.12e10'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('[1,2,3]'))"#, &[]);
-    run_ast(file, r#"json_typeof(parse_json('{"a":1,"b":2}'))"#, &[]);
+fn test_json_typeof(file: &mut impl Write, enable_extended_json_syntax: bool) {
+    let func_ctx = FunctionContext {
+        enable_extended_json_syntax,
+        ..FunctionContext::default()
+    };
+    let test_ctx = TestContext {
+        func_ctx: func_ctx.clone(),
+        ..TestContext::default()
+    };
+    run_ast_with_context(file, r#"json_typeof(NULL)"#, test_ctx.clone());
+    run_ast_with_context(file, r#"json_typeof(parse_json('null'))"#, test_ctx.clone());
+    run_ast_with_context(file, r#"json_typeof(parse_json('true'))"#, test_ctx.clone());
+    run_ast_with_context(
+        file,
+        r#"json_typeof(parse_json('"test"'))"#,
+        test_ctx.clone(),
+    );
+    run_ast_with_context(file, r#"json_typeof(parse_json('123'))"#, test_ctx.clone());
+    run_ast_with_context(
+        file,
+        r#"json_typeof(parse_json('-1.12'))"#,
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        r#"json_typeof(parse_json('1.12e10'))"#,
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        r#"json_typeof(parse_json('[1,2,3]'))"#,
+        test_ctx.clone(),
+    );
+    run_ast_with_context(
+        file,
+        r#"json_typeof(parse_json('{"a":1,"b":2}'))"#,
+        test_ctx.clone(),
+    );
 }
 
 fn test_array_construct(file: &mut impl Write) {
