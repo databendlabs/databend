@@ -122,7 +122,7 @@ impl Immutable {
 impl MapApiRO<UserKey> for Immutable {
     async fn get(&self, key: &UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
         // get() is just delegated
-        self.as_ref().user_map().get(key).await
+        self.as_ref().as_user_map().get(key).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<UserKey>, io::Error>
@@ -136,7 +136,7 @@ impl MapApiRO<UserKey> for Immutable {
 impl MapApiRO<ExpireKey> for Immutable {
     async fn get(&self, key: &ExpireKey) -> Result<SeqMarkedOf<ExpireKey>, io::Error> {
         // get() is just delegated
-        self.as_ref().expire_map().get(key).await
+        self.as_ref().as_expire_map().get(key).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>

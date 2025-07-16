@@ -20,7 +20,7 @@ use map_api::SeqMarked;
 
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApiExt;
+use crate::leveled_store::map_api::MapApiHelper;
 use crate::state_machine::UserKey;
 
 #[tokio::test]
@@ -29,7 +29,7 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     // Insert an entry at level 0
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a1"), Some((None, b("b0"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_tombstone(0));
@@ -39,7 +39,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     l.freeze_writable();
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a1"), Some((None, b("b1"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(1, (None, b("b0"))));
@@ -47,7 +47,7 @@ async fn test_freeze() -> anyhow::Result<()> {
 
     // Listing entries from all levels see the latest
     let got = l
-        .user_map()
+        .as_user_map()
         .range(user_key("")..)
         .await?
         .try_collect::<Vec<_>>()
@@ -61,7 +61,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     let immutables = l.immutable_levels_ref();
 
     let got = immutables
-        .user_map()
+        .as_user_map()
         .range(user_key("")..)
         .await?
         .try_collect::<Vec<_>>()
@@ -80,7 +80,7 @@ async fn test_single_level() -> anyhow::Result<()> {
 
     // Write a1
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a1"), Some((None, b("b1"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_tombstone(0));
@@ -88,39 +88,39 @@ async fn test_single_level() -> anyhow::Result<()> {
 
     // Write more
     let (_prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a2"), Some((None, b("b2"))))
         .await?;
     assert_eq!(result, SeqMarked::new_normal(2, (None, b("b2"))));
 
     let (_prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a3"), Some((None, b("b3"))))
         .await?;
     assert_eq!(result, SeqMarked::new_normal(3, (None, b("b3"))));
 
     let (_prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("x1"), Some((None, b("y1"))))
         .await?;
     assert_eq!(result, SeqMarked::new_normal(4, (None, b("y1"))));
 
     let (_prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("x2"), Some((None, b("y2"))))
         .await?;
     assert_eq!(result, SeqMarked::new_normal(5, (None, b("y2"))));
 
     // Override a1
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a1"), Some((None, b("b1"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(1, (None, b("b1"))));
     assert_eq!(result, SeqMarked::new_normal(6, (None, b("b1"))));
 
     // Delete a3
-    let (prev, result) = l.user_map_mut().set(user_key("a3"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("a3"), None).await?;
     assert_eq!(prev, SeqMarked::new_normal(3, (None, b("b3"))));
     assert_eq!(
         result,
@@ -129,7 +129,7 @@ async fn test_single_level() -> anyhow::Result<()> {
     );
 
     // Range
-    let strm = l.user_map().range(user_key("")..).await?;
+    let strm = l.as_user_map().range(user_key("")..).await?;
     let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
@@ -141,10 +141,10 @@ async fn test_single_level() -> anyhow::Result<()> {
     ]);
 
     // Get
-    let got = l.user_map().get(&user_key("a2")).await?;
+    let got = l.as_user_map().get(&user_key("a2")).await?;
     assert_eq!(got, SeqMarked::new_normal(2, (None, b("b2"))));
 
-    let got = l.user_map().get(&user_key("a3")).await?;
+    let got = l.as_user_map().get(&user_key("a3")).await?;
     assert_eq!(got, SeqMarked::new_tombstone(6));
     Ok(())
 }
@@ -155,20 +155,20 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     let mut l = LeveledMap::default();
 
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("a1"), Some((None, b("b1"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("a2"), Some((None, b("b2"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("x1"), Some((None, b("y1"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("x2"), Some((None, b("y2"))))
         .await?;
 
-    let it = l.user_map().range(user_key("")..).await?;
+    let it = l.as_user_map().range(user_key("")..).await?;
     let got = it.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
@@ -184,7 +184,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Override
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a2"), Some((None, b("b3"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(2, (None, b("b2"))));
@@ -192,27 +192,27 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Override again
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a2"), Some((None, b("b4"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(5, (None, b("b3"))));
     assert_eq!(result, SeqMarked::new_normal(6, (None, b("b4"))));
 
     // Delete by adding a tombstone
-    let (prev, result) = l.user_map_mut().set(user_key("a1"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("a1"), None).await?;
     assert_eq!(prev, SeqMarked::new_normal(1, (None, b("b1"))));
     assert_eq!(result, SeqMarked::new_tombstone(6));
 
     // Override tombstone
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a1"), Some((None, b("b5"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_tombstone(6));
     assert_eq!(result, SeqMarked::new_normal(7, (None, b("b5"))));
 
     // Range
-    let it = l.user_map().range(user_key("")..).await?;
+    let it = l.as_user_map().range(user_key("")..).await?;
     let got = it.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
@@ -224,20 +224,20 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Get
 
-    let got = l.user_map().get(&user_key("a1")).await?;
+    let got = l.as_user_map().get(&user_key("a1")).await?;
     assert_eq!(got, SeqMarked::new_normal(7, (None, b("b5"))));
 
-    let got = l.user_map().get(&user_key("a2")).await?;
+    let got = l.as_user_map().get(&user_key("a2")).await?;
     assert_eq!(got, SeqMarked::new_normal(6, (None, b("b4"))));
 
-    let got = l.user_map().get(&user_key("w1")).await?;
+    let got = l.as_user_map().get(&user_key("w1")).await?;
     assert_eq!(got, SeqMarked::new_tombstone(0));
 
     // Check base level
 
     let immutables = l.immutable_levels_ref();
 
-    let strm = immutables.user_map().range(user_key("")..).await?;
+    let strm = immutables.as_user_map().range(user_key("")..).await?;
     let got = strm.try_collect::<Vec<_>>().await?;
     assert_eq!(got, vec![
         //
@@ -260,33 +260,33 @@ async fn test_two_levels() -> anyhow::Result<()> {
 async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     let mut l = LeveledMap::default();
     // internal_seq: 0
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("a"), Some((None, b("a0"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("b"), Some((None, b("b0"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c0"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("d"), Some((None, b("d0"))))
         .await?;
 
     l.freeze_writable();
     // internal_seq: 4
-    l.user_map_mut().set(user_key("b"), None).await?;
-    l.user_map_mut()
+    l.as_user_map_mut().set(user_key("b"), None).await?;
+    l.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c1"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("e"), Some((None, b("e1"))))
         .await?;
 
     l.freeze_writable();
     // internal_seq: 6
-    l.user_map_mut().set(user_key("c"), None).await?;
-    l.user_map_mut()
+    l.as_user_map_mut().set(user_key("c"), None).await?;
+    l.as_user_map_mut()
         .set(user_key("d"), Some((None, b("d2"))))
         .await?;
 
@@ -297,26 +297,26 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
 async fn test_three_levels_get_range() -> anyhow::Result<()> {
     let l = build_3_levels().await?;
 
-    let got = l.user_map().get(&user_key("a")).await?;
+    let got = l.as_user_map().get(&user_key("a")).await?;
     assert_eq!(got, SeqMarked::new_normal(1, (None, b("a0"))));
 
-    let got = l.user_map().get(&user_key("b")).await?;
+    let got = l.as_user_map().get(&user_key("b")).await?;
     assert_eq!(got, SeqMarked::new_tombstone(4));
 
-    let got = l.user_map().get(&user_key("c")).await?;
+    let got = l.as_user_map().get(&user_key("c")).await?;
     assert_eq!(got, SeqMarked::new_tombstone(6));
 
-    let got = l.user_map().get(&user_key("d")).await?;
+    let got = l.as_user_map().get(&user_key("d")).await?;
     assert_eq!(got, SeqMarked::new_normal(7, (None, b("d2"))));
 
-    let got = l.user_map().get(&user_key("e")).await?;
+    let got = l.as_user_map().get(&user_key("e")).await?;
     assert_eq!(got, SeqMarked::new_normal(6, (None, b("e1"))));
 
-    let got = l.user_map().get(&user_key("f")).await?;
+    let got = l.as_user_map().get(&user_key("f")).await?;
     assert_eq!(got, SeqMarked::new_tombstone(0));
 
     let got = l
-        .user_map()
+        .as_user_map()
         .range(user_key("")..)
         .await?
         .try_collect::<Vec<_>>()
@@ -338,49 +338,49 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
     let mut l = build_3_levels().await?;
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("a"), Some((None, b("x"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(1, (None, b("a0"))));
     assert_eq!(result, SeqMarked::new_normal(8, (None, b("x"))));
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("b"), Some((None, b("y"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_tombstone(4));
     assert_eq!(result, SeqMarked::new_normal(9, (None, b("y"))));
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("c"), Some((None, b("z"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_tombstone(6));
     assert_eq!(result, SeqMarked::new_normal(10, (None, b("z"))));
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("d"), Some((None, b("u"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(7, (None, b("d2"))));
     assert_eq!(result, SeqMarked::new_normal(11, (None, b("u"))));
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("e"), Some((None, b("v"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_normal(6, (None, b("e1"))));
     assert_eq!(result, SeqMarked::new_normal(12, (None, b("v"))));
 
     let (prev, result) = l
-        .user_map_mut()
+        .as_user_map_mut()
         .set(user_key("f"), Some((None, b("w"))))
         .await?;
     assert_eq!(prev, SeqMarked::new_tombstone(0));
     assert_eq!(result, SeqMarked::new_normal(13, (None, b("w"))));
 
     let got = l
-        .user_map()
+        .as_user_map()
         .range(user_key("")..)
         .await?
         .try_collect::<Vec<_>>()
@@ -402,32 +402,32 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
 async fn test_three_levels_delete() -> anyhow::Result<()> {
     let mut l = build_3_levels().await?;
 
-    let (prev, result) = l.user_map_mut().set(user_key("a"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("a"), None).await?;
     assert_eq!(prev, SeqMarked::new_normal(1, (None, b("a0"))));
     assert_eq!(result, SeqMarked::new_tombstone(7));
 
-    let (prev, result) = l.user_map_mut().set(user_key("b"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("b"), None).await?;
     assert_eq!(prev, SeqMarked::new_tombstone(4));
     assert_eq!(result, SeqMarked::new_tombstone(7));
 
-    let (prev, result) = l.user_map_mut().set(user_key("c"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("c"), None).await?;
     assert_eq!(prev, SeqMarked::new_tombstone(6));
     assert_eq!(result, SeqMarked::new_tombstone(7));
 
-    let (prev, result) = l.user_map_mut().set(user_key("d"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("d"), None).await?;
     assert_eq!(prev, SeqMarked::new_normal(7, (None, b("d2"))));
     assert_eq!(result, SeqMarked::new_tombstone(7));
 
-    let (prev, result) = l.user_map_mut().set(user_key("e"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("e"), None).await?;
     assert_eq!(prev, SeqMarked::new_normal(6, (None, b("e1"))));
     assert_eq!(result, SeqMarked::new_tombstone(7));
 
-    let (prev, result) = l.user_map_mut().set(user_key("f"), None).await?;
+    let (prev, result) = l.as_user_map_mut().set(user_key("f"), None).await?;
     assert_eq!(prev, SeqMarked::new_tombstone(0));
     assert_eq!(result, SeqMarked::new_tombstone(0));
 
     let got = l
-        .user_map()
+        .as_user_map()
         .range(user_key("")..)
         .await?
         .try_collect::<Vec<_>>()
@@ -452,16 +452,16 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     let mut l = LeveledMap::default();
 
     // internal_seq: 0
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(
             user_key("a"),
             Some((Some(KVMeta::new_expires_at(1)), b("a0"))),
         )
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("b"), Some((None, b("b0"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(
             user_key("c"),
             Some((Some(KVMeta::new_expires_at(2)), b("c0"))),
@@ -471,13 +471,13 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
     l.freeze_writable();
 
     // internal_seq: 3
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(
             user_key("b"),
             Some((Some(KVMeta::new_expires_at(10)), b("b1"))),
         )
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c1"))))
         .await?;
 
@@ -489,7 +489,7 @@ async fn build_2_level_with_meta() -> anyhow::Result<LeveledMap> {
 #[tokio::test]
 async fn test_2_level_same_tombstone() -> anyhow::Result<()> {
     let lm = build_2_level_consecutive_delete().await?;
-    let strm = lm.user_map().range(..).await?;
+    let strm = lm.as_user_map().range(..).await?;
 
     let got = strm.try_collect::<Vec<_>>().await?;
 
@@ -519,85 +519,26 @@ async fn build_2_level_consecutive_delete() -> anyhow::Result<LeveledMap> {
     let mut l = LeveledMap::default();
 
     // internal_seq: 0
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("a"), Some((None, b("a0"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("b"), Some((None, b("b0"))))
         .await?;
-    l.user_map_mut()
+    l.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c0"))))
         .await?;
-    l.user_map_mut().set(user_key("b"), None).await?;
+    l.as_user_map_mut().set(user_key("b"), None).await?;
 
     l.freeze_writable();
 
     // internal_seq: 3
-    l.user_map_mut().set(user_key("b"), None).await?;
-    l.user_map_mut()
+    l.as_user_map_mut().set(user_key("b"), None).await?;
+    l.as_user_map_mut()
         .set(user_key("c"), Some((None, b("c1"))))
         .await?;
 
     Ok(l)
-}
-
-#[tokio::test]
-async fn test_two_level_update_value() -> anyhow::Result<()> {
-    // Update value for a.
-    {
-        let mut l = build_2_level_with_meta().await?;
-
-        let (prev, result) = MapApiExt::upsert_value(&mut l, user_key("a"), b("a1")).await?;
-        assert_eq!(
-            prev,
-            SeqMarked::new_normal(1, (Some(KVMeta::new_expires_at(1)), b("a0")))
-        );
-        assert_eq!(
-            result,
-            SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(1)), b("a1")))
-        );
-
-        let got = l.user_map().get(&user_key("a")).await?;
-        assert_eq!(
-            got,
-            SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(1)), b("a1")))
-        );
-    }
-
-    // Update value for b.
-    {
-        let mut l = build_2_level_with_meta().await?;
-
-        let (prev, result) = MapApiExt::upsert_value(&mut l, user_key("b"), b("x1")).await?;
-        assert_eq!(
-            prev,
-            SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(10)), b("b1")))
-        );
-        assert_eq!(
-            result,
-            SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(10)), b("x1")))
-        );
-
-        let got = l.user_map().get(&user_key("b")).await?;
-        assert_eq!(
-            got,
-            SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(10)), b("x1")))
-        );
-    }
-
-    // Update nonexistent.
-    {
-        let mut l = build_2_level_with_meta().await?;
-
-        let (prev, result) = MapApiExt::upsert_value(&mut l, user_key("d"), b("d1")).await?;
-        assert_eq!(prev, SeqMarked::new_tombstone(0));
-        assert_eq!(result, SeqMarked::new_normal(6, (None, b("d1"))));
-
-        let got = l.user_map().get(&user_key("d")).await?;
-        assert_eq!(got, SeqMarked::new_normal(6, (None, b("d1"))));
-    }
-
-    Ok(())
 }
 
 #[tokio::test]
@@ -607,7 +548,8 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, user_key("a"), Some(KVMeta::new_expires_at(2))).await?;
+            MapApiHelper::update_meta(&mut l, user_key("a"), Some(KVMeta::new_expires_at(2)))
+                .await?;
 
         assert_eq!(
             prev,
@@ -618,7 +560,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(2)), b("a0")))
         );
 
-        let got = l.user_map().get(&user_key("a")).await?;
+        let got = l.as_user_map().get(&user_key("a")).await?;
         assert_eq!(
             got,
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(2)), b("a0")))
@@ -629,14 +571,14 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await?;
 
-        let (prev, result) = MapApiExt::update_meta(&mut l, user_key("b"), None).await?;
+        let (prev, result) = MapApiHelper::update_meta(&mut l, user_key("b"), None).await?;
         assert_eq!(
             prev,
             SeqMarked::new_normal(4, (Some(KVMeta::new_expires_at(10)), b("b1"),))
         );
         assert_eq!(result, SeqMarked::new_normal(6, (None, b("b1"))));
 
-        let got = l.user_map().get(&user_key("b")).await?;
+        let got = l.as_user_map().get(&user_key("b")).await?;
         assert_eq!(got, SeqMarked::new_normal(6, (None, b("b1"))));
     }
 
@@ -645,14 +587,15 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, user_key("c"), Some(KVMeta::new_expires_at(20))).await?;
+            MapApiHelper::update_meta(&mut l, user_key("c"), Some(KVMeta::new_expires_at(20)))
+                .await?;
         assert_eq!(prev, SeqMarked::new_normal(5, (None, b("c1"))));
         assert_eq!(
             result,
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(20)), b("c1")))
         );
 
-        let got = l.user_map().get(&user_key("c")).await?;
+        let got = l.as_user_map().get(&user_key("c")).await?;
         assert_eq!(
             got,
             SeqMarked::new_normal(6, (Some(KVMeta::new_expires_at(20)), b("c1")))
@@ -664,11 +607,12 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await?;
 
         let (prev, result) =
-            MapApiExt::update_meta(&mut l, user_key("d"), Some(KVMeta::new_expires_at(2))).await?;
+            MapApiHelper::update_meta(&mut l, user_key("d"), Some(KVMeta::new_expires_at(2)))
+                .await?;
         assert_eq!(prev, SeqMarked::new_tombstone(0));
         assert_eq!(result, SeqMarked::new_tombstone(0));
 
-        let got = l.user_map().get(&user_key("d")).await?;
+        let got = l.as_user_map().get(&user_key("d")).await?;
         assert_eq!(got, SeqMarked::new_tombstone(0));
     }
 

@@ -44,13 +44,23 @@ pub struct SMV003 {
 }
 
 impl StateMachineApi for SMV003 {
-    type Map = LeveledMap;
+    type UserMap = LeveledMap;
 
-    fn map_ref(&self) -> &Self::Map {
+    fn user_map(&self) -> &Self::UserMap {
         &self.levels
     }
 
-    fn map_mut(&mut self) -> &mut Self::Map {
+    fn user_map_mut(&mut self) -> &mut Self::UserMap {
+        &mut self.levels
+    }
+
+    type ExpireMap = LeveledMap;
+
+    fn expire_map(&self) -> &Self::ExpireMap {
+        &self.levels
+    }
+
+    fn expire_map_mut(&mut self) -> &mut Self::ExpireMap {
         &mut self.levels
     }
 
@@ -62,6 +72,7 @@ impl StateMachineApi for SMV003 {
         self.subscriber.as_ref().map(|x| x.as_ref())
     }
 }
+
 impl SMV003 {
     /// Return a mutable reference to the map that stores app data.
     pub(in crate::sm_v003) fn map_mut(&mut self) -> &mut LeveledMap {
