@@ -410,6 +410,6 @@ impl HistoryConfig {
         self.tables
             .iter()
             .find(|table| table.table_name.eq_ignore_ascii_case(table_name))
-            .map_or(false, |table| table.invisible)
+            .is_some_and(|table| table.invisible)
     }
 }
