@@ -122,17 +122,8 @@ impl MetaEventSubscriber {
                 }
             };
 
-            match &watch_result {
-                Ok(t) => {
-                    info!(
-                        "{} received event from watch-stream: Ok({})",
-                        self.ctx,
-                        t.display()
-                    );
-                }
-                Err(e) => {
-                    info!("{} received event from watch-stream: Err({})", self.ctx, e);
-                }
+            if let Err(e) = &watch_result {
+                info!("{} received event from watch-stream: Err({})", self.ctx, e);
             }
 
             let Some(watch_response) = watch_result? else {
