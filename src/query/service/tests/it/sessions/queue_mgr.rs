@@ -382,6 +382,10 @@ async fn test_heavy_actions() -> Result<()> {
             // MERGE INTO
             add_to_queue: true,
         },
+        Query {
+            sql: "CREATE TABLE test_heavy_create AS SELECT 1",
+            add_to_queue: true,
+        }
     ];
 
     let fixture = TestFixture::setup().await?;
