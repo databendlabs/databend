@@ -66,6 +66,8 @@ pub struct TransformSortCollect<A: SortAlgorithm, C> {
     memory_settings: MemorySettings,
 }
 
+const DEFAULT_NUM_MERGE: usize = 5;
+
 impl<A, C> TransformSortCollect<A, C>
 where
     A: SortAlgorithm,
@@ -121,7 +123,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: merger.num_rows().div_ceil(self.max_block_size).max(2),
+                num_merge: DEFAULT_NUM_MERGE,
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -146,7 +148,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: num_rows.div_ceil(self.max_block_size).max(2),
+                num_merge: DEFAULT_NUM_MERGE,
             }
         } else {
             self.determine_params(num_bytes, num_rows)
@@ -331,18 +333,21 @@ where
             unreachable!()
         };
 
-        let input = input_data.in_memory_rows();
+        let incoming = input_data.in_memory_rows();
         let memory_rows = spill_sort.collect_memory_rows();
         let max = spill_sort.max_rows();
 
-        if memory_rows > 0 && memory_rows + input > max {
+        if memory_rows > 0 && memory_rows + incoming > max {
+            log::debug!(incoming_rows = incoming, memory_rows, max_rows = max; "collect_spill_last");
             spill_sort
-                .collect_spill_last(memory_rows + input - max)
+                .collect_spill_last(memory_rows + incoming - max)
                 .await?;
         }
-        if input > max || finished && input > 0 {
+        let need_spill = incoming > max;
+        if need_spill || finished && incoming > 0 {
+            log::debug!(incoming_rows = incoming, memory_rows, max_rows = max, finished; "sort_input_data");
             spill_sort
-                .sort_input_data(std::mem::take(input_data), &self.aborting)
+                .sort_input_data(std::mem::take(input_data), need_spill, &self.aborting)
                 .await?;
         }
         if finished {

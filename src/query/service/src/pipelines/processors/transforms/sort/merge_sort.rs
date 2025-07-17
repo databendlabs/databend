@@ -434,9 +434,10 @@ where
                         .collect_spill_last(memory_rows + input - max)
                         .await?;
                 }
-                if input > max || finished && input > 0 {
+                let need_spill = input > max;
+                if need_spill || finished && input > 0 {
                     spill_sort
-                        .sort_input_data(std::mem::take(input_data), &self.aborting)
+                        .sort_input_data(std::mem::take(input_data), need_spill, &self.aborting)
                         .await?;
                 }
                 if finished {

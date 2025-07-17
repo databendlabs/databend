@@ -1,7 +1,3 @@
-# SortBoundBroadcast deadlock
-statement ok
-set enable_shuffle_sort = 0;
-
 statement ok
 create or replace database issue_17314;
 

@@ -128,13 +128,14 @@ where A: SortAlgorithm
     pub async fn sort_input_data(
         &mut self,
         input_data: Vec<DataBlock>,
+        need_spill: bool,
         aborting: &AtomicBool,
     ) -> Result<()> {
         let Step::Collect(collect) = &mut self.step else {
             unreachable!()
         };
         collect
-            .sort_input_data(&self.base, input_data, aborting)
+            .sort_input_data(&self.base, input_data, need_spill, aborting)
             .await
     }
 
@@ -170,6 +171,10 @@ where A: SortAlgorithm
             sort.choice_streams_by_bound();
         }
 
+        log::debug!(
+            current_len = sort.current.len(),
+            subsequent_len = sort.subsequent.len(),
+            params:? = sort.params; "restore status");
         if sort.current.len() <= sort.params.num_merge {
             return sort.restore_and_output(&self.base).await;
         }
@@ -228,10 +233,12 @@ where A: SortAlgorithm
 }
 
 impl<A: SortAlgorithm> StepCollect<A> {
+    #[fastrace::trace(name = "StepCollect::sort_input_data")]
     async fn sort_input_data(
         &mut self,
         base: &Base,
         mut input_data: Vec<DataBlock>,
+        need_spill: bool,
         aborting: &AtomicBool,
     ) -> Result<()> {
         let batch_rows = self.params.batch_rows;
@@ -264,7 +271,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
                 }
 
                 let mut block = base.new_block(data);
-                if !sorted.is_empty() {
+                if need_spill && !sorted.is_empty() {
                     block.spill(&base.spiller).await?;
                 }
                 sorted.push_back(block);
@@ -278,6 +285,7 @@ impl<A: SortAlgorithm> StepCollect<A> {
         Ok(())
     }
 
+    #[fastrace::trace(name = "StepCollect::spill_last")]
     async fn spill_last(&mut self, base: &Base, target_rows: usize) -> Result<()> {
         let Some(s) = self.streams.last_mut() else {
             return Ok(());
@@ -329,6 +337,7 @@ impl<A: SortAlgorithm> StepSort<A> {
         self.bound_index += 1;
     }
 
+    #[fastrace::trace(name = "StepSort::merge_current")]
     async fn merge_current(&mut self, base: &Base) -> Result<()> {
         for s in &mut self.subsequent {
             s.spill(0).await?;
@@ -367,6 +376,7 @@ impl<A: SortAlgorithm> StepSort<A> {
         Ok(())
     }
 
+    #[fastrace::trace(name = "StepSort::restore_and_output")]
     async fn restore_and_output(&mut self, base: &Base) -> Result<OutputData> {
         let merger = match self.output_merger.as_mut() {
             Some(merger) => merger,
@@ -462,6 +472,7 @@ impl<A: SortAlgorithm> StepSort<A> {
         })
     }
 
+    #[fastrace::trace(name = "StepSort::sort_spill")]
     async fn sort_spill(
         &mut self,
         base: &Base,
@@ -477,11 +488,12 @@ impl<A: SortAlgorithm> StepSort<A> {
             .sum::<usize>()
             * batch_rows;
 
-        if need + self.subsequent.in_memory_rows() + self.current.in_memory_rows()
-            < batch_rows * num_merge
-        {
+        let current_memory_rows = self.current.in_memory_rows();
+        let subsequent_memory_rows = self.subsequent.in_memory_rows();
+        if need + subsequent_memory_rows + current_memory_rows < batch_rows * num_merge {
             return Ok(());
         }
+        log::debug!(need, current_memory_rows, subsequent_memory_rows; "subsequent need spill");
 
         let mut unspilled = self
             .current
@@ -511,11 +523,13 @@ impl<A: SortAlgorithm> StepSort<A> {
         Ok(())
     }
 
+    #[fastrace::trace(name = "StepSort::choice_streams_by_bound")]
     fn choice_streams_by_bound(&mut self) {
         debug_assert!(self.current.is_empty());
         debug_assert!(!self.subsequent.is_empty());
 
         self.next_bound();
+        log::debug!(cur_bound:? = self.cur_bound, bound_index = self.bound_index; "next_bound");
         if self.cur_bound.is_none() {
             mem::swap(&mut self.current, &mut self.subsequent);
             for s in &mut self.current {

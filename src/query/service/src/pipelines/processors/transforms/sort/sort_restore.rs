@@ -161,6 +161,7 @@ impl Processor for SortBoundEdge {
         self
     }
 
+    #[fastrace::trace(name = "SortBoundEdge::event")]
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             self.input.finish();
@@ -216,7 +217,7 @@ impl Processor for SortBoundEdge {
 
         output_meta.next = SortBoundNext::Next(incoming_index);
 
-        log::debug!("output_meta: {:?}", output_meta);
+        log::debug!(output_meta:? = output_meta; "ouput");
 
         self.output.push_data(Ok(output));
         Ok(Event::NeedConsume)

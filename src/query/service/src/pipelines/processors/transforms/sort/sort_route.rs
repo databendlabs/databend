@@ -192,6 +192,7 @@ impl Processor for TransformSortRoute {
         self
     }
 
+    #[fastrace::trace(name = "TransformSortRoute::event")]
     fn event(&mut self) -> Result<Event> {
         if self.output.is_finished() {
             for input in &self.inputs {

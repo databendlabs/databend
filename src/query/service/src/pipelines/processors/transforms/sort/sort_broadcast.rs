@@ -73,17 +73,20 @@ impl SortSampleState {
         }
     }
 
+    #[fastrace::trace(name = "SortSampleState::commit_sample")]
     async fn commit_sample(
         &mut self,
         meta: Option<SortExchangeMeta>,
     ) -> Result<Vec<SortExchangeMeta>> {
         let sender = self.ctx.broadcast_source_sender(self.broadcast_id);
+        let is_empty = meta.is_none();
         let meta = meta.map(|meta| meta.boxed()).unwrap_or(().boxed());
         sender
             .send(meta)
             .await
             .map_err(|_| ErrorCode::TokioError("send sort bounds failed"))?;
         sender.close();
+        log::debug!(is_empty; "sample has sent");
 
         let receiver = self.ctx.broadcast_sink_receiver(self.broadcast_id);
         let mut all = Vec::new();
@@ -176,7 +179,7 @@ impl<R: Rows + 'static> HookTransform for TransformSortBoundBroadcast<R> {
             .collect();
 
         let bounds = Bounds::merge::<R>(bounds_vec, self.state.batch_rows)?.dedup::<R>();
-        log::debug!("global_bounds.len: {}", bounds.len());
+        log::debug!(global_bounds_len = bounds.len(); "bound has broadcasted");
         self.output_data = Some(SortCollectedMeta { bounds, ..local });
         Ok(())
     }
