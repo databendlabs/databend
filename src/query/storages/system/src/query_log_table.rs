@@ -86,9 +86,9 @@ pub struct QueryLogElement {
     pub node_id: String,
     pub sql_user: String,
 
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub sql_user_quota: String,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub sql_user_privileges: String,
 
     // Query.
@@ -154,7 +154,7 @@ pub struct QueryLogElement {
 
     // Session
     pub query_tag: String,
-    #[serde(skip_serializing)]
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub session_settings: String,
 
     // Extra.
