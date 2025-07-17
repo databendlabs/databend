@@ -19,7 +19,7 @@ use crate::leveled_store::leveled_map::LeveledMap;
 
 #[tokio::test]
 async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
-    let mut lm = LeveledMap::default();
+    let lm = LeveledMap::default();
 
     let _c = lm.acquire_compactor().await;
 
@@ -41,7 +41,7 @@ async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_blocking_wait_ok() -> anyhow::Result<()> {
-    let mut lm = LeveledMap::default();
+    let lm = LeveledMap::default();
 
     let _c = lm.acquire_compactor().await;
 
