@@ -108,7 +108,7 @@ impl SelectInterpreter {
         DataSchemaRefExt::create(fields)
     }
 
-    #[inline]
+    #[fastrace::trace(name = "SelectInterpreter::build_physical_plan")]
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
         let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
@@ -119,6 +119,7 @@ impl SelectInterpreter {
             .await
     }
 
+    #[fastrace::trace(name = "SelectInterpreter::build_pipeline")]
     #[async_backtrace::framed]
     pub async fn build_pipeline(
         &self,
@@ -275,7 +276,7 @@ impl Interpreter for SelectInterpreter {
 
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
-    #[fastrace::trace]
+    #[fastrace::trace(name = "SelectInterpreter::execute2")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         self.attach_tables_to_ctx();

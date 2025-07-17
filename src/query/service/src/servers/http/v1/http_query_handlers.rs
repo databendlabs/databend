@@ -432,6 +432,7 @@ async fn query_page_handler(
 
 #[poem::handler]
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(mut req): Json<HttpQueryRequest>,
