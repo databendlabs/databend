@@ -941,6 +941,7 @@ impl<'a> Evaluator<'a> {
                             .set_span(span));
                         }
                         let mut vals = Vec::with_capacity(dimension);
+                        let col = col.remove_nullable();
                         match col {
                             Column::Number(num_col) => {
                                 for i in 0..dimension {

@@ -578,6 +578,36 @@ EvalScalar
 ├── estimated rows: 1.00
 └── DummyTableScan
 
+
+statement ok
+CREATE OR REPLACE FUNCTION embedding_4 (VARCHAR) RETURNS ARRAY(FLOAT NULL) LANGUAGE python IMMUTABLE HANDLER = 'embedding_4' ADDRESS = 'http://0.0.0.0:8815';
+
+query T
+SELECT embedding_4('databend.com')::vector(4);
+----
+[1.1,1.2,1.3,1.4]
+
+statement ok
+CREATE OR REPLACE TABLE test(url STRING, length INT64);
+
+statement ok
+INSERT INTO test (url) VALUES('databend.com'),('databend.cn');
+
+query T
+SELECT embedding_4('databend.com')::vector(4) fro
+----
+[1.1,1.2,1.3,1.4]
+
+query T
+SELECT embedding_4(url)::vector(4) FROM test;
+----
+[1.1,1.2,1.3,1.4]
+[1.1,1.2,1.3,1.4]
+
+statement ok
+drop FUNCTION embedding_4;
+
+
 statement ok
 remove @udf_stage;
 
