@@ -414,6 +414,12 @@ def ping(s: str) -> str:
 def check_headers() -> str:
     return "success"
 
+@udf(
+    input_types=["VARCHAR"],
+    result_type="ARRAY(FLOAT32 NULL)"
+)
+def embedding_4(s: str):
+    return [1.1, 1.2, 1.3, 1.4]
 
 if __name__ == "__main__":
     udf_server = CheckHeadersServer(
@@ -444,7 +450,9 @@ if __name__ == "__main__":
     udf_server.add_function(wait_concurrent)
     udf_server.add_function(url_len)
     udf_server.add_function(check_headers)
+    udf_server.add_function(embedding_4)
 
     # Built-in function
     udf_server.add_function(ping)
     udf_server.serve()
+
