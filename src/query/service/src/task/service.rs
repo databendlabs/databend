@@ -223,7 +223,7 @@ impl TaskService {
                         let task_name = task.task_name.to_string();
                         let task_name_clone = task_name.clone();
                         let task_service = TaskService::instance();
-                        let owner = Self::get_task_owner(&task, &tenant).await?;
+                        let owner = Self::get_task_owner(&task, tenant).await?;
 
                         let fn_lock =
                             async |task_service: &TaskService,
