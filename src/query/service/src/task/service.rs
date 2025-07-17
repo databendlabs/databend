@@ -223,6 +223,7 @@ impl TaskService {
                         let task_name = task.task_name.to_string();
                         let task_name_clone = task_name.clone();
                         let task_service = TaskService::instance();
+                        let owner = Self::get_task_owner(&task, &tenant).await?;
 
                         let fn_lock =
                             async |task_service: &TaskService,
@@ -272,6 +273,9 @@ impl TaskService {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
+                                                        if !Self::check_when(&task, &owner, &task_service).await.unwrap() {
+                                                            continue;
+                                                        }
                                                         fn_new_task_run(&task_service, &task).await?;
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
@@ -311,11 +315,15 @@ impl TaskService {
                                                     .unwrap_or(Duration::ZERO);
 
                                                 task.next_scheduled_at = Some(Utc::now() + duration);
+                                                task_mgr.update_task(task.clone()).await??;
                                                 tokio::select! {
                                                     _ = sleep(duration) => {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
+                                                        if !Self::check_when(&task, &owner, &task_service).await? {
+                                                            continue;
+                                                        }
                                                         fn_new_task_run(&task_service, &task).await?;
                                                         task_mgr.send(TaskMessage::ExecuteTask(task.clone())).await?;
                                                     }
@@ -389,9 +397,20 @@ impl TaskService {
                                                     .ok_or_else(|| {
                                                         ErrorCode::UnknownTask(next_task)
                                                     })?;
-                                                task_mgr
-                                                    .send(TaskMessage::ExecuteTask(next_task))
-                                                    .await?;
+                                                let next_owner =
+                                                    Self::get_task_owner(&next_task, &tenant)
+                                                        .await?;
+                                                if Self::check_when(
+                                                    &next_task,
+                                                    &next_owner,
+                                                    &task_service,
+                                                )
+                                                .await?
+                                                {
+                                                    task_mgr
+                                                        .send(TaskMessage::ExecuteTask(next_task))
+                                                        .await?;
+                                                }
                                             }
                                             break;
                                         }
@@ -422,11 +441,11 @@ impl TaskService {
                     )?;
                 }
                 TaskMessage::DeleteTask(task_name) => {
-                    if task_mgr.accept(&task_key).await? {
-                        self.clean_task_afters(&task_name).await?;
-                    }
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
                         token.cancel();
+                    }
+                    if task_mgr.accept(&task_key).await? {
+                        self.clean_task_afters(&task_name).await?;
                     }
                     task_mgr
                         .accept(&TaskMessageIdent::new(
@@ -495,40 +514,43 @@ impl TaskService {
     async fn spawn_task(task: Task, user: UserInfo) -> Result<()> {
         let task_service = TaskService::instance();
 
-        if let Some(when_condition) = &task.when_condition {
-            let result = task_service
-                .execute_sql(Some(user.clone()), &format!("SELECT {when_condition}"))
-                .await?;
-            let is_met = result
-                .first()
-                .and_then(|block| block.get_by_offset(0).index(0))
-                .and_then(|scalar| {
-                    scalar
-                        .as_boolean()
-                        .cloned()
-                        .map(Ok)
-                        .or_else(|| scalar.as_string().map(|str| str.trim().parse::<bool>()))
-                })
-                .transpose()
-                .map_err(|err| {
-                    ErrorCode::TaskWhenConditionNotMet(format!(
-                        "when condition error for task: {}, {}",
-                        task.task_name, err
-                    ))
-                })?
-                .unwrap_or(false);
-            if !is_met {
-                return Err(ErrorCode::TaskWhenConditionNotMet(format!(
-                    "when condition not met for task: {}",
-                    task.task_name
-                )));
-            }
-        }
         task_service
             .execute_sql(Some(user), &task.query_text)
             .await?;
 
         Ok(())
+    }
+
+    async fn check_when(
+        task: &Task,
+        user: &UserInfo,
+        task_service: &Arc<TaskService>,
+    ) -> Result<bool> {
+        let Some(when_condition) = &task.when_condition else {
+            return Ok(true);
+        };
+        let result = task_service
+            .execute_sql(Some(user.clone()), &format!("SELECT {when_condition}"))
+            .await
+            .unwrap();
+        Ok(result
+            .first()
+            .and_then(|block| block.get_by_offset(0).index(0))
+            .and_then(|scalar| {
+                scalar
+                    .as_boolean()
+                    .cloned()
+                    .map(Ok)
+                    .or_else(|| scalar.as_string().map(|str| str.trim().parse::<bool>()))
+            })
+            .transpose()
+            .map_err(|err| {
+                ErrorCode::TaskWhenConditionNotMet(format!(
+                    "when condition error for task: {}, {}",
+                    task.task_name, err
+                ))
+            })?
+            .unwrap_or(false))
     }
 
     pub async fn create_context(&self, other_user: Option<UserInfo>) -> Result<Arc<QueryContext>> {
@@ -792,7 +814,7 @@ WHERE ta.task_name = '{task_name}'
             task.query_text.replace('\'', "''"),
             task.when_condition
                 .as_ref()
-                .map(|s| format!("'{s}'").replace('\'', "''"))
+                .map(|s| format!("'{}'", s.replace('\'', "''")))
                 .unwrap_or_else(|| "null".to_string()),
             if !task.after.is_empty() {
                 format!("'{}'", task.after.join(", "))

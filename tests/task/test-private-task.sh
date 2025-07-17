@@ -132,7 +132,7 @@ response8=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content
 alter_task_2_query_id=$(echo $response8 | jq -r '.id')
 echo "Resume Task 2 ID: $alter_task_2_query_id"
 
-sleep 10
+sleep 8
 
 response9=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 
@@ -166,7 +166,7 @@ python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
 
 echo "Started 2-node cluster with private task enabled..."
 
-sleep 7
+sleep 9
 
 response9=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t1 ORDER BY c1\"}")
 
@@ -267,3 +267,110 @@ if [ "$state19" != "Succeeded" ]; then
 fi
 actual=$(echo "$response19" | jq -c '.data')
 echo "\n\nSELECT * FROM system.tasks: $actual"
+
+# Test Task When on After & Schedule & Execute
+response20=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t3 (c1 int, c2 int)\"}")
+create_table_query_id_2=$(echo $response20 | jq -r '.id')
+echo "Create Table Query ID: $create_table_query_id_2"
+
+response21=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_5 WAREHOUSE = 'mywh' SCHEDULE = 3 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(1, 0)\"}")
+create_task_5_query_id=$(echo $response21 | jq -r '.id')
+echo "Create Task 5 Query ID: $create_task_5_query_id"
+
+response22=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_6 WAREHOUSE = 'mywh' SCHEDULE = 5 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(2, 0)\"}")
+create_task_6_query_id=$(echo $response22 | jq -r '.id')
+echo "Create Task 6 Query ID: $create_task_6_query_id"
+
+response23=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_7 WAREHOUSE = 'mywh' AFTER 'my_task_5', 'my_task_6' WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 2)  AS insert into t3 values(3, 0)\"}")
+create_task_7_query_id=$(echo $response23 | jq -r '.id')
+echo "Create Task 7 Query ID: $create_task_7_query_id"
+
+sleep 1
+
+response24=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_5 RESUME\"}")
+alter_task_5_query_id=$(echo $response24 | jq -r '.id')
+echo "Resume Task 5 ID: $alter_task_5_query_id"
+
+response25=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_6 RESUME\"}")
+alter_task_6_query_id=$(echo $response25 | jq -r '.id')
+echo "Resume Task 6 ID: $alter_task_6_query_id"
+
+response26=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"ALTER TASK my_task_7 RESUME\"}")
+alter_task_7_query_id=$(echo $response26 | jq -r '.id')
+echo "Resume Task 7 ID: $alter_task_7_query_id"
+
+sleep 6
+
+response27=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t3 ORDER BY c1\"}")
+
+actual=$(echo "$response27" | jq -c '.data')
+expected='[]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response28=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"INSERT INTO t3 VALUES (1, 1)\"}")
+insert_t3_query_id=$(echo $response28 | jq -r '.id')
+echo "INSERT T3 (1, 1) ID: $insert_t3_query_id"
+
+sleep 5
+
+response29=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+
+actual=$(echo "$response29" | jq -c '.data')
+expected='[["1","0"],["1","1"],["2","0"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response30=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_task_7\"}")
+execute_task_7_query_id=$(echo $response30 | jq -r '.id')
+echo "Execute Task 7 ID: $execute_task_7_query_id"
+
+sleep 1
+
+response31=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+
+actual=$(echo "$response31" | jq -c '.data')
+expected='[["1","0"],["1","1"],["2","0"],["3","0"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response32=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"INSERT INTO t3 VALUES (2, 2)\"}")
+insert_t3_query_id_1=$(echo $response32 | jq -r '.id')
+echo "INSERT T3 (2, 2) ID: $insert_t3_query_id_1"
+
+sleep 6
+
+response33=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1, c2 FROM t3 ORDER BY c1, c2\"}")
+
+actual=$(echo "$response33" | jq -c '.data')
+expected='[["1","0"],["1","0"],["1","0"],["1","1"],["2","0"],["2","0"],["2","2"],["3","0"],["3","0"],["3","0"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Query result matches expected"
+else
+    echo "❌ Mismatch"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
