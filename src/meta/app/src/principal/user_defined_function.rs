@@ -224,7 +224,7 @@ impl Display for UDFDefinition {
                         write!(f, " VOLATILE")?;
                     }
                 }
-                write!(f, " HANDLER = '{handler}'")?;
+                write!(f, " HANDLER = {handler}")?;
                 if !headers.is_empty() {
                     write!(f, " HEADERS = (")?;
                     for (i, (key, value)) in headers.iter().enumerate() {

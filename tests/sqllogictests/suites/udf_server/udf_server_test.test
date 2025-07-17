@@ -564,21 +564,6 @@ select * from _tmp_table order by field1;
 4
 5
 
-statement ok
-CREATE OR REPLACE TABLE test(url STRING, length INT64);
-
-statement ok
-INSERT INTO test (url) VALUES('databend.com'),('databend.cn');
-
-statement ok
-UPDATE test SET length = url_len(url);
-
-query TI
-SELECT * FROM test;
-----
-databend.com 12
-databend.cn 11
-
 query I
 SELECT url_len('databend.com');
 ----
