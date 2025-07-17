@@ -50,6 +50,7 @@ pub struct TransformSortCollect<A: SortAlgorithm, C> {
     output_data: Option<DataBlock>,
 
     max_block_size: usize,
+    default_num_merge: usize,
     row_converter: C,
     sort_desc: Arc<[SortColumnDescription]>,
     /// If this transform is after an Exchange transform,
@@ -66,8 +67,6 @@ pub struct TransformSortCollect<A: SortAlgorithm, C> {
     memory_settings: MemorySettings,
 }
 
-const DEFAULT_NUM_MERGE: usize = 5;
-
 impl<A, C> TransformSortCollect<A, C>
 where
     A: SortAlgorithm,
@@ -79,6 +78,7 @@ where
         base: Base,
         sort_desc: Arc<[SortColumnDescription]>,
         max_block_size: usize,
+        default_num_merge: usize,
         sort_limit: bool,
         order_col_generated: bool,
         memory_settings: MemorySettings,
@@ -104,6 +104,7 @@ where
             aborting: AtomicBool::new(false),
             memory_settings,
             max_block_size,
+            default_num_merge,
         })
     }
 
@@ -123,7 +124,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: DEFAULT_NUM_MERGE,
+                num_merge: self.default_num_merge,
             }
         } else {
             self.determine_params(merger.num_bytes(), merger.num_rows())
@@ -148,7 +149,7 @@ where
         let params = if no_spill {
             SortSpillParams {
                 batch_rows: self.max_block_size,
-                num_merge: DEFAULT_NUM_MERGE,
+                num_merge: self.default_num_merge,
             }
         } else {
             self.determine_params(num_bytes, num_rows)

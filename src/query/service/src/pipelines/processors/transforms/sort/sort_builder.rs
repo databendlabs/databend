@@ -43,7 +43,10 @@ use crate::spillers::Spiller;
 enum SortType {
     Sort(Arc<InputPort>),
 
-    Collect(Arc<InputPort>),
+    Collect {
+        input: Arc<InputPort>,
+        default_num_merge: usize,
+    },
     BoundBroadcast {
         input: Arc<InputPort>,
         state: SortSampleState,
@@ -130,13 +133,17 @@ impl TransformSortBuilder {
         &self,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        default_num_merge: usize,
     ) -> Result<Box<dyn Processor>> {
         self.check();
 
         let mut build = Build {
             params: self,
             output,
-            typ: Some(SortType::Collect(input)),
+            typ: Some(SortType::Collect {
+                input,
+                default_num_merge,
+            }),
         };
 
         select_row_type(&mut build)
@@ -281,7 +288,7 @@ struct Build<'a> {
 impl Build<'_> {
     fn build_sort<A, C>(
         &mut self,
-        limit_sort: bool,
+        sort_limit: bool,
         input: Arc<InputPort>,
     ) -> Result<Box<dyn Processor>>
     where
@@ -295,7 +302,7 @@ impl Build<'_> {
             schema,
             self.params.sort_desc.clone(),
             self.params.block_size,
-            self.params.limit.map(|limit| (limit, limit_sort)),
+            self.params.limit.map(|limit| (limit, sort_limit)),
             self.params.spiller.clone().unwrap(),
             self.params.output_order_col,
             self.params.order_col_generated,
@@ -305,8 +312,9 @@ impl Build<'_> {
 
     fn build_sort_collect<A, C>(
         &mut self,
-        sort_limit: bool,
         input: Arc<InputPort>,
+        sort_limit: bool,
+        default_num_merge: usize,
     ) -> Result<Box<dyn Processor>>
     where
         A: SortAlgorithm + 'static,
@@ -318,6 +326,7 @@ impl Build<'_> {
             self.params.new_base(),
             self.params.sort_desc.clone(),
             self.params.block_size,
+            default_num_merge,
             sort_limit,
             self.params.order_col_generated,
             self.params.memory_settings.clone(),
@@ -380,16 +389,25 @@ impl RowsTypeVisitor for Build<'_> {
         R: Rows + 'static,
         C: RowConverter<R> + Send + 'static,
     {
-        let limit_sort = self.params.should_use_sort_limit();
+        let sort_limit = self.params.should_use_sort_limit();
         match self.typ.take().unwrap() {
             SortType::Sort(input) => match self.params.enable_loser_tree {
-                true => self.build_sort::<LoserTreeSort<R>, C>(limit_sort, input),
-                false => self.build_sort::<HeapSort<R>, C>(limit_sort, input),
+                true => self.build_sort::<LoserTreeSort<R>, C>(sort_limit, input),
+                false => self.build_sort::<HeapSort<R>, C>(sort_limit, input),
             },
 
-            SortType::Collect(input) => match self.params.enable_loser_tree {
-                true => self.build_sort_collect::<LoserTreeSort<R>, C>(limit_sort, input),
-                false => self.build_sort_collect::<HeapSort<R>, C>(limit_sort, input),
+            SortType::Collect {
+                input,
+                default_num_merge,
+            } => match self.params.enable_loser_tree {
+                true => self.build_sort_collect::<LoserTreeSort<R>, C>(
+                    input,
+                    sort_limit,
+                    default_num_merge,
+                ),
+                false => {
+                    self.build_sort_collect::<HeapSort<R>, C>(input, sort_limit, default_num_merge)
+                }
             },
             SortType::BoundBroadcast { input, state } => {
                 self.build_bound_broadcast::<R>(input, state)

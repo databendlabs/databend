@@ -380,8 +380,13 @@ impl SortPipelineBuilder {
         .with_memory_settings(memory_settings)
         .with_enable_loser_tree(enable_loser_tree);
 
+        let default_num_merge = settings.get_max_threads()?.max(2);
         pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(builder.build_collect(input, output)?))
+            Ok(ProcessorPtr::create(builder.build_collect(
+                input,
+                output,
+                default_num_merge as _,
+            )?))
         })?;
 
         builder.add_bound_broadcast(
