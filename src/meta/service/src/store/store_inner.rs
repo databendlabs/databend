@@ -17,15 +17,14 @@ use std::fs;
 use std::io;
 use std::io::ErrorKind;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyerror::AnyError;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::tokio::sync::RwLockWriteGuard;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
 use databend_common_meta_raft_store::leveled_store::db_exporter::DBExporter;
+use databend_common_meta_raft_store::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
 use databend_common_meta_raft_store::ondisk::Header;
 use databend_common_meta_raft_store::ondisk::TREE_HEADER;
 use databend_common_meta_raft_store::raft_log_v004;
@@ -54,7 +53,6 @@ use log::debug;
 use log::error;
 use log::info;
 use raft_log::api::raft_log_writer::RaftLogWriter;
-use tokio::time::sleep;
 
 use crate::metrics::raft_metrics;
 use crate::metrics::SnapshotBuilding;
@@ -193,14 +191,16 @@ impl RaftStoreInner {
 
         let _guard = SnapshotBuilding::guard();
 
+        let permit = self.new_compactor_acquirer().await.acquire().await;
+
         let mut compactor = {
             let mut w = self.state_machine.write().await;
             w.freeze_writable();
-            w.acquire_compactor().await
+            w.new_compactor(permit)
         };
 
         let (mut sys_data, mut strm) = compactor
-            .compact()
+            .compact_into_stream()
             .await
             .map_err(|e| StorageError::read_snapshot(None, &e))?;
 
@@ -343,32 +343,11 @@ impl RaftStoreInner {
             Ok(line)
         }
 
-        // Lock all data components so that we have a consistent view.
-        //
-        // Hold the singleton compactor to prevent snapshot from being replaced until exporting finished.
-        // Holding it prevent logs from being purged.
-        //
-        // Although vote and log must be consistent,
-        // it is OK to export RaftState and logs without transaction protection(i.e. they do not share a lock),
-        // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
+        let permit = self.new_compactor_acquirer().await.acquire().await;
+
         let compactor = {
-            // If there is a compactor running,
-            // and it will be installed back to SM with
-            // `self.state_machine.write().await.levels_mut().replace_with_compacted()`.
-            // This compactor can not block with self.state_machine lock held.
-            // Otherwise, there is a deadlock:
-            // - This thread holds self.state_machine lock, acquiring compactor.
-            // - The other thread holds compactor, acquiring self.state_machine lock.
-            loop {
-                let got = {
-                    let mut sm = self.state_machine.write().await;
-                    sm.try_acquire_compactor()
-                };
-                if let Some(c) = got {
-                    break c;
-                }
-                sleep(Duration::from_millis(10)).await;
-            }
+            let sm_read = self.state_machine.read().await;
+            sm_read.new_compactor(permit)
         };
 
         let mut dump = {
@@ -492,5 +471,10 @@ impl RaftStoreInner {
             })?;
 
         Ok(endpoint)
+    }
+
+    async fn new_compactor_acquirer(&self) -> CompactorAcquirer {
+        let sm = self.state_machine.read().await;
+        sm.new_compactor_acquirer()
     }
 }

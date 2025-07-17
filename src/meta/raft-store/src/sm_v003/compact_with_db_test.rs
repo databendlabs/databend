@@ -269,7 +269,7 @@ async fn test_compact_output_3_level() -> anyhow::Result<()> {
 
     let mut compactor = lm.acquire_compactor().await;
 
-    let (sys_data, strm) = compactor.compact().await?;
+    let (sys_data, strm) = compactor.compact_into_stream().await?;
 
     assert_eq!(sys_data.curr_seq(), 7);
     assert_eq!(

@@ -93,7 +93,7 @@ impl<'a> CompactingData<'a> {
     /// The stream Item is 2 items tuple of key, and value with seq.
     ///
     /// The exported stream contains encoded `String` key and rotbl value [`SeqMarked`]
-    pub async fn compact(
+    pub async fn compact_into_stream(
         &self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
         fn with_context(e: io::Error, key: &impl fmt::Debug) -> io::Error {

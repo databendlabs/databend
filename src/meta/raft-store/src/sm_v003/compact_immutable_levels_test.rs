@@ -149,7 +149,7 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
     let mut compactor = lm.acquire_compactor().await;
 
-    let (sys_data, strm) = compactor.compact().await?;
+    let (sys_data, strm) = compactor.compact_into_stream().await?;
     assert_eq!(
         r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7}"#,
         serde_json::to_string(&sys_data).unwrap()
@@ -176,7 +176,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 
     let mut compactor = sm.acquire_compactor().await;
 
-    let (sys_data, strm) = compactor.compact().await?;
+    let (sys_data, strm) = compactor.compact_into_stream().await?;
     let got = strm
         .map_ok(|x| serde_json::to_string(&x).unwrap())
         .try_collect::<Vec<_>>()
