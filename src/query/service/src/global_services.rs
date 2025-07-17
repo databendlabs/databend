@@ -176,6 +176,11 @@ impl GlobalServices {
             GlobalHistoryLog::init(config).await?;
         }
         if config.task.on {
+            if config.query.cloud_control_grpc_server_address.is_some() {
+                return Err(ErrorCode::InvalidConfig(
+                    "Private Task is enabled but `cloud_control_grpc_server_address` is not empty",
+                ));
+            }
             TaskService::init(config).await?;
         }
 

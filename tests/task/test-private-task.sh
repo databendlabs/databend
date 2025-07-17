@@ -19,6 +19,7 @@ for node in 1 2; do
 
     echo "Appending history table config to node-${node}"
     cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
+    sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
 done
 
 # Start meta cluster (3 nodes - needed for HA)
