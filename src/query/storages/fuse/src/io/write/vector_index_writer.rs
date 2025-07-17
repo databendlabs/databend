@@ -75,11 +75,6 @@ impl VectorIndexBuilder {
         table_indexes: &BTreeMap<String, TableIndex>,
         schema: TableSchemaRef,
     ) -> Option<VectorIndexBuilder> {
-        info!(
-            "Starting vector index creation with {} table indexes",
-            table_indexes.len()
-        );
-
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(ctx.get_license_key(), Feature::VectorIndex)
             .ok()?;
@@ -96,7 +91,6 @@ impl VectorIndexBuilder {
                 continue;
             }
 
-            info!("Processing vector index: {}", index.name);
             let mut offsets = Vec::with_capacity(index.column_ids.len());
             for column_id in &index.column_ids {
                 for (offset, field) in schema.fields.iter().enumerate() {
@@ -185,11 +179,6 @@ impl VectorIndexBuilder {
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
-        info!(
-            "Adding block with {} rows to vector index",
-            block.num_rows()
-        );
-
         for offset in &self.field_offsets_set {
             let block_entry = block.get_by_offset(*offset);
             let column = block_entry.to_column();

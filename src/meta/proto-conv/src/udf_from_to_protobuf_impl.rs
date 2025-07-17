@@ -75,6 +75,7 @@ impl FromToProto for mt::UDFServer {
             handler: p.handler,
             headers: p.headers,
             language: p.language,
+            immutable: p.immutable,
         })
     }
 
@@ -109,6 +110,7 @@ impl FromToProto for mt::UDFServer {
             language: self.language.clone(),
             arg_types,
             return_type: Some(return_type),
+            immutable: self.immutable,
         })
     }
 }
@@ -139,6 +141,7 @@ impl FromToProto for mt::UDFScript {
             runtime_version: p.runtime_version,
             imports: p.imports,
             packages: p.packages,
+            immutable: p.immutable,
         })
     }
 
@@ -175,6 +178,7 @@ impl FromToProto for mt::UDFScript {
             runtime_version: self.runtime_version.clone(),
             imports: self.imports.clone(),
             packages: self.packages.clone(),
+            immutable: self.immutable,
         })
     }
 }

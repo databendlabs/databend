@@ -3345,6 +3345,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
+ "databend-common-metrics",
  "databend_educe",
  "divan",
  "either",

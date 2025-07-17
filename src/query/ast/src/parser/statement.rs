@@ -4808,6 +4808,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
             ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
+            ~ (#udf_immutable)?
             ~ ( IMPORTS ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ ( PACKAGES ~ ^"=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" )?
             ~ HANDLER ~ ^"=" ~ ^#literal_string
@@ -4822,6 +4823,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
             return_type,
             _,
             language,
+            immutable,
             imports,
             packages,
             _,
@@ -4846,6 +4848,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     // TODO inject runtime_version by user
                     // Now we use fixed runtime version
                     runtime_version: "".to_string(),
+                    immutable,
                 }
             } else {
                 UDFDefinition::UDFServer {
@@ -4857,6 +4860,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     headers: headers
                         .map(|(_, _, _, headers, _)| BTreeMap::from_iter(headers))
                         .unwrap_or_default(),
+                    immutable,
                 }
             }
         },
@@ -4928,6 +4932,13 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
 
     )(i)
+}
+
+fn udf_immutable(i: Input) -> IResult<bool> {
+    alt((
+        value(false, rule! { VOLATILE }),
+        value(true, rule! { IMMUTABLE }),
+    ))(i)
 }
 
 pub fn mutation_update_expr(i: Input) -> IResult<MutationUpdateExpr> {

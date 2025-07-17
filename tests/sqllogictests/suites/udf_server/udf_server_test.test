@@ -550,7 +550,7 @@ statement ok
 copy into @udf_stage from (select 'bbbbb');
 
 statement ok
-CREATE OR REPLACE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
+CREATE OR REPLACE FUNCTION url_len (VARCHAR) RETURNS BIGINT LANGUAGE python IMMUTABLE HANDLER = 'url_len' ADDRESS = 'http://0.0.0.0:8815';
 
 statement ok
 create or replace table _tmp_table(field1 int);
@@ -564,6 +564,19 @@ select * from _tmp_table order by field1;
 4
 5
 
+query I
+SELECT url_len('databend.com');
+----
+12
+
+query T
+EXPLAIN SELECT url_len('databend.com');
+----
+EvalScalar
+├── output columns: [url_len('databend.com') (#0)]
+├── expressions: [12]
+├── estimated rows: 1.00
+└── DummyTableScan
 
 statement ok
 remove @udf_stage;
@@ -584,3 +597,4 @@ query I
 select sum((value::Int)::Int) from system.metrics where metric = 'external_running_requests_total';
 ----
 0
+
