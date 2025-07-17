@@ -88,29 +88,17 @@ impl ColumnStatisticsState {
 
     pub fn finalize(
         self,
-        bloom_distinct_count: HashMap<ColumnId, usize>,
-        hll_distinct_count: HashMap<ColumnId, usize>,
+        mut column_distinct_count: HashMap<ColumnId, usize>,
     ) -> Result<StatisticsOfColumns> {
-        let mut distinct_count =
-            HashMap::with_capacity(self.distinct_columns.len() + hll_distinct_count.len());
         for (column_id, estimator) in &self.distinct_columns {
-            distinct_count.insert(*column_id, estimator.finalize());
+            column_distinct_count.insert(*column_id, estimator.finalize());
         }
-        distinct_count.extend(hll_distinct_count);
 
         let mut statistics = StatisticsOfColumns::with_capacity(self.col_stats.len());
         for (id, stats) in self.col_stats {
             let mut col_stats = stats.finalize()?;
-            if let Some(count) = distinct_count.get(&id) {
+            if let Some(count) = column_distinct_count.get(&id) {
                 col_stats.distinct_of_values = Some(*count as u64);
-            } else if let Some(&count) = bloom_distinct_count.get(&id) {
-                // value calculated by xor hash function include NULL, need to subtract one.
-                let distinct_of_values = if col_stats.null_count > 0 && count > 0 {
-                    count as u64 - 1
-                } else {
-                    count as u64
-                };
-                col_stats.distinct_of_values = Some(distinct_of_values);
             } else if col_stats.min == col_stats.max {
                 // Bloom index will skip the large string column, it also no need to calc distinct values.
                 if col_stats.min.is_null() {
@@ -188,7 +176,7 @@ mod tests {
         }
         let mut column_stats_state = ColumnStatisticsState::new(&stats_columns, &stats_columns);
         column_stats_state.add_block(&schema, &block)?;
-        let stats_1 = column_stats_state.finalize(HashMap::new(), HashMap::new())?;
+        let stats_1 = column_stats_state.finalize(HashMap::new())?;
 
         assert_eq!(stats_0, stats_1);
         Ok(())

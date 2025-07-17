@@ -308,7 +308,7 @@ impl StreamBlockBuilder {
         } else {
             None
         };
-        let bloom_distinct_count = bloom_index_state
+        let mut column_distinct_count = bloom_index_state
             .as_ref()
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
@@ -317,12 +317,10 @@ impl StreamBlockBuilder {
             .meta_locations
             .block_stats_location(&block_id);
         let block_stats_state = self.block_stats_builder.finalize(block_stats_location)?;
-        let hll_distinct_count = block_stats_state
-            .as_ref()
-            .map_or(HashMap::new(), |i| i.column_distinct_count.clone());
-        let col_stats = self
-            .column_stats_state
-            .finalize(bloom_distinct_count, hll_distinct_count)?;
+        if let Some(state) = &block_stats_state {
+            column_distinct_count.extend(state.column_distinct_count.clone());
+        }
+        let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_writers.len());
         for (i, inverted_index_writer) in std::mem::take(&mut self.inverted_index_writers)

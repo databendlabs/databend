@@ -398,11 +398,8 @@ impl BloomIndex {
             (column, None)
         };
 
-        let capacity = validity.map_or(column.len(), |v| v.true_count() + 1);
+        let capacity = validity.map_or(column.len(), |v| v.true_count());
         let mut result = Vec::with_capacity(capacity);
-        if validity.is_some() {
-            result.push(0);
-        }
         let column = T::try_downcast_column(column).unwrap();
         if let Some(validity) = validity {
             let column_iter = T::iter_column(&column);
