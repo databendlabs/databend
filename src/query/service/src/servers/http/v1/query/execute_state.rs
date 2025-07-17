@@ -279,8 +279,8 @@ impl Executor {
         let state = match &guard.state {
             Starting(s) => {
                 info!(
-                    "[HTTP-QUERY] Query {} state transitioning from Starting to Stopped, reason: {:?}",
-                    &guard.query_id, reason
+                    query_id = guard.query_id, reason:? = reason;
+                    "[HTTP-QUERY] Query state transitioning from Starting to Stopped"
                 );
                 if let Err(e) = &reason {
                     InterpreterQueryLog::log_finish(
@@ -347,6 +347,7 @@ impl Executor {
 
 impl ExecuteState {
     #[async_backtrace::framed]
+    #[fastrace::trace(name = "ExecuteState::try_start_query")]
     pub(crate) async fn try_start_query(
         executor: Arc<Mutex<Executor>>,
         sql: String,
