@@ -23,8 +23,8 @@ use maplit::btreemap;
 use crate::common;
 
 #[test]
-fn test_decode_v135_add_task() -> anyhow::Result<()> {
-    let sequence_meta_v134 = vec![
+fn test_decode_v136_add_task() -> anyhow::Result<()> {
+    let task_v136 = vec![
         8, 11, 18, 6, 116, 97, 115, 107, 95, 99, 34, 16, 83, 69, 76, 69, 67, 84, 32, 42, 32, 70,
         82, 79, 77, 32, 116, 49, 42, 7, 99, 111, 109, 109, 101, 110, 116, 50, 6, 112, 117, 98, 108,
         105, 99, 58, 22, 8, 11, 18, 11, 51, 48, 32, 49, 50, 32, 42, 32, 42, 32, 42, 26, 3, 85, 84,
@@ -35,7 +35,7 @@ fn test_decode_v135_add_task() -> anyhow::Result<()> {
         48, 58, 48, 48, 58, 49, 50, 32, 85, 84, 67, 130, 1, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48,
         49, 32, 48, 48, 58, 48, 48, 58, 49, 51, 32, 85, 84, 67, 138, 1, 6, 116, 97, 115, 107, 95,
         97, 138, 1, 6, 116, 97, 115, 107, 95, 98, 146, 1, 6, 99, 49, 32, 62, 32, 49, 154, 1, 6, 10,
-        1, 97, 18, 1, 98, 170, 1, 2, 109, 101, 160, 6, 135, 1, 168, 6, 24,
+        1, 97, 18, 1, 98, 170, 1, 2, 109, 101, 160, 6, 136, 1, 168, 6, 24,
     ];
 
     let want = || mt::Task {
@@ -68,7 +68,7 @@ fn test_decode_v135_add_task() -> anyhow::Result<()> {
         session_params: btreemap! { s("a") => s("b") },
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), sequence_meta_v134.as_slice(), 135, want())?;
+    common::test_load_old(func_name!(), task_v136.as_slice(), 136, want())?;
 
     Ok(())
 }
