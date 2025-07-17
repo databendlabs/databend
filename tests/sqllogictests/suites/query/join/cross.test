@@ -21,3 +21,170 @@ drop table onecolumn
 
 statement ok
 drop table empty
+
+statement ok
+CREATE TABLE cte_test1 (
+  "Price Branch Region" VARCHAR NULL,
+  "PriceBranchID" VARCHAR NULL,
+  "ProductType" VARCHAR NULL,
+  "Product Type" VARCHAR NULL,
+  "BILL TO_CustomerID" VARCHAR NULL,
+  "BILL TO_CustomerName" VARCHAR NULL,
+  "CustomerType" VARCHAR NULL,
+  "MarketCategory" VARCHAR NULL,
+  "OrderChannel" VARCHAR NULL,
+  "Price Override" VARCHAR NULL,
+  "Value" DECIMAL(38, 10) NULL
+);
+
+statement ok
+INSERT INTO cte_test1 VALUES (
+    'Price Branch Region'
+    , 'PriceBranchID'
+    , 'ProductType'
+    , 'Product Type'
+    , 'BILL TO_CustomerID'
+    , 'BILL TO_CustomerName'
+    , 'CustomerType'
+    , 'MarketCategory'
+    , 'OrderChannel'
+    , 'Price Override'
+    , 10
+);
+
+statement ok
+CREATE TABLE cte_test2 (
+  "Year" VARCHAR NULL,
+  "PriceBranchGlRegionID" VARCHAR NULL,
+  "Price Branch Region" VARCHAR NULL,
+  "PriceBranchID" VARCHAR NULL,
+  "Enterprise Profit" VARCHAR NULL,
+  "Tier Group" VARCHAR NULL,
+  "Tier Group 2" VARCHAR NULL,
+  "Tier Group Sort" VARCHAR NULL,
+  "Tier" VARCHAR NULL,
+  "Tier Name" VARCHAR NULL,
+  "Tier Label" VARCHAR NULL,
+  "Short Name" VARCHAR NULL,
+  "Economic Tree" VARCHAR NULL,
+  "Tier Group v2" VARCHAR NULL,
+  "Tier Name v2" VARCHAR NULL,
+  "Tier Sort v2" VARCHAR NULL,
+  "Tier Group 2 v2" VARCHAR NULL,
+  "Tier Group v3" VARCHAR NULL,
+  "Tier Name v3" VARCHAR NULL,
+  "Short Name v3" VARCHAR NULL,
+  "Tier Sort v3" VARCHAR NULL,
+  "ProductType" VARCHAR NULL,
+  "Product Type" VARCHAR NULL,
+  "BILL TO_CustomerID" VARCHAR NULL,
+  "BILL TO_CustomerName" VARCHAR NULL,
+  "CustomerType" VARCHAR NULL,
+  "MarketCategory" VARCHAR NULL,
+  "OrderChannel" VARCHAR NULL,
+  "Price Override" VARCHAR NULL,
+  "Value" DECIMAL(38, 10) NULL,
+  "BuyLineID" VARCHAR NULL
+);
+
+statement ok
+INSERT INTO cte_test2 VALUES (
+  'Year',
+  'PriceBranchGlRegionID',
+  'Price Branch Region',
+  'PriceBranchID',
+  'Enterprise Profit',
+  'Tier Group',
+  'Tier Group 2',
+  'Tier Group Sort',
+  'Tier',
+  'Tier Name',
+  'Tier Label',
+  'Short Name',
+  'Economic Tree',
+  'Tier Group v2',
+  'Tier Name v2',
+  'Tier Sort v2',
+  'Tier Group 2 v2',
+  'Tier Group v3',
+  'Tier Name v3',
+  'Short Name v3',
+  'Tier Sort v3',
+  'ProductType',
+  'Product Type',
+  'BILL TO_CustomerID',
+  'BILL TO_CustomerName',
+  'CustomerType',
+  'MarketCategory',
+  'OrderChannel',
+  'Price Override',
+  20,
+  'BuyLineID'
+);
+
+query T
+WITH GrossRev AS
+(
+  SELECT
+      "ProductType"
+    , "Product Type"
+    , "BILL TO_CustomerID"
+    , "BILL TO_CustomerName"
+    , "CustomerType"
+    , "OrderChannel"
+    , "MarketCategory"
+    , "Price Branch Region"
+    , "PriceBranchID"
+    , "Price Override"
+    , SUM(0) "Value"
+    , SUM("Value") "GrossRevenue"
+  FROM cte_test1
+  GROUP BY
+      "ProductType"
+    , "Product Type"
+    , "BILL TO_CustomerID"
+    , "BILL TO_CustomerName"
+    , "CustomerType"
+    , "OrderChannel"
+    , "MarketCategory"
+    , "Price Branch Region"
+    , "PriceBranchID"
+    , "Price Override"
+)
+, ShortName AS
+(
+  SELECT
+      "Tier Group v3"
+    , "Short Name v3"
+    , "Tier Sort v3"
+  FROM cte_test2
+  GROUP BY
+      "Tier Group v3"
+    , "Short Name v3"
+    , "Tier Sort v3"
+)
+, res AS
+(
+SELECT
+      'GrossRevData' "DataSet"
+    , sn."Tier Group v3"
+    , sn."Short Name v3"
+    , sn."Tier Sort v3"
+    , gr."ProductType"
+    , gr."Product Type"
+    , gr."BILL TO_CustomerID"
+    , gr."BILL TO_CustomerName"
+    , gr."CustomerType"
+    , gr."OrderChannel"
+    , gr."MarketCategory"
+    , gr."Price Branch Region"
+    , gr."PriceBranchID"
+    , gr."Price Override"
+    , gr."Value"
+    , gr."GrossRevenue"
+FROM ShortName sn
+CROSS JOIN GrossRev gr
+)
+select "BILL TO_CustomerName" from res;
+----
+BILL TO_CustomerName

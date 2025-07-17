@@ -88,7 +88,7 @@ impl PipelineBuilder {
             grouping_ids.push(!id & mask);
         }
 
-        self.main_pipeline.add_transformer(|| {
+        self.main_pipeline.add_accumulating_transformer(|| {
             TransformExpandGroupingSets::new(group_bys.clone(), grouping_ids.clone())
         });
         Ok(())

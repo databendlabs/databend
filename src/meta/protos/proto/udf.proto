@@ -37,6 +37,7 @@ message UDFServer {
   repeated DataType arg_types = 4;
   DataType return_type = 5;
   map<string, string> headers = 6;
+  optional bool immutable = 7;
 }
 
 message UDFScript {
@@ -51,6 +52,7 @@ message UDFScript {
   string runtime_version = 6;
   repeated string imports = 7;
   repeated string packages = 8;
+  optional bool immutable = 9;
 }
 
 message UDAFScript {

@@ -19,9 +19,8 @@ use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
 use pretty_assertions::assert_eq;
+use seq_marked::SeqMarked;
 
-use crate::leveled_store::map_api::AsMap;
-use crate::marked::Marked;
 use crate::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
 use crate::state_machine_api::StateMachineApi;
@@ -175,26 +174,16 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .map_ref()
         .expire_map()
         .range(..)
         .await?
         .try_collect::<Vec<_>>()
         .await?;
     assert_eq!(got, vec![
-        (
-            ExpireKey::new(5_000, 2),
-            Marked::new_with_meta(2, s("b"), None)
-        ),
-        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
-        (
-            ExpireKey::new(15_000, 4),
-            Marked::new_with_meta(4, s("a"), None)
-        ),
-        (
-            ExpireKey::new(20_000, 3),
-            Marked::new_with_meta(3, s("c"), None)
-        ),
+        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+        (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
+        (ExpireKey::new(15_000, 4), SeqMarked::new_normal(4, s("a"))),
+        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
     ]);
 
     Ok(())
@@ -284,7 +273,6 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     // Check expire store
     let got = sm
-        .map_ref()
         .expire_map()
         .range(..)
         .await?
@@ -292,16 +280,10 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
         .await?;
     assert_eq!(got, vec![
         //
-        (
-            ExpireKey::new(5_000, 2),
-            Marked::new_with_meta(2, s("b"), None)
-        ),
-        (ExpireKey::new(10_000, 1), Marked::new_tombstone(4)),
-        (ExpireKey::new(15_000, 4), Marked::new_tombstone(5),),
-        (
-            ExpireKey::new(20_000, 3),
-            Marked::new_with_meta(3, s("c"), None)
-        ),
+        (ExpireKey::new(5_000, 2), SeqMarked::new_normal(2, s("b"))),
+        (ExpireKey::new(10_000, 1), SeqMarked::new_tombstone(4)),
+        (ExpireKey::new(15_000, 4), SeqMarked::new_tombstone(5),),
+        (ExpireKey::new(20_000, 3), SeqMarked::new_normal(3, s("c"))),
     ]);
 
     Ok(())

@@ -146,12 +146,12 @@ impl BlockEntry {
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     pub unsafe fn index_unchecked(&self, index: usize) -> ScalarRef {
         match self {
-            BlockEntry::Const(scalar, _, n) => {
+            BlockEntry::Const(scalar, _, _n) => {
                 #[cfg(debug_assertions)]
-                if index >= *n {
+                if index >= *_n {
                     panic!(
                         "index out of bounds: the len is {:?} but the index is {}",
-                        n, index
+                        _n, index
                     )
                 }
 
