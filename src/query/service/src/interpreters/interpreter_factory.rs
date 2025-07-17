@@ -227,14 +227,12 @@ impl InterpreterFactory {
                 kind.clone(),
                 config.clone(),
                 false,
-                false,
             )?)),
             Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Ast(formatted_string.clone()),
                 ExplainConfig::default(),
-                false,
                 false,
             )?)),
             Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
@@ -243,18 +241,14 @@ impl InterpreterFactory {
                 ExplainKind::Syntax(formatted_sql.clone()),
                 ExplainConfig::default(),
                 false,
-                false,
             )?)),
             Plan::ExplainAnalyze {
-                graphical,
-                partial,
-                plan,
+                graphical, plan, ..
             } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
                 ExplainConfig::default(),
-                *partial,
                 *graphical,
             )?)),
             Plan::ExplainPerf { sql } => Ok(Arc::new(ExplainPerfInterpreter::try_create(

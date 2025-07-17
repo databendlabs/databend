@@ -29,9 +29,10 @@ use databend_common_expression::StateAddr;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::aggregates::AggregateFunctionSortDesc;
-use databend_common_sql::executor::physical_plans::LagLeadDefault;
-use databend_common_sql::executor::physical_plans::WindowFunction;
 use itertools::Itertools;
+
+use crate::physical_plans::LagLeadDefault;
+use crate::physical_plans::WindowFunction;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {

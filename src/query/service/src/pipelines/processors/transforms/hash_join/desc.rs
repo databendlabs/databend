@@ -19,11 +19,11 @@ use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
-use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::PhysicalRuntimeFilter;
-use databend_common_sql::executor::PhysicalRuntimeFilters;
 use parking_lot::RwLock;
 
+use crate::physical_plans::HashJoin;
+use crate::physical_plans::PhysicalRuntimeFilter;
+use crate::physical_plans::PhysicalRuntimeFilters;
 use crate::sql::plans::JoinType;
 
 pub const MARKER_KIND_TRUE: u8 = 0;

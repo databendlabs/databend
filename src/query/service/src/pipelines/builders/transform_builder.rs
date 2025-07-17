@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformDummy;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
+use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::new_serialize_segment_processor;
@@ -48,7 +49,6 @@ use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::pipelines::processors::InputPort;
 use crate::pipelines::processors::OutputPort;
 use crate::pipelines::PipelineBuilder;
-use crate::sql::executor::physical_plans::MutationKind;
 
 impl PipelineBuilder {
     pub(crate) fn filter_transform_builder(
