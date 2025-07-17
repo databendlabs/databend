@@ -122,14 +122,10 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let strm = if let Some(right) = prefix_right_bound(&p) {
             self.user_map()
-                .as_user_map()
                 .range(UserKey::new(&p)..UserKey::new(right))
                 .await?
         } else {
-            self.user_map()
-                .as_user_map()
-                .range(UserKey::new(&p)..)
-                .await?
+            self.user_map().range(UserKey::new(&p)..).await?
         };
 
         let strm = strm
@@ -218,7 +214,7 @@ pub trait StateMachineApiExt: StateMachineApi {
     ///
     /// It does not check expiration of the returned entry.
     async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
-        let got = self.user_map().as_user_map().get(key.as_ref()).await?;
+        let got = self.user_map().get(key.as_ref()).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
     }
