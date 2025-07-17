@@ -219,25 +219,7 @@ impl TaskMgr {
         let key = DirName::new(TaskIdent::new(&self.tenant, ""));
         let strm = self.kv_api.list_pb_values(&key).await?;
 
-        match strm.try_collect().await {
-            Ok(tasks) => Ok(tasks),
-            Err(_) => self.list_task_fallback().await,
-        }
-    }
-
-    #[async_backtrace::framed]
-    #[fastrace::trace]
-    pub async fn list_task_fallback(&self) -> Result<Vec<Task>, MetaError> {
-        let key = TaskIdent::new(&self.tenant, "dummy");
-        let dir = DirName::new(key);
-        let tasks = self
-            .kv_api
-            .list_pb_values(&dir)
-            .await?
-            .try_collect::<Vec<_>>()
-            .await?;
-
-        Ok(tasks)
+        strm.try_collect().await
     }
 
     #[async_backtrace::framed]
