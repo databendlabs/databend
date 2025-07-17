@@ -22,14 +22,16 @@ use rotbl::v001::SeqMarked;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
+use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 
 /// Compactor is responsible for compacting the immutable levels and db.
 ///
 /// Only one Compactor can be running at a time.
 pub struct Compactor {
-    /// When dropped, drop the Sender so that the [`LeveledMap`] will be notified.
-    #[allow(dead_code)]
-    pub(super) guard: tokio::sync::oneshot::Sender<()>,
+    /// Acquired permit for this compactor.
+    ///
+    /// This is used to ensure that only one compactor can run at a time.
+    pub(crate) _permit: CompactorPermit,
 
     /// In memory immutable levels.
     pub(super) immutable_levels: ImmutableLevels,
@@ -68,10 +70,10 @@ impl Compactor {
     /// and a stream contains `kv` and `expire` entries.
     ///
     /// The exported stream contains encoded `String` key and rotbl value [`SeqMarked`]
-    pub async fn compact(
+    pub async fn compact_into_stream(
         &mut self,
     ) -> Result<(SysData, IOResultStream<(String, SeqMarked)>), io::Error> {
         let compacting_data = CompactingData::new(&mut self.immutable_levels, self.db.as_ref());
-        compacting_data.compact().await
+        compacting_data.compact_into_stream().await
     }
 }

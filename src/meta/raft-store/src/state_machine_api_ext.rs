@@ -128,10 +128,6 @@ pub trait StateMachineApiExt: StateMachineApi {
             self.user_map().range(UserKey::new(&p)..).await?
         };
 
-        let strm = strm
-            // Return only keys with the expected prefix
-            .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))));
-
         let strm = add_cooperative_yielding(strm, format!("list_kv: {prefix}"))
             // Skip tombstone
             .try_filter_map(|(k, marked)| future::ready(Ok(seq_marked_to_seqv(k, marked))));

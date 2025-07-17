@@ -18,44 +18,6 @@ use tokio::time::timeout;
 use crate::leveled_store::leveled_map::LeveledMap;
 
 #[tokio::test]
-async fn test_try_acquire_ok() -> anyhow::Result<()> {
-    let mut lm = LeveledMap::default();
-
-    let c = lm.try_acquire_compactor();
-    assert!(c.is_some(), "Ok to try get compactor");
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_try_acquire_fail() -> anyhow::Result<()> {
-    let mut lm = LeveledMap::default();
-
-    let _c = lm.acquire_compactor().await;
-
-    assert!(
-        lm.try_acquire_compactor().is_none(),
-        "can not get two compactor"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_try_acquire_ok_after_previous_dropped() -> anyhow::Result<()> {
-    let mut lm = LeveledMap::default();
-
-    let _c = lm.acquire_compactor().await;
-
-    assert!(lm.try_acquire_compactor().is_none());
-
-    drop(_c);
-
-    assert!(lm.try_acquire_compactor().is_some());
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_blocking_wait_timeout() -> anyhow::Result<()> {
     let mut lm = LeveledMap::default();
 

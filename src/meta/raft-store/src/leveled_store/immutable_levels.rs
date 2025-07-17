@@ -24,8 +24,6 @@ use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKey;
-use crate::leveled_store::map_api::MapKeyDecode;
-use crate::leveled_store::map_api::MapKeyEncode;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
@@ -71,8 +69,6 @@ impl ImmutableLevels {
 impl<K> MapApiRO<K> for ImmutableLevels
 where
     K: MapKey,
-    K: MapKeyEncode,
-    K: MapKeyDecode,
     Level: MapApiRO<K>,
     Immutable: MapApiRO<K>,
 {
