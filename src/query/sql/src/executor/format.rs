@@ -180,10 +180,7 @@ impl PhysicalPlan {
                 let left_child = plan.left.format_join(metadata)?;
                 let right_child = plan.right.format_join(metadata)?;
 
-                let children = vec![
-                    FormatTreeNode::with_children("CTE".to_string(), vec![left_child]),
-                    FormatTreeNode::with_children("Main".to_string(), vec![right_child]),
-                ];
+                let children = vec![left_child, right_child];
 
                 Ok(FormatTreeNode::with_children(
                     format!("MaterializedCTE: {}", plan.cte_name),
