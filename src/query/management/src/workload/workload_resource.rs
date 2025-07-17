@@ -162,15 +162,9 @@ impl WorkloadGroupResourceManagerInner {
                 workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY)
             {
                 self.percent_normalizer.update(*v);
-                self.update_mem_usage(&online_workload_group);
-            } else if let Some(QuotaValue::Bytes(v)) =
-                workload_resource.meta.quotas.get(MEMORY_QUOTA_KEY)
-            {
-                workload_resource
-                    .max_memory_usage
-                    .store(*v, Ordering::Relaxed);
             }
 
+            self.update_mem_usage(&online_workload_group);
             return Ok(workload_resource);
         };
 
@@ -182,46 +176,26 @@ impl WorkloadGroupResourceManagerInner {
             let old_percentage = old_workload_group.meta.quotas.get(MEMORY_QUOTA_KEY);
 
             match (old_percentage, new_percentage) {
-                (None, None) => {
-                    return Ok(workload_resource);
-                }
-                (None, Some(QuotaValue::Bytes(_v))) => {
-                    self.update_mem_usage(&online_workload_group);
-                    return Ok(workload_resource);
-                }
                 (None, Some(QuotaValue::Percentage(v))) => {
                     self.percent_normalizer.update(*v);
-                    self.update_mem_usage(&online_workload_group);
                 }
                 (Some(QuotaValue::Percentage(v)), None) => {
                     self.percent_normalizer.remove(*v);
-                    self.update_mem_usage(&online_workload_group);
                 }
                 (Some(QuotaValue::Percentage(v)), Some(QuotaValue::Bytes(_))) => {
                     self.percent_normalizer.remove(*v);
-                    self.update_mem_usage(&online_workload_group);
                 }
                 (Some(QuotaValue::Percentage(old)), Some(QuotaValue::Percentage(new))) => {
                     self.percent_normalizer.remove(*old);
                     self.percent_normalizer.update(*new);
-                    self.update_mem_usage(&online_workload_group);
-                }
-                (Some(QuotaValue::Bytes(_)), None) => {
-                    workload_resource
-                        .max_memory_usage
-                        .store(0, Ordering::Relaxed);
-                    return Ok(workload_resource);
                 }
                 (Some(QuotaValue::Bytes(_)), Some(QuotaValue::Percentage(v))) => {
                     self.percent_normalizer.update(*v);
-                    self.update_mem_usage(&online_workload_group);
-                }
-                (Some(QuotaValue::Bytes(_old)), Some(QuotaValue::Bytes(_new))) => {
-                    self.update_mem_usage(&online_workload_group);
-                    return Ok(workload_resource);
                 }
                 _ => {}
             }
+
+            self.update_mem_usage(&online_workload_group);
         }
 
         Ok(workload_resource)
@@ -259,7 +233,17 @@ impl WorkloadGroupResourceManagerInner {
                         .max_memory_usage
                         .store(memory_usage, Ordering::Relaxed);
                 } else {
-                    workload_group.max_memory_usage.store(0, Ordering::Relaxed)
+                    let limit = self.global_mem_stat.get_limit();
+                    let usage_ratio = workload_group.meta.get_max_memory_usage_ratio();
+                    let mut memory_usage = 0;
+
+                    if limit > 0 {
+                        memory_usage = limit as usize / 100 * usage_ratio;
+                    }
+
+                    workload_group
+                        .max_memory_usage
+                        .store(memory_usage, Ordering::Relaxed)
                 }
             }
         }
