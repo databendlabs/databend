@@ -33,6 +33,7 @@ pyo3 = { version = "0.24", features = ["generate-import-lib", "abi3-py312"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
 
 [lints]
 workspace = true

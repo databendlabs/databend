@@ -12,6 +12,7 @@ databend-common-catalog = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storages-system = { workspace = true }
 databend-common-storages-view = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

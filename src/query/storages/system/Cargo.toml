@@ -51,6 +51,7 @@ serde_repr = { workspace = true }
 snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true, optional = true }
 typetag = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

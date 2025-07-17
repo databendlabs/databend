@@ -16,6 +16,7 @@ display-more = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

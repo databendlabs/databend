@@ -34,6 +34,7 @@ simple_hll = { workspace = true, features = ["serde_borsh"] }
 snap = { workspace = true, optional = true }
 typetag = { workspace = true }
 zstd = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

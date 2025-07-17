@@ -47,6 +47,7 @@ tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
 xorfilter-rs = { workspace = true, features = ["cbordata"] }
 zerocopy = { workspace = true, features = ["derive"] }
+databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
 
 [dev-dependencies]
 divan = { workspace = true }
