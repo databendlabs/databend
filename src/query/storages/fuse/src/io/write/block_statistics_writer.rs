@@ -76,16 +76,27 @@ impl BlockStatsBuilder {
     }
 
     pub fn add_block(&mut self, block: &DataBlock) -> Result<()> {
-        for column_builder in self.builders.iter_mut() {
+        let mut keys_to_remove = vec![];
+        for (index, column_builder) in self.builders.iter_mut().enumerate() {
             let entry = block.get_by_offset(column_builder.index);
             match entry {
                 BlockEntry::Const(s, ..) => {
                     column_builder.builder.update_scalar(&s.as_ref());
                 }
                 BlockEntry::Column(col) => {
+                    if col.check_large_string() {
+                        keys_to_remove.push(index);
+                        continue;
+                    }
                     column_builder.builder.update_column(col);
                 }
             }
+        }
+
+        // reverse sorting.
+        keys_to_remove.sort_by(|a, b| b.cmp(a));
+        for k in keys_to_remove {
+            self.builders.remove(k);
         }
         Ok(())
     }
