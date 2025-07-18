@@ -625,18 +625,6 @@ impl BloomIndex {
         let data_type = DataType::from(data_type);
         Xor8Filter::supported_type(&data_type)
     }
-
-    /// Checks if the average length of a string column exceeds 256 bytes.
-    /// If it does, the bloom index for the column will not be established.
-    pub fn check_large_string(column: &Column) -> bool {
-        if let Column::String(v) = &column {
-            let bytes_per_row = v.total_bytes_len() / v.len().max(1);
-            if bytes_per_row > 256 {
-                return true;
-            }
-        }
-        false
-    }
 }
 
 pub struct BloomIndexBuilder {
@@ -780,14 +768,14 @@ impl BloomIndexBuilder {
                             builder.push_default();
                         }
                         let str_column = builder.build();
-                        if BloomIndex::check_large_string(&str_column) {
+                        if str_column.check_large_string() {
                             bloom_keys_to_remove.push(index);
                             continue;
                         }
                         let str_type = DataType::Nullable(Box::new(DataType::String));
                         (str_column, str_type)
                     } else {
-                        if BloomIndex::check_large_string(&column) {
+                        if column.check_large_string() {
                             bloom_keys_to_remove.push(index);
                             continue;
                         }
@@ -795,7 +783,7 @@ impl BloomIndexBuilder {
                     }
                 }
                 _ => {
-                    if BloomIndex::check_large_string(&column) {
+                    if column.check_large_string() {
                         bloom_keys_to_remove.push(index);
                         continue;
                     }

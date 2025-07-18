@@ -1694,6 +1694,23 @@ impl Column {
             _ => (false, None),
         }
     }
+
+    /// Checks if the average length of a string column exceeds 256 bytes.
+    /// If it does, the bloom index for the column will not be established.
+    pub fn check_large_string(&self) -> bool {
+        let (inner, len) = if let Column::Nullable(c) = self {
+            (&c.column, c.validity.true_count())
+        } else {
+            (self, self.len())
+        };
+        if let Column::String(v) = inner {
+            let bytes_per_row = v.total_bytes_len() / len.max(1);
+            if bytes_per_row > 256 {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 /// Serialize a column to a base64 string.
