@@ -80,20 +80,23 @@ where
     A: Allocator + Clone + Default,
 {
     #[inline(always)]
-    pub fn set_insert(&mut self, key: &K) -> Result<&mut MaybeUninit<()>, &mut ()> {
-        unsafe { self.insert_borrowing(key) }
+    pub fn set_insert(&mut self, key: &K) -> bool {
+        unsafe { self.insert_and_entry(key).is_ok() }
     }
 
     #[inline(always)]
     pub fn set_merge(&mut self, other: &Self) {
-        unsafe {
-            for _ in other.table0.iter() {
-                let _ = self.table0.insert();
-            }
-            self.table1.set_merge(&other.table1);
-            self.table2.set_merge(&other.table2);
-            self.table3.set_merge(&other.table3);
-            self.table4.set_merge(&other.table4);
+        let iter = ShortStringHashtableIter {
+            it_0: Some(other.table0.iter()),
+            it_1: Some(other.table1.iter()),
+            it_2: Some(other.table2.iter()),
+            it_3: Some(other.table3.iter()),
+            it_4: Some(other.table4.iter()),
+            _phantom: PhantomData,
+        };
+
+        for d in iter {
+            let _ = self.set_insert(d.key());
         }
     }
 }
@@ -270,6 +273,255 @@ where
         match self.insert_and_entry_borrowing(key) {
             Ok(e) => Ok(&mut *(e.get_mut_ptr() as *mut MaybeUninit<V>)),
             Err(e) => Err(&mut *e.get_mut_ptr()),
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn insert_and_entry(
+        &mut self,
+        key: &K,
+    ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
+    {
+        let key = key.as_bytes();
+        match key.len() {
+            _ if key.last().copied() == Some(0) => {
+                self.table4.check_grow();
+                match self.table4.insert(FallbackKey::new(key)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+
+                        self.key_size += key.len();
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
+            }
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
+
+            1..=8 => {
+                self.table1.check_grow();
+                let mut t = [0u64; 1];
+                t[0] = read_le(key.as_ptr(), key.len());
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
+                self.table1
+                    .insert(t)
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
+                    })
+            }
+            9..=16 => {
+                self.table2.check_grow();
+                let mut t = [0u64; 2];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
+                self.table2
+                    .insert(t)
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
+                    })
+            }
+            17..=24 => {
+                self.table3.check_grow();
+                let mut t = [0u64; 3];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
+                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
+                self.table3
+                    .insert(t)
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
+                    })
+            }
+            _ => {
+                self.table4.check_grow();
+                match self.table4.insert(FallbackKey::new(key)) {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
+
+                        self.key_size += key.len();
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
+            }
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key: &K,
+        hash: u64,
+    ) -> Result<ShortStringHashtableEntryMutRef<'_, K, V>, ShortStringHashtableEntryMutRef<'_, K, V>>
+    {
+        let key = key.as_bytes();
+        match key.len() {
+            _ if key.last().copied() == Some(0) => {
+                self.table4.check_grow();
+                match self
+                    .table4
+                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
+                {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, hash));
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
+            }
+            0 => {
+                self.table0
+                    .insert()
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
+                        )
+                    })
+            }
+            1..=8 => {
+                self.table1.check_grow();
+                let mut t = [0u64; 1];
+                t[0] = read_le(key.as_ptr(), key.len());
+                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
+                self.table1
+                    .insert_with_hash(t, hash)
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table1(x),
+                        )
+                    })
+            }
+            9..=16 => {
+                self.table2.check_grow();
+                let mut t = [0u64; 2];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
+                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
+                self.table2
+                    .insert_with_hash(t, hash)
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table2(x),
+                        )
+                    })
+            }
+            17..=24 => {
+                self.table3.check_grow();
+                let mut t = [0u64; 3];
+                t[0] = (key.as_ptr() as *const u64).read_unaligned();
+                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
+                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
+                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
+                self.table3
+                    .insert_with_hash(t, hash)
+                    .map(|x| {
+                        self.key_size += key.len();
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
+                    })
+                    .map_err(|x| {
+                        ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table3(x),
+                        )
+                    })
+            }
+            _ => {
+                self.table4.check_grow();
+                match self
+                    .table4
+                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
+                {
+                    Ok(e) => {
+                        // We need to save the key to avoid drop it.
+                        let s = self.arena.alloc_slice_copy(key);
+                        e.set_key(FallbackKey::new_with_hash(s, hash));
+
+                        self.key_size += key.len();
+                        Ok(ShortStringHashtableEntryMutRef(
+                            ShortStringHashtableEntryMutRefInner::Table4(e),
+                        ))
+                    }
+                    Err(e) => Err(ShortStringHashtableEntryMutRef(
+                        ShortStringHashtableEntryMutRefInner::Table4(e),
+                    )),
+                }
+            }
         }
     }
 }
@@ -948,253 +1200,6 @@ where A: Allocator + Clone + Default
         }
     }
 
-    #[inline(always)]
-    unsafe fn insert_and_entry(
-        &mut self,
-        key: &Self::Key,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let key = key.as_bytes();
-        match key.len() {
-            _ if key.last().copied() == Some(0) => {
-                self.table4.check_grow();
-                match self.table4.insert(FallbackKey::new(key)) {
-                    Ok(e) => {
-                        // We need to save the key to avoid drop it.
-                        let s = self.arena.alloc_slice_copy(key);
-                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
-
-                        self.key_size += key.len();
-                        Ok(ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table4(e),
-                        ))
-                    }
-                    Err(e) => Err(ShortStringHashtableEntryMutRef(
-                        ShortStringHashtableEntryMutRefInner::Table4(e),
-                    )),
-                }
-            }
-            0 => {
-                self.table0
-                    .insert()
-                    .map(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
-                        )
-                    })
-            }
-
-            1..=8 => {
-                self.table1.check_grow();
-                let mut t = [0u64; 1];
-                t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
-                self.table1
-                    .insert(t)
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table1(x),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table1(x),
-                        )
-                    })
-            }
-            9..=16 => {
-                self.table2.check_grow();
-                let mut t = [0u64; 2];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
-                self.table2
-                    .insert(t)
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table2(x),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table2(x),
-                        )
-                    })
-            }
-            17..=24 => {
-                self.table3.check_grow();
-                let mut t = [0u64; 3];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
-                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
-                self.table3
-                    .insert(t)
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table3(x),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table3(x),
-                        )
-                    })
-            }
-            _ => {
-                self.table4.check_grow();
-                match self.table4.insert(FallbackKey::new(key)) {
-                    Ok(e) => {
-                        // We need to save the key to avoid drop it.
-                        let s = self.arena.alloc_slice_copy(key);
-                        e.set_key(FallbackKey::new_with_hash(s, e.key.assume_init_ref().hash));
-
-                        self.key_size += key.len();
-                        Ok(ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table4(e),
-                        ))
-                    }
-                    Err(e) => Err(ShortStringHashtableEntryMutRef(
-                        ShortStringHashtableEntryMutRefInner::Table4(e),
-                    )),
-                }
-            }
-        }
-    }
-
-    #[inline(always)]
-    unsafe fn insert_and_entry_with_hash(
-        &mut self,
-        key: &Self::Key,
-        hash: u64,
-    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
-        let key = key.as_bytes();
-        match key.len() {
-            _ if key.last().copied() == Some(0) => {
-                self.table4.check_grow();
-                match self
-                    .table4
-                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
-                {
-                    Ok(e) => {
-                        // We need to save the key to avoid drop it.
-                        let s = self.arena.alloc_slice_copy(key);
-                        e.set_key(FallbackKey::new_with_hash(s, hash));
-                        Ok(ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table4(e),
-                        ))
-                    }
-                    Err(e) => Err(ShortStringHashtableEntryMutRef(
-                        ShortStringHashtableEntryMutRefInner::Table4(e),
-                    )),
-                }
-            }
-            0 => {
-                self.table0
-                    .insert()
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table0(x, PhantomData),
-                        )
-                    })
-            }
-            1..=8 => {
-                self.table1.check_grow();
-                let mut t = [0u64; 1];
-                t[0] = read_le(key.as_ptr(), key.len());
-                let t = std::mem::transmute::<[u64; 1], InlineKey<0>>(t);
-                self.table1
-                    .insert_with_hash(t, hash)
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table1(x),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table1(x),
-                        )
-                    })
-            }
-            9..=16 => {
-                self.table2.check_grow();
-                let mut t = [0u64; 2];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = read_le(key.as_ptr().offset(8), key.len() - 8);
-                let t = std::mem::transmute::<[u64; 2], InlineKey<1>>(t);
-                self.table2
-                    .insert_with_hash(t, hash)
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table2(x),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table2(x),
-                        )
-                    })
-            }
-            17..=24 => {
-                self.table3.check_grow();
-                let mut t = [0u64; 3];
-                t[0] = (key.as_ptr() as *const u64).read_unaligned();
-                t[1] = (key.as_ptr() as *const u64).offset(1).read_unaligned();
-                t[2] = read_le(key.as_ptr().offset(16), key.len() - 16);
-                let t = std::mem::transmute::<[u64; 3], InlineKey<2>>(t);
-                self.table3
-                    .insert_with_hash(t, hash)
-                    .map(|x| {
-                        self.key_size += key.len();
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table3(x),
-                        )
-                    })
-                    .map_err(|x| {
-                        ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table3(x),
-                        )
-                    })
-            }
-            _ => {
-                self.table4.check_grow();
-                match self
-                    .table4
-                    .insert_with_hash(FallbackKey::new_with_hash(key, hash), hash)
-                {
-                    Ok(e) => {
-                        // We need to save the key to avoid drop it.
-                        let s = self.arena.alloc_slice_copy(key);
-                        e.set_key(FallbackKey::new_with_hash(s, hash));
-
-                        self.key_size += key.len();
-                        Ok(ShortStringHashtableEntryMutRef(
-                            ShortStringHashtableEntryMutRefInner::Table4(e),
-                        ))
-                    }
-                    Err(e) => Err(ShortStringHashtableEntryMutRef(
-                        ShortStringHashtableEntryMutRefInner::Table4(e),
-                    )),
-                }
-            }
-        }
-    }
-
     fn iter(&self) -> Self::Iterator<'_> {
         ShortStringHashtableIter {
             it_0: Some(self.table0.iter()),
@@ -1215,5 +1220,20 @@ where A: Allocator + Clone + Default
         // NOTE: Bump provides the reset function to free memory, but it will cause memory leakage(maybe a bug).
         // In fact, we don't need to call the drop function. rust will call it, But we call it to improve the readability of the code.
         drop(std::mem::take(&mut self.arena));
+    }
+
+    unsafe fn insert_and_entry(
+        &mut self,
+        key_ref: &Self::Key,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        self.insert_and_entry(key_ref)
+    }
+
+    unsafe fn insert_and_entry_with_hash(
+        &mut self,
+        key_ref: &Self::Key,
+        hash: u64,
+    ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+        self.insert_and_entry_with_hash(key_ref, hash)
     }
 }
