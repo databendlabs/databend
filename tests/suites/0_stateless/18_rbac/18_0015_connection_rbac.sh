@@ -8,7 +8,6 @@ export USER_A_CONNECT="bendsql --user=a --password=123 --host=${QUERY_MYSQL_HAND
 export USER_B_CONNECT="bendsql --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
 
-
 echo "=== OLD LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=0 ==="
 echo "=== TEST USER A WITH SUPER PRIVILEGES ==="
 echo "set global enable_experimental_connection_privilege_check=0;" | $BENDSQL_CLIENT_CONNECT
@@ -98,22 +97,22 @@ echo "show connections;" | $USER_C_CONNECT
 
 echo "--- user b can not drop connection c2 ---"
 echo "drop connection if exists c2;" | $USER_B_CONNECT
-echo "CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c2');" | $USER_B_CONNECT
+curl -s -u "b:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c2')\"}" | jq -r '.error.message' |grep 'Permission denied: privilege AccessConnection' |wc -l
 echo "show grants on connection c2;" | $USER_B_CONNECT
 
 echo "--- revoke access connection from c , thne user c can not drop/use connection c1,3 ---"
 echo "revoke access connection on connection c1 from c;" | $BENDSQL_CLIENT_CONNECT
 echo "revoke access connection on connection c3 from c;" | $BENDSQL_CLIENT_CONNECT
-echo "CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c1');" | $USER_C_CONNECT
-echo "CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c3');" | $USER_C_CONNECT
+curl -s -u "c:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c1');\"}" | jq -r '.error.message' |grep 'Permission denied: privilege AccessConnection' |wc -l
+curl -s -u "c:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c3')\"}" | jq -r '.error.message' |grep 'Permission denied: privilege AccessConnection' |wc -l
 echo "show grants on connection c1;" | $USER_C_CONNECT
 echo "show grants on connection c3;" | $USER_C_CONNECT
 echo "drop connection if exists c1;" | $USER_C_CONNECT
 echo "drop connection if exists c3;" | $USER_C_CONNECT
 
 echo "--- user b can drop/use connection c1,3 ---"
-echo "CREATE STAGE c1 URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c1');" | $USER_C_CONNECT
-echo "CREATE STAGE c3 URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c3');" | $USER_C_CONNECT
+curl -s -u "b:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c1');\"}" | jq -r '.error.message'
+curl -s -u "b:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c3')\"}" | jq -r '.error.message'
 echo "show grants on connection c1;" | $USER_B_CONNECT
 echo "show grants on connection c3;" | $USER_B_CONNECT
 echo "drop connection if exists c1;" | $USER_B_CONNECT
@@ -121,7 +120,7 @@ echo "show grants for role role1;" | $USER_B_CONNECT
 echo "drop connection if exists c3;" | $USER_B_CONNECT
 
 echo "--- user c can drop/use connection c2 ---"
-echo "CREATE STAGE c2 URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c2');" | $USER_C_CONNECT
+curl -s -u "c:123" -XPOST "http://$QUERY_MYSQL_HANDLER_HOST:$QUERY_HTTP_HANDLER_PORT/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE STAGE my_s3_stage URL = 's3://databend-toronto' CONNECTION = (CONNECTION_NAME = 'c2')\"}" | jq -r '.error.message'
 echo "show grants for role role2;" | $USER_C_CONNECT
 echo "show grants on connection c2;" | $USER_C_CONNECT
 echo "drop connection if exists c2;" | $USER_C_CONNECT

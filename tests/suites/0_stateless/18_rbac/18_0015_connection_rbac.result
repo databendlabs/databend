@@ -6,7 +6,6 @@ c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key
 c1	azblob	endpoint_url=******com
 c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_access_key=******min
 c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
-toronto	s3	access_key_id=******id> secret_access_key=******ey>
 === NEW LOGIC: user has super privileges can operator all connections with enable_experimental_connection_privilege_check=1 ===
 === TEST USER A WITH SUPER PRIVILEGES ===
 --- CREATE 3 CONNECTIONS WILL SUCCESS ---
@@ -44,38 +43,23 @@ c2	s3	access_key_id=******min endpoint_url=******00/ region=******uto secret_acc
 c3	s3	access_key_id=c3 endpoint_url=******00/ region=******uto secret_access_key=c3
 --- user b can not drop connection c2 ---
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c2 for user 'b'@'%' with roles [public,role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.
-Error: APIError: QueryFailed: [4000]invalid input parameter (fail to get connection_name c2: PermissionDenied. Code: 1063, Text = Permission denied: privilege AccessConnection is required on connection c2 for user 'b'@'%'.
-
-
-)
+1
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS CONNECTION is required on connection c2 for user b
 --- revoke access connection from c , thne user c can not drop/use connection c1,3 ---
-Error: APIError: QueryFailed: [4000]invalid input parameter (fail to get connection_name c1: PermissionDenied. Code: 1063, Text = Permission denied: privilege AccessConnection is required on connection c1 for user 'c'@'%'.
-
-
-)
-Error: APIError: QueryFailed: [4000]invalid input parameter (fail to get connection_name c3: PermissionDenied. Code: 1063, Text = Permission denied: privilege AccessConnection is required on connection c3 for user 'c'@'%'.
-
-
-)
+1
+1
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS CONNECTION is required on connection c1 for user c
 Error: APIError: QueryFailed: [1063]Permission denied: privilege ACCESS CONNECTION is required on connection c3 for user c
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c1 for user 'c'@'%' with roles [public,role2]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [AccessConnection] is required on CONNECTION c3 for user 'c'@'%' with roles [public,role2]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.
 --- user b can drop/use connection c1,3 ---
-Error: APIError: QueryFailed: [4000]invalid input parameter (fail to get connection_name c1: PermissionDenied. Code: 1063, Text = Permission denied: privilege AccessConnection is required on connection c1 for user 'c'@'%'.
-
-
-)
-Error: APIError: QueryFailed: [4000]invalid input parameter (fail to get connection_name c3: PermissionDenied. Code: 1063, Text = Permission denied: privilege AccessConnection is required on connection c3 for user 'c'@'%'.
-
-
-)
+invalid input parameter (protocol from connection_name=c1 (azblob) not match with uri protocol (s3).)
+Permission denied: privilege [Super] is required on *.* for user 'b'@'%' with roles [role1]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.
 OWNERSHIP	c1	NULL	ROLE	role1	
 OWNERSHIP	c3	NULL	ROLE	role1	
 CREATE CONNECTION	*.*	NULL	ROLE	role1	GRANT CREATE CONNECTION ON *.* TO ROLE `role1`
 OWNERSHIP	c3	NULL	ROLE	role1	GRANT OWNERSHIP ON CONNECTION c3 TO ROLE `role1`
 --- user c can drop/use connection c2 ---
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on *.* for user 'c'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.
+Permission denied: privilege [Super] is required on *.* for user 'c'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.
 OWNERSHIP	c2	NULL	ROLE	role2	GRANT OWNERSHIP ON CONNECTION c2 TO ROLE `role2`
 OWNERSHIP	c2	NULL	ROLE	role2	
