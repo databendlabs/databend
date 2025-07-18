@@ -18,7 +18,6 @@ use std::time::Duration;
 use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -47,12 +46,15 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use log::info;
 
+use super::cmd::Cmd;
+use super::cmd::Commands;
+
 pub struct MainError;
 
-pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
+pub async fn run_cmd(cmd: &Cmd) -> Result<bool, MainError> {
     let make_error = || "failed to run cmd";
 
-    match &conf.subcommand {
+    match &cmd.subcommand {
         None => return Ok(false),
         Some(Commands::Ver) => {
             println!("version: {}", *DATABEND_SEMVER);
@@ -63,12 +65,14 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
             output_format,
             config,
         }) => {
-            let mut conf = conf.clone();
+            let mut cmd = cmd.clone();
             if !config.is_empty() {
-                let c =
-                    databend_common_config::Config::load_with_config_file(config.as_str()).unwrap();
-                conf = c.try_into().unwrap();
+                cmd.config_file = config.to_string();
             }
+            let conf = cmd
+                .init_inner_config(false)
+                .await
+                .with_context(make_error)?;
             local::query_local(conf, query, output_format)
                 .await
                 .with_context(make_error)?

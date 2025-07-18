@@ -43,9 +43,6 @@ fn mask_sensitive_field(field: &str) -> String {
 impl Config {
     pub fn with_mask(self) -> Self {
         Config {
-            subcommand: self.subcommand,
-            cmd: self.cmd,
-            config_file: self.config_file,
             query: self.query.mask_display(),
             log: self.log,
             meta: self.meta.mask_display(),
