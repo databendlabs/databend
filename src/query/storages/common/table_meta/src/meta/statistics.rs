@@ -25,7 +25,6 @@ pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
-pub type ColumnDistinctHLL = simple_hll::HyperLogLog<10>;
 
 // Assigned to executors, describes that which blocks of given segment, an executor should take care of
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]

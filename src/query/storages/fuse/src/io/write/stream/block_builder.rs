@@ -318,7 +318,9 @@ impl StreamBlockBuilder {
             .block_stats_location(&block_id);
         let block_stats_state = self.block_stats_builder.finalize(block_stats_location)?;
         if let Some(state) = &block_stats_state {
-            column_distinct_count.extend(state.column_distinct_count.clone());
+            for (key, val) in &state.column_distinct_count {
+                column_distinct_count.entry(*key).or_insert(*val);
+            }
         }
         let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
 
