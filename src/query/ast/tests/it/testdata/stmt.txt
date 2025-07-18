@@ -25165,6 +25165,7 @@ CreateUDF(
             handler: "binary_reverse",
             headers: {},
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25198,6 +25199,7 @@ CreateUDF(
                 "X-Authorization": "123",
             },
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25228,6 +25230,7 @@ AlterUDF(
             handler: "binary_reverse",
             headers: {},
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25259,6 +25262,7 @@ CreateUDF(
             handler: "binary_reverse",
             headers: {},
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25388,6 +25392,7 @@ CreateUDF(
             handler: "addone_py",
             language: "python",
             runtime_version: "",
+            immutable: None,
         },
     },
 )
@@ -25434,6 +25439,7 @@ CreateUDF(
             handler: "addone_py",
             language: "python",
             runtime_version: "",
+            immutable: None,
         },
     },
 )

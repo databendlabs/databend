@@ -12,49 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
-use std::sync::Arc;
-
 use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
-use futures::future::BoxFuture;
 use map_api::map_api::MapApi;
 
 use crate::state_machine::ExpireKey;
-
-/// Send a key-value change event to subscribers.
-pub trait SMEventSender: Debug + Sync + Send {
-    fn send(&self, change: (String, Option<SeqV>, Option<SeqV>));
-
-    /// Send a future to the worker to let it run it in serialized order.
-    fn send_future(&self, fut: BoxFuture<'static, ()>);
-}
-
-impl<T> SMEventSender for Arc<T>
-where T: SMEventSender
-{
-    fn send(&self, change: (String, Option<SeqV>, Option<SeqV>)) {
-        self.as_ref().send(change);
-    }
-
-    fn send_future(&self, fut: BoxFuture<'static, ()>) {
-        self.as_ref().send_future(fut);
-    }
-}
+use crate::state_machine::UserKey;
 
 /// The API a state machine implements.
 ///
 /// The state machine is responsible for managing the application's persistent state,
 /// including application kv data and expired key data.
 pub trait StateMachineApi: Send + Sync {
-    type Map: MapApi<String, KVMeta> + MapApi<ExpireKey, KVMeta> + 'static;
+    /// The map that stores application data.
+    type UserMap: MapApi<UserKey> + 'static;
 
     /// Returns a reference to the map that stores application data.
     ///
     /// This method provides read-only access to the underlying key-value store
     /// that contains the application's persistent state, including application kv data and expired key data.
-    fn map_ref(&self) -> &Self::Map;
+    fn user_map(&self) -> &Self::UserMap;
 
     /// Returns a mutable reference to the map that stores application data.
     ///
@@ -62,7 +39,16 @@ pub trait StateMachineApi: Send + Sync {
     /// that contains the application's persistent state, including application kv data and expired key data.
     /// Changes made through this reference will be persisted according to the state machine's replication
     /// protocol.
-    fn map_mut(&mut self) -> &mut Self::Map;
+    fn user_map_mut(&mut self) -> &mut Self::UserMap;
+
+    /// The map that stores expired key data.
+    type ExpireMap: MapApi<ExpireKey> + 'static;
+
+    /// Returns a reference to the map that stores expired key data.
+    fn expire_map(&self) -> &Self::ExpireMap;
+
+    /// Returns a mutable reference to the map that stores expired key data.
+    fn expire_map_mut(&mut self) -> &mut Self::ExpireMap;
 
     /// Returns a mutable reference to the system data.
     ///
@@ -70,10 +56,17 @@ pub trait StateMachineApi: Send + Sync {
     /// metadata about the state machine and its configuration.
     fn sys_data_mut(&mut self) -> &mut SysData;
 
-    /// Returns an optional reference to the event sender.
+    /// Notify subscribers of a key-value change applied to the state machine.
     ///
-    /// This method returns an event sender that can be used to send state change events to subscribers.
+    /// Called after a change is committed, but before it is guaranteed persisted.
+    /// The change may be replayed on server restart.
     ///
-    /// The implementation could just return `None` if the state machine does not support subscribing.
-    fn event_sender(&self) -> Option<&dyn SMEventSender>;
+    /// - `change`: (`String`, `Option<SeqV>`, `Option<SeqV>`)
+    ///   - key: user application key
+    ///   - old: previous value (`None` if new key)
+    ///   - new: new value (`None` if deleted)
+    ///
+    /// Called for every successful create, update, or delete.
+    /// Implementations without subscribers may leave this empty.
+    fn on_change_applied(&mut self, change: (String, Option<SeqV>, Option<SeqV>));
 }

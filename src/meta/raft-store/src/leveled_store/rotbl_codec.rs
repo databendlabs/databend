@@ -20,14 +20,12 @@ use std::io;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
-use databend_common_meta_types::KVMeta;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::value_convert::ValueConvert;
-use crate::marked::Marked;
 
 pub struct RotblCodec;
 
@@ -36,7 +34,7 @@ impl RotblCodec {
     /// Convert range of user key to range of rotbl range.
     pub(crate) fn encode_range<K, R>(range: &R) -> Result<(Bound<String>, Bound<String>), io::Error>
     where
-        K: MapKey<KVMeta>,
+        K: MapKey,
         K: MapKeyEncode,
         R: RangeBounds<K>,
     {
@@ -54,7 +52,7 @@ impl RotblCodec {
     /// `MapKey::PREFIX` is prepended to the bound value and an open bound is converted to a bound with key-space.
     /// E.g., use the `PREFIX/` as the left side closed bound,
     /// and use the `next(PREFIX/)` as the right side open bound.
-    fn encode_bound<K: MapKey<KVMeta> + MapKeyEncode>(
+    fn encode_bound<K: MapKey + MapKeyEncode>(
         v: Bound<&K>,
         dir: &str,
     ) -> Result<Bound<String>, io::Error> {
@@ -76,12 +74,12 @@ impl RotblCodec {
     /// Encode a key value pair of type `(K: MapKey, V: MapKey::V)` to rotbl key-value: `(String, SeqMarked)`.
     pub(crate) fn encode_key_seq_marked<K>(
         key: &K,
-        marked: Marked<K::V>,
+        marked: SeqMarked<K::V>,
     ) -> Result<(String, SeqMarked), io::Error>
     where
-        K: MapKey<KVMeta>,
+        K: MapKey,
         K: MapKeyEncode,
-        Marked<K::V>: ValueConvert<SeqMarked>,
+        SeqMarked<K::V>: ValueConvert<SeqMarked>,
     {
         let k = Self::encode_key(key)?;
         let v = marked.conv_to()?;
@@ -104,7 +102,7 @@ impl RotblCodec {
     /// Decode a key from a string with key-space prefix into [`MapKey`] implementation.
     pub(crate) fn decode_key<K>(str_key: &str) -> Result<K, io::Error>
     where
-        K: MapKey<KVMeta>,
+        K: MapKey,
         K: MapKeyEncode,
         K: MapKeyDecode,
     {
@@ -135,37 +133,44 @@ mod tests {
 
     use super::*;
     use crate::state_machine::ExpireKey;
+    use crate::state_machine::UserKey;
 
     #[test]
     fn test_encode_key_string() {
-        let r = RotblCodec::encode_key::<String>(&s("a")).unwrap();
+        let r = RotblCodec::encode_key(&user_key("a")).unwrap();
         assert_eq!(r, "kv--/a");
 
-        assert_eq!(RotblCodec::decode_key::<String>("kv--/").unwrap(), s(""));
-        assert_eq!(RotblCodec::decode_key::<String>("kv--/a").unwrap(), s("a"));
         assert_eq!(
-            RotblCodec::decode_key::<String>("kv--/a/").unwrap(),
-            s("a/")
+            RotblCodec::decode_key::<UserKey>("kv--/").unwrap(),
+            user_key("")
         );
-        assert!(RotblCodec::decode_key::<String>("kv-").is_err());
-        assert!(RotblCodec::decode_key::<String>("kv--").is_err());
+        assert_eq!(
+            RotblCodec::decode_key::<UserKey>("kv--/a").unwrap(),
+            user_key("a")
+        );
+        assert_eq!(
+            RotblCodec::decode_key::<UserKey>("kv--/a/").unwrap(),
+            user_key("a/")
+        );
+        assert!(RotblCodec::decode_key::<UserKey>("kv-").is_err());
+        assert!(RotblCodec::decode_key::<UserKey>("kv--").is_err());
     }
 
     #[test]
     fn test_encode_range_string() {
-        let r = RotblCodec::encode_range::<String, _>(&(s("a")..s("z"))).unwrap();
+        let r = RotblCodec::encode_range(&(user_key("a")..user_key("z"))).unwrap();
         assert_eq!(r, (Included(s("kv--/a")), Excluded(s("kv--/z"))));
 
-        let r = RotblCodec::encode_range::<String, _>(&(s("a")..=s("z"))).unwrap();
+        let r = RotblCodec::encode_range(&(user_key("a")..=user_key("z"))).unwrap();
         assert_eq!(r, (Included(s("kv--/a")), Included(s("kv--/z"))));
 
-        let r = RotblCodec::encode_range::<String, _>(&(..s("z"))).unwrap();
+        let r = RotblCodec::encode_range(&(..user_key("z"))).unwrap();
         assert_eq!(r, (Included(s("kv--/")), Excluded(s("kv--/z"))));
 
-        let r = RotblCodec::encode_range::<String, _>(&(s("a")..)).unwrap();
+        let r = RotblCodec::encode_range(&(user_key("a")..)).unwrap();
         assert_eq!(r, (Included(s("kv--/a")), Excluded(s("kv--0"))));
 
-        let r = RotblCodec::encode_range::<String, _>(&(..)).unwrap();
+        let r = RotblCodec::encode_range::<UserKey, _>(&(..)).unwrap();
         assert_eq!(r, (Included(s("kv--/")), Excluded(s("kv--0"))));
     }
 
@@ -238,5 +243,9 @@ mod tests {
 
     fn s(s: impl ToString) -> String {
         s.to_string()
+    }
+
+    fn user_key(s: impl ToString) -> UserKey {
+        UserKey::new(s)
     }
 }

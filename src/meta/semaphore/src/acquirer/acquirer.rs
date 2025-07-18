@@ -397,7 +397,7 @@ impl Acquirer {
                     // Extend the lease only if the entry still exists. If the entry has been removed,
                     // it means the semaphore has been released. Re-inserting it would cause confusion
                     // in the semaphore state and potentially lead to inconsistent behavior.
-                    info!(
+                    log::debug!(
                         "{}: About to extend semaphore permit lease: {} ttl: {:?}",
                         ctx, key_str, ttl
                     );

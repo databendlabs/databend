@@ -354,6 +354,7 @@ pub struct HistoryConfig {
 pub struct HistoryTableConfig {
     pub table_name: String,
     pub retention: usize,
+    pub invisible: bool,
 }
 
 impl Display for HistoryConfig {
@@ -399,6 +400,16 @@ impl Default for HistoryTableConfig {
         Self {
             table_name: "".to_string(),
             retention: 168,
+            invisible: false,
         }
+    }
+}
+
+impl HistoryConfig {
+    pub fn is_invisible(&self, table_name: &str) -> bool {
+        self.tables
+            .iter()
+            .find(|table| table.table_name.eq_ignore_ascii_case(table_name))
+            .is_some_and(|table| table.invisible)
     }
 }

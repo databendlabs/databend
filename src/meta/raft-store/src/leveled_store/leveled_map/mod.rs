@@ -12,21 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use compactor::Compactor;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use log::info;
-use tokio::sync::oneshot::error::TryRecvError;
+use tokio::sync::Semaphore;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
+use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
+use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 
 #[cfg(test)]
 mod acquire_compactor_test;
 pub mod compacting_data;
 pub mod compactor;
+pub mod compactor_acquirer;
 #[cfg(test)]
 mod leveled_map_test;
 mod map_api_impl;
@@ -37,12 +42,10 @@ mod map_api_impl;
 ///
 /// The top level is the newest and writable.
 /// Others are immutable.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct LeveledMap {
-    /// Concurrency control: only one thread can set this field to Some and compact.
-    ///
-    /// The other should wait for the compaction to finish by blocking on the receiver.
-    current_compactor: Option<tokio::sync::oneshot::Receiver<()>>,
+    /// A semaphore that permits at most one compactor to run.
+    compaction_semaphore: Arc<Semaphore>,
 
     /// The top level is the newest and writable.
     writable: Level,
@@ -51,6 +54,18 @@ pub struct LeveledMap {
     immutable_levels: ImmutableLevels,
 
     persisted: Option<DB>,
+}
+
+impl Default for LeveledMap {
+    fn default() -> Self {
+        Self {
+            // Only one compactor is allowed.
+            compaction_semaphore: Arc::new(Semaphore::new(1)),
+            writable: Default::default(),
+            immutable_levels: Default::default(),
+            persisted: None,
+        }
+    }
 }
 
 impl AsRef<SysData> for LeveledMap {
@@ -157,50 +172,25 @@ impl LeveledMap {
         info!("compaction finished replacing the db");
     }
 
-    /// Try to get a singleton `Compactor` instance specific to `self`
-    /// if it is not currently in use by another thread.
-    ///
-    /// This method requires a mutable reference to prevent concurrent access to shared data,
-    /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
-    pub(crate) fn try_acquire_compactor(&mut self) -> Option<Compactor> {
-        if let Some(rx) = &mut self.current_compactor {
-            match rx.try_recv() {
-                Err(TryRecvError::Closed) => {
-                    // Ok, released. Continue
-                }
-                Err(TryRecvError::Empty) => {
-                    // Another compactor still in use.
-                    return None;
-                }
-                Ok(_) => {
-                    unreachable!("it never send any value")
-                }
-            }
-        }
-
-        Some(self.new_compactor())
-    }
-
     /// Get a singleton `Compactor` instance specific to `self`.
     ///
     /// This method requires a mutable reference to prevent concurrent access to shared data,
     /// such as `self.immediate_levels` and `self.persisted`, during the construction of the compactor.
-    pub(crate) async fn acquire_compactor(&mut self) -> Compactor {
-        if let Some(rx) = self.current_compactor.take() {
-            let _ = rx.await;
-        }
+    pub(crate) async fn acquire_compactor(&self) -> Compactor {
+        let acquirer = self.new_compactor_acquirer();
 
-        self.new_compactor()
+        let permit = acquirer.acquire().await;
+
+        self.new_compactor(permit)
     }
 
-    fn new_compactor(&mut self) -> Compactor {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+    pub(crate) fn new_compactor_acquirer(&self) -> CompactorAcquirer {
+        CompactorAcquirer::new(self.compaction_semaphore.clone())
+    }
 
-        // current_compactor must be None, which is guaranteed by caller.
-        self.current_compactor = Some(rx);
-
+    pub(crate) fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
         Compactor {
-            guard: tx,
+            _permit: permit,
             immutable_levels: self.immutable_levels.clone(),
             db: self.persisted.clone(),
             since: self.immutable_level_index(),

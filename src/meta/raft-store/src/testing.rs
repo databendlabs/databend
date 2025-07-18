@@ -12,28 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(coroutines)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(try_blocks)]
-#![allow(clippy::diverging_sub_expression)]
+use std::time::Duration;
+use std::time::SystemTime;
 
-pub mod applier;
-pub mod config;
-pub mod key_spaces;
-pub mod leveled_store;
-pub(crate) mod marked;
-pub mod ondisk;
-pub mod raft_log_v004;
-pub mod sm_v003;
-pub mod snapshot_config;
-pub mod state;
-pub mod state_machine;
-pub mod state_machine_api;
-pub mod state_machine_api_ext;
-pub(crate) mod testing;
-pub mod utils;
+#[allow(dead_code)]
+pub(crate) fn since_epoch_secs() -> u64 {
+    since_epoch().as_secs()
+}
 
-mod state_machine_features;
+pub(crate) fn since_epoch_millis() -> u64 {
+    since_epoch().as_millis() as u64
+}
 
-pub use state_machine_features::StateMachineFeature;
+pub(crate) fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+}
