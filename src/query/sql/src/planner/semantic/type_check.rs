@@ -4438,10 +4438,11 @@ impl<'a> TypeChecker<'a> {
                     ..
                 })] => {
                     let col_data_type = data_type.remove_nullable();
+                    let target_type = target_type.remove_nullable();
                     if table_index.is_some()
                         && matches!(col_data_type, DataType::Vector(_))
                         && matches!(&**argument, ScalarExpr::ConstantExpr(_))
-                        && matches!(&**target_type, DataType::Vector(_))
+                        && matches!(&target_type, DataType::Vector(_))
                         && LicenseManagerSwitch::instance()
                             .check_enterprise_enabled(
                                 self.ctx.get_license_key(),
@@ -4514,6 +4515,7 @@ impl<'a> TypeChecker<'a> {
                                 let Scalar::Array(arg_col) = arg.value else {
                                     return None;
                                 };
+                                let arg_col = arg_col.remove_nullable();
 
                                 let col_vector_type = col_data_type.as_vector().unwrap();
                                 let col_dimension = col_vector_type.dimension() as usize;
