@@ -26,20 +26,20 @@ use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::versions::Versioned;
-use crate::meta::ColumnDistinctHLL;
 use crate::meta::FormatVersion;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
+use crate::meta::MetaHLL;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BlockStatistics {
     pub format_version: FormatVersion,
 
-    pub hll: HashMap<ColumnId, ColumnDistinctHLL>,
+    pub hll: HashMap<ColumnId, MetaHLL>,
 }
 
 impl BlockStatistics {
-    pub fn new(hll: HashMap<ColumnId, ColumnDistinctHLL>) -> Self {
+    pub fn new(hll: HashMap<ColumnId, MetaHLL>) -> Self {
         Self {
             format_version: BlockStatistics::VERSION,
             hll,

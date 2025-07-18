@@ -39,7 +39,7 @@ use databend_common_expression::with_number_type;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
-use databend_storages_common_table_meta::meta::ColumnDistinctHLL;
+use databend_storages_common_table_meta::meta::MetaHLL;
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
@@ -47,7 +47,7 @@ pub trait ColumnNDVEstimatorOps: Send + Sync {
     fn update_column(&mut self, column: &Column);
     fn update_scalar(&mut self, scalar: &ScalarRef);
     fn finalize(&self) -> usize;
-    fn hll(self) -> ColumnDistinctHLL;
+    fn hll(self) -> MetaHLL;
 }
 
 #[enum_dispatch(ColumnNDVEstimatorOps)]
@@ -111,7 +111,7 @@ where
     T: ValueType + Send + Sync,
     for<'a> T::ScalarRef<'a>: Hash,
 {
-    hll: ColumnDistinctHLL,
+    hll: MetaHLL,
     _phantom: PhantomData<T>,
 }
 
@@ -122,7 +122,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            hll: ColumnDistinctHLL::new(),
+            hll: MetaHLL::new(),
             _phantom: Default::default(),
         }
     }
@@ -181,7 +181,7 @@ where
         self.hll.count()
     }
 
-    fn hll(self) -> ColumnDistinctHLL {
+    fn hll(self) -> MetaHLL {
         self.hll
     }
 }

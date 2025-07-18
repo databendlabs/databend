@@ -196,7 +196,9 @@ impl BlockBuilder {
             &self.ndv_columns_map,
         )?;
         if let Some(block_stats_state) = &block_stats_state {
-            column_distinct_count.extend(block_stats_state.column_distinct_count.clone());
+            for (key, val) in &block_stats_state.column_distinct_count {
+                column_distinct_count.entry(*key).or_insert(*val);
+            }
         }
 
         let mut inverted_index_states = Vec::with_capacity(self.inverted_index_builders.len());
