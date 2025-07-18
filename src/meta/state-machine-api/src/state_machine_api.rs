@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::sys_data::SysData;
-use databend_common_meta_types::SeqV;
-use map_api::map_api::MapApi;
+use map_api::MapApi;
 
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
+use crate::ExpireKey;
+use crate::SeqV;
+use crate::UserKey;
 
 /// The API a state machine implements.
 ///
 /// The state machine is responsible for managing the application's persistent state,
 /// including application kv data and expired key data.
-pub trait StateMachineApi: Send + Sync {
+pub trait StateMachineApi<SysData>: Send + Sync {
     /// The map that stores application data.
     type UserMap: MapApi<UserKey> + 'static;
 

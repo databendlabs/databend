@@ -20,12 +20,12 @@ use databend_common_meta_types::Change;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 use fastrace::func_name;
 use log::debug;
+use seq_marked::SeqValue;
 
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;

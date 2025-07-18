@@ -36,7 +36,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;

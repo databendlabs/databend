@@ -20,6 +20,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_meta_state_machine_api::ExpireKey;
+use databend_common_meta_state_machine_api::MetaValue;
+use databend_common_meta_state_machine_api::UserKey;
 use map_api::map_api_ro::MapApiRO;
 use seq_marked::SeqMarked;
 
@@ -29,9 +32,6 @@ use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKV;
 use crate::leveled_store::map_api::SeqMarkedOf;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 /// A single **immutable** level of state machine data.
 ///

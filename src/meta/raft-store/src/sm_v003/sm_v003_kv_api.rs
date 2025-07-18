@@ -20,12 +20,12 @@ use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use seq_marked::SeqValue;
 
 use crate::sm_v003::SMV003;
 use crate::state_machine_api_ext::StateMachineApiExt;

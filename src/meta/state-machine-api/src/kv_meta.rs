@@ -20,9 +20,9 @@ use map_api::Expirable;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::flexible_timestamp_to_duration;
+use crate::time_util::flexible_timestamp_to_duration;
 
-/// The meta data of a record in kv
+/// The metadata of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
 pub struct KVMeta {
     /// Expiration time in **seconds or milliseconds** since Unix epoch (1970-01-01).
@@ -32,7 +32,7 @@ pub struct KVMeta {
     /// - Values ≤ `100_000_000_000`: treated as seconds since epoch
     ///
     /// See [`adaptable_timestamp_to_duration`]
-    pub(crate) expire_at: Option<u64>,
+    pub expire_at: Option<u64>,
 }
 
 impl KVMeta {

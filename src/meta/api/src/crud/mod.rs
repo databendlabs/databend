@@ -28,16 +28,16 @@ use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::ValueWithName;
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use databend_common_proto_conv::FromToProto;
 pub use errors::CrudError;
 use futures::TryStreamExt;
 use log::info;
+use seq_marked::SeqValue;
 
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;

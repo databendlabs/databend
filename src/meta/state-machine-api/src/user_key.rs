@@ -15,6 +15,10 @@
 use std::fmt;
 use std::ops::Deref;
 
+use map_api::MapKey;
+
+use crate::KVMeta;
+
 /// Key for the user data in state machine
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -46,6 +50,10 @@ impl fmt::Display for UserKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.key)
     }
+}
+
+impl MapKey for UserKey {
+    type V = (Option<KVMeta>, Vec<u8>);
 }
 
 impl UserKey {

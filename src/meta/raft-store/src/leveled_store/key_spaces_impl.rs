@@ -18,14 +18,12 @@ use std::fmt;
 use std::io;
 use std::io::Error;
 
-use databend_common_meta_types::KVMeta;
+use databend_common_meta_state_machine_api::ExpireKey;
+use databend_common_meta_state_machine_api::UserKey;
 
-use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::MapKeyPrefix;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 impl MapKeyEncode for UserKey {
     const PREFIX: MapKeyPrefix = "kv--";
@@ -39,10 +37,6 @@ impl MapKeyDecode for UserKey {
     fn decode(buf: &str) -> Result<Self, Error> {
         Ok(Self::new(buf))
     }
-}
-
-impl MapKey for UserKey {
-    type V = (Option<KVMeta>, Vec<u8>);
 }
 
 impl MapKeyEncode for ExpireKey {
@@ -117,10 +111,6 @@ impl MapKeyDecode for ExpireKey {
 
         Ok(Self::new(time_ms, seq))
     }
-}
-
-impl MapKey for ExpireKey {
-    type V = String;
 }
 
 #[cfg(test)]

@@ -16,12 +16,12 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use databend_common_meta_state_machine_api::KVMeta;
 use deepsize::Context;
 use display_more::DisplayUnixTimeStampExt;
 
 use crate::cmd::CmdContext;
-use crate::flexible_timestamp_to_duration;
-use crate::seq_value::KVMeta;
+use crate::time::flexible_timestamp_to_duration;
 use crate::time::Interval;
 
 /// Specifies the metadata associated with a kv record, used in an `upsert` cmd.
@@ -89,7 +89,7 @@ impl MetaSpec {
         }
     }
 
-    /// Create a KVMeta with a absolute expiration time in second since 1970-01-01.
+    /// Create a KVMeta with an absolute expiration time in second since 1970-01-01.
     pub fn new_expire(expires_at_sec_or_ms: u64) -> Self {
         Self {
             expire_at: Some(expires_at_sec_or_ms),
@@ -121,9 +121,10 @@ impl MetaSpec {
 mod tests {
     use std::time::Duration;
 
+    use databend_common_meta_state_machine_api::KVMeta;
+
     use super::MetaSpec;
     use crate::cmd::CmdContext;
-    use crate::seq_value::KVMeta;
     use crate::Time;
 
     #[test]
