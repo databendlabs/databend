@@ -36,21 +36,15 @@ use crate::common;
 //
 
 #[test]
-fn test_decode_v136_grant_object() -> anyhow::Result<()> {
+fn test_decode_v136_grant_connection_object() -> anyhow::Result<()> {
     let role_info_v136 = vec![
-        10, 2, 114, 49, 18, 214, 1, 10, 23, 10, 9, 10, 0, 160, 6, 136, 1, 168, 6, 24, 16, 128, 128,
+        10, 2, 114, 49, 18, 86, 10, 23, 10, 9, 10, 0, 160, 6, 136, 1, 168, 6, 24, 16, 128, 128,
         128, 2, 160, 6, 136, 1, 168, 6, 24, 10, 27, 10, 13, 74, 4, 10, 2, 99, 49, 160, 6, 136, 1,
-        168, 6, 24, 16, 128, 128, 128, 4, 160, 6, 136, 1, 168, 6, 24, 10, 33, 10, 22, 18, 13, 10,
-        7, 100, 101, 102, 97, 117, 108, 116, 18, 2, 100, 98, 160, 6, 136, 1, 168, 6, 24, 16, 2,
-        160, 6, 136, 1, 168, 6, 24, 10, 37, 10, 26, 26, 17, 10, 7, 100, 101, 102, 97, 117, 108,
-        116, 18, 2, 100, 98, 26, 2, 116, 98, 160, 6, 136, 1, 168, 6, 24, 16, 2, 160, 6, 136, 1,
-        168, 6, 24, 10, 24, 10, 13, 34, 4, 10, 2, 102, 49, 160, 6, 136, 1, 168, 6, 24, 16, 1, 160,
-        6, 136, 1, 168, 6, 24, 10, 26, 10, 13, 42, 4, 10, 2, 115, 49, 160, 6, 136, 1, 168, 6, 24,
-        16, 128, 128, 32, 160, 6, 136, 1, 168, 6, 24, 10, 23, 10, 9, 10, 0, 160, 6, 136, 1, 168, 6,
-        24, 16, 254, 255, 191, 7, 160, 6, 136, 1, 168, 6, 24, 160, 6, 136, 1, 168, 6, 24, 26, 23,
-        49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67,
-        34, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85,
-        84, 67, 160, 6, 136, 1, 168, 6, 24,
+        168, 6, 24, 16, 128, 128, 128, 4, 160, 6, 136, 1, 168, 6, 24, 10, 23, 10, 9, 10, 0, 160, 6,
+        136, 1, 168, 6, 24, 16, 254, 255, 191, 7, 160, 6, 136, 1, 168, 6, 24, 160, 6, 136, 1, 168,
+        6, 24, 26, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48,
+        32, 85, 84, 67, 34, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58,
+        48, 48, 32, 85, 84, 67, 160, 6, 136, 1, 168, 6, 24,
     ];
     let want = || mt::principal::RoleInfo {
         name: "r1".to_string(),
@@ -63,26 +57,6 @@ fn test_decode_v136_grant_object() -> anyhow::Result<()> {
                 mt::principal::GrantEntry::new(
                     mt::principal::GrantObject::Connection("c1".to_string()),
                     make_bitflags!(UserPrivilegeType::{AccessConnection}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::Database("default".to_string(), "db".to_string()),
-                    make_bitflags!(UserPrivilegeType::{Create}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::Table(
-                        "default".to_string(),
-                        "db".to_string(),
-                        "tb".to_string(),
-                    ),
-                    make_bitflags!(UserPrivilegeType::{Create}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::UDF("f1".to_string()),
-                    make_bitflags!(UserPrivilegeType::{Usage}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::Stage("s1".to_string()),
-                    make_bitflags!(UserPrivilegeType::{Write}),
                 ),
                 // test new global privilege CreateConneciton, AccessConnection
                 mt::principal::GrantEntry::new(
@@ -103,7 +77,7 @@ fn test_decode_v136_grant_object() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_decode_v136_ownership() -> anyhow::Result<()> {
+fn test_decode_v136_connection_ownership() -> anyhow::Result<()> {
     let ownership_info_v136 = vec![
         10, 2, 114, 49, 18, 13, 50, 4, 10, 2, 99, 49, 160, 6, 136, 1, 168, 6, 24, 160, 6, 136, 1,
         168, 6, 24,

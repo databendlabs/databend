@@ -82,8 +82,8 @@ message GrantObject {
   }
 
   message GrantConnectionObject {
-      string connection = 1;
-    }
+    string connection = 1;
+  }
 
   oneof object {
     GrantGlobalObject global = 1;

@@ -50,9 +50,9 @@ message OwnershipObject {
     string id = 1;
   }
 
-    message OwnershipConnectionObject {
-      string connection = 1;
-    }
+  message OwnershipConnectionObject {
+    string connection = 1;
+  }
 
   oneof object {
     OwnershipDatabaseObject database = 1;

@@ -265,7 +265,7 @@ impl PrivilegeAccess {
 
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
-                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection",
                                 privileges,
                                 catalog_name,
                                 db_name,
