@@ -107,7 +107,6 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             RaftStoreEntry::RaftStateKV { .. } => Ok(None),
             RaftStoreEntry::Expire { .. } => Ok(None),
             RaftStoreEntry::Sequences { .. } => Ok(None),
-            RaftStoreEntry::ClientLastResps { .. } => Ok(None),
             RaftStoreEntry::LogMeta { .. } => Ok(None),
 
             RaftStoreEntry::NodeId(_) => Ok(None),
