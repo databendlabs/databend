@@ -478,6 +478,8 @@ self_cell = "1.2.0"
 semver = "1.0.14"
 seq-marked = { version = "0.3.1", features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
 serde = { version = "1.0.164", features = ["derive", "rc"] }
+serde-bridge = "0.0.3"
+serde-env = { git = "https://github.com/Xuanwo/serde-env", rev = "085d4b1" }
 serde_derive = "1"
 serde_ignored = "0.1.10"
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order", "unbounded_depth"] }
