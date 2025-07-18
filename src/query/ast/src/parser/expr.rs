@@ -2246,41 +2246,48 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             expr: Box::new(expr),
         },
     );
-    let function_call_with_within_group_window_body = map(
+    let function_call_with_within_group_window_body = map_res(
         rule! {
             "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")")?
             ~ #within_group?
             ~ #window_function?
         },
-        |(_, opt_distinct, opt_args, _, order_by, window)| match (order_by, window) {
-            (Some(order_by), window) => FunctionCallSuffix::WithInGroupWindow {
-                distinct: opt_distinct.is_some(),
-                args: opt_args.unwrap_or_default(),
-                order_by,
-                window,
-            },
-            (None, Some(window)) => FunctionCallSuffix::Window {
-                distinct: opt_distinct.is_some(),
-                args: opt_args.unwrap_or_default(),
-                window,
-            },
-            (None, None) => FunctionCallSuffix::Simple {
-                distinct: opt_distinct.is_some(),
-                args: opt_args.unwrap_or_default(),
-            },
-        },
-    );
-    let function_call_with_params_window_body = map(
-        rule! {
-            "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #window_function?
-        },
-        |(_, params, _, _, opt_distinct, opt_args, _, window)| FunctionCallSuffix::ParamsWindow {
-            distinct: opt_distinct.is_some(),
-            params,
-            args: opt_args.unwrap_or_default(),
+        |(_, opt_distinct_0, params_0, _, params_1, order_by, window)| match (
+            opt_distinct_0,
+            params_0,
+            params_1,
+            order_by,
             window,
+        ) {
+            (None, Some(params_0), Some((_, opt_distinct_1, params_1, _)), None, window) => {
+                Ok(FunctionCallSuffix::ParamsWindow {
+                    distinct: opt_distinct_1.is_some(),
+                    params: params_0,
+                    args: params_1.unwrap_or_default(),
+                    window,
+                })
+            }
+            (opt_distinct, params, None, Some(order_by), window) => {
+                Ok(FunctionCallSuffix::WithInGroupWindow {
+                    distinct: opt_distinct.is_some(),
+                    args: params.unwrap_or_default(),
+                    order_by,
+                    window,
+                })
+            }
+            (opt_distinct, params, None, None, Some(window)) => Ok(FunctionCallSuffix::Window {
+                distinct: opt_distinct.is_some(),
+                args: params.unwrap_or_default(),
+                window,
+            }),
+            (opt_distinct, params, None, None, None) => Ok(FunctionCallSuffix::Simple {
+                distinct: opt_distinct.is_some(),
+                args: params.unwrap_or_default(),
+            }),
+            _ => Err(nom::Err::Error(ErrorKind::Other(
+                "Unsupported function format",
+            ))),
         },
     );
 
@@ -2288,10 +2295,9 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
         rule!(
             #function_name
             ~ (
-                    #function_call_with_lambda_body : "`function(..., x -> ...)`"
-                    | #function_call_with_params_window_body : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                    | #function_call_with_within_group_window_body : "`function(...) [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
-                )
+                    #function_call_with_within_group_window_body : "`function(...)(...) [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
+                    | #function_call_with_lambda_body : "`function(..., x -> ...)`"
+            )
         ),
         |(name, suffix)| match suffix {
             FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {
