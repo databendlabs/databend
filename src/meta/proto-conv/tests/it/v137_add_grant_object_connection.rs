@@ -36,6 +36,7 @@ use crate::common;
 //
 
 #[test]
+<<<<<<< HEAD:src/meta/proto-conv/tests/it/v137_add_grant_object_connection.rs
 fn test_decode_v137_grant_object() -> anyhow::Result<()> {
     let role_info_v137 = vec![
         10, 2, 114, 49, 18, 214, 1, 10, 23, 10, 9, 10, 0, 160, 6, 137, 1, 168, 6, 24, 16, 128, 128,
@@ -51,6 +52,17 @@ fn test_decode_v137_grant_object() -> anyhow::Result<()> {
         49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67,
         34, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85,
         84, 67, 160, 6, 137, 1, 168, 6, 24,
+=======
+fn test_decode_v136_grant_connection_object() -> anyhow::Result<()> {
+    let role_info_v136 = vec![
+        10, 2, 114, 49, 18, 86, 10, 23, 10, 9, 10, 0, 160, 6, 136, 1, 168, 6, 24, 16, 128, 128,
+        128, 2, 160, 6, 136, 1, 168, 6, 24, 10, 27, 10, 13, 74, 4, 10, 2, 99, 49, 160, 6, 136, 1,
+        168, 6, 24, 16, 128, 128, 128, 4, 160, 6, 136, 1, 168, 6, 24, 10, 23, 10, 9, 10, 0, 160, 6,
+        136, 1, 168, 6, 24, 16, 254, 255, 191, 7, 160, 6, 136, 1, 168, 6, 24, 160, 6, 136, 1, 168,
+        6, 24, 26, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48,
+        32, 85, 84, 67, 34, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58,
+        48, 48, 32, 85, 84, 67, 160, 6, 136, 1, 168, 6, 24,
+>>>>>>> ffc4e86d5b (fix conversation):src/meta/proto-conv/tests/it/v136_add_grant_object_connection.rs
     ];
     let want = || mt::principal::RoleInfo {
         name: "r1".to_string(),
@@ -63,26 +75,6 @@ fn test_decode_v137_grant_object() -> anyhow::Result<()> {
                 mt::principal::GrantEntry::new(
                     mt::principal::GrantObject::Connection("c1".to_string()),
                     make_bitflags!(UserPrivilegeType::{AccessConnection}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::Database("default".to_string(), "db".to_string()),
-                    make_bitflags!(UserPrivilegeType::{Create}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::Table(
-                        "default".to_string(),
-                        "db".to_string(),
-                        "tb".to_string(),
-                    ),
-                    make_bitflags!(UserPrivilegeType::{Create}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::UDF("f1".to_string()),
-                    make_bitflags!(UserPrivilegeType::{Usage}),
-                ),
-                mt::principal::GrantEntry::new(
-                    mt::principal::GrantObject::Stage("s1".to_string()),
-                    make_bitflags!(UserPrivilegeType::{Write}),
                 ),
                 // test new global privilege CreateConneciton, AccessConnection
                 mt::principal::GrantEntry::new(
@@ -103,9 +95,15 @@ fn test_decode_v137_grant_object() -> anyhow::Result<()> {
 }
 
 #[test]
+<<<<<<< HEAD:src/meta/proto-conv/tests/it/v137_add_grant_object_connection.rs
 fn test_decode_v137_ownership() -> anyhow::Result<()> {
     let ownership_info_v137 = vec![
         10, 2, 114, 49, 18, 13, 50, 4, 10, 2, 99, 49, 160, 6, 137, 1, 168, 6, 24, 160, 6, 137, 1,
+=======
+fn test_decode_v136_connection_ownership() -> anyhow::Result<()> {
+    let ownership_info_v136 = vec![
+        10, 2, 114, 49, 18, 13, 50, 4, 10, 2, 99, 49, 160, 6, 136, 1, 168, 6, 24, 160, 6, 136, 1,
+>>>>>>> ffc4e86d5b (fix conversation):src/meta/proto-conv/tests/it/v136_add_grant_object_connection.rs
         168, 6, 24,
     ];
 
