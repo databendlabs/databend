@@ -1298,7 +1298,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("nondeterministic_update_lazy_read_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(u64::MAX),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum rows in a query to enable lazy read optimization when updating a multi-joined row. Setting it to 0 disables the optimization.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

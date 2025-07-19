@@ -1,0 +1,13 @@
+statement ok
+set error_on_nondeterministic_update = 0;
+
+statement ok
+set nondeterministic_update_lazy_read_threshold = 18446744073709551615;
+
+include ./update.test
+
+statement ok
+unset error_on_nondeterministic_update;
+
+statement ok
+unset nondeterministic_update_lazy_read_threshold;
