@@ -215,8 +215,7 @@ async fn test_watch() -> anyhow::Result<()> {
     // 2. test filter
     {
         let key_str = "1";
-        let watch = WatchRequest::new(s(key_str), None)
-            .with_filter(FilterType::Delete);
+        let watch = WatchRequest::new(s(key_str), None).with_filter(FilterType::Delete);
 
         let key = s(key_str);
         let val = b("old");
@@ -339,8 +338,7 @@ async fn test_watch_initialization_flush() -> anyhow::Result<()> {
     }
 
     let mut strm = {
-        let watch = WatchRequest::new(s("a"), Some(s("e")))
-            .with_initial_flush(true);
+        let watch = WatchRequest::new(s("a"), Some(s("e"))).with_initial_flush(true);
         client.watch_with_initialization(watch).await?
     };
 

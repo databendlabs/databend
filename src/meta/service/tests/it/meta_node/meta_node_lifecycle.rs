@@ -812,7 +812,10 @@ async fn assert_upsert_kv_synced(meta_nodes: Vec<Arc<MetaNode>>, key: &str) -> a
         leader
             .assume_leader()
             .await?
-            .write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes()))))
+            .write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                key,
+                key.as_bytes(),
+            ))))
             .await?;
     }
 

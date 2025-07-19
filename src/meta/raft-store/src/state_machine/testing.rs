@@ -37,7 +37,9 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
         Entry::new_blank(new_log_id(1, 0, 3)),
         Entry {
             log_id: new_log_id(1, 0, 4),
-            payload: EntryPayload::Normal(LogEntry::new(Cmd::UpsertKV(UpsertKV::update("a", b"A")))),
+            payload: EntryPayload::Normal(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(
+                "a", b"A",
+            )))),
         },
         Entry {
             log_id: new_log_id(1, 0, 5),

@@ -839,7 +839,9 @@ impl TestSuite {
                 // delete k1
                 TxnOp {
                     request: Some(txn_op::Request::Delete(TxnDeleteRequest::new(
-                        txn_key1.clone(), true, None
+                        txn_key1.clone(),
+                        true,
+                        None,
                     ))),
                 },
                 // get k1

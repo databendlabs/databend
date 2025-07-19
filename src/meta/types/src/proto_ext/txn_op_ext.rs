@@ -26,7 +26,7 @@ impl pb::TxnOp {
     pub fn put(key: impl ToString, value: Vec<u8>) -> pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest::new(
-                key, value, true, None, None
+                key, value, true, None, None,
             ))),
         }
     }
@@ -37,7 +37,11 @@ impl pb::TxnOp {
     pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl: Option<Duration>) -> pb::TxnOp {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest::new(
-                key, value, true, None, ttl.map(|d| d.as_millis() as u64)
+                key,
+                value,
+                true,
+                None,
+                ttl.map(|d| d.as_millis() as u64),
             ))),
         }
     }
@@ -71,7 +75,7 @@ impl pb::TxnOp {
     pub fn delete_exact(key: impl ToString, seq: Option<u64>) -> Self {
         pb::TxnOp {
             request: Some(pb::txn_op::Request::Delete(pb::TxnDeleteRequest::new(
-                key, true, seq
+                key, true, seq,
             ))),
         }
     }
