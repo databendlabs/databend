@@ -14,13 +14,13 @@
 
 //! Test for db_map_api_ro_impl.
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::KVMeta;
-use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::db_map_api_ro_impl::MapView;

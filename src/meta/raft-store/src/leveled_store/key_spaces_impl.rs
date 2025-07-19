@@ -18,8 +18,8 @@ use std::fmt;
 use std::io;
 use std::io::Error;
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::UserKey;
+use state_machine_api::ExpireKey;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;

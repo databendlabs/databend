@@ -80,7 +80,6 @@ pub mod match_seq {
     pub use map_api::match_seq::MatchSeq;
     pub use map_api::match_seq::MatchSeqExt;
 }
-pub use databend_common_meta_state_machine_api::SeqV;
 pub use match_seq::ConflictSeq;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
@@ -105,6 +104,7 @@ pub use protobuf::TxnPutResponse;
 pub use protobuf::TxnReply;
 pub use protobuf::TxnRequest;
 pub use seq_num::SeqNum;
+pub use state_machine_api::SeqV;
 pub use time::Interval;
 pub use time::Time;
 pub use with::With;

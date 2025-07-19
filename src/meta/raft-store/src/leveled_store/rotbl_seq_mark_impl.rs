@@ -22,10 +22,10 @@
 
 use std::io;
 
-use databend_common_meta_state_machine_api::KVMeta;
-use databend_common_meta_state_machine_api::MetaValue;
 use rotbl::v001::Marked;
 use rotbl::v001::SeqMarked;
+use state_machine_api::KVMeta;
+use state_machine_api::MetaValue;
 
 use crate::leveled_store::value_convert::ValueConvert;
 

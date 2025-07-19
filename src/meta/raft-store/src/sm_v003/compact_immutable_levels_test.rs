@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::KVMeta;
-use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
@@ -27,6 +24,9 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;

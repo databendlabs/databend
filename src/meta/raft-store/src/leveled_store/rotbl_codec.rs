@@ -128,8 +128,8 @@ impl RotblCodec {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_state_machine_api::ExpireKey;
-    use databend_common_meta_state_machine_api::UserKey;
+    use state_machine_api::ExpireKey;
+    use state_machine_api::UserKey;
     use Bound::Excluded;
     use Bound::Included;
 

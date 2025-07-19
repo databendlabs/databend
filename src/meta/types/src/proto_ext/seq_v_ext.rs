@@ -14,11 +14,11 @@
 
 use std::time::Duration;
 
-use databend_common_meta_state_machine_api::KVMeta;
-use databend_common_meta_state_machine_api::SeqV;
 use map_api::match_seq::errors::ConflictSeq;
 use map_api::match_seq::MatchSeq;
 use map_api::match_seq::MatchSeqExt;
+use state_machine_api::KVMeta;
+use state_machine_api::SeqV;
 
 use crate::protobuf as pb;
 use crate::time::flexible_timestamp_to_duration;

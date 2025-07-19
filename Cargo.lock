@@ -3787,11 +3787,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "databend-common-meta-kvapi",
- "databend-common-meta-state-machine-api",
  "databend-common-meta-types",
  "display-more",
  "fastrace",
  "log",
+ "state-machine-api",
  "tokio",
 ]
 
@@ -3827,7 +3827,6 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-meta-kvapi",
  "databend-common-meta-sled-store",
- "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-version",
@@ -3853,6 +3852,7 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
+ "state-machine-api",
  "stream-more",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -3889,7 +3889,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "byteorder",
- "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "fastrace",
@@ -3898,19 +3897,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sled",
+ "state-machine-api",
  "tempfile",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "databend-common-meta-state-machine-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "display-more",
- "map-api",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -3952,7 +3941,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "databend-common-exception",
- "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
@@ -3970,6 +3958,7 @@ dependencies = [
  "rotbl",
  "serde",
  "serde_json",
+ "state-machine-api",
  "thiserror 1.0.69",
  "tonic",
  "tonic-build",
@@ -5145,7 +5134,6 @@ dependencies = [
  "databend-common-meta-raft-store",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
- "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-metrics",
@@ -5176,6 +5164,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
+ "state-machine-api",
  "temp-env",
  "tempfile",
  "test-harness",
@@ -14465,6 +14454,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b8c4a4445d81357df8b1a650d0d0d6fbbbfe99d064aa5e02f3e4022061476d8"
 dependencies = [
  "loom 0.5.6",
+]
+
+[[package]]
+name = "state-machine-api"
+version = "0.1.0"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.0#3c4eb15cb42620f7cdaf331b0fd0a75c6a31f498"
+dependencies = [
+ "display-more",
+ "map-api",
+ "serde",
 ]
 
 [[package]]

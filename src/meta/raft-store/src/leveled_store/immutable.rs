@@ -20,11 +20,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::MetaValue;
-use databend_common_meta_state_machine_api::UserKey;
 use map_api::map_api_ro::MapApiRO;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
