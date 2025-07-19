@@ -29,6 +29,7 @@ use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CTEConsumer;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -52,6 +53,7 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
@@ -124,6 +126,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
             PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
+            PhysicalPlan::MaterializedCTE(plan) => self.replace_materialized_cte(plan),
+            PhysicalPlan::CTEConsumer(plan) => self.replace_cte_consumer(plan),
         }
     }
 
@@ -643,6 +647,23 @@ pub trait PhysicalPlanReplacer {
             },
         )))
     }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
+            stat_info: plan.stat_info.clone(),
+            cte_name: plan.cte_name.clone(),
+            cte_output_columns: plan.cte_output_columns.clone(),
+        })))
+    }
+
+    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
+    }
 }
 
 impl PhysicalPlan {
@@ -666,6 +687,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_)
+                | PhysicalPlan::CTEConsumer(_)
                 | PhysicalPlan::BroadcastSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
@@ -794,6 +816,10 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::BroadcastSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MaterializedCTE(plan) => {
+                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

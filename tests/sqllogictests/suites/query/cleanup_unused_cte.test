@@ -1,0 +1,112 @@
+# Test for CleanupUnusedCTEOptimizer
+# This test verifies that unused CTEs are properly removed from the query plan
+
+# Test case 1: CTE is used, should not be removed
+query I
+with t1 as materialized (select number as a from numbers(10)) select t1.a from t1;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# Test case 2: CTE is not used, should be removed
+query I
+with t1 as materialized (select number as a from numbers(10)) select number as b from numbers(5);
+----
+0
+1
+2
+3
+4
+
+# Test case 3: Multiple CTEs, some used and some unused
+query I
+with t1 as materialized (select number as a from numbers(10)),
+     t2 as materialized (select number as b from numbers(20)),
+     t3 as materialized (select number as c from numbers(30))
+select t1.a from t1 join t2 on t1.a = t2.b;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# Test case 4: Nested CTEs, inner CTE is unused
+query I
+with t1 as materialized (select number as a from numbers(10)),
+     t2 as materialized (select a as b from t1),
+     t3 as materialized (select number as c from numbers(5))
+select t2.b from t2;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# Test case 5: All CTEs are unused
+query I
+with t1 as materialized (select number as a from numbers(10)),
+     t2 as materialized (select number as b from numbers(20))
+select number as c from numbers(3);
+----
+0
+1
+2
+
+# Test case 6: CTE with complex query, should be removed when unused
+query I
+with t1 as materialized (
+    select number as a, number * 2 as b 
+    from numbers(10) 
+    where number > 5
+)
+select number as c from numbers(3);
+----
+0
+1
+2
+
+# Test case 7: CTE with aggregation, should be removed when unused
+query I
+with t1 as materialized (
+    select number as a, count(*) as cnt 
+    from numbers(10) 
+    group by number
+)
+select number as b from numbers(3);
+----
+0
+1
+2
+
+# Test case 8: CTE with join, should be removed when unused
+query I
+with t1 as materialized (
+    select n1.number as a, n2.number as b
+    from numbers(5) n1
+    join numbers(5) n2 on n1.number = n2.number
+)
+select number as c from numbers(3);
+----
+0
+1
+2 

@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use log::info;
 
 use super::common::contains_local_table_scan;
+use super::common::contains_materialized_cte;
 use super::common::contains_warehouse_table_scan;
 use crate::optimizer::ir::Memo;
 use crate::optimizer::ir::SExpr;
@@ -96,6 +97,12 @@ impl OptimizerPipeline {
                 self.opt_ctx.set_enable_distributed_optimization(true);
                 info!("Enable distributed optimization due to warehouse table scan.");
             }
+        }
+
+        // Check if the plan contains MaterializedCTE, if so, disable distributed optimization
+        if contains_materialized_cte(s_expr) {
+            self.opt_ctx.set_enable_distributed_optimization(false);
+            info!("Disable distributed optimization due to MaterializedCTE.");
         }
 
         Ok(())

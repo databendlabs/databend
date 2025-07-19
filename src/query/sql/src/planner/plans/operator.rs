@@ -33,6 +33,7 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
+use crate::plans::CTEConsumer;
 use crate::plans::CacheScan;
 use crate::plans::ConstantTableScan;
 use crate::plans::DummyTableScan;
@@ -42,6 +43,7 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::Limit;
+use crate::plans::MaterializedCTE;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
@@ -127,6 +129,8 @@ pub enum RelOp {
     MergeInto,
     CompactBlock,
     MutationSource,
+    MaterializedCTE,
+    CTEConsumer,
 }
 
 /// Relational operators
@@ -160,6 +164,8 @@ pub enum RelOperator {
     Mutation(Mutation),
     CompactBlock(CompactBlock),
     MutationSource(MutationSource),
+    MaterializedCTE(MaterializedCTE),
+    CTEConsumer(CTEConsumer),
 }
 
 impl RelOperator {
@@ -249,5 +255,7 @@ impl_try_from_rel_operator! {
     AsyncFunction,
     Mutation,
     CompactBlock,
-    MutationSource
+    MutationSource,
+    MaterializedCTE,
+    CTEConsumer
 }

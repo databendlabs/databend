@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
+use databend_common_sql::executor::physical_plans::CTEConsumer;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
@@ -26,6 +27,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MaterializedCTE;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
@@ -158,6 +160,10 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
@@ -340,5 +346,25 @@ impl PhysicalPlanReplacer for Fragmenter {
 
             source_fragment_id,
         }))
+    }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let left = self.replace(plan.left.as_ref())?;
+
+        fragments.append(&mut self.fragments);
+        self.state = State::Other;
+        let right = self.replace(plan.right.as_ref())?;
+        fragments.append(&mut self.fragments);
+
+        self.fragments = fragments;
+        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
+            stat_info: plan.stat_info.clone(),
+            cte_name: plan.cte_name.clone(),
+            cte_output_columns: plan.cte_output_columns.clone(),
+        })))
     }
 }

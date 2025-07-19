@@ -176,6 +176,21 @@ impl PhysicalPlan {
                     children,
                 ))
             }
+            PhysicalPlan::MaterializedCTE(plan) => {
+                let left_child = plan.left.format_join(metadata)?;
+                let right_child = plan.right.format_join(metadata)?;
+
+                let children = vec![left_child, right_child];
+
+                Ok(FormatTreeNode::with_children(
+                    format!("MaterializedCTE: {}", plan.cte_name),
+                    children,
+                ))
+            }
+            PhysicalPlan::CTEConsumer(plan) => Ok(FormatTreeNode::with_children(
+                format!("CTEConsumer: {}", plan.cte_name),
+                vec![],
+            )),
             other => {
                 let children = other
                     .children()
@@ -526,6 +541,32 @@ fn to_format_tree(
         }
         PhysicalPlan::BroadcastSink(_plan) => {
             Ok(FormatTreeNode::new("RuntimeFilterSink".to_string()))
+        }
+        PhysicalPlan::MaterializedCTE(plan) => {
+            let mut children = Vec::new();
+            append_profile_info(&mut children, profs, plan.plan_id);
+            children.push(to_format_tree(&plan.left, metadata, profs, context)?);
+            children.push(to_format_tree(&plan.right, metadata, profs, context)?);
+            Ok(FormatTreeNode::with_children(
+                format!("MaterializedCTE: {}", plan.cte_name),
+                children,
+            ))
+        }
+        PhysicalPlan::CTEConsumer(plan) => {
+            let mut children = Vec::new();
+            children.push(FormatTreeNode::new(format!(
+                "cte_name: {}",
+                plan.cte_name.clone()
+            )));
+            children.push(FormatTreeNode::new(format!(
+                "cte_schema: [{}]",
+                format_output_columns(plan.cte_schema.clone(), metadata, false)
+            )));
+            append_profile_info(&mut children, profs, plan.plan_id);
+            Ok(FormatTreeNode::with_children(
+                "CTEConsumer".to_string(),
+                children,
+            ))
         }
     }
 }

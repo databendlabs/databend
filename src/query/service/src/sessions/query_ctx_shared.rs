@@ -72,6 +72,7 @@ use uuid::Uuid;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::MaterializedCteChannel;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -182,6 +183,9 @@ pub struct QueryContextShared {
     // QueryPerf used to draw flamegraph
     pub(in crate::sessions) perf_flag: AtomicBool,
     pub(in crate::sessions) nodes_perf: Arc<Mutex<HashMap<String, String>>>,
+
+    pub(in crate::sessions) materialized_cte_channels:
+        Arc<Mutex<HashMap<String, MaterializedCteChannel>>>,
 }
 
 #[derive(Default)]
@@ -259,6 +263,7 @@ impl QueryContextShared {
             broadcast_channels: Arc::new(Mutex::new(HashMap::new())),
             perf_flag: AtomicBool::new(false),
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
+            materialized_cte_channels: Arc::new(Mutex::new(HashMap::new())),
         }))
     }
 
