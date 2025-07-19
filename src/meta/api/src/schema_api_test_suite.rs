@@ -135,7 +135,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::Operation;
 use databend_common_meta_types::UpsertKV;
 use fastrace::func_name;
 use log::debug;

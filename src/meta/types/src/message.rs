@@ -14,7 +14,7 @@
 
 use serde::Serialize;
 
-use crate::grpc_helper::GrpcHelper;
+use crate::GrpcHelper;
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::raft_types::AppendEntriesRequest;

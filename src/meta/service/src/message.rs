@@ -20,7 +20,7 @@ use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
-use databend_common_meta_types::grpc_helper::GrpcHelper;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::AppliedState;
