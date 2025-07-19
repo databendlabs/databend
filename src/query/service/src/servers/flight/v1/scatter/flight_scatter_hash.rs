@@ -131,6 +131,10 @@ impl OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for OneHashKeyFlightScatter {
+    fn name(&self) -> &'static str {
+        "OneHashKey"
+    }
+
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
@@ -150,6 +154,10 @@ impl FlightScatter for OneHashKeyFlightScatter {
 }
 
 impl FlightScatter for HashFlightScatter {
+    fn name(&self) -> &'static str {
+        "Hash"
+    }
+
     fn execute(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();

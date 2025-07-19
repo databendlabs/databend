@@ -95,7 +95,7 @@ RowFetch
     ├── limit: 5
     ├── offset: 0
     ├── estimated rows: 5.00
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [t._vector_score (#2), t._row_id (#3)]
         ├── sort keys: [_vector_score ASC NULLS LAST]
         ├── estimated rows: 16.00

@@ -28,6 +28,7 @@ pub struct ShuffleExchangeParams {
     pub destination_ids: Vec<String>,
     pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
     pub exchange_injector: Arc<dyn ExchangeInjector>,
+    pub allow_adjust_parallelism: bool,
 }
 
 #[derive(Clone)]

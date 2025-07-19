@@ -23,6 +23,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 
 use super::RowConverter;
@@ -68,6 +69,15 @@ where
             inner: T::slice_column(&self.inner, range),
         }
     }
+
+    fn scalar_as_item<'a>(s: &'a Scalar) -> Self::Item<'a> {
+        let s = &s.as_ref();
+        T::try_downcast_scalar(s).unwrap()
+    }
+
+    fn owned_item(item: Self::Item<'_>) -> Scalar {
+        T::upcast_scalar(T::to_owned_scalar(item))
+    }
 }
 
 /// Rows structure for single simple types. (numbers, date, timestamp)
@@ -110,6 +120,15 @@ where
         Self {
             inner: T::slice_column(&self.inner, range),
         }
+    }
+
+    fn scalar_as_item<'a>(s: &'a Scalar) -> Self::Item<'a> {
+        let s = &s.as_ref();
+        Reverse(T::try_downcast_scalar(s).unwrap())
+    }
+
+    fn owned_item(item: Self::Item<'_>) -> Scalar {
+        T::upcast_scalar(T::to_owned_scalar(item.0))
     }
 }
 
