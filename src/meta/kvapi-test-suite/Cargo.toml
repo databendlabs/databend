@@ -11,7 +11,7 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-state-machine-api = { workspace = true }
+state-machine-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }

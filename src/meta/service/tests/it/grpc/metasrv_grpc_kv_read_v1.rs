@@ -22,7 +22,6 @@ use databend_common_meta_client::Streamed;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
-use databend_common_meta_state_machine_api::KVMeta;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::UpsertKV;
@@ -31,6 +30,7 @@ use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use log::info;
 use pretty_assertions::assert_eq;
+use state_machine_api::KVMeta;
 use test_harness::test;
 
 use crate::testing::meta_service_test_harness;

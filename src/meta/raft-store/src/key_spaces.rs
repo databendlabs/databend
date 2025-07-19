@@ -19,8 +19,6 @@ use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledKeySpace;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::ExpireValue;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Entry;
@@ -32,6 +30,8 @@ use databend_common_meta_types::SeqNum;
 use databend_common_meta_types::SeqV;
 use serde::Deserialize;
 use serde::Serialize;
+use state_machine_api::ExpireKey;
+use state_machine_api::ExpireValue;
 
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;

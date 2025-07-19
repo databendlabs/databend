@@ -30,7 +30,7 @@ databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
-databend-common-meta-state-machine-api = { workspace = true }
+state-machine-api = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }

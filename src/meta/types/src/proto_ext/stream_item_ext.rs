@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_state_machine_api::SeqV;
+use state_machine_api::SeqV;
 
 use crate::protobuf as pb;
 use crate::protobuf::StreamItem;

@@ -105,7 +105,6 @@ members = [
     "src/meta/raft-store",
     "src/meta/semaphore",
     "src/meta/sled-store",
-    "src/meta/state-machine-api",
     "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
@@ -156,7 +155,7 @@ databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
-databend-common-meta-state-machine-api = { path = "src/meta/state-machine-api" }
+state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.1.0" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }

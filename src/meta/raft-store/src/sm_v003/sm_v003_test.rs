@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::StateMachineApi;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
@@ -22,6 +20,8 @@ use map_api::map_api_ro::MapApiRO;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
 use seq_marked::SeqValue;
+use state_machine_api::ExpireKey;
+use state_machine_api::StateMachineApi;
 
 use crate::sm_v003::SMV003;
 use crate::state_machine_api_ext::StateMachineApiExt;

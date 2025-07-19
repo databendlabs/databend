@@ -16,8 +16,6 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::io;
 
-use databend_common_meta_state_machine_api::SeqV;
-use databend_common_meta_state_machine_api::StateMachineApi;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
@@ -25,6 +23,8 @@ use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::info;
 use openraft::entry::RaftEntry;
+use state_machine_api::SeqV;
+use state_machine_api::StateMachineApi;
 
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::compactor::Compactor;

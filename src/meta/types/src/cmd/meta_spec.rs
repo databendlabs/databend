@@ -16,9 +16,9 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-use databend_common_meta_state_machine_api::KVMeta;
 use deepsize::Context;
 use display_more::DisplayUnixTimeStampExt;
+use state_machine_api::KVMeta;
 
 use crate::cmd::CmdContext;
 use crate::time::flexible_timestamp_to_duration;
@@ -121,7 +121,7 @@ impl MetaSpec {
 mod tests {
     use std::time::Duration;
 
-    use databend_common_meta_state_machine_api::KVMeta;
+    use state_machine_api::KVMeta;
 
     use super::MetaSpec;
     use crate::cmd::CmdContext;

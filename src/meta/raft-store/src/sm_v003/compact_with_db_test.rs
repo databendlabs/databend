@@ -14,9 +14,6 @@
 
 use std::io;
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::KVMeta;
-use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
@@ -29,6 +26,9 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
