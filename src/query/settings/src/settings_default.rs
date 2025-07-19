@@ -1297,6 +1297,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("nondeterministic_update_lazy_read_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(u64::MAX),
+                    desc: "Sets the maximum rows in a query to enable lazy read optimization when updating a multi-joined row. Setting it to 0 disables the optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("enable_auto_vacuum", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Whether to automatically trigger VACUUM operations on tables (using vacuum2)",

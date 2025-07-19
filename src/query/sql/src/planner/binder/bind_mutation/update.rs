@@ -29,12 +29,14 @@ use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::RowFetch;
 use crate::plans::ScalarItem;
 use crate::plans::VisitorMut;
 use crate::BindContext;
@@ -282,14 +284,36 @@ impl Binder {
             .collect();
         let eval_scalar = EvalScalar { items };
 
-        mutation.bind_context.aggregate_info.group_items = fields_bindings
-            .into_iter()
-            .chain(std::iter::once(row_id))
-            .map(|column| ScalarItem {
-                index: column.index,
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
-            })
-            .collect();
+        mutation.bind_context.aggregate_info.group_items = vec![ScalarItem {
+            index: row_id.index,
+            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: row_id.clone(),
+            }),
+        }];
+
+        let enable_lazy_read = {
+            let settings = self.ctx.get_settings();
+            let lazy_read_threshold = settings.get_nondeterministic_update_lazy_read_threshold()?;
+            let rel_expr = RelExpr::with_s_expr(s_expr);
+            let cardinality = rel_expr.derive_cardinality_child(0)?;
+
+            lazy_read_threshold != 0 && lazy_read_threshold >= cardinality.cardinality as u64
+        };
+
+        if mutation.strategy == MutationStrategy::Direct || !enable_lazy_read {
+            mutation
+                .bind_context
+                .aggregate_info
+                .group_items
+                .extend(fields_bindings.iter().map(|column| ScalarItem {
+                    index: column.index,
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: column.clone(),
+                    }),
+                }));
+        }
 
         for eval in &mut mutation.matched_evaluators {
             if let Some(expr) = &mut eval.condition {
@@ -319,14 +343,20 @@ impl Binder {
                 .collect(),
         );
 
-        let aggr_expr =
+        let mut input =
             self.bind_aggregate(&mut mutation.bind_context, s_expr.unary_child().clone())?;
 
-        let input = if eval_scalar.items.is_empty() {
-            aggr_expr
-        } else {
-            aggr_expr.build_unary(Arc::new(eval_scalar.into()))
-        };
+        if !eval_scalar.items.is_empty() {
+            input = input.build_unary(Arc::new(eval_scalar.into()));
+        }
+
+        if mutation.strategy != MutationStrategy::Direct && enable_lazy_read {
+            input = input.build_unary(RelOperator::RowFetch(RowFetch {
+                need_wrap_nullable: false,
+                row_id_index: row_id.index,
+                lazy_columns: fields_bindings.iter().map(|x| x.index).collect(),
+            }));
+        }
 
         let s_expr = Box::new(input.build_unary(Arc::new(mutation.into())));
         let Plan::DataMutation {

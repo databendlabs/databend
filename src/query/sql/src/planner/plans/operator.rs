@@ -45,6 +45,7 @@ use crate::plans::Limit;
 use crate::plans::Mutation;
 use crate::plans::OptimizeCompactBlock as CompactBlock;
 use crate::plans::ProjectSet;
+use crate::plans::RowFetch;
 use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::Udf;
@@ -127,6 +128,7 @@ pub enum RelOp {
     MergeInto,
     CompactBlock,
     MutationSource,
+    RowFetch,
 }
 
 /// Relational operators
@@ -155,6 +157,7 @@ pub enum RelOperator {
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
     Udf(Udf),
+    RowFetch(RowFetch),
     RecursiveCteScan(RecursiveCteScan),
     AsyncFunction(AsyncFunction),
     Mutation(Mutation),

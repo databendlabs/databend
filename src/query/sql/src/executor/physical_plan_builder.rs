@@ -129,6 +129,10 @@ impl PhysicalPlanBuilder {
                 self.build_mutation_source(mutation_source).await
             }
             RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
+            RelOperator::RowFetch(row_fetch) => {
+                self.build_row_fetch(s_expr, row_fetch, required, stat_info)
+                    .await
+            }
         }
     }
 
