@@ -53,6 +53,8 @@ pub struct InnerConfig {
 
     pub log: LogConfig,
 
+    pub task: TaskConfig,
+
     // Meta Service config.
     pub meta: MetaConfig,
 
@@ -498,6 +500,11 @@ impl Debug for MetaConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogConfig {
     Hive(CatalogHiveConfig),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct TaskConfig {
+    pub on: bool,
 }
 
 // TODO: add compat protocol support

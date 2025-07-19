@@ -83,6 +83,8 @@ pub enum Feature {
     SystemHistory,
     #[serde(alias = "vector_index", alias = "VECTOR_INDEX")]
     VectorIndex,
+    #[serde(alias = "private_task", alias = "PRIVATE_TASK")]
+    PrivateTask,
     #[serde(other)]
     Unknown,
 }
@@ -134,6 +136,7 @@ impl fmt::Display for Feature {
             Feature::WorkloadGroup => write!(f, "workload_group"),
             Feature::SystemHistory => write!(f, "system_history"),
             Feature::VectorIndex => write!(f, "vector_index"),
+            Feature::PrivateTask => write!(f, "private_task"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -373,6 +376,11 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::PrivateTask,
+            serde_json::from_str::<Feature>("\"private_task\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -408,11 +416,12 @@ mod tests {
                 Feature::NgramIndex,
                 Feature::WorkloadGroup,
                 Feature::SystemHistory,
+                Feature::PrivateTask,
             ]),
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,ngram_index,private_task,storage_encryption,storage_quota(storage_usage: 1),stream,system_history,vacuum,virtual_column,workload_group] }",
             license_info.to_string()
         );
     }

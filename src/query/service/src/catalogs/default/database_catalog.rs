@@ -138,10 +138,10 @@ impl Debug for DatabaseCatalog {
 impl DatabaseCatalog {
     #[async_backtrace::framed]
     pub async fn try_create_with_config(conf: InnerConfig) -> Result<DatabaseCatalog> {
+        let table_function_factory = TableFunctionFactory::create(&conf);
         let immutable_catalog = ImmutableCatalog::try_create_with_config(Some(&conf), None)?;
         let mutable_catalog = MutableCatalog::try_create_with_config(conf).await?;
         let session_catalog = SessionCatalog::create(mutable_catalog, SessionState::default());
-        let table_function_factory = TableFunctionFactory::create();
         let res = DatabaseCatalog {
             immutable_catalog: Arc::new(immutable_catalog),
             mutable_catalog: Arc::new(session_catalog),

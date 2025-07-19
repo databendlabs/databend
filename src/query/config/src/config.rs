@@ -72,6 +72,7 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use super::inner::TaskConfig as InnerTaskConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -113,6 +114,9 @@ pub struct Config {
 
     #[clap(flatten)]
     pub log: LogConfig,
+
+    #[clap(flatten)]
+    pub task: TaskConfig,
 
     // Meta Service config.
     #[clap(flatten)]
@@ -2343,6 +2347,34 @@ impl From<InnerLogConfig> for LogConfig {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct TaskConfig {
+    #[clap(
+        long = "private-task-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub private_task_on: bool,
+}
+
+impl TryInto<InnerTaskConfig> for TaskConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerTaskConfig> {
+        Ok(InnerTaskConfig {
+            on: self.private_task_on,
+        })
+    }
+}
+
+impl From<InnerTaskConfig> for TaskConfig {
+    fn from(inner: InnerTaskConfig) -> Self {
+        TaskConfig {
+            private_task_on: inner.on,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
@@ -3555,6 +3587,7 @@ mod cache_config_converters {
                 config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
+                task: inner.task.into(),
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
@@ -3579,6 +3612,7 @@ mod cache_config_converters {
                 config_file,
                 query,
                 log,
+                task,
                 meta,
                 storage,
                 catalog,
@@ -3609,6 +3643,7 @@ mod cache_config_converters {
                 config_file,
                 query: query.try_into()?,
                 log: log.try_into()?,
+                task: task.try_into()?,
                 meta: meta.try_into()?,
                 storage: storage.try_into()?,
                 catalogs,
