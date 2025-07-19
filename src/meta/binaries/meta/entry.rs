@@ -209,7 +209,6 @@ async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), Met
     println!();
 
     let ent = LogEntry {
-        txid: None,
         time_ms: None,
         cmd: Cmd::AddNode {
             node_id,

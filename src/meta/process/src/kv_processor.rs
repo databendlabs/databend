@@ -139,7 +139,6 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             Cmd::SetFeature { .. } => Ok(None),
             Cmd::UpsertKV(ups) => {
                 let x = LogEntry {
-                    txid: log_entry.txid,
                     time_ms: log_entry.time_ms,
                     cmd: Cmd::UpsertKV(unwrap_or_return!(self.proc_upsert_kv(ups)?)),
                 };
@@ -162,7 +161,6 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                 }
 
                 Ok(Some(LogEntry {
-                    txid: log_entry.txid,
                     time_ms: log_entry.time_ms,
                     cmd: Cmd::Transaction(TxnRequest::new(condition, if_then).with_else(else_then)),
                 }))

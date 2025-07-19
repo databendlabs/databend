@@ -48,7 +48,6 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
         let maybe_leader = MetaLeader::new(mn);
         let rst = maybe_leader
             .write(LogEntry {
-                txid: None,
                 time_ms: None,
                 cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes())),
             })

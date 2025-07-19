@@ -193,7 +193,6 @@ impl<'a> MetaLeader<'a> {
         }
 
         let ent = LogEntry {
-            txid: None,
             time_ms: None,
             cmd: Cmd::AddNode {
                 node_id,
@@ -251,7 +250,6 @@ impl<'a> MetaLeader<'a> {
 
         // 2. Remove node info
         let ent = LogEntry {
-            txid: None,
             time_ms: None,
             cmd: Cmd::RemoveNode { node_id },
         };
