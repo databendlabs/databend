@@ -200,12 +200,7 @@ pub async fn fetch_id<T: kvapi::Key>(
     generator: T,
 ) -> Result<u64, MetaError> {
     let res = kv_api
-        .upsert_kv(UpsertKV {
-            key: generator.to_string_key(),
-            seq: MatchSeq::GE(0),
-            value: Operation::Update(b"".to_vec()),
-            value_meta: None,
-        })
+        .upsert_kv(UpsertKV::update(generator.to_string_key(), b""))
         .await?;
 
     // seq: MatchSeq::Any always succeeds

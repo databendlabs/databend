@@ -240,12 +240,7 @@ async fn upsert_test_data(
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
     let res = kv_api
-        .upsert_kv(UpsertKV {
-            key: key.to_string_key(),
-            seq: MatchSeq::GE(0),
-            value: Operation::Update(value),
-            value_meta: None,
-        })
+        .upsert_kv(UpsertKV::update(key.to_string_key(), &value))
         .await?;
 
     let seq_v = res.result.unwrap();
@@ -257,12 +252,7 @@ async fn delete_test_data(
     key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
-        .upsert_kv(UpsertKV {
-            key: key.to_string_key(),
-            seq: MatchSeq::GE(0),
-            value: Operation::Delete,
-            value_meta: None,
-        })
+        .upsert_kv(UpsertKV::delete(key.to_string_key()))
         .await?;
 
     Ok(())

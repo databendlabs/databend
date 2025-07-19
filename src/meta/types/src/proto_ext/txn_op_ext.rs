@@ -25,13 +25,9 @@ impl pb::TxnOp {
     /// Create a txn operation that puts a record.
     pub fn put(key: impl ToString, value: Vec<u8>) -> pb::TxnOp {
         pb::TxnOp {
-            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
-                key: key.to_string(),
-                value,
-                prev_value: true,
-                expire_at: None,
-                ttl_ms: None,
-            })),
+            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest::new(
+                key, value, true, None, None
+            ))),
         }
     }
 
@@ -40,13 +36,9 @@ impl pb::TxnOp {
     /// `ttl` is relative expire time while `expire_at` is absolute expire time.
     pub fn put_with_ttl(key: impl ToString, value: Vec<u8>, ttl: Option<Duration>) -> pb::TxnOp {
         pb::TxnOp {
-            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest {
-                key: key.to_string(),
-                value,
-                prev_value: true,
-                expire_at: None,
-                ttl_ms: ttl.map(|d| d.as_millis() as u64),
-            })),
+            request: Some(pb::txn_op::Request::Put(pb::TxnPutRequest::new(
+                key, value, true, None, ttl.map(|d| d.as_millis() as u64)
+            ))),
         }
     }
 
@@ -78,20 +70,16 @@ impl pb::TxnOp {
     /// Create a new `TxnOp` with a `Delete` operation that will be executed only when the `seq` matches.
     pub fn delete_exact(key: impl ToString, seq: Option<u64>) -> Self {
         pb::TxnOp {
-            request: Some(pb::txn_op::Request::Delete(pb::TxnDeleteRequest {
-                key: key.to_string(),
-                prev_value: true,
-                match_seq: seq,
-            })),
+            request: Some(pb::txn_op::Request::Delete(pb::TxnDeleteRequest::new(
+                key, true, seq
+            ))),
         }
     }
 
     /// Create a new `TxnOp` with a `Get` operation.
     pub fn get(key: impl ToString) -> Self {
         pb::TxnOp {
-            request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest {
-                key: key.to_string(),
-            })),
+            request: Some(pb::txn_op::Request::Get(pb::TxnGetRequest::new(key))),
         }
     }
 

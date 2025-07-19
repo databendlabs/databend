@@ -14,6 +14,7 @@
 
 use serde::Serialize;
 
+use crate::grpc_helper::GrpcHelper;
 use crate::protobuf::RaftReply;
 use crate::protobuf::RaftRequest;
 use crate::raft_types::AppendEntriesRequest;
@@ -24,9 +25,7 @@ use crate::MetaAPIError;
 
 impl tonic::IntoRequest<RaftRequest> for LogEntry {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(&self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
@@ -43,54 +42,42 @@ impl TryFrom<RaftRequest> for LogEntry {
 
 impl tonic::IntoRequest<RaftRequest> for AppendEntriesRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(&self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
 
 impl tonic::IntoRequest<RaftRequest> for &AppendEntriesRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
 
 impl tonic::IntoRequest<RaftRequest> for InstallSnapshotRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(&self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
 
 impl tonic::IntoRequest<RaftRequest> for &InstallSnapshotRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
 
 impl tonic::IntoRequest<RaftRequest> for VoteRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(&self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
 
 impl tonic::IntoRequest<RaftRequest> for &VoteRequest {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }

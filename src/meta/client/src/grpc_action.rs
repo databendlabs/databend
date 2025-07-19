@@ -29,6 +29,7 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::grpc_helper::GrpcHelper;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
@@ -71,10 +72,7 @@ impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
 
 impl From<MetaGrpcReq> for RaftRequest {
     fn from(v: MetaGrpcReq) -> Self {
-        let raft_request = RaftRequest {
-            // Safe unwrap(): serialize to string must be ok.
-            data: serde_json::to_string(&v).unwrap(),
-        };
+        let raft_request = GrpcHelper::encode_raft_request(&v).expect("fail to serialize");
 
         debug!(
             req :? =(&raft_request);
@@ -87,10 +85,8 @@ impl From<MetaGrpcReq> for RaftRequest {
 
 impl MetaGrpcReq {
     pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
-        let raft_request = RaftRequest {
-            data: serde_json::to_string(self)
-                .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?,
-        };
+        let raft_request = GrpcHelper::encode_raft_request(self)
+            .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?;
 
         debug!(
             req :? =(&raft_request);
@@ -124,10 +120,7 @@ impl RequestFor for MetaGrpcReadReq {
 
 impl From<MetaGrpcReadReq> for RaftRequest {
     fn from(v: MetaGrpcReadReq) -> Self {
-        let raft_request = RaftRequest {
-            // Safe unwrap(): serialize to string must be ok.
-            data: serde_json::to_string(&v).unwrap(),
-        };
+        let raft_request = GrpcHelper::encode_raft_request(&v).expect("fail to serialize");
 
         debug!(
             req :? =(&raft_request);
@@ -140,10 +133,8 @@ impl From<MetaGrpcReadReq> for RaftRequest {
 
 impl MetaGrpcReadReq {
     pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
-        let raft_request = RaftRequest {
-            data: serde_json::to_string(self)
-                .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?,
-        };
+        let raft_request = GrpcHelper::encode_raft_request(self)
+            .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?;
 
         debug!(
             req :? =(&raft_request);

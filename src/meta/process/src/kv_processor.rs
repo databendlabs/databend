@@ -173,12 +173,12 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             Operation::Update(v) => {
                 let buf = (self.process_pb)(&ups.key, v)?;
 
-                Ok(Some(UpsertKV {
-                    key: ups.key,
-                    seq: ups.seq,
-                    value: Operation::Update(buf),
-                    value_meta: ups.value_meta,
-                }))
+                Ok(Some(UpsertKV::new(
+                    ups.key,
+                    ups.seq,
+                    Operation::Update(buf),
+                    ups.value_meta,
+                )))
             }
             Operation::Delete => Ok(None),
             #[allow(deprecated)]
@@ -220,13 +220,7 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
     fn proc_tx_put_request(&self, p: TxnPutRequest) -> Result<TxnPutRequest, anyhow::Error> {
         let value = (self.process_pb)(&p.key, p.value)?;
 
-        let pr = TxnPutRequest {
-            key: p.key,
-            value,
-            prev_value: p.prev_value,
-            expire_at: p.expire_at,
-            ttl_ms: p.ttl_ms,
-        };
+        let pr = TxnPutRequest::new(p.key, value, p.prev_value, p.expire_at, p.ttl_ms);
 
         Ok(pr)
     }
