@@ -27,6 +27,8 @@ databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+serde-bridge = { workspace = true }
+serde-env = { workspace = true }
 serde_ignored = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }
