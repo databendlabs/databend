@@ -155,7 +155,7 @@ impl TableMetaLocationGenerator {
     pub fn block_stats_location(&self, block_id: &Uuid) -> Location {
         (
             format!(
-                "{}{}_v{}.parquet",
+                "{}{}_v{}.mpk",
                 self.block_statistics_location_prefix(),
                 block_id.as_simple(),
                 BlockStatistics::VERSION,
