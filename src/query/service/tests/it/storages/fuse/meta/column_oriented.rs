@@ -288,6 +288,39 @@ fn check_block_level_meta(
         assert!(is_null);
     }
 
+    // check block stats location
+    let block_stats_location = column_oriented_segment
+        .col_by_name(&[BLOCK_STATS_LOCATION])
+        .unwrap();
+    for (block_stats_location, block_meta) in block_stats_location.iter().zip(block_metas.iter()) {
+        let block_stats_location = block_stats_location.as_tuple();
+        if let Some(block_stats_location) = block_stats_location {
+            assert_eq!(
+                block_stats_location[0].as_string().unwrap(),
+                &block_meta.block_stats_location.as_ref().unwrap().0
+            );
+            assert_eq!(
+                block_stats_location[1]
+                    .as_number()
+                    .unwrap()
+                    .as_u_int64()
+                    .unwrap(),
+                &block_meta.block_stats_location.as_ref().unwrap().1
+            );
+        } else {
+            assert!(block_meta.block_stats_location.is_none());
+        }
+    }
+
+    // check block stats size
+    let block_stats_size = column_oriented_segment
+        .col_by_name(&[BLOCK_STATS_SIZE])
+        .unwrap();
+    for (block_stats_size, block_meta) in block_stats_size.iter().zip(block_metas.iter()) {
+        let block_stats_size = block_stats_size.as_number().unwrap().as_u_int64().unwrap();
+        assert_eq!(block_stats_size, &block_meta.block_stats_size);
+    }
+
     // check compression
     let compression = column_oriented_segment.col_by_name(&[COMPRESSION]).unwrap();
     for (compression, block_meta) in compression.iter().zip(block_metas.iter()) {
@@ -372,7 +405,7 @@ async fn test_segment_cache() -> Result<()> {
     )
     .await?;
     let cached = cache.get(&location).unwrap();
-    assert_eq!(cached.segment_schema.fields.len(), 10);
+    assert_eq!(cached.segment_schema.fields.len(), 12);
     assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
@@ -385,7 +418,7 @@ async fn test_segment_cache() -> Result<()> {
     let _column_oriented_segment =
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
-    assert_eq!(cached.segment_schema.fields.len(), 12);
+    assert_eq!(cached.segment_schema.fields.len(), 14);
 
     let column_1 = table_schema.field_of_column_id(col_id).unwrap();
     let stat_1 = column_oriented_segment
@@ -409,7 +442,7 @@ async fn test_segment_cache() -> Result<()> {
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
-    assert_eq!(cached.segment_schema.fields.len(), 13);
+    assert_eq!(cached.segment_schema.fields.len(), 15);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
     check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
@@ -423,7 +456,7 @@ async fn test_segment_cache() -> Result<()> {
         read_column_oriented_segment(operator.clone(), &location, &projection, true).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
-    assert_eq!(cached.segment_schema.fields.len(), 13);
+    assert_eq!(cached.segment_schema.fields.len(), 15);
     check_summary(&block_metas, &cached);
     check_block_level_meta(&block_metas, &cached);
     check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);

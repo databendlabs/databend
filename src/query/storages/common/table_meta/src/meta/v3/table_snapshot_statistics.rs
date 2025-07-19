@@ -29,7 +29,7 @@ pub type MetaHLL = simple_hll::HyperLogLog<12>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
-    /// format version of snapshot
+    /// format version of statistics
     pub format_version: FormatVersion,
 
     /// id of snapshot

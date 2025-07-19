@@ -17,6 +17,8 @@ use std::io::Read;
 use databend_common_exception::Result;
 
 use crate::meta::load_json;
+use crate::meta::BlockStatistics;
+use crate::meta::BlockStatisticsVersion;
 use crate::meta::TableSnapshotStatistics;
 use crate::meta::TableSnapshotStatisticsVersion;
 
@@ -42,6 +44,18 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
                 TableSnapshotStatistics::from(ts)
             }
             TableSnapshotStatisticsVersion::V3(v) => load_json(reader, v)?,
+        };
+        Ok(r)
+    }
+}
+
+impl VersionedReader<BlockStatistics> for BlockStatisticsVersion {
+    type TargetType = BlockStatistics;
+
+    fn read<R>(&self, reader: R) -> Result<BlockStatistics>
+    where R: Read + Unpin + Send {
+        let r = match self {
+            BlockStatisticsVersion::V0(_) => BlockStatistics::from_read(reader)?,
         };
         Ok(r)
     }

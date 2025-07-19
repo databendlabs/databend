@@ -37,10 +37,11 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
+use crate::io::StreamBlockProperties;
+use crate::operations::TransformBlockBuilder;
 use crate::operations::TransformBlockWriter;
 use crate::operations::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
-use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -50,19 +51,22 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
-        let enable_stream_block_write = ctx.get_settings().get_enable_block_stream_write()?
-            && matches!(self.storage_format, FuseStorageFormat::Parquet);
+        let enable_stream_block_write = self.enable_stream_block_write(ctx.clone())?;
         if enable_stream_block_write {
+            let properties = StreamBlockProperties::try_create(
+                ctx.clone(),
+                self,
+                MutationKind::Insert,
+                table_meta_timestamps,
+            )?;
+
             pipeline.add_transform(|input, output| {
-                TransformBlockWriter::try_create(
-                    ctx.clone(),
-                    input,
-                    output,
-                    self,
-                    table_meta_timestamps,
-                    false,
-                )
+                TransformBlockBuilder::try_create(input, output, properties.clone())
             })?;
+
+            pipeline.add_async_accumulating_transformer(|| {
+                TransformBlockWriter::create(ctx.clone(), MutationKind::Insert, self, false)
+            });
         } else {
             let block_thresholds = self.get_block_thresholds();
             build_compact_block_pipeline(pipeline, block_thresholds)?;

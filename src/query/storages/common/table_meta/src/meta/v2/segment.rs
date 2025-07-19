@@ -176,6 +176,10 @@ pub struct BlockMeta {
     pub virtual_block_meta: Option<VirtualBlockMeta>,
     pub compression: Compression,
 
+    pub block_stats_location: Option<Location>,
+    #[serde(default)]
+    pub block_stats_size: u64,
+
     // block create_on
     pub create_on: Option<DateTime<Utc>>,
 }
@@ -197,6 +201,8 @@ impl BlockMeta {
         vector_index_size: Option<u64>,
         vector_index_location: Option<Location>,
         virtual_block_meta: Option<VirtualBlockMeta>,
+        block_stats_location: Option<Location>,
+        block_stats_size: u64,
         compression: Compression,
         create_on: Option<DateTime<Utc>>,
     ) -> Self {
@@ -215,6 +221,8 @@ impl BlockMeta {
             vector_index_size,
             vector_index_location,
             virtual_block_meta,
+            block_stats_location,
+            block_stats_size,
             compression,
             create_on,
         }
@@ -377,6 +385,8 @@ impl BlockMeta {
             vector_index_size: None,
             vector_index_location: None,
             virtual_block_meta: None,
+            block_stats_location: None,
+            block_stats_size: 0,
             create_on: None,
             ngram_filter_index_size: None,
         }
@@ -405,6 +415,8 @@ impl BlockMeta {
             vector_index_size: None,
             vector_index_location: None,
             virtual_block_meta: None,
+            block_stats_location: None,
+            block_stats_size: 0,
             create_on: None,
             ngram_filter_index_size: None,
         }

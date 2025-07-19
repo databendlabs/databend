@@ -121,6 +121,7 @@ pub fn create_inverted_index_builders(table_meta: &TableMeta) -> Vec<InvertedInd
     inverted_index_builders
 }
 
+#[derive(Debug)]
 pub struct InvertedIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,

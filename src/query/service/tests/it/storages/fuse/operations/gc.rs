@@ -59,6 +59,7 @@ async fn test_fuse_purge_normal_case() -> Result<()> {
         1, // 1 segments
         1, // 1 blocks
         1, // 1 index
+        1, // 1 block statistic
         Some(()),
         None,
     )
@@ -118,9 +119,10 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         "do_gc: there should be 1 snapshot, 0 segment/block",
         expected_num_of_snapshot,
         0, // 0 snapshot statistic
-        1, // 0 segments
-        1, // 0 blocks
-        1, // 0 index
+        1, // 1 segments
+        1, // 1 blocks
+        1, // 1 index
+        1, // 1 block statistic
         Some(()),
         None,
     )
@@ -250,6 +252,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
     let expected_num_of_segment = 3;
     let expected_num_of_blocks = 3;
     let expected_num_of_index = expected_num_of_blocks;
+    let expected_num_of_block_stats = expected_num_of_blocks;
     check_data_dir(
         &fixture,
         "do_gc: verify retention period",
@@ -258,6 +261,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
         expected_num_of_segment,
         expected_num_of_blocks,
         expected_num_of_index,
+        expected_num_of_block_stats,
         Some(()),
         None,
     )
@@ -296,6 +300,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let expected_num_of_segment = 3;
         let expected_num_of_blocks = 6;
         let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_block_stats = expected_num_of_blocks;
         check_data_dir(
             &fixture,
             "do_gc: navigate to time point",
@@ -304,6 +309,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             expected_num_of_segment,
             expected_num_of_blocks,
             expected_num_of_index,
+            expected_num_of_block_stats,
             Some(()),
             None,
         )
@@ -317,7 +323,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
     {
         let table = fixture.latest_default_table().await?;
         compact_segment(ctx.clone(), &table).await?;
-        check_data_dir(&fixture, "", 4, 0, 5, 7, 7, Some(()), None).await?;
+        check_data_dir(&fixture, "", 4, 0, 5, 7, 7, 7, Some(()), None).await?;
     }
 
     let table = fixture.latest_default_table().await?;
@@ -333,6 +339,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let expected_num_of_segment = 1;
         let expected_num_of_blocks = 7;
         let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_block_stats = expected_num_of_blocks;
         check_data_dir(
             &fixture,
             "do_gc: with older version",
@@ -341,6 +348,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             expected_num_of_segment,
             expected_num_of_blocks,
             expected_num_of_index,
+            expected_num_of_block_stats,
             Some(()),
             None,
         )
@@ -357,6 +365,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
         let expected_num_of_segment = 0;
         let expected_num_of_blocks = 0;
         let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_block_stats = expected_num_of_blocks;
         check_data_dir(
             &fixture,
             "do_gc: purge last snapshot",
@@ -365,6 +374,7 @@ async fn test_fuse_purge_older_version() -> Result<()> {
             expected_num_of_segment,
             expected_num_of_blocks,
             expected_num_of_index,
+            expected_num_of_block_stats,
             Some(()),
             None,
         )
