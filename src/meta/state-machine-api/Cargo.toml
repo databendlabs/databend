@@ -1,5 +1,5 @@
 [package]
-name = "databend-common-meta-kvapi-test-suite"
+name = "databend-common-meta-state-machine-api"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -9,14 +9,13 @@ edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = { workspace = true }
-databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-state-machine-api = { workspace = true }
-databend-common-meta-types = { workspace = true }
 display-more = { workspace = true }
-fastrace = { workspace = true }
-log = { workspace = true }
-tokio = { workspace = true }
+map-api = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true

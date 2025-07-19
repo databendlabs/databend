@@ -18,7 +18,10 @@ use std::fmt;
 use std::fmt::Write;
 use std::io;
 
-use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_state_machine_api::ExpireKey;
+use databend_common_meta_state_machine_api::KVMeta;
+use databend_common_meta_state_machine_api::MetaValue;
+use databend_common_meta_state_machine_api::UserKey;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 pub use map_api::map_key::MapKey;
@@ -26,10 +29,6 @@ pub use map_api::map_value::MapValue;
 pub use map_api::BeforeAfter;
 pub use map_api::IOResultStream;
 use seq_marked::SeqMarked;
-
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 pub type MapKeyPrefix = &'static str;
 

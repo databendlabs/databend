@@ -49,7 +49,6 @@ use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_metrics::cluster::*;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_enterprise_resources_management::ResourcesManagement;
@@ -579,7 +578,7 @@ impl ClusterDiscovery {
     async fn start_heartbeat(self: &Arc<Self>, seq_node: SeqV<NodeInfo>) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
         let seq = seq_node.seq;
-        let node_info = seq_node.into_value().unwrap();
+        let node_info = seq_node.data;
         heartbeat.start(node_info, seq);
         Ok(())
     }

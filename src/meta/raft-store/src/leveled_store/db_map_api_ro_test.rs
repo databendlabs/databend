@@ -14,7 +14,9 @@
 
 //! Test for db_map_api_ro_impl.
 
-use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_state_machine_api::ExpireKey;
+use databend_common_meta_state_machine_api::KVMeta;
+use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
@@ -24,8 +26,6 @@ use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::map_api::AsMap;
 use crate::sm_v003::SMV003;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_db_map_api_ro() -> anyhow::Result<()> {
