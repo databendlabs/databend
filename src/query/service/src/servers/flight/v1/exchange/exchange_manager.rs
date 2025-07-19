@@ -25,6 +25,7 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightData;
 use async_channel::Receiver;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::Thread;
@@ -112,6 +113,30 @@ impl DataExchangeManager {
             None => format!("Unknown running query {}", query_id),
             Some(executor) => executor.get_inner().format_graph_nodes(),
         })
+    }
+
+    pub fn get_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut executors = Vec::new();
+        {
+            let queries_coordinator_guard = self.queries_coordinator.lock();
+            let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+            for (query_id, query_coordinator) in queries_coordinator.iter() {
+                if let Some(info) = &query_coordinator.info {
+                    if let Some(executor) = info.query_executor.clone() {
+                        executors.push((query_id, executor));
+                    }
+                }
+            }
+        }
+        executors
+            .into_iter()
+            .map(|(query_id, executor)| {
+                (
+                    query_id.clone(),
+                    executor.get_inner().get_query_execution_stats(),
+                )
+            })
+            .collect()
     }
 
     pub fn get_query_ctx(&self, query_id: &str) -> Result<Arc<QueryContext>> {
