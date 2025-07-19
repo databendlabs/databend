@@ -361,7 +361,7 @@ error:
   --> SQL:1:15
   |
 1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
-  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
+  | ----- ------  ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `ACCESS`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -399,7 +399,7 @@ error:
   --> SQL:1:24
   |
 1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
-  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
+  | ------ ------          ^^^ unexpected `ALL`, expecting `ALTER`, `SELECT`, `DELETE`, `ACCESS`, `USAGE`, `INSERT`, `UPDATE`, `SUPER`, `CREATE`, `DROP`, `GRANT`, or `SET`
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
@@ -930,7 +930,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -942,7 +942,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -954,7 +954,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1055,7 +1055,7 @@ error:
   --> SQL:1:16
   |
 1 | SHOW GRANTS ON task t1;
-  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `WAREHOUSE`, `DATABASE`, or `UDF`
+  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `WAREHOUSE`, `DATABASE`, `UDF`, or `CONNECTION`
 
 
 ---------- Input ----------

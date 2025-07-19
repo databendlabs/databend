@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_sql::plans::CreateConnectionPlan;
+use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -64,6 +67,26 @@ impl Interpreter for CreateConnectionInterpreter {
         let _create_file_format = user_mgr
             .add_connection(&tenant, conn, &plan.create_option)
             .await?;
+
+        // Grant ownership as the current role
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Connection {
+                            name: self.plan.name.clone(),
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

@@ -244,7 +244,7 @@ impl AsyncSource for ShowGrantsSource {
             "role" | "user" => {
                 show_account_grants(self.ctx.clone(), &self.grant_type, &self.name).await?
             }
-            "table" | "database" | "udf" | "stage" | "warehouse" => {
+            "table" | "database" | "udf" | "stage" | "warehouse" | "connection" => {
                 show_object_grant(
                     self.ctx.clone(),
                     &self.grant_type,
@@ -257,7 +257,7 @@ impl AsyncSource for ShowGrantsSource {
             "role_grantee" => show_role_grantees(self.ctx.clone(), &self.name).await?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage|warehouse|role_grantee', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|role_grantee', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -536,6 +536,12 @@ async fn show_account_grants(
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
                 }
+                GrantObject::Connection(connection) => {
+                    object_name.push(connection.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
                 GrantObject::Global => {
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());
@@ -628,6 +634,15 @@ async fn show_account_grants(
                                     id, identity
                                 ));
                             }
+                        }
+                        OwnershipObject::Connection { name } => {
+                            object_name.push(name.to_string());
+                            object_id.push(None);
+                            privileges.push("OWNERSHIP".to_string());
+                            grant_list.push(format!(
+                                "GRANT OWNERSHIP ON CONNECTION {} TO {}",
+                                name, identity
+                            ));
                         }
                     }
                 }
@@ -854,9 +869,25 @@ async fn show_object_grant(
                 name,
             )
         }
+        "connection" => {
+            if !visibility_checker.check_connection_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS CONNECTION is required on connection {} for user {}",
+                    name, current_user
+                )));
+            }
+            (
+                GrantObject::Connection(name.to_string()),
+                OwnershipObject::Connection {
+                    name: name.to_string(),
+                },
+                None,
+                name,
+            )
+        }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Expected 'table|database|udf|stage|warehouse', but got {:?}",
+                "Expected 'table|database|udf|stage|warehouse|connection', but got {:?}",
                 grant_type
             )));
         }

@@ -194,6 +194,7 @@ impl Binder {
             AccountMgrLevel::UDF(udf) => Ok(GrantObject::UDF(udf.clone())),
             AccountMgrLevel::Stage(stage) => Ok(GrantObject::Stage(stage.clone())),
             AccountMgrLevel::Warehouse(w) => Ok(GrantObject::Warehouse(w.clone())),
+            AccountMgrLevel::Connection(c) => Ok(GrantObject::Connection(c.clone())),
         }
     }
 
@@ -255,6 +256,7 @@ impl Binder {
             AccountMgrLevel::UDF(udf) => Ok(vec![GrantObject::UDF(udf.clone())]),
             AccountMgrLevel::Stage(stage) => Ok(vec![GrantObject::Stage(stage.clone())]),
             AccountMgrLevel::Warehouse(w) => Ok(vec![GrantObject::Warehouse(w.clone())]),
+            AccountMgrLevel::Connection(c) => Ok(vec![GrantObject::Connection(c.clone())]),
         }
     }
 
@@ -487,6 +489,9 @@ impl Binder {
             }
             GrantObjectName::Warehouse(name) => {
                 format!("SELECT * FROM show_grants('warehouse', '{}')", name)
+            }
+            GrantObjectName::Connection(name) => {
+                format!("SELECT * FROM show_grants('connection', '{}')", name)
             }
         };
 

@@ -194,6 +194,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Warehouse(pb::grant_object::GrantWarehouseObject {
                 warehouse,
             }) => Ok(mt::principal::GrantObject::Warehouse(warehouse)),
+            pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
+                connection,
+            }) => Ok(mt::principal::GrantObject::Connection(connection)),
         }
     }
 
@@ -241,6 +244,11 @@ impl FromToProto for mt::principal::GrantObject {
                     warehouse: w.clone(),
                 },
             )),
+            mt::principal::GrantObject::Connection(c) => Some(
+                pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
+                    connection: c.clone(),
+                }),
+            ),
         };
         Ok(pb::GrantObject {
             ver: VER,

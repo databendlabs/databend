@@ -1,4 +1,10 @@
 statement ok
+GRANT access connection on connection c2 to role 'role2';
+
+statement ok
+GRANT ownership on connection c2 to role 'role2';
+
+statement ok
 show grants for role 'role1';
 
 statement ok

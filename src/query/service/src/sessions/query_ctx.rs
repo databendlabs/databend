@@ -1165,6 +1165,18 @@ impl TableContext for QueryContext {
         }
     }
     async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        if self
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let visibility_checker = self.get_visibility_checker(false).await?;
+            if !visibility_checker.check_connection_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
+                    &self.get_current_user()?.identity().display(),
+                )));
+            }
+        }
         self.shared.get_connection(name).await
     }
 

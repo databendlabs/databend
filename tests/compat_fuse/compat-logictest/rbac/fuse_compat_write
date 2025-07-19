@@ -11,6 +11,12 @@ statement ok
 create function a as (a) -> (a+1);
 
 statement ok
+create connection c1 storage_type = 's3' access_key_id ='11' secret_access_key ='11' ENDPOINT_URL='http://127.0.0.1:9900';
+
+statement ok
+create connection c2 storage_type = 's3' access_key_id ='22' secret_access_key ='22' ENDPOINT_URL='http://127.0.0.1:9900';
+
+statement ok
 drop role if exists 'role2';
 
 statement ok
@@ -21,3 +27,6 @@ GRANT OWNERSHIP on udf a to role 'role1';
 
 statement ok
 GRANT create warehouse on *.* to role 'role1';
+
+statement ok
+GRANT create connection on *.* to role 'role1';

@@ -32,6 +32,7 @@ use itertools::Itertools;
 pub struct GrantObjectVisibilityChecker {
     granted_global_udf: bool,
     granted_global_ws: bool,
+    granted_global_c: bool,
     granted_global_db_table: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
@@ -46,6 +47,7 @@ pub struct GrantObjectVisibilityChecker {
     granted_write_stages: HashSet<String>,
     granted_read_stages: HashSet<String>,
     granted_ws: HashSet<String>,
+    granted_c: HashSet<String>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -56,6 +58,7 @@ impl GrantObjectVisibilityChecker {
     ) -> Self {
         let mut granted_global_udf = false;
         let mut granted_global_ws = false;
+        let mut granted_global_c = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
@@ -63,6 +66,7 @@ impl GrantObjectVisibilityChecker {
         let mut granted_tables = HashSet::new();
         let mut granted_udfs = HashSet::new();
         let mut granted_ws = HashSet::new();
+        let mut granted_c = HashSet::new();
         let mut granted_write_stages = HashSet::new();
         let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
@@ -104,6 +108,15 @@ impl GrantObjectVisibilityChecker {
                             ent.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_warehouse(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_c,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_connection(false)
                                     .has_privilege(privilege)
                             },
                         );
@@ -181,6 +194,9 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Warehouse(w) => {
                         granted_ws.insert(w.to_string());
                     }
+                    GrantObject::Connection(c) => {
+                        granted_c.insert(c.to_string());
+                    }
                 }
             }
         }
@@ -212,12 +228,16 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::Warehouse { id } => {
                     granted_ws.insert(id.to_string());
                 }
+                OwnershipObject::Connection { name } => {
+                    granted_c.insert(name.to_string());
+                }
             }
         }
 
         Self {
             granted_global_udf,
             granted_global_ws,
+            granted_global_c,
             granted_global_db_table,
             granted_global_stage,
             granted_global_read_stage,
@@ -235,6 +255,7 @@ impl GrantObjectVisibilityChecker {
                 ("default".to_string(), "system".to_string()),
             ]),
             granted_ws,
+            granted_c,
         }
     }
 
@@ -277,6 +298,16 @@ impl GrantObjectVisibilityChecker {
         }
 
         if self.granted_ws.contains(id) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_connection_visibility(&self, name: &str) -> bool {
+        if self.granted_global_c {
+            return true;
+        }
+        if self.granted_c.contains(name) {
             return true;
         }
         false

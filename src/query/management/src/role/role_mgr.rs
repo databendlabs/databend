@@ -566,6 +566,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::Stage { name } => GrantObject::Stage(name.to_string()),
         OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
         OwnershipObject::Warehouse { id } => GrantObject::Warehouse(id.to_string()),
+        OwnershipObject::Connection { name } => GrantObject::Connection(name.to_string()),
     }
 }
 
