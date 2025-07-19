@@ -21,7 +21,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::Cmd;
-use crate::RaftTxId;
 
 /// The application data request type which the `metasrv` works with.
 ///
@@ -30,9 +29,6 @@ use crate::RaftTxId;
 /// "client" and "serial", thus the raft engine is able to distinguish if a request is duplicated.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub struct LogEntry {
-    /// When not None, it is used to filter out duplicated logs, which are caused by retries by client.
-    pub txid: Option<RaftTxId>,
-
     /// The time in millisecond when this log is proposed by the leader.
     ///
     /// State machine depends on clock time to expire values.
@@ -47,9 +43,6 @@ pub struct LogEntry {
 
 impl Display for LogEntry {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        if let Some(txid) = &self.txid {
-            write!(f, "txid: {:?}", txid)?;
-        }
         if let Some(time_ms) = &self.time_ms {
             write!(
                 f,
@@ -64,14 +57,36 @@ impl Display for LogEntry {
 
 impl LogEntry {
     pub fn new(cmd: Cmd) -> Self {
-        Self {
-            txid: None,
-            time_ms: None,
-            cmd,
-        }
+        Self { time_ms: None, cmd }
     }
-    pub fn with_txid(mut self, txid: Option<RaftTxId>) -> Self {
-        self.txid = txid;
-        self
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// With txid before 2025-07-19
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
+    pub struct LogEntryWithTxid {
+        pub txid: Option<()>,
+
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub time_ms: Option<u64>,
+
+        /// The action a client want to take.
+        pub cmd: Cmd,
+    }
+
+    #[test]
+    fn test_compat_with_and_without_txid() {
+        let json_with_txid = r#"{"txid":null,"time_ms":1667290824603,"cmd":{"UpsertKV":{"key":"__fd_clusters","seq":{"Exact":0},"value":{"Update":[123]},"value_meta":{"expire_at":1667290884}}}}"#;
+
+        let log_entry: LogEntry = serde_json::from_str(json_with_txid).unwrap();
+        println!("{:?}", log_entry);
+
+        let json_without_txid = r#"{"time_ms":1667290824603,"cmd":{"UpsertKV":{"key":"__fd_clusters","seq":{"Exact":0},"value":{"Update":[123]},"value_meta":{"expire_at":1667290884}}}}"#;
+
+        let log_entry: LogEntryWithTxid = serde_json::from_str(json_without_txid).unwrap();
+        println!("{:?}", log_entry);
     }
 }

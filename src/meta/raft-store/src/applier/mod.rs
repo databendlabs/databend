@@ -117,7 +117,6 @@ where SM: StateMachineApi<SysData> + 'static
             }
             EntryPayload::Normal(ref data) => {
                 info!("apply: normal: {} {}", log_id, data);
-                assert!(data.txid.is_none(), "txid is disabled");
 
                 self.apply_cmd(&data.cmd).await?
             }

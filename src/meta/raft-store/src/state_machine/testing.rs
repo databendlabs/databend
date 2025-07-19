@@ -18,7 +18,6 @@ use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::RaftTxId;
 use databend_common_meta_types::UpsertKV;
 use maplit::btreeset;
 use openraft::entry::RaftEntry;
@@ -39,7 +38,6 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
         Entry {
             log_id: new_log_id(1, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
-                txid: None,
                 time_ms: None,
                 cmd: Cmd::UpsertKV(UpsertKV::update("a", b"A")),
             }),
@@ -63,7 +61,6 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
         Entry {
             log_id: new_log_id(1, 0, 9),
             payload: EntryPayload::Normal(LogEntry {
-                txid: None,
                 time_ms: None,
                 cmd: Cmd::AddNode {
                     node_id: 5,
@@ -84,26 +81,4 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
     .collect::<Vec<_>>();
 
     (logs, want)
-}
-
-// test cases fro Cmd::IncrSeq:
-// case_name, txid, key, want
-pub fn cases_incr_seq() -> Vec<(&'static str, Option<RaftTxId>, &'static str, u64)> {
-    vec![
-        ("incr on none", Some(RaftTxId::new("foo", 1)), "k1", 1),
-        ("incr on existent", Some(RaftTxId::new("foo", 2)), "k1", 2),
-        (
-            "dup: same serial, even with diff key, got the previous result",
-            Some(RaftTxId::new("foo", 2)),
-            "k2",
-            2,
-        ),
-        (
-            "diff client, same serial, not a dup request",
-            Some(RaftTxId::new("bar", 2)),
-            "k2",
-            1,
-        ),
-        ("no txid, no de-dup", None, "k2", 2),
-    ]
 }

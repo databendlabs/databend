@@ -251,11 +251,7 @@ async fn init_new_cluster(
 
             let entry: Entry = Entry {
                 log_id,
-                payload: EntryPayload::Normal(LogEntry {
-                    txid: None,
-                    time_ms: None,
-                    cmd,
-                }),
+                payload: EntryPayload::Normal(LogEntry { time_ms: None, cmd }),
             };
 
             sto.blocking_append([entry]).await?;
