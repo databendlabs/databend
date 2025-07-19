@@ -58,6 +58,7 @@ use crate::executor::physical_plans::MutationOrganize;
 use crate::executor::physical_plans::MutationSplit;
 use crate::executor::physical_plans::RowFetch;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
@@ -283,11 +284,21 @@ impl PhysicalPlanBuilder {
             }));
         }
 
+        let already_enable_lazy_read = {
+            let settings = self.ctx.get_settings();
+            let lazy_read_threshold = settings.get_nondeterministic_update_lazy_read_threshold()?;
+            let rel_expr = RelExpr::with_s_expr(s_expr);
+            let cardinality = rel_expr.derive_cardinality_child(0)?;
+
+            lazy_read_threshold != 0 && lazy_read_threshold >= cardinality.cardinality as u64
+        };
+
         // Construct row fetch plan for lazy columns.
-        if let Some(lazy_columns) = self
-            .metadata
-            .read()
-            .get_table_lazy_columns(target_table_index)
+        if !already_enable_lazy_read
+            && let Some(lazy_columns) = self
+                .metadata
+                .read()
+                .get_table_lazy_columns(target_table_index)
             && !lazy_columns.is_empty()
         {
             plan = PhysicalPlan::RowFetch(build_mutation_row_fetch(

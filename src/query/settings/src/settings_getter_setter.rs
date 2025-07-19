@@ -1013,4 +1013,8 @@ impl Settings {
     pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
     }
+
+    pub fn get_nondeterministic_update_lazy_read_threshold(&self) -> Result<u64> {
+        self.try_get_u64("nondeterministic_update_lazy_read_threshold")
+    }
 }

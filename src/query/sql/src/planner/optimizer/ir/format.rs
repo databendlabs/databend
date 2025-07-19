@@ -53,6 +53,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Sort(_) => "Sort".to_string(),
         RelOperator::Limit(_) => "Limit".to_string(),
         RelOperator::UnionAll(_) => "UnionAll".to_string(),
+        RelOperator::RowFetch(_) => "RowFetch".to_string(),
         RelOperator::Exchange(op) => {
             format!("Exchange: ({})", match op {
                 Exchange::Hash(scalars) => format!(

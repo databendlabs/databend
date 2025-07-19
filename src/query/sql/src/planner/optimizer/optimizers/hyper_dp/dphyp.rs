@@ -336,6 +336,7 @@ impl DPhpyOptimizer {
             | RelOperator::Aggregate(_)
             | RelOperator::Sort(_)
             | RelOperator::Limit(_)
+            | RelOperator::RowFetch(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
             | RelOperator::Udf(_)
