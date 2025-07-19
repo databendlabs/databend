@@ -20,6 +20,24 @@ use display_more::DisplayUnixTimeStampExt;
 
 use crate::TxnPutRequest;
 
+impl TxnPutRequest {
+    pub fn new(
+        key: impl ToString,
+        value: Vec<u8>,
+        prev_value: bool,
+        expire_at: Option<u64>,
+        ttl_ms: Option<u64>,
+    ) -> Self {
+        Self {
+            key: key.to_string(),
+            value,
+            prev_value,
+            expire_at,
+            ttl_ms,
+        }
+    }
+}
+
 impl Display for TxnPutRequest {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Put key={}", self.key)?;

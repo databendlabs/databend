@@ -2188,9 +2188,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn.if_then
                 .push(txn_op_put(&tbid, serialize_struct(&new_table_meta)?));
             txn.else_then.push(TxnOp {
-                request: Some(Request::Get(TxnGetRequest {
-                    key: tbid.to_string_key(),
-                })),
+                request: Some(Request::Get(TxnGetRequest::new(tbid.to_string_key()))),
             });
 
             new_table_meta_map.insert(req.0.table_id, new_table_meta);

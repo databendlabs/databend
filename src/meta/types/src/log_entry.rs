@@ -23,10 +23,6 @@ use serde::Serialize;
 use crate::Cmd;
 
 /// The application data request type which the `metasrv` works with.
-///
-/// The client and the serial together provides external consistency:
-/// If a client failed to recv the response, it  re-send another RaftRequest with the same
-/// "client" and "serial", thus the raft engine is able to distinguish if a request is duplicated.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
 pub struct LogEntry {
     /// The time in millisecond when this log is proposed by the leader.
@@ -58,6 +54,10 @@ impl Display for LogEntry {
 impl LogEntry {
     pub fn new(cmd: Cmd) -> Self {
         Self { time_ms: None, cmd }
+    }
+
+    pub fn new_with_time(cmd: Cmd, time_ms: Option<u64>) -> Self {
+        Self { time_ms, cmd }
     }
 }
 

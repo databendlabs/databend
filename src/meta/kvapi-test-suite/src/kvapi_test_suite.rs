@@ -834,23 +834,19 @@ impl TestSuite {
                 TxnOp::put(txn_key2.clone(), b("new_v2")),
                 // get k1
                 TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
+                    request: Some(txn_op::Request::Get(TxnGetRequest::new(txn_key1.clone()))),
                 },
                 // delete k1
                 TxnOp {
-                    request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                        key: txn_key1.clone(),
-                        prev_value: true,
-                        match_seq: None,
-                    })),
+                    request: Some(txn_op::Request::Delete(TxnDeleteRequest::new(
+                        txn_key1.clone(),
+                        true,
+                        None,
+                    ))),
                 },
                 // get k1
                 TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
+                    request: Some(txn_op::Request::Get(TxnGetRequest::new(txn_key1.clone()))),
                 },
             ];
 
