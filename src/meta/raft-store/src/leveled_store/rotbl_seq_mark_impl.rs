@@ -22,12 +22,12 @@
 
 use std::io;
 
-use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_state_machine_api::KVMeta;
+use databend_common_meta_state_machine_api::MetaValue;
 use rotbl::v001::Marked;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::value_convert::ValueConvert;
-use crate::marked::MetaValue;
 
 impl ValueConvert<SeqMarked> for SeqMarked<MetaValue> {
     fn conv_to(self) -> Result<SeqMarked, io::Error> {

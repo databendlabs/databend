@@ -29,9 +29,8 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 use futures::future::FutureExt;
@@ -41,6 +40,7 @@ use futures::stream::BoxStream;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
 use itertools::Itertools;
+use seq_marked::SeqValue;
 
 pub(crate) use self::codec::decode_non_empty_item;
 pub(crate) use self::codec::decode_seqv;
@@ -524,9 +524,8 @@ mod tests {
     use databend_common_meta_kvapi::kvapi::KVStream;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
     use databend_common_meta_types::protobuf::StreamItem;
-    use databend_common_meta_types::seq_value::SeqV;
-    use databend_common_meta_types::seq_value::SeqValue;
     use databend_common_meta_types::MetaError;
+    use databend_common_meta_types::SeqV;
     use databend_common_meta_types::TxnReply;
     use databend_common_meta_types::TxnRequest;
     use databend_common_meta_types::UpsertKV;
@@ -534,6 +533,7 @@ mod tests {
     use futures::StreamExt;
     use futures::TryStreamExt;
     use prost::Message;
+    use seq_marked::SeqValue;
 
     use crate::kv_pb_api::KVPbApi;
 

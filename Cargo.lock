@@ -3598,6 +3598,7 @@ dependencies = [
  "futures",
  "log",
  "prost",
+ "seq-marked",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3628,6 +3629,7 @@ dependencies = [
  "maplit",
  "prost",
  "rand 0.8.5",
+ "seq-marked",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3784,6 +3786,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "databend-common-meta-kvapi",
+ "databend-common-meta-state-machine-api",
  "databend-common-meta-types",
  "display-more",
  "fastrace",
@@ -3818,13 +3821,12 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode 2.0.1",
- "byteorder",
- "chrono",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-kvapi",
  "databend-common-meta-sled-store",
+ "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-version",
@@ -3873,6 +3875,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "pretty_assertions",
+ "seq-marked",
  "thiserror 1.0.69",
  "tokio",
  "tonic",
@@ -3883,7 +3886,9 @@ name = "databend-common-meta-sled-store"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "byteorder",
+ "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "fastrace",
@@ -3894,6 +3899,17 @@ dependencies = [
  "sled",
  "tempfile",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "databend-common-meta-state-machine-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "display-more",
+ "map-api",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -3935,6 +3951,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "databend-common-exception",
+ "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
@@ -5127,6 +5144,7 @@ dependencies = [
  "databend-common-meta-raft-store",
  "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
+ "databend-common-meta-state-machine-api",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
  "databend-common-metrics",
@@ -10026,8 +10044,8 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.2.6"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.6#015e10b3d22a0bf217ddc31f98b76a864ae60a4e"
+version = "0.2.7"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.2.7#f9b7ee4594f39e9e54e5afca9160e0bbb19d96aa"
 dependencies = [
  "async-trait",
  "deepsize",

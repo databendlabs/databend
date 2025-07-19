@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_state_machine_api::ExpireKey;
+use databend_common_meta_state_machine_api::KVMeta;
+use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
@@ -31,8 +33,6 @@ use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003::SMV003;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {

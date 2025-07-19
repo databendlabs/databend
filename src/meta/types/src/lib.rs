@@ -27,7 +27,6 @@ mod grpc_helper;
 mod log_entry;
 mod message;
 mod operation;
-mod raft_txid;
 mod seq_num;
 mod time;
 mod with;
@@ -39,7 +38,6 @@ pub mod cmd;
 pub mod errors;
 pub mod node;
 pub mod raft_types;
-pub mod seq_value;
 pub mod snapshot_db;
 pub mod sys_data;
 // reexport
@@ -82,6 +80,7 @@ pub mod match_seq {
     pub use map_api::match_seq::MatchSeq;
     pub use map_api::match_seq::MatchSeqExt;
 }
+pub use databend_common_meta_state_machine_api::SeqV;
 pub use match_seq::ConflictSeq;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
@@ -105,12 +104,7 @@ pub use protobuf::TxnPutRequest;
 pub use protobuf::TxnPutResponse;
 pub use protobuf::TxnReply;
 pub use protobuf::TxnRequest;
-pub use raft_txid::RaftTxId;
 pub use seq_num::SeqNum;
-pub use seq_value::KVMeta;
-pub use seq_value::SeqV;
-pub use seq_value::SeqValue;
-pub use time::flexible_timestamp_to_duration;
 pub use time::Interval;
 pub use time::Time;
 pub use with::With;

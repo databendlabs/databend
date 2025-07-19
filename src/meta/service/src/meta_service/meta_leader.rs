@@ -192,16 +192,12 @@ impl<'a> MetaLeader<'a> {
             return Ok(());
         }
 
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::AddNode {
-                node_id,
-                node: Node::new(node_id, endpoint)
-                    .with_grpc_advertise_address(req.grpc_api_advertise_address),
-                overriding: false,
-            },
-        };
+        let ent = LogEntry::new(Cmd::AddNode {
+            node_id,
+            node: Node::new(node_id, endpoint)
+                .with_grpc_advertise_address(req.grpc_api_advertise_address),
+            overriding: false,
+        });
         self.write(ent).await?;
 
         self.raft
@@ -250,11 +246,7 @@ impl<'a> MetaLeader<'a> {
             .await?;
 
         // 2. Remove node info
-        let ent = LogEntry {
-            txid: None,
-            time_ms: None,
-            cmd: Cmd::RemoveNode { node_id },
-        };
+        let ent = LogEntry::new(Cmd::RemoveNode { node_id });
         self.write(ent).await?;
 
         Ok(())

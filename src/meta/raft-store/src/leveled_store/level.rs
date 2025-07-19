@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_state_machine_api::ExpireKey;
+use databend_common_meta_state_machine_api::MetaValue;
+use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::StreamExt;
 use log::warn;
@@ -29,9 +32,6 @@ use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 /// A single level of state machine data.
 ///

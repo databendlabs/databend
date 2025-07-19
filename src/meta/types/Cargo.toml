@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 anyerror = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-common-meta-state-machine-api = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-tracing = { workspace = true }
 deepsize = { workspace = true }

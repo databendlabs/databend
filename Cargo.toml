@@ -105,6 +105,7 @@ members = [
     "src/meta/raft-store",
     "src/meta/semaphore",
     "src/meta/sled-store",
+    "src/meta/state-machine-api",
     "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
@@ -155,6 +156,7 @@ databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
 databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
+databend-common-meta-state-machine-api = { path = "src/meta/state-machine-api" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
@@ -658,7 +660,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 display-more = { git = "https://github.com/databendlabs/display-more", tag = "v0.2.0" }
-map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.6" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.7" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "d82aa6d" }

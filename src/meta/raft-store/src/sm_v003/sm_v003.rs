@@ -16,12 +16,13 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::io;
 
+use databend_common_meta_state_machine_api::SeqV;
+use databend_common_meta_state_machine_api::StateMachineApi;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::StorageError;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
-use databend_common_meta_types::SeqV;
 use log::info;
 use openraft::entry::RaftEntry;
 
@@ -32,7 +33,6 @@ use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
-use crate::state_machine_api::StateMachineApi;
 
 type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
 
@@ -56,7 +56,7 @@ impl fmt::Debug for SMV003 {
     }
 }
 
-impl StateMachineApi for SMV003 {
+impl StateMachineApi<SysData> for SMV003 {
     type UserMap = LeveledMap;
 
     fn user_map(&self) -> &Self::UserMap {
