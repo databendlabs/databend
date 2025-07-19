@@ -37,6 +37,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_meta_api::kv_pb_api::decode_seqv;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskMessageType;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::principal::ScheduleOptions;
@@ -450,7 +451,7 @@ impl TaskService {
                     task_mgr
                         .accept(&TaskMessageIdent::new(
                             tenant,
-                            TaskMessage::schedule_key(&task_name),
+                            TaskMessage::key_with_type(TaskMessageType::Schedule, &task_name),
                         ))
                         .await?;
                 }

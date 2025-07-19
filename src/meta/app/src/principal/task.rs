@@ -94,17 +94,26 @@ pub struct TaskRun {
     pub root_task_id: u64,
 }
 
-impl TaskRun {
-    pub fn key(&self) -> String {
-        format!("{}@{}", self.task.task_name, self.run_id)
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub enum TaskMessageType {
+    Execute,
+    Schedule,
+    Delete,
+    After,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TaskMessage {
+    //  Execute Task immediately. If an error occurs, if it is a SQL error in the task,
+    // it will be recorded in the error message of the task run.
     ExecuteTask(Task),
+    //  Schedule Task will try to spawn a thread in Query to continue running according to the time set in schedule
     ScheduleTask(Task),
+    // Delete the task information and try to cancel the scheduled task in the query.
     DeleteTask(String),
+    //  After Task will bind Task to the tasks in Task.afters.
+    // When Execute Task is executed, after all the after tasks of Task are completed,
+    // the execution will continue.
     AfterTask(Task),
 }
 
@@ -118,22 +127,27 @@ impl TaskMessage {
         }
     }
 
+    pub fn ty(&self) -> TaskMessageType {
+        match self {
+            TaskMessage::ExecuteTask(_) => TaskMessageType::Execute,
+            TaskMessage::ScheduleTask(_) => TaskMessageType::Schedule,
+            TaskMessage::DeleteTask(_) => TaskMessageType::Delete,
+            TaskMessage::AfterTask(_) => TaskMessageType::After,
+        }
+    }
+
     pub fn key(&self) -> String {
-        let ty = match self {
-            TaskMessage::ExecuteTask(_) => 0,
-            TaskMessage::ScheduleTask(_) => 1,
-            TaskMessage::DeleteTask(_) => 2,
-            TaskMessage::AfterTask(_) => 3,
+        Self::key_with_type(self.ty(), self.task_name())
+    }
+
+    pub fn key_with_type(ty: TaskMessageType, task_name: &str) -> String {
+        let ty_num = match ty {
+            TaskMessageType::Execute => 0,
+            TaskMessageType::Schedule => 1,
+            TaskMessageType::Delete => 2,
+            TaskMessageType::After => 3,
         };
-        format!("{}-{}-{}", TaskMessage::prefix(), ty, self.task_name())
-    }
-
-    pub fn schedule_key(task_name: &str) -> String {
-        format!("{}-1-{task_name}", TaskMessage::prefix())
-    }
-
-    pub fn prefix() -> i64 {
-        0
+        format!("{}-{}-{}", TaskMessage::prefix_range().0, ty_num, task_name)
     }
 
     /// Returns the inclusive range of key prefixes used by `TaskMessage`.
