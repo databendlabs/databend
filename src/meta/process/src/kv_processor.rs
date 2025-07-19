@@ -138,10 +138,10 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
             Cmd::RemoveNode { .. } => Ok(None),
             Cmd::SetFeature { .. } => Ok(None),
             Cmd::UpsertKV(ups) => {
-                let x = LogEntry {
-                    time_ms: log_entry.time_ms,
-                    cmd: Cmd::UpsertKV(unwrap_or_return!(self.proc_upsert_kv(ups)?)),
-                };
+                let x = LogEntry::new_with_time(
+                    Cmd::UpsertKV(unwrap_or_return!(self.proc_upsert_kv(ups)?)),
+                    log_entry.time_ms,
+                );
                 Ok(Some(x))
             }
             Cmd::Transaction(tx) => {
@@ -160,10 +160,10 @@ where F: Fn(&str, Vec<u8>) -> Result<Vec<u8>, anyhow::Error>
                     else_then.push(self.proc_txop(op)?);
                 }
 
-                Ok(Some(LogEntry {
-                    time_ms: log_entry.time_ms,
-                    cmd: Cmd::Transaction(TxnRequest::new(condition, if_then).with_else(else_then)),
-                }))
+                Ok(Some(LogEntry::new_with_time(
+                    Cmd::Transaction(TxnRequest::new(condition, if_then).with_else(else_then)),
+                    log_entry.time_ms,
+                )))
             }
         }
     }

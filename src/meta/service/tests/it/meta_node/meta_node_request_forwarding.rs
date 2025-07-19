@@ -47,10 +47,7 @@ async fn test_meta_node_forward_to_leader() -> anyhow::Result<()> {
         let mn = &all[id as usize];
         let maybe_leader = MetaLeader::new(mn);
         let rst = maybe_leader
-            .write(LogEntry {
-                time_ms: None,
-                cmd: Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes())),
-            })
+            .write(LogEntry::new(Cmd::UpsertKV(UpsertKV::update(key, key.as_bytes()))))
             .await;
 
         if id == leader_id {
