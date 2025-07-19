@@ -355,6 +355,7 @@ impl Binder {
                 need_wrap_nullable: false,
                 row_id_index: row_id.index,
                 lazy_columns: fields_bindings.iter().map(|x| x.index).collect(),
+                fetch_table_index: mutation.target_table_index,
             }));
         }
 

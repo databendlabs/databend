@@ -88,8 +88,8 @@ impl PhysicalPlanBuilder {
             return Err(ErrorCode::Internal("Internal column _row_id is not found"));
         };
 
-        let lazy_columns = metadata
-            .lazy_columns()
+        let lazy_columns = row_fetch
+            .lazy_columns
             .iter()
             .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
             .cloned()
@@ -114,7 +114,8 @@ impl PhysicalPlanBuilder {
             })
             .collect();
 
-        let source = input_plan.try_find_single_data_source();
+        let metadata = self.metadata.read();
+        let source = metadata.get_table_source(&row_fetch.fetch_table_index);
         debug_assert!(source.is_some());
         let source_info = source.cloned().unwrap();
         let table_schema = source_info.source_info.schema();

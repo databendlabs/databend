@@ -30,6 +30,7 @@ pub struct RowFetch {
 
     pub lazy_columns: ColumnSet,
     pub row_id_index: IndexType,
+    pub fetch_table_index: IndexType,
 }
 
 impl Operator for RowFetch {
