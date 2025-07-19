@@ -19,7 +19,6 @@ databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
-state-machine-api = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-version = { workspace = true }
@@ -44,6 +43,7 @@ semver = { workspace = true }
 seq-marked = { workspace = true, features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+state-machine-api = { workspace = true }
 stream-more = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

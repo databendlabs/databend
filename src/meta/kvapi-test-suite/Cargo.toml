@@ -11,11 +11,11 @@ edition = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
-state-machine-api = { workspace = true }
 databend-common-meta-types = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
+state-machine-api = { workspace = true }
 tokio = { workspace = true }
 
 [lints]

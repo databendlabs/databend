@@ -30,7 +30,6 @@ databend-common-meta-client = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
-state-machine-api = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
@@ -57,6 +56,7 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
+state-machine-api = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
