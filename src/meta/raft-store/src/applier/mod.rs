@@ -16,7 +16,6 @@ use std::future::ready;
 use std::io;
 use std::time::Duration;
 
-use databend_common_meta_state_machine_api::StateMachineApi;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::boolean_expression::CombiningOperator;
@@ -61,6 +60,7 @@ use log::info;
 use log::warn;
 use num::FromPrimitive;
 use seq_marked::SeqValue;
+use state_machine_api::StateMachineApi;
 
 use crate::state_machine_api_ext::StateMachineApiExt;
 

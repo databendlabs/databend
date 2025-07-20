@@ -15,8 +15,6 @@
 use std::fmt;
 use std::io;
 
-use databend_common_meta_state_machine_api::ExpireKey;
-use databend_common_meta_state_machine_api::UserKey;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
@@ -26,6 +24,8 @@ use map_api::map_api_ro::MapApiRO;
 use map_api::IOResultStream;
 use map_api::MapKV;
 use rotbl::v001::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::UserKey;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 

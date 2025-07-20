@@ -16,10 +16,10 @@ use std::mem::size_of_val;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use databend_common_meta_state_machine_api::ExpireKey;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
+use state_machine_api::ExpireKey;
 
 use crate::SledBytesError;
 

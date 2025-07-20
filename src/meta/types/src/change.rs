@@ -16,10 +16,10 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_meta_state_machine_api::SeqV;
-use databend_common_meta_state_machine_api::SeqValue;
 use serde::Deserialize;
 use serde::Serialize;
+use state_machine_api::SeqV;
+use state_machine_api::SeqValue;
 
 /// `Change` describes a state transition: the states before and after an operation.
 ///

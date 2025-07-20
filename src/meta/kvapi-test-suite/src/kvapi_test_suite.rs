@@ -16,7 +16,6 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_state_machine_api::KVMeta;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
@@ -50,6 +49,7 @@ use fastrace::func_name;
 use fastrace::func_path;
 use log::debug;
 use log::info;
+use state_machine_api::KVMeta;
 use tokio::time::sleep;
 
 pub struct TestSuite {}
