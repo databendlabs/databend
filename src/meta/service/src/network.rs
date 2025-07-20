@@ -616,11 +616,11 @@ impl RaftNetworkV2<TypeConfig> for Network {
             self.target, grpc_res_v001
         );
 
-        match &grpc_res_v001 {
+        match grpc_res_v001 {
             Ok(response) => {
                 // VoteV001 succeeded, parse the VoteResponse directly
                 self.client.lock().await.replace(client);
-                let vote_response = response.get_ref().clone();
+                let vote_response = response.into_inner();
                 let vote_resp: VoteResponse = vote_response.into();
                 return Ok(vote_resp);
             }
