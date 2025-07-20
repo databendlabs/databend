@@ -353,6 +353,7 @@ service RaftService {
   // Added in 1.2.547, 2024-06-27
   rpc InstallSnapshotV003(stream SnapshotChunkRequestV003) returns (SnapshotResponseV003);
   rpc Vote(RaftRequest) returns (RaftReply);
+  rpc VoteV001(VoteRequest) returns (VoteResponse);
   rpc TransferLeader(TransferLeaderRequest) returns (Empty);
 }
 

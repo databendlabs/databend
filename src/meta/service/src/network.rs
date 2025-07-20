@@ -601,17 +601,46 @@ impl RaftNetworkV2<TypeConfig> for Network {
     ) -> Result<VoteResponse, RPCError> {
         info!(id = self.id, target = self.target, rpc = rpc.summary(); "send_vote");
 
-        let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
-
-        let req = GrpcHelper::traced_req(raft_req);
-
-        let bytes = req.get_ref().data.len() as u64;
-        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
-
         let mut client = self
             .take_client()
             .log_elapsed_debug("Raft NetworkConnection vote take_client()")
             .await?;
+
+        // First, try VoteV001 with native protobuf types
+        let vote_req_pb = pb::VoteRequest::from(rpc.clone());
+        let req_v001 = GrpcHelper::traced_req(vote_req_pb);
+
+        let grpc_res_v001 = client.vote_v001(req_v001).await;
+        info!(
+            "vote_v001: resp from target={} {:?}",
+            self.target, grpc_res_v001
+        );
+
+        match &grpc_res_v001 {
+            Ok(response) => {
+                // VoteV001 succeeded, parse the VoteResponse directly
+                self.client.lock().await.replace(client);
+                let vote_response = response.get_ref().clone();
+                let vote_resp: VoteResponse = vote_response.into();
+                return Ok(vote_resp);
+            }
+            Err(e) => {
+                // Only fall back for specific status codes indicating method not implemented
+                if matches!(e.code(), tonic::Code::Unimplemented | tonic::Code::NotFound) {
+                    warn!(target = self.target, rpc = rpc.summary(); "vote_v001 not implemented, falling back to vote: {}", e);
+                } else {
+                    // For other errors, don't fall back - return the error
+                    return Err(RPCError::Unreachable(self.status_to_unreachable(e.clone())));
+                }
+            }
+        }
+
+        // Fallback to old Vote RPC using RaftRequest
+        let raft_req = GrpcHelper::encode_raft_request(&rpc).map_err(|e| Unreachable::new(&e))?;
+        let req = GrpcHelper::traced_req(raft_req);
+
+        let bytes = req.get_ref().data.len() as u64;
+        raft_metrics::network::incr_sendto_bytes(&self.target, bytes);
 
         let grpc_res = client.vote(req).await;
         info!("vote: resp from target={} {:?}", self.target, grpc_res);
