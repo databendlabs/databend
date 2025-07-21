@@ -56,6 +56,7 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
+state-machine-api = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }

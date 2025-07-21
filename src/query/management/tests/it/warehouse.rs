@@ -26,11 +26,11 @@ use databend_common_management::*;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::LocalMetaService;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
+use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_empty_id_with_self_managed() -> Result<()> {

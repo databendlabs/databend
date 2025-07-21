@@ -24,7 +24,6 @@ databend-common-grpc = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
-databend-common-version = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }

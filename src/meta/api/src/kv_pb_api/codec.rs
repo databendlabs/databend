@@ -15,9 +15,9 @@
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_proto_conv::FromToProto;
 
 use crate::kv_pb_api::errors::NoneValue;
@@ -86,7 +86,7 @@ where
     let x: Result<_, PbDecodeError> = try {
         let p: T::PB = prost::Message::decode(buf.as_ref())?;
         let v: T = FromToProto::from_pb(p)?;
-        SeqV::with_meta(seqv.seq, seqv.meta, v)
+        SeqV::new_with_meta(seqv.seq, seqv.meta, v)
     };
 
     x.map_err(|e| e.with_context(context()))

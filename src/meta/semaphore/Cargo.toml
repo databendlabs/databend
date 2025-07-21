@@ -23,6 +23,7 @@ display-more = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
+seq-marked = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }

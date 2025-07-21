@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Debug;
+use std::fmt;
+use std::fmt::Formatter;
 use std::io;
 
 use databend_common_meta_types::raft_types::Entry;
@@ -22,35 +23,57 @@ use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::info;
 use openraft::entry::RaftEntry;
+use state_machine_api::SeqV;
+use state_machine_api::StateMachineApi;
 
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::compactor::Compactor;
+use crate::leveled_store::leveled_map::compactor_acquirer::CompactorAcquirer;
+use crate::leveled_store::leveled_map::compactor_acquirer::CompactorPermit;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003_kv_api::SMV003KVApi;
-use crate::state_machine::ExpireKey;
-use crate::state_machine_api::SMEventSender;
-use crate::state_machine_api::StateMachineApi;
 
-#[derive(Debug, Default)]
+type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
+
+#[derive(Default)]
 pub struct SMV003 {
     levels: LeveledMap,
 
-    /// The expiration key since which for next clean.
-    expire_cursor: ExpireKey,
-
-    /// subscriber of state machine data
-    pub(crate) subscriber: Option<Box<dyn SMEventSender>>,
+    /// Callback when a change is applied to state machine
+    pub(crate) on_change_applied: Option<OnChange>,
 }
 
-impl StateMachineApi for SMV003 {
-    type Map = LeveledMap;
+impl fmt::Debug for SMV003 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SMV003")
+            .field("levels", &self.levels)
+            .field(
+                "on_change_applied",
+                &self.on_change_applied.as_ref().map(|_x| "is_set"),
+            )
+            .finish()
+    }
+}
 
-    fn map_ref(&self) -> &Self::Map {
+impl StateMachineApi<SysData> for SMV003 {
+    type UserMap = LeveledMap;
+
+    fn user_map(&self) -> &Self::UserMap {
         &self.levels
     }
 
-    fn map_mut(&mut self) -> &mut Self::Map {
+    fn user_map_mut(&mut self) -> &mut Self::UserMap {
+        &mut self.levels
+    }
+
+    type ExpireMap = LeveledMap;
+
+    fn expire_map(&self) -> &Self::ExpireMap {
+        &self.levels
+    }
+
+    fn expire_map_mut(&mut self) -> &mut Self::ExpireMap {
         &mut self.levels
     }
 
@@ -58,10 +81,15 @@ impl StateMachineApi for SMV003 {
         self.levels.sys_data_mut()
     }
 
-    fn event_sender(&self) -> Option<&dyn SMEventSender> {
-        self.subscriber.as_ref().map(|x| x.as_ref())
+    fn on_change_applied(&mut self, change: (String, Option<SeqV>, Option<SeqV>)) {
+        let Some(on_change_applied) = &self.on_change_applied else {
+            // No subscribers, do nothing.
+            return;
+        };
+        (*on_change_applied)(change);
     }
 }
+
 impl SMV003 {
     /// Return a mutable reference to the map that stores app data.
     pub(in crate::sm_v003) fn map_mut(&mut self) -> &mut LeveledMap {
@@ -159,20 +187,26 @@ impl SMV003 {
         self.map_mut()
     }
 
-    pub fn set_event_sender(&mut self, subscriber: Box<dyn SMEventSender>) {
-        self.subscriber = Some(subscriber);
+    pub fn set_on_change_applied(&mut self, on_change_applied: OnChange) {
+        self.on_change_applied = Some(on_change_applied);
     }
 
     pub fn freeze_writable(&mut self) {
         self.levels.freeze_writable();
     }
 
-    pub fn try_acquire_compactor(&mut self) -> Option<Compactor> {
-        self.map_mut().try_acquire_compactor()
+    /// A shortcut
+    pub async fn acquire_compactor(&self) -> Compactor {
+        let permit = self.new_compactor_acquirer().acquire().await;
+        self.new_compactor(permit)
     }
 
-    pub async fn acquire_compactor(&mut self) -> Compactor {
-        self.levels.acquire_compactor().await
+    pub fn new_compactor_acquirer(&self) -> CompactorAcquirer {
+        self.levels.new_compactor_acquirer()
+    }
+
+    pub fn new_compactor(&self, permit: CompactorPermit) -> Compactor {
+        self.levels.new_compactor(permit)
     }
 
     /// Replace all the state machine data with the given one.
@@ -189,9 +223,5 @@ impl SMV003 {
         );
 
         self.levels = level;
-
-        // The installed data may not clean up all expired keys, if it is built with an older state machine.
-        // So we need to reset the cursor then the next time applying a log it will clean up all expired.
-        self.expire_cursor = ExpireKey::new(0, 0);
     }
 }

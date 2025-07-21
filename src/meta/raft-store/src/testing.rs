@@ -12,9 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod kv_meta;
+use std::time::Duration;
+use std::time::SystemTime;
 
-pub use kv_meta::KVMeta;
-pub use map_api::seq_value::SeqValue;
+#[allow(dead_code)]
+pub(crate) fn since_epoch_secs() -> u64 {
+    since_epoch().as_secs()
+}
 
-pub type SeqV<T = Vec<u8>> = map_api::seq_value::SeqV<KVMeta, T>;
+pub(crate) fn since_epoch_millis() -> u64 {
+    since_epoch().as_millis() as u64
+}
+
+pub(crate) fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+}

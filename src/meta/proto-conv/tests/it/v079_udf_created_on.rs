@@ -63,6 +63,7 @@ fn test_decode_v79_udf_python() -> anyhow::Result<()> {
                 DataType::Number(NumberDataType::Int32),
             ],
             return_type: DataType::Number(NumberDataType::Int64),
+            immutable: None,
         }),
         created_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
     };

@@ -112,6 +112,8 @@ pub struct UserFunctionArguments {
     parameters: Vec<String>,
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     states: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "std::option::Option::is_none")]
+    immutable: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -178,6 +180,7 @@ impl UserFunctionsTable {
                         server: None,
                         parameters: x.parameters.clone(),
                         states: BTreeMap::new(),
+                        immutable: None,
                     },
                     UDFDefinition::UDFServer(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
@@ -185,6 +188,7 @@ impl UserFunctionsTable {
                         server: Some(x.address.to_string()),
                         parameters: vec![],
                         states: BTreeMap::new(),
+                        immutable: x.immutable,
                     },
                     UDFDefinition::UDFScript(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
@@ -192,6 +196,7 @@ impl UserFunctionsTable {
                         server: None,
                         parameters: vec![],
                         states: BTreeMap::new(),
+                        immutable: x.immutable,
                     },
                     UDFDefinition::UDAFScript(x) => UserFunctionArguments {
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
@@ -203,6 +208,7 @@ impl UserFunctionsTable {
                             .iter()
                             .map(|f| (f.name().to_string(), f.data_type().to_string()))
                             .collect(),
+                        immutable: None,
                     },
                 },
             })

@@ -18,16 +18,17 @@ use std::fmt;
 use std::fmt::Write;
 use std::io;
 
-use databend_common_meta_types::seq_value::KVMeta;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 pub use map_api::map_key::MapKey;
 pub use map_api::map_value::MapValue;
 pub use map_api::BeforeAfter;
 pub use map_api::IOResultStream;
-
-use crate::marked::Marked;
-use crate::state_machine::ExpireKey;
+use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 pub type MapKeyPrefix = &'static str;
 
@@ -47,10 +48,10 @@ pub trait MapKeyDecode: Sized {
 }
 
 /// A Marked value type of key type.
-pub(crate) type MarkedOf<K> = Marked<<K as MapKey<KVMeta>>::V>;
+pub(crate) type SeqMarkedOf<K> = SeqMarked<<K as MapKey>::V>;
 
 /// A key-value pair used in a map.
-pub(crate) type MapKV<K> = (K, MarkedOf<K>);
+pub(crate) type MapKV<K> = (K, SeqMarkedOf<K>);
 
 /// A stream of result of key-value returned by `range()`.
 pub(crate) type KVResultStream<K> = IOResultStream<MapKV<K>>;
@@ -58,89 +59,45 @@ pub(crate) type KVResultStream<K> = IOResultStream<MapKV<K>>;
 /// Trait for using Self as an implementation of the MapApi.
 #[allow(dead_code)]
 pub trait AsMap {
-    /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
-    fn as_map<K: MapKey<KVMeta>>(&self) -> &impl MapApiRO<K, KVMeta>
-    where Self: MapApiRO<K, KVMeta> + Sized {
+    fn as_user_map(&self) -> &impl MapApiRO<UserKey>
+    where Self: MapApiRO<UserKey> + Sized {
         self
     }
 
-    /// Use Self as an implementation of the [`MapApi`] interface, allowing for mutation.
-    fn as_map_mut<K: MapKey<KVMeta>>(&mut self) -> &mut impl MapApi<K, KVMeta>
-    where Self: MapApi<K, KVMeta> + Sized {
+    fn as_user_map_mut(&mut self) -> &mut impl MapApi<UserKey>
+    where Self: MapApi<UserKey> + Sized {
         self
     }
 
-    fn str_map(&self) -> &impl MapApiRO<String, KVMeta>
-    where Self: MapApiRO<String, KVMeta> + Sized {
-        self
-    }
-
-    fn expire_map(&self) -> &impl MapApiRO<ExpireKey, KVMeta>
-    where Self: MapApiRO<ExpireKey, KVMeta> + Sized {
-        self
-    }
-
-    fn str_map_mut(&mut self) -> &mut impl MapApi<String, KVMeta>
-    where Self: MapApi<String, KVMeta> + Sized {
-        self
-    }
-
-    fn expire_map_mut(&mut self) -> &mut impl MapApi<ExpireKey, KVMeta>
-    where Self: MapApi<ExpireKey, KVMeta> + Sized {
+    fn as_expire_map(&self) -> &impl MapApiRO<ExpireKey>
+    where Self: MapApiRO<ExpireKey> + Sized {
         self
     }
 }
 
 impl<T> AsMap for T {}
 
-pub(crate) struct MapApiExt;
+pub(crate) struct MapApiHelper;
 
-impl MapApiExt {
+impl MapApiHelper {
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
-    pub(crate) async fn update_meta<K, T>(
+    pub(crate) async fn update_meta<T>(
         s: &mut T,
-        key: K,
+        key: UserKey,
         meta: Option<KVMeta>,
-    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
+    ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error>
     where
-        K: MapKey<KVMeta>,
-        K: MapKeyEncode,
-        T: MapApi<K, KVMeta>,
+        T: MapApi<UserKey>,
     {
-        //
         let got = s.get(&key).await?;
         if got.is_tombstone() {
             return Ok((got.clone(), got.clone()));
         }
 
         // Safe unwrap(), got is Normal
-        let (v, _) = got.unpack_ref().unwrap();
+        let (_meta, v) = got.into_data().unwrap();
 
-        s.set(key, Some((v.clone(), meta))).await
-    }
-
-    /// Update only the value and keeps the meta unchanged.
-    /// If the entry does not exist, create one.
-    #[allow(dead_code)]
-    pub(crate) async fn upsert_value<K, T>(
-        s: &mut T,
-        key: K,
-        value: K::V,
-    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
-    where
-        K: MapKey<KVMeta>,
-        K: MapKeyEncode,
-        T: MapApi<K, KVMeta>,
-    {
-        let got = s.get(&key).await?;
-
-        let meta = if let Some((_, meta)) = got.unpack_ref() {
-            meta
-        } else {
-            None
-        };
-
-        s.set(key, Some((value, meta.cloned()))).await
+        s.set(key, Some((meta, v))).await
     }
 }

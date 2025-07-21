@@ -174,9 +174,14 @@ impl MetaNodeBuilder {
         let handle = DispatcherHandle::new(handle, node_id);
         let handle = Arc::new(handle);
 
+        let on_change_applied = {
+            let h = handle.clone();
+            move |change| h.send_change(change)
+        };
+
         sto.get_state_machine()
             .await
-            .set_event_sender(Box::new(handle.clone()));
+            .set_on_change_applied(Box::new(on_change_applied));
 
         let meta_node = Arc::new(MetaNode {
             raft_store: sto.clone(),
@@ -1110,7 +1115,6 @@ impl MetaNode {
         node_id: NodeId,
         node: Node,
     ) -> Result<AppliedState, MetaAPIError> {
-        // TODO: use txid?
         let cmd = Cmd::AddNode {
             node_id,
             node,

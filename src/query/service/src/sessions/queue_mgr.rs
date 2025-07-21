@@ -174,56 +174,59 @@ impl<Data: QueueData> QueueManager<Data> {
     }
 
     pub async fn acquire(self: &Arc<Self>, data: Data) -> Result<AcquireQueueGuard> {
-        if data.need_acquire_to_queue() {
-            info!(
-                "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
-                self.length()
-            );
-
-            let start_time = SystemTime::now();
-            let instant = Instant::now();
-            let mut timeout = data.timeout();
-            let mut guards = vec![];
-
-            let data = Arc::new(data);
-            if let Some(workload_group) = ThreadTracker::workload_group() {
-                if let Some(QuotaValue::Number(permits)) =
-                    workload_group.meta.get_quota(MAX_CONCURRENCY_QUOTA_KEY)
-                {
-                    let mut workload_group_timeout = timeout;
-
-                    if let Some(QuotaValue::Duration(queue_timeout)) = workload_group
-                        .meta
-                        .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
-                    {
-                        workload_group_timeout =
-                            std::cmp::min(queue_timeout, workload_group_timeout);
-                    }
-
-                    let workload_queue_guard = self
-                        .acquire_workload_queue(
-                            data.clone(),
-                            workload_group.queue_key.clone(),
-                            permits as u64,
-                            workload_group_timeout,
-                        )
-                        .await?;
-
-                    info!("[QUERY-QUEUE] Successfully acquired from workload group queue. elapsed: {:?}", instant.elapsed());
-                    timeout -= instant.elapsed();
-                    guards.push(workload_queue_guard);
-                }
-            }
-
-            guards.push(self.acquire_warehouse_queue(data, timeout).await?);
-
-            inc_session_running_acquired_queries();
-            record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
-
-            return Ok(AcquireQueueGuard::create(guards));
+        if !data.need_acquire_to_queue() {
+            info!("[QUERY-QUEUE] Non-heavy queries skip the query queue and execute directly.");
+            return Ok(AcquireQueueGuard::create(vec![]));
         }
 
-        Ok(AcquireQueueGuard::create(vec![]))
+        info!(
+            "[QUERY-QUEUE] Preparing to acquire from query queue, current length: {}",
+            self.length()
+        );
+
+        let start_time = SystemTime::now();
+        let instant = Instant::now();
+        let mut timeout = data.timeout();
+        let mut guards = vec![];
+
+        let data = Arc::new(data);
+        if let Some(workload_group) = ThreadTracker::workload_group() {
+            if let Some(QuotaValue::Number(permits)) =
+                workload_group.meta.get_quota(MAX_CONCURRENCY_QUOTA_KEY)
+            {
+                let mut workload_group_timeout = timeout;
+
+                if let Some(QuotaValue::Duration(queue_timeout)) = workload_group
+                    .meta
+                    .get_quota(QUERY_QUEUED_TIMEOUT_QUOTA_KEY)
+                {
+                    workload_group_timeout = std::cmp::min(queue_timeout, workload_group_timeout);
+                }
+
+                let workload_queue_guard = self
+                    .acquire_workload_queue(
+                        data.clone(),
+                        workload_group.queue_key.clone(),
+                        permits as u64,
+                        workload_group_timeout,
+                    )
+                    .await?;
+
+                info!(
+                    "[QUERY-QUEUE] Successfully acquired from workload group queue. elapsed: {:?}",
+                    instant.elapsed()
+                );
+                timeout -= instant.elapsed();
+                guards.push(workload_queue_guard);
+            }
+        }
+
+        guards.push(self.acquire_warehouse_queue(data, timeout).await?);
+
+        inc_session_running_acquired_queries();
+        record_session_queue_acquire_duration_ms(start_time.elapsed().unwrap_or_default());
+
+        Ok(AcquireQueueGuard::create(guards))
     }
 
     async fn acquire_workload_queue(
@@ -579,6 +582,9 @@ impl QueryEntry {
             | Plan::RefreshIndex(_)
             | Plan::ReclusterTable(_)
             | Plan::TruncateTable(_) => {
+                return true;
+            }
+            Plan::CreateTable(v) if v.as_select.is_some() => {
                 return true;
             }
             Plan::DropTable(v) if v.all => {

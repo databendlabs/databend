@@ -16,6 +16,14 @@ use std::fmt;
 
 use crate::protobuf as pb;
 
+impl pb::TxnGetRequest {
+    pub fn new(key: impl ToString) -> Self {
+        Self {
+            key: key.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for pb::TxnGetRequest {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Get key={}", self.key)
@@ -28,9 +36,7 @@ mod tests {
 
     #[test]
     fn test_display_txn_get_request() {
-        let req = pb::TxnGetRequest {
-            key: "k1".to_string(),
-        };
+        let req = pb::TxnGetRequest::new("k1");
         assert_eq!(format!("{}", req), "Get key=k1");
     }
 }
