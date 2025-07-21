@@ -2989,9 +2989,9 @@ pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
     );
     map(
         rule! {
-           (VALUES ~ #value?)? ~ FROM ~ #at_string ~  #file_format_clause
+           (VALUES ~ #value?)? ~ FROM ~ #at_string ~  #file_format_clause ~ ";"? ~ &EOI
         },
-        |(values, _, location, format_options)| InsertSource::LoadFile {
+        |(values, _, location, format_options, _, _)| InsertSource::LoadFile {
             value: values.map(|(_, value)| value).unwrap_or_default(),
             location,
             format_options,
