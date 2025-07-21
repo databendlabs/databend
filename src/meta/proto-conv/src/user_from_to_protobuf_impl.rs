@@ -295,7 +295,13 @@ impl FromToProto for mt::principal::UserGrantSet {
 
         let mut entries = Vec::new();
         for entry in p.entries.iter() {
-            entries.push(mt::principal::GrantEntry::from_pb(entry.clone())?);
+            // If we add new GrantObject in new version
+            // Rollback to old version, GrantEntry.object will be None
+            // GrantEntry::from_pb will return err so user can not login in old version.
+            match mt::principal::GrantEntry::from_pb(entry.clone()) {
+                Ok(entry) => entries.push(entry),
+                Err(e) => log::error!("GrantEntry::from_pb with error : {e}"),
+            }
         }
         let mut roles = HashSet::new();
         for role in p.roles.iter() {
