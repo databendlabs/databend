@@ -365,6 +365,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             stat_info: plan.stat_info.clone(),
             cte_name: plan.cte_name.clone(),
             cte_output_columns: plan.cte_output_columns.clone(),
+            ref_count: plan.ref_count,
         })))
     }
 }

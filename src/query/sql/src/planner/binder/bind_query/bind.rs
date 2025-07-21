@@ -85,13 +85,39 @@ impl Binder {
         s_expr = self.bind_query_limit(query, s_expr, limit, offset);
 
         if let Some(with) = &with {
-            s_expr = self.bind_materialized_cte(with, s_expr, bind_context.cte_context.clone())?;
+            let cte_ref_count = self.compute_cte_ref_count(with, query)?;
+            s_expr = self.bind_materialized_cte(
+                with,
+                s_expr,
+                bind_context.cte_context.clone(),
+                &cte_ref_count,
+            )?;
         }
 
         Ok((s_expr, bind_context))
     }
 
     fn auto_materialize_cte(&mut self, with: &mut With, query: &Query) -> Result<()> {
+        let cte_ref_count = self.compute_cte_ref_count(with, query)?;
+
+        // Update materialization based on reference count
+        for cte in with.ctes.iter_mut() {
+            let table_name = self.normalize_identifier(&cte.alias.name).name;
+            if let Some(count) = cte_ref_count.get(&table_name) {
+                log::info!("[CTE]cte_ref_count: {table_name} {count}");
+                // Materialize if referenced more than once
+                cte.materialized |= *count > 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn compute_cte_ref_count(
+        &self,
+        with: &With,
+        query: &Query,
+    ) -> Result<HashMap<String, usize>> {
         // Initialize the count of each CTE to 0
         let mut cte_ref_count: HashMap<String, usize> = HashMap::new();
         for cte in with.ctes.iter() {
@@ -105,19 +131,8 @@ impl Binder {
             name_resolution_ctx: self.name_resolution_ctx.clone(),
         };
         query.drive(&mut visitor);
-        cte_ref_count = visitor.cte_ref_count;
 
-        // Update materialization based on reference count
-        for cte in with.ctes.iter_mut() {
-            let table_name = self.normalize_identifier(&cte.alias.name).name;
-            if let Some(count) = cte_ref_count.get(&table_name) {
-                log::info!("[CTE]cte_ref_count: {table_name} {count}");
-                // Materialize if referenced more than once
-                cte.materialized |= *count > 1;
-            }
-        }
-
-        Ok(())
+        Ok(visitor.cte_ref_count)
     }
 
     pub(crate) fn bind_query_order_by(

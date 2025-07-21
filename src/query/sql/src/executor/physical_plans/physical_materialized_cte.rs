@@ -33,6 +33,7 @@ pub struct MaterializedCTE {
     pub right: Box<PhysicalPlan>,
     pub cte_name: String,
     pub cte_output_columns: Vec<ColumnBinding>,
+    pub ref_count: usize,
 }
 
 impl MaterializedCTE {
@@ -68,6 +69,7 @@ impl PhysicalPlanBuilder {
             right: right_side,
             cte_name: materialized_cte.cte_name.clone(),
             cte_output_columns: materialized_cte.cte_output_columns.clone(),
+            ref_count: materialized_cte.ref_count,
         })))
     }
 }

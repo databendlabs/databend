@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Query;
@@ -168,6 +169,7 @@ impl Binder {
         with: &With,
         main_query_expr: SExpr,
         cte_context: CteContext,
+        cte_ref_count: &HashMap<String, usize>,
     ) -> Result<SExpr> {
         let mut current_expr = main_query_expr;
 
@@ -177,7 +179,10 @@ impl Binder {
                 let (s_expr, bind_context) =
                     self.bind_cte_definition(&cte_name, &cte_context.cte_map, &cte.query)?;
 
-                let materialized_cte = MaterializedCTE::new(cte_name, bind_context.columns);
+                let ref_count = cte_ref_count.get(&cte_name).unwrap();
+
+                let materialized_cte =
+                    MaterializedCTE::new(cte_name, bind_context.columns, *ref_count);
                 current_expr = SExpr::create_binary(
                     Arc::new(materialized_cte.into()),
                     Arc::new(s_expr),

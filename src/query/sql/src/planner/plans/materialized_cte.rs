@@ -28,13 +28,15 @@ use crate::ColumnBinding;
 pub struct MaterializedCTE {
     pub cte_name: String,
     pub cte_output_columns: Vec<ColumnBinding>,
+    pub ref_count: usize,
 }
 
 impl MaterializedCTE {
-    pub fn new(cte_name: String, output_columns: Vec<ColumnBinding>) -> Self {
+    pub fn new(cte_name: String, output_columns: Vec<ColumnBinding>, ref_count: usize) -> Self {
         Self {
             cte_name,
             cte_output_columns: output_columns,
+            ref_count,
         }
     }
 }
