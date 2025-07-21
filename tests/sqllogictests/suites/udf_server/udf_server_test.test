@@ -565,16 +565,16 @@ select * from _tmp_table order by field1;
 5
 
 statement ok
-CREATE OR REPLACE TABLE test(url STRING, length INT64);
+CREATE OR REPLACE TABLE test_update_udf(url STRING, length INT64);
 
 statement ok
-INSERT INTO test (url) VALUES('databend.com'),('databend.cn');
+INSERT INTO test_update_udf (url) VALUES('databend.com'),('databend.cn');
 
 statement ok
-UPDATE test SET length = url_len(url);
+UPDATE test_update_udf SET length = url_len(url);
 
 query TI
-SELECT * FROM test;
+SELECT * FROM test_update_udf;
 ----
 databend.com 12
 databend.cn 11
