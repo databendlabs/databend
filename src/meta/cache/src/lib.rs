@@ -96,6 +96,6 @@
 
 mod cache;
 mod meta_cache_types;
-mod meta_client_source;
+pub mod meta_client_source;
 
 pub use cache::Cache;

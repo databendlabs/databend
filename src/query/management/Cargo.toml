@@ -9,6 +9,10 @@ edition = { workspace = true }
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+cron = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-functions = { workspace = true }
@@ -30,6 +34,7 @@ seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
