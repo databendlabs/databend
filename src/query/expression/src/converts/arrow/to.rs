@@ -26,6 +26,7 @@ use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::buffer_to_array_data;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use super::ARROW_EXT_TYPE_BITMAP;
@@ -230,6 +231,14 @@ impl DataBlock {
     }
 
     pub fn to_record_batch(self, table_schema: &TableSchema) -> Result<RecordBatch> {
+        if self.columns().len() != table_schema.num_fields() {
+            return Err(ErrorCode::Internal(format!(
+                "The number of columns in the data block does not match the number of fields in the table schema, block_columns: {}, table_schema_fields: {}",
+                self.columns().len(),
+                table_schema.num_fields()
+            )));
+        }
+
         if table_schema.num_fields() == 0 {
             return Ok(RecordBatch::try_new_with_options(
                 Arc::new(Schema::empty()),
