@@ -36,7 +36,9 @@ impl PipelineBuilder {
             false,
         )?;
         build_res.main_pipeline.try_resize(1)?;
-        let tx = self.ctx.get_materialized_cte_sender(&cte.cte_name);
+        let tx = self
+            .ctx
+            .get_materialized_cte_senders(&cte.cte_name, cte.ref_count);
         build_res
             .main_pipeline
             .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))?;

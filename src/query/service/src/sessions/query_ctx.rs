@@ -68,6 +68,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -139,7 +140,6 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
-use crate::pipelines::processors::transforms::MaterializedCteData;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
@@ -586,30 +586,29 @@ impl QueryContext {
         self.shared.table_meta_timestamps.lock().clear();
     }
 
-    pub fn get_materialized_cte_sender(
+    pub fn get_materialized_cte_senders(
         &self,
         cte_name: &str,
-    ) -> tokio::sync::watch::Sender<Arc<MaterializedCteData>> {
+        cte_ref_count: usize,
+    ) -> Vec<Sender<DataBlock>> {
+        let mut senders = vec![];
+        let mut receivers = vec![];
+        for _ in 0..cte_ref_count {
+            let (sender, receiver) = async_channel::unbounded();
+            senders.push(sender);
+            receivers.push(receiver);
+        }
         self.shared
-            .materialized_cte_channels
+            .materialized_cte_receivers
             .lock()
-            .entry(cte_name.to_string())
-            .or_default()
-            .sender
-            .clone()
+            .insert(cte_name.to_string(), receivers);
+        senders
     }
 
-    pub fn get_materialized_cte_receiver(
-        &self,
-        cte_name: &str,
-    ) -> tokio::sync::watch::Receiver<Arc<MaterializedCteData>> {
-        self.shared
-            .materialized_cte_channels
-            .lock()
-            .entry(cte_name.to_string())
-            .or_default()
-            .receiver
-            .clone()
+    pub fn get_materialized_cte_receiver(&self, cte_name: &str) -> Receiver<DataBlock> {
+        let mut receivers = self.shared.materialized_cte_receivers.lock();
+        let receivers = receivers.get_mut(cte_name).unwrap();
+        receivers.pop().unwrap()
     }
 }
 

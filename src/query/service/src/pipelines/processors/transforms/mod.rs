@@ -47,8 +47,6 @@ pub use broadcast::BroadcastSinkProcessor;
 pub use broadcast::BroadcastSourceProcessor;
 pub use hash_join::*;
 pub use materialized_cte::CTESource;
-pub use materialized_cte::MaterializedCteChannel;
-pub use materialized_cte::MaterializedCteData;
 pub use materialized_cte::MaterializedCteSink;
 pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
