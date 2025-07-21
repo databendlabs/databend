@@ -151,7 +151,8 @@ impl PhysicalPlanBuilder {
         }
 
         let udf_ids = s_expr.get_udfs_col_ids()?;
-        let required_udf_ids = maybe_udfs.intersection(&udf_ids);
+        let required_udf_ids: BTreeSet<_> = maybe_udfs.intersection(&udf_ids).collect();
+        let udf_col_num = required_udf_ids.len();
         required.extend(required_udf_ids);
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
@@ -249,6 +250,7 @@ impl PhysicalPlanBuilder {
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                udf_col_num,
             });
 
             if *distributed {
