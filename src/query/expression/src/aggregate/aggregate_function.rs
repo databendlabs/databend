@@ -22,13 +22,13 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
-use crate::types::BinaryType;
 use crate::types::DataType;
+use crate::AggrStateSerdeType;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
-use crate::ColumnView;
 use crate::ProjectedBlock;
 use crate::Scalar;
+use crate::ScalarRef;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
@@ -69,32 +69,49 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
+    fn serialize_type(&self) -> Vec<AggrStateSerdeType> {
+        vec![AggrStateSerdeType::Binary(self.serialize_size_per_row())]
+    }
+
+    fn serialize(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+        let binary_builder = builder.as_tuple_mut().unwrap()[0].as_binary_mut().unwrap();
+        self.serialize_binary(place, &mut binary_builder.data)?;
+        binary_builder.commit_row();
+        Ok(())
+    }
+
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
 
     fn serialize_size_per_row(&self) -> Option<usize> {
         None
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()>;
+    fn merge(&self, place: AggrState, data: ScalarRef) -> Result<()> {
+        let mut binary = *data.as_tuple().unwrap()[0].as_binary().unwrap();
+        self.merge_binary(place, &mut binary)
+    }
+
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()>;
 
     /// Batch merge and deserialize the state from binary array
     fn batch_merge(
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
-        state: &ColumnView<BinaryType>,
+        state: &BlockEntry,
     ) -> Result<()> {
-        for (place, mut data) in places.iter().zip(state.iter()) {
-            self.merge(AggrState::new(*place, loc), &mut data)?;
+        let column = state.to_column();
+        for (place, data) in places.iter().zip(column.iter()) {
+            self.merge(AggrState::new(*place, loc), data)?;
         }
 
         Ok(())
     }
 
     fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
-        let view = state.downcast::<BinaryType>().unwrap();
-        for mut data in view.iter() {
-            self.merge(place, &mut data)?;
+        let column = state.to_column();
+        for data in column.iter() {
+            self.merge(place, data)?;
         }
         Ok(())
     }

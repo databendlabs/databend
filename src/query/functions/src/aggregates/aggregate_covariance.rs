@@ -231,12 +231,12 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         Ok(state.serialize(writer)?)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let rhs: AggregateCovarianceState = borsh_partial_deserialize(reader)?;
         state.merge(&rhs);

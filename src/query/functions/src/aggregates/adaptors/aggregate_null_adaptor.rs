@@ -183,11 +183,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
             .accumulate_row(place, not_null_columns, validity, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.0.serialize(place, writer)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         self.0.merge(place, reader)
     }
 
@@ -308,11 +308,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             .accumulate_row(place, not_null_columns, validity, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.0.serialize(place, writer)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         self.0.merge(place, reader)
     }
 
@@ -498,17 +498,18 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         if !NULLABLE_RESULT {
-            return self.nested.serialize(place, writer);
+            return self.nested.serialize_binary(place, writer);
         }
 
-        self.nested.serialize(place.remove_last_loc(), writer)?;
+        self.nested
+            .serialize_binary(place.remove_last_loc(), writer)?;
         let flag = get_flag(place);
         writer.write_scalar(&flag)
     }
 
     fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         if !NULLABLE_RESULT {
-            return self.nested.merge(place, reader);
+            return self.nested.merge_binary(place, reader);
         }
 
         let flag = reader[reader.len() - 1];
@@ -522,7 +523,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         }
         set_flag(place, true);
         self.nested
-            .merge(place.remove_last_loc(), &mut &reader[..reader.len() - 1])
+            .merge_binary(place.remove_last_loc(), &mut &reader[..reader.len() - 1])
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

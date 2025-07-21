@@ -86,11 +86,11 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn serialize(&self, _place: AggrState, _writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, _place: AggrState, _writer: &mut Vec<u8>) -> Result<()> {
         Ok(())
     }
 
-    fn merge(&self, _place: AggrState, _reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, _place: AggrState, _reader: &mut &[u8]) -> Result<()> {
         Ok(())
     }
 

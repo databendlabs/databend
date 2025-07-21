@@ -287,7 +287,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<BitmapAggState>();
         // flag indicate where bitmap is none
         let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
@@ -298,7 +298,7 @@ where
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<BitmapAggState>();
 
         let flag = reader[0];
@@ -482,12 +482,12 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.inner.serialize(place, writer)
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.inner.serialize_binary(place, writer)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.inner.merge(place, reader)
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+        self.inner.merge_binary(place, reader)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

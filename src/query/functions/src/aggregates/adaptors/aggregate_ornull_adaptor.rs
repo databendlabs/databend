@@ -178,17 +178,18 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.inner.serialize(place.remove_last_loc(), writer)?;
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.inner
+            .serialize_binary(place.remove_last_loc(), writer)?;
         let flag = get_flag(place) as u8;
         writer.write_scalar(&flag)
     }
 
     #[inline]
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let flag = get_flag(place) || reader[reader.len() - 1] > 0;
         self.inner
-            .merge(place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
+            .merge_binary(place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
         set_flag(place, flag);
         Ok(())
     }

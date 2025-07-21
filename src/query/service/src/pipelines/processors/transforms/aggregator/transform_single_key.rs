@@ -24,7 +24,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ProjectedBlock;
@@ -156,14 +155,10 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 )
                 .zip(builders.iter_mut())
             {
-                func.serialize(place, &mut builder.data)?;
-                builder.commit_row();
+                func.serialize(place, builder)?;
             }
 
-            let columns = builders
-                .into_iter()
-                .map(|b| Column::Binary(b.build()))
-                .collect();
+            let columns = builders.into_iter().map(|b| b.build()).collect();
             vec![DataBlock::new_from_columns(columns)]
         } else {
             vec![]

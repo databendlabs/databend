@@ -121,12 +121,12 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = Self::get_state(place);
         Ok(state.serialize(writer)?)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = Self::get_state(place);
         let rhs = SortAggState::deserialize(reader)?;
 

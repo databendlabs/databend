@@ -143,12 +143,12 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         Ok(state.serialize(writer)?)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let rhs: AggregateRetentionState = borsh_partial_deserialize(reader)?;
         state.merge(&rhs);

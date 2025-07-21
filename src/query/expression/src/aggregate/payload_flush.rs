@@ -150,17 +150,12 @@ impl Payload {
                 {
                     {
                         let builder = &mut builders[idx];
-                        func.serialize(AggrState::new(*place, loc), &mut builder.data)?;
-                        builder.commit_row();
+                        func.serialize(AggrState::new(*place, loc), builder)?;
                     }
                 }
             }
 
-            entries.extend(
-                builders
-                    .into_iter()
-                    .map(|builder| Column::Binary(builder.build()).into()),
-            );
+            entries.extend(builders.into_iter().map(|builder| builder.build().into()));
         }
 
         entries.extend_from_slice(&state.take_group_columns());

@@ -106,13 +106,13 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize(place, writer)
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.nested.serialize_binary(place, writer)
     }
 
     #[inline]
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge(place, reader)
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+        self.nested.merge_binary(place, reader)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -121,7 +121,7 @@ impl AggregateFunction for AggregateStateCombinator {
 
     fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = builder.as_binary_mut().unwrap();
-        self.nested.serialize(place, &mut builder.data)?;
+        self.nested.serialize_binary(place, &mut builder.data)?;
         builder.commit_row();
         Ok(())
     }

@@ -155,12 +155,12 @@ impl AggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize(place, writer)
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.nested.serialize_binary(place, writer)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge(place, reader)
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+        self.nested.merge_binary(place, reader)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

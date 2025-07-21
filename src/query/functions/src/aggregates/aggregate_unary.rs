@@ -227,12 +227,12 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state: &mut S = place.get::<S>();
         Ok(state.serialize(writer)?)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state: &mut S = place.get::<S>();
         let rhs = S::deserialize_reader(reader)?;
         state.merge(&rhs)

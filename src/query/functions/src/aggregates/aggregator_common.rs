@@ -187,9 +187,9 @@ pub fn eval_aggr_for_test(
     func.accumulate(state, entries.into(), None, rows)?;
     if with_serialize {
         let mut buf = vec![];
-        func.serialize(state, &mut buf)?;
+        func.serialize_binary(state, &mut buf)?;
         func.init_state(state);
-        func.merge(state, &mut buf.as_slice())?;
+        func.merge_binary(state, &mut buf.as_slice())?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(state, &mut builder)?;

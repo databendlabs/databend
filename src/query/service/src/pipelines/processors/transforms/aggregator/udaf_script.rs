@@ -98,14 +98,14 @@ impl AggregateFunction for AggregateUdfScript {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<UdfAggState>();
         state
             .serialize(writer)
             .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<UdfAggState>();
         let rhs =
             UdfAggState::deserialize(reader).map_err(|e| ErrorCode::Internal(e.to_string()))?;

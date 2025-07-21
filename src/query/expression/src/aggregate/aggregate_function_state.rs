@@ -20,6 +20,8 @@ use enum_as_inner::EnumAsInner;
 
 use super::AggregateFunctionRef;
 use crate::types::binary::BinaryColumnBuilder;
+use crate::types::DataType;
+use crate::ColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr {
@@ -113,11 +115,11 @@ impl From<StateAddr> for usize {
 
 pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
     let mut registry = AggrStateRegistry::default();
-    let mut serialize_size = Vec::with_capacity(funcs.len());
+    let mut serialize_type = Vec::with_capacity(funcs.len());
     for func in funcs {
         func.register_state(&mut registry);
         registry.commit();
-        serialize_size.push(func.serialize_size_per_row());
+        serialize_type.push(func.serialize_type().into_boxed_slice());
     }
 
     let AggrStateRegistry { states, offsets } = registry;
@@ -132,7 +134,7 @@ pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout>
     Ok(StatesLayout {
         layout,
         states_loc,
-        serialize_size,
+        serialize_type,
     })
 }
 
@@ -195,14 +197,30 @@ impl AggrStateLoc {
 pub struct StatesLayout {
     pub layout: Layout,
     pub states_loc: Vec<Box<[AggrStateLoc]>>,
-    serialize_size: Vec<Option<usize>>,
+    serialize_type: Vec<Box<[AggrStateSerdeType]>>,
 }
 
 impl StatesLayout {
-    pub fn serialize_builders(&self, num_rows: usize) -> Vec<BinaryColumnBuilder> {
-        self.serialize_size
+    pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
+        self.serialize_type
             .iter()
-            .map(|size| BinaryColumnBuilder::with_capacity(num_rows, num_rows * size.unwrap_or(0)))
+            .map(|item| {
+                let builder = item
+                    .iter()
+                    .map(|serde_type| match serde_type {
+                        AggrStateSerdeType::Bool => {
+                            ColumnBuilder::with_capacity(&DataType::Boolean, num_rows)
+                        }
+                        AggrStateSerdeType::Binary(size) => {
+                            ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(
+                                num_rows,
+                                num_rows * size.unwrap_or(0),
+                            ))
+                        }
+                    })
+                    .collect();
+                ColumnBuilder::Tuple(builder)
+            })
             .collect()
     }
 }
@@ -286,6 +304,12 @@ impl Default for AggrStateRegistry {
 pub enum AggrStateType {
     Bool,
     Custom(Layout),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AggrStateSerdeType {
+    Bool,
+    Binary(Option<usize>),
 }
 
 #[cfg(test)]

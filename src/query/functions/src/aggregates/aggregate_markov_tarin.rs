@@ -113,12 +113,12 @@ impl AggregateFunction for MarkovTarin {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<MarkovModel>();
         Ok(state.serialize(writer)?)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<MarkovModel>();
         let mut rhs = borsh_partial_deserialize::<MarkovModel>(reader)?;
         state.merge(&mut rhs);

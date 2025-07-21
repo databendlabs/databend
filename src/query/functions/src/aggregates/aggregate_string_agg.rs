@@ -147,12 +147,12 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<StringAggState>();
         Ok(state.serialize(writer)?)
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<StringAggState>();
         let rhs: StringAggState = borsh_partial_deserialize(reader)?;
         state.values.push_str(&rhs.values);
