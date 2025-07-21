@@ -2,7 +2,7 @@ statement ok
 set error_on_nondeterministic_update = 0;
 
 statement ok
-set nondeterministic_update_lazy_read_threshold = 18446744073709551615;
+set nondeterministic_update_lazy_read_threshold = 0;
 
 include ./update.test
 
