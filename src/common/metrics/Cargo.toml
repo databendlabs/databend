@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 databend-common-base = { workspace = true }
 prometheus-client = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = { workspace = true }

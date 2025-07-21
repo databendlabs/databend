@@ -11,6 +11,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 http = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

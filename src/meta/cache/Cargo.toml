@@ -29,6 +29,7 @@ futures = { workspace = true }
 log = { workspace = true }
 sub-cache = { workspace = true }
 tonic = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }

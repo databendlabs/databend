@@ -28,6 +28,7 @@ serde_json = { workspace = true }
 state-machine-api = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 prost-build = { workspace = true }

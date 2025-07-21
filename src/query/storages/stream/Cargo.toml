@@ -22,6 +22,7 @@ databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [build-dependencies]
 

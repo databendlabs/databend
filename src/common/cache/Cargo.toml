@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 hashbrown = { workspace = true }
 hashlink = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 

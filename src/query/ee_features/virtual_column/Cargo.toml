@@ -16,6 +16,7 @@ databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [build-dependencies]
 

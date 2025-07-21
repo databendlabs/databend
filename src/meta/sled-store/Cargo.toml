@@ -24,6 +24,7 @@ sled = { workspace = true }
 state-machine-api = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }

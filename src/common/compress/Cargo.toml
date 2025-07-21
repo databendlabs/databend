@@ -17,6 +17,7 @@ log = { workspace = true }
 pin-project = { workspace = true }
 serde = { workspace = true }
 zip = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 env_logger = { workspace = true }

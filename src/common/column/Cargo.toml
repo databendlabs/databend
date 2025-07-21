@@ -36,6 +36,7 @@ serde = { workspace = true, features = ["rc"], optional = true }
 serde_derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
 simdutf8 = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 proptest = { workspace = true }

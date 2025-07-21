@@ -32,6 +32,7 @@ logforth = { workspace = true }
 opendal = { workspace = true, features = ["services-s3", "services-fs"] }
 tokio = { workspace = true }
 toml = { workspace = true, features = ["parse"] }
+databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
 
 [lints]
 workspace = true

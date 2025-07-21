@@ -27,6 +27,7 @@ roaring = { workspace = true, features = ["serde"] }
 scroll = { workspace = true }
 serde = { workspace = true }
 wkt = { workspace = true }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 aho-corasick = { workspace = true }

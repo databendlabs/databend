@@ -14,6 +14,7 @@ cargo_metadata = { workspace = true }
 gix = { workspace = true }
 log = { workspace = true }
 vergen = { workspace = true, default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
+databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [lints]
 workspace = true
