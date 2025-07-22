@@ -423,12 +423,12 @@ impl Payload {
 
     pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
         let fake_rows = fake_rows.unwrap_or(0);
+        assert_eq!(self.aggrs.is_empty(), self.states_layout.is_none());
         let entries = self
             .states_layout
             .as_ref()
-            .unwrap()
-            .serialize_type
             .iter()
+            .flat_map(|x| x.serialize_type.iter())
             .map(|serde_type| {
                 ColumnBuilder::repeat_default(&serde_type.data_type(), fake_rows)
                     .build()

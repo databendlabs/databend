@@ -125,12 +125,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 continue;
             }
 
-            match AggregateMeta::downcast_from(block.take_meta().unwrap()) {
-                None => unreachable!(),
-                Some(AggregateMeta::Spilled(_)) => unreachable!(),
-                Some(AggregateMeta::Serialized(_)) => unreachable!(),
-                Some(AggregateMeta::BucketSpilled(_)) => unreachable!(),
-                Some(AggregateMeta::Partitioned { .. }) => unreachable!(),
+            match block.take_meta().and_then(AggregateMeta::downcast_from) {
                 Some(AggregateMeta::AggregateSpilling(payload)) => {
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
@@ -172,6 +167,8 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                     let c = serialize_block(block_number, c, &self.options)?;
                     serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
+
+                _ => unreachable!(),
             };
         }
 
