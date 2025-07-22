@@ -257,6 +257,18 @@ statement error 2218
 grant usage on warehouse a to u1;
 
 statement ok
+drop connection if exists c1;
+
+statement ok
+CREATE CONNECTION c1 STORAGE_TYPE='azblob' ENDPOINT_URL='http://s3.amazonaws.com';
+
+statement error 2218
+grant access connection on connection c1 to u1;
+
+statement ok
+drop connection if exists c1;
+
+statement ok
 GRANT create warehouse on *.* to role 'role1';
 
 statement ok
