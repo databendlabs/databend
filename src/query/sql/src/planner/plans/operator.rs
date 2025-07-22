@@ -31,6 +31,7 @@ use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::r_cte_scan::RecursiveCteScan;
+use crate::plans::sequence::Sequence;
 use crate::plans::Aggregate;
 use crate::plans::AsyncFunction;
 use crate::plans::CTEConsumer;
@@ -131,6 +132,7 @@ pub enum RelOp {
     MutationSource,
     MaterializedCTE,
     CTEConsumer,
+    Sequence,
 }
 
 /// Relational operators
@@ -166,6 +168,7 @@ pub enum RelOperator {
     MutationSource(MutationSource),
     MaterializedCTE(MaterializedCTE),
     CTEConsumer(CTEConsumer),
+    Sequence(Sequence),
 }
 
 impl RelOperator {
@@ -257,5 +260,6 @@ impl_try_from_rel_operator! {
     CompactBlock,
     MutationSource,
     MaterializedCTE,
-    CTEConsumer
+    CTEConsumer,
+    Sequence
 }

@@ -330,6 +330,9 @@ async fn create_memory_table_for_cte_scan(
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
         PhysicalPlan::MaterializedCTE(plan) => {
+            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
+        }
+        PhysicalPlan::Sequence(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.left.as_ref()).await?;
             create_memory_table_for_cte_scan(ctx, plan.right.as_ref()).await?;
         }

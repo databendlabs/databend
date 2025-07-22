@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::Hash;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -25,48 +24,39 @@ use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::ColumnBinding;
+use crate::ScalarExpr;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct MaterializedCTE {
-    pub cte_name: String,
-    pub cte_output_columns: Vec<ColumnBinding>,
-    pub ref_count: usize,
-}
+pub struct Sequence;
 
-impl MaterializedCTE {
-    pub fn new(cte_name: String, output_columns: Vec<ColumnBinding>, ref_count: usize) -> Self {
-        Self {
-            cte_name,
-            cte_output_columns: output_columns,
-            ref_count,
-        }
-    }
-}
-
-impl Operator for MaterializedCTE {
+impl Operator for Sequence {
+    /// Get relational operator kind
     fn rel_op(&self) -> RelOp {
-        RelOp::MaterializedCTE
+        RelOp::Sequence
     }
 
     /// Get arity of this operator
     fn arity(&self) -> usize {
-        1
+        2
+    }
+
+    fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
+        Box::new(std::iter::empty())
     }
 
     /// Derive relational property
     fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
-        rel_expr.derive_relational_prop_child(0)
+        rel_expr.derive_relational_prop_child(1)
     }
 
     /// Derive physical property
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        rel_expr.derive_physical_prop_child(0)
+        rel_expr.derive_physical_prop_child(1)
     }
 
     /// Derive statistics information
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+        rel_expr.derive_cardinality_child(1)
     }
 
     /// Compute required property for child with index `child_index`

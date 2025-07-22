@@ -17,38 +17,23 @@ use databend_common_sql::executor::physical_plans::MaterializedCTE;
 
 use crate::pipelines::processors::transforms::MaterializedCteSink;
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::QueryContext;
 impl PipelineBuilder {
     pub(crate) fn build_materialized_cte(&mut self, cte: &MaterializedCTE) -> Result<()> {
-        // init builder for cte pipeline
-        let sub_context = QueryContext::create_from(self.ctx.as_ref());
-        let sub_builder =
-            PipelineBuilder::create(self.func_ctx.clone(), self.settings.clone(), sub_context);
-
-        // build cte pipeline
-        let mut build_res = sub_builder.finalize(&cte.left)?;
-        let input_schema = cte.left.output_schema()?;
+        self.build_pipeline(&cte.input)?;
+        let input_schema = cte.input.output_schema()?;
         Self::build_result_projection(
             &self.func_ctx,
             input_schema,
             &cte.cte_output_columns,
-            &mut build_res.main_pipeline,
+            &mut self.main_pipeline,
             false,
         )?;
-        build_res.main_pipeline.try_resize(1)?;
+        self.main_pipeline.try_resize(1)?;
         let tx = self
             .ctx
             .get_materialized_cte_senders(&cte.cte_name, cte.ref_count);
-        build_res
-            .main_pipeline
+        self.main_pipeline
             .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))?;
-
-        // add cte pipeline to pipelines
-        self.pipelines.push(build_res.main_pipeline);
-        self.pipelines.extend(build_res.sources_pipelines);
-
-        // build main pipeline
-        self.build_pipeline(&cte.right)?;
         Ok(())
     }
 }

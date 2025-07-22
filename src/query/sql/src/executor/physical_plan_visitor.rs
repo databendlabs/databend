@@ -63,6 +63,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Sequence;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -128,6 +129,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
             PhysicalPlan::MaterializedCTE(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::CTEConsumer(plan) => self.replace_cte_consumer(plan),
+            PhysicalPlan::Sequence(plan) => self.replace_sequence(plan),
         }
     }
 
@@ -649,12 +651,10 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
-        let left = self.replace(&plan.left)?;
-        let right = self.replace(&plan.right)?;
+        let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
             plan_id: plan.plan_id,
-            left: Box::new(left),
-            right: Box::new(right),
+            input: Box::new(input),
             stat_info: plan.stat_info.clone(),
             cte_name: plan.cte_name.clone(),
             cte_output_columns: plan.cte_output_columns.clone(),
@@ -664,6 +664,17 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
+    }
+
+    fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+        Ok(PhysicalPlan::Sequence(Box::new(Sequence {
+            plan_id: plan.plan_id,
+            stat_info: plan.stat_info.clone(),
+            left: Box::new(left),
+            right: Box::new(right),
+        })))
     }
 }
 
@@ -819,6 +830,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::MaterializedCTE(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Sequence(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }

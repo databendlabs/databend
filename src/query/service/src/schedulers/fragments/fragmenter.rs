@@ -27,10 +27,10 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::MaterializedCTE;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::Sequence;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlanReplacer;
@@ -348,7 +348,7 @@ impl PhysicalPlanReplacer for Fragmenter {
         }))
     }
 
-    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+    fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
         let mut fragments = vec![];
         let left = self.replace(plan.left.as_ref())?;
 
@@ -358,14 +358,11 @@ impl PhysicalPlanReplacer for Fragmenter {
         fragments.append(&mut self.fragments);
 
         self.fragments = fragments;
-        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+        Ok(PhysicalPlan::Sequence(Box::new(Sequence {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
             stat_info: plan.stat_info.clone(),
-            cte_name: plan.cte_name.clone(),
-            cte_output_columns: plan.cte_output_columns.clone(),
-            ref_count: plan.ref_count,
         })))
     }
 }

@@ -82,6 +82,7 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
         RelOperator::MaterializedCTE(_) => "MaterializedCTE".to_string(),
         RelOperator::CTEConsumer(_) => "CTEConsumer".to_string(),
+        RelOperator::Sequence(_) => "Sequence".to_string(),
     }
 }
 

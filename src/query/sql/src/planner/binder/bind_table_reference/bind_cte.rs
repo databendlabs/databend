@@ -33,6 +33,7 @@ use crate::optimizer::ir::SExpr;
 use crate::plans::CTEConsumer;
 use crate::plans::MaterializedCTE;
 use crate::plans::RelOperator;
+use crate::plans::Sequence;
 
 impl Binder {
     pub fn init_cte(&mut self, bind_context: &mut BindContext, with: &Option<With>) -> Result<()> {
@@ -183,9 +184,12 @@ impl Binder {
 
                 let materialized_cte =
                     MaterializedCTE::new(cte_name, bind_context.columns, *ref_count);
+                let materialized_cte =
+                    SExpr::create_unary(Arc::new(materialized_cte.into()), Arc::new(s_expr));
+                let sequence = Sequence {};
                 current_expr = SExpr::create_binary(
-                    Arc::new(materialized_cte.into()),
-                    Arc::new(s_expr),
+                    Arc::new(sequence.into()),
+                    materialized_cte,
                     Arc::new(current_expr),
                 );
             }

@@ -270,10 +270,7 @@ impl DPhpyOptimizer {
         Ok((new_s_expr, left_res.1 && right_res.1))
     }
 
-    async fn process_materialized_cte_node(
-        &mut self,
-        s_expr: &SExpr,
-    ) -> Result<(Arc<SExpr>, bool)> {
+    async fn process_sequence_node(&mut self, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
         let mut left_dphyp = DPhpyOptimizer::new(self.opt_ctx.clone());
         let left_expr = left_dphyp.optimize_async(s_expr.child(0)?).await?;
 
@@ -406,7 +403,7 @@ impl DPhpyOptimizer {
 
             RelOperator::Join(_) => self.process_join_node(s_expr, join_conditions).await,
 
-            RelOperator::MaterializedCTE(_) => self.process_materialized_cte_node(s_expr).await,
+            RelOperator::Sequence(_) => self.process_sequence_node(s_expr).await,
             RelOperator::CTEConsumer(_) => {
                 self.process_cte_consumer_node(s_expr, join_relation).await
             }
@@ -418,7 +415,8 @@ impl DPhpyOptimizer {
             | RelOperator::EvalScalar(_)
             | RelOperator::Window(_)
             | RelOperator::Udf(_)
-            | RelOperator::Filter(_) => {
+            | RelOperator::Filter(_)
+            | RelOperator::MaterializedCTE(_) => {
                 self.process_unary_node(s_expr, join_conditions, join_child, join_relation)
                     .await
             }

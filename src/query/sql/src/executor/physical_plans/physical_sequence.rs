@@ -19,51 +19,40 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ir::SExpr;
-use crate::ColumnBinding;
+use crate::ColumnSet;
 
+/// This is a binary operator that executes its children in order (left to right), and returns the results of the right child
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MaterializedCTE {
+pub struct Sequence {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
-    pub input: Box<PhysicalPlan>,
-    pub cte_name: String,
-    pub cte_output_columns: Vec<ColumnBinding>,
-    pub ref_count: usize,
+    pub left: Box<PhysicalPlan>,
+    pub right: Box<PhysicalPlan>,
 }
 
-impl MaterializedCTE {
+impl Sequence {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        self.right.output_schema()
     }
 }
 
 impl PhysicalPlanBuilder {
-    pub(crate) async fn build_materialized_cte(
+    pub(crate) async fn build_sequence(
         &mut self,
         s_expr: &SExpr,
-        materialized_cte: &crate::plans::MaterializedCTE,
+        _sequence: &crate::plans::Sequence,
         stat_info: PlanStatsInfo,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
-        let input = Box::new(
-            self.build(
-                s_expr.child(0)?,
-                materialized_cte
-                    .cte_output_columns
-                    .iter()
-                    .map(|c| c.index)
-                    .collect(),
-            )
-            .await?,
-        );
-        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+        let left_side = Box::new(self.build(s_expr.child(0)?, Default::default()).await?);
+        let right_side = Box::new(self.build(s_expr.child(1)?, required).await?);
+        Ok(PhysicalPlan::Sequence(Box::new(Sequence {
             plan_id: 0,
             stat_info: Some(stat_info),
-            input,
-            cte_name: materialized_cte.cte_name.clone(),
-            cte_output_columns: materialized_cte.cte_output_columns.clone(),
-            ref_count: materialized_cte.ref_count,
+            left: left_side,
+            right: right_side,
         })))
     }
 }

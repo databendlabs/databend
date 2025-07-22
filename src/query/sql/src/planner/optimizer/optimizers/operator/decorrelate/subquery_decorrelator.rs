@@ -341,7 +341,8 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
             | RelOperator::CTEConsumer(_)
-            | RelOperator::CompactBlock(_) => Ok(s_expr.clone()),
+            | RelOperator::CompactBlock(_)
+            | RelOperator::Sequence(_) => Ok(s_expr.clone()),
         }
     }
 

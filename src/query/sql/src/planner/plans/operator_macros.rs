@@ -112,6 +112,7 @@ macro_rules! impl_match_rel_op {
             RelOperator::MutationSource($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::MaterializedCTE($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::CTEConsumer($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::Sequence($rel_op) => $rel_op.$method($($arg),*),
         }
     }
 }

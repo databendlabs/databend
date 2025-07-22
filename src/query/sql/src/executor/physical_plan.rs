@@ -73,6 +73,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Sequence;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -164,8 +165,10 @@ pub enum PhysicalPlan {
     BroadcastSource(BroadcastSource),
     BroadcastSink(BroadcastSink),
 
+    // CTE
     MaterializedCTE(Box<MaterializedCTE>),
     CTEConsumer(Box<CTEConsumer>),
+    Sequence(Box<Sequence>),
 }
 
 impl PhysicalPlan {
@@ -430,12 +433,17 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCTE(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
-                plan.left.adjust_plan_id(next_id);
-                plan.right.adjust_plan_id(next_id);
+                plan.input.adjust_plan_id(next_id);
             }
             PhysicalPlan::CTEConsumer(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
+            }
+            PhysicalPlan::Sequence(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
             }
         }
     }
@@ -497,6 +505,7 @@ impl PhysicalPlan {
             PhysicalPlan::BroadcastSink(v) => v.plan_id,
             PhysicalPlan::MaterializedCTE(v) => v.plan_id,
             PhysicalPlan::CTEConsumer(v) => v.plan_id,
+            PhysicalPlan::Sequence(v) => v.plan_id,
         }
     }
 
@@ -556,6 +565,7 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkCommitInsert(_) => todo!(),
             PhysicalPlan::MaterializedCTE(plan) => plan.output_schema(),
             PhysicalPlan::CTEConsumer(plan) => plan.output_schema(),
+            PhysicalPlan::Sequence(plan) => plan.output_schema(),
         }
     }
 
@@ -621,6 +631,7 @@ impl PhysicalPlan {
             PhysicalPlan::BroadcastSink(_) => "RuntimeFilterSink".to_string(),
             PhysicalPlan::MaterializedCTE(_) => "MaterializedCTE".to_string(),
             PhysicalPlan::CTEConsumer(_) => "CTEConsumer".to_string(),
+            PhysicalPlan::Sequence(_) => "Sequence".to_string(),
         }
     }
 
@@ -696,7 +707,8 @@ impl PhysicalPlan {
                 CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_ref())),
                 CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_ref())),
             },
-            PhysicalPlan::MaterializedCTE(plan) => Box::new(
+            PhysicalPlan::MaterializedCTE(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Sequence(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
         }
@@ -773,7 +785,8 @@ impl PhysicalPlan {
                 CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_mut())),
                 CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_mut())),
             },
-            PhysicalPlan::MaterializedCTE(plan) => Box::new(
+            PhysicalPlan::MaterializedCTE(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Sequence(plan) => Box::new(
                 std::iter::once(plan.left.as_mut()).chain(std::iter::once(plan.right.as_mut())),
             ),
             PhysicalPlan::BroadcastSink(plan) => Box::new(std::iter::once(plan.input.as_mut())),
@@ -836,7 +849,8 @@ impl PhysicalPlan {
             | PhysicalPlan::BroadcastSource(_)
             | PhysicalPlan::BroadcastSink(_)
             | PhysicalPlan::MaterializedCTE(_)
-            | PhysicalPlan::CTEConsumer(_) => None,
+            | PhysicalPlan::CTEConsumer(_)
+            | PhysicalPlan::Sequence(_) => None,
         }
     }
 

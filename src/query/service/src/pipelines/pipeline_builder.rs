@@ -298,6 +298,7 @@ impl PipelineBuilder {
 
             PhysicalPlan::MaterializedCTE(cte) => self.build_materialized_cte(cte),
             PhysicalPlan::CTEConsumer(cte_consumer) => self.build_cte_consumer(cte_consumer),
+            PhysicalPlan::Sequence(sequence) => self.build_sequence(sequence),
         }?;
 
         self.is_exchange_stack.pop();

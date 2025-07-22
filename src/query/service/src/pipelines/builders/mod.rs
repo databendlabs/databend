@@ -45,6 +45,7 @@ mod builder_replace_into;
 mod builder_row_fetch;
 mod builder_scalar;
 mod builder_scan;
+mod builder_sequence;
 mod builder_sort;
 mod builder_udf;
 mod builder_union_all;
