@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
+use crate::plans::MaterializedCTE;
 use crate::plans::RelOperator;
 
 /// Optimizer that removes unused CTEs from the query plan.
@@ -54,9 +55,11 @@ impl CleanupUnusedCTEOptimizer {
 
     /// Remove unused CTEs from the expression tree
     fn remove_unused_ctes(s_expr: &SExpr, referenced_ctes: &HashSet<String>) -> Result<SExpr> {
-        if let RelOperator::MaterializedCTE(m_cte) = s_expr.plan() {
+        if let RelOperator::Sequence(_) = s_expr.plan() {
+            let left_child = s_expr.child(0)?.plan().clone();
+            let cte: MaterializedCTE = left_child.try_into()?;
             // If this CTE is not referenced, remove it by returning the right child
-            if !referenced_ctes.contains(&m_cte.cte_name) {
+            if !referenced_ctes.contains(&cte.cte_name) {
                 // Return the right child (main query) and skip the left child (CTE definition)
                 let right_child = s_expr.child(1)?;
                 return Self::remove_unused_ctes(right_child, referenced_ctes);

@@ -318,12 +318,13 @@ impl SubqueryDecorrelatorOptimizer {
                 Arc::new(self.optimize_sync(s_expr.right_child())?),
             )),
 
-            RelOperator::Limit(_) | RelOperator::Udf(_) | RelOperator::AsyncFunction(_) | RelOperator::MaterializedCTE(_) => {
-                Ok(SExpr::create_unary(
-                    s_expr.plan.clone(),
-                    Arc::new(self.optimize_sync(s_expr.unary_child())?),
-                ))
-            }
+            RelOperator::Limit(_)
+            | RelOperator::Udf(_)
+            | RelOperator::AsyncFunction(_)
+            | RelOperator::MaterializedCTE(_) => Ok(SExpr::create_unary(
+                s_expr.plan.clone(),
+                Arc::new(self.optimize_sync(s_expr.unary_child())?),
+            )),
 
             RelOperator::DummyTableScan(_)
             | RelOperator::Scan(_)
