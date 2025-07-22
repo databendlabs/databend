@@ -84,7 +84,7 @@ impl ParquetVariantTable {
             parquet.use_logic_type
         } else {
             return Err(ErrorCode::Internal(
-                "bug: ParquetVariantTable::read_data must be called with FileFormatParams",
+                "bug: ParquetVariantTable::read_data must be called with Parquet FileFormatParams",
             ));
         };
 

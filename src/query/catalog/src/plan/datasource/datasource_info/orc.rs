@@ -21,8 +21,7 @@ use crate::plan::StageTableInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
 pub struct OrcTableInfo {
     pub stage_table_info: StageTableInfo,
-    pub arrow_schema: arrow_schema::SchemaRef,
-    pub schema_from: String,
+    pub schema: Option<(arrow_schema::SchemaRef, String)>,
 }
 
 impl OrcTableInfo {

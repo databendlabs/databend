@@ -4525,6 +4525,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
+ "jiff 0.2.13",
  "log",
  "opendal",
  "orc-rust",
@@ -5583,12 +5584,14 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
+ "jiff 0.2.13",
  "serde",
  "typetag",
 ]

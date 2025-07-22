@@ -320,7 +320,7 @@ impl IcebergTable {
             let data_schema = Arc::new(data_schema);
             pipeline.add_source(
                 |output| {
-                    ORCSource::try_create(
+                    ORCSource::try_create_with_schema(
                         output,
                         ctx.clone(),
                         Arc::new(op.clone()),

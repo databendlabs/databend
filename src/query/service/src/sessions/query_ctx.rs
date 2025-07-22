@@ -1767,6 +1767,14 @@ impl TableContext for QueryContext {
                 }
             }
             FileFormatParams::Orc(..) => {
+                let is_variant =
+                    match max_column_position {
+                        0 => false,
+                        1 => true,
+                        _ => return Err(ErrorCode::SemanticError(
+                            "[QUERY-CTX] Query from ORC file only support $1 as column position",
+                        )),
+                    };
                 let schema = Arc::new(TableSchema::empty());
                 let info = StageTableInfo {
                     schema,
@@ -1778,7 +1786,7 @@ impl TableContext for QueryContext {
                     default_exprs: None,
                     copy_into_table_options: Default::default(),
                     stage_root,
-                    is_variant: false,
+                    is_variant,
                 };
                 OrcTable::try_create(info).await
             }
