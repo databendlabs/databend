@@ -23,7 +23,8 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::BinaryWrite;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -177,21 +178,43 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
-    #[inline]
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
         self.inner
-            .serialize_binary(place.remove_last_loc(), writer)?;
-        let flag = get_flag(place) as u8;
-        writer.write_scalar(&flag)
+            .serialize_type()
+            .into_iter()
+            .chain(Some(StateSerdeItem::Bool))
+            .collect()
     }
 
-    #[inline]
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let flag = get_flag(place) || reader[reader.len() - 1] > 0;
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let n = builders.len();
+        debug_assert_eq!(self.inner.serialize_type().len() + 1, n);
+
+        let flag = get_flag(place);
+        builders
+            .last_mut()
+            .and_then(ColumnBuilder::as_boolean_mut)
+            .unwrap()
+            .push(flag);
+
         self.inner
-            .merge_binary(place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
+            .serialize(place.remove_last_loc(), &mut builders[..n - 1])
+    }
+
+    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
+        unreachable!()
+    }
+
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        let flag = get_flag(place) || *data.last().and_then(ScalarRef::as_boolean).unwrap();
+        self.inner
+            .merge(place.remove_last_loc(), &data[..data.len() - 1])?;
         set_flag(place, flag);
         Ok(())
+    }
+
+    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
+        unreachable!()
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -236,6 +259,63 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     unsafe fn drop_state(&self, place: AggrState) {
         self.inner.drop_state(place.remove_last_loc())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &databend_common_expression::BlockEntry,
+    ) -> Result<()> {
+        let column = state.to_column();
+        for (place, data) in places.iter().zip(column.iter()) {
+            self.merge(
+                AggrState::new(*place, loc),
+                data.as_tuple().unwrap().as_slice(),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn batch_merge_single(
+        &self,
+        place: AggrState,
+        state: &databend_common_expression::BlockEntry,
+    ) -> Result<()> {
+        let column = state.to_column();
+        for data in column.iter() {
+            self.merge(place, data.as_tuple().unwrap().as_slice())?;
+        }
+        Ok(())
+    }
+
+    fn batch_merge_states(
+        &self,
+        places: &[StateAddr],
+        rhses: &[StateAddr],
+        loc: &[AggrStateLoc],
+    ) -> Result<()> {
+        for (place, rhs) in places.iter().zip(rhses.iter()) {
+            self.merge_states(AggrState::new(*place, loc), AggrState::new(*rhs, loc))?;
+        }
+        Ok(())
+    }
+
+    fn batch_merge_result(
+        &self,
+        places: &[StateAddr],
+        loc: Box<[AggrStateLoc]>,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
+        for place in places {
+            self.merge_result(AggrState::new(*place, &loc), builder)?;
+        }
+        Ok(())
+    }
+
+    fn get_if_condition(&self, _columns: ProjectedBlock) -> Option<Bitmap> {
+        None
     }
 }
 

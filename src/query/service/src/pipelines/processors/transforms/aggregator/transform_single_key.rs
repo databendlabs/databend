@@ -155,7 +155,8 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 )
                 .zip(builders.iter_mut())
             {
-                func.serialize(place, builder)?;
+                let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+                func.serialize(place, builders)?;
             }
 
             let columns = builders.into_iter().map(|b| b.build()).collect();

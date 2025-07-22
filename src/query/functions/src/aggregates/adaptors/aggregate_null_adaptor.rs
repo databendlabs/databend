@@ -23,7 +23,8 @@ use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::BinaryWrite;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -183,12 +184,24 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
             .accumulate_row(place, not_null_columns, validity, row)
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.0.serialize(place, writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.0.serialize_type()
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.0.merge(place, reader)
+    fn serialize(&self, place: AggrState, builder: &mut [ColumnBuilder]) -> Result<()> {
+        self.0.serialize(place, builder)
+    }
+
+    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
+        unreachable!()
+    }
+
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        self.0.merge(place, data)
+    }
+
+    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
+        unreachable!()
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -304,12 +317,20 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             .accumulate_row(place, not_null_columns, validity, row)
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.0.serialize(place, writer)
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        self.0.serialize(place, builders)
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.0.merge(place, reader)
+    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
+        unreachable!()
+    }
+
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        self.0.merge(place, data)
+    }
+
+    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
+        unreachable!()
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -488,24 +509,42 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             .accumulate_row(place.remove_last_loc(), not_null_columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
         if !NULLABLE_RESULT {
-            return self.nested.serialize_binary(place, writer);
+            return self.nested.serialize_type();
         }
-
         self.nested
-            .serialize_binary(place.remove_last_loc(), writer)?;
-        let flag = get_flag(place);
-        writer.write_scalar(&flag)
+            .serialize_type()
+            .into_iter()
+            .chain(Some(StateSerdeItem::Bool))
+            .collect()
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
         if !NULLABLE_RESULT {
-            return self.nested.merge_binary(place, reader);
+            return self.nested.serialize(place, builders);
+        }
+        let n = builders.len();
+        debug_assert_eq!(self.nested.serialize_type().len() + 1, n);
+
+        let flag = get_flag(place);
+        builders
+            .last_mut()
+            .and_then(ColumnBuilder::as_boolean_mut)
+            .unwrap()
+            .push(flag);
+        self.nested
+            .serialize(place.remove_last_loc(), &mut builders[..(n - 1)])
+    }
+
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        if !NULLABLE_RESULT {
+            return self.nested.merge(place, data);
         }
 
-        let flag = reader[reader.len() - 1];
-        if flag == 0 {
+        let n = data.len();
+        let flag = *data.last().and_then(ScalarRef::as_boolean).unwrap();
+        if !flag {
             return Ok(());
         }
 
@@ -514,8 +553,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             self.init_state(place);
         }
         set_flag(place, true);
-        self.nested
-            .merge_binary(place.remove_last_loc(), &mut &reader[..reader.len() - 1])
+        self.nested.merge(place.remove_last_loc(), &data[..n - 1])
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

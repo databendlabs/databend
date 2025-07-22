@@ -149,8 +149,8 @@ impl Payload {
                     .enumerate()
                 {
                     {
-                        let builder = &mut builders[idx];
-                        func.serialize(AggrState::new(*place, loc), builder)?;
+                        let builders = builders[idx].as_tuple_mut().unwrap().as_mut_slice();
+                        func.serialize(AggrState::new(*place, loc), builders)?;
                     }
                 }
             }

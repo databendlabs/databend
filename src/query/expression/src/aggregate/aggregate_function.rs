@@ -73,8 +73,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         vec![StateSerdeItem::Binary(self.serialize_size_per_row())]
     }
 
-    fn serialize(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let binary_builder = builder.as_tuple_mut().unwrap()[0].as_binary_mut().unwrap();
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
         self.serialize_binary(place, &mut binary_builder.data)?;
         binary_builder.commit_row();
         Ok(())
@@ -86,8 +86,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         None
     }
 
-    fn merge(&self, place: AggrState, data: ScalarRef) -> Result<()> {
-        let mut binary = *data.as_tuple().unwrap()[0].as_binary().unwrap();
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        let mut binary = *data[0].as_binary().unwrap();
         self.merge_binary(place, &mut binary)
     }
 
@@ -102,7 +102,10 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     ) -> Result<()> {
         let column = state.to_column();
         for (place, data) in places.iter().zip(column.iter()) {
-            self.merge(AggrState::new(*place, loc), data)?;
+            self.merge(
+                AggrState::new(*place, loc),
+                data.as_tuple().unwrap().as_slice(),
+            )?;
         }
 
         Ok(())
@@ -111,7 +114,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
         let column = state.to_column();
         for data in column.iter() {
-            self.merge(place, data)?;
+            self.merge(place, data.as_tuple().unwrap().as_slice())?;
         }
         Ok(())
     }
