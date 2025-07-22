@@ -160,7 +160,7 @@ impl FromToProto for mt::principal::GrantObject {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let Some(object) = p.object else {
-            return Err(Incompatible::new("GrantObject cannot be None".to_string()));
+            return Err(Incompatible::new(format!("Incompatible GrantObject type: Data contains an unrecognized variant for {} version", p.ver)));
         };
 
         match object {
