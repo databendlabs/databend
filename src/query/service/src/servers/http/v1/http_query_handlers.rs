@@ -432,6 +432,7 @@ async fn query_page_handler(
 
 #[poem::handler]
 #[async_backtrace::framed]
+#[fastrace::trace]
 pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(mut req): Json<HttpQueryRequest>,
@@ -541,6 +542,16 @@ pub(crate) async fn query_handler(
 
             parent_mem_stat = ParentMemStat::Normal(workload_group.mem_stat.clone());
             tracking_workload_group = Some(workload_group);
+        } else if let Ok(user) = session.get_current_user() {
+            log::info!(
+                "[Workload-Group] The user {} does not have a workload group.",
+                user.name
+            );
+        } else {
+            log::info!(
+                "[Workload-Group] The query {:?} does not have a workload group.",
+                session.get_current_query_id()
+            );
         }
 
         let name = Some(ctx.query_id.clone());

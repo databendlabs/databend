@@ -18,7 +18,6 @@ use std::fmt;
 use std::fmt::Write;
 use std::io;
 
-use databend_common_meta_types::seq_value::KVMeta;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 pub use map_api::map_key::MapKey;
@@ -26,10 +25,10 @@ pub use map_api::map_value::MapValue;
 pub use map_api::BeforeAfter;
 pub use map_api::IOResultStream;
 use seq_marked::SeqMarked;
-
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 pub type MapKeyPrefix = &'static str;
 
@@ -60,44 +59,27 @@ pub(crate) type KVResultStream<K> = IOResultStream<MapKV<K>>;
 /// Trait for using Self as an implementation of the MapApi.
 #[allow(dead_code)]
 pub trait AsMap {
-    /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
-    fn as_map<K: MapKey>(&self) -> &impl MapApiRO<K>
-    where Self: MapApiRO<K> + Sized {
-        self
-    }
-
-    /// Use Self as an implementation of the [`MapApi`] interface, allowing for mutation.
-    fn as_map_mut<K: MapKey>(&mut self) -> &mut impl MapApi<K>
-    where Self: MapApi<K> + Sized {
-        self
-    }
-
-    fn user_map(&self) -> &impl MapApiRO<UserKey>
+    fn as_user_map(&self) -> &impl MapApiRO<UserKey>
     where Self: MapApiRO<UserKey> + Sized {
         self
     }
 
-    fn expire_map(&self) -> &impl MapApiRO<ExpireKey>
-    where Self: MapApiRO<ExpireKey> + Sized {
-        self
-    }
-
-    fn user_map_mut(&mut self) -> &mut impl MapApi<UserKey>
+    fn as_user_map_mut(&mut self) -> &mut impl MapApi<UserKey>
     where Self: MapApi<UserKey> + Sized {
         self
     }
 
-    fn expire_map_mut(&mut self) -> &mut impl MapApi<ExpireKey>
-    where Self: MapApi<ExpireKey> + Sized {
+    fn as_expire_map(&self) -> &impl MapApiRO<ExpireKey>
+    where Self: MapApiRO<ExpireKey> + Sized {
         self
     }
 }
 
 impl<T> AsMap for T {}
 
-pub(crate) struct MapApiExt;
+pub(crate) struct MapApiHelper;
 
-impl MapApiExt {
+impl MapApiHelper {
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
     pub(crate) async fn update_meta<T>(
@@ -108,7 +90,6 @@ impl MapApiExt {
     where
         T: MapApi<UserKey>,
     {
-        //
         let got = s.get(&key).await?;
         if got.is_tombstone() {
             return Ok((got.clone(), got.clone()));
@@ -118,25 +99,5 @@ impl MapApiExt {
         let (_meta, v) = got.into_data().unwrap();
 
         s.set(key, Some((meta, v))).await
-    }
-
-    /// Update only the value and keeps the meta unchanged.
-    /// If the entry does not exist, create one.
-    #[allow(dead_code)]
-    pub(crate) async fn upsert_value<T>(
-        s: &mut T,
-        key: UserKey,
-        value: Vec<u8>,
-    ) -> Result<BeforeAfter<SeqMarked<MetaValue>>, io::Error>
-    where
-        T: MapApi<UserKey>,
-    {
-        let got = s.get(&key).await?;
-
-        let d = got.into_data();
-
-        let meta = if let Some((meta, _)) = d { meta } else { None };
-
-        s.set(key, Some((meta, value))).await
     }
 }

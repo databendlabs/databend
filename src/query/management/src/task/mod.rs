@@ -12,21 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module re-exports the `Marked` type from the `map_api` crate,
-//! setting the meta type to `KVMeta`.
+mod errors;
+mod task_mgr;
 
-#[cfg(test)]
-mod marked_test;
-
-use databend_common_meta_types::KVMeta;
-use seq_marked::SeqMarked;
-
-use crate::state_machine::ExpireValue;
-
-pub type MetaValue<T = Vec<u8>> = (Option<KVMeta>, T);
-
-impl From<ExpireValue> for SeqMarked<String> {
-    fn from(value: ExpireValue) -> Self {
-        SeqMarked::new_normal(value.seq, value.key)
-    }
-}
+pub use errors::TaskApiError;
+pub use errors::TaskError;
+pub use task_mgr::TaskMgr;

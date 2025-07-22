@@ -27,8 +27,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::SeqV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_udf() -> Result<()> {
@@ -218,6 +218,7 @@ fn create_test_udf_server() -> UserDefinedFunction {
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "This is a description",
+        None,
     )
 }
 
@@ -231,6 +232,7 @@ fn create_test_udf_script() -> UserDefinedFunction {
         DataType::Number(NumberDataType::Int64),
         "3.12.0",
         "This is a description",
+        None,
     )
 }
 

@@ -164,6 +164,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (132, "2025-06-25: Remove: SequenceMeta.start"),
     (133, "2025-06-25: Add: Add new StageFileCompression Zip"),
     (134, "2025-06-27: Add: SequenceMeta.storage_version"),
+    (135, "2025-07-16: Add: UDFServer.immutable, UDFScript.immutable"),
+    (136, "2025-07-17: Add: Task"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

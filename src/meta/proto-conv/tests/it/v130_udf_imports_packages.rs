@@ -59,6 +59,7 @@ fn test_decode_v130_udf_script() -> anyhow::Result<()> {
             imports: vec!["@s1/a.zip".to_string(), "@s2/b.py".to_string()],
             packages: vec!["numpy".to_string(), "pandas".to_string()],
             runtime_version: "3.12.2".to_string(),
+            immutable: None,
         }),
         created_on: DateTime::<Utc>::default(),
     };

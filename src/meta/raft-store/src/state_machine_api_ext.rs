@@ -17,12 +17,11 @@ use std::io;
 use std::ops::RangeBounds;
 use std::time::Duration;
 
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use display_more::DisplayUnixTimeStampExt;
 use futures_util::StreamExt;
@@ -33,18 +32,20 @@ use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 use map_api::IOResultStream;
 use seq_marked::SeqMarked;
+use seq_marked::SeqValue;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
+use state_machine_api::SeqV;
+use state_machine_api::StateMachineApi;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApiExt;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
-use crate::state_machine_api::StateMachineApi;
+use crate::leveled_store::map_api::MapApiHelper;
 use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;
 
 #[async_trait::async_trait]
-pub trait StateMachineApiExt: StateMachineApi {
+pub trait StateMachineApiExt: StateMachineApi<SysData> {
     /// It returns 2 entries: the previous one and the new one after upsert.
     async fn upsert_kv_primary_index(
         &mut self,
@@ -53,12 +54,7 @@ pub trait StateMachineApiExt: StateMachineApi {
     ) -> Result<(SeqMarked<MetaValue>, SeqMarked<MetaValue>), io::Error> {
         let kv_meta = upsert_kv.value_meta.as_ref().map(|m| m.to_kv_meta(cmd_ctx));
 
-        let prev = self
-            .map_ref()
-            .user_map()
-            .get(upsert_kv.key.as_ref())
-            .await?
-            .clone();
+        let prev = self.user_map().get(upsert_kv.key.as_ref()).await?.clone();
 
         if upsert_kv.seq.match_seq(&prev.seq()).is_err() {
             return Ok((prev.clone(), prev));
@@ -66,7 +62,7 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let (prev, mut result) = match &upsert_kv.value {
             Operation::Update(v) => {
-                self.map_mut()
+                self.user_map_mut()
                     .set(
                         UserKey::new(&upsert_kv.key),
                         Some((kv_meta.clone(), v.clone())),
@@ -74,14 +70,14 @@ pub trait StateMachineApiExt: StateMachineApi {
                     .await?
             }
             Operation::Delete => {
-                self.map_mut()
+                self.user_map_mut()
                     .set(UserKey::new(&upsert_kv.key), None)
                     .await?
             }
             #[allow(deprecated)]
             Operation::AsIs => {
-                MapApiExt::update_meta(
-                    self.map_mut(),
+                MapApiHelper::update_meta(
+                    self.user_map_mut(),
                     UserKey::new(&upsert_kv.key),
                     kv_meta.clone(),
                 )
@@ -105,7 +101,7 @@ pub trait StateMachineApiExt: StateMachineApi {
             // in order to keep compatibility with the old state machine.
             // Old SM will just insert an expired record, and that causes the system seq increase by 1.
             let (_p, r) = self
-                .map_mut()
+                .user_map_mut()
                 .set(UserKey::new(&upsert_kv.key), None)
                 .await?;
             result = r;
@@ -126,17 +122,12 @@ pub trait StateMachineApiExt: StateMachineApi {
         let p = prefix.to_string();
 
         let strm = if let Some(right) = prefix_right_bound(&p) {
-            self.map_ref()
-                .user_map()
+            self.user_map()
                 .range(UserKey::new(&p)..UserKey::new(right))
                 .await?
         } else {
-            self.map_ref().user_map().range(UserKey::new(&p)..).await?
+            self.user_map().range(UserKey::new(&p)..).await?
         };
-
-        let strm = strm
-            // Return only keys with the expected prefix
-            .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))));
 
         let strm = add_cooperative_yielding(strm, format!("list_kv: {prefix}"))
             // Skip tombstone
@@ -151,8 +142,8 @@ pub trait StateMachineApiExt: StateMachineApi {
         let left = rng.start_bound().cloned();
         let right = rng.end_bound().cloned();
 
-        let leveled_map = self.map_ref();
-        let strm = leveled_map.user_map().range(rng).await?;
+        let leveled_map = self.user_map();
+        let strm = leveled_map.as_user_map().range(rng).await?;
 
         let strm = add_cooperative_yielding(strm, format!("range_kv: {left:?} to {right:?}"))
             // Skip tombstone
@@ -178,7 +169,7 @@ pub trait StateMachineApiExt: StateMachineApi {
         // Remove previous expiration index, add a new one.
 
         if let Some(exp_ms) = removed.expires_at_ms_opt() {
-            self.map_mut()
+            self.expire_map_mut()
                 .set(ExpireKey::new(exp_ms, *removed.internal_seq()), None)
                 .await?;
         }
@@ -186,7 +177,7 @@ pub trait StateMachineApiExt: StateMachineApi {
         if let Some(exp_ms) = added.expires_at_ms_opt() {
             let k = ExpireKey::new(exp_ms, *added.internal_seq());
             let v = key.to_string();
-            self.map_mut().set(k, Some(v)).await?;
+            self.expire_map_mut().set(k, Some(v)).await?;
         }
 
         Ok(())
@@ -204,7 +195,7 @@ pub trait StateMachineApiExt: StateMachineApi {
         // curr_time > expire_at => expired
         let end = ExpireKey::new(curr_time_ms, 0);
 
-        let strm = self.map_ref().expire_map().range(..end).await?;
+        let strm = self.expire_map().range(..end).await?;
 
         let strm = add_cooperative_yielding(strm, format!("list_expire_index up to {end}"))
             // Return only non-deleted records
@@ -220,13 +211,13 @@ pub trait StateMachineApiExt: StateMachineApi {
     ///
     /// It does not check expiration of the returned entry.
     async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
-        let got = self.map_ref().user_map().get(key.as_ref()).await?;
+        let got = self.user_map().get(key.as_ref()).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
     }
 }
 
-impl<T> StateMachineApiExt for T where T: StateMachineApi {}
+impl<T> StateMachineApiExt for T where T: StateMachineApi<SysData> {}
 
 /// Convert internal data format [`SeqMarked<T>`] containing tombstone to a public API format [`SeqV`] without tombstone.
 ///

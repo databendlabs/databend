@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod kv_meta;
+mod meta;
+pub mod service;
+mod session;
 
-pub use kv_meta::KVMeta;
-pub use map_api::SeqValue;
-
-pub type SeqV<T = Vec<u8>> = map_api::SeqV<KVMeta, T>;
+pub use service::TaskService;

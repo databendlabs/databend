@@ -28,8 +28,6 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::state_machine::UserKey;
-use databend_common_meta_raft_store::state_machine_api::SMEventSender;
 use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
@@ -65,6 +63,7 @@ use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
+use state_machine_api::UserKey;
 use tokio_stream;
 use tokio_stream::Stream;
 use tonic::codegen::BoxStream;
@@ -74,6 +73,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
+use watcher::dispatch::Command;
 use watcher::key_range::build_key_range;
 use watcher::util::new_initialization_sink;
 use watcher::util::try_forward;
@@ -518,7 +518,7 @@ impl MetaService for MetaServiceImpl {
                     sender_str
                 );
 
-                mn.dispatcher_handle.send_future(fu);
+                mn.dispatcher_handle.send_command(Command::Future(fu));
             }
 
             stream

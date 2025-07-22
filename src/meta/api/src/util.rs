@@ -24,15 +24,13 @@ use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::InvalidArgument;
 use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaNetworkError;
-use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
@@ -200,12 +198,7 @@ pub async fn fetch_id<T: kvapi::Key>(
     generator: T,
 ) -> Result<u64, MetaError> {
     let res = kv_api
-        .upsert_kv(UpsertKV {
-            key: generator.to_string_key(),
-            seq: MatchSeq::GE(0),
-            value: Operation::Update(b"".to_vec()),
-            value_meta: None,
-        })
+        .upsert_kv(UpsertKV::update(generator.to_string_key(), b""))
         .await?;
 
     // seq: MatchSeq::Any always succeeds

@@ -126,3 +126,5 @@ mod v131_avro_and_parquet_file_format_params;
 mod v132_remove_sequence_meta_start;
 mod v133_stage_file_compression;
 mod v134_add_sequence_meta_storage_version;
+mod v135_udf_immutable;
+mod v136_add_task;

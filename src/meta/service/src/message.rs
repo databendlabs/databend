@@ -24,6 +24,7 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Endpoint;
+use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MetaAPIError;
 
@@ -150,18 +151,14 @@ pub enum ForwardResponse {
 
 impl tonic::IntoRequest<RaftRequest> for ForwardRequest<ForwardRequestBody> {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(&self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }
 
 impl tonic::IntoRequest<RaftRequest> for ForwardRequest<MetaGrpcReadReq> {
     fn into_request(self) -> tonic::Request<RaftRequest> {
-        let mes = RaftRequest {
-            data: serde_json::to_string(&self).expect("fail to serialize"),
-        };
+        let mes = GrpcHelper::encode_raft_request(&self).expect("fail to serialize");
         tonic::Request::new(mes)
     }
 }

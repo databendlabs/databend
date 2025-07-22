@@ -162,6 +162,7 @@ impl Spiller {
     }
 
     /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
+    #[fastrace::trace(name = "Spiller::spill")]
     pub async fn spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
         let (location, layout, data_size) = self.spill_unmanage(data_block).await?;
 
@@ -325,6 +326,7 @@ impl Spiller {
 
     /// Read a certain file to a [`DataBlock`].
     /// We should guarantee that the file is managed by this spiller.
+    #[fastrace::trace(name = "Spiller::read_spilled_file")]
     pub async fn read_spilled_file(&self, location: &Location) -> Result<DataBlock> {
         let layout = self.ctx.get_spill_layout(location).unwrap();
         self.read_unmanage_spilled_file(location, &layout).await

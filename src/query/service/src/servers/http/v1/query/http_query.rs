@@ -38,6 +38,7 @@ use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use databend_common_settings::ScopeLevel;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnState;
+use fastrace::future::FutureExt;
 use http::StatusCode;
 use log::error;
 use log::info;
@@ -441,7 +442,7 @@ fn try_set_txn(
 
 impl HttpQuery {
     #[async_backtrace::framed]
-    #[fastrace::trace]
+    #[fastrace::trace(name = "HttpQuery::try_create")]
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
@@ -790,6 +791,7 @@ impl HttpQuery {
     }
 
     pub async fn start_query(&mut self, sql: String) -> Result<()> {
+        let span = fastrace::Span::enter_with_local_parent("HttpQuery::start_query");
         let (block_sender, query_context) = {
             let state = self.executor.lock();
             let ExecuteState::Starting(state) = &state.state else {
@@ -844,7 +846,8 @@ impl HttpQuery {
                     Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
                     block_sender.close();
                 }
-            },
+            }
+            .in_span(span),
             None,
         )?;
 

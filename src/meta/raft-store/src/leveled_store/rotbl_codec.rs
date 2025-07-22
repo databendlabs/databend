@@ -128,12 +128,12 @@ impl RotblCodec {
 
 #[cfg(test)]
 mod tests {
+    use state_machine_api::ExpireKey;
+    use state_machine_api::UserKey;
     use Bound::Excluded;
     use Bound::Included;
 
     use super::*;
-    use crate::state_machine::ExpireKey;
-    use crate::state_machine::UserKey;
 
     #[test]
     fn test_encode_key_string() {

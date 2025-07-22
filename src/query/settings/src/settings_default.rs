@@ -492,6 +492,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enforce_local", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce local plan.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enforce_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce broadcast join.",
@@ -1165,7 +1172,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("short_sql_max_length", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(128),
+                    value: UserSettingValue::UInt64(2048),
                     desc: "Sets the maximum length for truncating SQL queries in short_sql function.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,

@@ -21,7 +21,6 @@ use std::fmt::Formatter;
 
 use clap::ArgAction;
 use clap::Args;
-use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use databend_common_base::base::mask_string;
@@ -57,7 +56,6 @@ use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
 use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
-use databend_common_version::DATABEND_COMMIT_VERSION;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -72,6 +70,7 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use super::inner::TaskConfig as InnerTaskConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
@@ -90,29 +89,18 @@ const CATALOG_HIVE: &str = "hive";
 /// It's forbidden to do any breaking changes on this struct.
 /// Only adding new fields is allowed.
 /// This same rules should be applied to all fields of this struct.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Parser)]
-#[clap(name = "databend-query", about, version = & * * DATABEND_COMMIT_VERSION, author)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct Config {
-    /// Run a command and quit
-    #[command(subcommand)]
-    #[serde(skip)]
-    pub subcommand: Option<Commands>,
-
-    // To be compatible with the old version, we keep the `cmd` arg
-    // We should always use `databend-query ver` instead `databend-query --cmd ver` in latest version
-    #[clap(long)]
-    pub cmd: Option<String>,
-
-    #[clap(long, short = 'c', value_name = "VALUE", default_value_t)]
-    pub config_file: String,
-
     // Query engine config.
     #[clap(flatten)]
     pub query: QueryConfig,
 
     #[clap(flatten)]
     pub log: LogConfig,
+
+    #[clap(flatten)]
+    pub task: TaskConfig,
 
     // Meta Service config.
     #[clap(flatten)]
@@ -184,32 +172,13 @@ impl Config {
     /// with_args is to control whether we need to load from args or not.
     /// We should set this to false during tests because we don't want
     /// our test binary to parse cargo's args.
-    #[no_sanitize(address)]
-    pub fn load(with_args: bool) -> Result<Self> {
-        let mut arg_conf = Self::default();
-
-        if with_args {
-            arg_conf = Self::parse();
-        }
-
-        if arg_conf.cmd == Some("ver".to_string()) {
-            arg_conf.subcommand = Some(Commands::Ver);
-        }
-
-        if arg_conf.subcommand.is_some() {
-            return Ok(arg_conf);
-        }
-
+    pub fn merge(self, config_file: &str) -> Result<Self> {
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
 
         // Load from config file first.
         {
-            let final_config_file = if !arg_conf.config_file.is_empty() {
-                // TODO: remove this `allow(clippy::redundant_clone)`
-                // as soon as this issue is fixed:
-                // https://github.com/rust-lang/rust-clippy/issues/10940
-                #[allow(clippy::redundant_clone)]
-                arg_conf.config_file.clone()
+            let final_config_file = if !config_file.is_empty() {
+                config_file.to_string()
             } else if let Ok(path) = env::var("CONFIG_FILE") {
                 path
             } else {
@@ -228,9 +197,7 @@ impl Config {
         builder = builder.collect(from_env());
 
         // Finally, load from args.
-        if with_args {
-            builder = builder.collect(from_self(arg_conf));
-        }
+        builder = builder.collect(from_self(self));
 
         // Check obsoleted.
         let conf = builder.build()?;
@@ -667,7 +634,9 @@ pub struct HiveCatalogConfig {
         default_value_t
     )]
     pub address: String,
+
     /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     pub meta_store_address: Option<String>,
 
     #[clap(long = "hive-thrift-protocol", value_name = "VALUE", default_value_t)]
@@ -1811,39 +1780,39 @@ pub struct QueryConfig {
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_disk_cache_mb_size: Option<u64>,
 
     /// OBSOLETED: Table Meta Cached enabled
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_meta_cache_enabled: Option<bool>,
 
     /// OBSOLETED: Max number of cached table block meta
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_block_meta_count: Option<u64>,
 
     /// OBSOLETED: Table memory cache size (mb)
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_memory_cache_mb_size: Option<u64>,
 
     /// OBSOLETED: Table disk cache folder root
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_disk_cache_root: Option<String>,
 
     /// OBSOLETED: Max number of cached table snapshot
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_snapshot_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached table snapshot statistics
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_statistic_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached table segment
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_segment_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached bloom index meta objects
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_bloom_index_meta_count: Option<u64>,
 
     /// OBSOLETED:
@@ -1852,12 +1821,12 @@ pub struct QueryConfig {
     ///
     /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub table_cache_bloom_index_filter_count: Option<u64>,
 
     /// OBSOLETED: (cache of raw bloom filter data is no longer supported)
     /// Max bytes of cached bloom filter bytes.
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
 
     /// OBSOLETED: use settings['parquet_fast_read_bytes'] instead
@@ -1866,11 +1835,11 @@ pub struct QueryConfig {
     /// parquet_fast_read_bytes = 52428800
     /// will let databend read whole file for parquet file less than 50MB and read column by column
     /// if file size is greater than 50MB
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub parquet_fast_read_bytes: Option<u64>,
 
     /// OBSOLETED: use settings['max_storage_io_requests'] instead
-    #[clap(long, value_name = "VALUE")]
+    #[clap(long, value_name = "VALUE", hide = true)]
     pub max_storage_io_requests: Option<u64>,
 
     /// Disable some system load(For example system.configs) for cloud security.
@@ -2339,6 +2308,34 @@ impl From<InnerLogConfig> for LogConfig {
             log_level: None,
             query_enabled: None,
             log_query_enabled: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct TaskConfig {
+    #[clap(
+        long = "private-task-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
+    #[serde(rename = "on")]
+    pub private_task_on: bool,
+}
+
+impl TryInto<InnerTaskConfig> for TaskConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerTaskConfig> {
+        Ok(InnerTaskConfig {
+            on: self.private_task_on,
+        })
+    }
+}
+
+impl From<InnerTaskConfig> for TaskConfig {
+    fn from(inner: InnerTaskConfig) -> Self {
+        TaskConfig {
+            private_task_on: inner.on,
         }
     }
 }
@@ -3550,11 +3547,9 @@ mod cache_config_converters {
     impl From<InnerConfig> for Config {
         fn from(inner: InnerConfig) -> Self {
             Self {
-                subcommand: inner.subcommand,
-                cmd: None,
-                config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
+                task: inner.task.into(),
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
@@ -3575,10 +3570,9 @@ mod cache_config_converters {
 
         fn try_into(self) -> Result<InnerConfig> {
             let Config {
-                subcommand,
-                config_file,
                 query,
                 log,
+                task,
                 meta,
                 storage,
                 catalog,
@@ -3605,10 +3599,9 @@ mod cache_config_converters {
             let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
 
             Ok(InnerConfig {
-                subcommand,
-                config_file,
                 query: query.try_into()?,
                 log: log.try_into()?,
+                task: task.try_into()?,
                 meta: meta.try_into()?,
                 storage: storage.try_into()?,
                 catalogs,
@@ -3811,16 +3804,22 @@ mod test {
     use std::ffi::OsString;
 
     use clap::Parser;
-    use pretty_assertions::assert_eq;
 
-    use crate::Config;
-    use crate::InnerConfig;
+    use super::*;
+
+    #[derive(Parser)]
+    #[clap(name = "databend-query", about, author)]
+    pub struct Cmd {
+        #[clap(flatten)]
+        pub config: Config,
+    }
 
     /// It's required to make sure setting's default value is the same with clap.
     #[test]
     fn test_config_default() {
         let setting_default = InnerConfig::default();
-        let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
+        let config_default: InnerConfig = Cmd::parse_from(Vec::<OsString>::new())
+            .config
             .try_into()
             .expect("parse from args must succeed");
 

@@ -22,6 +22,9 @@ use std::sync::Arc;
 
 use map_api::map_api_ro::MapApiRO;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
@@ -29,9 +32,6 @@ use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKV;
 use crate::leveled_store::map_api::SeqMarkedOf;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 /// A single **immutable** level of state machine data.
 ///
@@ -122,7 +122,7 @@ impl Immutable {
 impl MapApiRO<UserKey> for Immutable {
     async fn get(&self, key: &UserKey) -> Result<SeqMarked<MetaValue>, io::Error> {
         // get() is just delegated
-        self.as_ref().user_map().get(key).await
+        self.as_ref().as_user_map().get(key).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<UserKey>, io::Error>
@@ -136,7 +136,7 @@ impl MapApiRO<UserKey> for Immutable {
 impl MapApiRO<ExpireKey> for Immutable {
     async fn get(&self, key: &ExpireKey) -> Result<SeqMarkedOf<ExpireKey>, io::Error> {
         // get() is just delegated
-        self.as_ref().expire_map().get(key).await
+        self.as_ref().as_expire_map().get(key).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<ExpireKey>, io::Error>

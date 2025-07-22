@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::CmdContext;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use map_api::map_api_ro::MapApiRO;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
+use seq_marked::SeqValue;
+use state_machine_api::ExpireKey;
+use state_machine_api::StateMachineApi;
 
-use crate::leveled_store::map_api::AsMap;
 use crate::sm_v003::SMV003;
-use crate::state_machine::ExpireKey;
-use crate::state_machine_api::StateMachineApi;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
 #[tokio::test]
@@ -175,7 +174,6 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .map_ref()
         .expire_map()
         .range(..)
         .await?
@@ -275,7 +273,6 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     // Check expire store
     let got = sm
-        .map_ref()
         .expire_map()
         .range(..)
         .await?

@@ -20,11 +20,11 @@ use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::sys_data::SysData;
 use rotbl::v001::SeqMarked;
+use state_machine_api::UserKey;
 
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::state_machine::StateMachineMetaKey;
-use crate::state_machine::UserKey;
 
 /// Convert V002 snapshot lines in json of [`SMEntry`]
 /// to V004 rotbl key-value pairs. `(String, SeqMarked)`,

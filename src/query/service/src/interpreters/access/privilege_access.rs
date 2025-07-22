@@ -36,7 +36,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
@@ -46,6 +46,7 @@ use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
@@ -165,8 +166,9 @@ impl PrivilegeAccess {
 
     fn access_system_history(
         &self,
-        catalog_name: &str,
-        db_name: &str,
+        catalog_name: Option<&str>,
+        db_name: Option<&str>,
+        stage_name: Option<&str>,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
@@ -176,20 +178,50 @@ impl PrivilegeAccess {
         {
             return Ok(());
         }
-        if catalog_name == CATALOG_DEFAULT
-            && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE)
-            && !matches!(
-                privilege,
-                UserPrivilegeType::Select | UserPrivilegeType::Drop
-            )
-        {
-            return Err(ErrorCode::PermissionDenied(
-                format!(
-                    "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
-                    privilege
-                ),
-            ));
+        match (catalog_name, db_name, stage_name) {
+            (Some(catalog_name), Some(db_name), None) => {
+                if catalog_name == CATALOG_DEFAULT
+                    && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE)
+                    && !matches!(
+                        privilege,
+                        UserPrivilegeType::Select | UserPrivilegeType::Drop
+                    )
+                {
+                    return Err(ErrorCode::PermissionDenied(
+                        format!(
+                            "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
+                            privilege
+                        ),
+                    ));
+                }
+            }
+            (None, None, Some(stage_name)) => {
+                let config = GlobalConfig::instance();
+                let sensitive_system_stage = config.log.history.stage_name.clone();
+
+                return if stage_name.eq_ignore_ascii_case(&sensitive_system_stage) {
+                    if let Some(current_role) = self.ctx.get_current_role() {
+                        if current_role.name == BUILTIN_ROLE_ACCOUNT_ADMIN {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission Denied: Operation '{:?}' on stage {sensitive_system_stage} is not allowed",
+                                privilege
+                            )))
+                        }
+                    } else {
+                        Err(ErrorCode::PermissionDenied(format!(
+                            "Permission Denied: Operation '{:?}' on stage {sensitive_system_stage} is not allowed",
+                            privilege
+                        )))
+                    }
+                } else {
+                    Ok(())
+                };
+            }
+            _ => unreachable!(),
         }
+
         Ok(())
     }
 
@@ -200,7 +232,7 @@ impl PrivilegeAccess {
         privileges: UserPrivilegeType,
         if_exists: bool,
     ) -> Result<()> {
-        self.access_system_history(catalog_name, db_name, privileges)?;
+        self.access_system_history(Some(catalog_name), Some(db_name), None, privileges)?;
         let tenant = self.ctx.get_tenant();
         let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
@@ -305,7 +337,7 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
-        self.access_system_history(catalog_name, db_name, privilege)?;
+        self.access_system_history(Some(catalog_name), Some(db_name), None, privilege)?;
 
         if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());
@@ -624,6 +656,9 @@ impl PrivilegeAccess {
         {
             return Ok(());
         }
+
+        // History Config has a inner stage, can not be operator by any user.
+        self.access_system_history(None, None, Some(&stage_info.stage_name), privilege)?;
 
         // Note: validate_stage_access is not used for validate Create Stage privilege
         self.validate_access(
