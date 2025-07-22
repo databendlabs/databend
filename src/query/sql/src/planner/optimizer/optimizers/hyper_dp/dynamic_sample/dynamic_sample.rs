@@ -139,7 +139,8 @@ pub async fn dynamic_sample(
         | RelOperator::Exchange(_)
         | RelOperator::Window(_)
         | RelOperator::Udf(_)
-        | RelOperator::AsyncFunction(_) => {
+        | RelOperator::AsyncFunction(_)
+        | RelOperator::RowFetch(_) => {
             dynamic_sample(ctx, metadata, s_expr.child(0)?, sample_executor).await
         }
     }

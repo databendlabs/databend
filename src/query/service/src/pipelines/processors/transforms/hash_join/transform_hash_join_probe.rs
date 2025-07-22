@@ -112,7 +112,6 @@ pub struct TransformHashJoinProbe {
     partition_id_to_restore: usize,
 
     step: Step,
-    step_logs: Vec<Step>,
 }
 
 impl TransformHashJoinProbe {
@@ -176,7 +175,6 @@ impl TransformHashJoinProbe {
             spiller,
             partition_id_to_restore: 0,
             step: Step::Async(AsyncStep::WaitBuild),
-            step_logs: vec![Step::Async(AsyncStep::WaitBuild)],
         }))
     }
 
@@ -192,7 +190,6 @@ impl TransformHashJoinProbe {
             }
         };
         self.step = step.clone();
-        self.step_logs.push(step);
         Ok(event)
     }
 
