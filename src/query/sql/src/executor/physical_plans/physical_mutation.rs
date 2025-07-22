@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -100,7 +101,7 @@ impl PhysicalPlanBuilder {
         &mut self,
         s_expr: &SExpr,
         mutation: &crate::plans::Mutation,
-        required: ColumnSet,
+        mut required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let crate::plans::Mutation {
             bind_context,
@@ -122,8 +123,37 @@ impl PhysicalPlanBuilder {
             can_try_update_column_only,
             no_effect,
             truncate_table,
+            direct_filter,
             ..
         } = mutation;
+
+        let mut maybe_udfs = BTreeSet::new();
+        for matched_evaluator in matched_evaluators {
+            if let Some(condition) = &matched_evaluator.condition {
+                maybe_udfs.extend(condition.used_columns());
+            }
+            if let Some(update_list) = &matched_evaluator.update {
+                for update_scalar in update_list.values() {
+                    maybe_udfs.extend(update_scalar.used_columns());
+                }
+            }
+        }
+        for unmatched_evaluator in unmatched_evaluators {
+            if let Some(condition) = &unmatched_evaluator.condition {
+                maybe_udfs.extend(condition.used_columns());
+            }
+            for value in &unmatched_evaluator.values {
+                maybe_udfs.extend(value.used_columns());
+            }
+        }
+        for filter_value in direct_filter {
+            maybe_udfs.extend(filter_value.used_columns());
+        }
+
+        let udf_ids = s_expr.get_udfs_col_ids()?;
+        let required_udf_ids: BTreeSet<_> = maybe_udfs.intersection(&udf_ids).collect();
+        let udf_col_num = required_udf_ids.len();
+        required.extend(required_udf_ids);
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
         if *no_effect {
@@ -220,6 +250,7 @@ impl PhysicalPlanBuilder {
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
                 table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+                udf_col_num,
             });
 
             if *distributed {

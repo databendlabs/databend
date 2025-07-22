@@ -33,4 +33,5 @@ pub struct ColumnMutation {
     pub input_num_columns: usize,
     pub has_filter_column: bool,
     pub table_meta_timestamps: TableMetaTimestamps,
+    pub udf_col_num: usize,
 }

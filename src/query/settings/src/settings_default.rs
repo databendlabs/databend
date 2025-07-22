@@ -492,6 +492,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enforce_local", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enforce local plan.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("enforce_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce broadcast join.",

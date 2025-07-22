@@ -189,9 +189,8 @@ jobs:
       - self-hosted
       - X64
       - Linux
-      - 2c8g
+      - 8c32g
       - "${{ inputs.runner_provider }}"
-      - "${{ inputs.runner_capacity }}"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_license
