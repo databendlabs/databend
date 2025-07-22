@@ -32,6 +32,7 @@ mod warehouse;
 mod client_session;
 pub mod errors;
 mod procedure;
+pub mod task;
 mod workload;
 
 pub use client_session::ClientSessionMgr;
@@ -50,6 +51,7 @@ pub use serde::serialize_struct;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;
+pub use task::TaskMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
 pub use warehouse::SelectedNode;
