@@ -85,6 +85,10 @@ impl GlobalServices {
             "tenant_id".to_string(),
             config.query.tenant_id.tenant_name().to_string(),
         );
+        log_labels.insert(
+            "warehouse_id".to_string(),
+            config.query.warehouse_id.clone(),
+        );
         log_labels.insert("cluster_id".to_string(), config.query.cluster_id.clone());
         log_labels.insert("node_id".to_string(), config.query.node_id.clone());
         GlobalLogger::init(&app_name_shuffle, &config.log, log_labels);

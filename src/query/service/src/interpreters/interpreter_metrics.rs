@@ -27,6 +27,7 @@ const LABEL_HANDLER: &str = "handler";
 const LABEL_KIND: &str = "kind";
 const LABEL_TENANT: &str = "tenant";
 const LABEL_CLUSTER: &str = "cluster";
+const LABEL_WAREHOUSE: &str = "warehouse";
 const LABEL_CODE: &str = "code";
 
 impl InterpreterMetrics {
@@ -35,12 +36,14 @@ impl InterpreterMetrics {
         let query_kind = ctx.get_query_kind().to_string();
         let tenant_id = ctx.get_tenant();
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let warehouse_id = GlobalConfig::instance().query.warehouse_id.clone();
 
         vec![
             (LABEL_HANDLER, handler_type),
             (LABEL_KIND, query_kind),
             (LABEL_TENANT, tenant_id.tenant_name().to_string()),
             (LABEL_CLUSTER, cluster_id),
+            (LABEL_WAREHOUSE, warehouse_id),
         ]
     }
 
