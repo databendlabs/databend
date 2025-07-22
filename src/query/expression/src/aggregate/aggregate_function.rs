@@ -23,12 +23,12 @@ use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
 use crate::types::DataType;
-use crate::AggrStateSerdeType;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::ScalarRef;
+use crate::StateSerdeItem;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
@@ -69,8 +69,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
-    fn serialize_type(&self) -> Vec<AggrStateSerdeType> {
-        vec![AggrStateSerdeType::Binary(self.serialize_size_per_row())]
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(self.serialize_size_per_row())]
     }
 
     fn serialize(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {

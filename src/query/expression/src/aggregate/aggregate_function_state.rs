@@ -119,7 +119,7 @@ pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout>
     for func in funcs {
         func.register_state(&mut registry);
         registry.commit();
-        serialize_type.push(func.serialize_type().into_boxed_slice());
+        serialize_type.push(StateSerdeType(func.serialize_type().into()));
     }
 
     let AggrStateRegistry { states, offsets } = registry;
@@ -193,25 +193,49 @@ impl AggrStateLoc {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum StateSerdeItem {
+    Bool,
+    Binary(Option<usize>),
+}
+
+#[derive(Debug, Clone)]
+pub struct StateSerdeType(Box<[StateSerdeItem]>);
+
+impl StateSerdeType {
+    pub fn data_type(&self) -> DataType {
+        DataType::Tuple(
+            self.0
+                .iter()
+                .map(|item| match item {
+                    StateSerdeItem::Bool => DataType::Boolean,
+                    StateSerdeItem::Binary(_) => DataType::Binary,
+                })
+                .collect(),
+        )
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StatesLayout {
     pub layout: Layout,
     pub states_loc: Vec<Box<[AggrStateLoc]>>,
-    serialize_type: Vec<Box<[AggrStateSerdeType]>>,
+    pub(super) serialize_type: Vec<StateSerdeType>,
 }
 
 impl StatesLayout {
     pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
         self.serialize_type
             .iter()
-            .map(|item| {
-                let builder = item
+            .map(|serde_type| {
+                let builder = serde_type
+                    .0
                     .iter()
-                    .map(|serde_type| match serde_type {
-                        AggrStateSerdeType::Bool => {
+                    .map(|item| match item {
+                        StateSerdeItem::Bool => {
                             ColumnBuilder::with_capacity(&DataType::Boolean, num_rows)
                         }
-                        AggrStateSerdeType::Binary(size) => {
+                        StateSerdeItem::Binary(size) => {
                             ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(
                                 num_rows,
                                 num_rows * size.unwrap_or(0),
@@ -304,12 +328,6 @@ impl Default for AggrStateRegistry {
 pub enum AggrStateType {
     Bool,
     Custom(Layout),
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum AggrStateSerdeType {
-    Bool,
-    Binary(Option<usize>),
 }
 
 #[cfg(test)]
