@@ -4096,6 +4096,7 @@ dependencies = [
  "databend-common-protos",
  "enumflags2",
  "fastrace",
+ "log",
  "maplit",
  "num",
  "pretty_assertions",
