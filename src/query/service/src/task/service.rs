@@ -202,6 +202,17 @@ impl TaskService {
         while let Some(result) = steam.next().await {
             let (_, task_message) = result?;
             let task_key = TaskMessageIdent::new(tenant, task_message.key());
+
+            if let Some(WarehouseOptions {
+                warehouse: Some(warehouse),
+                ..
+            }) = task_message.warehouse_options()
+            {
+                // [WarehouseInfo::SelfManaged] uses ClusterId as warehouse
+                if warehouse != &self.cluster_id {
+                    continue;
+                }
+            }
             match task_message {
                 // ScheduleTask is always monitored by all Query nodes, and ExecuteTask is sent serially to avoid repeated sending.
                 TaskMessage::ScheduleTask(mut task) => {
@@ -438,7 +449,7 @@ impl TaskService {
                         None,
                     )?;
                 }
-                TaskMessage::DeleteTask(task_name) => {
+                TaskMessage::DeleteTask(task_name, _) => {
                     if let Some(token) = scheduled_tasks.remove(&task_name) {
                         token.cancel();
                     }
