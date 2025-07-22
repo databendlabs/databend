@@ -137,6 +137,11 @@ impl SExpr {
         &self.children[0]
     }
 
+    pub fn unary_child_arc(&self) -> Arc<SExpr> {
+        assert_eq!(self.children.len(), 1);
+        self.children[0].clone()
+    }
+
     pub fn left_child(&self) -> &SExpr {
         debug_assert_eq!(self.children.len(), 2);
         &self.children[0]

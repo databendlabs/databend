@@ -487,7 +487,7 @@ Limit
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 3.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 3.85
@@ -734,7 +734,7 @@ INSERT INTO t2 VALUES (1, 10), (2, 20);
 query I
 EXPLAIN SELECT * FROM t1 LEFT OUTER JOIN t2 ON TRUE AND t1.i = t2.k AND FALSE order by i, j;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.i (#0), t1.j (#1), t2.k (#2), t2.l (#3)]
 ├── sort keys: [i ASC NULLS LAST, j ASC NULLS LAST]
 ├── estimated rows: 3.00

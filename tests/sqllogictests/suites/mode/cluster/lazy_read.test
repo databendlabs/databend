@@ -5,6 +5,9 @@ statement ok
 set max_threads = 4;
 
 statement ok
+set enable_shuffle_sort = 0;
+
+statement ok
 insert into t_lazy select number + 1, 1.1, '1.1', (1,2), '2020-01-01' from numbers(100)
 
 statement ok
@@ -30,14 +33,14 @@ RowFetch
     ├── limit: 2
     ├── offset: 0
     ├── estimated rows: 2.00
-    └── Sort
+    └── Sort(Final)
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 300.00
         └── Exchange
             ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), #_order_col]
             ├── exchange type: Merge
-            └── Sort
+            └── Sort(Partial)
                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7), #_order_col]
                 ├── sort keys: [a DESC NULLS LAST]
                 ├── estimated rows: 300.00
@@ -98,14 +101,14 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 2.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 300.00
     └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6), #_order_col]
             ├── sort keys: [a DESC NULLS LAST]
             ├── estimated rows: 300.00

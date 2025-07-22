@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::DataType;
@@ -57,18 +56,10 @@ pub fn try_add_multi_sort_merge(
     remove_order_col: bool,
     enable_loser_tree: bool,
 ) -> Result<()> {
-    debug_assert!(if !remove_order_col {
-        schema.has_field(ORDER_COL_NAME)
-    } else {
-        !schema.has_field(ORDER_COL_NAME)
-    });
-
-    if pipeline.is_empty() {
-        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
-    }
+    debug_assert!(remove_order_col != schema.has_field(ORDER_COL_NAME));
 
     match pipeline.output_len() {
-        0 => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+        0 => panic!("Cannot resize empty pipe."),
         1 => Ok(()),
         last_pipe_size => {
             let mut inputs_port = Vec::with_capacity(last_pipe_size);
@@ -77,7 +68,7 @@ pub fn try_add_multi_sort_merge(
             }
             let output_port = OutputPort::create();
 
-            let processor = ProcessorPtr::create(create_processor(
+            let processor = ProcessorPtr::create(create_multi_sort_processor(
                 inputs_port.clone(),
                 output_port.clone(),
                 schema,
@@ -98,7 +89,7 @@ pub fn try_add_multi_sort_merge(
     }
 }
 
-fn create_processor(
+pub fn create_multi_sort_processor(
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
     schema: DataSchemaRef,

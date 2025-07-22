@@ -52,20 +52,29 @@ impl Rule for RuleSplitAggregate {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut agg: Aggregate = s_expr.plan().clone().try_into()?;
+        let agg = s_expr.plan().as_aggregate().unwrap();
         if agg.mode != AggregateMode::Initial {
             return Ok(());
         }
 
-        agg.mode = AggregateMode::Final;
-        let mut partial = agg.clone();
-        partial.mode = AggregateMode::Partial;
         let result = SExpr::create_unary(
-            Arc::new(agg.into()),
-            Arc::new(SExpr::create_unary(
-                Arc::new(partial.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-            )),
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Final,
+                    ..agg.clone()
+                }
+                .into(),
+            ),
+            SExpr::create_unary(
+                Arc::new(
+                    Aggregate {
+                        mode: AggregateMode::Partial,
+                        ..agg.clone()
+                    }
+                    .into(),
+                ),
+                s_expr.unary_child_arc(),
+            ),
         );
         state.add_result(result);
         Ok(())

@@ -24,6 +24,7 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_sql::executor::physical_plans::SortStep;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
 use databend_storages_common_cache::TempDirManager;
@@ -182,12 +183,12 @@ impl PipelineBuilder {
                     top_n.func,
                     num_partitions as u64,
                 ),
-            )
+            )?
         } else {
             self.main_pipeline.exchange(
                 num_processors,
                 WindowPartitionExchange::create(partition_by.clone(), num_partitions),
-            );
+            )?
         }
 
         let temp_dir_manager = TempDirManager::instance();
@@ -198,7 +199,12 @@ impl PipelineBuilder {
             .map(|temp_dir| SpillerDiskConfig::new(temp_dir, enable_dio))
             .transpose()?;
 
-        let have_order_col = window_partition.after_exchange.unwrap_or(false);
+        let have_order_col = match window_partition.sort_step {
+            SortStep::Single | SortStep::Partial => false,
+            SortStep::Final => true,
+            _ => unimplemented!(),
+        };
+
         let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
 
         let processor_id = AtomicUsize::new(0);

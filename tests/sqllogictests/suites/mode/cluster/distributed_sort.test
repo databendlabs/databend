@@ -9,14 +9,14 @@ create table t_distributed_sort (a int not null, b float not null, c string not 
 query T
 explain select * from t_distributed_sort order by a desc;
 ----
-Sort
+Sort(Final)
 ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
 ├── sort keys: [a DESC NULLS LAST]
 ├── estimated rows: 0.00
 └── Exchange
     ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
     ├── exchange type: Merge
-    └── Sort
+    └── Sort(Partial)
         ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 0.00
@@ -43,14 +43,14 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6)]
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 0.00
     └── Exchange
         ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort.b (#1), t_distributed_sort.c (#2), t_distributed_sort.d (#3), t_distributed_sort.e (#6), #_order_col]
             ├── sort keys: [a DESC NULLS LAST]
             ├── estimated rows: 0.00
@@ -79,14 +79,14 @@ RowFetch
     ├── limit: 2
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Sort
+    └── Sort(Final)
         ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7)]
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 0.00
         └── Exchange
             ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), #_order_col]
             ├── exchange type: Merge
-            └── Sort
+            └── Sort(Partial)
                 ├── output columns: [t_distributed_sort.a (#0), t_distributed_sort._row_id (#7), #_order_col]
                 ├── sort keys: [a DESC NULLS LAST]
                 ├── estimated rows: 0.00

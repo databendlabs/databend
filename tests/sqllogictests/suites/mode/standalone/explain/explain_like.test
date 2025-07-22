@@ -35,7 +35,7 @@ Filter
 query T
 explain select * from t1 where s like 'abcd%' order by s;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.s (#0)]
 ├── sort keys: [s ASC NULLS LAST]
 ├── estimated rows: 1.00
@@ -62,7 +62,7 @@ abcd
 query T
 explain select * from t1 where s like 'abcd' order by s;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.s (#0)]
 ├── sort keys: [s ASC NULLS LAST]
 ├── estimated rows: 1.00

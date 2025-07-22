@@ -1010,6 +1010,7 @@ impl FragmentCoordinator {
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: exchange_injector
                         .flight_scatter(&info.query_ctx, data_exchange)?,
+                    allow_adjust_parallelism: true,
                 },
             ))),
             DataExchange::ShuffleDataExchange(exchange) => Ok(Some(
@@ -1022,6 +1023,7 @@ impl FragmentCoordinator {
                     destination_ids: exchange.destination_ids.to_owned(),
                     shuffle_scatter: exchange_injector
                         .flight_scatter(&info.query_ctx, data_exchange)?,
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
                 }),
             )),
         }
