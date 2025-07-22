@@ -256,6 +256,9 @@ create user u1 identified by '123';
 statement error 2218
 grant usage on warehouse a to u1;
 
+statement error 2218
+grant access connection on connection c1 to u1;
+
 statement ok
 GRANT create warehouse on *.* to role 'role1';
 
