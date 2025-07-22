@@ -288,6 +288,11 @@ impl Table for MemoryTable {
             data_size: Some(data_bytes),
             data_size_compressed: Some(data_bytes),
             index_size: None,
+            bloom_index_size: None,
+            ngram_index_size: None,
+            inverted_index_size: None,
+            vector_index_size: None,
+            virtual_column_size: None,
             number_of_blocks: None,
             number_of_segments: None,
         }))
