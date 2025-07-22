@@ -190,7 +190,6 @@ jobs:
       - X64
       - Linux
       - 8c32g
-      - aws
       - "${{ inputs.runner_provider }}"
     steps:
       - uses: actions/checkout@v4
