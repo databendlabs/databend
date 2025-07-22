@@ -125,7 +125,7 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block(None));
+            return Ok(self.empty_block(0));
         }
         DataBlock::concat(&blocks)
     }
@@ -172,7 +172,7 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block(None));
+            return Ok(self.empty_block(0));
         }
 
         DataBlock::concat(&blocks)

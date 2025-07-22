@@ -224,7 +224,7 @@ impl SerializeAggregateStream {
                 // always return at least one block
                 if self.nums == 0 {
                     self.nums += 1;
-                    let block = p.payload.empty_block(Some(1));
+                    let block = p.payload.empty_block(1);
                     Ok(Some(block.add_meta(Some(
                         AggregateSerdeMeta::create_agg_payload(
                             p.bucket,

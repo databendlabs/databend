@@ -166,9 +166,4 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn get_if_condition(&self, _columns: ProjectedBlock) -> Option<Bitmap> {
         None
     }
-
-    // some features
-    fn convert_const_to_full(&self) -> bool {
-        true
-    }
 }

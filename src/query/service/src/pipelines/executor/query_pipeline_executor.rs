@@ -33,7 +33,6 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
-use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;

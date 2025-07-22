@@ -207,10 +207,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.drop_state(place);
     }
 
-    fn convert_const_to_full(&self) -> bool {
-        self.0.nested.convert_const_to_full()
-    }
-
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
         self.0.nested.get_if_condition(columns)
     }
@@ -330,10 +326,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
     unsafe fn drop_state(&self, place: AggrState) {
         self.0.drop_state(place);
-    }
-
-    fn convert_const_to_full(&self) -> bool {
-        self.0.nested.convert_const_to_full()
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
