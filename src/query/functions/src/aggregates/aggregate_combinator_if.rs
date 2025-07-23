@@ -26,6 +26,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::StateAddr;
@@ -54,20 +55,18 @@ impl AggregateIfCombinator {
         sort_descs: Vec<AggregateFunctionSortDesc>,
         nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
-        let name = format!("IfCombinator({})", nested_name);
+        let name = format!("IfCombinator({nested_name})");
         let argument_len = arguments.len();
 
         if argument_len == 0 {
             return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                "{} expect to have more than one argument",
-                name
+                "{name} expect to have more than one argument",
             )));
         }
 
         if !matches!(&arguments[argument_len - 1], DataType::Boolean) {
             return Err(ErrorCode::BadArguments(format!(
-                "The type of the last argument for {} must be boolean type, but got {:?}",
-                name,
+                "The type of the last argument for {name} must be boolean type, but got {:?}",
                 &arguments[argument_len - 1]
             )));
         }
@@ -157,15 +156,23 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        self.nested.serialize_type()
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize_binary(place, writer)
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        self.nested.serialize(place, builders)
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge_binary(place, reader)
+    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
+        unreachable!()
+    }
+
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        self.nested.merge(place, data)
+    }
+
+    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
+        unreachable!()
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
