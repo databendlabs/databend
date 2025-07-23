@@ -27,6 +27,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MaterializedCTE;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
@@ -350,19 +351,50 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
         let mut fragments = vec![];
-        let left = self.replace(plan.left.as_ref())?;
+        let _left = self.replace(plan.left.as_ref())?;
 
         fragments.append(&mut self.fragments);
-        self.state = State::Other;
         let right = self.replace(plan.right.as_ref())?;
         fragments.append(&mut self.fragments);
 
         self.fragments = fragments;
-        Ok(PhysicalPlan::Sequence(Box::new(Sequence {
-            plan_id: plan.plan_id,
-            left: Box::new(left),
-            right: Box::new(right),
-            stat_info: plan.stat_info.clone(),
-        })))
+        Ok(right)
+    }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+        let input = self.replace(plan.input.as_ref())?;
+        let plan = PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            input: Box::new(input),
+            ..plan.clone()
+        }));
+
+        let fragment_type = match self.state {
+            State::SelectLeaf => FragmentType::Source,
+            State::MutationSource => FragmentType::MutationSource,
+            State::Other => FragmentType::Intermediate,
+            State::ReplaceInto => FragmentType::ReplaceInto,
+            State::Compact => FragmentType::Compact,
+            State::Recluster => FragmentType::Recluster,
+        };
+        self.state = State::Other;
+
+        let fragment_id = self.ctx.get_fragment_id();
+
+        let mut fragment = PlanFragment {
+            plan: plan.clone(),
+            fragment_type,
+
+            fragment_id,
+            exchange: None,
+            query_id: self.query_id.clone(),
+
+            source_fragments: self.fragments.drain(..).collect(),
+        };
+
+        // Fill the destination_fragment_id for source fragments of `fragment`.
+        Self::resolve_fragment_connection(&mut fragment);
+
+        self.fragments.push(fragment);
+        Ok(plan)
     }
 }

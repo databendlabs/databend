@@ -59,9 +59,3 @@ pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> 
 
     false
 }
-
-/// Check if a query contains MaterializedCTE operators.
-pub fn contains_materialized_cte(s_expr: &SExpr) -> bool {
-    s_expr.children().any(contains_materialized_cte)
-        || matches!(s_expr.plan(), RelOperator::MaterializedCTE(_))
-}
