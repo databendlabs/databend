@@ -29,6 +29,7 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
 use databend_common_sql::executor::physical_plans::MaterializedCTE;
 use databend_common_sql::executor::physical_plans::MutationSource;
+use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
 use databend_common_sql::executor::physical_plans::Sequence;
@@ -255,6 +256,28 @@ impl PhysicalPlanReplacer for Fragmenter {
             build_side_cache_info: plan.build_side_cache_info.clone(),
             runtime_filter: plan.runtime_filter.clone(),
             broadcast_id: plan.broadcast_id,
+        }))
+    }
+
+    fn replace_range_join(&mut self, plan: &RangeJoin) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let left = self.replace(&plan.left)?;
+        fragments.append(&mut self.fragments);
+        let right = self.replace(&plan.right)?;
+        fragments.append(&mut self.fragments);
+
+        self.fragments = fragments;
+
+        Ok(PhysicalPlan::RangeJoin(RangeJoin {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
+            conditions: plan.conditions.clone(),
+            other_conditions: plan.other_conditions.clone(),
+            join_type: plan.join_type.clone(),
+            range_join_type: plan.range_join_type.clone(),
+            output_schema: plan.output_schema.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
