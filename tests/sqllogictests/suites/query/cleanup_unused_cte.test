@@ -3,7 +3,7 @@
 
 # Test case 1: CTE is used, should not be removed
 query I
-with t1 as materialized (select number as a from numbers(10)) select t1.a from t1;
+with t1 as materialized (select number as a from numbers(10)) select t1.a from t1 order by t1.a;
 ----
 0
 1
@@ -18,7 +18,7 @@ with t1 as materialized (select number as a from numbers(10)) select t1.a from t
 
 # Test case 2: CTE is not used, should be removed
 query I
-with t1 as materialized (select number as a from numbers(10)) select number as b from numbers(5);
+with t1 as materialized (select number as a from numbers(10)) select number as b from numbers(5) order by b;
 ----
 0
 1
@@ -31,7 +31,7 @@ query I
 with t1 as materialized (select number as a from numbers(10)),
      t2 as materialized (select number as b from numbers(20)),
      t3 as materialized (select number as c from numbers(30))
-select t1.a from t1 join t2 on t1.a = t2.b;
+select t1.a from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0
 1
@@ -49,7 +49,7 @@ query I
 with t1 as materialized (select number as a from numbers(10)),
      t2 as materialized (select a as b from t1),
      t3 as materialized (select number as c from numbers(5))
-select t2.b from t2;
+select t2.b from t2 order by t2.b;
 ----
 0
 1
@@ -66,7 +66,7 @@ select t2.b from t2;
 query I
 with t1 as materialized (select number as a from numbers(10)),
      t2 as materialized (select number as b from numbers(20))
-select number as c from numbers(3);
+select number as c from numbers(3) order by c;
 ----
 0
 1
@@ -79,7 +79,7 @@ with t1 as materialized (
     from numbers(10) 
     where number > 5
 )
-select number as c from numbers(3);
+select number as c from numbers(3) order by c;
 ----
 0
 1
@@ -92,7 +92,7 @@ with t1 as materialized (
     from numbers(10) 
     group by number
 )
-select number as b from numbers(3);
+select number as b from numbers(3) order by b;
 ----
 0
 1
@@ -105,7 +105,7 @@ with t1 as materialized (
     from numbers(5) n1
     join numbers(5) n2 on n1.number = n2.number
 )
-select number as c from numbers(3);
+select number as c from numbers(3) order by c;
 ----
 0
 1
