@@ -128,4 +128,5 @@ mod v133_stage_file_compression;
 mod v134_add_sequence_meta_storage_version;
 mod v135_udf_immutable;
 mod v136_add_task;
-mod v137_table_statistics;
+mod v137_add_grant_object_connection;
+mod v138_table_statistics;

@@ -201,9 +201,13 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        if let GrantObject::Warehouse(_) = object {
+
+        if matches!(
+            object,
+            GrantObject::Warehouse(_) | GrantObject::Connection(_)
+        ) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse privileges to user `{}`",
+                "Cannot grant warehouse|connection privileges to user `{}`",
                 user.username
             )));
         }

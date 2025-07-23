@@ -28,10 +28,10 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v137_table_statistics() -> anyhow::Result<()> {
+fn test_decode_v138_table_statistics() -> anyhow::Result<()> {
     let bytes = vec![
         8, 100, 16, 128, 8, 24, 128, 6, 32, 128, 8, 40, 1, 48, 2, 56, 128, 2, 64, 128, 1, 72, 128,
-        1, 80, 128, 4, 160, 6, 137, 1, 168, 6, 24,
+        1, 80, 128, 4, 160, 6, 138, 1, 168, 6, 24,
     ];
     let want = || TableStatistics {
         number_of_rows: 100,
@@ -48,5 +48,5 @@ fn test_decode_v137_table_statistics() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 137, want())
+    common::test_load_old(func_name!(), bytes.as_slice(), 138, want())
 }
