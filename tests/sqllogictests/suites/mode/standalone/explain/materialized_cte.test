@@ -1,16 +1,17 @@
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
-MaterializedCTE: t1
-├── TableScan
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#2)]
-│   ├── read rows: 10
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 10.00
+Sequence
+├── MaterializedCTE: t1
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#2)]
+│       ├── read rows: 10
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
 └── HashJoin
     ├── output columns: [numbers.number (#0)]
     ├── join type: INNER
@@ -31,20 +32,22 @@ MaterializedCTE: t1
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
-MaterializedCTE: t1
-├── TableScan
-│   ├── table: default.system.numbers
-│   ├── output columns: [number (#3)]
-│   ├── read rows: 10
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 1
-│   ├── partitions scanned: 1
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 10.00
-└── MaterializedCTE: t2
-    ├── CTEConsumer
-    │   ├── cte_name: t1
-    │   └── cte_schema: [number (#2)]
+Sequence
+├── MaterializedCTE: t1
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#3)]
+│       ├── read rows: 10
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
+└── Sequence
+    ├── MaterializedCTE: t2
+    │   └── CTEConsumer
+    │       ├── cte_name: t1
+    │       └── cte_schema: [number (#2)]
     └── HashJoin
         ├── output columns: [numbers.number (#0)]
         ├── join type: INNER

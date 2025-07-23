@@ -11,34 +11,36 @@ C as (select * from B as b1 left outer join B as b2 on b1.a = b2.a where b1.b < 
 D as (select * from C)
 select * from D;
 ----
-MaterializedCTE: a
-├── UnionAll
-│   ├── output columns: [a (#22), b (#23)]
-│   ├── estimated rows: 20.00
-│   ├── TableScan
-│   │   ├── table: default.default.t1
-│   │   ├── output columns: [a (#18), b (#19)]
-│   │   ├── read rows: 10
-│   │   ├── read size: < 1 KiB
-│   │   ├── partitions total: 1
-│   │   ├── partitions scanned: 1
-│   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   │   ├── push downs: [filters: [], limit: NONE]
-│   │   └── estimated rows: 10.00
-│   └── TableScan
-│       ├── table: default.default.t2
-│       ├── output columns: [a (#20), b (#21)]
-│       ├── read rows: 10
-│       ├── read size: < 1 KiB
-│       ├── partitions total: 1
-│       ├── partitions scanned: 1
-│       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│       ├── push downs: [filters: [], limit: NONE]
-│       └── estimated rows: 10.00
-└── MaterializedCTE: b
-    ├── CTEConsumer
-    │   ├── cte_name: a
-    │   └── cte_schema: [a (#16), b (#17)]
+Sequence
+├── MaterializedCTE: a
+│   └── UnionAll
+│       ├── output columns: [a (#22), b (#23)]
+│       ├── estimated rows: 20.00
+│       ├── TableScan
+│       │   ├── table: default.default.t1
+│       │   ├── output columns: [a (#18), b (#19)]
+│       │   ├── read rows: 10
+│       │   ├── read size: < 1 KiB
+│       │   ├── partitions total: 1
+│       │   ├── partitions scanned: 1
+│       │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│       │   ├── push downs: [filters: [], limit: NONE]
+│       │   └── estimated rows: 10.00
+│       └── TableScan
+│           ├── table: default.default.t2
+│           ├── output columns: [a (#20), b (#21)]
+│           ├── read rows: 10
+│           ├── read size: < 1 KiB
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│           ├── push downs: [filters: [], limit: NONE]
+│           └── estimated rows: 10.00
+└── Sequence
+    ├── MaterializedCTE: b
+    │   └── CTEConsumer
+    │       ├── cte_name: a
+    │       └── cte_schema: [a (#16), b (#17)]
     └── HashJoin
         ├── output columns: [a (#4), b (#5), b (#11), a (#10)]
         ├── join type: INNER

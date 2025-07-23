@@ -178,7 +178,7 @@ impl PhysicalPlan {
             }
             PhysicalPlan::MaterializedCTE(plan) => {
                 let input = plan.input.format_join(metadata)?;
-                let mut children = vec![
+                let children = vec![
                     FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
                     FormatTreeNode::new(format!("ref_count: {}", plan.ref_count)),
                     input,
@@ -189,7 +189,7 @@ impl PhysicalPlan {
                 ))
             }
             PhysicalPlan::CTEConsumer(plan) => {
-                let mut children = vec![
+                let children = vec![
                     FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
                     FormatTreeNode::new(format!(
                         "cte_schema: [{}]",
@@ -204,7 +204,7 @@ impl PhysicalPlan {
             PhysicalPlan::Sequence(plan) => {
                 let left = plan.left.format_join(metadata)?;
                 let right = plan.right.format_join(metadata)?;
-                let mut children = vec![left, right];
+                let children = vec![left, right];
                 Ok(FormatTreeNode::with_children(
                     "Sequence".to_string(),
                     children,
@@ -588,7 +588,6 @@ fn to_format_tree(
         }
         PhysicalPlan::Sequence(plan) => {
             let mut children = Vec::new();
-            children.push(FormatTreeNode::new(format!("Sequence")));
             append_profile_info(&mut children, profs, plan.plan_id);
             children.push(to_format_tree(&plan.left, metadata, profs, context)?);
             children.push(to_format_tree(&plan.right, metadata, profs, context)?);
