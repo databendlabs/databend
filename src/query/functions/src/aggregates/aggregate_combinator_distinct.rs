@@ -28,6 +28,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_distinct_state::AggregateDistinctNumberState;
 use super::aggregate_distinct_state::AggregateDistinctState;
@@ -104,6 +105,10 @@ where State: DistinctStateFunc
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = Self::get_state(place);
         state.add(columns, row)
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

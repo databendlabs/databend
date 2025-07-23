@@ -131,10 +131,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.init_state(place);
     }
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.0.serialize_size_per_row()
-    }
-
     fn register_state(&self, registry: &mut AggrStateRegistry) {
         self.0.register_state(registry);
     }
@@ -188,8 +184,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.serialize_type()
     }
 
-    fn serialize(&self, place: AggrState, builder: &mut [ColumnBuilder]) -> Result<()> {
-        self.0.serialize(place, builder)
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        self.0.serialize(place, builders)
     }
 
     fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
@@ -257,10 +253,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.0.init_state(place);
     }
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.0.serialize_size_per_row()
-    }
-
     fn register_state(&self, registry: &mut AggrStateRegistry) {
         self.0.register_state(registry);
     }
@@ -315,6 +307,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
         self.0
             .accumulate_row(place, not_null_columns, validity, row)
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.0.serialize_type()
     }
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
@@ -382,12 +378,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
 
         set_flag(place, false);
         self.nested.init_state(place.remove_last_loc());
-    }
-
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.nested
-            .serialize_size_per_row()
-            .map(|row| if NULLABLE_RESULT { row + 1 } else { row })
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
@@ -516,7 +506,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         self.nested
             .serialize_type()
             .into_iter()
-            .chain(Some(StateSerdeItem::Bool))
+            .chain(Some(StateSerdeItem::DataType(DataType::Boolean)))
             .collect()
     }
 

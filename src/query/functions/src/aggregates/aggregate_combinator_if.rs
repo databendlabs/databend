@@ -26,6 +26,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
@@ -153,6 +154,10 @@ impl AggregateFunction for AggregateIfCombinator {
                 .accumulate_row(place, columns.slice(0..self.argument_len - 1), row)?;
         }
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

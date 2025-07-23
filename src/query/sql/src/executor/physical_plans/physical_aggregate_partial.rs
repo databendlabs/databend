@@ -73,7 +73,7 @@ impl AggregatePartial {
                 .serialize_type()
                 .iter()
                 .map(|serde_type| match serde_type {
-                    StateSerdeItem::Bool => DataType::Boolean,
+                    StateSerdeItem::DataType(data_type) => data_type.clone(),
                     StateSerdeItem::Binary(_) => DataType::Binary,
                 })
                 .collect();

@@ -39,6 +39,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::StateSerdeItem;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
@@ -96,6 +97,10 @@ impl AggregateFunction for AggregateUdfScript {
             .map_err(|e| ErrorCode::UDFRuntimeError(format!("failed to accumulate_row: {e}")))?;
         place.write(|| state);
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

@@ -31,6 +31,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
 use super::borsh_partial_deserialize;
@@ -143,6 +144,11 @@ where
             });
         Ok(())
     }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         Ok(state.serialize(writer)?)

@@ -34,6 +34,7 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_partial_deserialize;
@@ -145,6 +146,10 @@ impl AggregateFunction for AggregateStringAggFunction {
         state.values.push_str(v);
         state.values.push_str(&self.delimiter);
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

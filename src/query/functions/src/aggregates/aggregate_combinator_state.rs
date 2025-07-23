@@ -22,6 +22,7 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::AggregateFunctionFactory;
 use super::StateAddr;
@@ -104,6 +105,10 @@ impl AggregateFunction for AggregateStateCombinator {
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         self.nested.accumulate_row(place, columns, row)
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

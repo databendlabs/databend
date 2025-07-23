@@ -90,10 +90,6 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.init_state(place.remove_last_loc())
     }
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.inner.serialize_size_per_row().map(|row| row + 1)
-    }
-
     fn register_state(&self, registry: &mut AggrStateRegistry) {
         self.inner.register_state(registry);
         registry.register(AggrStateType::Bool);
@@ -182,7 +178,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner
             .serialize_type()
             .into_iter()
-            .chain(Some(StateSerdeItem::Bool))
+            .chain(Some(StateSerdeItem::DataType(DataType::Boolean)))
             .collect()
     }
 
@@ -259,63 +255,6 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     unsafe fn drop_state(&self, place: AggrState) {
         self.inner.drop_state(place.remove_last_loc())
-    }
-
-    fn batch_merge(
-        &self,
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &databend_common_expression::BlockEntry,
-    ) -> Result<()> {
-        let column = state.to_column();
-        for (place, data) in places.iter().zip(column.iter()) {
-            self.merge(
-                AggrState::new(*place, loc),
-                data.as_tuple().unwrap().as_slice(),
-            )?;
-        }
-
-        Ok(())
-    }
-
-    fn batch_merge_single(
-        &self,
-        place: AggrState,
-        state: &databend_common_expression::BlockEntry,
-    ) -> Result<()> {
-        let column = state.to_column();
-        for data in column.iter() {
-            self.merge(place, data.as_tuple().unwrap().as_slice())?;
-        }
-        Ok(())
-    }
-
-    fn batch_merge_states(
-        &self,
-        places: &[StateAddr],
-        rhses: &[StateAddr],
-        loc: &[AggrStateLoc],
-    ) -> Result<()> {
-        for (place, rhs) in places.iter().zip(rhses.iter()) {
-            self.merge_states(AggrState::new(*place, loc), AggrState::new(*rhs, loc))?;
-        }
-        Ok(())
-    }
-
-    fn batch_merge_result(
-        &self,
-        places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
-        builder: &mut ColumnBuilder,
-    ) -> Result<()> {
-        for place in places {
-            self.merge_result(AggrState::new(*place, &loc), builder)?;
-        }
-        Ok(())
-    }
-
-    fn get_if_condition(&self, _columns: ProjectedBlock) -> Option<Bitmap> {
-        None
     }
 }
 

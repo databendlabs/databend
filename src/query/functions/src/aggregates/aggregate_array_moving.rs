@@ -45,6 +45,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
 use super::aggregate_function::AggregateFunction;
@@ -447,6 +448,10 @@ where State: SumState
         state.accumulate_row(&columns[0], row)
     }
 
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         Ok(state.serialize(writer)?)
@@ -614,6 +619,10 @@ where State: SumState
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

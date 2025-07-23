@@ -40,6 +40,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::assert_unary_arguments;
@@ -111,6 +112,10 @@ impl AggregateFunction for MarkovTarin {
         };
         model.consume(self.params.order, data, &mut code_points);
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

@@ -35,6 +35,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::StateSerdeItem;
 use itertools::Itertools;
 
 use super::borsh_partial_deserialize;
@@ -362,6 +363,11 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
         });
         Ok(())
     }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         Ok(state.serialize(writer)?)

@@ -69,9 +69,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
-    fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(self.serialize_size_per_row())]
-    }
+    fn serialize_type(&self) -> Vec<StateSerdeItem>;
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
@@ -81,10 +79,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
-
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        None
-    }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         let mut binary = *data[0].as_binary().unwrap();

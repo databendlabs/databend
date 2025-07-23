@@ -29,6 +29,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
@@ -141,6 +142,10 @@ impl AggregateFunction for AggregateRetentionFunction {
             }
         }
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

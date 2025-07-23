@@ -36,6 +36,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
 
@@ -287,6 +288,10 @@ where
         Ok(())
     }
 
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<BitmapAggState>();
         // flag indicate where bitmap is none
@@ -480,6 +485,10 @@ where
             return self.inner.accumulate_row(place, columns, row);
         }
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

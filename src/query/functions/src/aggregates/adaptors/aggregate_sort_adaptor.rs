@@ -34,6 +34,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::StateSerdeItem;
 use itertools::Itertools;
 
 use crate::aggregates::AggregateFunctionSortDesc;
@@ -119,6 +120,10 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
             }
         }
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

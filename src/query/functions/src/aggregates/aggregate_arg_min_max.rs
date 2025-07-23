@@ -31,6 +31,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnView;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
@@ -268,6 +269,10 @@ where
             state.update(val, arg_col.index(row).unwrap())
         }
         Ok(())
+    }
+
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {

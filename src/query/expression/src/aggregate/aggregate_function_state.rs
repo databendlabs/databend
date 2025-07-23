@@ -193,9 +193,9 @@ impl AggrStateLoc {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum StateSerdeItem {
-    Bool,
+    DataType(DataType),
     Binary(Option<usize>),
 }
 
@@ -208,7 +208,7 @@ impl StateSerdeType {
             self.0
                 .iter()
                 .map(|item| match item {
-                    StateSerdeItem::Bool => DataType::Boolean,
+                    StateSerdeItem::DataType(data_type) => data_type.clone(),
                     StateSerdeItem::Binary(_) => DataType::Binary,
                 })
                 .collect(),
@@ -232,8 +232,8 @@ impl StatesLayout {
                     .0
                     .iter()
                     .map(|item| match item {
-                        StateSerdeItem::Bool => {
-                            ColumnBuilder::with_capacity(&DataType::Boolean, num_rows)
+                        StateSerdeItem::DataType(data_type) => {
+                            ColumnBuilder::with_capacity(data_type, num_rows)
                         }
                         StateSerdeItem::Binary(size) => {
                             ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(
