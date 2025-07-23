@@ -82,7 +82,7 @@ pub struct ClusterDiscovery {
 #[async_trait::async_trait]
 pub trait ClusterHelper {
     fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
-    fn empty() -> Arc<Cluster>;
+    fn empty(node: NodeInfo) -> Arc<Cluster>;
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
@@ -110,12 +110,10 @@ impl ClusterHelper for Cluster {
         })
     }
 
-    fn empty() -> Arc<Cluster> {
-        Arc::new(Cluster {
-            unassign: false,
-            local_id: String::from(""),
-            nodes: Vec::new(),
-        })
+    fn empty(node: NodeInfo) -> Arc<Cluster> {
+        let node_info = Arc::new(node);
+        let local_id = node_info.id.clone();
+        Cluster::create(vec![node_info], local_id)
     }
 
     fn is_empty(&self) -> bool {
@@ -321,9 +319,20 @@ impl ClusterDiscovery {
 
                 // compatibility, for self-managed nodes, we allow queries to continue executing even when the heartbeat fails.
                 if cluster_nodes.is_empty() && !config.query.cluster_id.is_empty() {
-                    let mut cluster = Cluster::empty();
-                    let mut_cluster = Arc::get_mut(&mut cluster).unwrap();
-                    mut_cluster.local_id = self.local_id.clone();
+                    let node_info = Arc::new(NodeInfo::create(
+                        config.query.node_id.clone(),
+                        config.query.node_secret.clone(),
+                        config.query.num_cpus,
+                        format!(
+                            "{}:{}",
+                            config.query.http_handler_host, config.query.http_handler_port
+                        ),
+                        config.query.flight_api_address.clone(),
+                        config.query.discovery_address.clone(),
+                        String::new(),
+                        String::new(),
+                    ));
+                    let cluster = Cluster::create(vec![node_info], config.query.node_id.clone());
                     return Ok(cluster);
                 }
 
@@ -355,12 +364,47 @@ impl ClusterDiscovery {
             true => self.warehouse_manager.discover(&config.query.node_id).await,
             false => {
                 self.warehouse_manager
-                    .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
+                    .list_warehouse_cluster_nodes(
+                        &config.query.warehouse_id,
+                        &config.query.cluster_id,
+                    )
                     .await
             }
         };
 
         self.create_cluster_with_try_connect(config, nodes).await
+    }
+
+    pub async fn single_node_cluster(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        match self
+            .warehouse_manager
+            .get_node_info(&config.query.node_id)
+            .await?
+        {
+            None => {
+                let mut node_info = NodeInfo::create(
+                    config.query.node_id.clone(),
+                    config.query.node_secret.clone(),
+                    config.query.num_cpus,
+                    format!(
+                        "{}:{}",
+                        config.query.http_handler_host, config.query.http_handler_port
+                    ),
+                    config.query.flight_api_address.clone(),
+                    config.query.discovery_address.clone(),
+                    String::new(),
+                    String::new(),
+                );
+
+                node_info.cluster_id = config.query.cluster_id.clone();
+                node_info.warehouse_id = config.query.warehouse_id.clone();
+                Ok(Cluster::empty(node_info))
+            }
+            Some(v) => Ok(Cluster::create(
+                vec![Arc::new(v)],
+                config.query.node_id.clone(),
+            )),
+        }
     }
 
     pub async fn find_node_by_warehouse(

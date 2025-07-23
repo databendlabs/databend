@@ -14,7 +14,6 @@
 
 use std::time::SystemTime;
 
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_metrics::interpreter::*;
 
@@ -35,8 +34,8 @@ impl InterpreterMetrics {
         let handler_type = ctx.get_current_session().get_type().to_string();
         let query_kind = ctx.get_query_kind().to_string();
         let tenant_id = ctx.get_tenant();
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
-        let warehouse_id = GlobalConfig::instance().query.warehouse_id.clone();
+        let cluster_id = ctx.get_cluster().get_cluster_id().unwrap_or_default();
+        let warehouse_id = ctx.get_cluster().get_warehouse_id().unwrap_or_default();
 
         vec![
             (LABEL_HANDLER, handler_type),

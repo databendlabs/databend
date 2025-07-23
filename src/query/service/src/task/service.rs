@@ -30,7 +30,7 @@ use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::cluster_info::Cluster;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -67,6 +67,7 @@ use tokio::time::sleep;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 
+use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
@@ -83,8 +84,6 @@ pub type TaskMessageStream = BoxStream<'static, Result<(String, TaskMessage)>>;
 pub struct TaskService {
     initialized: AtomicBool,
     tenant: Tenant,
-    node_id: String,
-    cluster_id: String,
     meta_handle: TaskMetaHandle,
     _runtime: Arc<Runtime>,
 }
@@ -167,8 +166,6 @@ impl TaskService {
         let instance = TaskService {
             initialized: AtomicBool::new(false),
             tenant: cfg.query.tenant_id.clone(),
-            node_id: cfg.query.node_id.clone(),
-            cluster_id: cfg.query.cluster_id.clone(),
             meta_handle,
             _runtime: runtime.clone(),
         };
@@ -555,21 +552,23 @@ impl TaskService {
     }
 
     pub async fn create_context(&self, other_user: Option<UserInfo>) -> Result<Arc<QueryContext>> {
+        // only need run the sql on the current node
+        let cluster_discovery = ClusterDiscovery::instance();
+        let dummy_cluster = cluster_discovery
+            .single_node_cluster(&GlobalConfig::instance())
+            .await?;
+
         let (user, role) = if let Some(other_user) = other_user {
             (other_user, None)
         } else {
             (
-                get_task_user(self.tenant.tenant_name(), &self.cluster_id),
+                get_task_user(self.tenant.tenant_name(), &dummy_cluster.get_cluster_id()?),
                 Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()),
             )
         };
+
         let session = create_session(user, role).await?;
-        // only need run the sql on the current node
-        session.create_query_context_with_cluster(Arc::new(Cluster {
-            unassign: false,
-            local_id: self.node_id.clone(),
-            nodes: vec![],
-        }))
+        session.create_query_context_with_cluster(dummy_cluster)
     }
 
     pub async fn lasted_task_run(&self, task_name: &str) -> Result<Option<TaskRun>> {
