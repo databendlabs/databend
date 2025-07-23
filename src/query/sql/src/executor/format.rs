@@ -178,18 +178,38 @@ impl PhysicalPlan {
             }
             PhysicalPlan::MaterializedCTE(plan) => {
                 let input = plan.input.format_join(metadata)?;
-
-                let children = vec![input];
-
+                let mut children = vec![
+                    FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
+                    FormatTreeNode::new(format!("ref_count: {}", plan.ref_count)),
+                    input,
+                ];
                 Ok(FormatTreeNode::with_children(
-                    format!("MaterializedCTE: {}", plan.cte_name),
+                    format!("MaterializedCTE"),
                     children,
                 ))
             }
-            PhysicalPlan::CTEConsumer(plan) => Ok(FormatTreeNode::with_children(
-                format!("CTEConsumer: {}", plan.cte_name),
-                vec![],
-            )),
+            PhysicalPlan::CTEConsumer(plan) => {
+                let mut children = vec![
+                    FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
+                    FormatTreeNode::new(format!(
+                        "cte_schema: [{}]",
+                        format_output_columns(plan.cte_schema.clone(), &metadata.read(), false)
+                    )),
+                ];
+                Ok(FormatTreeNode::with_children(
+                    "CTEConsumer".to_string(),
+                    children,
+                ))
+            }
+            PhysicalPlan::Sequence(plan) => {
+                let left = plan.left.format_join(metadata)?;
+                let right = plan.right.format_join(metadata)?;
+                let mut children = vec![left, right];
+                Ok(FormatTreeNode::with_children(
+                    "Sequence".to_string(),
+                    children,
+                ))
+            }
             other => {
                 let children = other
                     .children()
