@@ -319,7 +319,7 @@ impl ClusterDiscovery {
 
                 // compatibility, for self-managed nodes, we allow queries to continue executing even when the heartbeat fails.
                 if cluster_nodes.is_empty() && !config.query.cluster_id.is_empty() {
-                    let node_info = Arc::new(NodeInfo::create(
+                    let mut node_info = NodeInfo::create(
                         config.query.node_id.clone(),
                         config.query.node_secret.clone(),
                         config.query.num_cpus,
@@ -331,9 +331,11 @@ impl ClusterDiscovery {
                         config.query.discovery_address.clone(),
                         String::new(),
                         String::new(),
-                    ));
-                    let cluster = Cluster::create(vec![node_info], config.query.node_id.clone());
-                    return Ok(cluster);
+                    );
+
+                    node_info.cluster_id = config.query.cluster_id.clone();
+                    node_info.warehouse_id = config.query.warehouse_id.clone();
+                    return Ok(Cluster::empty(node_info));
                 }
 
                 Ok(Cluster::create(res, self.local_id.clone()))
