@@ -149,8 +149,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             .await
             .with_context(make_error)?;
         info!(
-            "Databend query has been registered:{:?} to metasrv:{:?}.",
-            conf.query.cluster_id, conf.meta.endpoints
+            "Databend query has been registered:{:?}/{:?} to metasrv:{:?}.",
+            conf.query.warehouse_id, conf.query.cluster_id, conf.meta.endpoints
         );
     }
 

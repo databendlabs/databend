@@ -38,6 +38,10 @@ pub async fn query_local(
         conf.query.cluster_id = "local_test".to_string();
     }
 
+    if conf.query.warehouse_id.is_empty() {
+        conf.query.warehouse_id = conf.query.cluster_id.clone();
+    }
+
     GlobalServices::init(&conf, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();

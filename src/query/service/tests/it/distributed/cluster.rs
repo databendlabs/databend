@@ -121,6 +121,7 @@ fn setup_node_configs(addresses: Vec<&str>) -> Vec<InnerConfig> {
             let mut conf = ConfigBuilder::create().build();
             conf.query.flight_api_address = address.to_string();
             conf.query.cluster_id = format!("node{}", i + 1);
+            conf.query.warehouse_id = format!("node{}", i + 1);
             conf
         })
         .collect()
