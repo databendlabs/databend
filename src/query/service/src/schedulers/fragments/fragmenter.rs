@@ -164,6 +164,7 @@ impl PhysicalPlanReplacer for Fragmenter {
     }
 
     fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+        self.state = State::Other;
         Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
     }
 
