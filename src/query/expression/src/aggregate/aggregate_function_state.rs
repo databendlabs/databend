@@ -203,6 +203,10 @@ pub enum StateSerdeItem {
 pub struct StateSerdeType(Box<[StateSerdeItem]>);
 
 impl StateSerdeType {
+    pub fn new(items: impl Into<Box<[StateSerdeItem]>>) -> Self {
+        StateSerdeType(items.into())
+    }
+
     pub fn data_type(&self) -> DataType {
         DataType::Tuple(
             self.0

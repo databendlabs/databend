@@ -129,6 +129,11 @@ impl RuleStatsAggregateOptimizer {
                     for (need_rewrite_agg, agg) in
                         need_rewrite_aggs.iter().zip(agg.aggregate_functions.iter())
                     {
+                        if matches!(agg.scalar, ScalarExpr::UDAFCall(_)) {
+                            agg_results.push(agg.clone());
+                            continue;
+                        }
+
                         let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
 
                         if let Some((col_id, name)) = need_rewrite_agg {

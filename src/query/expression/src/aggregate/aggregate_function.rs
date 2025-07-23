@@ -29,6 +29,7 @@ use crate::ProjectedBlock;
 use crate::Scalar;
 use crate::ScalarRef;
 use crate::StateSerdeItem;
+use crate::StateSerdeType;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
@@ -70,6 +71,11 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
 
     fn serialize_type(&self) -> Vec<StateSerdeItem>;
+
+    fn serialize_data_type(&self) -> DataType {
+        let serde_type = StateSerdeType::new(self.serialize_type());
+        serde_type.data_type()
+    }
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();

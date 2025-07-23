@@ -22,6 +22,7 @@ use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::AggregateFunctionFactory;
@@ -71,7 +72,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Binary)
+        Ok(self.nested.serialize_data_type())
     }
 
     fn init_state(&self, place: AggrState) {
@@ -108,16 +109,23 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        self.nested.serialize_type()
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize_binary(place, writer)
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        self.nested.serialize(place, builders)
     }
 
-    #[inline]
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge_binary(place, reader)
+    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
+        unreachable!()
+    }
+
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        self.nested.merge(place, data)
+    }
+
+    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
+        unreachable!()
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -125,10 +133,8 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = builder.as_binary_mut().unwrap();
-        self.nested.serialize_binary(place, &mut builder.data)?;
-        builder.commit_row();
-        Ok(())
+        let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+        self.nested.serialize(place, builders)
     }
 
     fn need_manual_drop_state(&self) -> bool {

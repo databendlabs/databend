@@ -17,7 +17,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
-use databend_common_expression::StateSerdeItem;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
 use super::SortDesc;
@@ -69,16 +68,7 @@ impl AggregatePartial {
                 )
                 .unwrap();
 
-            let tuple = func
-                .serialize_type()
-                .iter()
-                .map(|serde_type| match serde_type {
-                    StateSerdeItem::DataType(data_type) => data_type.clone(),
-                    StateSerdeItem::Binary(_) => DataType::Binary,
-                })
-                .collect();
-
-            fields.push(DataField::new(&name, DataType::Tuple(tuple)))
+            fields.push(DataField::new(&name, func.serialize_data_type()))
         }
 
         for (idx, field) in self.group_by.iter().zip(
