@@ -60,6 +60,7 @@ pub enum GrantObject {
     UDF(String),
     Stage(String),
     Warehouse(String),
+    Connection(String),
 }
 
 impl GrantObject {
@@ -93,6 +94,7 @@ impl GrantObject {
             (GrantObject::Stage(lstage), GrantObject::Stage(rstage)) => lstage == rstage,
             (GrantObject::UDF(udf), GrantObject::UDF(rudf)) => udf == rudf,
             (GrantObject::Warehouse(w), GrantObject::Warehouse(rw)) => w == rw,
+            (GrantObject::Connection(c), GrantObject::Connection(rc)) => c == rc,
             _ => false,
         }
     }
@@ -116,6 +118,9 @@ impl GrantObject {
             GrantObject::Warehouse(_) => {
                 UserPrivilegeSet::available_privileges_on_warehouse(available_ownership)
             }
+            GrantObject::Connection(_) => {
+                UserPrivilegeSet::available_privileges_on_connection(available_ownership)
+            }
         }
     }
 
@@ -124,7 +129,8 @@ impl GrantObject {
             GrantObject::Global
             | GrantObject::Stage(_)
             | GrantObject::UDF(_)
-            | GrantObject::Warehouse(_) => None,
+            | GrantObject::Warehouse(_)
+            | GrantObject::Connection(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
         }
@@ -146,6 +152,7 @@ impl fmt::Display for GrantObject {
             GrantObject::UDF(udf) => write!(f, "UDF {udf}"),
             GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
             GrantObject::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
+            GrantObject::Connection(c) => write!(f, "CONNECTION {c}"),
         }
     }
 }
