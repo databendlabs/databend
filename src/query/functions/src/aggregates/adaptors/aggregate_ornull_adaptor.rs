@@ -15,7 +15,6 @@
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -198,24 +197,12 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             .serialize(place.remove_last_loc(), &mut builders[..n - 1])
     }
 
-    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
-        Err(ErrorCode::Internal(
-            "Calls to serialize_binary should be refactored to calls to serialize",
-        ))
-    }
-
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         let flag = get_flag(place) || *data.last().and_then(ScalarRef::as_boolean).unwrap();
         self.inner
             .merge(place.remove_last_loc(), &data[..data.len() - 1])?;
         set_flag(place, flag);
         Ok(())
-    }
-
-    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
-        Err(ErrorCode::Internal(
-            "Calls to merge_binary should be refactored to calls to merge",
-        ))
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

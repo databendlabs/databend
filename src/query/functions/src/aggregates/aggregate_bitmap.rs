@@ -36,6 +36,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
@@ -292,24 +293,27 @@ where
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
         let state = place.get::<BitmapAggState>();
         // flag indicate where bitmap is none
         let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
-        writer.write_scalar(&flag)?;
+        binary_builder.data.write_scalar(&flag)?;
         if let Some(rb) = &state.rb {
-            rb.serialize_into(writer)?;
+            rb.serialize_into(&mut binary_builder.data)?;
         }
+        binary_builder.commit_row();
         Ok(())
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        let mut binary = *data[0].as_binary().unwrap();
         let state = place.get::<BitmapAggState>();
 
-        let flag = reader[0];
-        reader.consume(1);
+        let flag = binary[0];
+        binary.consume(1);
         if flag == 1 {
-            let rb = deserialize_bitmap(reader)?;
+            let rb = deserialize_bitmap(binary)?;
             state.add::<OP>(rb);
         }
         Ok(())
@@ -491,12 +495,12 @@ where
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.inner.serialize_binary(place, writer)
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        self.inner.serialize(place, builders)
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.inner.merge_binary(place, reader)
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        self.inner.merge(place, data)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

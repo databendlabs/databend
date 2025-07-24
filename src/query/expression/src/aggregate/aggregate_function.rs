@@ -77,21 +77,9 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         serde_type.data_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        self.serialize_binary(place, &mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
-    }
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()>;
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()>;
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
-        self.merge_binary(place, &mut binary)
-    }
-
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()>;
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()>;
 
     /// Batch merge and deserialize the state from binary array
     fn batch_merge(

@@ -163,20 +163,8 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.serialize(place, builders)
     }
 
-    fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
-        Err(ErrorCode::Internal(
-            "Calls to serialize_binary should be refactored to calls to serialize",
-        ))
-    }
-
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         self.nested.merge(place, data)
-    }
-
-    fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
-        Err(ErrorCode::Internal(
-            "Calls to merge_binary should be refactored to calls to merge",
-        ))
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

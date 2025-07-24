@@ -126,14 +126,22 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
         let state = Self::get_state(place);
-        Ok(state.serialize(writer)?)
+        state.serialize(&mut binary_builder.data)?;
+        binary_builder.commit_row();
+        Ok(())
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(
+        &self,
+        place: AggrState,
+        data: &[databend_common_expression::ScalarRef],
+    ) -> Result<()> {
+        let mut binary = *data[0].as_binary().unwrap();
         let state = Self::get_state(place);
-        let rhs = SortAggState::deserialize(reader)?;
+        let rhs = SortAggState::deserialize(&mut binary)?;
 
         Self::merge_states_inner(state, &rhs);
         Ok(())

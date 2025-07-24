@@ -39,6 +39,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::ProjectedBlock;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_sql::plans::UDFLanguage;
@@ -103,17 +104,21 @@ impl AggregateFunction for AggregateUdfScript {
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize_binary(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
         let state = place.get::<UdfAggState>();
         state
-            .serialize(writer)
-            .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))
+            .serialize(&mut binary_builder.data)
+            .map_err(|e| ErrorCode::Internal(format!("state failed to serialize: {e}")))?;
+        binary_builder.commit_row();
+        Ok(())
     }
 
-    fn merge_binary(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
+        let mut binary = *data[0].as_binary().unwrap();
         let state = place.get::<UdfAggState>();
-        let rhs =
-            UdfAggState::deserialize(reader).map_err(|e| ErrorCode::Internal(e.to_string()))?;
+        let rhs = UdfAggState::deserialize(&mut binary)
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
         let states = arrow_select::concat::concat(&[&state.0, &rhs.0])?;
         let state = self
             .runtime
