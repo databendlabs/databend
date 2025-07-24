@@ -184,14 +184,9 @@ impl Binder {
 
                 let materialized_cte =
                     MaterializedCTE::new(cte_name, bind_context.columns, *ref_count);
-                let materialized_cte =
-                    SExpr::create_unary(Arc::new(materialized_cte.into()), Arc::new(s_expr));
+                let materialized_cte = SExpr::create_unary(materialized_cte, s_expr);
                 let sequence = Sequence {};
-                current_expr = SExpr::create_binary(
-                    Arc::new(sequence.into()),
-                    materialized_cte,
-                    Arc::new(current_expr),
-                );
+                current_expr = SExpr::create_binary(sequence, materialized_cte, current_expr);
             }
         }
 
