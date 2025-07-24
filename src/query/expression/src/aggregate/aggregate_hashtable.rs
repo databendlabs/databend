@@ -218,7 +218,7 @@ impl AggregateHashTable {
                     .zip(agg_states.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.batch_merge(state_places, loc, state)?;
+                    func.batch_merge(state_places, loc, state, None)?;
                 }
             }
         }

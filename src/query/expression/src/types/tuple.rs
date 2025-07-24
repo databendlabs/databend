@@ -35,57 +35,66 @@ pub type AnyQuaternaryType = QuaternaryType<AnyType, AnyType, AnyType, AnyType>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnaryType<T>(PhantomData<T>);
 
-impl<T> AccessType for UnaryType<T>
-where T: AccessType
+impl<A> AccessType for UnaryType<A>
+where A: AccessType
 {
-    type Scalar = T::Scalar;
-    type ScalarRef<'a> = T::ScalarRef<'a>;
-    type Column = T::Column;
-    type Domain = T::Domain;
-    type ColumnIterator<'a> = T::ColumnIterator<'a>;
+    type Scalar = A::Scalar;
+    type ScalarRef<'a> = A::ScalarRef<'a>;
+    type Column = A::Column;
+    type Domain = A::Domain;
+    type ColumnIterator<'a> = A::ColumnIterator<'a>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        T::to_owned_scalar(scalar)
+        A::to_owned_scalar(scalar)
     }
 
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        T::to_scalar_ref(scalar)
+        A::to_scalar_ref(scalar)
     }
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        T::try_downcast_scalar(scalar)
+        let [a] = scalar.as_tuple()?.as_slice() else {
+            return None;
+        };
+        A::try_downcast_scalar(a)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        T::try_downcast_domain(domain)
+        let [a] = domain.as_tuple()?.as_slice() else {
+            return None;
+        };
+        A::try_downcast_domain(a)
     }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        T::try_downcast_column(col)
+        let [a] = col.as_tuple()?.as_slice() else {
+            return None;
+        };
+        A::try_downcast_column(a)
     }
 
     fn column_len(col: &Self::Column) -> usize {
-        T::column_len(col)
+        A::column_len(col)
     }
 
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        T::index_column(col, index)
+        A::index_column(col, index)
     }
 
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        T::index_column_unchecked(col, index)
+        A::index_column_unchecked(col, index)
     }
 
     fn slice_column(col: &Self::Column, range: std::ops::Range<usize>) -> Self::Column {
-        T::slice_column(col, range)
+        A::slice_column(col, range)
     }
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        T::iter_column(col)
+        A::iter_column(col)
     }
 
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        T::compare(lhs, rhs)
+        A::compare(lhs, rhs)
     }
 }
 

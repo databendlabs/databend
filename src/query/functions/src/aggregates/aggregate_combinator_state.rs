@@ -126,8 +126,9 @@ impl AggregateFunction for AggregateStateCombinator {
         places: &[StateAddr],
         loc: &[AggrStateLoc],
         state: &BlockEntry,
+        filter: Option<&Bitmap>,
     ) -> Result<()> {
-        self.nested.batch_merge(places, loc, state)
+        self.nested.batch_merge(places, loc, state, filter)
     }
 
     fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {

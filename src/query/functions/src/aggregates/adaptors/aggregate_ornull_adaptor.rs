@@ -216,24 +216,44 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         places: &[StateAddr],
         loc: &[AggrStateLoc],
         state: &BlockEntry,
+        filter: Option<&Bitmap>,
     ) -> Result<()> {
         match state {
             BlockEntry::Column(Column::Tuple(tuple)) => {
                 let flag = tuple.last().unwrap().as_boolean().unwrap();
-                for (place, flag) in places.iter().zip(flag.iter()) {
-                    merge_flag(AggrState::new(*place, loc), flag);
+                let iter = places.iter().zip(flag.iter());
+                if let Some(filter) = filter {
+                    for (place, flag) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
+                    {
+                        merge_flag(AggrState::new(*place, loc), flag);
+                    }
+                } else {
+                    for (place, flag) in iter {
+                        merge_flag(AggrState::new(*place, loc), flag);
+                    }
                 }
                 let inner_state = Column::Tuple(tuple[0..tuple.len() - 1].to_vec()).into();
                 self.inner
-                    .batch_merge(places, &loc[0..loc.len() - 1], &inner_state)?;
+                    .batch_merge(places, &loc[0..loc.len() - 1], &inner_state, filter)?;
             }
             _ => {
                 let state = state.to_column();
-                for (place, data) in places.iter().zip(state.iter()) {
-                    self.merge(
-                        AggrState::new(*place, loc),
-                        data.as_tuple().unwrap().as_slice(),
-                    )?;
+                let iter = places.iter().zip(state.iter());
+                if let Some(filter) = filter {
+                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
+                    {
+                        self.merge(
+                            AggrState::new(*place, loc),
+                            data.as_tuple().unwrap().as_slice(),
+                        )?;
+                    }
+                } else {
+                    for (place, data) in iter {
+                        self.merge(
+                            AggrState::new(*place, loc),
+                            data.as_tuple().unwrap().as_slice(),
+                        )?;
+                    }
                 }
             }
         }
