@@ -70,7 +70,12 @@ impl SetInterpreter {
         let mut is_globals = vec![];
 
         for (var, scalar) in self.set.idents.iter().zip(scalars.into_iter()) {
-            let scalar = scalar.as_string().unwrap();
+            let scalar = scalar.as_string().ok_or_else(|| {
+                ErrorCode::BadArguments(format!(
+                    "Expected string value for setting '{}', but got {:?}",
+                    var, scalar
+                ))
+            })?;
             let ok = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => false,
@@ -216,8 +221,16 @@ impl Interpreter for SetInterpreter {
                 datablock
                     .columns()
                     .iter()
-                    .map(|c| c.index(0).unwrap().to_owned())
-                    .collect()
+                    .map(|c| {
+                        c.index(0)
+                            .ok_or_else(|| {
+                                ErrorCode::Internal(
+                                    "Failed to access first row of datablock column".to_string(),
+                                )
+                            })
+                            .map(|s| s.to_owned())
+                    })
+                    .collect::<Result<Vec<_>>>()?
             }
         };
 
