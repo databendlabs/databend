@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::headers::HEADER_SQL;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -131,13 +132,19 @@ async fn streaming_load_handler_inner(
         .await
         .map_err(InternalServerError)?;
 
-    let sql = req.headers().get("sql").ok_or(poem::Error::from_string(
-        "[HTTP-STREAMING-LOAD] Missing required 'sql' header in request",
-        StatusCode::BAD_REQUEST,
-    ))?;
+    let sql = req
+        .headers()
+        .get(HEADER_SQL)
+        .ok_or(poem::Error::from_string(
+            "[HTTP-STREAMING-LOAD] Missing required 'sql' header in request",
+            StatusCode::BAD_REQUEST,
+        ))?;
     let sql = sql.to_str().map_err(|e| {
         poem::Error::from_string(
-            format!("[HTTP-STREAMING-LOAD] Invalid UTF-8 in 'sql' header: {}", e),
+            format!(
+                "[HTTP-STREAMING-LOAD] Invalid UTF-8 in value of header {HEADER_SQL}: {}",
+                e
+            ),
             StatusCode::BAD_REQUEST,
         )
     })?;

@@ -208,15 +208,11 @@ async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), Met
     println!("Register this node: {{{}}}", node);
     println!();
 
-    let ent = LogEntry {
-        txid: None,
-        time_ms: None,
-        cmd: Cmd::AddNode {
-            node_id,
-            node,
-            overriding: true,
-        },
-    };
+    let ent = LogEntry::new(Cmd::AddNode {
+        node_id,
+        node,
+        overriding: true,
+    });
     info!("Raft log entry for updating node: {:?}", ent);
 
     meta_node.write(ent).await?;

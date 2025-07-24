@@ -117,6 +117,12 @@ pub async fn validate_grant_object_exists(
                 ))
             };
         }
+        GrantObject::Connection(c) => {
+            return match ctx.get_connection(c).await {
+                Ok(_c) => Ok(()),
+                Err(e) => Err(e),
+            }
+        }
         GrantObject::Global => (),
     }
 

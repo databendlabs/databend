@@ -59,21 +59,29 @@ impl Interpreter for ShowConnectionsInterpreter {
 
         formats.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let names = formats.iter().map(|x| x.name.clone()).collect::<Vec<_>>();
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
+            formats.retain(|c| visibility_checker.check_connection_visibility(&c.name));
+        }
 
-        let types = formats
-            .iter()
-            .map(|x| x.storage_type.clone())
-            .collect::<Vec<_>>();
+        // Merge three independent 'map().collect()' into one iteration.
+        let capacity = formats.len();
+        let mut names = Vec::with_capacity(capacity);
+        let mut types = Vec::with_capacity(capacity);
+        let mut options = Vec::with_capacity(capacity);
 
-        let options = formats
-            .iter_mut()
-            .map(|x| {
-                let conn = Connection::new(x.storage_params.clone()).mask();
-                x.storage_params = conn.conns;
-                x.storage_params_display().clone()
-            })
-            .collect::<Vec<_>>();
+        for c in formats.iter_mut() {
+            names.push(c.name.clone());
+            types.push(c.storage_type.clone());
+
+            let conn = Connection::new(c.storage_params.clone()).mask();
+            c.storage_params = conn.conns;
+            options.push(c.storage_params_display().clone());
+        }
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),

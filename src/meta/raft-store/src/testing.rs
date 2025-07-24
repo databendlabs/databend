@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This module re-exports the `Marked` type from the `map_api` crate,
-//! setting the meta type to `KVMeta`.
+use std::time::Duration;
+use std::time::SystemTime;
 
-#[cfg(test)]
-mod marked_test;
+#[allow(dead_code)]
+pub(crate) fn since_epoch_secs() -> u64 {
+    since_epoch().as_secs()
+}
 
-use databend_common_meta_types::seq_value::KVMeta;
+pub(crate) fn since_epoch_millis() -> u64 {
+    since_epoch().as_millis() as u64
+}
 
-use crate::state_machine::ExpireValue;
-
-pub type Marked<T = Vec<u8>> = map_api::marked::Marked<KVMeta, T>;
-
-impl From<ExpireValue> for Marked<String> {
-    fn from(value: ExpireValue) -> Self {
-        Marked::new_with_meta(value.seq, value.key, None)
-    }
+pub(crate) fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
 }

@@ -1,0 +1,74 @@
+// Copyright 2022 Datafuse Labs.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package databend_proto;
+
+message WarehouseOptions {
+  optional string warehouse = 1;  // warehouse or using_warehouse_size
+  optional string using_warehouse_size = 2;
+}
+
+message ScheduleOptions {
+  enum ScheduleType {
+    interval_type = 0;
+    cron_type = 1;
+  }
+  optional int32 interval = 1; //  secs, INTERVAL= '5 second' means execute sql every 5 secs
+  optional string cron = 2; // CRON = '0 2 * * *' means Every night at 2 AM. UTC time zone.
+  optional string time_zone = 3; // "UTC..."
+  ScheduleType schedule_type = 4;
+  optional uint64 milliseconds_interval = 5; // milliseconds level interval
+}
+
+message TaskMessage {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  
+  oneof message {
+    Task execute_task = 1;
+    Task schedule_task = 2;
+    string delete_task = 3;
+    Task after_task = 4;
+  }
+}
+
+message Task {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  enum Status {
+    Suspended = 0;
+    Started = 1;
+  }
+  uint64 task_id = 1;
+  string task_name = 2;
+  string query_text = 4;
+  optional string comment = 5;
+  string owner = 6;
+  ScheduleOptions schedule_options = 7;
+  WarehouseOptions warehouse_options = 8;
+  optional string next_scheduled_at = 9;
+  optional int32 suspend_task_after_num_failures = 10; //SUSPEND_TASK_AFTER_NUM_FAILURES
+  Status status = 12;
+  string created_at = 14; // RFC 3339 format time
+  string updated_at = 15;
+  optional string last_suspended_at = 16;
+  repeated string after = 17;
+  optional string when_condition = 18;
+  map<string, string> session_parameters = 19;
+  optional string error_integration = 20;
+  string owner_user = 21;
+}

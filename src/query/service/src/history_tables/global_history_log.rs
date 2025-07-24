@@ -24,8 +24,8 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -52,6 +52,7 @@ use rand::random;
 use tokio::time::sleep;
 use uuid::Uuid;
 
+use crate::clusters::ClusterDiscovery;
 use crate::history_tables::alter_table::get_alter_table_sql;
 use crate::history_tables::alter_table::get_log_table;
 use crate::history_tables::alter_table::should_reset;
@@ -66,8 +67,6 @@ pub struct GlobalHistoryLog {
     meta_handle: HistoryMetaHandle,
     interval: u64,
     tenant_id: String,
-    node_id: String,
-    cluster_id: String,
     stage_name: String,
     initialized: AtomicBool,
     retention_interval: usize,
@@ -98,8 +97,6 @@ impl GlobalHistoryLog {
             meta_handle,
             interval: cfg.log.history.interval as u64,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
-            node_id: cfg.query.node_id.clone(),
-            cluster_id: cfg.query.cluster_id.clone(),
             stage_name,
             initialized: AtomicBool::new(false),
             retention_interval: cfg.log.history.retention_interval,
@@ -385,8 +382,7 @@ impl GlobalHistoryLog {
         if let Some(_guard) = may_permit {
             let sql = &table.delete;
             self.execute_sql(sql).await?;
-            let session = create_session(&self.tenant_id, &self.cluster_id).await?;
-            let context = session.create_query_context().await?;
+            let context = self.create_context().await?;
             if LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
                 .is_ok()
@@ -405,13 +401,15 @@ impl GlobalHistoryLog {
     }
 
     pub async fn create_context(&self) -> Result<Arc<QueryContext>> {
-        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         // only need run the sql on the current node
-        session.create_query_context_with_cluster(Arc::new(Cluster {
-            unassign: false,
-            local_id: self.node_id.clone(),
-            nodes: vec![],
-        }))
+        let cluster_discovery = ClusterDiscovery::instance();
+        let dummy_cluster = cluster_discovery
+            .single_node_cluster(&GlobalConfig::instance())
+            .await?;
+
+        let cluster_id = dummy_cluster.get_cluster_id()?;
+        let session = create_session(&self.tenant_id, &cluster_id).await?;
+        session.create_query_context_with_cluster(dummy_cluster)
     }
 }
 

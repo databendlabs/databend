@@ -40,6 +40,7 @@ pub enum UDFDefinition {
         handler: String,
         headers: BTreeMap<String, String>,
         language: String,
+        immutable: Option<bool>,
     },
     UDFScript {
         arg_types: Vec<TypeName>,
@@ -50,6 +51,7 @@ pub enum UDFDefinition {
         handler: String,
         language: String,
         runtime_version: String,
+        immutable: Option<bool>,
     },
     UDAFServer {
         arg_types: Vec<TypeName>,
@@ -89,13 +91,19 @@ impl Display for UDFDefinition {
                 handler,
                 headers,
                 language,
+                immutable,
             } => {
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
-                write!(
-                    f,
-                    " ) RETURNS {return_type} LANGUAGE {language} HANDLER = '{handler}'"
-                )?;
+                write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
+                write!(f, " HANDLER = '{handler}'")?;
                 if !headers.is_empty() {
                     write!(f, " HEADERS = (")?;
                     for (i, (key, value)) in headers.iter().enumerate() {
@@ -117,6 +125,7 @@ impl Display for UDFDefinition {
                 runtime_version: _,
                 imports,
                 packages,
+                immutable,
             } => {
                 write!(f, "( ")?;
                 write_comma_separated_list(f, arg_types)?;
@@ -128,9 +137,17 @@ impl Display for UDFDefinition {
                     .iter()
                     .map(|s| QuotedString(s, '\'').to_string())
                     .join(",");
+                write!(f, " ) RETURNS {return_type} LANGUAGE {language}")?;
+                if let Some(immutable) = immutable {
+                    if *immutable {
+                        write!(f, " IMMUTABLE")?;
+                    } else {
+                        write!(f, " VOLATILE")?;
+                    }
+                }
                 write!(
                     f,
-                    " ) RETURNS {return_type} LANGUAGE {language} IMPORTS = ({}) PACKAGES = ({}) HANDLER = '{handler}' AS $$\n{code}\n$$",
+                    " IMPORTS = ({}) PACKAGES = ({}) HANDLER = '{handler}' AS $$\n{code}\n$$",
                     imports, packages
                 )?;
             }

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod kv_meta;
+mod errors;
+mod task_mgr;
 
-pub use kv_meta::KVMeta;
-pub use map_api::seq_value::SeqValue;
-
-pub type SeqV<T = Vec<u8>> = map_api::seq_value::SeqV<KVMeta, T>;
+pub use errors::TaskApiError;
+pub use errors::TaskError;
+pub use task_mgr::TaskMgr;

@@ -16,7 +16,6 @@ use std::io;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::snapshot_db::DB;
-use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
 use map_api::map_api_ro::MapApiRO;
 use rotbl::v001::SeqMarked;
@@ -27,31 +26,30 @@ use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::value_convert::ValueConvert;
-use crate::marked::Marked;
 
 /// A wrapper that implements the `MapApiRO` trait for the `DB`.
 #[derive(Debug, Clone)]
 pub struct MapView<'a>(pub &'a DB);
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K, KVMeta> for MapView<'_>
+impl<K> MapApiRO<K> for MapView<'_>
 where
-    K: MapKey<KVMeta>,
+    K: MapKey,
     K: MapKeyEncode,
     K: MapKeyDecode,
-    Marked<K::V>: ValueConvert<SeqMarked>,
+    SeqMarked<K::V>: ValueConvert<SeqMarked>,
 {
-    async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
+    async fn get(&self, key: &K) -> Result<SeqMarked<K::V>, io::Error> {
         let key = RotblCodec::encode_key(key)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let res = self.0.rotbl.get(&key).await?;
 
         let Some(seq_marked) = res else {
-            return Ok(Marked::empty());
+            return Ok(SeqMarked::new_not_found());
         };
 
-        let marked = Marked::<K::V>::conv_from(seq_marked)?;
+        let marked = SeqMarked::<K::V>::conv_from(seq_marked)?;
         Ok(marked)
     }
 
@@ -65,7 +63,7 @@ where
         let strm = strm.map(|res_item: Result<(String, SeqMarked), io::Error>| {
             let (str_k, seq_marked) = res_item?;
             let key = RotblCodec::decode_key(&str_k)?;
-            let marked = Marked::conv_from(seq_marked)?;
+            let marked = SeqMarked::conv_from(seq_marked)?;
             Ok((key, marked))
         });
 

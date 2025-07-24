@@ -13,14 +13,13 @@
 // limitations under the License.
 
 use std::time::Duration;
+use std::time::SystemTime;
 
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
 use databend_common_meta_types::protobuf::KvMeta;
-use databend_common_meta_types::seq_value::KVMeta;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
@@ -29,6 +28,7 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -49,6 +49,7 @@ use fastrace::func_name;
 use fastrace::func_path;
 use log::debug;
 use log::info;
+use state_machine_api::KVMeta;
 use tokio::time::sleep;
 
 pub struct TestSuite {}
@@ -281,7 +282,7 @@ impl TestSuite {
             assert!(res.is_none(), "got expired");
         }
 
-        let now_sec = SeqV::<()>::now_sec();
+        let now_sec = since_epoch_secs();
 
         info!("--- expired entry act as if it does not exist, an ADD op should apply");
         {
@@ -293,7 +294,7 @@ impl TestSuite {
                         .with(MetaSpec::new_expire(now_sec - 1)),
                 )
                 .await?;
-            // dbg!("update expired k1", _res);
+            // dbg!("update on expired k1", _res);
 
             let _res = kv
                 .upsert_kv(
@@ -305,8 +306,14 @@ impl TestSuite {
             // dbg!("update non expired k2", _res);
 
             info!("--- mget should not return expired");
-            let mut res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
             {
+                // let got = kv.get_kv("k1").await?;
+                // dbg!("k1", got);
+                // let got = kv.get_kv("k2").await?;
+                // dbg!("k2", got);
+
+                let mut res = kv.mget_kv(&["k1".to_string(), "k2".to_string()]).await?;
+                // dbg!(&res);
                 assert_eq!(res[0], None);
 
                 let v2 = res.remove(1).unwrap();
@@ -362,7 +369,7 @@ impl TestSuite {
 
         info!("--- expired in milliseconds");
         {
-            let now_sec = SeqV::<()>::now_sec();
+            let now_sec = since_epoch_secs();
 
             // expire time in milliseconds
             kv.upsert_kv(
@@ -451,7 +458,7 @@ impl TestSuite {
 
         let test_key = "test_key_for_update_meta";
 
-        let now_sec = SeqV::<()>::now_sec();
+        let now_sec = since_epoch_secs();
 
         let r = kv.upsert_kv(UpsertKV::update(test_key, b"v1")).await?;
         assert_eq!(Some(SeqV::new(1, b("v1"))), r.result);
@@ -827,23 +834,19 @@ impl TestSuite {
                 TxnOp::put(txn_key2.clone(), b("new_v2")),
                 // get k1
                 TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
+                    request: Some(txn_op::Request::Get(TxnGetRequest::new(txn_key1.clone()))),
                 },
                 // delete k1
                 TxnOp {
-                    request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                        key: txn_key1.clone(),
-                        prev_value: true,
-                        match_seq: None,
-                    })),
+                    request: Some(txn_op::Request::Delete(TxnDeleteRequest::new(
+                        txn_key1.clone(),
+                        true,
+                        None,
+                    ))),
                 },
                 // get k1
                 TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
+                    request: Some(txn_op::Request::Get(TxnGetRequest::new(txn_key1.clone()))),
                 },
             ];
 
@@ -872,7 +875,7 @@ impl TestSuite {
                 TxnOpResponse {
                     response: Some(txn_op_response::Response::Get(TxnGetResponse {
                         key: txn_key1.clone(),
-                        value: Some(pb::SeqV::from(SeqV::with_meta(
+                        value: Some(pb::SeqV::from(SeqV::new_with_meta(
                             6,
                             Some(KVMeta::default()),
                             val1_new.clone(),
@@ -884,7 +887,7 @@ impl TestSuite {
                     response: Some(txn_op_response::Response::Delete(TxnDeleteResponse {
                         key: txn_key1.clone(),
                         success: true,
-                        prev_value: Some(pb::SeqV::from(SeqV::with_meta(
+                        prev_value: Some(pb::SeqV::from(SeqV::new_with_meta(
                             6,
                             Some(KVMeta::default()),
                             val1_new.clone(),
@@ -1427,7 +1430,7 @@ impl TestSuite {
 
         info!("--- {}", func_path!());
 
-        let now_ms = SeqV::<()>::now_ms();
+        let now_ms = since_epoch_millis();
 
         let txn = TxnRequest::new(vec![], vec![
             TxnOp::put_sequential("k1/", "seq1", b("v1")).with_expires_at_ms(Some(now_ms + 1000)),
@@ -1905,4 +1908,18 @@ fn normalize_txn_response(vs: Vec<TxnOpResponse>) -> Vec<TxnOpResponse> {
 
 fn b(x: impl ToString) -> Vec<u8> {
     x.to_string().as_bytes().to_vec()
+}
+
+fn since_epoch_secs() -> u64 {
+    since_epoch().as_secs()
+}
+
+fn since_epoch_millis() -> u64 {
+    since_epoch().as_millis() as u64
+}
+
+fn since_epoch() -> Duration {
+    SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
 }

@@ -123,12 +123,7 @@ async fn test_watch_single_key() -> anyhow::Result<()> {
 
     let seq: u64 = 1;
 
-    let watch = WatchRequest {
-        key: s("a"),
-        key_end: None,
-        filter_type: FilterType::All.into(),
-        initial_flush: false,
-    };
+    let watch = WatchRequest::new(s("a"), None);
 
     let key_a = s("a");
     let val_a = b("a");
@@ -167,12 +162,7 @@ async fn test_watch() -> anyhow::Result<()> {
     let mut seq: u64 = 1;
     // 1.update some events
     {
-        let watch = WatchRequest {
-            key: "a".to_string(),
-            key_end: Some("z".to_string()),
-            filter_type: FilterType::All.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new("a".to_string(), Some("z".to_string()));
 
         let key_a = s("a");
         let key_b = s("b");
@@ -225,13 +215,7 @@ async fn test_watch() -> anyhow::Result<()> {
     // 2. test filter
     {
         let key_str = "1";
-        let watch = WatchRequest {
-            key: s(key_str),
-            key_end: None,
-            // filter only delete events
-            filter_type: FilterType::Delete.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new(s(key_str), None).with_filter(FilterType::Delete);
 
         let key = s(key_str);
         let val = b("old");
@@ -290,12 +274,7 @@ async fn test_watch() -> anyhow::Result<()> {
 
         let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
 
-        let watch = WatchRequest {
-            key: start,
-            key_end: Some(end),
-            filter_type: FilterType::All.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new(start, Some(end));
 
         let conditions = vec![TxnCondition {
             key: txn_key.clone(),
@@ -359,12 +338,7 @@ async fn test_watch_initialization_flush() -> anyhow::Result<()> {
     }
 
     let mut strm = {
-        let watch = WatchRequest {
-            key: s("a"),
-            key_end: Some(s("e")),
-            filter_type: FilterType::All.into(),
-            initial_flush: true,
-        };
+        let watch = WatchRequest::new(s("a"), Some(s("e"))).with_initial_flush(true);
         client.watch_with_initialization(watch).await?
     };
 
@@ -487,12 +461,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     let watch_client = make_client(&addr)?;
     let mut client_stream = {
         let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
-        let watch = WatchRequest {
-            key: start,
-            key_end: Some(end),
-            filter_type: FilterType::All.into(),
-            initial_flush: false,
-        };
+        let watch = WatchRequest::new(start, Some(end));
         watch_client.request(watch).await?
     };
 
@@ -594,12 +563,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     let (tc, addr) = crate::tests::start_metasrv().await?;
 
-    let watch_req = || WatchRequest {
-        key: "a".to_string(),
-        key_end: Some("z".to_string()),
-        filter_type: FilterType::All.into(),
-        initial_flush: false,
-    };
+    let watch_req = || WatchRequest::new("a".to_string(), Some("z".to_string()));
 
     let client1 = make_client(&addr)?;
     let _watch_stream1 = client1.request(watch_req()).await?;

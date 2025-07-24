@@ -38,12 +38,12 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::UpsertKV;
 use enumflags2::make_bitflags;
@@ -566,6 +566,7 @@ fn convert_to_grant_obj(owner_obj: &OwnershipObject) -> GrantObject {
         OwnershipObject::Stage { name } => GrantObject::Stage(name.to_string()),
         OwnershipObject::UDF { name } => GrantObject::UDF(name.to_string()),
         OwnershipObject::Warehouse { id } => GrantObject::Warehouse(id.to_string()),
+        OwnershipObject::Connection { name } => GrantObject::Connection(name.to_string()),
     }
 }
 

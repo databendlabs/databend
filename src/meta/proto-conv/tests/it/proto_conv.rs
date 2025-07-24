@@ -305,6 +305,7 @@ fn new_udf_server() -> databend_common_meta_app::principal::UDFServer {
         language: "python".to_string(),
         arg_types: vec![DataType::String],
         return_type: DataType::Boolean,
+        immutable: None,
     }
 }
 

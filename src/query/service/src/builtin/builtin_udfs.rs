@@ -50,6 +50,7 @@ impl BuiltinUDFs {
                     handler,
                     headers,
                     language,
+                    immutable,
                 } => {
                     let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                     for arg_type in arg_types {
@@ -65,6 +66,7 @@ impl BuiltinUDFs {
                         arg_datatypes,
                         return_type,
                         "Built-in UDF",
+                        immutable,
                     );
 
                     Ok(udf)

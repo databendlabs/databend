@@ -17,11 +17,11 @@ use std::time::Duration;
 use map_api::match_seq::errors::ConflictSeq;
 use map_api::match_seq::MatchSeq;
 use map_api::match_seq::MatchSeqExt;
+use state_machine_api::KVMeta;
+use state_machine_api::SeqV;
 
-use crate::flexible_timestamp_to_duration;
 use crate::protobuf as pb;
-use crate::seq_value::KVMeta;
-use crate::seq_value::SeqV;
+use crate::time::flexible_timestamp_to_duration;
 
 impl From<KVMeta> for pb::KvMeta {
     fn from(m: KVMeta) -> Self {

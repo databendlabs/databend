@@ -46,7 +46,6 @@ use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
-use databend_common_meta_types::SeqValue;
 
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
@@ -88,7 +87,7 @@ impl DefaultDatabase {
                 Arc::new(TableInfo {
                     ident: TableIdent {
                         table_id: id.table_id,
-                        seq: meta.seq(),
+                        seq: meta.seq,
                     },
                     desc: format!("'{}'.'{}'", self.get_db_name(), name),
                     name: name.to_string(),
@@ -167,7 +166,7 @@ impl Database for DefaultDatabase {
                 Arc::new(TableInfo {
                     ident: TableIdent {
                         table_id: table_id.table_id,
-                        seq: seqv.seq(),
+                        seq: seqv.seq,
                     },
                     desc: format!(
                         "'{}'.'{}'",
@@ -216,7 +215,7 @@ impl Database for DefaultDatabase {
                 Arc::new(TableInfo::new_full(
                     self.get_db_name(),
                     &niv.name().table_name,
-                    TableIdent::new(niv.id().table_id, niv.value().seq()),
+                    TableIdent::new(niv.id().table_id, niv.value().seq),
                     niv.value().data.clone(),
                     Arc::new(CatalogInfo::default()),
                     DatabaseType::NormalDB,

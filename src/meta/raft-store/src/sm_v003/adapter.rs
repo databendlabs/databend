@@ -20,10 +20,10 @@ use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::sys_data::SysData;
 use rotbl::v001::SeqMarked;
+use state_machine_api::UserKey;
 
 use crate::key_spaces::SMEntry;
 use crate::leveled_store::rotbl_codec::RotblCodec;
-use crate::marked::Marked;
 use crate::state_machine::StateMachineMetaKey;
 
 /// Convert V002 snapshot lines in json of [`SMEntry`]
@@ -82,13 +82,14 @@ impl SMEntryV002ToV004 {
                     value.seq = 1;
                 }
 
-                let marked = Marked::from(value);
+                let marked = SeqMarked::from(value);
                 let (k, v) = RotblCodec::encode_key_seq_marked(&key, marked)?;
                 return Ok(Some((k, v)));
             }
             SMEntry::GenericKV { key, value } => {
-                let marked = Marked::from(value);
-                let (k, v) = RotblCodec::encode_key_seq_marked(&key, marked)?;
+                let marked = SeqMarked::from(value);
+                let (k, v) =
+                    RotblCodec::encode_key_seq_marked(UserKey::from_string_ref(&key), marked)?;
                 return Ok(Some((k, v)));
             }
             SMEntry::Sequences { key: _, value } => {

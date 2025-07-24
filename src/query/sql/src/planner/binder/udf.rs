@@ -84,6 +84,7 @@ impl Binder {
                 handler,
                 headers,
                 language,
+                immutable,
             } => {
                 UDFValidator::is_udf_server_allowed(address.as_str())?;
 
@@ -113,13 +114,14 @@ impl Binder {
                     UDF_CLIENT_USER_AGENT.as_str(),
                 )?;
 
-                let mut client = UDFFlightClient::connect(endpoint, connect_timeout, batch_rows)
-                    .await?
-                    .with_tenant(self.ctx.get_tenant().tenant_name())?
-                    .with_func_name(&name)?
-                    .with_handler_name(handler)?
-                    .with_query_id(&self.ctx.get_id())?
-                    .with_headers(headers.iter())?;
+                let mut client =
+                    UDFFlightClient::connect(handler, endpoint, connect_timeout, batch_rows)
+                        .await?
+                        .with_tenant(self.ctx.get_tenant().tenant_name())?
+                        .with_func_name(&name)?
+                        .with_handler_name(handler)?
+                        .with_query_id(&self.ctx.get_id())?
+                        .with_headers(headers.iter())?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
@@ -134,6 +136,7 @@ impl Binder {
                         handler: handler.clone(),
                         headers: headers.clone(),
                         language: language.clone(),
+                        immutable: *immutable,
                     }),
                     created_on: Utc::now(),
                 })
@@ -148,6 +151,7 @@ impl Binder {
                 runtime_version,
                 imports,
                 packages,
+                immutable,
             } => {
                 UDFValidator::is_udf_script_allowed(&language.parse()?)?;
                 let definition = create_udf_definition_script(
@@ -160,6 +164,7 @@ impl Binder {
                     handler,
                     language,
                     code,
+                    *immutable,
                 )?;
                 Ok(UserDefinedFunction {
                     name,
@@ -188,6 +193,7 @@ impl Binder {
                     "",
                     language,
                     code,
+                    None,
                 )?;
                 Ok(UserDefinedFunction {
                     name,
@@ -268,6 +274,7 @@ fn create_udf_definition_script(
     handler: &str,
     language: &str,
     code: &str,
+    immutable: Option<bool>,
 ) -> Result<PlanUDFDefinition> {
     let Ok(language) = language.parse::<UDFLanguage>() else {
         return Err(ErrorCode::InvalidArgument(format!(
@@ -329,6 +336,7 @@ fn create_udf_definition_script(
             handler: handler.to_string(),
             language: language.to_string(),
             runtime_version,
+            immutable,
         })),
     }
 }

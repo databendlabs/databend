@@ -721,6 +721,8 @@ pub enum TokenKind {
     IDENTIFIER,
     #[token("IF", ignore(ascii_case))]
     IF,
+    #[token("IMMUTABLE", ignore(ascii_case))]
+    IMMUTABLE,
     #[token("IN", ignore(ascii_case))]
     IN,
     #[token("INCLUDE_QUERY_ID", ignore(ascii_case))]
@@ -1134,6 +1136,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("ACCESS", ignore(ascii_case))]
+    ACCESS,
     #[token("USE_LOGIC_TYPE", ignore(ascii_case))]
     USE_LOGIC_TYPE,
     #[token("USE_RAW_PATH", ignore(ascii_case))]
@@ -1280,6 +1284,8 @@ pub enum TokenKind {
     VECTOR,
     #[token("VERBOSE", ignore(ascii_case))]
     VERBOSE,
+    #[token("VOLATILE", ignore(ascii_case))]
+    VOLATILE,
     #[token("GRAPHICAL", ignore(ascii_case))]
     GRAPHICAL,
     #[token("VIEW", ignore(ascii_case))]

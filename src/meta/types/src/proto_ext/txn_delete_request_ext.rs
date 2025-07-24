@@ -17,6 +17,16 @@ use std::fmt::Formatter;
 
 use crate::TxnDeleteRequest;
 
+impl TxnDeleteRequest {
+    pub fn new(key: impl ToString, prev_value: bool, match_seq: Option<u64>) -> Self {
+        Self {
+            key: key.to_string(),
+            prev_value,
+            match_seq,
+        }
+    }
+}
+
 impl Display for TxnDeleteRequest {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "Delete key={}", self.key)

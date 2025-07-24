@@ -13,26 +13,28 @@
 // limitations under the License.
 
 //! Implement the conversion between `rotbl::SeqMarked` and `Marked` that is used by this crate.
+//!
+//! `UserKey`
+//! `SeqV <-> SeqMarked<(Option<KVMeta>, bytes)> <-> SeqMarked`
+//!
+//! `ExpireKey`
+//! `ExpireValue <-> SeqMarked<String> <-> SeqMarked`
 
 use std::io;
 
-use databend_common_meta_types::seq_value::KVMeta;
+use rotbl::v001::Marked;
 use rotbl::v001::SeqMarked;
+use state_machine_api::KVMeta;
+use state_machine_api::MetaValue;
 
 use crate::leveled_store::value_convert::ValueConvert;
-use crate::marked::Marked;
 
-impl ValueConvert<SeqMarked> for Marked {
+impl ValueConvert<SeqMarked> for SeqMarked<MetaValue> {
     fn conv_to(self) -> Result<SeqMarked, io::Error> {
-        // internal_seq() is the storage seq of the record.
-        // seq() returns seq for user, which 0 for a tombstone.
-        let seq_marked = match self {
-            Marked::TombStone { internal_seq } => SeqMarked::new_tombstone(internal_seq),
-            Marked::Normal {
-                internal_seq,
-                value,
-                meta,
-            } => {
+        let (seq, data) = self.into_parts();
+        let seq_marked = match data {
+            Marked::TombStone => SeqMarked::new_tombstone(seq),
+            Marked::Normal((meta, value)) => {
                 let kv_meta_str = serde_json::to_string(&meta).map_err(|e| {
                     io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -50,17 +52,20 @@ impl ValueConvert<SeqMarked> for Marked {
                     )
                 })?;
 
-                SeqMarked::new_normal(internal_seq, d)
+                SeqMarked::new_normal(seq, d)
             }
         };
         Ok(seq_marked)
     }
 
     fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
-        let seq = seq_marked.seq();
+        let (seq, data) = seq_marked.into_parts();
 
-        let Some(data) = seq_marked.into_data() else {
-            return Ok(Marked::new_tombstone(seq));
+        let data = match data {
+            Marked::TombStone => {
+                return Ok(SeqMarked::new_tombstone(seq));
+            }
+            Marked::Normal(bytes) => bytes,
         };
 
         // version, meta, value
@@ -97,20 +102,31 @@ impl ValueConvert<SeqMarked> for Marked {
             )
         })?;
 
-        let marked = Marked::new_with_meta(seq, value, kv_meta);
+        let marked = SeqMarked::new_normal(seq, (kv_meta, value));
         Ok(marked)
     }
 }
 
-impl ValueConvert<SeqMarked> for Marked<String> {
+/// Conversion for ExpireValue
+impl ValueConvert<SeqMarked> for SeqMarked<String> {
     fn conv_to(self) -> Result<SeqMarked, io::Error> {
-        let marked = Marked::<Vec<u8>>::from(self);
+        let marked = self.map(|s| (None::<KVMeta>, s.into_bytes()));
+
         marked.conv_to()
     }
 
     fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
-        let marked = Marked::<Vec<u8>>::conv_from(seq_marked)?;
-        Marked::<String>::try_from(marked)
+        let marked = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_marked)?;
+        let marked = marked.try_map(|(_meta, value)| {
+            String::from_utf8(value).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("fail to decode String from bytes: {}", e),
+                )
+            })
+        })?;
+
+        Ok(marked)
     }
 }
 
@@ -128,54 +144,46 @@ mod tests {
     #[test]
     fn test_marked_of_string_try_from_seq_marked() -> io::Result<()> {
         t_string_try_from(
-            Marked::<String>::new_with_meta(1, s("hello"), None),
+            SeqMarked::<String>::new_normal(1, s("hello")),
             SeqMarked::new_normal(1, b("\x01\x04null\x05hello")),
         );
 
         t_string_try_from(
-            Marked::<String>::new_with_meta(1, s("hello"), Some(KVMeta::new_expires_at(20))),
-            SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello")),
-        );
-
-        t_string_try_from(
-            Marked::<String>::new_tombstone(2),
+            SeqMarked::<String>::new_tombstone(2),
             SeqMarked::new_tombstone(2),
         );
         Ok(())
     }
 
-    fn t_string_try_from(marked: Marked<String>, seq_marked: SeqMarked) {
+    fn t_string_try_from(marked: SeqMarked<String>, seq_marked: SeqMarked) {
         let got: SeqMarked = marked.clone().conv_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got = Marked::<String>::conv_from(got).unwrap();
+        let got = SeqMarked::<String>::conv_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
     #[test]
     fn test_marked_try_from_seq_marked() -> io::Result<()> {
         t_try_from(
-            Marked::new_with_meta(1, b("hello"), None),
+            SeqMarked::new_normal(1, (None, b("hello"))),
             SeqMarked::new_normal(1, b("\x01\x04null\x05hello")),
         );
 
         t_try_from(
-            Marked::new_with_meta(1, b("hello"), Some(KVMeta::new_expires_at(20))),
+            SeqMarked::new_normal(1, (Some(KVMeta::new_expires_at(20)), b("hello"))),
             SeqMarked::new_normal(1, b("\x01\x10{\"expire_at\":20}\x05hello")),
         );
 
-        t_try_from(
-            Marked::<Vec<u8>>::new_tombstone(2),
-            SeqMarked::new_tombstone(2),
-        );
+        t_try_from(SeqMarked::new_tombstone(2), SeqMarked::new_tombstone(2));
         Ok(())
     }
 
-    fn t_try_from(marked: Marked, seq_marked: SeqMarked) {
+    fn t_try_from(marked: SeqMarked<MetaValue>, seq_marked: SeqMarked) {
         let got: SeqMarked = marked.clone().conv_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got = Marked::conv_from(got).unwrap();
+        let got = SeqMarked::conv_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
@@ -203,7 +211,7 @@ mod tests {
     }
 
     fn t_invalid(seq_mark: SeqMarked, want_err: impl ToString) {
-        let res = Marked::<Vec<u8>>::conv_from(seq_mark);
+        let res = SeqMarked::<(Option<KVMeta>, Vec<u8>)>::conv_from(seq_mark);
         let err = res.unwrap_err();
         assert_eq!(want_err.to_string(), err.to_string());
     }

@@ -78,6 +78,8 @@ use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F32;
+use databend_common_expression::udf_client::UDFFlightClient;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
@@ -116,6 +118,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
+use databend_common_version::UDF_CLIENT_USER_AGENT;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use derive_visitor::Visitor;
@@ -4435,10 +4438,11 @@ impl<'a> TypeChecker<'a> {
                     ..
                 })] => {
                     let col_data_type = data_type.remove_nullable();
+                    let target_type = target_type.remove_nullable();
                     if table_index.is_some()
                         && matches!(col_data_type, DataType::Vector(_))
                         && matches!(&**argument, ScalarExpr::ConstantExpr(_))
-                        && matches!(&**target_type, DataType::Vector(_))
+                        && matches!(&target_type, DataType::Vector(_))
                         && LicenseManagerSwitch::instance()
                             .check_enterprise_enabled(
                                 self.ctx.get_license_key(),
@@ -4511,6 +4515,7 @@ impl<'a> TypeChecker<'a> {
                                 let Scalar::Array(arg_col) = arg.value else {
                                     return None;
                                 };
+                                let arg_col = arg_col.remove_nullable();
 
                                 let col_vector_type = col_data_type.as_vector().unwrap();
                                 let col_dimension = col_vector_type.dimension() as usize;
@@ -4789,14 +4794,43 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
+        let mut all_args_const = true;
         let mut args = Vec::with_capacity(arguments.len());
         for (argument, dest_type) in arguments.iter().zip(udf_definition.arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;
+            // TODO: support cast constant
+            if !matches!(arg, ScalarExpr::ConstantExpr(_)) || ty != dest_type.remove_nullable() {
+                all_args_const = false;
+            }
             if ty != *dest_type {
                 args.push(wrap_cast(&arg, dest_type));
             } else {
                 args.push(arg);
             }
+        }
+        let immutable = udf_definition.immutable.unwrap_or_default();
+        if immutable && all_args_const {
+            let mut arg_scalars = Vec::with_capacity(args.len());
+            for arg in &args {
+                let arg_scalar = match arg {
+                    ScalarExpr::ConstantExpr(constant) => constant.value.clone(),
+                    ScalarExpr::CastExpr(cast) => {
+                        let constant = ConstantExpr::try_from(*cast.argument.clone()).unwrap();
+                        constant.value.clone()
+                    }
+                    _ => unreachable!(),
+                };
+                arg_scalars.push(arg_scalar);
+            }
+            let value = databend_common_base::runtime::block_on(self.fold_udf_server(
+                name.as_str(),
+                arg_scalars,
+                udf_definition.clone(),
+            ))?;
+            return Ok(Box::new((
+                ConstantExpr { span, value }.into(),
+                udf_definition.return_type.clone(),
+            )));
         }
 
         let arg_names = arguments.iter().map(|arg| format!("{}", arg)).join(", ");
@@ -4819,6 +4853,54 @@ impl<'a> TypeChecker<'a> {
             .into(),
             udf_definition.return_type.clone(),
         )))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn fold_udf_server(
+        &mut self,
+        name: &str,
+        args: Vec<Scalar>,
+        udf_definition: UDFServer,
+    ) -> Result<Scalar> {
+        let mut block_entries = Vec::with_capacity(args.len());
+        for (arg, dest_type) in args.into_iter().zip(udf_definition.arg_types.iter()) {
+            let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
+            block_entries.push(entry);
+        }
+
+        let settings = self.ctx.get_settings();
+        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
+        let request_timeout = settings.get_external_server_request_timeout_secs()?;
+
+        let endpoint = UDFFlightClient::build_endpoint(
+            &udf_definition.address,
+            connect_timeout,
+            request_timeout,
+            UDF_CLIENT_USER_AGENT.as_str(),
+        )?;
+
+        let num_rows = 1;
+        let mut client =
+            UDFFlightClient::connect(&udf_definition.handler, endpoint, connect_timeout, num_rows)
+                .await?
+                .with_tenant(self.ctx.get_tenant().tenant_name())?
+                .with_func_name(name)?
+                .with_handler_name(&udf_definition.handler)?
+                .with_query_id(&self.ctx.get_id())?
+                .with_headers(udf_definition.headers)?;
+
+        let result = client
+            .do_exchange(
+                name,
+                &udf_definition.handler,
+                num_rows,
+                block_entries,
+                &udf_definition.return_type,
+            )
+            .await?;
+
+        let value = unsafe { result.index_unchecked(0) };
+        Ok(value.to_owned())
     }
 
     async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
@@ -4902,6 +4984,7 @@ impl<'a> TypeChecker<'a> {
             runtime_version,
             imports,
             packages,
+            immutable: _immutable,
         } = udf_definition;
 
         let language = language.parse()?;
