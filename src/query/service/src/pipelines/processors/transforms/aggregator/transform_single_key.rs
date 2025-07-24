@@ -93,18 +93,19 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             self.first_block_start = Some(Instant::now());
         }
 
-        let is_agg_index_block = block
+        let meta = block
             .get_meta()
             .and_then(AggIndexMeta::downcast_ref_from)
-            .map(|index| index.is_agg)
-            .unwrap_or_default();
+            .copied();
 
         let block = block.consume_convert_to_full();
-        if is_agg_index_block {
+        if let Some(meta) = meta
+            && meta.is_agg
+        {
+            assert_eq!(self.states_layout.num_aggr_func(), meta.num_agg_funcs);
             // Aggregation states are in the back of the block.
-            let states_indices = (block.num_columns() - self.states_layout.states_loc.len()
-                ..block.num_columns())
-                .collect::<Vec<_>>();
+            let start = block.num_columns() - self.states_layout.num_aggr_func();
+            let states_indices = (start..block.num_columns()).collect::<Vec<_>>();
             let states = ProjectedBlock::project(&states_indices, &block);
 
             for ((place, func), state) in self

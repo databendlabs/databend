@@ -129,37 +129,48 @@ impl RuleStatsAggregateOptimizer {
                     for (need_rewrite_agg, agg) in
                         need_rewrite_aggs.iter().zip(agg.aggregate_functions.iter())
                     {
-                        if matches!(agg.scalar, ScalarExpr::UDAFCall(_)) {
-                            agg_results.push(agg.clone());
-                            continue;
-                        }
+                        let column = if let ScalarExpr::UDAFCall(udaf) = &agg.scalar {
+                            ColumnBindingBuilder::new(
+                                udaf.display_name.clone(),
+                                agg.index,
+                                udaf.return_type.clone(),
+                                Visibility::Visible,
+                            )
+                            .build()
+                        } else {
+                            let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
+                            if let Some((col_id, name)) = need_rewrite_agg {
+                                if let Some(stat) = stats.get(col_id) {
+                                    let value_bound = if name.eq_ignore_ascii_case("min") {
+                                        &stat.min
+                                    } else {
+                                        &stat.max
+                                    };
+                                    if !value_bound.may_be_truncated {
+                                        let scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                            span: agg.scalar.span(),
+                                            value: value_bound.value.clone(),
+                                        });
 
-                        let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
+                                        let scalar = scalar
+                                            .unify_to_data_type(agg_func.return_type.as_ref());
 
-                        if let Some((col_id, name)) = need_rewrite_agg {
-                            if let Some(stat) = stats.get(col_id) {
-                                let value_bound = if name.eq_ignore_ascii_case("min") {
-                                    &stat.min
-                                } else {
-                                    &stat.max
-                                };
-                                if !value_bound.may_be_truncated {
-                                    let scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                                        span: agg.scalar.span(),
-                                        value: value_bound.value.clone(),
-                                    });
-
-                                    let scalar =
-                                        scalar.unify_to_data_type(agg_func.return_type.as_ref());
-
-                                    eval_scalar_results.push(ScalarItem {
-                                        index: agg.index,
-                                        scalar,
-                                    });
-                                    continue;
+                                        eval_scalar_results.push(ScalarItem {
+                                            index: agg.index,
+                                            scalar,
+                                        });
+                                        continue;
+                                    }
                                 }
                             }
-                        }
+                            ColumnBindingBuilder::new(
+                                agg_func.display_name.clone(),
+                                agg.index,
+                                agg_func.return_type.clone(),
+                                Visibility::Visible,
+                            )
+                            .build()
+                        };
 
                         // Add other aggregate functions as derived column,
                         // this will be used in aggregating index rewrite.
@@ -167,13 +178,7 @@ impl RuleStatsAggregateOptimizer {
                             index: agg.index,
                             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                                 span: agg.scalar.span(),
-                                column: ColumnBindingBuilder::new(
-                                    agg_func.display_name.clone(),
-                                    agg.index,
-                                    agg_func.return_type.clone(),
-                                    Visibility::Visible,
-                                )
-                                .build(),
+                                column,
                             }),
                         });
                         agg_results.push(agg.clone());

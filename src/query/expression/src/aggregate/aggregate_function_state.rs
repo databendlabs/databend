@@ -228,6 +228,10 @@ pub struct StatesLayout {
 }
 
 impl StatesLayout {
+    pub fn num_aggr_func(&self) -> usize {
+        self.states_loc.len()
+    }
+
     pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
         self.serialize_type
             .iter()
