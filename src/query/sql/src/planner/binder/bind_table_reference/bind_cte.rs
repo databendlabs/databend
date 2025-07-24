@@ -178,7 +178,7 @@ impl Binder {
                 let (s_expr, bind_context) =
                     self.bind_cte_definition(&cte_name, &cte_context.cte_map, &cte.query)?;
 
-                let materialized_cte = MaterializedCTE::new(cte_name, bind_context.columns);
+                let materialized_cte = MaterializedCTE::new(cte_name, Some(bind_context.columns));
                 let materialized_cte = SExpr::create_unary(materialized_cte, s_expr);
                 let sequence = Sequence {};
                 current_expr = SExpr::create_binary(sequence, materialized_cte, current_expr);

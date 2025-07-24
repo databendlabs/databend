@@ -21,13 +21,15 @@ impl PipelineBuilder {
     pub(crate) fn build_materialized_cte(&mut self, cte: &MaterializedCTE) -> Result<()> {
         self.build_pipeline(&cte.input)?;
         let input_schema = cte.input.output_schema()?;
-        Self::build_result_projection(
-            &self.func_ctx,
-            input_schema,
-            &cte.cte_output_columns,
-            &mut self.main_pipeline,
-            false,
-        )?;
+        if let Some(output_columns) = &cte.cte_output_columns {
+            Self::build_result_projection(
+                &self.func_ctx,
+                input_schema,
+                output_columns,
+                &mut self.main_pipeline,
+                false,
+            )?;
+        }
         self.main_pipeline.try_resize(1)?;
         let tx = self
             .ctx
