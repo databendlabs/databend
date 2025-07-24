@@ -25,6 +25,7 @@ use crate::optimizer::optimizers::rule::RuleEliminateSort;
 use crate::optimizer::optimizers::rule::RuleEliminateUnion;
 use crate::optimizer::optimizers::rule::RuleFilterNulls;
 use crate::optimizer::optimizers::rule::RuleFoldCountAggregate;
+use crate::optimizer::optimizers::rule::RuleGroupingSetsToUnion;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::RuleLeftExchangeJoin;
 use crate::optimizer::optimizers::rule::RuleMergeEvalScalar;
@@ -101,6 +102,7 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
+            RuleID::RuleGroupingSetsToUnion => Ok(Box::new(RuleGroupingSetsToUnion::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::CommuteJoin => Ok(Box::new(RuleCommuteJoin::new())),

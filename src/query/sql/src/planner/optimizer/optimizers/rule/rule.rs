@@ -58,6 +58,7 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
+        RuleID::RuleGroupingSetsToUnion,
     ]
 });
 
@@ -112,6 +113,7 @@ pub enum RuleID {
     EliminateSort,
     MergeEvalScalar,
     MergeFilter,
+    RuleGroupingSetsToUnion,
     SplitAggregate,
     FoldCountAggregate,
     PushDownPrewhere,
@@ -156,6 +158,7 @@ impl Display for RuleID {
             RuleID::MergeEvalScalar => write!(f, "MergeEvalScalar"),
             RuleID::MergeFilter => write!(f, "MergeFilter"),
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
+            RuleID::RuleGroupingSetsToUnion => write!(f, "RuleGroupingSetsToUnion"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
