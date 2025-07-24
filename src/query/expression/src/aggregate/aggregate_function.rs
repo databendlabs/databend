@@ -22,6 +22,10 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
+use crate::types::AnyPairType;
+use crate::types::AnyQuaternaryType;
+use crate::types::AnyTernaryType;
+use crate::types::AnyUnaryType;
 use crate::types::DataType;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
@@ -81,28 +85,86 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()>;
 
-    /// Batch merge and deserialize the state from binary array
+    /// Batch deserialize the state and merge
     fn batch_merge(
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
         state: &BlockEntry,
     ) -> Result<()> {
-        let column = state.to_column();
-        for (place, data) in places.iter().zip(column.iter()) {
-            self.merge(
-                AggrState::new(*place, loc),
-                data.as_tuple().unwrap().as_slice(),
-            )?;
+        match state.data_type().as_tuple().unwrap().len() {
+            1 => {
+                let view = state.downcast::<AnyUnaryType>().unwrap();
+                for (place, data) in places.iter().zip(view.iter()) {
+                    self.merge(AggrState::new(*place, loc), &[data])?;
+                }
+            }
+            2 => {
+                let view = state.downcast::<AnyPairType>().unwrap();
+                for (place, data) in places.iter().zip(view.iter()) {
+                    self.merge(AggrState::new(*place, loc), &[data.0, data.1])?;
+                }
+            }
+            3 => {
+                let view = state.downcast::<AnyTernaryType>().unwrap();
+                for (place, data) in places.iter().zip(view.iter()) {
+                    self.merge(AggrState::new(*place, loc), &[data.0, data.1, data.2])?;
+                }
+            }
+            4 => {
+                let view = state.downcast::<AnyQuaternaryType>().unwrap();
+                for (place, data) in places.iter().zip(view.iter()) {
+                    self.merge(AggrState::new(*place, loc), &[
+                        data.0, data.1, data.2, data.3,
+                    ])?;
+                }
+            }
+            _ => {
+                let state = state.to_column();
+                for (place, data) in places.iter().zip(state.iter()) {
+                    self.merge(
+                        AggrState::new(*place, loc),
+                        data.as_tuple().unwrap().as_slice(),
+                    )?;
+                }
+            }
         }
 
         Ok(())
     }
 
     fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
-        let column = state.to_column();
-        for data in column.iter() {
-            self.merge(place, data.as_tuple().unwrap().as_slice())?;
+        match state.data_type().as_tuple().unwrap().len() {
+            1 => {
+                let view = state.downcast::<AnyUnaryType>().unwrap();
+                for data in view.iter() {
+                    self.merge(place, &[data])?;
+                }
+            }
+            2 => {
+                let view = state.downcast::<AnyPairType>().unwrap();
+                for data in view.iter() {
+                    self.merge(place, &[data.0, data.1])?;
+                }
+            }
+            3 => {
+                let view = state.downcast::<AnyTernaryType>().unwrap();
+                for data in view.iter() {
+                    self.merge(place, &[data.0, data.1, data.2])?;
+                }
+            }
+            4 => {
+                let view = state.downcast::<AnyQuaternaryType>().unwrap();
+                for data in view.iter() {
+                    self.merge(place, &[data.0, data.1, data.2, data.3])?;
+                }
+            }
+            _ => {
+                let state = state.to_column();
+                for data in state.iter() {
+                    self.merge(place, data.as_tuple().unwrap().as_slice())?;
+                }
+            }
         }
         Ok(())
     }
