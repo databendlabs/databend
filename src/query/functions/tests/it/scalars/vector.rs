@@ -14,6 +14,8 @@
 
 use std::io::Write;
 
+use databend_common_expression::types::*;
+use databend_common_expression::FromData;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -26,6 +28,9 @@ fn test_vector() {
     test_vector_cosine_distance(file);
     test_vector_l1_distance(file);
     test_vector_l2_distance(file);
+    test_vector_inner_product(file);
+    test_vector_vector_dims(file);
+    test_vector_vector_norm(file);
 }
 
 fn test_vector_cosine_distance(file: &mut impl Write) {
@@ -48,6 +53,16 @@ fn test_vector_cosine_distance(file: &mut impl Write) {
         "cosine_distance([1,0]::vector(2), [0,1]::vector(2))",
         &[],
     );
+    run_ast(
+        file,
+        "cosine_distance([a, b]::vector(2), [c, d]::vector(2))",
+        &[
+            ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+            ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+            ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+            ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+        ],
+    );
 }
 
 fn test_vector_l1_distance(file: &mut impl Write) {
@@ -65,6 +80,16 @@ fn test_vector_l1_distance(file: &mut impl Write) {
         &[],
     );
     run_ast(file, "l1_distance([1,2]::vector(2), [3,4]::vector(2))", &[]);
+    run_ast(
+        file,
+        "l1_distance([a, b]::vector(2), [c, d]::vector(2))",
+        &[
+            ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+            ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+            ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+            ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+        ],
+    );
 }
 
 fn test_vector_l2_distance(file: &mut impl Write) {
@@ -82,4 +107,66 @@ fn test_vector_l2_distance(file: &mut impl Write) {
         &[],
     );
     run_ast(file, "l2_distance([1,2]::vector(2), [3,4]::vector(2))", &[]);
+    run_ast(
+        file,
+        "l2_distance([a, b]::vector(2), [c, d]::vector(2))",
+        &[
+            ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+            ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+            ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+            ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+        ],
+    );
+}
+
+fn test_vector_inner_product(file: &mut impl Write) {
+    run_ast(file, "inner_product([1,0,0], [1,0,0])", &[]);
+    run_ast(file, "inner_product([1,0,0], [-1,0,0])", &[]);
+    run_ast(file, "inner_product([1,2,3], [4,5,6])", &[]);
+    run_ast(file, "inner_product([0,0,0], [1,2,3])", &[]);
+    run_ast(
+        file,
+        "inner_product([1,-2,3]::vector(3), [-4,5,-6]::vector(3))",
+        &[],
+    );
+    run_ast(
+        file,
+        "inner_product([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))",
+        &[],
+    );
+    run_ast(
+        file,
+        "inner_product([1,0]::vector(2), [0,1]::vector(2))",
+        &[],
+    );
+    run_ast(
+        file,
+        "inner_product([a, b]::vector(2), [c, d]::vector(2))",
+        &[
+            ("a", Float32Type::from_data(vec![1.0f32, 5.1, 9.4])),
+            ("b", Float32Type::from_data(vec![2.0f32, 6.2, 10.6])),
+            ("c", Float32Type::from_data(vec![3.0f32, 7.3, 11.1])),
+            ("d", Float32Type::from_data(vec![4.0f32, 8.4, 12.3])),
+        ],
+    );
+}
+
+fn test_vector_vector_dims(file: &mut impl Write) {
+    run_ast(file, "vector_dims([1,-2]::vector(2))", &[]);
+    run_ast(file, "vector_dims([0.1,0.2,0.3]::vector(3))", &[]);
+    run_ast(file, "vector_dims([a, b, c]::vector(3))", &[
+        ("a", Float32Type::from_data(vec![1.0f32, 4.0, 7.0])),
+        ("b", Float32Type::from_data(vec![2.0f32, 5.0, 8.0])),
+        ("c", Float32Type::from_data(vec![3.0f32, 6.0, 9.0])),
+    ]);
+}
+
+fn test_vector_vector_norm(file: &mut impl Write) {
+    run_ast(file, "vector_norm([1,-2]::vector(2))", &[]);
+    run_ast(file, "vector_norm([0.1,0.2,0.3]::vector(3))", &[]);
+    run_ast(file, "vector_norm([a, b, c]::vector(3))", &[
+        ("a", Float32Type::from_data(vec![1.0f32, 4.0, 7.0])),
+        ("b", Float32Type::from_data(vec![2.0f32, 5.0, 8.0])),
+        ("c", Float32Type::from_data(vec![3.0f32, 6.0, 9.0])),
+    ]);
 }

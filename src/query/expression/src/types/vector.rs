@@ -288,6 +288,13 @@ impl VectorScalar {
             VectorScalar::Float32(vals) => vals.len() * 4,
         }
     }
+
+    pub const fn dimension(&self) -> usize {
+        match self {
+            VectorScalar::Int8(vals) => vals.len(),
+            VectorScalar::Float32(vals) => vals.len(),
+        }
+    }
 }
 
 impl<'a> VectorScalarRef<'a> {
@@ -309,6 +316,13 @@ impl<'a> VectorScalarRef<'a> {
         match self {
             VectorScalarRef::Int8(vals) => vals.len(),
             VectorScalarRef::Float32(vals) => vals.len() * 4,
+        }
+    }
+
+    pub const fn dimension(&self) -> usize {
+        match self {
+            VectorScalarRef::Int8(vals) => vals.len(),
+            VectorScalarRef::Float32(vals) => vals.len(),
         }
     }
 
