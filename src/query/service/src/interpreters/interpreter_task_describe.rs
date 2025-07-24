@@ -14,16 +14,12 @@
 
 use std::sync::Arc;
 
-use databend_common_cloud_control::client_config::make_request;
-use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::DescribeTaskRequest;
-use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DescribeTaskPlan;
 use databend_common_storages_system::parse_tasks_to_datablock;
 
-use crate::interpreters::common::get_task_client_config;
+use crate::interpreters::task::TaskInterpreter;
+use crate::interpreters::task::TaskInterpreterManager;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -40,17 +36,6 @@ impl DescribeTaskInterpreter {
     }
 }
 
-impl DescribeTaskInterpreter {
-    fn build_request(&self) -> DescribeTaskRequest {
-        let plan = self.plan.clone();
-        DescribeTaskRequest {
-            task_name: plan.task_name,
-            tenant_id: plan.tenant.tenant_name().to_string(),
-            if_exist: false,
-        }
-    }
-}
-
 #[async_trait::async_trait]
 impl Interpreter for DescribeTaskInterpreter {
     fn name(&self) -> &str {
@@ -64,23 +49,12 @@ impl Interpreter for DescribeTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let config = GlobalConfig::instance();
-        if config.query.cloud_control_grpc_server_address.is_none() {
-            return Err(ErrorCode::CloudControlNotEnabled(
-                "cannot describe task without cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        }
-        let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_task_client();
-        let req = self.build_request();
-        let config = get_task_client_config(self.ctx.clone(), cloud_api.get_timeout())?;
-        let req = make_request(req, config);
-        let resp = task_client.describe_task(req).await?;
-        if resp.task.is_none() {
+        let Some(task) = TaskInterpreterManager::build(&self.ctx)?
+            .describe_task(&self.ctx, &self.plan)
+            .await?
+        else {
             return Ok(PipelineBuildResult::create());
-        }
-        let tasks = vec![resp.task.unwrap()];
-        let result = parse_tasks_to_datablock(tasks)?;
-        PipelineBuildResult::from_blocks(vec![result])
+        };
+        PipelineBuildResult::from_blocks(vec![parse_tasks_to_datablock(vec![task])?])
     }
 }

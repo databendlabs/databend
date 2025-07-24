@@ -564,6 +564,51 @@ select * from _tmp_table order by field1;
 4
 5
 
+statement ok
+CREATE OR REPLACE TABLE test_update_udf(url STRING, length INT64);
+
+statement ok
+INSERT INTO test_update_udf (url) VALUES('databend.com'),('databend.cn');
+
+statement ok
+UPDATE test_update_udf SET length = url_len(url);
+
+query TI
+SELECT * FROM test_update_udf;
+----
+databend.com 12
+databend.cn 11
+
+
+statement ok
+CREATE OR REPLACE TABLE test_update_udf_1(url STRING, a INT64,b INT64,c INT64);
+
+statement ok
+CREATE OR REPLACE FUNCTION url_len_mul_100 (VARCHAR) RETURNS BIGINT LANGUAGE python IMMUTABLE HANDLER = 'url_len_mul_100' ADDRESS = 'http://0.0.0.0:8815';
+
+statement ok
+INSERT INTO test_update_udf_1 (url) VALUES('databend.com'),('databend.cn');
+
+statement ok
+UPDATE test_update_udf_1 SET a = url_len(url),b = url_len_mul_100(url), c = length(url) + 123;
+
+query TIII
+SELECT * FROM test_update_udf_1;
+----
+databend.com 12 1200 135
+databend.cn 11 1100 134
+
+statement ok
+UPDATE test_update_udf_1 SET b = url_len(url),c = url_len_mul_100(url), a = length(url) + 123;
+
+query TIII
+SELECT * FROM test_update_udf_1;
+----
+databend.com 135 12 1200
+databend.cn 134 11 1100
+
+
+
 query I
 SELECT url_len('databend.com');
 ----

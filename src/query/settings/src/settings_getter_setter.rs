@@ -1017,4 +1017,8 @@ impl Settings {
     pub fn get_enable_parallel_union_all(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parallel_union_all")? == 1)
     }
+
+    pub fn get_enforce_local(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enforce_local")? == 1)
+    }
 }

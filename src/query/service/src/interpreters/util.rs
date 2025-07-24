@@ -48,6 +48,18 @@ pub fn check_system_history(
     Ok(())
 }
 
+pub fn check_system_history_stage(
+    stage_name: &str,
+    sensitive_system_stage: &str,
+) -> databend_common_exception::Result<()> {
+    if stage_name.eq_ignore_ascii_case(sensitive_system_stage) {
+        return Err(ErrorCode::IllegalGrant(
+            "Can not modify system history stage {sensitive_system_stage} ownership",
+        ));
+    }
+    Ok(())
+}
+
 #[allow(clippy::type_complexity)]
 pub fn generate_desc_schema(
     schema: TableSchemaRef,

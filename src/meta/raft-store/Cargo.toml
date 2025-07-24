@@ -14,8 +14,6 @@ io-uring = ["databend-common-meta-sled-store/io-uring"]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true }
-byteorder = { workspace = true }
-chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
@@ -45,6 +43,7 @@ semver = { workspace = true }
 seq-marked = { workspace = true, features = ["seq-marked-serde", "seq-marked-bincode", "seqv-serde"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+state-machine-api = { workspace = true }
 stream-more = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }

@@ -29,6 +29,7 @@ use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CTEConsumer;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -52,6 +53,7 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::MutationSource;
 use crate::executor::physical_plans::ProjectSet;
@@ -61,6 +63,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Sequence;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -124,6 +127,9 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ChunkCommitInsert(plan) => self.replace_chunk_commit_insert(plan),
             PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
+            PhysicalPlan::MaterializedCTE(plan) => self.replace_materialized_cte(plan),
+            PhysicalPlan::CTEConsumer(plan) => self.replace_cte_consumer(plan),
+            PhysicalPlan::Sequence(plan) => self.replace_sequence(plan),
         }
     }
 
@@ -643,6 +649,33 @@ pub trait PhysicalPlanReplacer {
             },
         )))
     }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            stat_info: plan.stat_info.clone(),
+            cte_name: plan.cte_name.clone(),
+            cte_output_columns: plan.cte_output_columns.clone(),
+            ref_count: plan.ref_count,
+        })))
+    }
+
+    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
+    }
+
+    fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+        Ok(PhysicalPlan::Sequence(Box::new(Sequence {
+            plan_id: plan.plan_id,
+            stat_info: plan.stat_info.clone(),
+            left: Box::new(left),
+            right: Box::new(right),
+        })))
+    }
 }
 
 impl PhysicalPlan {
@@ -666,6 +699,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_)
+                | PhysicalPlan::CTEConsumer(_)
                 | PhysicalPlan::BroadcastSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
@@ -794,6 +828,13 @@ impl PhysicalPlan {
                 }
                 PhysicalPlan::BroadcastSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::MaterializedCTE(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::Sequence(plan) => {
+                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

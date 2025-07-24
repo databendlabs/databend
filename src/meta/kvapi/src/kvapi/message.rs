@@ -15,8 +15,8 @@
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
+use databend_common_meta_types::SeqV;
 use display_more::display_slice::DisplaySliceExt;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

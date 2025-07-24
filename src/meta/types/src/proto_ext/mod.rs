@@ -39,3 +39,5 @@ mod txn_delete_request_ext;
 mod txn_delete_response_ext;
 mod txn_put_request_ext;
 mod txn_put_response_ext;
+mod vote_request_ext;
+mod vote_response_ext;

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Defines application key spaces that are defined by raft-store.
-//! All of the key spaces stores key-value pairs in the underlying sled db.
+//! All the key spaces stores key-value pairs in the underlying sled db.
 
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledKeySpace;
@@ -26,17 +26,17 @@ use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::LogIndex;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Vote;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
 use serde::Deserialize;
 use serde::Serialize;
+use state_machine_api::ExpireKey;
+use state_machine_api::ExpireValue;
 
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::ExpireValue;
 use crate::state_machine::LogMetaKey;
 use crate::state_machine::LogMetaValue;
 use crate::state_machine::StateMachineMetaKey;

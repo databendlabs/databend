@@ -1115,7 +1115,6 @@ impl MetaNode {
         node_id: NodeId,
         node: Node,
     ) -> Result<AppliedState, MetaAPIError> {
-        // TODO: use txid?
         let cmd = Cmd::AddNode {
             node_id,
             node,

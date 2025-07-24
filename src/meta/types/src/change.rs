@@ -18,9 +18,8 @@ use std::fmt::Formatter;
 
 use serde::Deserialize;
 use serde::Serialize;
-
-use crate::seq_value::SeqV;
-use crate::seq_value::SeqValue;
+use state_machine_api::SeqV;
+use state_machine_api::SeqValue;
 
 /// `Change` describes a state transition: the states before and after an operation.
 ///

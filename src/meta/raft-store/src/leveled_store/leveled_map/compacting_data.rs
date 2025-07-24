@@ -24,6 +24,8 @@ use map_api::map_api_ro::MapApiRO;
 use map_api::IOResultStream;
 use map_api::MapKV;
 use rotbl::v001::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::UserKey;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
@@ -32,8 +34,6 @@ use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 use crate::utils::add_cooperative_yielding;
 
 /// The data to compact.

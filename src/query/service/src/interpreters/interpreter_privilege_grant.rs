@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
@@ -33,6 +34,7 @@ use log::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::util::check_system_history;
+use crate::interpreters::util::check_system_history_stage;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -110,9 +112,14 @@ impl GrantPrivilegeInterpreter {
                     db_id: *db_id,
                 })
             },
-            GrantObject::Stage(name) => Ok(OwnershipObject::Stage {
-                name: name.to_string(),
-            }),
+            GrantObject::Stage(name) => {
+                let config = GlobalConfig::instance();
+                let sensitive_system_stage = config.log.history.stage_name.clone();
+                check_system_history_stage(name, &sensitive_system_stage)?;
+                Ok(OwnershipObject::Stage {
+                    name: name.to_string(),
+                })
+            },
             GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
                 name: name.to_string(),
             }),

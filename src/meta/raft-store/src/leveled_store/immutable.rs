@@ -22,6 +22,9 @@ use std::sync::Arc;
 
 use map_api::map_api_ro::MapApiRO;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
@@ -29,9 +32,6 @@ use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapKV;
 use crate::leveled_store::map_api::SeqMarkedOf;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 /// A single **immutable** level of state machine data.
 ///

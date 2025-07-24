@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::seq_value::KVMeta;
 use futures_util::TryStreamExt;
 use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 use map_api::SeqMarked;
+use state_machine_api::KVMeta;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiHelper;
-use crate::state_machine::UserKey;
 
 #[tokio::test]
 async fn test_freeze() -> anyhow::Result<()> {

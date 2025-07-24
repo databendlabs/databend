@@ -16,9 +16,9 @@ use std::fmt;
 
 use display_more::DisplayUnixTimeStampExt;
 
-use crate::flexible_timestamp_to_duration;
 use crate::protobuf::KvMeta;
 use crate::protobuf::SeqV;
+use crate::time::flexible_timestamp_to_duration;
 
 impl fmt::Display for KvMeta {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -20,8 +20,6 @@ use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::BooleanExpression;
 use databend_common_meta_types::protobuf::FetchAddU64Response;
 use databend_common_meta_types::protobuf::KvMeta;
-use databend_common_meta_types::seq_value::KVMeta;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition;
 use databend_common_meta_types::txn_op;
 use databend_common_meta_types::txn_op_response;
@@ -30,6 +28,7 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -50,6 +49,7 @@ use fastrace::func_name;
 use fastrace::func_path;
 use log::debug;
 use log::info;
+use state_machine_api::KVMeta;
 use tokio::time::sleep;
 
 pub struct TestSuite {}
@@ -834,23 +834,19 @@ impl TestSuite {
                 TxnOp::put(txn_key2.clone(), b("new_v2")),
                 // get k1
                 TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
+                    request: Some(txn_op::Request::Get(TxnGetRequest::new(txn_key1.clone()))),
                 },
                 // delete k1
                 TxnOp {
-                    request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                        key: txn_key1.clone(),
-                        prev_value: true,
-                        match_seq: None,
-                    })),
+                    request: Some(txn_op::Request::Delete(TxnDeleteRequest::new(
+                        txn_key1.clone(),
+                        true,
+                        None,
+                    ))),
                 },
                 // get k1
                 TxnOp {
-                    request: Some(txn_op::Request::Get(TxnGetRequest {
-                        key: txn_key1.clone(),
-                    })),
+                    request: Some(txn_op::Request::Get(TxnGetRequest::new(txn_key1.clone()))),
                 },
             ];
 

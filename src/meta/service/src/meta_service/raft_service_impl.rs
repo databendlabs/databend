@@ -291,6 +291,41 @@ impl RaftService for RaftServiceImpl {
         .await
     }
 
+    async fn vote_v001(
+        &self,
+        request: Request<pb::VoteRequest>,
+    ) -> Result<Response<pb::VoteResponse>, Status> {
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
+        let remote_addr = remote_addr(&request);
+
+        async {
+            let v_req_pb = request.into_inner();
+
+            let v_req: VoteRequest = v_req_pb.into();
+
+            let v_req_summary = v_req.summary();
+
+            info!(
+                "RaftServiceImpl::vote_v001: from:{remote_addr} start: {}",
+                v_req_summary
+            );
+
+            let raft = &self.meta_node.raft;
+
+            let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
+
+            info!(
+                "RaftServiceImpl::vote_v001: from:{remote_addr} done: {}",
+                v_req_summary
+            );
+
+            let resp_pb = pb::VoteResponse::from(resp);
+            Ok(Response::new(resp_pb))
+        }
+        .in_span(root)
+        .await
+    }
+
     async fn transfer_leader(
         &self,
         request: Request<pb::TransferLeaderRequest>,
