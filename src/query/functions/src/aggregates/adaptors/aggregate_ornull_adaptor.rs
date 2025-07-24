@@ -20,6 +20,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
@@ -68,6 +70,11 @@ pub fn set_flag(place: AggrState, flag: bool) {
 pub fn get_flag(place: AggrState) -> bool {
     let c = place.addr.next(flag_offset(place)).get::<u8>();
     *c != 0
+}
+
+fn merge_flag(place: AggrState, other: bool) {
+    let flag = other || get_flag(place);
+    set_flag(place, flag);
 }
 
 fn flag_offset(place: AggrState) -> usize {
@@ -198,10 +205,39 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let flag = get_flag(place) || *data.last().and_then(ScalarRef::as_boolean).unwrap();
+        merge_flag(place, *data.last().and_then(ScalarRef::as_boolean).unwrap());
         self.inner
             .merge(place.remove_last_loc(), &data[..data.len() - 1])?;
-        set_flag(place, flag);
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+    ) -> Result<()> {
+        match state {
+            BlockEntry::Column(Column::Tuple(tuple)) => {
+                let flag = tuple.last().unwrap().as_boolean().unwrap();
+                for (place, flag) in places.iter().zip(flag.iter()) {
+                    merge_flag(AggrState::new(*place, loc), flag);
+                }
+                let inner_state = Column::Tuple(tuple[0..tuple.len() - 1].to_vec()).into();
+                self.inner
+                    .batch_merge(places, &loc[0..loc.len() - 1], &inner_state)?;
+            }
+            _ => {
+                let state = state.to_column();
+                for (place, data) in places.iter().zip(state.iter()) {
+                    self.merge(
+                        AggrState::new(*place, loc),
+                        data.as_tuple().unwrap().as_slice(),
+                    )?;
+                }
+            }
+        }
+
         Ok(())
     }
 

@@ -20,6 +20,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
@@ -313,6 +315,15 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.0.merge(place, data)
     }
 
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+    ) -> Result<()> {
+        self.0.batch_merge(places, loc, state)
+    }
+
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.0.merge_states(place, rhs)
     }
@@ -516,7 +527,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             return self.nested.merge(place, data);
         }
 
-        let n = data.len();
         let flag = *data.last().and_then(ScalarRef::as_boolean).unwrap();
         if !flag {
             return Ok(());
@@ -527,7 +537,56 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             self.init_state(place);
         }
         set_flag(place, true);
-        self.nested.merge(place.remove_last_loc(), &data[..n - 1])
+        self.nested
+            .merge(place.remove_last_loc(), &data[..data.len() - 1])
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+    ) -> Result<()> {
+        if !NULLABLE_RESULT {
+            return self.nested.batch_merge(places, loc, state);
+        }
+
+        match state {
+            BlockEntry::Column(Column::Tuple(tuple)) => {
+                let nested_state = tuple[0..tuple.len() - 1].to_vec();
+                let flag = tuple.last().unwrap().as_boolean().unwrap();
+
+                let places = places
+                    .iter()
+                    .zip(flag.iter())
+                    .filter_map(|(place, flag)| {
+                        if flag {
+                            let addr = AggrState::new(*place, loc);
+                            if !get_flag(addr) {
+                                // initial the state to remove the dirty stats
+                                self.init_state(AggrState::new(*place, loc));
+                            }
+                            set_flag(addr, true);
+                        }
+                        flag.then_some(*place)
+                    })
+                    .collect::<Vec<_>>();
+
+                let nested_state = Column::Tuple(nested_state).filter(flag).into();
+                self.nested
+                    .batch_merge(&places, &loc[..loc.len() - 1], &nested_state)
+            }
+            _ => {
+                let state = state.to_column();
+                for (place, data) in places.iter().zip(state.iter()) {
+                    self.merge(
+                        AggrState::new(*place, loc),
+                        data.as_tuple().unwrap().as_slice(),
+                    )?;
+                }
+                Ok(())
+            }
+        }
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

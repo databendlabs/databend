@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
@@ -118,6 +119,19 @@ impl AggregateFunction for AggregateStateCombinator {
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         self.nested.merge(place, data)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+    ) -> Result<()> {
+        self.nested.batch_merge(places, loc, state)
+    }
+
+    fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
+        self.nested.batch_merge_single(place, state)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
