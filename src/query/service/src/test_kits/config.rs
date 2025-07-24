@@ -33,6 +33,7 @@ impl ConfigBuilder {
         conf.query.tenant_id = Tenant::new_literal("test");
         conf.log = databend_common_tracing::Config::new_testing();
         conf.query.cluster_id = String::from("test_cluster");
+        conf.query.warehouse_id = String::from("test_warehouse");
 
         // add builtin users for test
         let users = vec![UserConfig {

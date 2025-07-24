@@ -174,7 +174,8 @@ impl PrivilegeAccess {
         stage_name: Option<&str>,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let cluster = self.ctx.get_cluster();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
         let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
         if get_history_log_user(tenant_id.tenant_name(), &cluster_id).identity()
             == self.ctx.get_current_user()?.identity()

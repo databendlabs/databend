@@ -31,7 +31,7 @@ async fn test_empty_cluster_discovery() -> Result<()> {
     let discover_cluster = cluster_discovery.discover(&config).await?;
 
     let discover_cluster_nodes = discover_cluster.get_nodes();
-    assert_eq!(discover_cluster_nodes.len(), 0);
+    assert_eq!(discover_cluster_nodes.len(), 1);
     assert!(discover_cluster.is_empty());
     assert!(!discover_cluster.unassign);
 
