@@ -164,7 +164,9 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn serialize_binary(&self, _: AggrState, _: &mut Vec<u8>) -> Result<()> {
-        unreachable!()
+        Err(ErrorCode::Internal(
+            "Calls to serialize_binary should be refactored to calls to serialize",
+        ))
     }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
@@ -172,7 +174,9 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn merge_binary(&self, _: AggrState, _: &mut &[u8]) -> Result<()> {
-        unreachable!()
+        Err(ErrorCode::Internal(
+            "Calls to merge_binary should be refactored to calls to merge",
+        ))
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
