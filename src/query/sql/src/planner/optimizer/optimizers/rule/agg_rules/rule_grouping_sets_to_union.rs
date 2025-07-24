@@ -35,7 +35,7 @@ use crate::IndexType;
 use crate::ScalarExpr;
 
 // TODO
-const ID: RuleID = RuleID::RuleGroupingSetsToUnion;
+const ID: RuleID = RuleID::GroupingSetsToUnion;
 // Split `Grouping Sets` into `Union All` of `Group by`
 // Eg:
 // select number % 10 AS a, number % 3 AS b, number % 4 AS c
@@ -102,7 +102,7 @@ impl Rule for RuleGroupingSetsToUnion {
                         .group_items
                         .iter()
                         .map(|i| i.index)
-                        .filter(|index| !set.contains(&index))
+                        .filter(|index| !set.contains(index))
                         .clone()
                         .collect();
 
@@ -120,19 +120,6 @@ impl Rule for RuleGroupingSetsToUnion {
                         indexes: group_ids,
                         kind: SetKind::Nullable,
                     };
-
-                    // Replace the index to be null in aggregate functions
-                    for func in agg.aggregate_functions.iter_mut() {
-                        if let ScalarExpr::AggregateFunction(func) = &mut func.scalar {
-                            for arg in func.args.iter_mut() {
-                                none_match_visitor.visit(arg)?;
-                            }
-
-                            for arg in func.sort_descs.iter_mut() {
-                                none_match_visitor.visit(&mut arg.expr)?;
-                            }
-                        }
-                    }
 
                     for scalar in eval_scalar.items.iter_mut() {
                         none_match_visitor.visit(&mut scalar.scalar)?;
