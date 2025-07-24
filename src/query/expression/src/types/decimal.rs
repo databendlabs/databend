@@ -83,6 +83,58 @@ pub type Decimal256Type = DecimalType<i256>;
 pub type DecimalType<T> = SimpleValueType<CoreDecimal<T>>;
 pub type DecimalScalarType<T> = SimpleValueType<CoreScalarDecimal<T>>;
 
+impl<Num: Decimal> AccessType for CoreDecimal<Num> {
+    type Scalar = Num;
+    type ScalarRef<'a> = Num;
+    type Column = Buffer<Num>;
+    type Domain = SimpleDomain<Num>;
+    type ColumnIterator<'a> = std::iter::Copied<std::slice::Iter<'a, Num>>;
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+        Num::try_downcast_scalar(scalar.as_decimal()?)
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        Num::try_downcast_domain(domain.as_decimal()?)
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+        Num::try_downcast_column(col).map(|(col, _)| col)
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.get(index).copied()
+    }
+
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        *col.get_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.clone().sliced(range.start, range.end - range.start)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter().copied()
+    }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+}
+
 impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     type Scalar = Num;
     type Domain = SimpleDomain<Num>;
@@ -152,6 +204,64 @@ impl<Num: Decimal> SimpleType for CoreDecimal<Num> {
     #[inline(always)]
     fn less_than_equal(left: &Num, right: &Num) -> bool {
         left <= right
+    }
+}
+
+impl<Num: Decimal> AccessType for CoreScalarDecimal<Num> {
+    type Scalar = (Num, DecimalSize);
+    type ScalarRef<'a> = (Num, DecimalSize);
+    type Column = Buffer<(Num, DecimalSize)>;
+    type Domain = SimpleDomain<(Num, DecimalSize)>;
+    type ColumnIterator<'a> = std::iter::Copied<std::slice::Iter<'a, (Num, DecimalSize)>>;
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        *scalar
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+        let scalar = scalar.as_decimal()?;
+        Num::try_downcast_scalar(scalar).map(|v| (v, scalar.size()))
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        let size = domain.as_decimal()?.decimal_size();
+        let domain = Num::try_downcast_domain(domain.as_decimal()?)?;
+        Some(SimpleDomain {
+            min: (domain.min, size),
+            max: (domain.max, size),
+        })
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+        Num::try_downcast_column(col).map(|(col, x)| col.into_iter().map(|v| (v, x)).collect())
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.get(index).copied()
+    }
+
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        *col.get_unchecked(index)
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.clone().sliced(range.start, range.end - range.start)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter().copied()
+    }
+
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 }
 
@@ -2931,7 +3041,9 @@ where
     T: Decimal,
 {
     #[inline]
-    fn compute(value: &F) -> T {
+    fn compute<'a>(
+        value: <CoreDecimal<F> as AccessType>::ScalarRef<'a>,
+    ) -> <CoreDecimal<T> as AccessType>::ScalarRef<'a> {
         value.as_decimal::<T>()
     }
 
@@ -2947,7 +3059,9 @@ impl<F> Compute<CoreScalarDecimal<F>, CoreNumber<F64>> for DecimalConvert<F, F64
 where F: Decimal
 {
     #[inline]
-    fn compute(value: &(F, DecimalSize)) -> F64 {
+    fn compute<'a>(
+        value: <CoreScalarDecimal<F> as AccessType>::ScalarRef<'a>,
+    ) -> <CoreNumber<F64> as AccessType>::ScalarRef<'a> {
         value.0.to_float64(value.1.scale()).into()
     }
 

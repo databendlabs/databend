@@ -561,6 +561,30 @@ select k, mode(v) from aggr group by k order by k;
 3 NULL
 
 statement ok
+CREATE OR REPLACE TABLE convert_string (
+    c1 STRING,
+    c2 INT,
+    c3 INT
+);
+
+statement ok
+INSERT INTO convert_string (c1, c2, c3) VALUES
+('a', 1, 1),
+('a', 2, 1),
+('b', 1, 1),
+('b', 2, 1),
+('a', 1, 1),
+('a', 1, 2),
+('a', 2, 2),
+('b', 1, 2);
+
+query IT
+select c1, string_agg(json_object('col', c2, 'no2', c3), ',') from convert_string group by c1;
+----
+a '{"col":1,"no2":1}','{"col":2,"no2":1}','{"col":1,"no2":1}','{"col":1,"no2":2}','{"col":2,"no2":2}'
+b '{"col":1,"no2":1}','{"col":2,"no2":1}','{"col":1,"no2":2}'
+
+statement ok
 DROP TABLE aggr
 
 statement ok
