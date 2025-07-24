@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::Optimizer;
-use crate::plans::MaterializedCTE;
 use crate::plans::RelOperator;
 
 /// Optimizer that removes unused CTEs from the query plan.
@@ -28,21 +27,23 @@ use crate::plans::RelOperator;
 pub struct CleanupUnusedCTEOptimizer;
 
 impl CleanupUnusedCTEOptimizer {
-    /// Collect all CTE names that are referenced by CTEConsumer nodes
-    fn collect_referenced_ctes(s_expr: &SExpr) -> Result<HashSet<String>> {
-        let mut referenced_ctes = HashSet::new();
+    /// Collect all CTE names that are referenced by CTEConsumer nodes and count their references
+    fn collect_referenced_ctes(s_expr: &SExpr) -> Result<HashMap<String, usize>> {
+        let mut referenced_ctes = HashMap::new();
         Self::collect_referenced_ctes_recursive(s_expr, &mut referenced_ctes)?;
         Ok(referenced_ctes)
     }
 
-    /// Recursively traverse the expression tree to find CTEConsumer nodes
+    /// Recursively traverse the expression tree to find CTEConsumer nodes and count references
     fn collect_referenced_ctes_recursive(
         s_expr: &SExpr,
-        referenced_ctes: &mut HashSet<String>,
+        referenced_ctes: &mut HashMap<String, usize>,
     ) -> Result<()> {
         // Check if current node is a CTEConsumer
         if let RelOperator::CTEConsumer(consumer) = s_expr.plan() {
-            referenced_ctes.insert(consumer.cte_name.clone());
+            *referenced_ctes
+                .entry(consumer.cte_name.clone())
+                .or_insert(0) += 1;
         }
 
         // Recursively process children
@@ -53,16 +54,33 @@ impl CleanupUnusedCTEOptimizer {
         Ok(())
     }
 
-    /// Remove unused CTEs from the expression tree
-    fn remove_unused_ctes(s_expr: &SExpr, referenced_ctes: &HashSet<String>) -> Result<SExpr> {
+    /// Remove unused CTEs from the expression tree and update ref_count
+    fn remove_unused_ctes(
+        s_expr: &SExpr,
+        referenced_ctes: &HashMap<String, usize>,
+    ) -> Result<SExpr> {
         if let RelOperator::Sequence(_) = s_expr.plan() {
             let left_child = s_expr.child(0)?.plan().clone();
-            let cte: MaterializedCTE = left_child.try_into()?;
-            // If this CTE is not referenced, remove it by returning the right child
-            if !referenced_ctes.contains(&cte.cte_name) {
-                // Return the right child (main query) and skip the left child (CTE definition)
-                let right_child = s_expr.child(1)?;
-                return Self::remove_unused_ctes(right_child, referenced_ctes);
+            if let RelOperator::MaterializedCTE(mut cte) = left_child {
+                let ref_count = referenced_ctes.get(&cte.cte_name).cloned().unwrap_or(0);
+                if ref_count == 0 {
+                    // Return the right child (main query) and skip the left child (CTE definition)
+                    let right_child = s_expr.child(1)?;
+                    return Self::remove_unused_ctes(right_child, referenced_ctes);
+                } else {
+                    cte.ref_count = ref_count;
+                    // Rebuild the left child with updated ref_count
+                    let left_child_expr =
+                        SExpr::create_unary(cte, Arc::new(s_expr.child(0)?.child(0)?.clone()));
+                    let right_child_expr =
+                        Self::remove_unused_ctes(s_expr.child(1)?, referenced_ctes)?;
+                    let new_expr = SExpr::create_binary(
+                        s_expr.plan().clone(),
+                        Arc::new(left_child_expr),
+                        Arc::new(right_child_expr),
+                    );
+                    return Ok(new_expr);
+                }
             }
         }
 
@@ -87,10 +105,10 @@ impl Optimizer for CleanupUnusedCTEOptimizer {
     }
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
-        // Collect all referenced CTEs
+        // Collect all referenced CTEs and their ref_count
         let referenced_ctes = Self::collect_referenced_ctes(s_expr)?;
 
-        // Remove unused CTEs
+        // Remove unused CTEs and update ref_count
         Self::remove_unused_ctes(s_expr, &referenced_ctes)
     }
 }

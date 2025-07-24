@@ -85,13 +85,7 @@ impl Binder {
         s_expr = self.bind_query_limit(query, s_expr, limit, offset);
 
         if let Some(with) = &with {
-            let cte_ref_count = self.compute_cte_ref_count(with, query)?;
-            s_expr = self.bind_materialized_cte(
-                with,
-                s_expr,
-                bind_context.cte_context.clone(),
-                &cte_ref_count,
-            )?;
+            s_expr = self.bind_materialized_cte(with, s_expr, bind_context.cte_context.clone())?;
         }
 
         Ok((s_expr, bind_context))
