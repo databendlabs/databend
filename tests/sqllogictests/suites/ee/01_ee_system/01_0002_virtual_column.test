@@ -145,6 +145,16 @@ select row_count, virtual_column_size from fuse_block('test_virtual_column', 't2
 ----
 3 806
 
+query III
+select block_count, row_count, virtual_column_size from fuse_segment('test_virtual_column', 't2');
+----
+1 3 806
+
+query III
+select block_count, row_count, virtual_column_size from fuse_snapshot('test_virtual_column', 't2');
+----
+1 3 806
+
 query IITTIII
 select virtual_block_size, row_count, column_name, column_type, column_id, block_offset, bytes_compressed from fuse_virtual_column('test_virtual_column', 't2')
 ----

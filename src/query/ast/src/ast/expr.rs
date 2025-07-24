@@ -1532,6 +1532,8 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
+    CosineDistance,
+    L1Distance,
     L2Distance,
 }
 
@@ -1560,6 +1562,8 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftLeft => "bit_shift_left".to_string(),
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
+            BinaryOperator::CosineDistance => "cosine_distance".to_string(),
+            BinaryOperator::L1Distance => "l1_distance".to_string(),
             BinaryOperator::L2Distance => "l2_distance".to_string(),
             BinaryOperator::LikeAny(_) => "like_any".to_string(),
             BinaryOperator::Like(_) => "like".to_string(),
@@ -1666,6 +1670,12 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::BitwiseShiftRight => {
                 write!(f, ">>")
+            }
+            BinaryOperator::CosineDistance => {
+                write!(f, "<=>")
+            }
+            BinaryOperator::L1Distance => {
+                write!(f, "<+>")
             }
             BinaryOperator::L2Distance => {
                 write!(f, "<->")
