@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Query;
@@ -20,8 +19,6 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::With;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRefExt;
 use indexmap::IndexMap;
 
 use crate::binder::BindContext;
@@ -117,16 +114,7 @@ impl Binder {
             cte_output_columns[index].column_name = column_name.clone();
         }
 
-        let fields = cte_output_columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.index.to_string(),
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let cte_schema = DataSchemaRefExt::create(fields);
+        let output_columns = cte_output_columns.iter().map(|c| c.index).collect();
 
         let mut new_bind_context = bind_context.clone();
         for column in cte_output_columns {
@@ -135,7 +123,7 @@ impl Binder {
 
         let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
             cte_name: table_name.to_string(),
-            cte_schema,
+            output_columns,
             def: s_expr,
         })));
         Ok((s_expr, new_bind_context))
@@ -170,7 +158,6 @@ impl Binder {
         with: &With,
         main_query_expr: SExpr,
         cte_context: CteContext,
-        cte_ref_count: &HashMap<String, usize>,
     ) -> Result<SExpr> {
         let mut current_expr = main_query_expr;
 
@@ -180,18 +167,10 @@ impl Binder {
                 let (s_expr, bind_context) =
                     self.bind_cte_definition(&cte_name, &cte_context.cte_map, &cte.query)?;
 
-                let ref_count = cte_ref_count.get(&cte_name).unwrap();
-
-                let materialized_cte =
-                    MaterializedCTE::new(cte_name, bind_context.columns, *ref_count);
-                let materialized_cte =
-                    SExpr::create_unary(Arc::new(materialized_cte.into()), Arc::new(s_expr));
+                let materialized_cte = MaterializedCTE::new(cte_name, Some(bind_context.columns));
+                let materialized_cte = SExpr::create_unary(materialized_cte, s_expr);
                 let sequence = Sequence {};
-                current_expr = SExpr::create_binary(
-                    Arc::new(sequence.into()),
-                    materialized_cte,
-                    Arc::new(current_expr),
-                );
+                current_expr = SExpr::create_binary(sequence, materialized_cte, current_expr);
             }
         }
 

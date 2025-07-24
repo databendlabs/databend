@@ -30,16 +30,17 @@ use crate::ColumnBinding;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MaterializedCTE {
     pub cte_name: String,
-    pub cte_output_columns: Vec<ColumnBinding>,
+    pub cte_output_columns: Option<Vec<ColumnBinding>>,
     pub ref_count: usize,
 }
 
 impl MaterializedCTE {
-    pub fn new(cte_name: String, output_columns: Vec<ColumnBinding>, ref_count: usize) -> Self {
+    pub fn new(cte_name: String, output_columns: Option<Vec<ColumnBinding>>) -> Self {
         Self {
             cte_name,
             cte_output_columns: output_columns,
-            ref_count,
+            // ref_count is set to 0 by default, will be updated by CleanupUnusedCTEOptimizer
+            ref_count: 0,
         }
     }
 }

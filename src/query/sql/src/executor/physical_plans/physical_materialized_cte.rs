@@ -18,6 +18,7 @@ use databend_common_expression::DataSchemaRef;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::ColumnBinding;
 
@@ -29,7 +30,7 @@ pub struct MaterializedCTE {
     pub stat_info: Option<PlanStatsInfo>,
     pub input: Box<PhysicalPlan>,
     pub cte_name: String,
-    pub cte_output_columns: Vec<ColumnBinding>,
+    pub cte_output_columns: Option<Vec<ColumnBinding>>,
     pub ref_count: usize,
 }
 
@@ -46,17 +47,14 @@ impl PhysicalPlanBuilder {
         materialized_cte: &crate::plans::MaterializedCTE,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let input = Box::new(
-            self.build(
-                s_expr.child(0)?,
-                materialized_cte
-                    .cte_output_columns
-                    .iter()
-                    .map(|c| c.index)
-                    .collect(),
-            )
-            .await?,
-        );
+        let required = match &materialized_cte.cte_output_columns {
+            Some(o) => o.iter().map(|c| c.index).collect(),
+            None => RelExpr::with_s_expr(s_expr.child(0)?)
+                .derive_relational_prop()?
+                .output_columns
+                .clone(),
+        };
+        let input = Box::new(self.build(s_expr.child(0)?, required).await?);
         Ok(PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
             plan_id: 0,
             stat_info: Some(stat_info),
