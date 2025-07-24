@@ -241,9 +241,18 @@ pub struct TableStatistics {
     pub data_bytes: u64,
     /// Size of data compressed in bytes
     pub compressed_data_bytes: u64,
-    /// Size of index data in bytes
+    /// Size of all index data in bytes
     pub index_data_bytes: u64,
-
+    /// Size of bloom index in bytes
+    pub bloom_index_size: Option<u64>,
+    /// Size of ngram index in bytes
+    pub ngram_index_size: Option<u64>,
+    /// Size of inverted index in bytes
+    pub inverted_index_size: Option<u64>,
+    /// Size of vector index in bytes
+    pub vector_index_size: Option<u64>,
+    /// Size of virtual column in bytes
+    pub virtual_column_size: Option<u64>,
     /// number of segments
     pub number_of_segments: Option<u64>,
 

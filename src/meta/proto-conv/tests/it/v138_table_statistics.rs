@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_app::schema::TableStatistics;
 use fastrace::func_name;
 
 use crate::common;
@@ -25,31 +26,27 @@ use crate::common;
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
 //
-// The message bytes are built from the output of `proto_conv::test_build_pb_buf()`
+// The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v43_table_statistics() -> anyhow::Result<()> {
-    let bytes_table_statistics_v43 = [
-        8, 100, 16, 200, 1, 24, 15, 32, 20, 40, 1, 48, 2, 160, 6, 43, 168, 6, 24,
+fn test_decode_v138_table_statistics() -> anyhow::Result<()> {
+    let bytes = vec![
+        8, 100, 16, 128, 8, 24, 128, 6, 32, 128, 8, 40, 1, 48, 2, 56, 128, 2, 64, 128, 1, 72, 128,
+        1, 80, 128, 4, 160, 6, 138, 1, 168, 6, 24,
     ];
-    let want = || databend_common_meta_app::schema::TableStatistics {
+    let want = || TableStatistics {
         number_of_rows: 100,
-        data_bytes: 200,
-        compressed_data_bytes: 15,
-        index_data_bytes: 20,
-        bloom_index_size: None,
-        ngram_index_size: None,
-        inverted_index_size: None,
-        vector_index_size: None,
+        data_bytes: 1024,
+        compressed_data_bytes: 768,
+        index_data_bytes: 1024,
+        bloom_index_size: Some(256),
+        ngram_index_size: Some(128),
+        inverted_index_size: Some(128),
+        vector_index_size: Some(512),
         virtual_column_size: None,
         number_of_segments: Some(1),
         number_of_blocks: Some(2),
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(
-        func_name!(),
-        bytes_table_statistics_v43.as_slice(),
-        43,
-        want(),
-    )
+    common::test_load_old(func_name!(), bytes.as_slice(), 138, want())
 }
