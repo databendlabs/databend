@@ -25,10 +25,14 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
+use crate::plans::CTEConsumer;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::MaterializedCTE;
+use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::Sequence;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
 use crate::IndexType;
@@ -133,6 +137,27 @@ impl Rule for RuleGroupingSetsToUnion {
 
                 // fold children into result
                 let mut result = children.first().unwrap().clone();
+
+                // Let's build a temporary CTE PLAN
+                let temp_cte_name = "cte".to_string();
+
+                let cte_materialized_plan = SExpr::create_unary(
+                    MaterializedCTE {
+                        cte_name: temp_cte_name,
+                        cte_output_columns: vec![],
+                        ref_count: children.len(),
+                    },
+                    agg_input.clone(),
+                );
+
+                let cte_consumer = SExpr::create_leaf(CTEConsumer {
+                    cte_name: temp_cte_name,
+                    cte_schema: todo!(),
+                    def: agg_input.clone(),
+                });
+
+                result = SExpr::create_unary(result.plan, cte_materialized_plan.clone());
+
                 for other in children.into_iter().skip(1) {
                     let union_plan = UnionAll {
                         left_outputs: eval_scalar.items.iter().map(|x| (x.index, None)).collect(),
@@ -142,6 +167,8 @@ impl Rule for RuleGroupingSetsToUnion {
                     };
                     result = SExpr::create_binary(Arc::new(union_plan.into()), result, other);
                 }
+                result = SExpr::create_binary(Sequence, cte_materialized_plan, result);
+
                 state.add_result(result);
                 return Ok(());
             }
