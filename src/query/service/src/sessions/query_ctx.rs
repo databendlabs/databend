@@ -38,6 +38,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
@@ -1064,6 +1065,12 @@ impl TableContext for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
+    }
+
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut all = SessionManager::instance().get_query_execution_stats();
+        all.extend(DataExchangeManager::instance().get_query_execution_stats());
+        all
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
