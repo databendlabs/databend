@@ -15,6 +15,7 @@
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use arrow_array::RecordBatch;
 use arrow_flight::decode::FlightRecordBatchStream;
@@ -26,9 +27,16 @@ use databend_common_base::headers::HEADER_FUNCTION;
 use databend_common_base::headers::HEADER_FUNCTION_HANDLER;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::DNSService;
+use databend_common_metrics::external_server::record_connect_external_duration;
+use databend_common_metrics::external_server::record_request_external_batch_rows;
+use databend_common_metrics::external_server::record_request_external_duration;
+use databend_common_metrics::external_server::record_running_requests_external_finish;
+use databend_common_metrics::external_server::record_running_requests_external_start;
 use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
@@ -43,6 +51,11 @@ use tonic::transport::Endpoint;
 use tonic::Request;
 
 use crate::types::DataType;
+use crate::variant_transform::contains_variant;
+use crate::variant_transform::transform_variant;
+use crate::BlockEntry;
+use crate::DataBlock;
+use crate::DataField;
 use crate::DataSchema;
 
 const UDF_TCP_KEEP_ALIVE_SEC: u64 = 30;
@@ -92,10 +105,13 @@ impl UDFFlightClient {
 
     #[async_backtrace::framed]
     pub async fn connect(
+        func_name: &str,
         endpoint: Arc<Endpoint>,
         conn_timeout: u64,
         batch_rows: usize,
     ) -> Result<UDFFlightClient> {
+        let instant = Instant::now();
+
         let mut connector = HttpConnector::new_with_resolver(DNSService);
         connector.enforce_http(false);
         connector.set_nodelay(true);
@@ -115,6 +131,10 @@ impl UDFFlightClient {
             })?;
         let inner =
             FlightServiceClient::new(channel).max_decoding_message_size(MAX_DECODING_MESSAGE_SIZE);
+
+        let connect_duration = instant.elapsed();
+        record_connect_external_duration(func_name, connect_duration);
+
         Ok(UDFFlightClient {
             inner,
             batch_rows,
@@ -240,6 +260,91 @@ impl UDFFlightClient {
 
     #[async_backtrace::framed]
     pub async fn do_exchange(
+        &mut self,
+        name: &str,
+        func_name: &str,
+        num_rows: usize,
+        args: Vec<BlockEntry>,
+        return_type: &DataType,
+    ) -> Result<BlockEntry> {
+        let instant = Instant::now();
+
+        Profile::record_usize_profile(ProfileStatisticsName::ExternalServerRequestCount, 1);
+        record_running_requests_external_start(name, 1);
+        record_request_external_batch_rows(func_name, num_rows);
+
+        let args = args
+            .into_iter()
+            .map(|arg| {
+                if contains_variant(&arg.data_type()) {
+                    let new_arg = BlockEntry::new(transform_variant(&arg.value(), true)?, || {
+                        (arg.data_type(), arg.len())
+                    });
+                    Ok(new_arg)
+                } else {
+                    Ok(arg)
+                }
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let fields = args
+            .iter()
+            .enumerate()
+            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type()))
+            .collect::<Vec<_>>();
+        let data_schema = DataSchema::new(fields);
+
+        let input_batch = DataBlock::new(args, num_rows)
+            .to_record_batch_with_dataschema(&data_schema)
+            .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+
+        let result_batch = self.inner_do_exchange(func_name, input_batch).await;
+
+        let request_duration = instant.elapsed();
+        record_running_requests_external_finish(name, 1);
+        record_request_external_duration(func_name, request_duration);
+
+        let result_batch = result_batch?;
+        let schema = DataSchema::try_from(&(*result_batch.schema()))?;
+        let (result_block, result_schema) = DataBlock::from_record_batch(&schema, &result_batch)
+            .map_err(|err| {
+                ErrorCode::UDFDataError(format!(
+                    "Cannot convert arrow record batch to data block: {err}"
+                ))
+            })?;
+
+        let result_fields = result_schema.fields();
+        if result_fields.is_empty() || result_block.is_empty() {
+            return Err(ErrorCode::EmptyDataFromServer(
+                "Get empty data from UDF Server",
+            ));
+        }
+
+        if result_fields[0].data_type() != return_type {
+            return Err(ErrorCode::UDFSchemaMismatch(format!(
+                "UDF server return incorrect type, expected: {}, but got: {}",
+                return_type,
+                result_fields[0].data_type()
+            )));
+        }
+        if result_block.num_rows() != num_rows {
+            return Err(ErrorCode::UDFDataError(format!(
+                "UDF server should return {} rows, but it returned {} rows",
+                num_rows,
+                result_block.num_rows()
+            )));
+        }
+
+        if contains_variant(return_type) {
+            let value = transform_variant(&result_block.get_by_offset(0).value(), false)?;
+            Ok(BlockEntry::Column(value.as_column().unwrap().clone()))
+        } else {
+            Ok(result_block.get_by_offset(0).clone())
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn inner_do_exchange(
         &mut self,
         func_name: &str,
         input_batch: RecordBatch,

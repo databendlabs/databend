@@ -36,7 +36,7 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::principal::SENSITIVE_SYSTEM_RESOURCE;
 use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::SeqV;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
@@ -46,6 +46,7 @@ use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_enterprise_resources_management::ResourcesManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
@@ -157,6 +158,9 @@ impl PrivilegeAccess {
                 name: name.to_string(),
             },
             GrantObject::Warehouse(id) => OwnershipObject::Warehouse { id: id.to_string() },
+            GrantObject::Connection(name) => OwnershipObject::Connection {
+                name: name.to_string(),
+            },
             GrantObject::Global => return Ok(None),
         };
 
@@ -165,31 +169,63 @@ impl PrivilegeAccess {
 
     fn access_system_history(
         &self,
-        catalog_name: &str,
-        db_name: &str,
+        catalog_name: Option<&str>,
+        db_name: Option<&str>,
+        stage_name: Option<&str>,
         privilege: UserPrivilegeType,
     ) -> Result<()> {
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let cluster = self.ctx.get_cluster();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
         let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
         if get_history_log_user(tenant_id.tenant_name(), &cluster_id).identity()
             == self.ctx.get_current_user()?.identity()
         {
             return Ok(());
         }
-        if catalog_name == CATALOG_DEFAULT
-            && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE)
-            && !matches!(
-                privilege,
-                UserPrivilegeType::Select | UserPrivilegeType::Drop
-            )
-        {
-            return Err(ErrorCode::PermissionDenied(
-                format!(
-                    "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
-                    privilege
-                ),
-            ));
+        match (catalog_name, db_name, stage_name) {
+            (Some(catalog_name), Some(db_name), None) => {
+                if catalog_name == CATALOG_DEFAULT
+                    && db_name.eq_ignore_ascii_case(SENSITIVE_SYSTEM_RESOURCE)
+                    && !matches!(
+                        privilege,
+                        UserPrivilegeType::Select | UserPrivilegeType::Drop
+                    )
+                {
+                    return Err(ErrorCode::PermissionDenied(
+                        format!(
+                            "Permission Denied: Operation '{:?}' on database 'default.system_history' is not allowed. This sensitive system resource only supports 'SELECT' and 'DROP'",
+                            privilege
+                        ),
+                    ));
+                }
+            }
+            (None, None, Some(stage_name)) => {
+                let config = GlobalConfig::instance();
+                let sensitive_system_stage = config.log.history.stage_name.clone();
+
+                return if stage_name.eq_ignore_ascii_case(&sensitive_system_stage) {
+                    if let Some(current_role) = self.ctx.get_current_role() {
+                        if current_role.name == BUILTIN_ROLE_ACCOUNT_ADMIN {
+                            Ok(())
+                        } else {
+                            Err(ErrorCode::PermissionDenied(format!(
+                                "Permission Denied: Operation '{:?}' on stage {sensitive_system_stage} is not allowed",
+                                privilege
+                            )))
+                        }
+                    } else {
+                        Err(ErrorCode::PermissionDenied(format!(
+                            "Permission Denied: Operation '{:?}' on stage {sensitive_system_stage} is not allowed",
+                            privilege
+                        )))
+                    }
+                } else {
+                    Ok(())
+                };
+            }
+            _ => unreachable!(),
         }
+
         Ok(())
     }
 
@@ -200,7 +236,7 @@ impl PrivilegeAccess {
         privileges: UserPrivilegeType,
         if_exists: bool,
     ) -> Result<()> {
-        self.access_system_history(catalog_name, db_name, privileges)?;
+        self.access_system_history(Some(catalog_name), Some(db_name), None, privileges)?;
         let tenant = self.ctx.get_tenant();
         let check_current_role_only = match privileges {
             // create table/stream need check db's Create Privilege
@@ -262,7 +298,7 @@ impl PrivilegeAccess {
 
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
-                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection",
                                 privileges,
                                 catalog_name,
                                 db_name,
@@ -305,7 +341,7 @@ impl PrivilegeAccess {
             return Ok(());
         }
 
-        self.access_system_history(catalog_name, db_name, privilege)?;
+        self.access_system_history(Some(catalog_name), Some(db_name), None, privilege)?;
 
         if self.ctx.is_temp_table(catalog_name, db_name, table_name) {
             return Ok(());
@@ -469,6 +505,38 @@ impl PrivilegeAccess {
         }
     }
 
+    async fn validate_connection_access(
+        &self,
+        connection: String,
+        privilege: UserPrivilegeType,
+    ) -> Result<()> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            return self
+                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                .await;
+        }
+
+        if self
+            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        self.validate_access(
+            &GrantObject::Connection(connection),
+            privilege,
+            false,
+            false,
+        )
+        .await
+    }
+
     async fn has_ownership(
         &self,
         session: &Arc<Session>,
@@ -533,6 +601,7 @@ impl PrivilegeAccess {
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
             | GrantObject::Warehouse(_)
+            | GrantObject::Connection(_)
             | GrantObject::TableById(_, _, _) => true,
             GrantObject::Global => false,
         };
@@ -584,11 +653,12 @@ impl PrivilegeAccess {
                     GrantObject::Global
                     | GrantObject::UDF(_)
                     | GrantObject::Warehouse(_)
+                    | GrantObject::Connection(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -624,6 +694,9 @@ impl PrivilegeAccess {
         {
             return Ok(());
         }
+
+        // History Config has a inner stage, can not be operator by any user.
+        self.access_system_history(None, None, Some(&stage_info.stage_name), privilege)?;
 
         // Note: validate_stage_access is not used for validate Create Stage privilege
         self.validate_access(
@@ -1289,6 +1362,31 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RemoveStage(plan) => {
                 self.validate_stage_access(&plan.stage, UserPrivilegeType::Write).await?;
             }
+            // Connection
+            Plan::CreateConnection(_) => {
+                let super_privilege_check_result = self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await;
+                if !self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_connection_privilege_check()?
+                {
+                    return super_privilege_check_result;
+                }
+                if super_privilege_check_result.is_err() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateConnection, true, false)
+                        .await?
+                }
+            }
+            Plan::DescConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
+            Plan::DropConnection(plan) => {
+                self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
+                    .await?;
+            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -1305,10 +1403,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterPasswordPolicy(_)
             | Plan::DropPasswordPolicy(_)
             | Plan::DescPasswordPolicy(_)
-            | Plan::CreateConnection(_)
-            | Plan::ShowConnections(_)
-            | Plan::DescConnection(_)
-            | Plan::DropConnection(_)
             | Plan::CreateIndex(_)
             | Plan::CreateTableIndex(_)
             | Plan::CreateNotification(_)
@@ -1365,6 +1459,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ShowConnections(_) => {}
             Plan::ShowWarehouses => {
                 // check privilege in interpreter
             }
@@ -1463,7 +1558,8 @@ fn check_db_tb_ownership_access(
                 }
                 OwnershipObject::UDF { .. }
                 | OwnershipObject::Stage { .. }
-                | OwnershipObject::Warehouse { .. } => {}
+                | OwnershipObject::Warehouse { .. }
+                | OwnershipObject::Connection { .. } => {}
             }
         }
     }

@@ -38,6 +38,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
@@ -1066,6 +1067,12 @@ impl TableContext for QueryContext {
         SessionManager::instance().processes_info()
     }
 
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut all = SessionManager::instance().get_query_execution_stats();
+        all.extend(DataExchangeManager::instance().get_query_execution_stats());
+        all
+    }
+
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         let queries = QueriesQueueManager::instance()
             .list()
@@ -1165,6 +1172,18 @@ impl TableContext for QueryContext {
         }
     }
     async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        if self
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let visibility_checker = self.get_visibility_checker(false).await?;
+            if !visibility_checker.check_connection_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
+                    &self.get_current_user()?.identity().display(),
+                )));
+            }
+        }
         self.shared.get_connection(name).await
     }
 
@@ -1190,6 +1209,13 @@ impl TableContext for QueryContext {
                 self.get_settings().get_enterprise_license(),
                 Feature::SystemHistory,
             )?;
+
+            if GlobalConfig::instance().log.history.is_invisible(table) {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "history table `{}` is configured as invisible",
+                    table
+                )));
+            }
         }
 
         let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;

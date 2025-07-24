@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Defines application key spaces that are defined by raft-store.
-//! All of the key spaces stores key-value pairs in the underlying sled db.
+//! All the key spaces stores key-value pairs in the underlying sled db.
 
 use databend_common_meta_sled_store::sled;
 use databend_common_meta_sled_store::SledKeySpace;
@@ -26,18 +26,17 @@ use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::LogIndex;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::Vote;
-use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::SeqNum;
+use databend_common_meta_types::SeqV;
 use serde::Deserialize;
 use serde::Serialize;
+use state_machine_api::ExpireKey;
+use state_machine_api::ExpireValue;
 
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::state::RaftStateKey;
 use crate::state::RaftStateValue;
-use crate::state_machine::ClientLastRespValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::ExpireValue;
 use crate::state_machine::LogMetaKey;
 use crate::state_machine::LogMetaValue;
 use crate::state_machine::StateMachineMetaKey;
@@ -118,13 +117,7 @@ impl SledKeySpace for Sequences {
     type V = SeqNum;
 }
 
-pub struct ClientLastResps {}
-impl SledKeySpace for ClientLastResps {
-    const PREFIX: u8 = 10;
-    const NAME: &'static str = "client-last-resp";
-    type K = String;
-    type V = ClientLastRespValue;
-}
+// Reserved: removed: `pub struct ClientLastResps {}`, PREFIX = 10;
 
 pub struct DataHeader {}
 impl SledKeySpace for DataHeader {
@@ -242,7 +235,6 @@ pub enum RaftStoreEntry {
     Expire           { key: <Expire           as SledKeySpace>::K, value: <Expire           as SledKeySpace>::V, },
     GenericKV        { key: <GenericKV        as SledKeySpace>::K, value: <GenericKV        as SledKeySpace>::V, },
     Sequences        { key: <Sequences        as SledKeySpace>::K, value: <Sequences        as SledKeySpace>::V, },
-    ClientLastResps  { key: <ClientLastResps  as SledKeySpace>::K, value: <ClientLastResps  as SledKeySpace>::V, },
     // V003 only
     LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: <LogMeta          as SledKeySpace>::V, },
 
@@ -273,7 +265,6 @@ impl RaftStoreEntry {
             | RaftStoreEntry::Expire { .. }
             | RaftStoreEntry::GenericKV { .. }
             | RaftStoreEntry::Sequences { .. }
-            | RaftStoreEntry::ClientLastResps { .. }
             | RaftStoreEntry::LogEntry(_)
             | RaftStoreEntry::NodeId(_)
             | RaftStoreEntry::Vote(_)
@@ -295,7 +286,6 @@ impl RaftStoreEntry {
             Self::Expire           { key, value } => serialize_for_sled!(Expire,           key, value),
             Self::GenericKV        { key, value } => serialize_for_sled!(GenericKV,        key, value),
             Self::Sequences        { key, value } => serialize_for_sled!(Sequences,        key, value),
-            Self::ClientLastResps  { key, value } => serialize_for_sled!(ClientLastResps,  key, value),
             Self::LogMeta          { key, value } => serialize_for_sled!(LogMeta,          key, value),
 
             RaftStoreEntry::LogEntry(_) |
@@ -329,7 +319,6 @@ impl RaftStoreEntry {
             Expire,
             GenericKV,
             Sequences,
-            ClientLastResps,
             LogMeta
         );
 
@@ -359,7 +348,6 @@ impl TryInto<SMEntry> for RaftStoreEntry {
 
             Self::Logs             { .. } => {Err("SMEntry does not contain Logs".to_string())},
             Self::RaftStateKV      { .. } => {Err("SMEntry does not contain RaftStateKV".to_string())}
-            Self::ClientLastResps  { .. } => {Err("SMEntry does not contain ClientLastResps".to_string())}
             Self::LogMeta          { .. } => {Err("SMEntry does not contain LogMeta".to_string())}
 
 

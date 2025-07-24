@@ -64,10 +64,19 @@ fn error_fields<C>(log_type: LogType, err: Option<ErrorCode<C>>) -> (LogType, i3
 }
 
 impl InterpreterQueryLog {
-    fn write_log(event: QueryLogElement) -> Result<()> {
+    fn write_log(mut event: QueryLogElement) -> Result<()> {
+        // log the query event in the system_history.query_history table
         let event_str = serde_json::to_string(&event)?;
-        // log the query log in JSON format
         info!(target: "databend::log::query", "{}", event_str);
+
+        // log the query event in `query-details` log file
+        // remove some fields to keep tidy in the log file
+        event.session_settings.clear();
+        event.sql_user_quota.clear();
+        event.sql_user_privileges.clear();
+        let event_str = serde_json::to_string(&event)?;
+        info!(target: "databend::log::query::file", "{}", event_str);
+
         // log the query event in the system log
         info!("query: {} becomes {:?}", event.query_id, event.log_type);
         Ok(())
@@ -79,10 +88,12 @@ impl InterpreterQueryLog {
     }
 
     pub fn log_start(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+        let cluster = ctx.get_cluster();
+
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = ctx.get_tenant();
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
         let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;
@@ -238,6 +249,8 @@ impl InterpreterQueryLog {
         has_profiles: bool,
     ) -> Result<()> {
         ctx.set_finish_time(now);
+        let cluster = ctx.get_cluster();
+
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = GlobalConfig::instance()
@@ -245,7 +258,7 @@ impl InterpreterQueryLog {
             .tenant_id
             .tenant_name()
             .to_string();
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
         let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;

@@ -15112,6 +15112,102 @@ Grant(
 
 
 ---------- Input ----------
+GRANT access connection, create connection ON *.*  TO 'test-grant';
+---------- Output ---------
+GRANT ACCESS CONNECTION, CREATE CONNECTION ON  *.* TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                AccessConnection,
+                CreateConnection,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT access connection on connection c1  TO 'test-grant';
+---------- Output ---------
+GRANT ACCESS CONNECTION ON  CONNECTION c1 TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                AccessConnection,
+            ],
+            level: Connection(
+                "c1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all on connection c1  TO 'test-grant';
+---------- Output ---------
+GRANT ACCESS CONNECTION ON  CONNECTION c1 TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                AccessConnection,
+            ],
+            level: Connection(
+                "c1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP on connection c1  TO role r1;
+---------- Output ---------
+GRANT OWNERSHIP ON  CONNECTION c1 TO ROLE 'r1'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Connection(
+                "c1",
+            ),
+        },
+        principal: Role(
+            "r1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
@@ -18137,6 +18233,26 @@ ShowObjectPrivileges(
     ShowObjectPrivilegesStmt {
         object: Database(
             "db",
+        ),
+        show_option: Some(
+            ShowOptions {
+                show_limit: None,
+                limit: None,
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+SHOW GRANTS ON CONNECTION c1;
+---------- Output ---------
+SHOW GRANTS ON  CONNECTION c1 
+---------- AST ------------
+ShowObjectPrivileges(
+    ShowObjectPrivilegesStmt {
+        object: Connection(
+            "c1",
         ),
         show_option: Some(
             ShowOptions {
@@ -25165,6 +25281,7 @@ CreateUDF(
             handler: "binary_reverse",
             headers: {},
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25198,6 +25315,7 @@ CreateUDF(
                 "X-Authorization": "123",
             },
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25228,6 +25346,7 @@ AlterUDF(
             handler: "binary_reverse",
             headers: {},
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25259,6 +25378,7 @@ CreateUDF(
             handler: "binary_reverse",
             headers: {},
             language: "python",
+            immutable: None,
         },
     },
 )
@@ -25388,6 +25508,7 @@ CreateUDF(
             handler: "addone_py",
             language: "python",
             runtime_version: "",
+            immutable: None,
         },
     },
 )
@@ -25434,6 +25555,7 @@ CreateUDF(
             handler: "addone_py",
             language: "python",
             runtime_version: "",
+            immutable: None,
         },
     },
 )

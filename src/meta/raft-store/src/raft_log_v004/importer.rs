@@ -109,9 +109,6 @@ impl Importer {
             RaftStoreEntry::Sequences { .. } => {
                 unreachable!("Sequences should be written to log");
             }
-            RaftStoreEntry::ClientLastResps { .. } => {
-                unreachable!("ClientLastResps should be written to log");
-            }
         }
 
         Ok(())

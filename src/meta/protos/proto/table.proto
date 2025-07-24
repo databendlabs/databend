@@ -188,6 +188,17 @@ message TableStatistics {
 
   // Number of blocks
   optional uint64 number_of_blocks = 6;
+
+  // Size of bloom index in bytes
+  optional uint64 bloom_index_size = 7;
+  // Size of ngram index in bytes
+  optional uint64 ngram_index_size = 8;
+  // Size of inverted index in bytes
+  optional uint64 inverted_index_size = 9;
+  // Size of vector index in bytes
+  optional uint64 vector_index_size = 10;
+  // Size of virtual column in bytes
+  optional uint64 virtual_column_size = 11;
 }
 
 message DatabaseIdTableName {

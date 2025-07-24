@@ -35,7 +35,6 @@ use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
 use databend_common_tracing::Config as LogConfig;
 
-use super::config::Commands;
 use super::config::Config;
 use super::config::ResourcesManagementConfig;
 use crate::BuiltInConfig;
@@ -45,13 +44,12 @@ use crate::BuiltInConfig;
 /// All function should implement based on this Config.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct InnerConfig {
-    pub subcommand: Option<Commands>,
-    pub config_file: String,
-
     // Query engine config.
     pub query: QueryConfig,
 
     pub log: LogConfig,
+
+    pub task: TaskConfig,
 
     // Meta Service config.
     pub meta: MetaConfig,
@@ -75,8 +73,8 @@ impl InnerConfig {
     /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`InnerConfig`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
-    pub async fn load() -> Result<Self> {
-        let mut cfg: Self = Config::load(true)?.try_into()?;
+    pub async fn init(cfg: Config, check_meta: bool) -> Result<Self> {
+        let mut cfg: Self = cfg.try_into()?;
 
         // Handle the node_id and node_secret for query node.
         cfg.query.node_id = GlobalUniqName::unique();
@@ -85,8 +83,7 @@ impl InnerConfig {
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await?;
 
-        // Only check meta config when cmd is empty.
-        if cfg.subcommand.is_none() {
+        if check_meta {
             cfg.meta.check_valid()?;
         }
         Ok(cfg)
@@ -96,8 +93,7 @@ impl InnerConfig {
     ///
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self> {
-        let cfg: Self = Config::load(false)?.try_into()?;
-        Ok(cfg)
+        Config::load_with_config_file("")?.try_into()
     }
 
     pub fn tls_query_cli_enabled(&self) -> bool {
@@ -136,8 +132,6 @@ impl InnerConfig {
 impl Debug for InnerConfig {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.debug_struct("InnerConfig")
-            .field("subcommand", &self.subcommand)
-            .field("config_file", &self.config_file)
             .field("query", &self.query.sanitize())
             .field("log", &self.log)
             .field("meta", &self.meta)
@@ -155,6 +149,8 @@ pub struct QueryConfig {
     pub tenant_id: Tenant,
     /// ID for construct the cluster.
     pub cluster_id: String,
+    /// ID for construct the warehouse.
+    pub warehouse_id: String,
     // ID for the query node.
     // This only initialized when InnerConfig::load().
     pub node_id: String,
@@ -265,6 +261,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
             cluster_id: "".to_string(),
+            warehouse_id: "".to_string(),
             node_id: "".to_string(),
             node_secret: "".to_string(),
             num_cpus: 0,
@@ -498,6 +495,11 @@ impl Debug for MetaConfig {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogConfig {
     Hive(CatalogHiveConfig),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct TaskConfig {
+    pub on: bool,
 }
 
 // TODO: add compat protocol support

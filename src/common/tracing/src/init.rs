@@ -108,6 +108,7 @@ fn env_filter(level: &str) -> EnvFilter {
     EnvFilter::new(
         EnvFilterBuilder::new()
             .filter(Some("databend::log::query"), LevelFilter::Off)
+            .filter(Some("databend::log::query::file"), LevelFilter::Off)
             .filter(Some("databend::log::profile"), LevelFilter::Off)
             .filter(Some("databend::log::structlog"), LevelFilter::Off)
             .filter(Some("databend::log::time_series"), LevelFilter::Off)
@@ -288,7 +289,7 @@ pub fn init_logging(
             let dispatch = Dispatch::new()
                 .filter(EnvFilter::new(
                     EnvFilterBuilder::new()
-                        .filter(Some("databend::log::query"), LevelFilter::Trace),
+                        .filter(Some("databend::log::query::file"), LevelFilter::Trace),
                 ))
                 .filter(filter_by_thread_tracker())
                 .append(query_log_file.with_layout(get_layout("identical")));
@@ -314,7 +315,7 @@ pub fn init_logging(
             let dispatch = Dispatch::new()
                 .filter(EnvFilter::new(
                     EnvFilterBuilder::new()
-                        .filter(Some("databend::log::query"), LevelFilter::Trace),
+                        .filter(Some("databend::log::query::file"), LevelFilter::Trace),
                 ))
                 .filter(filter_by_thread_tracker())
                 .append(otel);

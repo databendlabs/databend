@@ -160,7 +160,7 @@ impl FromToProto for mt::principal::GrantObject {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let Some(object) = p.object else {
-            return Err(Incompatible::new("GrantObject cannot be None".to_string()));
+            return Err(Incompatible::new(format!("Incompatible GrantObject type: Data contains an unrecognized variant for {} version", p.ver)));
         };
 
         match object {
@@ -194,6 +194,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Warehouse(pb::grant_object::GrantWarehouseObject {
                 warehouse,
             }) => Ok(mt::principal::GrantObject::Warehouse(warehouse)),
+            pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
+                connection,
+            }) => Ok(mt::principal::GrantObject::Connection(connection)),
         }
     }
 
@@ -241,6 +244,11 @@ impl FromToProto for mt::principal::GrantObject {
                     warehouse: w.clone(),
                 },
             )),
+            mt::principal::GrantObject::Connection(c) => Some(
+                pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
+                    connection: c.clone(),
+                }),
+            ),
         };
         Ok(pb::GrantObject {
             ver: VER,
@@ -295,7 +303,13 @@ impl FromToProto for mt::principal::UserGrantSet {
 
         let mut entries = Vec::new();
         for entry in p.entries.iter() {
-            entries.push(mt::principal::GrantEntry::from_pb(entry.clone())?);
+            // If we add new GrantObject in new version
+            // Rollback to old version, GrantEntry.object will be None
+            // GrantEntry::from_pb will return err so user can not login in old version.
+            match mt::principal::GrantEntry::from_pb(entry.clone()) {
+                Ok(entry) => entries.push(entry),
+                Err(e) => log::error!("GrantEntry::from_pb with error : {e}"),
+            }
         }
         let mut roles = HashSet::new();
         for role in p.roles.iter() {

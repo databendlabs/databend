@@ -377,6 +377,11 @@ impl<'a> SExprVisitor for StatsApplier<'a> {
                     data_size: stats.data_size,
                     data_size_compressed: stats.data_size_compressed,
                     index_size: stats.index_size,
+                    bloom_index_size: None,
+                    ngram_index_size: None,
+                    inverted_index_size: None,
+                    vector_index_size: None,
+                    virtual_column_size: None,
                     number_of_blocks: stats.number_of_blocks,
                     number_of_segments: stats.number_of_segments,
                 };

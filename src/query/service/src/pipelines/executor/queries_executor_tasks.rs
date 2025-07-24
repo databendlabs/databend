@@ -121,7 +121,6 @@ impl QueriesExecutorTasksQueue {
                     continue;
                 }
             }
-
             context.set_task(task);
 
             let workers_condvar = context.get_workers_condvar();

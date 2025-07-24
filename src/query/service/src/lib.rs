@@ -62,6 +62,7 @@ pub mod table_functions;
 pub mod test_kits;
 
 mod global_services;
+pub mod task;
 
 pub mod physical_plans;
 

@@ -197,7 +197,7 @@ impl IPhysicalPlan for AggregateExpand {
             grouping_ids.push(!id & mask);
         }
 
-        builder.main_pipeline.add_transformer(|| {
+        builder.main_pipeline.add_accumulating_transformer(|| {
             TransformExpandGroupingSets::new(group_bys.clone(), grouping_ids.clone())
         });
         Ok(())
