@@ -19,8 +19,6 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::With;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchemaRefExt;
 use indexmap::IndexMap;
 
 use crate::binder::BindContext;
@@ -116,16 +114,7 @@ impl Binder {
             cte_output_columns[index].column_name = column_name.clone();
         }
 
-        let fields = cte_output_columns
-            .iter()
-            .map(|column_binding| {
-                DataField::new(
-                    &column_binding.index.to_string(),
-                    *column_binding.data_type.clone(),
-                )
-            })
-            .collect();
-        let cte_schema = DataSchemaRefExt::create(fields);
+        let output_columns = cte_output_columns.iter().map(|c| c.index).collect();
 
         let mut new_bind_context = bind_context.clone();
         for column in cte_output_columns {
@@ -134,7 +123,7 @@ impl Binder {
 
         let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
             cte_name: table_name.to_string(),
-            cte_schema,
+            output_columns,
             def: s_expr,
         })));
         Ok((s_expr, new_bind_context))

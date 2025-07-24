@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
@@ -42,11 +44,18 @@ impl PhysicalPlanBuilder {
         cte_consumer: &crate::plans::CTEConsumer,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
+        let mut fields = Vec::new();
+        let metadata = self.metadata.read();
+        for index in &cte_consumer.output_columns {
+            let column = metadata.column(*index);
+            fields.push(DataField::new(&index.to_string(), column.data_type()));
+        }
+        let cte_schema = DataSchemaRefExt::create(fields);
         Ok(PhysicalPlan::CTEConsumer(Box::new(CTEConsumer {
             plan_id: 0,
             stat_info: Some(stat_info),
             cte_name: cte_consumer.cte_name.clone(),
-            cte_schema: cte_consumer.cte_schema.clone(),
+            cte_schema,
         })))
     }
 }

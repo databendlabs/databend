@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataSchemaRef;
 
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
@@ -34,7 +33,7 @@ use crate::plans::RelOp;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CTEConsumer {
     pub cte_name: String,
-    pub cte_schema: DataSchemaRef,
+    pub output_columns: Vec<usize>,
     pub def: SExpr,
 }
 
