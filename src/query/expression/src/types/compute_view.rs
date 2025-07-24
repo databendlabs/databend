@@ -24,13 +24,13 @@ use super::AnyType;
 use super::ArgType;
 use super::StringColumn;
 use super::StringType;
+use crate::display::scalar_ref_to_string;
 use crate::types::string::StringDomain;
 use crate::types::string::StringIterator;
 use crate::types::CoreNumber;
 use crate::types::Number;
 use crate::types::SimpleDomain;
 use crate::Column;
-use crate::display::scalar_ref_to_string;
 use crate::Domain;
 use crate::ScalarRef;
 
