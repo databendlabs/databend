@@ -161,6 +161,9 @@ impl PrivilegeAccess {
             GrantObject::Connection(name) => OwnershipObject::Connection {
                 name: name.to_string(),
             },
+            GrantObject::Sequence(name) => OwnershipObject::Sequence {
+                name: name.to_string(),
+            },
             GrantObject::Global => return Ok(None),
         };
 
@@ -537,6 +540,34 @@ impl PrivilegeAccess {
         .await
     }
 
+    async fn validate_seq_access(&self, seq: String) -> Result<()> {
+        if !self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            return self
+                .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                .await;
+        }
+
+        if self
+            .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+            .await
+            .is_ok()
+        {
+            return Ok(());
+        }
+
+        self.validate_access(
+            &GrantObject::Sequence(seq),
+            UserPrivilegeType::AccessSequence,
+            false,
+            false,
+        )
+        .await
+    }
+
     async fn has_ownership(
         &self,
         session: &Arc<Session>,
@@ -602,6 +633,7 @@ impl PrivilegeAccess {
             | GrantObject::Stage(_)
             | GrantObject::Warehouse(_)
             | GrantObject::Connection(_)
+            | GrantObject::Sequence(_)
             | GrantObject::TableById(_, _, _) => true,
             GrantObject::Global => false,
         };
@@ -654,11 +686,12 @@ impl PrivilegeAccess {
                     | GrantObject::UDF(_)
                     | GrantObject::Warehouse(_)
                     | GrantObject::Connection(_)
+                    | GrantObject::Sequence(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection.",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage|Connection|Sequence",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -811,7 +844,7 @@ impl PrivilegeAccess {
 
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
-    #[async_backtrace::framed]
+    //#[async_backtrace::framed]
     async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let user = self.ctx.get_current_user()?;
         if let Plan::AlterUser(plan) = plan {
@@ -838,6 +871,11 @@ impl AccessChecker for PrivilegeAccess {
             .ctx
             .get_settings()
             .get_enable_experimental_rbac_check()?;
+
+        let enable_seq_rbac_check = self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?;
         let tenant = self.ctx.get_tenant();
         let ctl_name = self.ctx.get_current_catalog();
 
@@ -923,8 +961,7 @@ impl AccessChecker for PrivilegeAccess {
                         };
                     }
                     Some(RewriteKind::ShowSequences) => {
-                        self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
-                            .await?;
+                        // will check privilege in show_sequences_table
                     }
                     _ => {}
                 };
@@ -940,6 +977,19 @@ impl AccessChecker for PrivilegeAccess {
                         }
                     }
                 }
+
+                /*if enable_seq_rbac_check {
+                    match s_expr.get_seq_names() {
+                        Ok(seqs) => {
+                            if !seqs.is_empty() {
+                                self.validate_seq_access(seqs).await?;
+                            }
+                        }
+                        Err(err) => {
+                            return Err(err.add_message("get seq error on validating access"));
+                        }
+                    }
+                }*/
 
                 let metadata = metadata.read().clone();
 
@@ -1387,6 +1437,27 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_connection_access(plan.name.to_string(), UserPrivilegeType::AccessConnection)
                     .await?;
             }
+            Plan::CreateSequence(_) => {
+                let super_privilege_check_result = self
+                    .validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                    .await;
+                if !enable_seq_rbac_check
+                {
+                    return super_privilege_check_result;
+                }
+                if super_privilege_check_result.is_err() {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateSequence, true, false)
+                        .await?
+                }
+            }
+            Plan::DescSequence(plan) => {
+                self.validate_seq_access(plan.ident.name().to_string())
+                    .await?;
+            }
+            Plan::DropSequence(plan) => {
+                self.validate_seq_access(plan.ident.name().to_string())
+                    .await?;
+            }
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -1415,10 +1486,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task
             | Plan::ExecuteTask(_)  // TODO: need to build ownership info for task
             | Plan::DropTask(_)     // TODO: need to build ownership info for task
-            | Plan::AlterTask(_)
-            | Plan::CreateSequence(_)
-            | Plan::DescSequence(_)
-            | Plan::DropSequence(_) => {
+            | Plan::AlterTask(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -1559,7 +1627,8 @@ fn check_db_tb_ownership_access(
                 OwnershipObject::UDF { .. }
                 | OwnershipObject::Stage { .. }
                 | OwnershipObject::Warehouse { .. }
-                | OwnershipObject::Connection { .. } => {}
+                | OwnershipObject::Connection { .. }
+                | OwnershipObject::Sequence { .. } => {}
             }
         }
     }

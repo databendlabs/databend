@@ -104,6 +104,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TempTblMgrRef;
 use databend_storages_common_session::TxnManagerRef;
@@ -685,8 +686,12 @@ impl Catalog for SessionCatalog {
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         self.inner.create_sequence(req).await
     }
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
-        self.inner.get_sequence(req).await
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
+        self.inner.get_sequence(req, visibility_checker).await
     }
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply> {
         self.inner.list_sequences(req).await
@@ -695,8 +700,11 @@ impl Catalog for SessionCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
-        self.inner.get_sequence_next_value(req).await
+        self.inner
+            .get_sequence_next_value(req, visibility_checker)
+            .await
     }
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {

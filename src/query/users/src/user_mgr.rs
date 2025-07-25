@@ -202,12 +202,14 @@ impl UserApiProvider {
             )));
         }
 
+        // Because of https://github.com/databendlabs/databend/pull/18400
+        // We can allow grant connection|seq to user in 2026.07
         if matches!(
             object,
-            GrantObject::Warehouse(_) | GrantObject::Connection(_)
+            GrantObject::Warehouse(_) | GrantObject::Connection(_) | GrantObject::Sequence(_)
         ) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse|connection privileges to user `{}`",
+                "Cannot grant warehouse|connection|Sequence privileges to user `{}`",
                 user.username
             )));
         }

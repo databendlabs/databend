@@ -39,6 +39,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_users::GrantObjectVisibilityChecker;
 use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
@@ -430,6 +431,34 @@ impl ScalarExpr {
         find_udfs.visit(self)?;
         Ok(find_udfs.udfs)
     }
+
+    // pub fn get_seq_names(&self) -> Result<HashSet<&String>> {
+    // struct FindSeqNamesVisitor<'a> {
+    // seq_names: HashSet<&'a String>,
+    // }
+    //
+    // impl<'a> Visitor<'a> for FindSeqNamesVisitor<'a> {
+    // fn visit_async_function_call(&mut self, async_func: &'a AsyncFunctionCall) -> Result<()> {
+    // for expr in &async_func.arguments {
+    // self.visit(expr)?;
+    // }
+    // match &async_func.func_arg {
+    // AsyncFunctionArgument::SequenceFunction(s) => {
+    // self.seq_names.insert(s);
+    // }
+    // AsyncFunctionArgument::DictGetFunction(_) => {}
+    // }
+    //
+    // Ok(())
+    // }
+    // }
+    //
+    // let mut find_seq_names = FindSeqNamesVisitor {
+    // seq_names: HashSet::new(),
+    // };
+    // find_seq_names.visit(self)?;
+    // Ok(find_seq_names.seq_names)
+    // }
 
     pub fn has_subquery(&self) -> bool {
         struct HasSubqueryVisitor {
@@ -1215,15 +1244,27 @@ pub struct AsyncFunctionCall {
 }
 
 impl AsyncFunctionCall {
-    pub async fn generate(&self, tenant: Tenant, catalog: Arc<dyn Catalog>) -> Result<Scalar> {
+    pub async fn generate(
+        &self,
+        tenant: Tenant,
+        catalog: Arc<dyn Catalog>,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {
+                if let Some(visibility_checker) = &visibility_checker {
+                    if !visibility_checker.check_seq_visibility(sequence_name) {
+                        return Err(ErrorCode::PermissionDenied(format!("Permission denied: privilege ACCESS SEQUENCE is required on sequence {}", sequence_name)));
+                    }
+                }
                 let req = GetSequenceNextValueReq {
                     ident: SequenceIdent::new(&tenant, sequence_name.clone()),
                     count: 1,
                 };
                 // Call meta's api to generate an incremental value.
-                let reply = catalog.get_sequence_next_value(req).await?;
+                let reply = catalog
+                    .get_sequence_next_value(req, visibility_checker)
+                    .await?;
                 Ok(Scalar::Number(NumberScalar::UInt64(reply.start)))
             }
             AsyncFunctionArgument::DictGetFunction(_dict_get_function_argument) => {

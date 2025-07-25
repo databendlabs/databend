@@ -65,8 +65,22 @@ impl<'a> VisitorMut<'a> for ExprValuesRewriter {
         if let ScalarExpr::AsyncFunctionCall(async_func) = &expr {
             let tenant = self.ctx.get_tenant();
             let catalog = self.ctx.get_default_catalog()?;
+            let visibility_checker = if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_sequence_privilege_check()?
+            {
+                let ctx = self.ctx.clone();
+                Some(databend_common_base::runtime::block_on(async move {
+                    ctx.get_visibility_checker(false).await
+                })?)
+            } else {
+                None
+            };
             let value = databend_common_base::runtime::block_on(async move {
-                async_func.generate(tenant.clone(), catalog.clone()).await
+                async_func
+                    .generate(tenant.clone(), catalog.clone(), visibility_checker)
+                    .await
             })?;
 
             *expr = ScalarExpr::ConstantExpr(ConstantExpr {

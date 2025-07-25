@@ -206,7 +206,7 @@ impl SExpr {
         self.plan.has_subquery() || self.children.iter().any(|child| child.has_subquery())
     }
 
-    #[recursive::recursive]
+    //#[recursive::recursive]
     pub fn get_udfs(&self) -> Result<HashSet<&String>> {
         let mut udfs = HashSet::new();
         let iter = self.plan.scalar_expr_iter();
@@ -224,6 +224,25 @@ impl SExpr {
         }
         Ok(udfs)
     }
+
+    // #[recursive::recursive]
+    // pub fn get_seq_names(&self) -> Result<HashSet<&String>> {
+    // let mut seq_names = HashSet::new();
+    // let iter = self.plan.scalar_expr_iter();
+    // for scalar in iter {
+    // for udf in scalar.get_seq_names()? {
+    // seq_names.insert(udf);
+    // }
+    // }
+    //
+    // for child in &self.children {
+    // let udf = child.get_seq_names()?;
+    // udf.iter().for_each(|udf| {
+    // seq_names.insert(*udf);
+    // })
+    // }
+    // Ok(seq_names)
+    // }
 
     #[recursive::recursive]
     pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<IndexType>> {
