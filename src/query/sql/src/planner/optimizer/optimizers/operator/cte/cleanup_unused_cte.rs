@@ -35,6 +35,7 @@ impl CleanupUnusedCTEOptimizer {
     }
 
     /// Recursively traverse the expression tree to find MaterializeCTERef nodes and count references
+    #[recursive::recursive]
     fn collect_referenced_ctes_recursive(
         s_expr: &SExpr,
         referenced_ctes: &mut HashMap<String, usize>,
