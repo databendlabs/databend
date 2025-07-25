@@ -51,8 +51,9 @@ use serde::Serialize;
 
 use super::compute_view::Compute;
 use super::compute_view::ComputeView;
-use super::{AccessType, NumberType};
+use super::AccessType;
 use super::AnyType;
+use super::NumberType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;

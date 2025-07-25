@@ -19,9 +19,10 @@ use std::ops::Range;
 
 use num_traits::AsPrimitive;
 
-use super::{AccessType, NumberType};
+use super::AccessType;
 use super::AnyType;
 use super::ArgType;
+use super::NumberType;
 use super::StringColumn;
 use super::StringType;
 use crate::display::scalar_ref_to_string;
