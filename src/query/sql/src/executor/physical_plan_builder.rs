@@ -133,7 +133,7 @@ impl PhysicalPlanBuilder {
                 self.build_materialized_cte(s_expr, materialized_cte, stat_info)
                     .await
             }
-            RelOperator::CTEConsumer(cte_consumer) => {
+            RelOperator::MaterializeCTERef(cte_consumer) => {
                 self.build_cte_consumer(cte_consumer, stat_info).await
             }
             RelOperator::Sequence(sequence) => {

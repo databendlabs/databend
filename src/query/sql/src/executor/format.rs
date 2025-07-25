@@ -188,7 +188,7 @@ impl PhysicalPlan {
                     children,
                 ))
             }
-            PhysicalPlan::CTEConsumer(plan) => {
+            PhysicalPlan::MaterializeCTERef(plan) => {
                 let children = vec![
                     FormatTreeNode::new(format!("cte_name: {}", plan.cte_name)),
                     FormatTreeNode::new(format!(
@@ -197,7 +197,7 @@ impl PhysicalPlan {
                     )),
                 ];
                 Ok(FormatTreeNode::with_children(
-                    "CTEConsumer".to_string(),
+                    "MaterializeCTERef".to_string(),
                     children,
                 ))
             }
@@ -570,7 +570,7 @@ fn to_format_tree(
                 children,
             ))
         }
-        PhysicalPlan::CTEConsumer(plan) => {
+        PhysicalPlan::MaterializeCTERef(plan) => {
             let mut children = Vec::new();
             children.push(FormatTreeNode::new(format!(
                 "cte_name: {}",
@@ -582,7 +582,7 @@ fn to_format_tree(
             )));
             append_profile_info(&mut children, profs, plan.plan_id);
             Ok(FormatTreeNode::with_children(
-                "CTEConsumer".to_string(),
+                "MaterializeCTERef".to_string(),
                 children,
             ))
         }

@@ -733,13 +733,13 @@ Sequence
     ├── Build
     │   └── HashJoin: INNER
     │       ├── Build
-    │       │   └── CTEConsumer
+    │       │   └── MaterializeCTERef
     │       │       ├── cte_name: revenue
     │       │       └── cte_schema: [l_suppkey (#9), total_revenue (#25)]
     │       └── Probe
     │           └── Scan: default.tpch_test.supplier (#0) (read rows: 10000)
     └── Probe
-        └── CTEConsumer
+        └── MaterializeCTERef
             ├── cte_name: revenue
             └── cte_schema: [l_suppkey (#28), total_revenue (#44)]
 

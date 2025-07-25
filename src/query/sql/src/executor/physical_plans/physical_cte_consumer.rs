@@ -23,7 +23,7 @@ use crate::executor::PhysicalPlanBuilder;
 
 /// This is a leaf operator that consumes the result of a materialized CTE.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CTEConsumer {
+pub struct MaterializeCTERef {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     // Only used for explain
@@ -32,7 +32,7 @@ pub struct CTEConsumer {
     pub cte_schema: DataSchemaRef,
 }
 
-impl CTEConsumer {
+impl MaterializeCTERef {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.cte_schema.clone())
     }
@@ -41,7 +41,7 @@ impl CTEConsumer {
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_cte_consumer(
         &mut self,
-        cte_consumer: &crate::plans::CTEConsumer,
+        cte_consumer: &crate::plans::MaterializeCTERef,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let mut fields = Vec::new();
@@ -51,11 +51,13 @@ impl PhysicalPlanBuilder {
             fields.push(DataField::new(&index.to_string(), column.data_type()));
         }
         let cte_schema = DataSchemaRefExt::create(fields);
-        Ok(PhysicalPlan::CTEConsumer(Box::new(CTEConsumer {
-            plan_id: 0,
-            stat_info: Some(stat_info),
-            cte_name: cte_consumer.cte_name.clone(),
-            cte_schema,
-        })))
+        Ok(PhysicalPlan::MaterializeCTERef(Box::new(
+            MaterializeCTERef {
+                plan_id: 0,
+                stat_info: Some(stat_info),
+                cte_name: cte_consumer.cte_name.clone(),
+                cte_schema,
+            },
+        )))
     }
 }

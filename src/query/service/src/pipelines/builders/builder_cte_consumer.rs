@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
-use databend_common_sql::executor::physical_plans::CTEConsumer;
+use databend_common_sql::executor::physical_plans::MaterializeCTERef;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::CTESource;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    pub(crate) fn build_cte_consumer(&mut self, cte: &CTEConsumer) -> Result<()> {
+    pub(crate) fn build_cte_consumer(&mut self, cte: &MaterializeCTERef) -> Result<()> {
         let receiver = self.ctx.get_materialized_cte_receiver(&cte.cte_name);
         self.main_pipeline.add_source(
             |output_port| {

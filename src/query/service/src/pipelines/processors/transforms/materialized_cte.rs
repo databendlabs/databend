@@ -77,7 +77,7 @@ impl CTESource {
 
 #[async_trait::async_trait]
 impl AsyncSource for CTESource {
-    const NAME: &'static str = "CTEConsumerSource";
+    const NAME: &'static str = "MaterializeCTESource";
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {

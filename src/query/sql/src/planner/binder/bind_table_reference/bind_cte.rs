@@ -27,7 +27,7 @@ use crate::binder::CteContext;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
-use crate::plans::CTEConsumer;
+use crate::plans::MaterializeCTERef;
 use crate::plans::MaterializedCTE;
 use crate::plans::RelOperator;
 use crate::plans::Sequence;
@@ -121,11 +121,13 @@ impl Binder {
             new_bind_context.add_column_binding(column);
         }
 
-        let s_expr = SExpr::create_leaf(Arc::new(RelOperator::CTEConsumer(CTEConsumer {
-            cte_name: table_name.to_string(),
-            output_columns,
-            def: s_expr,
-        })));
+        let s_expr = SExpr::create_leaf(Arc::new(RelOperator::MaterializeCTERef(
+            MaterializeCTERef {
+                cte_name: table_name.to_string(),
+                output_columns,
+                def: s_expr,
+            },
+        )));
         Ok((s_expr, new_bind_context))
     }
 
