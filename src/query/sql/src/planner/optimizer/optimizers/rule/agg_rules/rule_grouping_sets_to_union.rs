@@ -12,9 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::Matcher;
@@ -101,11 +105,13 @@ impl Rule for RuleGroupingSetsToUnion {
             .collect();
 
         if let Some(grouping_sets) = &agg.grouping_sets {
-            if grouping_sets.sets.len() > 1 {
+            if grouping_sets.sets.len() >= 1 {
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
 
-                // Let's build a temporary CTE PLAN
-                let temp_cte_name = format!("cte_{}", uuid::Uuid::new_v4().simple().to_string());
+                let mut hasher = DefaultHasher::new();
+                agg.grouping_sets.hash(&mut hasher);
+                let hash = hasher.finish();
+                let temp_cte_name = format!("cte_groupingsets_{hash}");
                 let cte_materialized_sexpr = SExpr::create_unary(
                     MaterializedCTE::new(temp_cte_name.clone(), None),
                     agg_input.clone(),
@@ -117,7 +123,34 @@ impl Rule for RuleGroupingSetsToUnion {
                     def: agg_input.clone(),
                 });
 
+                let mask = (1 << grouping_sets.dup_group_items.len()) - 1;
+                let group_bys = agg
+                    .group_items
+                    .iter()
+                    .map(|i| {
+                        agg_input_columns
+                            .iter()
+                            .position(|t| *t == i.index)
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>();
+
                 for set in &grouping_sets.sets {
+                    let mut id = 0;
+
+                    // For element in `group_bys`,
+                    // if it is in current grouping set: set 0, else: set 1. (1 represents it will be NULL in grouping)
+                    // Example: GROUP BY GROUPING SETS ((a, b), (a), (b), ())
+                    // group_bys: [a, b]
+                    // grouping_sets: [[0, 1], [0], [1], []]
+                    // grouping_ids: 00, 01, 10, 11
+
+                    for g in set {
+                        let i = group_bys.iter().position(|t| *t == *g).unwrap();
+                        id |= 1 << i;
+                    }
+                    let grouping_id = !id & mask;
+
                     let mut eval_scalar = eval_scalar.clone();
                     let mut agg = agg.clone();
                     agg.grouping_sets = None;
@@ -131,23 +164,18 @@ impl Rule for RuleGroupingSetsToUnion {
                         .collect();
 
                     agg.group_items.retain(|x| set.contains(&x.index));
-
                     let group_ids: Vec<IndexType> =
                         agg.group_items.iter().map(|i| i.index).collect();
 
-                    let mut none_match_visitor = ReplaceColumnBeBullVisitor {
-                        indexes: null_group_ids,
-                        kind: SetKind::Null,
-                    };
-
-                    let mut match_visitor = ReplaceColumnBeBullVisitor {
-                        indexes: group_ids,
-                        kind: SetKind::Nullable,
+                    let mut visitor = ReplaceColumnForGroupingSetsVisitor {
+                        group_indexes: group_ids,
+                        exclude_group_indexes: null_group_ids,
+                        grouping_id_index: grouping_sets.grouping_id_index,
+                        grouping_id_value: grouping_id,
                     };
 
                     for scalar in eval_scalar.items.iter_mut() {
-                        none_match_visitor.visit(&mut scalar.scalar)?;
-                        match_visitor.visit(&mut scalar.scalar)?;
+                        visitor.visit(&mut scalar.scalar)?;
                     }
 
                     let agg_plan = SExpr::create_unary(agg, cte_consumer.clone());
@@ -158,16 +186,19 @@ impl Rule for RuleGroupingSetsToUnion {
                 // fold children into result
                 let mut result = children.first().unwrap().clone();
                 for other in children.into_iter().skip(1) {
+                    let left_outputs: Vec<(IndexType, Option<ScalarExpr>)> =
+                        eval_scalar.items.iter().map(|x| (x.index, None)).collect();
+                    let right_outputs = left_outputs.clone();
+
                     let union_plan = UnionAll {
-                        left_outputs: eval_scalar.items.iter().map(|x| (x.index, None)).collect(),
-                        right_outputs: eval_scalar.items.iter().map(|x| (x.index, None)).collect(),
+                        left_outputs,
+                        right_outputs,
                         cte_scan_names: vec![],
                         output_indexes: eval_scalar.items.iter().map(|x| x.index).collect(),
                     };
                     result = SExpr::create_binary(Arc::new(union_plan.into()), result, other);
                 }
                 result = SExpr::create_binary(Sequence, cte_materialized_sexpr, result);
-
                 state.add_result(result);
                 return Ok(());
             }
@@ -186,41 +217,38 @@ impl Default for RuleGroupingSetsToUnion {
     }
 }
 
-enum SetKind {
-    Null,
-    Nullable,
+struct ReplaceColumnForGroupingSetsVisitor {
+    group_indexes: Vec<IndexType>,
+    exclude_group_indexes: Vec<IndexType>,
+    grouping_id_index: IndexType,
+    grouping_id_value: u32,
 }
 
-struct ReplaceColumnBeBullVisitor {
-    indexes: Vec<IndexType>,
-    kind: SetKind,
-}
-
-impl VisitorMut<'_> for ReplaceColumnBeBullVisitor {
+impl VisitorMut<'_> for ReplaceColumnForGroupingSetsVisitor {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         let old = expr.clone();
 
         if let ScalarExpr::BoundColumnRef(col) = expr {
-            if self.indexes.contains(&col.column.index) {
-                match self.kind {
-                    SetKind::Null => {
-                        *expr = ScalarExpr::TypedConstantExpr(
-                            ConstantExpr {
-                                value: Scalar::Null,
-                                span: col.span,
-                            },
-                            col.column.data_type.wrap_nullable(),
-                        );
-                    }
-                    SetKind::Nullable => {
-                        *expr = ScalarExpr::CastExpr(CastExpr {
-                            argument: Box::new(old),
-                            is_try: true,
-                            target_type: Box::new(col.column.data_type.wrap_nullable()),
-                            span: col.span,
-                        });
-                    }
-                }
+            if self.group_indexes.contains(&col.column.index) {
+                *expr = ScalarExpr::CastExpr(CastExpr {
+                    argument: Box::new(old),
+                    is_try: true,
+                    target_type: Box::new(col.column.data_type.wrap_nullable()),
+                    span: col.span,
+                });
+            } else if self.exclude_group_indexes.contains(&col.column.index) {
+                *expr = ScalarExpr::TypedConstantExpr(
+                    ConstantExpr {
+                        value: Scalar::Null,
+                        span: col.span,
+                    },
+                    col.column.data_type.wrap_nullable(),
+                );
+            } else if self.grouping_id_index == col.column.index {
+                *expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Number(NumberScalar::UInt32(self.grouping_id_value)),
+                    span: col.span,
+                });
             }
             return Ok(());
         }

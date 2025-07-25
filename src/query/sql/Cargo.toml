@@ -45,7 +45,6 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cidr = { workspace = true }
-uuid = { workspace = true }
 cron = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }

@@ -4223,7 +4223,6 @@ dependencies = [
  "tokio",
  "unicase",
  "url",
- "uuid",
 ]
 
 [[package]]
