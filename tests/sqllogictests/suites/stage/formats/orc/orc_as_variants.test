@@ -1,0 +1,64 @@
+query ??
+select $1 from @data/orc/  (file_format=>'orc') order by $1
+----
+{"binary":"","boolean":true,"date32":"1970-01-01","decimal":0.00000,"float32":0.0,"float64":0.0,"int16":0,"int32":0,"int64":0,"int8":0,"utf8":""}
+{"binary":"20","boolean":false,"date32":"1969-12-31","decimal":-1.00000,"float32":-1.0,"float64":-1.0,"int16":-1,"int32":-1,"int64":-1,"int8":-1,"utf8":" "}
+{"binary":"61","boolean":false,"date32":"1970-01-02","decimal":1.00000,"float32":1.0,"float64":1.0,"int16":1,"int32":1,"int64":1,"int8":1,"utf8":"a"}
+{"binary":"6465636F6465","boolean":true,"date32":"1582-10-15","decimal":-999999999.99999,"float32":null,"float64":null,"int16":-32768,"int32":-2147483648,"int64":-9223372036854775808,"int8":-128,"utf8":"decode"}
+{"binary":"656E636F6465","boolean":true,"date32":"9999-12-31","decimal":123456789.12345,"float32":null,"float64":null,"int16":32767,"int32":2147483647,"int64":9223372036854775807,"int8":127,"utf8":"encode"}
+{"binary":"E5A4A7E7868AE5928CE5A58F","boolean":true,"date32":"1582-10-16","decimal":-31256.12300,"float32":3.1415927410125732,"float64":3.14159265359,"int16":50,"int32":50,"int64":50,"int8":50,"utf8":"大熊和奏"}
+{"binary":"E69689E897A4E69CB1E5A48F","boolean":true,"date32":"2000-01-01","decimal":1241000.00000,"float32":-3.1415927410125732,"float64":-3.14159265359,"int16":51,"int32":51,"int64":51,"int8":51,"utf8":"斉藤朱夏"}
+{"binary":"E988B4E58E9FE5B88CE5AE9F","boolean":true,"date32":"3000-12-31","decimal":1.10000,"float32":1.100000023841858,"float64":1.1,"int16":52,"int32":52,"int64":52,"int8":52,"utf8":"鈴原希実"}
+{"binary":"F09FA494","boolean":false,"date32":"1900-01-01","decimal":0.99999,"float32":-1.100000023841858,"float64":-1.1,"int16":53,"int32":53,"int64":53,"int8":53,"utf8":"🤔"}
+{"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null}
+{"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null}
+{"map":{"nill":null,"one":1,"two":2}}
+{"map":{"one":1,"zero":0}}
+{"map":{"tree":3,"two":2}}
+{"map":null}
+{"nest":{"a":-3.0,"b":null}}
+{"nest":{"a":1.0,"b":true}}
+{"nest":{"a":3.0,"b":null}}
+{"nest":{"a":null,"b":null}}
+{"nest":null}
+{"value":[1,null,3,43,5]}
+{"value":[3,null]}
+{"value":[5,null,32,4,15]}
+{"value":[16,null,3,4,5,6]}
+{"value":null}
+
+statement ok
+create or replace table t1(a variant);
+
+query ok
+copy into t1 from (select $1 from @data/orc/) file_format=(type=orc) RETURN_FAILED_ONLY=true
+----
+
+query ok
+select a from t1 order by a
+----
+{"binary":"","boolean":true,"date32":"1970-01-01","decimal":0.00000,"float32":0.0,"float64":0.0,"int16":0,"int32":0,"int64":0,"int8":0,"utf8":""}
+{"binary":"20","boolean":false,"date32":"1969-12-31","decimal":-1.00000,"float32":-1.0,"float64":-1.0,"int16":-1,"int32":-1,"int64":-1,"int8":-1,"utf8":" "}
+{"binary":"61","boolean":false,"date32":"1970-01-02","decimal":1.00000,"float32":1.0,"float64":1.0,"int16":1,"int32":1,"int64":1,"int8":1,"utf8":"a"}
+{"binary":"6465636F6465","boolean":true,"date32":"1582-10-15","decimal":-999999999.99999,"float32":null,"float64":null,"int16":-32768,"int32":-2147483648,"int64":-9223372036854775808,"int8":-128,"utf8":"decode"}
+{"binary":"656E636F6465","boolean":true,"date32":"9999-12-31","decimal":123456789.12345,"float32":null,"float64":null,"int16":32767,"int32":2147483647,"int64":9223372036854775807,"int8":127,"utf8":"encode"}
+{"binary":"E5A4A7E7868AE5928CE5A58F","boolean":true,"date32":"1582-10-16","decimal":-31256.12300,"float32":3.1415927410125732,"float64":3.14159265359,"int16":50,"int32":50,"int64":50,"int8":50,"utf8":"大熊和奏"}
+{"binary":"E69689E897A4E69CB1E5A48F","boolean":true,"date32":"2000-01-01","decimal":1241000.00000,"float32":-3.1415927410125732,"float64":-3.14159265359,"int16":51,"int32":51,"int64":51,"int8":51,"utf8":"斉藤朱夏"}
+{"binary":"E988B4E58E9FE5B88CE5AE9F","boolean":true,"date32":"3000-12-31","decimal":1.10000,"float32":1.100000023841858,"float64":1.1,"int16":52,"int32":52,"int64":52,"int8":52,"utf8":"鈴原希実"}
+{"binary":"F09FA494","boolean":false,"date32":"1900-01-01","decimal":0.99999,"float32":-1.100000023841858,"float64":-1.1,"int16":53,"int32":53,"int64":53,"int8":53,"utf8":"🤔"}
+{"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null}
+{"binary":null,"boolean":null,"date32":null,"decimal":null,"float32":null,"float64":null,"int16":null,"int32":null,"int64":null,"int8":null,"utf8":null}
+{"map":{"nill":null,"one":1,"two":2}}
+{"map":{"one":1,"zero":0}}
+{"map":{"tree":3,"two":2}}
+{"map":null}
+{"nest":{"a":-3.0,"b":null}}
+{"nest":{"a":1.0,"b":true}}
+{"nest":{"a":3.0,"b":null}}
+{"nest":{"a":null,"b":null}}
+{"nest":null}
+{"value":[1,null,3,43,5]}
+{"value":[3,null]}
+{"value":[5,null,32,4,15]}
+{"value":[16,null,3,4,5,6]}
+{"value":null}
