@@ -173,7 +173,7 @@ where
     }
 
     fn serialize_type() -> Vec<StateSerdeItem> {
-        std::vec![StateSerdeItem::DataType(T::data_type())]
+        std::vec![StateSerdeItem::DataType(N::data_type())]
     }
 
     fn serialize_state(&self, builders: &mut [ColumnBuilder]) -> Result<()> {

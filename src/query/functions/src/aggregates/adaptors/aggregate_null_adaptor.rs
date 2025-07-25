@@ -191,6 +191,15 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.serialize(place, builders)
     }
 
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.0.batch_serialize(places, loc, builders)
+    }
+
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         self.0.merge(place, data)
     }
@@ -316,6 +325,15 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
         self.0.serialize(place, builders)
+    }
+
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.0.batch_serialize(places, loc, builders)
     }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
@@ -528,6 +546,29 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             .push(flag);
         self.nested
             .serialize(place.remove_last_loc(), &mut builders[..(n - 1)])
+    }
+
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        if !NULLABLE_RESULT {
+            return self.nested.batch_serialize(places, loc, builders);
+        }
+        let n = builders.len();
+        debug_assert_eq!(self.nested.serialize_type().len() + 1, n);
+        let flag_builder = builders
+            .last_mut()
+            .and_then(ColumnBuilder::as_boolean_mut)
+            .unwrap();
+        for place in places {
+            let place = AggrState::new(*place, loc);
+            flag_builder.push(get_flag(place));
+        }
+        self.nested
+            .batch_serialize(places, &loc[..loc.len() - 1], &mut builders[..(n - 1)])
     }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {

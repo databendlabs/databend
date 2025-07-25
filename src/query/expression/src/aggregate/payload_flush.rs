@@ -18,7 +18,6 @@ use databend_common_io::prelude::bincode_deserialize_from_slice;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
-use super::AggrState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -141,18 +140,14 @@ impl Payload {
         if let Some(state_layout) = self.states_layout.as_ref() {
             let mut builders = state_layout.serialize_builders(row_count);
 
-            for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (idx, (loc, func)) in state_layout
-                    .states_loc
-                    .iter()
-                    .zip(self.aggrs.iter())
-                    .enumerate()
-                {
-                    {
-                        let builders = builders[idx].as_tuple_mut().unwrap().as_mut_slice();
-                        func.serialize(AggrState::new(*place, loc), builders)?;
-                    }
-                }
+            for ((loc, func), builder) in state_layout
+                .states_loc
+                .iter()
+                .zip(self.aggrs.iter())
+                .zip(builders.iter_mut())
+            {
+                let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+                func.batch_serialize(&state.state_places.as_slice()[0..row_count], loc, builders)?;
             }
 
             entries.extend(builders.into_iter().map(|builder| builder.build().into()));

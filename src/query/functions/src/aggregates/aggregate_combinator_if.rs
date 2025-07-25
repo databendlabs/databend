@@ -163,8 +163,27 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.serialize(place, builders)
     }
 
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.nested.batch_serialize(places, loc, builders)
+    }
+
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         self.nested.merge(place, data)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &databend_common_expression::BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.nested.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

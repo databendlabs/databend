@@ -84,6 +84,18 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()>;
 
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        for place in places {
+            self.serialize(AggrState::new(*place, loc), builders)?;
+        }
+        Ok(())
+    }
+
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()>;
 
     /// Batch deserialize the state and merge

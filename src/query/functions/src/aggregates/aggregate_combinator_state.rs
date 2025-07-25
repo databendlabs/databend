@@ -117,6 +117,15 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.serialize(place, builders)
     }
 
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.nested.batch_serialize(places, loc, builders)
+    }
+
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
         self.nested.merge(place, data)
     }
