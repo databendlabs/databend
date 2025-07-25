@@ -51,13 +51,12 @@ use serde::Serialize;
 
 use super::compute_view::Compute;
 use super::compute_view::ComputeView;
-use super::AccessType;
+use super::{AccessType, NumberType};
 use super::AnyType;
 use super::SimpleDomain;
 use super::SimpleType;
 use super::SimpleValueType;
 use super::ValueType;
-use crate::types::CoreNumber;
 use crate::types::DataType;
 use crate::types::F64;
 use crate::utils::arrow::buffer_into_mut;
@@ -3030,7 +3029,7 @@ impl Ord for i256 {
 
 pub type DecimalView<F, T> = ComputeView<DecimalConvert<F, T>, CoreDecimal<F>, CoreDecimal<T>>;
 pub type DecimalF64View<F> =
-    ComputeView<DecimalConvert<F, F64>, CoreScalarDecimal<F>, CoreNumber<F64>>;
+    ComputeView<DecimalConvert<F, F64>, CoreScalarDecimal<F>, NumberType<F64>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DecimalConvert<F, T>(std::marker::PhantomData<(F, T)>);
@@ -3055,13 +3054,13 @@ where
     }
 }
 
-impl<F> Compute<CoreScalarDecimal<F>, CoreNumber<F64>> for DecimalConvert<F, F64>
+impl<F> Compute<CoreScalarDecimal<F>, NumberType<F64>> for DecimalConvert<F, F64>
 where F: Decimal
 {
     #[inline]
     fn compute<'a>(
         value: <CoreScalarDecimal<F> as AccessType>::ScalarRef<'a>,
-    ) -> <CoreNumber<F64> as AccessType>::ScalarRef<'a> {
+    ) -> <NumberType<F64> as AccessType>::ScalarRef<'a> {
         value.0.to_float64(value.1.scale()).into()
     }
 

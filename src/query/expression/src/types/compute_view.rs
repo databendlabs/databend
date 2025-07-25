@@ -19,7 +19,7 @@ use std::ops::Range;
 
 use num_traits::AsPrimitive;
 
-use super::AccessType;
+use super::{AccessType, NumberType};
 use super::AnyType;
 use super::ArgType;
 use super::StringColumn;
@@ -27,7 +27,6 @@ use super::StringType;
 use crate::display::scalar_ref_to_string;
 use crate::types::string::StringDomain;
 use crate::types::string::StringIterator;
-use crate::types::CoreNumber;
 use crate::types::Number;
 use crate::types::SimpleDomain;
 use crate::Column;
@@ -151,19 +150,19 @@ where
 }
 
 /// For number convert
-pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, CoreNumber<F>, CoreNumber<T>>;
+pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, NumberType<F>, NumberType<T>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberConvert<F, T>(std::marker::PhantomData<(F, T)>);
 
-impl<F, T> Compute<CoreNumber<F>, CoreNumber<T>> for NumberConvert<F, T>
+impl<F, T> Compute<NumberType<F>, NumberType<T>> for NumberConvert<F, T>
 where
     F: Number + AsPrimitive<T>,
     T: Number,
 {
     fn compute<'a>(
-        value: <CoreNumber<F> as AccessType>::ScalarRef<'a>,
-    ) -> <CoreNumber<T> as AccessType>::ScalarRef<'a> {
+        value: <NumberType<F> as AccessType>::ScalarRef<'a>,
+    ) -> <NumberType<T> as AccessType>::ScalarRef<'a> {
         value.as_()
     }
 

@@ -34,7 +34,6 @@ use serde::Serialize;
 
 use super::decimal::DecimalSize;
 use crate::property::Domain;
-use crate::types::AccessType;
 use crate::types::ArgType;
 use crate::types::DataType;
 use crate::types::SimpleType;
@@ -103,58 +102,6 @@ pub type Float32Type = NumberType<F32>;
 pub type Float64Type = NumberType<F64>;
 
 pub type NumberType<T> = SimpleValueType<CoreNumber<T>>;
-
-impl<Num: Number> AccessType for CoreNumber<Num> {
-    type Scalar = Num;
-    type ScalarRef<'a> = Num;
-    type Column = Buffer<Num>;
-    type Domain = SimpleDomain<Num>;
-    type ColumnIterator<'a> = std::iter::Copied<std::slice::Iter<'a, Num>>;
-
-    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
-    }
-
-    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
-    }
-
-    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        Num::try_downcast_scalar(scalar.as_number()?)
-    }
-
-    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        Num::try_downcast_domain(domain.as_number()?)
-    }
-
-    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        Num::try_downcast_column(col.as_number()?).cloned()
-    }
-
-    fn column_len(col: &Self::Column) -> usize {
-        col.len()
-    }
-
-    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).copied()
-    }
-
-    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        *col.get_unchecked(index)
-    }
-
-    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
-    }
-
-    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().copied()
-    }
-
-    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.cmp(&rhs)
-    }
-}
 
 impl<Num: Number> SimpleType for CoreNumber<Num> {
     type Scalar = Num;
