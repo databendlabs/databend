@@ -84,10 +84,7 @@ where
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        F::downcast_domain(domain).map(|domain| {
-            let domain1 = C::compute_domain(&domain);
-            domain1
-        })
+        F::downcast_domain(domain).map(|domain| C::compute_domain(&domain))
     }
 
     fn column_len(col: &Self::Column) -> usize {
@@ -164,8 +161,6 @@ where
     }
 
     fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
-        let min = domain.min.as_();
-        let max = domain.max.as_();
-        SimpleDomain { min, max }
+        SimpleDomain { min: domain.min.as_(), max: domain.max.as_() }
     }
 }
