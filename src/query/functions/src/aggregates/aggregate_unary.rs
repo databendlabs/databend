@@ -80,6 +80,22 @@ where
         builder: R::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
+
+    fn serialize_type() -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn serialize_state(&self, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        self.serialize(&mut binary_builder.data)?;
+        binary_builder.commit_row();
+        Ok(())
+    }
+
+    fn deserialize_state(data: &[ScalarRef]) -> Result<Self> {
+        let mut binary = *data[0].as_binary().unwrap();
+        Ok(Self::deserialize_reader(&mut binary)?)
+    }
 }
 
 pub trait FunctionData: Send + Sync {
@@ -230,21 +246,17 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        S::serialize_type()
     }
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
         let state: &mut S = place.get::<S>();
-        state.serialize(&mut binary_builder.data)?;
-        binary_builder.commit_row();
-        Ok(())
+        state.serialize_state(builders)
     }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
         let state: &mut S = place.get::<S>();
-        let rhs = S::deserialize_reader(&mut binary)?;
+        let rhs = S::deserialize_state(data)?;
         state.merge(&rhs)
     }
 

@@ -750,7 +750,7 @@ mod tests {
 
         fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
             let state = place.get::<u64>();
-            if let Some(ScalarRef::Number(NumberScalar::UInt64(value))) = data.get(0) {
+            if let Some(ScalarRef::Number(NumberScalar::UInt64(value))) = data.first() {
                 *state += value;
             }
             Ok(())
@@ -1031,7 +1031,7 @@ mod tests {
         {
             let values = vec![10u64, 20u64, 30u64, 40u64];
             let flags = vec![true, false, true, true];
-            let filter_bits = vec![true, false, true, false]; // Only process indices 0 and 2
+            let filter_bits = [true, false, true, false]; // Only process indices 0 and 2
             let filter = Bitmap::from_iter(filter_bits.iter().copied());
 
             test_both_strategies(&values, &flags, Some(&filter))?;
@@ -1040,7 +1040,7 @@ mod tests {
         {
             let values = vec![100u64, 200u64, 300u64, 400u64];
             let flags = vec![true, true, false, true]; // Skip index 2
-            let filter_bits = vec![true, false, true, true]; // Skip index 1
+            let filter_bits = [true, false, true, true]; // Skip index 1
             let filter = Bitmap::from_iter(filter_bits.iter().copied());
 
             test_both_strategies(&values, &flags, Some(&filter))?;

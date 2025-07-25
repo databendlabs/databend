@@ -32,7 +32,9 @@ use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
@@ -76,14 +78,14 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct NumberSumState<N>
-where N: ValueType
+where N: ArgType
 {
     pub value: N::Scalar,
 }
 
 impl<N> Default for NumberSumState<N>
 where
-    N: ValueType,
+    N: ArgType,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
     fn default() -> Self {
@@ -130,7 +132,7 @@ where
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
     T: ArgType + Sync + Send,
-    N: ValueType,
+    N: ArgType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
     for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
@@ -168,6 +170,20 @@ where
     ) -> Result<()> {
         builder.push_item(N::to_scalar_ref(&self.value));
         Ok(())
+    }
+
+    fn serialize_type() -> Vec<StateSerdeItem> {
+        std::vec![StateSerdeItem::DataType(T::data_type())]
+    }
+
+    fn serialize_state(&self, builders: &mut [ColumnBuilder]) -> Result<()> {
+        N::downcast_builder(&mut builders[0]).push_item(N::to_scalar_ref(&self.value));
+        Ok(())
+    }
+
+    fn deserialize_state(data: &[ScalarRef]) -> Result<Self> {
+        let value = N::to_owned_scalar(N::try_downcast_scalar(&data[0]).unwrap());
+        Ok(Self { value })
     }
 }
 
