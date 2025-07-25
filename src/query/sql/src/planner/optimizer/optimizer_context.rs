@@ -154,10 +154,10 @@ impl OptimizerContext {
     pub fn is_optimizer_disabled(self: &Arc<Self>, name: &str) -> bool {
         let settings = self.get_table_ctx().get_settings();
 
-        if !settings.get_grouping_sets_to_union().unwrap_or_default() {
-            if name == RuleID::GroupingSetsToUnion.to_string() {
-                return true;
-            }
+        if !settings.get_grouping_sets_to_union().unwrap_or_default()
+            && name == RuleID::GroupingSetsToUnion.to_string()
+        {
+            return true;
         }
 
         match settings.get_optimizer_skip_list() {

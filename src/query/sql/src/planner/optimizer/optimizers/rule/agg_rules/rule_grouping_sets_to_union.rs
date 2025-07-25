@@ -97,7 +97,7 @@ impl Rule for RuleGroupingSetsToUnion {
         }
 
         let agg_input = s_expr.child(0)?.child(0)?;
-        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(&agg_input)
+        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(agg_input)
             .derive_relational_prop()?
             .output_columns
             .iter()
@@ -105,7 +105,7 @@ impl Rule for RuleGroupingSetsToUnion {
             .collect();
 
         if let Some(grouping_sets) = &agg.grouping_sets {
-            if grouping_sets.sets.len() >= 1 {
+            if !grouping_sets.sets.is_empty() {
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
 
                 let mut hasher = DefaultHasher::new();
