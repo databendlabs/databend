@@ -577,7 +577,8 @@ impl MetaService for MetaServiceImpl {
                 wal_closed_chunk_sizes: status.raft_log.wal_closed_chunk_sizes,
             }),
 
-            snapshot_key_count: status.snapshot_key_count as u64,
+            snapshot_key_count: status.snapshot_key_count,
+
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,
