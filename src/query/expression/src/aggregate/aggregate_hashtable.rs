@@ -382,6 +382,7 @@ impl AggregateHashTable {
         Ok(())
     }
 
+    #[fastrace::trace(name = "AggregateHashTable::combine_payload")]
     pub fn combine_payload(
         &mut self,
         payload: &Payload,
