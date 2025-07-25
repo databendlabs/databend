@@ -23,7 +23,7 @@ use maplit::btreemap;
 use crate::common;
 
 #[test]
-fn test_decode_v138_task_message() -> anyhow::Result<()> {
+fn test_decode_v139_task_message() -> anyhow::Result<()> {
     let want_task = || mt::Task {
         task_id: 11,
         task_name: "task_c".to_string(),
@@ -55,7 +55,7 @@ fn test_decode_v138_task_message() -> anyhow::Result<()> {
     };
 
     {
-        let task_message_execute_v138 = vec![
+        let task_message_execute_v139 = vec![
             10, 239, 1, 8, 11, 18, 6, 116, 97, 115, 107, 95, 99, 34, 16, 83, 69, 76, 69, 67, 84,
             32, 42, 32, 70, 82, 79, 77, 32, 116, 49, 42, 7, 99, 111, 109, 109, 101, 110, 116, 50,
             6, 112, 117, 98, 108, 105, 99, 58, 22, 8, 11, 18, 11, 51, 48, 32, 49, 50, 32, 42, 32,
@@ -67,20 +67,20 @@ fn test_decode_v138_task_message() -> anyhow::Result<()> {
             67, 130, 1, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 49,
             51, 32, 85, 84, 67, 138, 1, 6, 116, 97, 115, 107, 95, 97, 138, 1, 6, 116, 97, 115, 107,
             95, 98, 146, 1, 6, 99, 49, 32, 62, 32, 49, 154, 1, 6, 10, 1, 97, 18, 1, 98, 170, 1, 2,
-            109, 101, 160, 6, 137, 1, 168, 6, 24, 160, 6, 137, 1, 168, 6, 24,
+            109, 101, 160, 6, 139, 1, 168, 6, 24, 160, 6, 139, 1, 168, 6, 24,
         ];
         let want_execute = || mt::TaskMessage::ExecuteTask(want_task());
 
         common::test_pb_from_to(func_name!(), want_execute())?;
         common::test_load_old(
             func_name!(),
-            task_message_execute_v138.as_slice(),
-            138,
+            task_message_execute_v139.as_slice(),
+            139,
             want_execute(),
         )?;
     }
     {
-        let task_message_schedule_v138 = vec![
+        let task_message_schedule_v139 = vec![
             18, 239, 1, 8, 11, 18, 6, 116, 97, 115, 107, 95, 99, 34, 16, 83, 69, 76, 69, 67, 84,
             32, 42, 32, 70, 82, 79, 77, 32, 116, 49, 42, 7, 99, 111, 109, 109, 101, 110, 116, 50,
             6, 112, 117, 98, 108, 105, 99, 58, 22, 8, 11, 18, 11, 51, 48, 32, 49, 50, 32, 42, 32,
@@ -92,20 +92,20 @@ fn test_decode_v138_task_message() -> anyhow::Result<()> {
             67, 130, 1, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 49,
             51, 32, 85, 84, 67, 138, 1, 6, 116, 97, 115, 107, 95, 97, 138, 1, 6, 116, 97, 115, 107,
             95, 98, 146, 1, 6, 99, 49, 32, 62, 32, 49, 154, 1, 6, 10, 1, 97, 18, 1, 98, 170, 1, 2,
-            109, 101, 160, 6, 137, 1, 168, 6, 24, 160, 6, 137, 1, 168, 6, 24,
+            109, 101, 160, 6, 139, 1, 168, 6, 24, 160, 6, 139, 1, 168, 6, 24,
         ];
         let want_schedule = || mt::TaskMessage::ScheduleTask(want_task());
 
         common::test_pb_from_to(func_name!(), want_schedule())?;
         common::test_load_old(
             func_name!(),
-            task_message_schedule_v138.as_slice(),
-            138,
+            task_message_schedule_v139.as_slice(),
+            139,
             want_schedule(),
         )?;
     }
     {
-        let task_message_after_v138 = vec![
+        let task_message_after_v139 = vec![
             34, 239, 1, 8, 11, 18, 6, 116, 97, 115, 107, 95, 99, 34, 16, 83, 69, 76, 69, 67, 84,
             32, 42, 32, 70, 82, 79, 77, 32, 116, 49, 42, 7, 99, 111, 109, 109, 101, 110, 116, 50,
             6, 112, 117, 98, 108, 105, 99, 58, 22, 8, 11, 18, 11, 51, 48, 32, 49, 50, 32, 42, 32,
@@ -117,22 +117,22 @@ fn test_decode_v138_task_message() -> anyhow::Result<()> {
             67, 130, 1, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 49,
             51, 32, 85, 84, 67, 138, 1, 6, 116, 97, 115, 107, 95, 97, 138, 1, 6, 116, 97, 115, 107,
             95, 98, 146, 1, 6, 99, 49, 32, 62, 32, 49, 154, 1, 6, 10, 1, 97, 18, 1, 98, 170, 1, 2,
-            109, 101, 160, 6, 137, 1, 168, 6, 24, 160, 6, 137, 1, 168, 6, 24,
+            109, 101, 160, 6, 139, 1, 168, 6, 24, 160, 6, 139, 1, 168, 6, 24,
         ];
         let want_after = || mt::TaskMessage::AfterTask(want_task());
 
         common::test_pb_from_to(func_name!(), want_after())?;
         common::test_load_old(
             func_name!(),
-            task_message_after_v138.as_slice(),
-            138,
+            task_message_after_v139.as_slice(),
+            139,
             want_after(),
         )?;
     }
     {
-        let task_message_delete_v138 = vec![
+        let task_message_delete_v139 = vec![
             26, 27, 10, 6, 116, 97, 115, 107, 95, 99, 18, 17, 10, 11, 119, 97, 114, 101, 104, 111,
-            117, 115, 101, 95, 97, 18, 2, 49, 48, 160, 6, 137, 1, 168, 6, 24,
+            117, 115, 101, 95, 97, 18, 2, 49, 48, 160, 6, 139, 1, 168, 6, 24,
         ];
         let want_delete = || {
             let task = want_task();
@@ -142,8 +142,8 @@ fn test_decode_v138_task_message() -> anyhow::Result<()> {
         common::test_pb_from_to(func_name!(), want_delete())?;
         common::test_load_old(
             func_name!(),
-            task_message_delete_v138.as_slice(),
-            138,
+            task_message_delete_v139.as_slice(),
+            139,
             want_delete(),
         )?;
     }
