@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 
 use crate::optimizer::ir::Matcher;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -30,7 +31,6 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::MaterializedCTE;
-use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::Sequence;
 use crate::plans::UnionAll;
@@ -93,10 +93,30 @@ impl Rule for RuleGroupingSetsToUnion {
         }
 
         let agg_input = s_expr.child(0)?.child(0)?;
+        let agg_input_columns: Vec<IndexType> = RelExpr::with_s_expr(&agg_input)
+            .derive_relational_prop()?
+            .output_columns
+            .iter()
+            .cloned()
+            .collect();
 
         if let Some(grouping_sets) = &agg.grouping_sets {
             if grouping_sets.sets.len() > 1 {
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
+
+                // Let's build a temporary CTE PLAN
+                let temp_cte_name = format!("cte_{}", uuid::Uuid::new_v4().simple().to_string());
+                let cte_materialized_sexpr = SExpr::create_unary(
+                    MaterializedCTE::new(temp_cte_name.clone(), None),
+                    agg_input.clone(),
+                );
+
+                let cte_consumer = SExpr::create_leaf(CTEConsumer {
+                    cte_name: temp_cte_name,
+                    output_columns: agg_input_columns.clone(),
+                    def: agg_input.clone(),
+                });
+
                 for set in &grouping_sets.sets {
                     let mut eval_scalar = eval_scalar.clone();
                     let mut agg = agg.clone();
@@ -130,34 +150,13 @@ impl Rule for RuleGroupingSetsToUnion {
                         match_visitor.visit(&mut scalar.scalar)?;
                     }
 
-                    let agg_plan = SExpr::create_unary(agg, agg_input.clone());
+                    let agg_plan = SExpr::create_unary(agg, cte_consumer.clone());
                     let eval_plan = SExpr::create_unary(eval_scalar, agg_plan);
                     children.push(eval_plan);
                 }
 
                 // fold children into result
                 let mut result = children.first().unwrap().clone();
-
-                // Let's build a temporary CTE PLAN
-                let temp_cte_name = "cte".to_string();
-
-                let cte_materialized_plan = SExpr::create_unary(
-                    MaterializedCTE {
-                        cte_name: temp_cte_name,
-                        cte_output_columns: vec![],
-                        ref_count: children.len(),
-                    },
-                    agg_input.clone(),
-                );
-
-                let cte_consumer = SExpr::create_leaf(CTEConsumer {
-                    cte_name: temp_cte_name,
-                    cte_schema: todo!(),
-                    def: agg_input.clone(),
-                });
-
-                result = SExpr::create_unary(result.plan, cte_materialized_plan.clone());
-
                 for other in children.into_iter().skip(1) {
                     let union_plan = UnionAll {
                         left_outputs: eval_scalar.items.iter().map(|x| (x.index, None)).collect(),
@@ -167,7 +166,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     };
                     result = SExpr::create_binary(Arc::new(union_plan.into()), result, other);
                 }
-                result = SExpr::create_binary(Sequence, cte_materialized_plan, result);
+                result = SExpr::create_binary(Sequence, cte_materialized_sexpr, result);
 
                 state.add_result(result);
                 return Ok(());
