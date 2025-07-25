@@ -962,14 +962,21 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting disables stage and udf privilege check(enable by default).",
+                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_connection_privilege_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting disables connection object privilege check(disable by default).",
+                    desc: "experiment setting enable connection object privilege check(disable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

@@ -92,6 +92,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_common_storages_iceberg::IcebergMutableCatalog;
+use databend_common_users::GrantObjectVisibilityChecker;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
@@ -527,7 +528,11 @@ impl Catalog for IcebergCatalog {
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         unimplemented!()
     }
-    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        _req: GetSequenceReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
     async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
@@ -537,6 +542,7 @@ impl Catalog for IcebergCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

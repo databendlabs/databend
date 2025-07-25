@@ -166,6 +166,7 @@ pub enum GrantObjectName {
     Stage(String),
     Warehouse(String),
     Connection(String),
+    Sequence(String),
 }
 
 impl Display for GrantObjectName {
@@ -185,6 +186,7 @@ impl Display for GrantObjectName {
             GrantObjectName::Stage(stage) => write!(f, " STAGE {stage}"),
             GrantObjectName::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
             GrantObjectName::Connection(c) => write!(f, " CONNECTION {c}"),
+            GrantObjectName::Sequence(s) => write!(f, " SEQUENCE {s}"),
         }
     }
 }
@@ -243,6 +245,7 @@ pub enum AccountMgrLevel {
     Stage(String),
     Warehouse(String),
     Connection(String),
+    Sequence(String),
 }
 
 impl Display for AccountMgrLevel {
@@ -266,7 +269,8 @@ impl Display for AccountMgrLevel {
             AccountMgrLevel::UDF(udf) => write!(f, " UDF {udf}"),
             AccountMgrLevel::Stage(stage) => write!(f, " STAGE {stage}"),
             AccountMgrLevel::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
-            AccountMgrLevel::Connection(w) => write!(f, " CONNECTION {w}"),
+            AccountMgrLevel::Connection(c) => write!(f, " CONNECTION {c}"),
+            AccountMgrLevel::Sequence(s) => write!(f, " SEQUENCE {s}"),
         }
     }
 }

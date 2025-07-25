@@ -129,6 +129,9 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Connection(name) => Ok(OwnershipObject::Connection {
                 name: name.to_string(),
             }),
+            GrantObject::Sequence(name) => Ok(OwnershipObject::Sequence {
+                name: name.to_string(),
+            }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),

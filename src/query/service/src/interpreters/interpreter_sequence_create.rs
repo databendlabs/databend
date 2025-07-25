@@ -16,9 +16,14 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_exception::Result;
+use databend_common_management::RoleApi;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_sql::plans::CreateSequencePlan;
 use databend_common_storages_fuse::TableContext;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -56,6 +61,23 @@ impl Interpreter for CreateSequenceInterpreter {
         };
         let catalog = self.ctx.get_default_catalog()?;
         let _reply = catalog.create_sequence(req).await?;
+
+        // Grant ownership as the current role
+        if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            let tenant = self.plan.ident.tenant();
+            let name = self.plan.ident.name().to_string();
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let role_api = UserApiProvider::instance().role_api(tenant);
+                role_api
+                    .grant_ownership(&OwnershipObject::Sequence { name }, &current_role.name)
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(tenant);
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

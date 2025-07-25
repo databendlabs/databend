@@ -15208,6 +15208,102 @@ Grant(
 
 
 ---------- Input ----------
+GRANT access sequence, create sequence ON *.*  TO 'test-grant';
+---------- Output ---------
+GRANT ACCESS SEQUENCE, CREATE SEQUENCE ON  *.* TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                AccessSequence,
+                CreateSequence,
+            ],
+            level: Global,
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT access sequence on sequence s1  TO 'test-grant';
+---------- Output ---------
+GRANT ACCESS SEQUENCE ON  SEQUENCE s1 TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                AccessSequence,
+            ],
+            level: Sequence(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all on sequence s1  TO 'test-grant';
+---------- Output ---------
+GRANT ACCESS SEQUENCE ON  SEQUENCE s1 TO USER 'test-grant'@'%'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                AccessSequence,
+            ],
+            level: Sequence(
+                "s1",
+            ),
+        },
+        principal: User(
+            UserIdentity {
+                username: "test-grant",
+                hostname: "%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP on sequence s1  TO role r1;
+---------- Output ---------
+GRANT OWNERSHIP ON  SEQUENCE s1 TO ROLE 'r1'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Sequence(
+                "s1",
+            ),
+        },
+        principal: Role(
+            "r1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
