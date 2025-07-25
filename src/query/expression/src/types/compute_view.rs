@@ -85,8 +85,8 @@ where
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
         F::downcast_domain(domain).map(|domain| {
-            let w = 1;
-            C::compute_domain(&domain)
+            let domain1 = C::compute_domain(&domain);
+            domain1
         })
     }
 
