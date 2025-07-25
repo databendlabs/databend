@@ -123,9 +123,7 @@ impl Binder {
             sql,
             session_parameters,
         } = stmt;
-        if (schedule_opts.is_none() && after.is_empty())
-            || (schedule_opts.is_some() && !after.is_empty())
-        {
+        if schedule_opts.is_some() && !after.is_empty() {
             return Err(ErrorCode::SyntaxException(
                 "task must be defined with either given time schedule as a root task or run after other task as a DAG".to_string(),
             ));
