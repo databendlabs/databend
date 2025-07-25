@@ -36,6 +36,5 @@ impl PipelineBuilder {
             .get_materialized_cte_senders(&cte.cte_name, cte.ref_count);
         self.main_pipeline
             .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))
-        Ok(())
     }
 }

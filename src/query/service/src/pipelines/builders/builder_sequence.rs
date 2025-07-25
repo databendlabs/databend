@@ -33,6 +33,5 @@ impl PipelineBuilder {
 
         // build main pipeline
         self.build_pipeline(&sequence.right)
-        Ok(())
     }
 }
