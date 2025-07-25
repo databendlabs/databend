@@ -33,6 +33,7 @@ educe = { workspace = true }
 either = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true, features = ["serde", "macros"] }
+fastrace = { workspace = true }
 futures = { workspace = true }
 geo = { workspace = true }
 geozero = { workspace = true }

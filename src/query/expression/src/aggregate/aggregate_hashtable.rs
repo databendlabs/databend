@@ -167,6 +167,7 @@ impl AggregateHashTable {
         }
     }
 
+    #[fastrace::trace(name = "AggregateHashTable::add_groups_inner")]
     // Add new groups and combine the states
     fn add_groups_inner(
         &mut self,

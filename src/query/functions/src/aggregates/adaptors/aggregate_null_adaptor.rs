@@ -534,11 +534,7 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             return Ok(());
         }
 
-        if !get_flag(place) {
-            // initial the state to remove the dirty stats
-            self.init_state(place);
-        }
-        set_flag(place, true);
+        self.update_flag(place);
         self.nested
             .merge(place.remove_last_loc(), &data[..data.len() - 1])
     }
@@ -556,35 +552,29 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
 
         match state {
             BlockEntry::Column(Column::Tuple(tuple)) => {
-                let nested_state = tuple[0..tuple.len() - 1].to_vec();
+                let nested_state = Column::Tuple(tuple[0..tuple.len() - 1].to_vec());
                 let flag = tuple.last().unwrap().as_boolean().unwrap();
                 let flag = match filter {
                     Some(filter) => filter & flag,
                     None => flag.clone(),
                 };
-                if flag.null_count() == 0 {
-                    return self.nested.batch_merge(
-                        places,
-                        loc,
-                        &Column::Tuple(nested_state).into(),
-                        filter,
-                    );
-                }
-
-                for (place, flag) in places.iter().zip(flag.iter()) {
-                    if flag {
-                        let addr = AggrState::new(*place, loc);
-                        if !get_flag(addr) {
-                            // initial the state to remove the dirty stats
-                            self.init_state(AggrState::new(*place, loc));
-                        }
-                        set_flag(addr, true);
+                let filter = if flag.null_count() == 0 {
+                    for place in places.iter() {
+                        self.update_flag(AggrState::new(*place, loc));
                     }
-                }
-
-                let nested_state = Column::Tuple(nested_state).into();
+                    None
+                } else {
+                    for place in places
+                        .iter()
+                        .zip(flag.iter())
+                        .filter_map(|(place, flag)| flag.then_some(place))
+                    {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    Some(&flag)
+                };
                 self.nested
-                    .batch_merge(places, &loc[..loc.len() - 1], &nested_state, Some(&flag))
+                    .batch_merge(places, &loc[..loc.len() - 1], &nested_state.into(), filter)
             }
             _ => {
                 let state = state.downcast::<AnyType>().unwrap();
@@ -642,6 +632,14 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         } else {
             self.nested.drop_state(place.remove_last_loc())
         }
+    }
+
+    fn update_flag(&self, place: AggrState) {
+        if !get_flag(place) {
+            // initial the state to remove the dirty stats
+            self.init_state(place);
+        }
+        set_flag(place, true);
     }
 }
 
