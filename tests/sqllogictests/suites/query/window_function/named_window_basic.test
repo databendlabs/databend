@@ -187,6 +187,21 @@ sales 4800 0.0
 sales 4800 0.0
 sales 5000 1.0
 
+# percent_rank
+query TII
+SELECT depname, salary, percent_rank() OVER w FROM empsalary WINDOW w AS (ORDER BY salary) order by salary
+----
+personnel 3500 0.0
+personnel 3900 0.1111111111111111
+develop 4200 0.2222222222222222
+develop 4500 0.3333333333333333
+sales 4800 0.4444444444444444
+sales 4800 0.4444444444444444
+sales 5000 0.6666666666666666
+develop 5200 0.7777777777777778
+develop 5200 0.7777777777777778
+develop 6000 1.0
+
 # min/max/avg
 query TIIR
 SELECT depname, min(salary) OVER w m1, max(salary) OVER w m2, AVG(salary) OVER w m3 FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary, empno) ORDER BY depname, empno
