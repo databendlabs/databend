@@ -32,7 +32,7 @@ impl PipelineBuilder {
         self.pipelines.extend(build_res.sources_pipelines);
 
         // build main pipeline
-        self.build_pipeline(&sequence.right)?;
+        self.build_pipeline(&sequence.right)
         Ok(())
     }
 }
