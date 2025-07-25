@@ -30,6 +30,7 @@ use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -208,8 +209,13 @@ impl TaskService {
                 ..
             }) = task_message.warehouse_options()
             {
-                // [WarehouseInfo::SelfManaged] uses ClusterId as warehouse
-                if warehouse != &self.cluster_id {
+                if warehouse
+                    != &self
+                        .create_context(None)
+                        .await?
+                        .get_cluster()
+                        .get_warehouse_id()?
+                {
                     continue;
                 }
             }
@@ -282,7 +288,7 @@ impl TaskService {
                                                         let Some(_guard) = fn_lock(&task_service, &task_key, duration.as_millis() as u64).await? else {
                                                             continue;
                                                         };
-                                                        if !Self::check_when(&task, &owner, &task_service).await.unwrap() {
+                                                        if !Self::check_when(&task, &owner, &task_service).await? {
                                                             continue;
                                                         }
                                                         fn_new_task_run(&task_service, &task).await?;
@@ -540,8 +546,7 @@ impl TaskService {
         };
         let result = task_service
             .execute_sql(Some(user.clone()), &format!("SELECT {when_condition}"))
-            .await
-            .unwrap();
+            .await?;
         Ok(result
             .first()
             .and_then(|block| block.get_by_offset(0).index(0))

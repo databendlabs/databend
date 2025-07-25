@@ -61,15 +61,15 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 create_table_query_id=$(echo $response | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id"
 
-response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 WAREHOUSE = 'mywh' SCHEDULE = 1 SECOND AS insert into t1 values(0)\"}")
+response1=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 SCHEDULE = 1 SECOND AS insert into t1 values(0)\"}")
 create_task_1_query_id=$(echo $response1 | jq -r '.id')
 echo "Create Task 1 Query ID: $create_task_1_query_id"
 
-response2=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 WAREHOUSE = 'mywh' SCHEDULE = 5 SECOND AS insert into t1 values(1)\"}")
+response2=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_2 SCHEDULE = 5 SECOND AS insert into t1 values(1)\"}")
 create_task_2_query_id=$(echo $response2 | jq -r '.id')
 echo "Create Task 2 ID: $create_task_2_query_id"
 
-response3=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_3 WAREHOUSE = 'mywh' AFTER 'my_task_1', 'my_task_2' AS insert into t1 values(2)\"}")
+response3=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_3 AFTER 'my_task_1', 'my_task_2' AS insert into t1 values(2)\"}")
 create_task_3_query_id=$(echo $response3 | jq -r '.id')
 echo "Create Task 3 ID: $create_task_3_query_id"
 
@@ -234,7 +234,7 @@ response15=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Conten
 create_table_query_id_1=$(echo $response15 | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id_1"
 
-response16=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 WAREHOUSE = 'mywh' SCHEDULE = USING CRON '*/5 * * * * ?' AS insert into t2 values(0)\"}")
+response16=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_4 SCHEDULE = USING CRON '*/5 * * * * ?' AS insert into t2 values(0)\"}")
 create_task_4_query_id=$(echo $response16 | jq -r '.id')
 echo "Create Task 4 Query ID: $create_task_4_query_id"
 
@@ -274,15 +274,15 @@ response20=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Conten
 create_table_query_id_2=$(echo $response20 | jq -r '.id')
 echo "Create Table Query ID: $create_table_query_id_2"
 
-response21=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_5 WAREHOUSE = 'mywh' SCHEDULE = 3 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(1, 0)\"}")
+response21=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_5 SCHEDULE = 3 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(1, 0)\"}")
 create_task_5_query_id=$(echo $response21 | jq -r '.id')
 echo "Create Task 5 Query ID: $create_task_5_query_id"
 
-response22=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_6 WAREHOUSE = 'mywh' SCHEDULE = 5 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(2, 0)\"}")
+response22=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_6 SCHEDULE = 5 SECOND WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 1) AS insert into t3 values(2, 0)\"}")
 create_task_6_query_id=$(echo $response22 | jq -r '.id')
 echo "Create Task 6 Query ID: $create_task_6_query_id"
 
-response23=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_7 WAREHOUSE = 'mywh' AFTER 'my_task_5', 'my_task_6' WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 2)  AS insert into t3 values(3, 0)\"}")
+response23=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_7 AFTER 'my_task_5', 'my_task_6' WHEN EXISTS (SELECT 1 FROM t3 WHERE c2 = 2)  AS insert into t3 values(3, 0)\"}")
 create_task_7_query_id=$(echo $response23 | jq -r '.id')
 echo "Create Task 7 Query ID: $create_task_7_query_id"
 
