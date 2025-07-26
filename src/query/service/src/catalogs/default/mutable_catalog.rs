@@ -120,6 +120,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -782,7 +783,20 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.create_sequence(req).await?)
     }
 
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
+        if let Some(vi) = visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
+
         let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
 
         let Some(seq_meta) = seq_meta else {
@@ -805,7 +819,16 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
+        if let Some(vi) = visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
         Ok(self.ctx.meta.get_sequence_next_value(req).await?)
     }
 

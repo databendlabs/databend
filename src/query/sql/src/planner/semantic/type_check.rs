@@ -5246,7 +5246,18 @@ impl<'a> TypeChecker<'a> {
             ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
         };
 
-        databend_common_base::runtime::block_on(catalog.get_sequence(req))?;
+        let visibility_checker = if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            Some(databend_common_base::runtime::block_on(async move {
+                self.ctx.get_visibility_checker(false).await
+            })?)
+        } else {
+            None
+        };
+        databend_common_base::runtime::block_on(catalog.get_sequence(req, visibility_checker))?;
 
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);

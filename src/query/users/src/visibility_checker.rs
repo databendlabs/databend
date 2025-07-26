@@ -33,6 +33,7 @@ pub struct GrantObjectVisibilityChecker {
     granted_global_udf: bool,
     granted_global_ws: bool,
     granted_global_c: bool,
+    granted_global_seq: bool,
     granted_global_db_table: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
@@ -48,6 +49,7 @@ pub struct GrantObjectVisibilityChecker {
     granted_read_stages: HashSet<String>,
     granted_ws: HashSet<String>,
     granted_c: HashSet<String>,
+    granted_seq: HashSet<String>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -59,6 +61,7 @@ impl GrantObjectVisibilityChecker {
         let mut granted_global_udf = false;
         let mut granted_global_ws = false;
         let mut granted_global_c = false;
+        let mut granted_global_seq = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
@@ -67,6 +70,7 @@ impl GrantObjectVisibilityChecker {
         let mut granted_udfs = HashSet::new();
         let mut granted_ws = HashSet::new();
         let mut granted_c = HashSet::new();
+        let mut granted_seq = HashSet::new();
         let mut granted_write_stages = HashSet::new();
         let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
@@ -117,6 +121,15 @@ impl GrantObjectVisibilityChecker {
                             ent.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_connection(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_seq,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_sequence(false)
                                     .has_privilege(privilege)
                             },
                         );
@@ -197,6 +210,9 @@ impl GrantObjectVisibilityChecker {
                     GrantObject::Connection(c) => {
                         granted_c.insert(c.to_string());
                     }
+                    GrantObject::Sequence(c) => {
+                        granted_seq.insert(c.to_string());
+                    }
                 }
             }
         }
@@ -231,6 +247,9 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::Connection { name } => {
                     granted_c.insert(name.to_string());
                 }
+                OwnershipObject::Sequence { name } => {
+                    granted_seq.insert(name.to_string());
+                }
             }
         }
 
@@ -238,6 +257,7 @@ impl GrantObjectVisibilityChecker {
             granted_global_udf,
             granted_global_ws,
             granted_global_c,
+            granted_global_seq,
             granted_global_db_table,
             granted_global_stage,
             granted_global_read_stage,
@@ -256,6 +276,7 @@ impl GrantObjectVisibilityChecker {
             ]),
             granted_ws,
             granted_c,
+            granted_seq,
         }
     }
 
@@ -308,6 +329,16 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
         if self.granted_c.contains(name) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_seq_visibility(&self, name: &str) -> bool {
+        if self.granted_global_seq {
+            return true;
+        }
+        if self.granted_seq.contains(name) {
             return true;
         }
         false

@@ -244,7 +244,7 @@ impl AsyncSource for ShowGrantsSource {
             "role" | "user" => {
                 show_account_grants(self.ctx.clone(), &self.grant_type, &self.name).await?
             }
-            "table" | "database" | "udf" | "stage" | "warehouse" | "connection" => {
+            "table" | "database" | "udf" | "stage" | "warehouse" | "connection" | "sequence" => {
                 show_object_grant(
                     self.ctx.clone(),
                     &self.grant_type,
@@ -257,7 +257,7 @@ impl AsyncSource for ShowGrantsSource {
             "role_grantee" => show_role_grantees(self.ctx.clone(), &self.name).await?,
             _ => {
                 return Err(ErrorCode::InvalidArgument(format!(
-                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|role_grantee', but got {:?}",
+                    "Expected 'user|role|table|database|udf|stage|warehouse|connection|sequence|role_grantee', but got {:?}",
                     self.grant_type
                 )));
             }
@@ -542,6 +542,12 @@ async fn show_account_grants(
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
+                GrantObject::Sequence(seq) => {
+                    object_name.push(seq.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
                 GrantObject::Global => {
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());
@@ -641,6 +647,15 @@ async fn show_account_grants(
                             privileges.push("OWNERSHIP".to_string());
                             grant_list.push(format!(
                                 "GRANT OWNERSHIP ON CONNECTION {} TO {}",
+                                name, identity
+                            ));
+                        }
+                        OwnershipObject::Sequence { name } => {
+                            object_name.push(name.to_string());
+                            object_id.push(None);
+                            privileges.push("OWNERSHIP".to_string());
+                            grant_list.push(format!(
+                                "GRANT OWNERSHIP ON SEQUENCE {} TO {}",
                                 name, identity
                             ));
                         }
@@ -885,9 +900,25 @@ async fn show_object_grant(
                 name,
             )
         }
+        "sequence" => {
+            if !visibility_checker.check_seq_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {} for user {}",
+                    name, current_user
+                )));
+            }
+            (
+                GrantObject::Sequence(name.to_string()),
+                OwnershipObject::Sequence {
+                    name: name.to_string(),
+                },
+                None,
+                name,
+            )
+        }
         _ => {
             return Err(ErrorCode::InvalidArgument(format!(
-                "Expected 'table|database|udf|stage|warehouse|connection', but got {:?}",
+                "Expected 'table|database|udf|stage|warehouse|connection|sequence', but got {:?}",
                 grant_type
             )));
         }

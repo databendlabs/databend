@@ -54,6 +54,10 @@ message OwnershipObject {
     string connection = 1;
   }
 
+  message OwnershipSequenceObject {
+    string sequence = 1;
+  }
+
   oneof object {
     OwnershipDatabaseObject database = 1;
     OwnershipTableObject table = 2;
@@ -61,5 +65,6 @@ message OwnershipObject {
     OwnershipStageObject stage = 4;
     OwnershipWarehouseObject warehouse = 5;
     OwnershipConnectionObject connection = 6;
+    OwnershipSequenceObject sequence = 7;
   }
 }

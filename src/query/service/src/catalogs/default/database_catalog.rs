@@ -107,6 +107,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use log::info;
 
@@ -794,8 +795,22 @@ impl Catalog for DatabaseCatalog {
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         self.mutable_catalog.create_sequence(req).await
     }
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
-        self.mutable_catalog.get_sequence(req).await
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
+        if let Some(vi) = &visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
+        self.mutable_catalog
+            .get_sequence(req, visibility_checker)
+            .await
     }
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply> {
@@ -805,8 +820,19 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
-        self.mutable_catalog.get_sequence_next_value(req).await
+        if let Some(vi) = &visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
+        self.mutable_catalog
+            .get_sequence_next_value(req, visibility_checker)
+            .await
     }
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply> {

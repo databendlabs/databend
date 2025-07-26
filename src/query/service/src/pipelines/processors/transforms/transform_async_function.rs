@@ -167,7 +167,18 @@ impl TransformAsyncFunction {
                             count: batch_size,
                         };
 
-                        let resp = catalog.get_sequence_next_value(req).await?;
+                        let visibility_checker = if ctx
+                            .get_settings()
+                            .get_enable_experimental_sequence_privilege_check()?
+                        {
+                            Some(ctx.get_visibility_checker(false).await?)
+                        } else {
+                            None
+                        };
+
+                        let resp = catalog
+                            .get_sequence_next_value(req, visibility_checker)
+                            .await?;
                         let start = resp.start;
 
                         // If we have remaining numbers, use them first

@@ -269,6 +269,18 @@ statement ok
 drop connection if exists c1;
 
 statement ok
+drop sequence if exists seq;
+
+statement ok
+CREATE sequence seq;
+
+statement error 2218
+grant access sequence on sequence seq to u1;
+
+statement ok
+drop sequence if exists seq;
+
+statement ok
 GRANT create warehouse on *.* to role 'role1';
 
 statement ok

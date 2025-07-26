@@ -130,3 +130,4 @@ mod v135_udf_immutable;
 mod v136_add_task;
 mod v137_add_grant_object_connection;
 mod v138_table_statistics;
+mod v139_add_grant_ownership_object_sequence;

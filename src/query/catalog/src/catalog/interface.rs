@@ -106,6 +106,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
@@ -550,13 +551,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn create_sequence(&self, req: CreateSequenceReq) -> Result<CreateSequenceReply>;
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply>;
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply>;
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply>;
 
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;

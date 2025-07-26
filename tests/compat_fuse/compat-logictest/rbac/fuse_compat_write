@@ -17,6 +17,12 @@ statement ok
 create connection c2 storage_type = 's3' access_key_id ='22' secret_access_key ='22' ENDPOINT_URL='http://127.0.0.1:9900';
 
 statement ok
+create connection seq1;
+
+statement ok
+create connection seq2;
+
+statement ok
 drop role if exists 'role2';
 
 statement ok
@@ -30,3 +36,6 @@ GRANT create warehouse on *.* to role 'role1';
 
 statement ok
 GRANT create connection on *.* to role 'role1';
+
+statement ok
+GRANT create sequence on *.* to role 'role1';
