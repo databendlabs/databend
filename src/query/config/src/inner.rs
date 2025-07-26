@@ -760,7 +760,7 @@ impl Default for CacheConfig {
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
-            vector_index_meta_count: 3000,
+            vector_index_meta_count: 30000,
             vector_index_filter_size: 2147483648,
             vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
