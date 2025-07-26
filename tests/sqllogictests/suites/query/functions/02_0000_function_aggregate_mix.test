@@ -578,7 +578,7 @@ INSERT INTO convert_string (c1, c2, c3) VALUES
 ('a', 2, 2),
 ('b', 1, 2);
 
-query IT
+query IT rowsort
 select c1, string_agg(json_object('col', c2, 'no2', c3), ',') from convert_string group by c1;
 ----
 a {"col":1,"no2":1},{"col":2,"no2":1},{"col":1,"no2":1},{"col":1,"no2":2},{"col":2,"no2":2}
