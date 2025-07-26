@@ -3268,6 +3268,8 @@ dependencies = [
  "log",
  "pretty_assertions",
  "serde",
+ "serde-bridge",
+ "serde-env 0.2.0",
  "serde_ignored",
  "serde_with",
  "serfig",
@@ -13662,6 +13664,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-env"
+version = "0.2.0"
+source = "git+https://github.com/Xuanwo/serde-env?rev=085d4b1#085d4b1846ad16e3b7062bf11bf40a1c38d746e1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_bytes"
 version = "0.11.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13817,7 +13827,7 @@ dependencies = [
  "log",
  "serde",
  "serde-bridge",
- "serde-env",
+ "serde-env 0.1.1",
  "toml 0.7.8",
 ]
 

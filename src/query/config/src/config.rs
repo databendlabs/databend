@@ -59,10 +59,10 @@ use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
-use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 
+use super::env::from_env;
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
@@ -3529,7 +3529,7 @@ pub struct SpillConfig {
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
 
-    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections.
+    // TODO: We need to fix StorageConfig so that it supports command line injections.
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 }
