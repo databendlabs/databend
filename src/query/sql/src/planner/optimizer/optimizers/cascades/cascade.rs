@@ -22,6 +22,7 @@ use log::info;
 use crate::optimizer::cost::CostModel;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::Memo;
+use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RequiredProperty;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::cascades::cost::DefaultCostModel;
@@ -36,6 +37,7 @@ use crate::optimizer::optimizers::rule::RuleSet;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
+use crate::plans::RelOperator;
 use crate::IndexType;
 
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
@@ -91,7 +93,7 @@ impl CascadesOptimizer {
         let result = self.optimize_internal(s_expr.clone());
 
         // Process different cases based on the result
-        let optimized_expr = match result {
+        let mut optimized_expr = match result {
             Ok(expr) => {
                 // After successful optimization, apply sort and limit push down if distributed optimization is enabled
                 if opt_ctx.get_enable_distributed_optimization() {
@@ -120,7 +122,52 @@ impl CascadesOptimizer {
             }
         };
 
+        optimized_expr = Self::remove_exchanges_for_serial_sequence(optimized_expr)?;
+
         Ok(optimized_expr)
+    }
+
+    fn remove_exchanges_for_serial_sequence(s_expr: SExpr) -> Result<SExpr> {
+        if Self::has_sequence_with_serial_left_child(&s_expr)? {
+            Self::remove_all_exchanges(s_expr)
+        } else {
+            Ok(s_expr)
+        }
+    }
+
+    fn has_sequence_with_serial_left_child(s_expr: &SExpr) -> Result<bool> {
+        if let RelOperator::Sequence(_) = s_expr.plan.as_ref() {
+            let left_child = s_expr.left_child();
+            let rel_expr = RelExpr::with_s_expr(left_child);
+            let physical_prop = rel_expr.derive_physical_prop()?;
+
+            if physical_prop.distribution == Distribution::Serial {
+                return Ok(true);
+            }
+        }
+
+        for child in s_expr.children() {
+            if Self::has_sequence_with_serial_left_child(child)? {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    fn remove_all_exchanges(s_expr: SExpr) -> Result<SExpr> {
+        if let RelOperator::Exchange(_) = s_expr.plan.as_ref() {
+            return Self::remove_all_exchanges(s_expr.unary_child().clone());
+        }
+
+        let mut new_children = Vec::new();
+        for child in s_expr.children() {
+            let processed_child = Self::remove_all_exchanges(child.clone())?;
+            new_children.push(Arc::new(processed_child));
+        }
+
+        let result = s_expr.replace_children(new_children);
+        Ok(result)
     }
 
     fn optimize_internal(&mut self, s_expr: SExpr) -> Result<SExpr> {

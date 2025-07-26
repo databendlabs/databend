@@ -1,6 +1,6 @@
 # two materialized ctes and select one column
 query I
-with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select t1.a from t1 join t2 on t1.a = t2.b;
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select t1.a from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0
 1
@@ -15,7 +15,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 
 # two materialized ctes and select all columns
 query I
-with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select * from t1 join t2 on t1.a = t2.b;
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)) select * from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0 0
 1 1
@@ -30,7 +30,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 
 # only one materialized
 query I
-with t1 as materialized (select number as a from numbers(10)) select t1.a from t1;
+with t1 as materialized (select number as a from numbers(10)) select t1.a from t1 order by t1.a;
 ----
 0
 1
@@ -45,7 +45,7 @@ with t1 as materialized (select number as a from numbers(10)) select t1.a from t
 
 # one materialized and one not
 query I
-with t1 as materialized (select number as a from numbers(10)), t2 as (select number as b from numbers(20)) select t1.a from t1 join t2 on t1.a = t2.b;
+with t1 as materialized (select number as a from numbers(10)), t2 as (select number as b from numbers(20)) select t1.a from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0
 1
@@ -60,7 +60,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as (select num
 
 # one cte uses a materialized cte
 query I
-with t1 as materialized (select number as a from numbers(10)), t2 as (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
+with t1 as materialized (select number as a from numbers(10)), t2 as (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0
 1
@@ -74,7 +74,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as (select a a
 9
 
 query I
-with t1 as materialized (select number as a from numbers(10)) select t2.a from t1 as t2 where t2.a in (select * from t1 as t3 where t2.a = t3.a);
+with t1 as materialized (select number as a from numbers(10)) select t2.a from t1 as t2 where t2.a in (select * from t1 as t3 where t2.a = t3.a) order by t2.a;
 ----
 0
 1
@@ -135,7 +135,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 
 # one materialized cte uses a materialized cte
 query I
-with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b order by t1.a;
 ----
 0
 1
@@ -149,7 +149,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 9
 
 query II
-with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)), t3 as (select b as c from t2) select * from t1 join t3 on t1.a = t3.c;
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select number as b from numbers(20)), t3 as (select b as c from t2) select * from t1 join t3 on t1.a = t3.c order by t1.a;
 ----
 0 0
 1 1
@@ -163,7 +163,7 @@ with t1 as materialized (select number as a from numbers(10)), t2 as materialize
 9 9
 
 query I
-with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select b from t2;
+with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select b from t2 order by b;
 ----
 0
 1

@@ -21,3 +21,4 @@ pub mod rule;
 
 pub use cascades::CascadesOptimizer;
 pub use hyper_dp::DPhpyOptimizer;
+pub use operator::CleanupUnusedCTEOptimizer;

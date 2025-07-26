@@ -80,6 +80,9 @@ fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::Mutation(_) => "MergeInto".to_string(),
         RelOperator::MutationSource(_) => "MutationSource".to_string(),
         RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
+        RelOperator::MaterializedCTE(_) => "MaterializedCTE".to_string(),
+        RelOperator::MaterializeCTERef(_) => "MaterializeCTERef".to_string(),
+        RelOperator::Sequence(_) => "Sequence".to_string(),
     }
 }
 

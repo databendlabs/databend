@@ -872,13 +872,6 @@ impl TableContext for CtxDelegation {
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
     }
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
-    }
 
     fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()

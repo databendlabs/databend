@@ -13,12 +13,14 @@
 // limitations under the License.
 
 mod aggregate;
+mod cte;
 mod decorrelate;
 mod filter;
 mod join;
 
 pub use aggregate::RuleNormalizeAggregateOptimizer;
 pub use aggregate::RuleStatsAggregateOptimizer;
+pub use cte::CleanupUnusedCTEOptimizer;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryDecorrelatorOptimizer;
 pub use decorrelate::UnnestResult;
