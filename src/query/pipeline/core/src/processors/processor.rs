@@ -161,12 +161,24 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn process(&self) -> Result<()> {
-        let mut name = self.name();
-        name.push_str("::process");
-        let _span = LocalSpan::enter_with_local_parent(name)
+        let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
             .with_property(|| ("graph-node-id", self.id().index().to_string()));
 
-        (*self.inner.get()).process()
+        match (*self.inner.get()).process() {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                let _ = span
+                    .with_property(|| ("error", "true"))
+                    .with_properties(|| {
+                        [
+                            ("error.type", err.code().to_string()),
+                            ("error.message", err.display_text()),
+                        ]
+                    });
+                log::info!(error = err.to_string(); "[PIPELINE-EXECUTOR] Error in process");
+                Err(err)
+            }
+        }
     }
 
     /// # Safety
@@ -190,10 +202,23 @@ impl ProcessorPtr {
         async move {
             let span = Span::enter_with_local_parent(name)
                 .with_property(|| ("graph-node-id", id.index().to_string()));
-            task.in_span(span).await?;
 
-            drop(inner);
-            Ok(())
+            match task.await {
+                Ok(_) => {
+                    drop(inner);
+                    Ok(())
+                }
+                Err(err) => {
+                    span.with_property(|| ("error", "true")).add_properties(|| {
+                        [
+                            ("error.type", err.code().to_string()),
+                            ("error.message", err.display_text()),
+                        ]
+                    });
+                    log::info!(error = err.to_string(); "[PIPELINE-EXECUTOR] Error in process");
+                    Err(err)
+                }
+            }
         }
         .boxed()
     }

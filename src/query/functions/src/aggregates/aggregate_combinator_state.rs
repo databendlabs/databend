@@ -19,9 +19,11 @@ use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::AggregateFunctionFactory;
 use super::StateAddr;
@@ -70,7 +72,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Binary)
+        Ok(self.nested.serialize_data_type())
     }
 
     fn init_state(&self, place: AggrState) {
@@ -106,13 +108,27 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize(place, writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.nested.serialize_type()
     }
 
-    #[inline]
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge(place, reader)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.nested.batch_serialize(places, loc, builders)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.nested.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -120,10 +136,9 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builder = builder.as_binary_mut().unwrap();
-        self.nested.serialize(place, &mut builder.data)?;
-        builder.commit_row();
-        Ok(())
+        let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+        self.nested
+            .batch_serialize(&[place.addr], place.loc, builders)
     }
 
     fn need_manual_drop_state(&self) -> bool {

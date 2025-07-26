@@ -147,6 +147,7 @@ impl PipelineExecutor {
         }
     }
 
+    #[fastrace::trace(name = "PipelineExecutor::init")]
     fn init(on_init_callback: &Mutex<Option<InitCallback>>, query_id: &Arc<String>) -> Result<()> {
         // TODO: the on init callback cannot be killed.
         {
@@ -159,10 +160,8 @@ impl PipelineExecutor {
                 }
             }
 
-            info!(
-                "[PIPELINE-EXECUTOR] Pipeline initialized successfully for query {}, elapsed: {:?}",
-                query_id,
-                instant.elapsed()
+            info!(query_id, elapsed:? = instant.elapsed();
+                "[PIPELINE-EXECUTOR] Pipeline initialized successfully",
             );
         }
         Ok(())

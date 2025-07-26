@@ -45,29 +45,31 @@ impl AsyncTransform for TransformExchangeAsyncBarrier {
     const NAME: &'static str = "TransformExchangeAsyncBarrier";
 
     async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
-        if let Some(meta) = data
+        let Some(meta) = data
             .take_meta()
             .and_then(FlightSerializedMeta::downcast_from)
-        {
-            let mut futures = Vec::with_capacity(meta.serialized_blocks.len());
+        else {
+            return Err(ErrorCode::Internal(""));
+        };
 
-            for serialized_block in meta.serialized_blocks {
-                futures.push(databend_common_base::runtime::spawn(async move {
-                    match serialized_block {
-                        FlightSerialized::DataBlock(v) => Ok(v),
-                        FlightSerialized::Future(f) => f.await,
-                    }
-                }));
-            }
-
-            return match futures::future::try_join_all(futures).await {
-                Err(_) => Err(ErrorCode::TokioError("Cannot join tokio job")),
-                Ok(spilled_data) => Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
-                    spilled_data.into_iter().collect::<Result<Vec<_>>>()?,
-                ))),
-            };
+        let mut futures = Vec::with_capacity(meta.serialized_blocks.len());
+        for serialized_block in meta.serialized_blocks {
+            futures.push(databend_common_base::runtime::spawn(async move {
+                match serialized_block {
+                    FlightSerialized::DataBlock(v) => Ok(v),
+                    FlightSerialized::Future(f) => f.await,
+                }
+            }));
         }
 
-        Err(ErrorCode::Internal(""))
+        match futures::future::try_join_all(futures).await {
+            Err(_) => Err(ErrorCode::TokioError("Cannot join tokio job")),
+            Ok(spilled_data) => {
+                let blocks = spilled_data.into_iter().collect::<Result<_>>()?;
+                Ok(DataBlock::empty_with_meta(ExchangeShuffleMeta::create(
+                    blocks,
+                )))
+            }
+        }
     }
 }

@@ -186,10 +186,13 @@ pub fn eval_aggr_for_test(
     let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
     func.accumulate(state, entries.into(), None, rows)?;
     if with_serialize {
-        let mut buf = vec![];
-        func.serialize(state, &mut buf)?;
+        let data_type = func.serialize_data_type();
+        let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
+        let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
+        func.batch_serialize(&[eval.addr], state.loc, builders)?;
         func.init_state(state);
-        func.merge(state, &mut buf.as_slice())?;
+        let column = builder.build();
+        func.batch_merge(&[eval.addr], state.loc, &column.into(), None)?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(state, &mut builder)?;

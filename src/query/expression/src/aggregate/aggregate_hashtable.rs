@@ -27,7 +27,6 @@ use crate::aggregate::payload_row::row_match_columns;
 use crate::group_hash_columns;
 use crate::new_sel;
 use crate::read;
-use crate::types::BinaryType;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::BlockEntry;
@@ -219,7 +218,7 @@ impl AggregateHashTable {
                     .zip(agg_states.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.batch_merge(state_places, loc, &state.downcast::<BinaryType>().unwrap())?;
+                    func.batch_merge(state_places, loc, state, None)?;
                 }
             }
         }

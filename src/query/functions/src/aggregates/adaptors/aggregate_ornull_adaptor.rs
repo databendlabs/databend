@@ -20,10 +20,12 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::BinaryWrite;
+use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -37,23 +39,23 @@ use super::StateAddr;
 /// Use a single additional byte of data after the nested function data:
 /// 0 means there was no input, 1 means there was some.
 pub struct AggregateFunctionOrNullAdaptor {
-    inner: AggregateFunctionRef,
+    nested: AggregateFunctionRef,
     inner_nullable: bool,
 }
 
 impl AggregateFunctionOrNullAdaptor {
     pub fn create(
-        inner: AggregateFunctionRef,
+        nested: AggregateFunctionRef,
         features: AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         // count/count distinct should not be nullable for empty set, just return zero
-        let inner_return_type = inner.return_type()?;
+        let inner_return_type = nested.return_type()?;
         if features.returns_default_when_only_null || inner_return_type == DataType::Null {
-            return Ok(inner);
+            return Ok(nested);
         }
 
         Ok(Arc::new(AggregateFunctionOrNullAdaptor {
-            inner,
+            nested,
             inner_nullable: inner_return_type.is_nullable(),
         }))
     }
@@ -69,32 +71,33 @@ pub fn get_flag(place: AggrState) -> bool {
     *c != 0
 }
 
+fn merge_flag(place: AggrState, other: bool) {
+    let flag = other || get_flag(place);
+    set_flag(place, flag);
+}
+
 fn flag_offset(place: AggrState) -> usize {
     *place.loc.last().unwrap().as_bool().unwrap().1
 }
 
 impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn name(&self) -> &str {
-        self.inner.name()
+        self.nested.name()
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.inner.return_type()?.wrap_nullable())
+        Ok(self.nested.return_type()?.wrap_nullable())
     }
 
     #[inline]
     fn init_state(&self, place: AggrState) {
         let c = place.addr.next(flag_offset(place)).get::<u8>();
         *c = 0;
-        self.inner.init_state(place.remove_last_loc())
-    }
-
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.inner.serialize_size_per_row().map(|row| row + 1)
+        self.nested.init_state(place.remove_last_loc())
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
-        self.inner.register_state(registry);
+        self.nested.register_state(registry);
         registry.register(AggrStateType::Bool);
     }
 
@@ -110,7 +113,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             return Ok(());
         }
 
-        let if_cond = self.inner.get_if_condition(columns);
+        let if_cond = self.nested.get_if_condition(columns);
 
         let validity = match (if_cond, validity) {
             (None, None) => None,
@@ -125,7 +128,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             .unwrap_or(true)
         {
             set_flag(place, true);
-            self.inner.accumulate(
+            self.nested.accumulate(
                 place.remove_last_loc(),
                 columns,
                 validity.as_ref(),
@@ -142,9 +145,9 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         columns: ProjectedBlock,
         input_rows: usize,
     ) -> Result<()> {
-        self.inner
+        self.nested
             .accumulate_keys(places, &loc[..loc.len() - 1], columns, input_rows)?;
-        let if_cond = self.inner.get_if_condition(columns);
+        let if_cond = self.nested.get_if_condition(columns);
 
         match if_cond {
             Some(v) if v.null_count() > 0 => {
@@ -171,30 +174,96 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     #[inline]
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        self.inner
+        self.nested
             .accumulate_row(place.remove_last_loc(), columns, row)?;
         set_flag(place, true);
         Ok(())
     }
 
-    #[inline]
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.inner.serialize(place.remove_last_loc(), writer)?;
-        let flag = get_flag(place) as u8;
-        writer.write_scalar(&flag)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.nested
+            .serialize_type()
+            .into_iter()
+            .chain(Some(StateSerdeItem::DataType(DataType::Boolean)))
+            .collect()
     }
 
-    #[inline]
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let flag = get_flag(place) || reader[reader.len() - 1] > 0;
-        self.inner
-            .merge(place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
-        set_flag(place, flag);
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let n = builders.len();
+        debug_assert_eq!(self.nested.serialize_type().len() + 1, n);
+        let flag_builder = builders
+            .last_mut()
+            .and_then(ColumnBuilder::as_boolean_mut)
+            .unwrap();
+        for place in places {
+            let place = AggrState::new(*place, loc);
+            flag_builder.push(get_flag(place));
+        }
+        self.nested
+            .batch_serialize(places, &loc[..loc.len() - 1], &mut builders[..(n - 1)])
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        match state {
+            BlockEntry::Column(Column::Tuple(tuple)) => {
+                let flag = tuple.last().unwrap().as_boolean().unwrap();
+                let iter = places.iter().zip(flag.iter());
+                if let Some(filter) = filter {
+                    for (place, flag) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
+                    {
+                        merge_flag(AggrState::new(*place, loc), flag);
+                    }
+                } else {
+                    for (place, flag) in iter {
+                        merge_flag(AggrState::new(*place, loc), flag);
+                    }
+                }
+                let inner_state = Column::Tuple(tuple[0..tuple.len() - 1].to_vec()).into();
+                self.nested
+                    .batch_merge(places, &loc[0..loc.len() - 1], &inner_state, filter)?;
+            }
+            BlockEntry::Const(Scalar::Tuple(tuple), DataType::Tuple(data_type), num_rows) => {
+                let flag = *tuple.last().unwrap().as_boolean().unwrap();
+                if let Some(filter) = filter {
+                    for place in places
+                        .iter()
+                        .zip(filter.iter())
+                        .filter_map(|(v, b)| b.then_some(v))
+                    {
+                        merge_flag(AggrState::new(*place, loc), flag);
+                    }
+                } else {
+                    for place in places {
+                        merge_flag(AggrState::new(*place, loc), flag);
+                    }
+                }
+                let inner_state = BlockEntry::new_const_column(
+                    DataType::Tuple(data_type[0..data_type.len() - 1].to_vec()),
+                    Scalar::Tuple(tuple[0..tuple.len() - 1].to_vec()),
+                    *num_rows,
+                );
+                self.nested
+                    .batch_merge(places, &loc[0..loc.len() - 1], &inner_state, filter)?;
+            }
+            _ => unreachable!(),
+        }
+
         Ok(())
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-        self.inner
+        self.nested
             .merge_states(place.remove_last_loc(), rhs.remove_last_loc())?;
         let flag = get_flag(place) || get_flag(rhs);
         set_flag(place, flag);
@@ -207,9 +276,9 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
                 if !get_flag(place) {
                     inner_mut.push_null();
                 } else if self.inner_nullable {
-                    self.inner.merge_result(place.remove_last_loc(), builder)?;
+                    self.nested.merge_result(place.remove_last_loc(), builder)?;
                 } else {
-                    self.inner
+                    self.nested
                         .merge_result(place.remove_last_loc(), &mut inner_mut.builder)?;
                     inner_mut.validity.push(true);
                 }
@@ -225,25 +294,21 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
     ) -> Result<Option<AggregateFunctionRef>> {
-        self.inner
+        self.nested
             .get_own_null_adaptor(nested_function, params, arguments)
     }
 
     fn need_manual_drop_state(&self) -> bool {
-        self.inner.need_manual_drop_state()
+        self.nested.need_manual_drop_state()
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.inner.drop_state(place.remove_last_loc())
-    }
-
-    fn convert_const_to_full(&self) -> bool {
-        self.inner.convert_const_to_full()
+        self.nested.drop_state(place.remove_last_loc())
     }
 }
 
 impl fmt::Display for AggregateFunctionOrNullAdaptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.inner)
+        write!(f, "{}", self.nested)
     }
 }

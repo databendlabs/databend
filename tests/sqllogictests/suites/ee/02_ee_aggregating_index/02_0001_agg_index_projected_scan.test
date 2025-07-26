@@ -75,7 +75,44 @@ SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
 1 1
 2 3
 
-query IIT
+query IIR
 SELECT MAX(a), MIN(b), AVG(c) from t
 ----
 2 1 3.5
+
+statement ok
+CREATE or REPLACE FUNCTION weighted_avg (INT, INT) STATE {sum INT, weight INT} RETURNS FLOAT
+LANGUAGE javascript AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$;
+
+query IIR
+SELECT MAX(a), MIN(b), weighted_avg(a,b) from t group by b;
+----
+2 2 1.3333334
+1 1 1.0
+
+query IIR
+SELECT MAX(a), MIN(b), weighted_avg(a,b) from t;
+----
+2 1 1.2857143
