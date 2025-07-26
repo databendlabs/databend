@@ -3,11 +3,11 @@ Exchange
 ├── exchange type: Merge
 └── EvalScalar
     ├── output columns: [sell_mnt = 0 (#170)]
-    ├── expressions: [t.sell_mnt (#169) = 0]
+    ├── expressions: [t.sell_mnt (#169) = 0: Boolean NULL]
     ├── estimated rows: 7119376617326129446912.00
     └── EvalScalar
         ├── output columns: [sell_mnt (#169)]
-        ├── expressions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167) / CAST(if(CAST(count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168) = 0 AS Boolean NULL), 1, count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168)) AS UInt64 NULL) + 3]
+        ├── expressions: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167) / CAST(if(CAST(count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168) = 0 AS Boolean NULL), 1, count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168)) AS UInt64 NULL) + 3: Float64 NULL]
         ├── estimated rows: 7119376617326129446912.00
         └── AggregateFinal
             ├── output columns: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167), count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168), a.a0d (#0), a.a0k (#7), a.a0m (#9), c.a5m (#144)]
@@ -16,31 +16,31 @@ Exchange
             ├── estimated rows: 7119376617326129446912.00
             └── Exchange
                 ├── output columns: [sum(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#167), count(CASE WHEN d.a1v = '603020' THEN 1 ELSE 0 END) (#168), a.a0d (#0), a.a0k (#7), a.a0m (#9), c.a5m (#144)]
-                ├── exchange type: Hash(0, 1, 2, 3)
+                ├── exchange type: Hash(0: String NULL, 1: String NULL, 2: String NULL, 3: String NULL)
                 └── AggregatePartial
                     ├── group by: [a0d, a0k, a0m, a5m]
                     ├── aggregate functions: [sum(sum_arg_0), count()]
                     ├── estimated rows: 7119376617326129446912.00
                     └── EvalScalar
                         ├── output columns: [a.a0d (#0), a.a0k (#7), a.a0m (#9), c.a5m (#144), sum_arg_0 (#166)]
-                        ├── expressions: [if(d.a1v (#154) = '603020', 1, 0)]
+                        ├── expressions: [if(d.a1v (#154) = '603020', 1, 0): UInt8]
                         ├── estimated rows: 7119376617326129446912.00
                         └── HashJoin
                             ├── output columns: [a.a0d (#0), a.a0k (#7), a.a0m (#9), d.a1v (#154), c.a5m (#144)]
                             ├── join type: INNER
-                            ├── build keys: [c.a0m (#149)]
-                            ├── probe keys: [a.a0m (#9)]
+                            ├── build keys: [c.a0m (#149): String NULL]
+                            ├── probe keys: [a.a0m (#9): String NULL]
                             ├── keys is null equal: [false]
                             ├── filters: []
                             ├── build join filters:
-                            │   └── filter id:3, build key:c.a0m (#149), probe key:a.a0m (#9), filter type:inlist,min_max
+                            │   └── filter id:3, build key:c.a0m (#149): String NULL, probe key:a.a0m (#9): String NULL, filter type:inlist,min_max
                             ├── estimated rows: 7119376617326129446912.00
                             ├── Exchange(Build)
                             │   ├── output columns: [c.a5m (#144), a0m (#149)]
                             │   ├── exchange type: Broadcast
                             │   └── EvalScalar
                             │       ├── output columns: [c.a5m (#144), a0m (#149)]
-                            │       ├── expressions: [CAST(c.a0m (#74) AS String NULL)]
+                            │       ├── expressions: [CAST(c.a0m (#74) AS String NULL) FROM String]
                             │       ├── estimated rows: 63773.60
                             │       └── TableScan
                             │           ├── table: default.default.a2x
@@ -49,18 +49,18 @@ Exchange
                             │           ├── read size: 0
                             │           ├── partitions total: 0
                             │           ├── partitions scanned: 0
-                            │           ├── push downs: [filters: [is_true(substr(a2x.a4m (#118), 20, 1) = '1')], limit: NONE]
+                            │           ├── push downs: [filters: [is_true(substr(a2x.a4m (#118), 20, 1) = '1'): Boolean], limit: NONE]
                             │           └── estimated rows: 63773.60
                             └── HashJoin(Probe)
                                 ├── output columns: [a.a0d (#0), a.a0k (#7), a.a0m (#9), d.a1v (#154)]
                                 ├── join type: INNER
-                                ├── build keys: [b.a0k (#48), b.a0n (#50)]
-                                ├── probe keys: [a.a0k (#7), a.a0n (#10)]
+                                ├── build keys: [b.a0k (#48): String NULL, b.a0n (#50): String NULL]
+                                ├── probe keys: [a.a0k (#7): String NULL, a.a0n (#10): String NULL]
                                 ├── keys is null equal: [false, false]
-                                ├── filters: [b.a2c (#52) <= a.a0d (#0), b.a2k (#61) > a.a0d (#0)]
+                                ├── filters: [b.a2c (#52) <= a.a0d (#0): Boolean NULL, b.a2k (#61) > a.a0d (#0): Boolean NULL]
                                 ├── build join filters:
-                                │   ├── filter id:1, build key:b.a0k (#48), probe key:a.a0k (#7), filter type:inlist,min_max
-                                │   └── filter id:2, build key:b.a0n (#50), probe key:a.a0n (#10), filter type:inlist,min_max
+                                │   ├── filter id:1, build key:b.a0k (#48): String NULL, probe key:a.a0k (#7): String NULL, filter type:inlist,min_max
+                                │   └── filter id:2, build key:b.a0n (#50): String NULL, probe key:a.a0n (#10): String NULL, filter type:inlist,min_max
                                 ├── estimated rows: 111635169056257280.00
                                 ├── Exchange(Build)
                                 │   ├── output columns: [b.a0k (#48), b.a0n (#50), b.a2c (#52), b.a2k (#61)]
@@ -72,17 +72,17 @@ Exchange
                                 │       ├── read size: 0
                                 │       ├── partitions total: 0
                                 │       ├── partitions scanned: 0
-                                │       ├── push downs: [filters: [is_true(a1z.a2t (#70) = '624100')], limit: NONE]
+                                │       ├── push downs: [filters: [is_true(a1z.a2t (#70) = '624100'): Boolean], limit: NONE]
                                 │       └── estimated rows: 45493.85
                                 └── HashJoin(Probe)
                                     ├── output columns: [a.a0d (#0), a.a0k (#7), a.a0m (#9), a.a0n (#10), d.a1v (#154)]
                                     ├── join type: INNER
-                                    ├── build keys: [d.a5t (#151)]
-                                    ├── probe keys: [a.a0l (#8)]
+                                    ├── build keys: [d.a5t (#151): String NULL]
+                                    ├── probe keys: [a.a0l (#8): String NULL]
                                     ├── keys is null equal: [false]
                                     ├── filters: []
                                     ├── build join filters:
-                                    │   └── filter id:0, build key:d.a5t (#151), probe key:a.a0l (#8), filter type:inlist,min_max
+                                    │   └── filter id:0, build key:d.a5t (#151): String NULL, probe key:a.a0l (#8): String NULL, filter type:inlist,min_max
                                     ├── estimated rows: 2453851765646.43
                                     ├── Exchange(Build)
                                     │   ├── output columns: [d.a5t (#151), d.a1v (#154)]
@@ -94,7 +94,7 @@ Exchange
                                     │       ├── read size: 0
                                     │       ├── partitions total: 0
                                     │       ├── partitions scanned: 0
-                                    │       ├── push downs: [filters: [is_true(substr(a5r.a5w (#156), 1, 1) = '1')], limit: NONE]
+                                    │       ├── push downs: [filters: [is_true(substr(a5r.a5w (#156), 1, 1) = '1'): Boolean], limit: NONE]
                                     │       └── estimated rows: 806.60
                                     └── TableScan(Probe)
                                         ├── table: default.default.a0c
@@ -103,7 +103,7 @@ Exchange
                                         ├── read size: 0
                                         ├── partitions total: 0
                                         ├── partitions scanned: 0
-                                        ├── push downs: [filters: [and_filters(a0c.a0d (#0) >= '20240526', a0c.a0d (#0) <= '20250525')], limit: NONE]
+                                        ├── push downs: [filters: [and_filters(a0c.a0d (#0) >= '20240526', a0c.a0d (#0) <= '20250525'): Boolean], limit: NONE]
                                         ├── apply join filters: [#3, #1, #2, #0]
                                         └── estimated rows: 3042216421.58
 
