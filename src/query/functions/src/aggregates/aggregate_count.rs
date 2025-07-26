@@ -16,15 +16,20 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::UnaryType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::utils::column_merge_validity;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
@@ -37,7 +42,6 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
-use crate::aggregates::borsh_partial_deserialize;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 
@@ -163,22 +167,56 @@ impl AggregateFunction for AggregateCountFunction {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![StateSerdeItem::DataType(UInt64Type::data_type())]
     }
 
     fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
         let state = place.get::<AggregateCountState>();
-        state.count.serialize(&mut binary_builder.data)?;
-        binary_builder.commit_row();
+        UInt64Type::downcast_builder(&mut builders[0]).push(state.count);
+        Ok(())
+    }
+
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let mut builder = UInt64Type::downcast_builder(&mut builders[0]);
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<AggregateCountState>();
+            builder.push(state.count);
+        }
         Ok(())
     }
 
     fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
         let state = place.get::<AggregateCountState>();
-        let other: u64 = borsh_partial_deserialize(&mut binary)?;
+        let other = UInt64Type::try_downcast_scalar(&data[0]).unwrap();
         state.count += other;
+        Ok(())
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<UInt64Type>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+        if let Some(filter) = filter {
+            for (place, other) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<AggregateCountState>();
+                state.count += other;
+            }
+        } else {
+            for (place, other) in iter {
+                let state = AggrState::new(*place, loc).get::<AggregateCountState>();
+                state.count += other;
+            }
+        }
         Ok(())
     }
 
