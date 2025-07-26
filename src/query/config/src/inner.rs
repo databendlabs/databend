@@ -761,7 +761,7 @@ impl Default for CacheConfig {
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
             vector_index_meta_count: 30000,
-            vector_index_filter_size: 21474836480,
+            vector_index_filter_size: 64424509440,
             vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
