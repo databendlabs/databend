@@ -66,6 +66,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
         1,
         1,
         1,
+        1,
         None,
         None,
     )
@@ -90,6 +91,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
             1,
             1,
             1,
+            1,
             None,
             None,
         )
@@ -103,6 +105,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
         check_data_dir(
             &fixture,
             "test_fuse_do_vacuum_drop_table: verify generate retention files",
+            0,
             0,
             0,
             0,

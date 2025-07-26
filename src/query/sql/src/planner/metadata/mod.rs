@@ -13,8 +13,10 @@
 // limitations under the License.
 
 mod bloom_index;
+mod hll_columns;
 #[allow(clippy::module_inception)]
 mod metadata;
 
 pub use bloom_index::BloomIndexColumns;
+pub use hll_columns::ApproxDistinctColumns;
 pub use metadata::*;

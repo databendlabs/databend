@@ -83,51 +83,48 @@ pub fn gen_columns_statistics(
                 let mut min = Scalar::Null;
                 let mut max = Scalar::Null;
 
-                let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
-                let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
+                if col.len() > 0 {
+                    let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
+                    let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
 
-                if mins.len() > 0 {
-                    min = if let Some(v) = mins.index(0) {
-                        if let Some(v) = v.to_owned().trim_min() {
-                            v
+                    if mins.len() > 0 {
+                        min = if let Some(v) = mins.index(0) {
+                            if let Some(v) = v.to_owned().trim_min() {
+                                v
+                            } else {
+                                continue;
+                            }
                         } else {
                             continue;
                         }
-                    } else {
-                        continue;
                     }
-                }
 
-                if maxs.len() > 0 {
-                    max = if let Some(v) = maxs.index(0) {
-                        if let Some(v) = v.to_owned().trim_max() {
-                            v
+                    if maxs.len() > 0 {
+                        max = if let Some(v) = maxs.index(0) {
+                            if let Some(v) = v.to_owned().trim_max() {
+                                v
+                            } else {
+                                continue;
+                            }
                         } else {
                             continue;
                         }
-                    } else {
-                        continue;
                     }
                 }
 
                 let (is_all_null, bitmap) = col.validity();
                 let unset_bits = match (is_all_null, bitmap) {
-                    (true, _) => rows,
-                    (false, Some(bitmap)) => bitmap.null_count(),
+                    (_, Some(bitmap)) => bitmap.null_count(),
+                    (true, None) => rows,
                     (false, None) => 0,
                 };
 
                 // use distinct count calculated by the xor hash function to avoid repetitive operation.
-                let distinct_of_values = if let Some(value) = column_distinct_count
+                let distinct_of_values = if let Some(&value) = column_distinct_count
                     .as_ref()
                     .and_then(|v| v.get(&column_id))
                 {
-                    // value calculated by xor hash function include NULL, need to subtract one.
-                    if unset_bits > 0 {
-                        *value as u64 - 1
-                    } else {
-                        *value as u64
-                    }
+                    value as u64
                 } else {
                     calc_column_distinct_of_values(&col, rows)?
                 };
