@@ -19,6 +19,7 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::error_info::NodeErrorType;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::Runtime;
@@ -448,6 +449,10 @@ impl QueryPipelineExecutor {
                 .fetch_profiling(Some(self.settings.executor_node_id.clone())),
             false => self.graph.fetch_profiling(None),
         }
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        self.graph.get_query_execution_stats()
     }
 }
 

@@ -78,6 +78,11 @@ pub struct Statistics {
     pub uncompressed_byte_size: u64,
     pub compressed_byte_size: u64,
     pub index_size: u64,
+    pub bloom_index_size: Option<u64>,
+    pub ngram_index_size: Option<u64>,
+    pub inverted_index_size: Option<u64>,
+    pub vector_index_size: Option<u64>,
+    pub virtual_column_size: Option<u64>,
 
     #[serde(deserialize_with = "crate::meta::v2::statistics::deserialize_col_stats")]
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
@@ -240,6 +245,11 @@ impl Statistics {
             uncompressed_byte_size: v0.uncompressed_byte_size,
             compressed_byte_size: v0.compressed_byte_size,
             index_size: v0.index_size,
+            bloom_index_size: None,
+            ngram_index_size: None,
+            inverted_index_size: None,
+            vector_index_size: None,
+            virtual_column_size: None,
             col_stats,
             cluster_stats: None,
             virtual_block_count: None,

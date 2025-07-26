@@ -105,6 +105,26 @@ impl DB {
         self.rotbl.file_size()
     }
 
+    /// Get the statistics of the snapshot database.
+    pub fn db_stat(&self) -> DBStat {
+        let stat = self.stat();
+        let access_stat = self.rotbl.access_stat();
+
+        let divider_block_num = std::cmp::max(stat.block_num as u64, 1);
+
+        DBStat {
+            block_num: stat.block_num as u64,
+            key_num: stat.key_num,
+            data_size: stat.data_size,
+            index_size: stat.index_size,
+            avg_block_size: stat.data_size / divider_block_num,
+            avg_keys_per_block: stat.key_num / divider_block_num,
+            read_block: access_stat.read_block(),
+            read_block_from_cache: access_stat.read_block_from_cache(),
+            read_block_from_disk: access_stat.read_block_from_disk(),
+        }
+    }
+
     pub fn stat(&self) -> &RotblStat {
         self.rotbl.stat()
     }
@@ -112,4 +132,34 @@ impl DB {
     pub fn sys_data(&self) -> &SysData {
         &self.sys_data
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DBStat {
+    /// Total number of blocks.
+    pub block_num: u64,
+
+    /// Total number of keys.
+    pub key_num: u64,
+
+    /// Size of all user data(in blocks) in bytes.
+    pub data_size: u64,
+
+    /// Size of serialized block index in bytes.
+    pub index_size: u64,
+
+    /// Average size in bytes of a block.
+    pub avg_block_size: u64,
+
+    /// Average number of keys per block.
+    pub avg_keys_per_block: u64,
+
+    /// Total number of read block from cache or from disk.
+    pub read_block: u64,
+
+    /// Total number of read block from cache.
+    pub read_block_from_cache: u64,
+
+    /// Total number of read block from disk.
+    pub read_block_from_disk: u64,
 }

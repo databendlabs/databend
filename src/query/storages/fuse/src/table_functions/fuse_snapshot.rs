@@ -76,6 +76,11 @@ impl FuseSnapshotFunc {
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut index_size: Vec<u64> = Vec::with_capacity(len);
+        let mut bloom_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut ngram_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut inverted_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut vector_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut virtual_column_size: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut timestamps: Vec<Option<i64>> = Vec::with_capacity(len);
         let mut current_snapshot_version = latest_snapshot_version;
         for s in snapshots {
@@ -95,6 +100,11 @@ impl FuseSnapshotFunc {
             compressed.push(s.compressed_byte_size);
             uncompressed.push(s.uncompressed_byte_size);
             index_size.push(s.index_size);
+            bloom_index_size.push(s.bloom_index_size);
+            ngram_index_size.push(s.ngram_index_size);
+            inverted_index_size.push(s.inverted_index_size);
+            vector_index_size.push(s.vector_index_size);
+            virtual_column_size.push(s.virtual_column_size);
             timestamps.push(s.timestamp.map(|dt| (dt.timestamp_micros())));
             current_snapshot_version = ver;
         }
@@ -110,6 +120,11 @@ impl FuseSnapshotFunc {
             UInt64Type::from_data(uncompressed),
             UInt64Type::from_data(compressed),
             UInt64Type::from_data(index_size),
+            UInt64Type::from_opt_data(bloom_index_size),
+            UInt64Type::from_opt_data(ngram_index_size),
+            UInt64Type::from_opt_data(inverted_index_size),
+            UInt64Type::from_opt_data(vector_index_size),
+            UInt64Type::from_opt_data(virtual_column_size),
             TimestampType::from_opt_data(timestamps),
         ]))
     }
@@ -148,6 +163,26 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "bloom_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "ngram_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "inverted_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "vector_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "virtual_column_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
             TableField::new("timestamp", TableDataType::Timestamp.wrap_nullable()),
         ])
     }

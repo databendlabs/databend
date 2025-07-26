@@ -21,7 +21,7 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::TableDataType;
 use jiff::tz::TimeZone;
 
-pub fn read_record_batch(
+pub fn read_record_batch_to_variant_column(
     record_batch: RecordBatch,
     builder: &mut BinaryColumnBuilder,
     tz: &TimeZone,
@@ -40,7 +40,7 @@ pub fn read_record_batch(
     Ok(())
 }
 
-pub fn record_batch_to_block(
+pub fn record_batch_to_variant_block(
     record_batch: RecordBatch,
     tz: &TimeZone,
     typ: &TableDataType,
@@ -50,7 +50,7 @@ pub fn record_batch_to_block(
         record_batch.num_rows(),
         record_batch.get_array_memory_size(),
     );
-    read_record_batch(record_batch, &mut builder, tz, typ, schema)?;
+    read_record_batch_to_variant_column(record_batch, &mut builder, tz, typ, schema)?;
     let column = builder.build();
     let num_rows = column.len();
     Ok(DataBlock::new(

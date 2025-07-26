@@ -240,6 +240,36 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     ))),
                 ),
                 TableField::new(
+                    "bloom_index_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "ngram_index_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "inverted_index_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "vector_index_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
+                    "virtual_column_size",
+                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64,
+                    ))),
+                ),
+                TableField::new(
                     "number_of_segments",
                     TableDataType::Nullable(Box::new(TableDataType::Number(
                         NumberDataType::UInt64,
@@ -332,6 +362,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 | "data_size"
                 | "data_compressed_size"
                 | "index_size"
+                | "bloom_index_size"
+                | "ngram_index_size"
+                | "inverted_index_size"
+                | "vector_index_size"
+                | "virtual_column_size"
                 | "number_of_segments"
                 | "number_of_blocks" => {
                     stats_fields_indexes.insert(i);
@@ -782,6 +817,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut data_sizes: Vec<Option<u64>> = Vec::new();
         let mut data_compressed_sizes: Vec<Option<u64>> = Vec::new();
         let mut index_sizes: Vec<Option<u64>> = Vec::new();
+        let mut bloom_index_sizes: Vec<Option<u64>> = Vec::new();
+        let mut ngram_index_sizes: Vec<Option<u64>> = Vec::new();
+        let mut inverted_index_sizes: Vec<Option<u64>> = Vec::new();
+        let mut vector_index_sizes: Vec<Option<u64>> = Vec::new();
+        let mut virtual_column_sizes: Vec<Option<u64>> = Vec::new();
 
         if WITHOUT_VIEW {
             for tbl in &database_tables {
@@ -811,6 +851,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 data_sizes.push(stats.as_ref().and_then(|v| v.data_size));
                 data_compressed_sizes.push(stats.as_ref().and_then(|v| v.data_size_compressed));
                 index_sizes.push(stats.as_ref().and_then(|v| v.index_size));
+                bloom_index_sizes.push(stats.as_ref().and_then(|v| v.bloom_index_size));
+                ngram_index_sizes.push(stats.as_ref().and_then(|v| v.ngram_index_size));
+                inverted_index_sizes.push(stats.as_ref().and_then(|v| v.inverted_index_size));
+                vector_index_sizes.push(stats.as_ref().and_then(|v| v.vector_index_size));
+                virtual_column_sizes.push(stats.as_ref().and_then(|v| v.virtual_column_size));
             }
         }
 
@@ -959,6 +1004,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 data_sizes,
                 data_compressed_sizes,
                 index_sizes,
+                bloom_index_sizes,
+                ngram_index_sizes,
+                inverted_index_sizes,
+                vector_index_sizes,
+                virtual_column_sizes,
                 number_of_segments,
                 number_of_blocks,
                 owners,
@@ -1007,6 +1057,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         data_sizes: Vec<Option<u64>>,
         data_compressed_sizes: Vec<Option<u64>>,
         index_sizes: Vec<Option<u64>>,
+        bloom_index_sizes: Vec<Option<u64>>,
+        ngram_index_sizes: Vec<Option<u64>>,
+        inverted_index_sizes: Vec<Option<u64>>,
+        vector_index_sizes: Vec<Option<u64>>,
+        virtual_column_sizes: Vec<Option<u64>>,
         number_of_segments: Vec<Option<u64>>,
         number_of_blocks: Vec<Option<u64>>,
         owners: Vec<Option<String>>,
@@ -1035,6 +1090,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             UInt64Type::from_opt_data(data_sizes),
             UInt64Type::from_opt_data(data_compressed_sizes),
             UInt64Type::from_opt_data(index_sizes),
+            UInt64Type::from_opt_data(bloom_index_sizes),
+            UInt64Type::from_opt_data(ngram_index_sizes),
+            UInt64Type::from_opt_data(inverted_index_sizes),
+            UInt64Type::from_opt_data(vector_index_sizes),
+            UInt64Type::from_opt_data(virtual_column_sizes),
             UInt64Type::from_opt_data(number_of_segments),
             UInt64Type::from_opt_data(number_of_blocks),
             StringType::from_opt_data(owners),
@@ -1132,6 +1192,11 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             vec![Some(0); rows],
             vec![Some(0); rows],
             vec![Some(0); rows],
+            vec![None; rows],
+            vec![None; rows],
+            vec![None; rows],
+            vec![None; rows],
+            vec![None; rows],
             vec![Some(0); rows],
             vec![Some(0); rows],
             vec![Some("".to_string()); rows],
@@ -1182,6 +1247,6 @@ fn push_table_info(
     catalogs.push(ctl_name.to_string());
     databases.push(db_name.to_string());
     databases_ids.push(db_id);
-    database_tables.push(table); // 如果 T: Copy, 这是 Copy; 如果 T: Clone, 外部调用时需要 .clone()
+    database_tables.push(table);
     owner.push(role);
 }

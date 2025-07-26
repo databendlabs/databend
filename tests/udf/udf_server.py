@@ -190,6 +190,9 @@ def json_access(data: Any, key: str) -> Any:
 def url_len(key: str) -> int:
     return len(key)
 
+@udf(input_types=["VARCHAR"], result_type="BIGINT")
+def url_len_mul_100(key: str) -> int:
+    return len(key) * 100
 
 @udf(input_types=["ARRAY(VARIANT)"], result_type="VARIANT")
 def json_concat(list: List[Any]) -> Any:
@@ -449,6 +452,7 @@ if __name__ == "__main__":
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
     udf_server.add_function(url_len)
+    udf_server.add_function(url_len_mul_100)
     udf_server.add_function(check_headers)
     udf_server.add_function(embedding_4)
 

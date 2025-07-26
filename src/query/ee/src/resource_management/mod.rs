@@ -36,7 +36,12 @@ pub async fn init_resources_management(cfg: &InnerConfig) -> Result<()> {
             true => Err(ErrorCode::InvalidConfig(
                 "cluster_id is empty without resources management.",
             )),
-            false => SelfManagedResourcesManagement::create(cfg),
+            false => match cfg.query.warehouse_id.is_empty() {
+                true => Err(ErrorCode::InvalidConfig(
+                    "warehouse_id is empty without resources management.",
+                )),
+                false => SelfManagedResourcesManagement::create(cfg),
+            },
         },
         Some(resources_management) => {
             match resources_management.typ.to_ascii_lowercase().as_str() {

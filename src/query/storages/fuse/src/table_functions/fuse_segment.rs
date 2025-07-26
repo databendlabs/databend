@@ -59,6 +59,26 @@ impl TableMetaFunc for FuseSegment {
             ),
             TableField::new("index_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
+                "bloom_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "ngram_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "inverted_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "vector_index_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
+                "virtual_column_size",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new(
                 "virtual_block_count",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
             ),
@@ -81,6 +101,11 @@ impl TableMetaFunc for FuseSegment {
         let mut compressed: Vec<u64> = Vec::with_capacity(len);
         let mut uncompressed: Vec<u64> = Vec::with_capacity(len);
         let mut index_size: Vec<u64> = Vec::with_capacity(len);
+        let mut bloom_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut ngram_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut inverted_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut vector_index_size: Vec<Option<u64>> = Vec::with_capacity(len);
+        let mut virtual_column_size: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut virtual_block_count: Vec<Option<u64>> = Vec::with_capacity(len);
         let mut file_location: Vec<String> = Vec::with_capacity(len);
 
@@ -103,6 +128,11 @@ impl TableMetaFunc for FuseSegment {
                 compressed.push(segment.summary.compressed_byte_size);
                 uncompressed.push(segment.summary.uncompressed_byte_size);
                 index_size.push(segment.summary.index_size);
+                bloom_index_size.push(segment.summary.bloom_index_size);
+                ngram_index_size.push(segment.summary.ngram_index_size);
+                inverted_index_size.push(segment.summary.inverted_index_size);
+                vector_index_size.push(segment.summary.vector_index_size);
+                virtual_column_size.push(segment.summary.virtual_column_size);
                 virtual_block_count.push(segment.summary.virtual_block_count);
                 file_location.push(segment_locations[idx].0.clone());
 
@@ -126,6 +156,11 @@ impl TableMetaFunc for FuseSegment {
             UInt64Type::from_data(uncompressed),
             UInt64Type::from_data(compressed),
             UInt64Type::from_data(index_size),
+            UInt64Type::from_opt_data(bloom_index_size),
+            UInt64Type::from_opt_data(ngram_index_size),
+            UInt64Type::from_opt_data(inverted_index_size),
+            UInt64Type::from_opt_data(vector_index_size),
+            UInt64Type::from_opt_data(virtual_column_size),
             UInt64Type::from_opt_data(virtual_block_count),
         ]))
     }

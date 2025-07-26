@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -292,6 +293,17 @@ impl PipelineExecutor {
             }
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
                 query_wrapper.graph.change_priority(priority as u64);
+            }
+        }
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => {
+                executor.get_query_execution_stats()
+            }
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.get_query_execution_stats()
             }
         }
     }

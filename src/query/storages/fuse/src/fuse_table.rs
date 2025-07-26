@@ -940,6 +940,11 @@ impl Table for FuseTable {
                     data_size: Some(summary.uncompressed_byte_size),
                     data_size_compressed: Some(summary.compressed_byte_size),
                     index_size: Some(summary.index_size),
+                    bloom_index_size: summary.bloom_index_size,
+                    ngram_index_size: summary.ngram_index_size,
+                    inverted_index_size: summary.inverted_index_size,
+                    vector_index_size: summary.vector_index_size,
+                    virtual_column_size: summary.virtual_column_size,
                     number_of_blocks: Some(summary.block_count),
                     number_of_segments: Some(snapshot.segments.len() as u64),
                 }
@@ -951,6 +956,11 @@ impl Table for FuseTable {
                     data_size: Some(s.data_bytes),
                     data_size_compressed: Some(s.compressed_data_bytes),
                     index_size: Some(s.index_data_bytes),
+                    bloom_index_size: s.bloom_index_size,
+                    ngram_index_size: s.ngram_index_size,
+                    inverted_index_size: s.inverted_index_size,
+                    vector_index_size: s.vector_index_size,
+                    virtual_column_size: s.virtual_column_size,
                     number_of_blocks: s.number_of_blocks,
                     number_of_segments: s.number_of_segments,
                 }
