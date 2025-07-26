@@ -168,6 +168,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (136, "2025-07-17: Add: Task"),
     (137, "2025-07-22: Add: GrantConnectionObject and UserPrivilegeType AccessConnection, AccessConnection"),
     (138, "2025-07-23: Add: TableStatistics add index size"),
+    (139, "2025-07-24: Add: TaskMessage::Delete add WarehouseOptions"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
