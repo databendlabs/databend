@@ -37,6 +37,7 @@ use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
+use crate::executor::physical_plans::CTEConsumer;
 use crate::executor::physical_plans::CacheScan;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
@@ -62,6 +63,7 @@ use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -71,6 +73,7 @@ use crate::executor::physical_plans::ReplaceAsyncSourcer;
 use crate::executor::physical_plans::ReplaceDeduplicate;
 use crate::executor::physical_plans::ReplaceInto;
 use crate::executor::physical_plans::RowFetch;
+use crate::executor::physical_plans::Sequence;
 use crate::executor::physical_plans::Shuffle;
 use crate::executor::physical_plans::Sort;
 use crate::executor::physical_plans::TableScan;
@@ -161,6 +164,11 @@ pub enum PhysicalPlan {
     // broadcast
     BroadcastSource(BroadcastSource),
     BroadcastSink(BroadcastSink),
+
+    // CTE
+    MaterializedCTE(Box<MaterializedCTE>),
+    CTEConsumer(Box<CTEConsumer>),
+    Sequence(Box<Sequence>),
 }
 
 impl PhysicalPlan {
@@ -422,6 +430,21 @@ impl PhysicalPlan {
                 *next_id += 1;
                 plan.input.adjust_plan_id(next_id);
             }
+            PhysicalPlan::MaterializedCTE(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.input.adjust_plan_id(next_id);
+            }
+            PhysicalPlan::CTEConsumer(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
+            PhysicalPlan::Sequence(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+                plan.left.adjust_plan_id(next_id);
+                plan.right.adjust_plan_id(next_id);
+            }
         }
     }
 
@@ -480,6 +503,9 @@ impl PhysicalPlan {
             PhysicalPlan::RecursiveCteScan(v) => v.plan_id,
             PhysicalPlan::BroadcastSource(v) => v.plan_id,
             PhysicalPlan::BroadcastSink(v) => v.plan_id,
+            PhysicalPlan::MaterializedCTE(v) => v.plan_id,
+            PhysicalPlan::CTEConsumer(v) => v.plan_id,
+            PhysicalPlan::Sequence(v) => v.plan_id,
         }
     }
 
@@ -537,6 +563,9 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(_) => todo!(),
             PhysicalPlan::ChunkMerge(_) => todo!(),
             PhysicalPlan::ChunkCommitInsert(_) => todo!(),
+            PhysicalPlan::MaterializedCTE(plan) => plan.output_schema(),
+            PhysicalPlan::CTEConsumer(plan) => plan.output_schema(),
+            PhysicalPlan::Sequence(plan) => plan.output_schema(),
         }
     }
 
@@ -600,6 +629,9 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkCommitInsert(_) => "Commit".to_string(),
             PhysicalPlan::BroadcastSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::BroadcastSink(_) => "RuntimeFilterSink".to_string(),
+            PhysicalPlan::MaterializedCTE(_) => "MaterializedCTE".to_string(),
+            PhysicalPlan::CTEConsumer(_) => "CTEConsumer".to_string(),
+            PhysicalPlan::Sequence(_) => "Sequence".to_string(),
         }
     }
 
@@ -613,6 +645,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::RecursiveCteScan(_)
+            | PhysicalPlan::CTEConsumer(_)
             | PhysicalPlan::BroadcastSource(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -674,6 +707,10 @@ impl PhysicalPlan {
                 CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_ref())),
                 CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_ref())),
             },
+            PhysicalPlan::MaterializedCTE(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::Sequence(plan) => Box::new(
+                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
+            ),
         }
     }
 
@@ -687,6 +724,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::BroadcastSource(_)
+            | PhysicalPlan::CTEConsumer(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_mut())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_mut())),
@@ -747,6 +785,10 @@ impl PhysicalPlan {
                 CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_mut())),
                 CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_mut())),
             },
+            PhysicalPlan::MaterializedCTE(plan) => Box::new(std::iter::once(plan.input.as_mut())),
+            PhysicalPlan::Sequence(plan) => Box::new(
+                std::iter::once(plan.left.as_mut()).chain(std::iter::once(plan.right.as_mut())),
+            ),
             PhysicalPlan::BroadcastSink(plan) => Box::new(std::iter::once(plan.input.as_mut())),
         }
     }
@@ -805,7 +847,10 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkMerge(_)
             | PhysicalPlan::ChunkCommitInsert(_)
             | PhysicalPlan::BroadcastSource(_)
-            | PhysicalPlan::BroadcastSink(_) => None,
+            | PhysicalPlan::BroadcastSink(_)
+            | PhysicalPlan::MaterializedCTE(_)
+            | PhysicalPlan::CTEConsumer(_)
+            | PhysicalPlan::Sequence(_) => None,
         }
     }
 

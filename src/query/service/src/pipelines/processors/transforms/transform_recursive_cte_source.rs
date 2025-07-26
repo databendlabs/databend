@@ -329,6 +329,13 @@ async fn create_memory_table_for_cte_scan(
         PhysicalPlan::AsyncFunction(plan) => {
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
+        PhysicalPlan::MaterializedCTE(plan) => {
+            create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
+        }
+        PhysicalPlan::Sequence(plan) => {
+            create_memory_table_for_cte_scan(ctx, plan.left.as_ref()).await?;
+            create_memory_table_for_cte_scan(ctx, plan.right.as_ref()).await?;
+        }
         PhysicalPlan::TableScan(_)
         | PhysicalPlan::ConstantTableScan(_)
         | PhysicalPlan::ExpressionScan(_)
@@ -361,6 +368,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::ChunkMerge(_)
         | PhysicalPlan::ChunkCommitInsert(_)
         | PhysicalPlan::BroadcastSource(_)
+        | PhysicalPlan::CTEConsumer(_)
         | PhysicalPlan::BroadcastSink(_) => {}
     }
     Ok(())

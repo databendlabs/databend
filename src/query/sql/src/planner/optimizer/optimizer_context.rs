@@ -19,6 +19,7 @@ use databend_common_catalog::table_context::TableContext;
 use educe::Educe;
 use parking_lot::RwLock;
 
+use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 use crate::MetadataRef;
 
@@ -152,6 +153,13 @@ impl OptimizerContext {
     /// Check if an optimizer or rule is disabled based on optimizer_skip_list setting
     pub fn is_optimizer_disabled(self: &Arc<Self>, name: &str) -> bool {
         let settings = self.get_table_ctx().get_settings();
+
+        if !settings.get_grouping_sets_to_union().unwrap_or_default()
+            && name == RuleID::GroupingSetsToUnion.to_string()
+        {
+            return true;
+        }
+
         match settings.get_optimizer_skip_list() {
             Ok(skip_list) if !skip_list.is_empty() => {
                 let name_lower = name.to_lowercase();

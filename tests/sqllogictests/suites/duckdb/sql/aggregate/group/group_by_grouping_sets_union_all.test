@@ -1,0 +1,7 @@
+statement ok
+set grouping_sets_to_union = 1;
+
+include ./group_by_grouping_sets.test
+
+statement ok
+unset grouping_sets_to_union;

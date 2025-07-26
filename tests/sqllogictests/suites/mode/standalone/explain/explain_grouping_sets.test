@@ -65,3 +65,164 @@ EvalScalar
                     ├── partitions scanned: 1
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 1.00
+
+
+statement ok
+set grouping_sets_to_union = 1;
+
+query T
+explain select number % 2 as a, number % 3 as b, number % 5 as c from numbers(1) group by cube(a, b, c);
+----
+Sequence
+├── MaterializedCTE: cte_groupingsets_16366510952463710337
+│   └── EvalScalar
+│       ├── output columns: [numbers.number (#0), a (#1), b (#2), c (#3)]
+│       ├── expressions: [numbers.number (#0) % 2, numbers.number (#0) % 3, numbers.number (#0) % 5]
+│       ├── estimated rows: 1.00
+│       └── TableScan
+│           ├── table: default.system.numbers
+│           ├── output columns: [number (#0)]
+│           ├── read rows: 1
+│           ├── read size: < 1 KiB
+│           ├── partitions total: 1
+│           ├── partitions scanned: 1
+│           ├── push downs: [filters: [], limit: NONE]
+│           └── estimated rows: 1.00
+└── UnionAll
+    ├── output columns: [a (#8), b (#9), c (#10)]
+    ├── estimated rows: 8.00
+    ├── UnionAll
+    │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   ├── estimated rows: 7.00
+    │   ├── UnionAll
+    │   │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   ├── estimated rows: 6.00
+    │   │   ├── UnionAll
+    │   │   │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   ├── estimated rows: 5.00
+    │   │   │   ├── UnionAll
+    │   │   │   │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │   ├── estimated rows: 4.00
+    │   │   │   │   ├── UnionAll
+    │   │   │   │   │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │   │   ├── estimated rows: 3.00
+    │   │   │   │   │   ├── UnionAll
+    │   │   │   │   │   │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │   │   │   ├── estimated rows: 2.00
+    │   │   │   │   │   │   ├── EvalScalar
+    │   │   │   │   │   │   │   ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │   │   │   │   ├── expressions: [NULL, NULL, NULL]
+    │   │   │   │   │   │   │   ├── estimated rows: 1.00
+    │   │   │   │   │   │   │   └── DummyTableScan
+    │   │   │   │   │   │   └── EvalScalar
+    │   │   │   │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │   │   │       ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), NULL, NULL]
+    │   │   │   │   │   │       ├── estimated rows: 1.00
+    │   │   │   │   │   │       └── AggregateFinal
+    │   │   │   │   │   │           ├── output columns: [a (#1)]
+    │   │   │   │   │   │           ├── group by: [a]
+    │   │   │   │   │   │           ├── aggregate functions: []
+    │   │   │   │   │   │           ├── estimated rows: 1.00
+    │   │   │   │   │   │           └── AggregatePartial
+    │   │   │   │   │   │               ├── group by: [a]
+    │   │   │   │   │   │               ├── aggregate functions: []
+    │   │   │   │   │   │               ├── estimated rows: 1.00
+    │   │   │   │   │   │               └── CTEConsumer
+    │   │   │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
+    │   │   │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │   │   └── EvalScalar
+    │   │   │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │   │       ├── expressions: [NULL, TRY_CAST(group_item (#2) AS UInt8 NULL), NULL]
+    │   │   │   │   │       ├── estimated rows: 1.00
+    │   │   │   │   │       └── AggregateFinal
+    │   │   │   │   │           ├── output columns: [b (#2)]
+    │   │   │   │   │           ├── group by: [b]
+    │   │   │   │   │           ├── aggregate functions: []
+    │   │   │   │   │           ├── estimated rows: 1.00
+    │   │   │   │   │           └── AggregatePartial
+    │   │   │   │   │               ├── group by: [b]
+    │   │   │   │   │               ├── aggregate functions: []
+    │   │   │   │   │               ├── estimated rows: 1.00
+    │   │   │   │   │               └── CTEConsumer
+    │   │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
+    │   │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   │   └── EvalScalar
+    │   │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │   │       ├── expressions: [NULL, NULL, TRY_CAST(group_item (#3) AS UInt8 NULL)]
+    │   │   │   │       ├── estimated rows: 1.00
+    │   │   │   │       └── AggregateFinal
+    │   │   │   │           ├── output columns: [c (#3)]
+    │   │   │   │           ├── group by: [c]
+    │   │   │   │           ├── aggregate functions: []
+    │   │   │   │           ├── estimated rows: 1.00
+    │   │   │   │           └── AggregatePartial
+    │   │   │   │               ├── group by: [c]
+    │   │   │   │               ├── aggregate functions: []
+    │   │   │   │               ├── estimated rows: 1.00
+    │   │   │   │               └── CTEConsumer
+    │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
+    │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   │   └── EvalScalar
+    │   │   │       ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │   │       ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), TRY_CAST(group_item (#2) AS UInt8 NULL), NULL]
+    │   │   │       ├── estimated rows: 1.00
+    │   │   │       └── AggregateFinal
+    │   │   │           ├── output columns: [a (#1), b (#2)]
+    │   │   │           ├── group by: [a, b]
+    │   │   │           ├── aggregate functions: []
+    │   │   │           ├── estimated rows: 1.00
+    │   │   │           └── AggregatePartial
+    │   │   │               ├── group by: [a, b]
+    │   │   │               ├── aggregate functions: []
+    │   │   │               ├── estimated rows: 1.00
+    │   │   │               └── CTEConsumer
+    │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
+    │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   │   └── EvalScalar
+    │   │       ├── output columns: [a (#8), b (#9), c (#10)]
+    │   │       ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), NULL, TRY_CAST(group_item (#3) AS UInt8 NULL)]
+    │   │       ├── estimated rows: 1.00
+    │   │       └── AggregateFinal
+    │   │           ├── output columns: [a (#1), c (#3)]
+    │   │           ├── group by: [a, c]
+    │   │           ├── aggregate functions: []
+    │   │           ├── estimated rows: 1.00
+    │   │           └── AggregatePartial
+    │   │               ├── group by: [a, c]
+    │   │               ├── aggregate functions: []
+    │   │               ├── estimated rows: 1.00
+    │   │               └── CTEConsumer
+    │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
+    │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    │   └── EvalScalar
+    │       ├── output columns: [a (#8), b (#9), c (#10)]
+    │       ├── expressions: [NULL, TRY_CAST(group_item (#2) AS UInt8 NULL), TRY_CAST(group_item (#3) AS UInt8 NULL)]
+    │       ├── estimated rows: 1.00
+    │       └── AggregateFinal
+    │           ├── output columns: [b (#2), c (#3)]
+    │           ├── group by: [b, c]
+    │           ├── aggregate functions: []
+    │           ├── estimated rows: 1.00
+    │           └── AggregatePartial
+    │               ├── group by: [b, c]
+    │               ├── aggregate functions: []
+    │               ├── estimated rows: 1.00
+    │               └── CTEConsumer
+    │                   ├── cte_name: cte_groupingsets_16366510952463710337
+    │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
+    └── EvalScalar
+        ├── output columns: [a (#8), b (#9), c (#10)]
+        ├── expressions: [TRY_CAST(group_item (#1) AS UInt8 NULL), TRY_CAST(group_item (#2) AS UInt8 NULL), TRY_CAST(group_item (#3) AS UInt8 NULL)]
+        ├── estimated rows: 1.00
+        └── AggregateFinal
+            ├── output columns: [a (#1), b (#2), c (#3)]
+            ├── group by: [a, b, c]
+            ├── aggregate functions: []
+            ├── estimated rows: 1.00
+            └── AggregatePartial
+                ├── group by: [a, b, c]
+                ├── aggregate functions: []
+                ├── estimated rows: 1.00
+                └── CTEConsumer
+                    ├── cte_name: cte_groupingsets_16366510952463710337
+                    └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]

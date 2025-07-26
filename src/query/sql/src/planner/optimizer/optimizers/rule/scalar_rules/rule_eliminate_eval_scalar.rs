@@ -25,6 +25,7 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::ColumnSet;
 use crate::MetadataRef;
+use crate::ScalarExpr;
 
 pub struct RuleEliminateEvalScalar {
     id: RuleID,
@@ -73,7 +74,32 @@ impl Rule for RuleEliminateEvalScalar {
             .clone();
         let eval_scalar_output_cols: ColumnSet =
             eval_scalar.items.iter().map(|x| x.index).collect();
+
         if eval_scalar_output_cols.is_subset(&child_output_cols) {
+            // check if there's f(#x) as #x, if so we can't eliminate the eval scalar
+            for item in eval_scalar.items {
+                match item.scalar {
+                    ScalarExpr::FunctionCall(func) => {
+                        if func.arguments.len() == 1 {
+                            if let ScalarExpr::BoundColumnRef(bound_column_ref) = &func.arguments[0]
+                            {
+                                if bound_column_ref.column.index == item.index {
+                                    return Ok(());
+                                }
+                            }
+                        }
+                    }
+                    ScalarExpr::CastExpr(cast) => {
+                        if let ScalarExpr::BoundColumnRef(bound_column_ref) = cast.argument.as_ref()
+                        {
+                            if bound_column_ref.column.index == item.index {
+                                return Ok(());
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
             state.add_result(s_expr.child(0)?.clone());
             return Ok(());
         }
