@@ -36,6 +36,7 @@ use databend_storages_common_index::VectorIndexMeta;
 use databend_storages_common_io::MergeIOReader;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::table::TableCompression;
+use log::info;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::parquet_to_arrow_field_levels;
@@ -156,6 +157,9 @@ pub(crate) async fn load_vector_index_files<'a>(
         names_map.insert(*i as u32, (name, cache_key));
     }
 
+    let not_cached_data = ranges.len();
+    let cached_data = column_data.len();
+
     if !ranges.is_empty() {
         let merge_io_result =
             MergeIOReader::merge_io_read(settings, operator.clone(), location, &ranges).await?;
@@ -210,11 +214,15 @@ pub(crate) async fn load_vector_index_files<'a>(
         vector_columns.push(column);
     }
 
+    let elapsed = start.elapsed().as_millis() as u64;
     // Perf.
     {
         metrics_inc_block_vector_index_read_bytes(vector_bytes_len as u64);
-        metrics_inc_block_vector_index_read_milliseconds(start.elapsed().as_millis() as u64);
+        metrics_inc_block_vector_index_read_milliseconds(elapsed);
     }
+    info!(
+        "[FUSE-PRUNER] Vector index read data elapsed: {elapsed} cached_data: {cached_data} not_cached_data: {not_cached_data}"
+    );
 
     Ok(vector_columns)
 }
