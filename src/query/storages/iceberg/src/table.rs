@@ -333,7 +333,12 @@ impl IcebergTable {
             )?;
             pipeline.try_resize(max_threads)?;
             pipeline.add_accumulating_transformer(|| {
-                StripeDecoder::new(ctx.clone(), data_schema.clone(), arrow_schema.clone())
+                StripeDecoder::new(
+                    ctx.clone(),
+                    data_schema.clone(),
+                    arrow_schema.clone(),
+                    vec![],
+                )
             });
         } else {
             let arrow_schema: Schema = table_schema.as_ref().into();

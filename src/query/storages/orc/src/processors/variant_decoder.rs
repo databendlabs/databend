@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -26,6 +27,7 @@ use databend_common_expression::TableSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
+use databend_storages_common_stage::add_internal_columns;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use jiff::tz::TimeZone;
 use orc_rust::array_decoder::NaiveStripeDecoder;
@@ -36,16 +38,25 @@ use crate::utils::map_orc_error;
 pub struct StripeDecoderForVariantTable {
     copy_status: Option<Arc<CopyStatus>>,
     tz: TimeZone,
+    internal_columns: Vec<InternalColumnType>,
 }
 
 impl StripeDecoderForVariantTable {
-    pub fn new(table_ctx: Arc<dyn TableContext>, tz: TimeZone) -> Self {
+    pub fn new(
+        table_ctx: Arc<dyn TableContext>,
+        tz: TimeZone,
+        internal_columns: Vec<InternalColumnType>,
+    ) -> Self {
         let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {
             Some(table_ctx.get_copy_status())
         } else {
             None
         };
-        StripeDecoderForVariantTable { copy_status, tz }
+        StripeDecoderForVariantTable {
+            copy_status,
+            tz,
+            internal_columns,
+        }
     }
 }
 
@@ -75,14 +86,22 @@ impl AccumulatingTransform for StripeDecoderForVariantTable {
         let batches = batches.map_err(|e| map_orc_error(e, &stripe.path))?;
 
         let mut blocks = vec![];
+        let mut start_row = stripe.start_row;
         for batch in batches {
-            let block = record_batch_to_variant_block(batch, &self.tz, &typ, &schemas.data_schema)?;
+            let mut block =
+                record_batch_to_variant_block(batch, &self.tz, &typ, &schemas.data_schema)?;
             if let Some(copy_status) = &self.copy_status {
                 copy_status.add_chunk(&stripe.path, FileStatus {
                     num_rows_loaded: block.num_rows(),
                     error: None,
                 })
             }
+            add_internal_columns(
+                &self.internal_columns,
+                stripe.path.clone(),
+                &mut block,
+                &mut start_row,
+            );
             blocks.push(block);
         }
         Ok(blocks)

@@ -691,7 +691,7 @@ pub async fn resolve_stage_location(
     // my_named_stage/abc/
     let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
     if names[0] == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments("placeholder @_databend_upload should be used in streaming_load handler or replaced in client."));
+        return Err(ErrorCode::BadArguments("placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client."));
     }
 
     let stage = if names[0] == "~" {

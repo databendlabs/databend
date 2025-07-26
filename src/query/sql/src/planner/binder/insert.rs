@@ -194,7 +194,7 @@ impl Binder {
                 match location.as_str() {
                     STAGE_PLACEHOLDER => {
                         if self.ctx.get_session_type() != SessionType::HTTPStreamingLoad {
-                            return Err(ErrorCode::BadArguments("placeholder @_databend_upload should be used in streaming_load handler or replaced in client."));
+                            return Err(ErrorCode::BadArguments("placeholder @_databend_upload in query handler: should be used in streaming_load handler or replaced in client."));
                         }
                         let (required_source_schema, values_consts) = if let Some(value) = value {
                             self.prepared_values(value, &schema, settings).await?

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -24,6 +25,7 @@ use databend_common_expression::DataSchema;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
+use databend_storages_common_stage::add_internal_columns;
 use orc_rust::array_decoder::NaiveStripeDecoder;
 
 use crate::strip::StripeInMemory;
@@ -33,6 +35,7 @@ pub struct StripeDecoder {
     data_schema: Arc<DataSchema>,
     arrow_schema: arrow_schema::SchemaRef,
     copy_status: Option<Arc<CopyStatus>>,
+    internal_columns: Vec<InternalColumnType>,
 }
 
 impl StripeDecoder {
@@ -40,6 +43,7 @@ impl StripeDecoder {
         table_ctx: Arc<dyn TableContext>,
         data_schema: Arc<DataSchema>,
         arrow_schema: arrow_schema::SchemaRef,
+        internal_columns: Vec<InternalColumnType>,
     ) -> Self {
         let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {
             Some(table_ctx.get_copy_status())
@@ -50,6 +54,7 @@ impl StripeDecoder {
             copy_status,
             arrow_schema,
             data_schema,
+            internal_columns,
         }
     }
 }
@@ -68,14 +73,22 @@ impl AccumulatingTransform for StripeDecoder {
         let batches: std::result::Result<Vec<RecordBatch>, _> = decoder.into_iter().collect();
         let batches = batches.map_err(|e| map_orc_error(e, &stripe.path))?;
         let mut blocks = vec![];
+        let mut start_row = stripe.start_row;
+
         for batch in batches {
-            let (block, _) = DataBlock::from_record_batch(self.data_schema.as_ref(), &batch)?;
+            let (mut block, _) = DataBlock::from_record_batch(self.data_schema.as_ref(), &batch)?;
             if let Some(copy_status) = &self.copy_status {
                 copy_status.add_chunk(&stripe.path, FileStatus {
                     num_rows_loaded: block.num_rows(),
                     error: None,
                 })
             }
+            add_internal_columns(
+                &self.internal_columns,
+                stripe.path.clone(),
+                &mut block,
+                &mut start_row,
+            );
             blocks.push(block);
         }
         Ok(blocks)

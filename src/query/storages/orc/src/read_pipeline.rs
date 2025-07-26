@@ -57,6 +57,15 @@ impl OrcTable {
         let data_schema: DataSchema = self.stage_table_info.schema.clone().into();
         let data_schema = Arc::new(data_schema);
 
+        let internal_columns = plan
+            .internal_columns
+            .as_ref()
+            .map(|m| {
+                m.values()
+                    .map(|i| i.column_type.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         if let Some((arrow_schema, schema_from)) = &self.schema {
             pipeline.add_source(
                 |output| {
@@ -73,7 +82,12 @@ impl OrcTable {
             )?;
             pipeline.try_resize(max_threads)?;
             pipeline.add_accumulating_transformer(|| {
-                StripeDecoder::new(ctx.clone(), data_schema.clone(), arrow_schema.clone())
+                StripeDecoder::new(
+                    ctx.clone(),
+                    data_schema.clone(),
+                    arrow_schema.clone(),
+                    internal_columns.clone(),
+                )
             });
         } else {
             pipeline.add_source(
@@ -89,7 +103,7 @@ impl OrcTable {
                 ErrorCode::InvalidTimezone(format!("[QUERY-CTX] Timezone validation failed: {}", e))
             })?;
             pipeline.add_accumulating_transformer(|| {
-                StripeDecoderForVariantTable::new(ctx.clone(), tz.clone())
+                StripeDecoderForVariantTable::new(ctx.clone(), tz.clone(), internal_columns.clone())
             });
         }
         Ok(())
