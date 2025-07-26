@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -19,15 +20,6 @@ use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::executor::physical_plans::AggregateExpand;
-use databend_common_sql::executor::physical_plans::AggregateFinal;
-use databend_common_sql::executor::physical_plans::AggregatePartial;
-use databend_common_sql::executor::physical_plans::EvalScalar;
-use databend_common_sql::executor::physical_plans::Filter;
-use databend_common_sql::executor::physical_plans::Sort;
-use databend_common_sql::executor::physical_plans::Window;
-use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::BindContext;
@@ -44,6 +36,11 @@ use itertools::Itertools;
 use log::info;
 
 use crate::interpreters::Interpreter;
+use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -279,75 +276,32 @@ impl Interpreter for AnalyzeTableInterpreter {
 }
 
 fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
-    #[recursive::recursive]
-    fn traverse(plan: PhysicalPlan) -> PhysicalPlan {
-        match plan {
-            PhysicalPlan::Filter(plan) => PhysicalPlan::Filter(Filter {
-                plan_id: plan.plan_id,
-                projections: plan.projections,
-                input: Box::new(traverse(*plan.input)),
-                predicates: plan.predicates,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::EvalScalar(plan) => PhysicalPlan::EvalScalar(EvalScalar {
-                plan_id: plan.plan_id,
-                projections: plan.projections,
-                input: Box::new(traverse(*plan.input)),
-                exprs: plan.exprs,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::AggregateExpand(plan) => PhysicalPlan::AggregateExpand(AggregateExpand {
-                plan_id: plan.plan_id,
-                input: Box::new(traverse(*plan.input)),
-                group_bys: plan.group_bys,
-                grouping_sets: plan.grouping_sets,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::AggregatePartial(plan) => {
-                PhysicalPlan::AggregatePartial(AggregatePartial {
-                    plan_id: plan.plan_id,
-                    input: Box::new(traverse(*plan.input)),
-                    group_by: plan.group_by,
-                    agg_funcs: plan.agg_funcs,
-                    rank_limit: plan.rank_limit,
-                    enable_experimental_aggregate_hashtable: plan
-                        .enable_experimental_aggregate_hashtable,
-                    group_by_display: plan.group_by_display,
-                    stat_info: plan.stat_info,
-                })
-            }
-            PhysicalPlan::AggregateFinal(plan) => PhysicalPlan::AggregateFinal(AggregateFinal {
-                plan_id: plan.plan_id,
-                input: Box::new(traverse(*plan.input)),
-                group_by: plan.group_by,
-                agg_funcs: plan.agg_funcs,
-                before_group_by_schema: plan.before_group_by_schema,
-                group_by_display: plan.group_by_display,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::Window(plan) => PhysicalPlan::Window(Window {
-                plan_id: plan.plan_id,
-                index: plan.index,
-                input: Box::new(traverse(*plan.input)),
-                func: plan.func,
-                partition_by: plan.partition_by,
-                order_by: plan.order_by,
-                window_frame: plan.window_frame,
-                limit: plan.limit,
-            }),
-            PhysicalPlan::Sort(plan) => PhysicalPlan::Sort(Sort {
-                plan_id: plan.plan_id,
-                input: Box::new(traverse(*plan.input)),
-                order_by: plan.order_by,
-                limit: plan.limit,
-                after_exchange: plan.after_exchange,
-                pre_projection: plan.pre_projection,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::Exchange(plan) => traverse(*plan.input),
-            _ => plan,
+    struct RemoveExchangeHandle;
+
+    impl RemoveExchangeHandle {
+        pub fn create() -> Box<dyn DeriveHandle> {
+            Box::new(RemoveExchangeHandle)
         }
     }
 
-    traverse(plan)
+    impl DeriveHandle for RemoveExchangeHandle {
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn derive(
+            &mut self,
+            v: &PhysicalPlan,
+            mut children: Vec<PhysicalPlan>,
+        ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+            let Some(_) = v.downcast_ref::<Exchange>() else {
+                return Err(children);
+            };
+
+            assert_eq!(children.len(), 1);
+            Ok(children.remove(0))
+        }
+    }
+
+    plan.derive_with(&mut RemoveExchangeHandle::create())
 }

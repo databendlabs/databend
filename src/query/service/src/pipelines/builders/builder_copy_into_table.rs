@@ -20,10 +20,8 @@ use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
@@ -31,14 +29,13 @@ use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_stage::TransformNullIf;
 use log::debug;
 use log::info;
 
+use crate::physical_plans::CopyIntoTable;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformCastSchema;
 use crate::pipelines::PipelineBuilder;
@@ -46,58 +43,6 @@ use crate::sessions::QueryContext;
 
 /// This file implements copy into table pipeline builder.
 impl PipelineBuilder {
-    pub(crate) fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
-        let to_table = self.ctx.build_table_by_table_info(&copy.table_info, None)?;
-        let source_schema = self.build_copy_into_table_input(copy, &to_table)?;
-        Self::build_copy_into_table_append(
-            self.ctx.clone(),
-            &mut self.main_pipeline,
-            copy,
-            source_schema,
-            to_table,
-        )?;
-        Ok(())
-    }
-    pub(crate) fn build_copy_into_table_input(
-        &mut self,
-        copy: &CopyIntoTable,
-        to_table: &Arc<dyn Table>,
-    ) -> Result<DataSchemaRef> {
-        match &copy.source {
-            CopyIntoTableSource::Query(input) => {
-                self.build_pipeline(input)?;
-                // Reorder the result for select clause
-                PipelineBuilder::build_result_projection(
-                    &self.func_ctx,
-                    input.output_schema()?,
-                    copy.project_columns.as_ref().unwrap(),
-                    &mut self.main_pipeline,
-                    false,
-                )?;
-                let fields = copy
-                    .project_columns
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .map(|column_binding| {
-                        DataField::new(
-                            &column_binding.column_name,
-                            *column_binding.data_type.clone(),
-                        )
-                    })
-                    .collect();
-                Ok(DataSchemaRefExt::create(fields))
-            }
-            CopyIntoTableSource::Stage(input) => {
-                self.ctx
-                    .set_read_block_thresholds(to_table.get_block_thresholds());
-
-                self.build_pipeline(input)?;
-                Ok(copy.required_source_schema.clone())
-            }
-        }
-    }
-
     fn need_null_if_processor<'a>(
         plan: &'a CopyIntoTable,
         source_schema: &Arc<DataSchema>,
@@ -127,7 +72,7 @@ impl PipelineBuilder {
         None
     }
 
-    fn build_copy_into_table_append(
+    pub fn build_copy_into_table_append(
         ctx: Arc<QueryContext>,
         main_pipeline: &mut Pipeline,
         plan: &CopyIntoTable,

@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,8 +22,6 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline_core::processors::create_resize_item;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
@@ -33,11 +30,7 @@ use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
 use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
 use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::binder::MutationStrategy;
-use databend_common_sql::executor::physical_plans::Mutation;
-use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::DefaultExprBinder;
-use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
@@ -53,88 +46,6 @@ use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceS
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
-    // build mutation serialize and mutation pipeline
-    pub(crate) fn build_mutation(&mut self, merge_into: &Mutation) -> Result<()> {
-        self.build_pipeline(&merge_into.input)?;
-
-        let tbl = self
-            .ctx
-            .build_table_by_table_info(&merge_into.table_info, None)?;
-
-        let table = FuseTable::try_from_table(tbl.as_ref())?;
-        let block_thresholds = table.get_block_thresholds();
-
-        let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
-
-        let io_request_semaphore =
-            Arc::new(Semaphore::new(self.settings.get_max_threads()? as usize));
-
-        // For row_id port, create rowid_aggregate_mutator
-        // For matched data port and unmatched port, do serialize
-        let serialize_len = match merge_into.strategy {
-            MutationStrategy::NotMatchedOnly => self.main_pipeline.output_len(),
-            MutationStrategy::MixedMatched | MutationStrategy::MatchedOnly => {
-                // remove row id port
-                self.main_pipeline.output_len() - 1
-            }
-            MutationStrategy::Direct => unreachable!(),
-        };
-
-        // 1. Fill default and computed columns
-        self.build_fill_columns_in_merge_into(
-            tbl.clone(),
-            serialize_len,
-            merge_into.need_match,
-            merge_into.unmatched.clone(),
-        )?;
-
-        // 2. Add cluster‘s blocksort if it's a cluster table
-        self.build_compact_and_cluster_sort_in_merge_into(
-            table,
-            merge_into.need_match,
-            serialize_len,
-            block_thresholds,
-        )?;
-
-        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
-
-        // 3.1 Add rowid_aggregate_mutator for row_id port
-        if merge_into.need_match {
-            pipe_items.push(table.rowid_aggregate_mutator(
-                self.ctx.clone(),
-                cluster_stats_gen.clone(),
-                io_request_semaphore,
-                merge_into.segments.clone(),
-                false,
-                merge_into.table_meta_timestamps,
-            )?);
-        }
-
-        // 3.2 Add serialize_block_transform for data port
-        for _ in 0..serialize_len {
-            let serialize_block_transform = TransformSerializeBlock::try_create(
-                self.ctx.clone(),
-                InputPort::create(),
-                OutputPort::create(),
-                table,
-                cluster_stats_gen.clone(),
-                MutationKind::MergeInto,
-                merge_into.table_meta_timestamps,
-            )?;
-            pipe_items.push(serialize_block_transform.into_pipe_item());
-        }
-
-        let output_len = pipe_items.iter().map(|item| item.outputs_port.len()).sum();
-        self.main_pipeline.add_pipe(Pipe::create(
-            self.main_pipeline.output_len(),
-            output_len,
-            pipe_items,
-        ));
-
-        Ok(())
-    }
-
     pub fn build_fill_columns_in_merge_into(
         &mut self,
         tbl: Arc<dyn Table>,

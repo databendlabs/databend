@@ -1,0 +1,177 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::any::Any;
+use std::sync::Arc;
+
+use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::Projection;
+use databend_common_exception::Result;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
+use databend_common_pipeline_core::processors::InputPort;
+use databend_common_pipeline_core::processors::OutputPort;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_transforms::create_dummy_item;
+use databend_common_storages_fuse::operations::row_fetch_processor;
+use itertools::Itertools;
+use tokio::sync::Semaphore;
+
+use crate::physical_plans::explain::PlanStatsInfo;
+use crate::physical_plans::format::format_output_columns;
+use crate::physical_plans::format::plan_stats_info_to_format_tree;
+use crate::physical_plans::format::FormatContext;
+use crate::physical_plans::physical_plan::IPhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::physical_plans::physical_plan::PhysicalPlanMeta;
+use crate::physical_plans::MutationSplit;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::pipelines::PipelineBuilder;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RowFetch {
+    pub meta: PhysicalPlanMeta,
+    pub input: PhysicalPlan,
+    // cloned from `input`.
+    pub source: Box<DataSourcePlan>,
+    // projection on the source table schema.
+    pub cols_to_fetch: Projection,
+    pub row_id_col_offset: usize,
+    pub fetched_fields: Vec<DataField>,
+    pub need_wrap_nullable: bool,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+#[typetag::serde]
+impl IPhysicalPlan for RowFetch {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn get_meta(&self) -> &PhysicalPlanMeta {
+        &self.meta
+    }
+
+    fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
+        &mut self.meta
+    }
+
+    fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = self.input.output_schema()?.fields().clone();
+        fields.extend_from_slice(&self.fetched_fields);
+        Ok(DataSchemaRefExt::create(fields))
+    }
+
+    fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&self.input))
+    }
+
+    fn children_mut<'a>(&'a mut self) -> Box<dyn Iterator<Item = &'a mut PhysicalPlan> + 'a> {
+        Box::new(std::iter::once(&mut self.input))
+    }
+
+    fn to_format_node(
+        &self,
+        ctx: &mut FormatContext<'_>,
+        children: Vec<FormatTreeNode<String>>,
+    ) -> Result<FormatTreeNode<String>> {
+        let table_schema = self.source.source_info.schema();
+        let projected_schema = self.cols_to_fetch.project_schema(&table_schema);
+        let fields_to_fetch = projected_schema.fields();
+
+        let mut node_children = vec![
+            FormatTreeNode::new(format!(
+                "output columns: [{}]",
+                format_output_columns(self.output_schema()?, ctx.metadata, true)
+            )),
+            FormatTreeNode::new(format!(
+                "columns to fetch: [{}]",
+                fields_to_fetch.iter().map(|f| f.name()).join(", ")
+            )),
+        ];
+
+        if let Some(info) = &self.stat_info {
+            node_children.extend(plan_stats_info_to_format_tree(info));
+        }
+
+        node_children.extend(children);
+
+        Ok(FormatTreeNode::with_children(
+            "RowFetch".to_string(),
+            node_children,
+        ))
+    }
+
+    #[recursive::recursive]
+    fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
+        self.input.try_find_single_data_source()
+    }
+
+    fn get_desc(&self) -> Result<String> {
+        let table_schema = self.source.source_info.schema();
+        let projected_schema = self.cols_to_fetch.project_schema(&table_schema);
+        Ok(projected_schema.fields.iter().map(|f| f.name()).join(", "))
+    }
+
+    fn derive(&self, mut children: Vec<PhysicalPlan>) -> PhysicalPlan {
+        let mut new_physical_plan = self.clone();
+        assert_eq!(children.len(), 1);
+        new_physical_plan.input = children.pop().unwrap();
+        Box::new(new_physical_plan)
+    }
+
+    fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
+        self.input.build_pipeline(builder)?;
+
+        let max_io_requests = builder.settings.get_max_storage_io_requests()? as usize;
+        let row_fetch_runtime = GlobalIORuntime::instance();
+        let row_fetch_semaphore = Arc::new(Semaphore::new(max_io_requests));
+        let processor = row_fetch_processor(
+            builder.ctx.clone(),
+            self.row_id_col_offset,
+            &self.source,
+            self.cols_to_fetch.clone(),
+            self.need_wrap_nullable,
+            row_fetch_semaphore,
+            row_fetch_runtime,
+        )?;
+
+        if self.input.downcast_ref::<MutationSplit>().is_none() {
+            builder.main_pipeline.add_transform(processor)?;
+        } else {
+            let output_len = builder.main_pipeline.output_len();
+            let mut pipe_items = Vec::with_capacity(output_len);
+            for i in 0..output_len {
+                if i % 2 == 0 {
+                    let input = InputPort::create();
+                    let output = OutputPort::create();
+                    let processor_ptr = processor(input.clone(), output.clone())?;
+                    pipe_items.push(PipeItem::create(processor_ptr, vec![input], vec![output]));
+                } else {
+                    pipe_items.push(create_dummy_item());
+                }
+            }
+            builder
+                .main_pipeline
+                .add_pipe(Pipe::create(output_len, output_len, pipe_items));
+        }
+
+        Ok(())
+    }
+}
