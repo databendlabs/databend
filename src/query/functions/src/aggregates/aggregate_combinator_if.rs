@@ -26,7 +26,6 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::StateAddr;
@@ -159,10 +158,6 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.serialize_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.nested.serialize(place, builders)
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -170,10 +165,6 @@ impl AggregateFunction for AggregateIfCombinator {
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
         self.nested.batch_serialize(places, loc, builders)
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        self.nested.merge(place, data)
     }
 
     fn batch_merge(

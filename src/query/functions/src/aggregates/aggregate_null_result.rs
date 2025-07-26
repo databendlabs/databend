@@ -23,9 +23,9 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function::AggregateFunction;
@@ -92,14 +92,26 @@ impl AggregateFunction for AggregateNullResultFunction {
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize(&self, _place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        _loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
-        binary_builder.commit_row();
+        for _ in places {
+            binary_builder.commit_row();
+        }
         Ok(())
     }
 
-    fn merge(&self, _place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let _binary = *data[0].as_binary().unwrap();
+    fn batch_merge(
+        &self,
+        _: &[StateAddr],
+        _: &[AggrStateLoc],
+        _: &BlockEntry,
+        _: Option<&Bitmap>,
+    ) -> Result<()> {
         Ok(())
     }
 

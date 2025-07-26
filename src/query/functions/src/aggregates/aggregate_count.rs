@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
-use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -34,7 +33,6 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function::AggregateFunction;
@@ -170,12 +168,6 @@ impl AggregateFunction for AggregateCountFunction {
         vec![StateSerdeItem::DataType(UInt64Type::data_type())]
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
-        UInt64Type::downcast_builder(&mut builders[0]).push(state.count);
-        Ok(())
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -187,13 +179,6 @@ impl AggregateFunction for AggregateCountFunction {
             let state = AggrState::new(*place, loc).get::<AggregateCountState>();
             builder.push(state.count);
         }
-        Ok(())
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
-        let other = UInt64Type::try_downcast_scalar(&data[0]).unwrap();
-        state.count += other;
         Ok(())
     }
 

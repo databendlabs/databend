@@ -26,6 +26,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -33,14 +34,15 @@ use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
@@ -281,20 +283,48 @@ where
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        state.serialize(&mut binary_builder.data)?;
-        binary_builder.commit_row();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        let mut rhs: AggregateWindowFunnelState<T::Scalar> =
-            borsh_partial_deserialize(&mut binary)?;
-        state.merge(&mut rhs);
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state =
+                    AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                let mut rhs: AggregateWindowFunnelState<T::Scalar> =
+                    borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state =
+                    AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                let mut rhs: AggregateWindowFunnelState<T::Scalar> =
+                    borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs);
+            }
+        }
         Ok(())
     }
 

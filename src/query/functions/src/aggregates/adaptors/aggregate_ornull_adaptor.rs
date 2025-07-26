@@ -25,7 +25,6 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
@@ -189,21 +188,6 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             .collect()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let n = builders.len();
-        debug_assert_eq!(self.nested.serialize_type().len() + 1, n);
-
-        let flag = get_flag(place);
-        builders
-            .last_mut()
-            .and_then(ColumnBuilder::as_boolean_mut)
-            .unwrap()
-            .push(flag);
-
-        self.nested
-            .serialize(place.remove_last_loc(), &mut builders[..n - 1])
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -222,13 +206,6 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         }
         self.nested
             .batch_serialize(places, &loc[..loc.len() - 1], &mut builders[..(n - 1)])
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        merge_flag(place, *data.last().and_then(ScalarRef::as_boolean).unwrap());
-        self.nested
-            .merge(place.remove_last_loc(), &data[..data.len() - 1])?;
-        Ok(())
     }
 
     fn batch_merge(
@@ -256,26 +233,30 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
                 self.nested
                     .batch_merge(places, &loc[0..loc.len() - 1], &inner_state, filter)?;
             }
-            _ => {
-                let state = state.to_column();
-                let iter = places.iter().zip(state.iter());
+            BlockEntry::Const(Scalar::Tuple(tuple), DataType::Tuple(data_type), num_rows) => {
+                let flag = *tuple.last().unwrap().as_boolean().unwrap();
                 if let Some(filter) = filter {
-                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
+                    for place in places
+                        .iter()
+                        .zip(filter.iter())
+                        .filter_map(|(v, b)| b.then_some(v))
                     {
-                        self.merge(
-                            AggrState::new(*place, loc),
-                            data.as_tuple().unwrap().as_slice(),
-                        )?;
+                        merge_flag(AggrState::new(*place, loc), flag);
                     }
                 } else {
-                    for (place, data) in iter {
-                        self.merge(
-                            AggrState::new(*place, loc),
-                            data.as_tuple().unwrap().as_slice(),
-                        )?;
+                    for place in places {
+                        merge_flag(AggrState::new(*place, loc), flag);
                     }
                 }
+                let inner_state = BlockEntry::new_const_column(
+                    DataType::Tuple(data_type[0..data_type.len() - 1].to_vec()),
+                    Scalar::Tuple(tuple[0..tuple.len() - 1].to_vec()),
+                    *num_rows,
+                );
+                self.nested
+                    .batch_merge(places, &loc[0..loc.len() - 1], &inner_state, filter)?;
             }
+            _ => unreachable!(),
         }
 
         Ok(())

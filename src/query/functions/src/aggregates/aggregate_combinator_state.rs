@@ -23,7 +23,6 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::AggregateFunctionFactory;
@@ -113,10 +112,6 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.serialize_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.nested.serialize(place, builders)
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -124,10 +119,6 @@ impl AggregateFunction for AggregateStateCombinator {
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
         self.nested.batch_serialize(places, loc, builders)
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        self.nested.merge(place, data)
     }
 
     fn batch_merge(
@@ -140,17 +131,14 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.batch_merge(places, loc, state, filter)
     }
 
-    fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
-        self.nested.batch_merge_single(place, state)
-    }
-
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.nested.merge_states(place, rhs)
     }
 
     fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-        self.nested.serialize(place, builders)
+        self.nested
+            .batch_serialize(&[place.addr], place.loc, builders)
     }
 
     fn need_manual_drop_state(&self) -> bool {

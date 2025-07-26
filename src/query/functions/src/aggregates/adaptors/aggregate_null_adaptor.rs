@@ -16,7 +16,6 @@ use std::fmt;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -26,7 +25,6 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
@@ -187,10 +185,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.serialize_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.0.serialize(place, builders)
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -198,10 +192,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
         self.0.batch_serialize(places, loc, builders)
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        self.0.merge(place, data)
     }
 
     fn batch_merge(
@@ -323,10 +313,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.0.serialize_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.0.serialize(place, builders)
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -334,10 +320,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
         self.0.batch_serialize(places, loc, builders)
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        self.0.merge(place, data)
     }
 
     fn batch_merge(
@@ -531,23 +513,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             .collect()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        if !NULLABLE_RESULT {
-            return self.nested.serialize(place, builders);
-        }
-        let n = builders.len();
-        debug_assert_eq!(self.nested.serialize_type().len() + 1, n);
-
-        let flag = get_flag(place);
-        builders
-            .last_mut()
-            .and_then(ColumnBuilder::as_boolean_mut)
-            .unwrap()
-            .push(flag);
-        self.nested
-            .serialize(place.remove_last_loc(), &mut builders[..(n - 1)])
-    }
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
@@ -569,21 +534,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         }
         self.nested
             .batch_serialize(places, &loc[..loc.len() - 1], &mut builders[..(n - 1)])
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        if !NULLABLE_RESULT {
-            return self.nested.merge(place, data);
-        }
-
-        let flag = *data.last().and_then(ScalarRef::as_boolean).unwrap();
-        if !flag {
-            return Ok(());
-        }
-
-        self.update_flag(place);
-        self.nested
-            .merge(place.remove_last_loc(), &data[..data.len() - 1])
     }
 
     fn batch_merge(
@@ -623,16 +573,37 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
                 self.nested
                     .batch_merge(places, &loc[..loc.len() - 1], &nested_state.into(), filter)
             }
-            _ => {
-                let state = state.downcast::<AnyType>().unwrap();
-                for (place, data) in places.iter().zip(state.iter()) {
-                    self.merge(
-                        AggrState::new(*place, loc),
-                        data.as_tuple().unwrap().as_slice(),
-                    )?;
-                }
-                Ok(())
+            BlockEntry::Const(Scalar::Tuple(tuple), DataType::Tuple(data_type), num_rows) => {
+                let flag = *tuple.last().and_then(Scalar::as_boolean).unwrap();
+                let flag = Bitmap::new_constant(flag, *num_rows);
+                let flag = match filter {
+                    Some(filter) => filter & &flag,
+                    None => flag,
+                };
+                let filter = if flag.null_count() == 0 {
+                    for place in places.iter() {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    None
+                } else {
+                    for place in places
+                        .iter()
+                        .zip(flag.iter())
+                        .filter_map(|(place, flag)| flag.then_some(place))
+                    {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    Some(&flag)
+                };
+                let nested_state = BlockEntry::new_const_column(
+                    DataType::Tuple(data_type[0..data_type.len() - 1].to_vec()),
+                    Scalar::Tuple(tuple[0..tuple.len() - 1].to_vec()),
+                    *num_rows,
+                );
+                self.nested
+                    .batch_merge(places, &loc[..loc.len() - 1], &nested_state, filter)
             }
+            _ => unreachable!(),
         }
     }
 
@@ -702,391 +673,4 @@ fn get_flag(place: AggrState) -> bool {
 
 fn flag_offset(place: AggrState) -> usize {
     *place.loc.last().unwrap().as_bool().unwrap().1
-}
-
-#[cfg(test)]
-mod tests {
-
-    use std::sync::Arc;
-
-    use databend_common_expression::types::*;
-    use databend_common_expression::*;
-
-    use super::*;
-
-    struct TestStateBuffer {
-        buffer: Vec<u8>,
-    }
-
-    impl TestStateBuffer {
-        fn new(layout: &std::alloc::Layout) -> Self {
-            let buffer = vec![1u8; layout.size()];
-            Self { buffer }
-        }
-
-        fn addr(&self) -> StateAddr {
-            StateAddr::new(self.buffer.as_ptr() as usize)
-        }
-    }
-
-    #[derive(Clone)]
-    struct MockAggregateFunction {
-        return_type: DataType,
-        serialize_items: Vec<StateSerdeItem>,
-    }
-
-    impl fmt::Display for MockAggregateFunction {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "MockAggregateFunction")
-        }
-    }
-
-    impl AggregateFunction for MockAggregateFunction {
-        fn name(&self) -> &str {
-            "mock"
-        }
-
-        fn return_type(&self) -> Result<DataType> {
-            Ok(self.return_type.clone())
-        }
-
-        fn init_state(&self, place: AggrState) {
-            place.write(|| 3_u64);
-        }
-
-        fn register_state(&self, registry: &mut AggrStateRegistry) {
-            registry.register(AggrStateType::Custom(std::alloc::Layout::new::<u64>()));
-        }
-
-        fn accumulate(
-            &self,
-            _place: AggrState,
-            _columns: ProjectedBlock,
-            _validity: Option<&Bitmap>,
-            _input_rows: usize,
-        ) -> Result<()> {
-            Ok(())
-        }
-
-        fn accumulate_row(
-            &self,
-            _place: AggrState,
-            _columns: ProjectedBlock,
-            _row: usize,
-        ) -> Result<()> {
-            Ok(())
-        }
-
-        fn serialize_type(&self) -> Vec<StateSerdeItem> {
-            self.serialize_items.clone()
-        }
-
-        fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-            let state = place.get::<u64>();
-            if let ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) = &mut builders[0] {
-                builder.push(*state);
-            }
-            Ok(())
-        }
-
-        fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-            let state = place.get::<u64>();
-            if let Some(ScalarRef::Number(NumberScalar::UInt64(value))) = data.first() {
-                *state += value;
-            }
-            Ok(())
-        }
-
-        fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-            let lhs_state = place.get::<u64>();
-            let rhs_state = rhs.get::<u64>();
-            *lhs_state += *rhs_state;
-            Ok(())
-        }
-
-        fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-            let state = place.get::<u64>();
-            if let ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) = builder {
-                builder.push(*state);
-            }
-            Ok(())
-        }
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum BatchMergeStrategy {
-        Reference,
-        Optimized,
-    }
-
-    pub struct TestNullFunction<const NULLABLE_RESULT: bool> {
-        adaptor: CommonNullAdaptor<NULLABLE_RESULT>,
-        strategy: BatchMergeStrategy,
-    }
-
-    impl<const NULLABLE_RESULT: bool> TestNullFunction<NULLABLE_RESULT> {
-        pub fn new(nested: AggregateFunctionRef, strategy: BatchMergeStrategy) -> Self {
-            Self {
-                adaptor: CommonNullAdaptor { nested },
-                strategy,
-            }
-        }
-
-        fn reference_batch_merge_impl(
-            &self,
-            places: &[StateAddr],
-            loc: &[AggrStateLoc],
-            state: &BlockEntry,
-            filter: Option<&Bitmap>,
-        ) -> Result<()> {
-            let view = state.downcast::<AnyType>().unwrap();
-            let iter = places.iter().zip(view.iter());
-            if let Some(filter) = filter {
-                for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                    self.merge(
-                        AggrState::new(*place, loc),
-                        data.as_tuple().unwrap().as_slice(),
-                    )?;
-                }
-            } else {
-                for (place, data) in iter {
-                    self.merge(
-                        AggrState::new(*place, loc),
-                        data.as_tuple().unwrap().as_slice(),
-                    )?;
-                }
-            }
-
-            Ok(())
-        }
-    }
-
-    impl<const NULLABLE_RESULT: bool> fmt::Display for TestNullFunction<NULLABLE_RESULT> {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "ConfigurableNull")
-        }
-    }
-
-    impl<const NULLABLE_RESULT: bool> AggregateFunction for TestNullFunction<NULLABLE_RESULT> {
-        fn name(&self) -> &str {
-            "test_null"
-        }
-
-        fn return_type(&self) -> Result<DataType> {
-            self.adaptor.return_type()
-        }
-
-        fn init_state(&self, place: AggrState) {
-            self.adaptor.init_state(place)
-        }
-
-        fn register_state(&self, registry: &mut AggrStateRegistry) {
-            self.adaptor.register_state(registry)
-        }
-
-        fn accumulate(
-            &self,
-            place: AggrState,
-            columns: ProjectedBlock,
-            validity: Option<&Bitmap>,
-            input_rows: usize,
-        ) -> Result<()> {
-            self.adaptor
-                .accumulate(place, columns, validity.cloned(), input_rows)
-        }
-
-        fn accumulate_row(
-            &self,
-            place: AggrState,
-            columns: ProjectedBlock,
-            row: usize,
-        ) -> Result<()> {
-            self.adaptor.accumulate_row(place, columns, None, row)
-        }
-
-        fn serialize_type(&self) -> Vec<StateSerdeItem> {
-            self.adaptor.serialize_type()
-        }
-
-        fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-            self.adaptor.serialize(place, builders)
-        }
-
-        fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-            self.adaptor.merge(place, data)
-        }
-
-        fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
-            self.adaptor.merge_states(place, rhs)
-        }
-
-        fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-            self.adaptor.merge_result(place, builder)
-        }
-
-        /// Custom batch_merge implementation that switches between reference and optimized strategies
-        fn batch_merge(
-            &self,
-            places: &[StateAddr],
-            loc: &[AggrStateLoc],
-            state: &BlockEntry,
-            filter: Option<&Bitmap>,
-        ) -> Result<()> {
-            match self.strategy {
-                BatchMergeStrategy::Reference => {
-                    self.reference_batch_merge_impl(places, loc, state, filter)
-                }
-                BatchMergeStrategy::Optimized => {
-                    self.adaptor.batch_merge(places, loc, state, filter)
-                }
-            }
-        }
-    }
-
-    fn create_configurable(strategy: BatchMergeStrategy) -> TestNullFunction<true> {
-        let nested = Arc::new(MockAggregateFunction {
-            return_type: DataType::Number(NumberDataType::UInt64),
-            serialize_items: vec![StateSerdeItem::DataType(DataType::Number(
-                NumberDataType::UInt64,
-            ))],
-        });
-        TestNullFunction::new(nested, strategy)
-    }
-
-    fn create_test_state_entry(values: &[u64], flags: &[bool]) -> Result<BlockEntry> {
-        // Build the state column as a tuple
-        let mut value_builder =
-            ColumnBuilder::with_capacity(&DataType::Number(NumberDataType::UInt64), values.len());
-        let mut flag_builder = ColumnBuilder::with_capacity(&DataType::Boolean, flags.len());
-
-        for &value in values {
-            if let ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) = &mut value_builder
-            {
-                builder.push(value);
-            }
-        }
-
-        for &flag in flags {
-            if let ColumnBuilder::Boolean(builder) = &mut flag_builder {
-                builder.push(flag);
-            }
-        }
-
-        let value_column = value_builder.build();
-        let flag_column = flag_builder.build();
-        let tuple_column = Column::Tuple(vec![value_column, flag_column]);
-
-        Ok(BlockEntry::new(Value::Column(tuple_column), || {
-            (
-                DataType::Tuple(vec![
-                    DataType::Number(NumberDataType::UInt64),
-                    DataType::Boolean,
-                ]),
-                values.len(),
-            )
-        }))
-    }
-
-    fn run_batch_merge_with_strategy(
-        strategy: BatchMergeStrategy,
-        buffers: &[TestStateBuffer],
-        loc: &[AggrStateLoc],
-        state_entry: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        let func = create_configurable(strategy);
-        let places: Vec<StateAddr> = buffers.iter().map(|b| b.addr()).collect();
-
-        // Initialize states
-        for buffer in buffers {
-            let place = AggrState::new(buffer.addr(), loc);
-            func.init_state(place);
-        }
-
-        // Run batch_merge
-        func.batch_merge(&places, loc, state_entry, filter)
-    }
-
-    fn test_both_strategies(values: &[u64], flags: &[bool], filter: Option<&Bitmap>) -> Result<()> {
-        let state_entry = create_test_state_entry(values, flags)?;
-        let (reference_buffers, optimized_buffers, loc) = {
-            let buffer_count = values.len();
-            let states_layout =
-                get_states_layout(&[Arc::new(create_configurable(BatchMergeStrategy::Reference))])?;
-            let layout = states_layout.layout;
-            let loc = states_layout.states_loc[0].to_vec();
-
-            let reference_buffers: Vec<TestStateBuffer> = (0..buffer_count)
-                .map(|_| TestStateBuffer::new(&layout))
-                .collect();
-            let optimized_buffers: Vec<TestStateBuffer> = (0..buffer_count)
-                .map(|_| TestStateBuffer::new(&layout))
-                .collect();
-
-            (reference_buffers, optimized_buffers, loc)
-        };
-
-        // Run both strategies
-        run_batch_merge_with_strategy(
-            BatchMergeStrategy::Reference,
-            &reference_buffers,
-            &loc,
-            &state_entry,
-            filter,
-        )?;
-
-        run_batch_merge_with_strategy(
-            BatchMergeStrategy::Optimized,
-            &optimized_buffers,
-            &loc,
-            &state_entry,
-            filter,
-        )?;
-
-        for i in 0..reference_buffers.len() {
-            assert_eq!(
-                reference_buffers[i].buffer, optimized_buffers[i].buffer,
-                "Buffer contents should match at index {}",
-                i
-            );
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_batch_merge_equivalence() -> Result<()> {
-        {
-            let values = vec![10u64, 20u64, 30u64];
-            let flags = vec![true, false, true];
-
-            test_both_strategies(&values, &flags, None)?;
-        }
-
-        {
-            let values = vec![100u64, 200u64, 300u64, 400u64];
-            let flags = vec![true, false, true, true]; // Skip index 1
-
-            test_both_strategies(&values, &flags, None)?;
-        }
-
-        {
-            let values = vec![10u64, 20u64, 30u64, 40u64];
-            let flags = vec![true, false, true, true];
-            let filter_bits = [true, false, true, false]; // Only process indices 0 and 2
-            let filter = Bitmap::from_iter(filter_bits.iter().copied());
-
-            test_both_strategies(&values, &flags, Some(&filter))?;
-        }
-
-        {
-            let values = vec![100u64, 200u64, 300u64, 400u64];
-            let flags = vec![true, true, false, true]; // Skip index 2
-            let filter_bits = [true, false, true, true]; // Skip index 1
-            let filter = Bitmap::from_iter(filter_bits.iter().copied());
-
-            test_both_strategies(&values, &flags, Some(&filter))?;
-        }
-
-        Ok(())
-    }
 }

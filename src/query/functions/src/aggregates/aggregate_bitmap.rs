@@ -33,10 +33,10 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
@@ -293,28 +293,57 @@ where
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
-        let state = place.get::<BitmapAggState>();
-        // flag indicate where bitmap is none
-        let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
-        binary_builder.data.write_scalar(&flag)?;
-        if let Some(rb) = &state.rb {
-            rb.serialize_into(&mut binary_builder.data)?;
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+            // flag indicate where bitmap is none
+            let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
+            binary_builder.data.write_scalar(&flag)?;
+            if let Some(rb) = &state.rb {
+                rb.serialize_into(&mut binary_builder.data)?;
+            }
+            binary_builder.commit_row();
         }
-        binary_builder.commit_row();
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
-        let state = place.get::<BitmapAggState>();
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
 
-        let flag = binary[0];
-        binary.consume(1);
-        if flag == 1 {
-            let rb = deserialize_bitmap(binary)?;
-            state.add::<OP>(rb);
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+                let flag = data[0];
+                data.consume(1);
+                if flag == 1 {
+                    let rb = deserialize_bitmap(data)?;
+                    state.add::<OP>(rb);
+                }
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+
+                let flag = data[0];
+                data.consume(1);
+                if flag == 1 {
+                    let rb = deserialize_bitmap(data)?;
+                    state.add::<OP>(rb);
+                }
+            }
         }
         Ok(())
     }
@@ -495,12 +524,23 @@ where
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.inner.serialize(place, builders)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.inner.batch_serialize(places, loc, builders)
     }
 
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        self.inner.merge(place, data)
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.inner.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

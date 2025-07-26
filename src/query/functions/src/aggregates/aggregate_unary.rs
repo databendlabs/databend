@@ -21,17 +21,19 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 
@@ -85,16 +87,42 @@ where
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize_state(&self, builders: &mut [ColumnBuilder]) -> Result<()> {
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
-        self.serialize(&mut binary_builder.data)?;
-        binary_builder.commit_row();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
         Ok(())
     }
 
-    fn deserialize_state(data: &[ScalarRef]) -> Result<Self> {
-        let mut binary = *data[0].as_binary().unwrap();
-        Ok(Self::deserialize_reader(&mut binary)?)
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let rhs = Self::deserialize_reader(&mut data)?;
+                let state: &mut Self = AggrState::new(*place, loc).get();
+                state.merge(&rhs)?;
+            }
+        } else {
+            for (place, mut data) in iter {
+                let rhs = Self::deserialize_reader(&mut data)?;
+                let state: &mut Self = AggrState::new(*place, loc).get();
+                state.merge(&rhs)?;
+            }
+        }
+        Ok(())
     }
 }
 
@@ -249,15 +277,23 @@ where
         S::serialize_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let state: &mut S = place.get::<S>();
-        state.serialize_state(builders)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        S::batch_serialize(places, loc, builders)
     }
 
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let state: &mut S = place.get::<S>();
-        let rhs = S::deserialize_state(data)?;
-        state.merge(&rhs)
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        S::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

@@ -29,7 +29,6 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Constant;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateAddr;
 
 use super::get_states_layout;
@@ -190,17 +189,10 @@ pub fn eval_aggr_for_test(
         let data_type = func.serialize_data_type();
         let mut builder = ColumnBuilder::with_capacity(&data_type, 1);
         let builders = builder.as_tuple_mut().unwrap().as_mut_slice();
-        func.serialize(state, builders)?;
+        func.batch_serialize(&[eval.addr], state.loc, builders)?;
         func.init_state(state);
         let column = builder.build();
-        let data = column.index(0);
-        func.merge(
-            state,
-            data.as_ref()
-                .and_then(ScalarRef::as_tuple)
-                .unwrap()
-                .as_slice(),
-        )?;
+        func.batch_merge(&[eval.addr], state.loc, &column.into(), None)?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(state, &mut builder)?;

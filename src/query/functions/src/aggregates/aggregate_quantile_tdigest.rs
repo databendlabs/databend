@@ -31,6 +31,7 @@ use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
@@ -368,19 +369,45 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
-        let state = place.get::<QuantileTDigestState>();
-        state.serialize(&mut binary_builder.data)?;
-        binary_builder.commit_row();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
-        let state = place.get::<QuantileTDigestState>();
-        let mut rhs: QuantileTDigestState = borsh_partial_deserialize(&mut binary)?;
-        state.merge(&mut rhs)
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
+                let mut rhs: QuantileTDigestState = borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs)?;
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
+                let mut rhs: QuantileTDigestState = borsh_partial_deserialize(&mut data)?;
+                state.merge(&mut rhs)?;
+            }
+        }
+        Ok(())
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

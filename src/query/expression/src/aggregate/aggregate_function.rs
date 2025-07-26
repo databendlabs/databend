@@ -22,17 +22,11 @@ use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
 use super::StateAddr;
-use crate::types::AnyPairType;
-use crate::types::AnyQuaternaryType;
-use crate::types::AnyTernaryType;
-use crate::types::AnyType;
-use crate::types::AnyUnaryType;
 use crate::types::DataType;
 use crate::BlockEntry;
 use crate::ColumnBuilder;
 use crate::ProjectedBlock;
 use crate::Scalar;
-use crate::ScalarRef;
 use crate::StateSerdeItem;
 use crate::StateSerdeType;
 
@@ -82,21 +76,12 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         serde_type.data_type()
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()>;
-
     fn batch_serialize(
         &self,
         places: &[StateAddr],
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        for place in places {
-            self.serialize(AggrState::new(*place, loc), builders)?;
-        }
-        Ok(())
-    }
-
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()>;
+    ) -> Result<()>;
 
     /// Batch deserialize the state and merge
     fn batch_merge(
@@ -105,127 +90,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         loc: &[AggrStateLoc],
         state: &BlockEntry,
         filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        match state.data_type().as_tuple().unwrap().len() {
-            1 => {
-                let view = state.downcast::<AnyUnaryType>().unwrap();
-                let iter = places.iter().zip(view.iter());
-                if let Some(filter) = filter {
-                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
-                    {
-                        self.merge(AggrState::new(*place, loc), &[data])?;
-                    }
-                } else {
-                    for (place, data) in iter {
-                        self.merge(AggrState::new(*place, loc), &[data])?;
-                    }
-                }
-            }
-            2 => {
-                let view = state.downcast::<AnyPairType>().unwrap();
-                let iter = places.iter().zip(view.iter());
-                if let Some(filter) = filter {
-                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
-                    {
-                        self.merge(AggrState::new(*place, loc), &[data.0, data.1])?;
-                    }
-                } else {
-                    for (place, data) in iter {
-                        self.merge(AggrState::new(*place, loc), &[data.0, data.1])?;
-                    }
-                }
-            }
-            3 => {
-                let view = state.downcast::<AnyTernaryType>().unwrap();
-                let iter = places.iter().zip(view.iter());
-                if let Some(filter) = filter {
-                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
-                    {
-                        self.merge(AggrState::new(*place, loc), &[data.0, data.1, data.2])?;
-                    }
-                } else {
-                    for (place, data) in iter {
-                        self.merge(AggrState::new(*place, loc), &[data.0, data.1, data.2])?;
-                    }
-                }
-            }
-            4 => {
-                let view = state.downcast::<AnyQuaternaryType>().unwrap();
-                let iter = places.iter().zip(view.iter());
-                if let Some(filter) = filter {
-                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
-                    {
-                        self.merge(AggrState::new(*place, loc), &[
-                            data.0, data.1, data.2, data.3,
-                        ])?;
-                    }
-                } else {
-                    for (place, data) in iter {
-                        self.merge(AggrState::new(*place, loc), &[
-                            data.0, data.1, data.2, data.3,
-                        ])?;
-                    }
-                }
-            }
-            _ => {
-                let view = state.downcast::<AnyType>().unwrap();
-                let iter = places.iter().zip(view.iter());
-                if let Some(filter) = filter {
-                    for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
-                    {
-                        self.merge(
-                            AggrState::new(*place, loc),
-                            data.as_tuple().unwrap().as_slice(),
-                        )?;
-                    }
-                } else {
-                    for (place, data) in iter {
-                        self.merge(
-                            AggrState::new(*place, loc),
-                            data.as_tuple().unwrap().as_slice(),
-                        )?;
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn batch_merge_single(&self, place: AggrState, state: &BlockEntry) -> Result<()> {
-        match state.data_type().as_tuple().unwrap().len() {
-            1 => {
-                let view = state.downcast::<AnyUnaryType>().unwrap();
-                for data in view.iter() {
-                    self.merge(place, &[data])?;
-                }
-            }
-            2 => {
-                let view = state.downcast::<AnyPairType>().unwrap();
-                for data in view.iter() {
-                    self.merge(place, &[data.0, data.1])?;
-                }
-            }
-            3 => {
-                let view = state.downcast::<AnyTernaryType>().unwrap();
-                for data in view.iter() {
-                    self.merge(place, &[data.0, data.1, data.2])?;
-                }
-            }
-            4 => {
-                let view = state.downcast::<AnyQuaternaryType>().unwrap();
-                for data in view.iter() {
-                    self.merge(place, &[data.0, data.1, data.2, data.3])?;
-                }
-            }
-            _ => {
-                let state = state.to_column();
-                for data in state.iter() {
-                    self.merge(place, data.as_tuple().unwrap().as_slice())?;
-                }
-            }
-        }
-        Ok(())
-    }
+    ) -> Result<()>;
 
     fn batch_merge_states(
         &self,

@@ -20,9 +20,11 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -34,7 +36,6 @@ use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -153,19 +154,44 @@ impl AggregateFunction for AggregateStringAggFunction {
         vec![StateSerdeItem::Binary(None)]
     }
 
-    fn serialize(&self, place: AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         let binary_builder = builders[0].as_binary_mut().unwrap();
-        let state = place.get::<StringAggState>();
-        state.serialize(&mut binary_builder.data)?;
-        binary_builder.commit_row();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<StringAggState>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
         Ok(())
     }
 
-    fn merge(&self, place: AggrState, data: &[ScalarRef]) -> Result<()> {
-        let mut binary = *data[0].as_binary().unwrap();
-        let state = place.get::<StringAggState>();
-        let rhs: StringAggState = borsh_partial_deserialize(&mut binary)?;
-        state.values.push_str(&rhs.values);
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = AggrState::new(*place, loc).get::<StringAggState>();
+                let rhs: StringAggState = borsh_partial_deserialize(&mut data)?;
+                state.values.push_str(&rhs.values);
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = AggrState::new(*place, loc).get::<StringAggState>();
+                let rhs: StringAggState = borsh_partial_deserialize(&mut data)?;
+                state.values.push_str(&rhs.values);
+            }
+        }
         Ok(())
     }
 
