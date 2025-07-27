@@ -28,12 +28,14 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::ExportArgs;
+use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::ListFeatures;
 use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
+use databend_common_meta_control::args::TriggerSnapshotArgs;
 use databend_common_meta_control::args::UpsertArgs;
 use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
@@ -162,6 +164,13 @@ impl App {
         Ok(())
     }
 
+    async fn trigger_snapshot(&self, args: &TriggerSnapshotArgs) -> anyhow::Result<()> {
+        let client = MetaAdminClient::new(args.admin_api_address.as_str());
+        client.trigger_snapshot().await?;
+        println!("triggered snapshot successfully.");
+        Ok(())
+    }
+
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
@@ -208,7 +217,20 @@ impl App {
         Ok(())
     }
 
+    async fn get(&self, args: &GetArgs) -> anyhow::Result<()> {
+        let addresses = vec![args.grpc_api_address.clone()];
+        let client = self.new_grpc_client(addresses)?;
+
+        let res = client.get_kv(&args.key).await?;
+        println!("{}", serde_json::to_string(&res)?);
+        Ok(())
+    }
+
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
+        eprintln!(
+            "Using gRPC API address: {}",
+            serde_json::to_string(&addresses).unwrap()
+        );
         MetaGrpcClient::try_create(
             addresses,
             "root",
@@ -226,11 +248,13 @@ enum CtlCommand {
     Export(ExportArgs),
     Import(ImportArgs),
     TransferLeader(TransferLeaderArgs),
+    TriggerSnapshot(TriggerSnapshotArgs),
     SetFeature(SetFeature),
     ListFeatures(ListFeatures),
     BenchClientNumConn(BenchArgs),
     Watch(WatchArgs),
     Upsert(UpsertArgs),
+    Get(GetArgs),
 }
 
 /// Usage:
@@ -271,6 +295,9 @@ async fn main() -> anyhow::Result<()> {
             CtlCommand::TransferLeader(args) => {
                 app.transfer_leader(args).await?;
             }
+            CtlCommand::TriggerSnapshot(args) => {
+                app.trigger_snapshot(args).await?;
+            }
             CtlCommand::SetFeature(args) => {
                 let client = MetaAdminClient::new(args.admin_api_address.as_str());
                 let res = client.set_feature(&args.feature, args.enable).await?;
@@ -295,6 +322,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Upsert(args) => {
                 app.upsert(args).await?;
+            }
+            CtlCommand::Get(args) => {
+                app.get(args).await?;
             }
         },
         // for backward compatibility

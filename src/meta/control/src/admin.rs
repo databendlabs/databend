@@ -79,6 +79,22 @@ impl MetaAdminClient {
         }
     }
 
+    pub async fn trigger_snapshot(&self) -> anyhow::Result<()> {
+        let resp = self
+            .client
+            .get(format!("{}/v1/ctrl/trigger_snapshot", self.endpoint))
+            .send()
+            .await?;
+        let status = resp.status();
+        if status.is_success() {
+            Ok(())
+        } else {
+            let data = resp.bytes().await?;
+            let msg = String::from_utf8_lossy(&data);
+            Err(anyhow::anyhow!("status code: {}, msg: {}", status, msg))
+        }
+    }
+
     pub async fn set_feature(
         &self,
         feature: &str,
