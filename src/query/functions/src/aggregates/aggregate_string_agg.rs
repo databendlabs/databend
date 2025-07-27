@@ -20,6 +20,8 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::compute_view::StringConvertView;
+use databend_common_expression::types::AccessType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
@@ -129,12 +131,13 @@ impl AggregateFunction for AggregateStringAggFunction {
         columns: ProjectedBlock,
         _input_rows: usize,
     ) -> Result<()> {
-        let view = columns[0].downcast::<StringType>().unwrap();
-        view.iter().zip(places.iter()).for_each(|(v, place)| {
-            let state = AggrState::new(*place, loc).get::<StringAggState>();
-            state.values.push_str(v);
-            state.values.push_str(&self.delimiter);
-        });
+        StringConvertView::iter_column(&columns[0].to_column())
+            .zip(places.iter())
+            .for_each(|(v, place)| {
+                let state = AggrState::new(*place, loc).get::<StringAggState>();
+                state.values.push_str(v.as_str());
+                state.values.push_str(&self.delimiter);
+            });
         Ok(())
     }
 

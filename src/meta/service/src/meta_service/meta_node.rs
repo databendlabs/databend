@@ -53,6 +53,7 @@ use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
 use databend_common_meta_types::raft_types::TypeConfig;
+use databend_common_meta_types::snapshot_db::DBStat;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
@@ -487,6 +488,19 @@ impl MetaNode {
                     )
                 }
 
+                {
+                    let db_stat = meta_node.get_snapshot_db_stat().await;
+                    let snapshot = server_metrics::snapshot();
+                    snapshot.block_count.set(db_stat.block_num as i64);
+                    snapshot.data_size.set(db_stat.data_size as i64);
+                    snapshot.index_size.set(db_stat.index_size as i64);
+                    snapshot.avg_block_size.set(db_stat.avg_block_size as i64);
+                    snapshot
+                        .avg_keys_per_block
+                        .set(db_stat.avg_keys_per_block as i64);
+                    snapshot.read_block.set(db_stat.read_block as i64);
+                }
+
                 last_leader = mm.current_leader;
             }
 
@@ -896,6 +910,10 @@ impl MetaNode {
 
     async fn get_snapshot_key_space_stat(&self) -> BTreeMap<String, u64> {
         self.raft_store.get_snapshot_key_space_stat().await
+    }
+
+    async fn get_snapshot_db_stat(&self) -> DBStat {
+        self.raft_store.get_snapshot_db_stat().await
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {

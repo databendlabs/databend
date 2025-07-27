@@ -27,12 +27,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_pipeline_core::processors::Event;
@@ -42,6 +39,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::OperatorRegistry;
+use databend_storages_common_stage::add_internal_columns;
 use databend_storages_common_stage::read_record_batch_to_variant_column;
 use databend_storages_common_stage::record_batch_to_variant_block;
 use jiff::tz::TimeZone;
@@ -376,29 +374,4 @@ pub fn read_small_file(
         vec![Column::Variant(column).into()],
         num_rows,
     ))
-}
-
-fn add_internal_columns(
-    internal_columns: &[InternalColumnType],
-    path: String,
-    b: &mut DataBlock,
-    start_row: &mut u64,
-) {
-    for c in internal_columns {
-        match c {
-            InternalColumnType::FileName => {
-                b.add_const_column(Scalar::String(path.clone()), DataType::String);
-            }
-            InternalColumnType::FileRowNumber => {
-                let end_row = (*start_row) + b.num_rows() as u64;
-                b.add_column(Column::Number(
-                    NumberColumnBuilder::UInt64(((*start_row)..end_row).collect()).build(),
-                ));
-                *start_row = end_row;
-            }
-            _ => {
-                unreachable!()
-            }
-        }
-    }
 }

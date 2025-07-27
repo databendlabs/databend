@@ -223,16 +223,16 @@ where
                 // round_div(-5, -2) --> 3
                 if std::intrinsics::unlikely(b == zero) {
                     ctx.set_error(result.len(), "divided by zero");
-                    result.push(C::compute(&one));
+                    result.push(C::compute(one));
                 } else {
                     match a.do_round_div(b, scale_mul) {
-                        Some(t) => result.push(C::compute(&t)),
+                        Some(t) => result.push(C::compute(t)),
                         None => {
                             ctx.set_error(
                                 result.len(),
                                 concat!("Decimal div overflow at line : ", line!()),
                             );
-                            result.push(C::compute(&one));
+                            result.push(C::compute(one));
                         }
                     }
                 }
@@ -248,20 +248,20 @@ where
             let scale_mul = scale_a + scale_b - return_size.scale();
 
             if scale_mul == 0 {
-                vectorize_2_arg::<L, R, DecimalType<U>>(|a, b, _| C::compute(&op.calc(a, b)))(
+                vectorize_2_arg::<L, R, DecimalType<U>>(|a, b, _| C::compute(op.calc(a, b)))(
                     a, b, ctx,
                 )
             } else {
                 let func = |a: T, b: T, result: &mut Vec<U>, ctx: &mut EvalContext| match a
                     .do_round_mul(b, scale_mul as u32, overflow)
                 {
-                    Some(t) => result.push(C::compute(&t)),
+                    Some(t) => result.push(C::compute(t)),
                     None => {
                         ctx.set_error(
                             result.len(),
                             concat!("Decimal multiply overflow at line : ", line!()),
                         );
-                        result.push(C::compute(&one));
+                        result.push(C::compute(one));
                     }
                 };
 
@@ -282,15 +282,15 @@ where
                             result.len(),
                             concat!("Decimal overflow at line : ", line!()),
                         );
-                        result.push(C::compute(&one));
+                        result.push(C::compute(one));
                     } else {
-                        result.push(C::compute(&t));
+                        result.push(C::compute(t));
                     }
                 };
 
                 vectorize_with_builder_2_arg::<L, R, DecimalType<U>>(func)(a, b, ctx)
             } else {
-                vectorize_2_arg::<L, R, DecimalType<U>>(|l, r, _| C::compute(&op.calc(l, r)))(
+                vectorize_2_arg::<L, R, DecimalType<U>>(|l, r, _| C::compute(op.calc(l, r)))(
                     a, b, ctx,
                 )
             }
