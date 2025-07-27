@@ -1705,4 +1705,3 @@ HashJoin
         ├── push downs: [filters: [NOT CAST(numbers.number (#0) AS Boolean)], limit: NONE]
         ├── apply join filters: [#0]
         └── estimated rows: 10.00
-

@@ -12,14 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bind;
-mod bind_cte;
-mod bind_join;
-mod bind_location;
-mod bind_obfuscate;
-mod bind_subquery;
-mod bind_table;
-mod bind_table_function;
+mod cleanup_unused_cte;
 
-pub use bind_join::JoinConditions;
-pub use bind_table_function::parse_result_scan_args;
+pub use cleanup_unused_cte::CleanupUnusedCTEOptimizer;
