@@ -26,6 +26,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
@@ -53,20 +54,18 @@ impl AggregateIfCombinator {
         sort_descs: Vec<AggregateFunctionSortDesc>,
         nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
-        let name = format!("IfCombinator({})", nested_name);
+        let name = format!("IfCombinator({nested_name})");
         let argument_len = arguments.len();
 
         if argument_len == 0 {
             return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                "{} expect to have more than one argument",
-                name
+                "{name} expect to have more than one argument",
             )));
         }
 
         if !matches!(&arguments[argument_len - 1], DataType::Boolean) {
             return Err(ErrorCode::BadArguments(format!(
-                "The type of the last argument for {} must be boolean type, but got {:?}",
-                name,
+                "The type of the last argument for {name} must be boolean type, but got {:?}",
                 &arguments[argument_len - 1]
             )));
         }
@@ -155,12 +154,27 @@ impl AggregateFunction for AggregateIfCombinator {
         Ok(())
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize(place, writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.nested.serialize_type()
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge(place, reader)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.nested.batch_serialize(places, loc, builders)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &databend_common_expression::BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.nested.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

@@ -43,7 +43,7 @@ impl Drop for PlanScopeGuard {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ErrorInfoDesc {
     message: String,
     detail: String,
@@ -60,7 +60,7 @@ impl ErrorInfoDesc {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum ErrorInfo {
     Other(ErrorInfoDesc),
     IoError(ErrorInfoDesc),
@@ -68,7 +68,7 @@ pub enum ErrorInfo {
     CalculationError(ErrorInfoDesc),
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlanProfile {
     pub id: Option<u32>,
     pub name: Option<String>,
