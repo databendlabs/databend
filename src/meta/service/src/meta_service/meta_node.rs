@@ -499,6 +499,12 @@ impl MetaNode {
                         .avg_keys_per_block
                         .set(db_stat.avg_keys_per_block as i64);
                     snapshot.read_block.set(db_stat.read_block as i64);
+                    snapshot
+                        .read_block_from_cache
+                        .set(db_stat.read_block_from_cache as i64);
+                    snapshot
+                        .read_block_from_disk
+                        .set(db_stat.read_block_from_disk as i64);
                 }
 
                 last_leader = mm.current_leader;
