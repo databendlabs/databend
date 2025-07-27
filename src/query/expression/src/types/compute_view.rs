@@ -17,12 +17,17 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
-use databend_common_column::buffer::Buffer;
 use num_traits::AsPrimitive;
 
-use super::simple_type::SimpleType;
 use super::AccessType;
-use crate::types::CoreNumber;
+use super::AnyType;
+use super::ArgType;
+use super::NumberType;
+use super::StringColumn;
+use super::StringType;
+use crate::display::scalar_ref_to_string;
+use crate::types::string::StringDomain;
+use crate::types::string::StringIterator;
 use crate::types::Number;
 use crate::types::SimpleDomain;
 use crate::Column;
@@ -31,23 +36,23 @@ use crate::ScalarRef;
 
 pub trait Compute<F, T>: Debug + Clone + PartialEq + 'static
 where
-    F: SimpleType,
-    T: SimpleType,
+    F: AccessType,
+    T: AccessType,
 {
-    fn compute(value: &F::Scalar) -> T::Scalar;
+    fn compute<'a>(value: F::ScalarRef<'a>) -> T::ScalarRef<'a>;
 
     fn compute_domain(domain: &F::Domain) -> T::Domain;
 }
 
 impl<T> Compute<T, T> for T
-where T: SimpleType
+where T: AccessType
 {
-    fn compute(value: &T::Scalar) -> T::Scalar {
-        *value
+    fn compute<'a>(value: T::ScalarRef<'a>) -> T::ScalarRef<'a> {
+        value
     }
 
     fn compute_domain(domain: &T::Domain) -> T::Domain {
-        *domain
+        domain.to_owned()
     }
 }
 
@@ -56,56 +61,56 @@ pub struct ComputeView<C, F, T>(PhantomData<(C, F, T)>);
 
 impl<C, F, T> AccessType for ComputeView<C, F, T>
 where
-    F: SimpleType,
-    T: SimpleType,
+    F: AccessType,
+    T: AccessType,
     C: Compute<F, T>,
 {
     type Scalar = T::Scalar;
-    type ScalarRef<'a> = T::Scalar;
-    type Column = Buffer<F::Scalar>;
+    type ScalarRef<'a> = T::ScalarRef<'a>;
+    type Column = F::Column;
     type Domain = T::Domain;
     type ColumnIterator<'a> =
-        std::iter::Map<std::slice::Iter<'a, F::Scalar>, fn(&'a F::Scalar) -> T::Scalar>;
+        std::iter::Map<F::ColumnIterator<'a>, fn(F::ScalarRef<'a>) -> T::ScalarRef<'a>>;
 
     fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
-        scalar
+        T::to_owned_scalar(scalar)
     }
 
     fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
-        *scalar
+        T::to_scalar_ref(scalar)
     }
 
     fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
-        F::downcast_scalar(scalar).map(|v| C::compute(&v))
+        F::try_downcast_scalar(scalar).map(|v| C::compute(v))
     }
 
     fn try_downcast_column(col: &Column) -> Option<Self::Column> {
-        F::downcast_column(col)
+        F::try_downcast_column(col)
     }
 
     fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
-        F::downcast_domain(domain).map(|domain| C::compute_domain(&domain))
+        F::try_downcast_domain(domain).map(|domain| C::compute_domain(&domain))
     }
 
     fn column_len(col: &Self::Column) -> usize {
-        col.len()
+        F::column_len(col)
     }
 
     fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        col.get(index).map(C::compute)
+        F::index_column(col, index).map(C::compute)
     }
 
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
-        debug_assert!(index < col.len());
-        C::compute(col.get_unchecked(index))
+        let scalar = F::index_column_unchecked(col, index);
+        C::compute(scalar)
     }
 
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
-        col.clone().sliced(range.start, range.end - range.start)
+        F::slice_column(col, range)
     }
 
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
-        col.iter().map(C::compute as fn(&F::Scalar) -> T::Scalar)
+        F::iter_column(col).map(C::compute)
     }
 
     fn scalar_memory_size(_: &Self::ScalarRef<'_>) -> usize {
@@ -113,50 +118,52 @@ where
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        col.len() * std::mem::size_of::<F>()
+        F::column_len(col) * std::mem::size_of::<F>()
     }
 
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        T::compare(&lhs, &rhs)
+        T::compare(lhs, rhs)
     }
 
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left == right
+        T::equal(left, right)
     }
 
     fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        left != right
+        T::not_equal(left, right)
     }
 
     fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        T::greater_than(&left, &right)
+        T::greater_than(left, right)
     }
 
     fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        T::less_than(&left, &right)
+        T::less_than(left, right)
     }
 
     fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        T::greater_than_equal(&left, &right)
+        T::greater_than_equal(left, right)
     }
 
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        T::less_than_equal(&left, &right)
+        T::less_than_equal(left, right)
     }
 }
 
 /// For number convert
-pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, CoreNumber<F>, CoreNumber<T>>;
+pub type NumberConvertView<F, T> = ComputeView<NumberConvert<F, T>, NumberType<F>, NumberType<T>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NumberConvert<F, T>(std::marker::PhantomData<(F, T)>);
 
-impl<F, T> Compute<CoreNumber<F>, CoreNumber<T>> for NumberConvert<F, T>
+impl<F, T> Compute<NumberType<F>, NumberType<T>> for NumberConvert<F, T>
 where
     F: Number + AsPrimitive<T>,
     T: Number,
 {
-    fn compute(value: &F) -> T {
+    fn compute<'a>(
+        value: <NumberType<F> as AccessType>::ScalarRef<'a>,
+    ) -> <NumberType<T> as AccessType>::ScalarRef<'a> {
         value.as_()
     }
 
@@ -164,5 +171,118 @@ where
         let min = domain.min.as_();
         let max = domain.max.as_();
         SimpleDomain { min, max }
+    }
+}
+
+/// For number convert
+pub type StringConvertView = ComputeView<StringConvert, AnyType, OwnedStringType>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedStringType;
+
+impl AccessType for OwnedStringType {
+    type Scalar = String;
+    type ScalarRef<'a> = String;
+    type Column = StringColumn;
+    type Domain = StringDomain;
+    type ColumnIterator<'a> = std::iter::Map<StringIterator<'a>, fn(&str) -> String>;
+
+    fn to_owned_scalar(scalar: Self::ScalarRef<'_>) -> Self::Scalar {
+        scalar.to_string()
+    }
+
+    fn to_scalar_ref(scalar: &Self::Scalar) -> Self::ScalarRef<'_> {
+        scalar.clone()
+    }
+
+    fn try_downcast_scalar<'a>(scalar: &ScalarRef<'a>) -> Option<Self::ScalarRef<'a>> {
+        scalar.as_string().map(|s| s.to_string())
+    }
+
+    fn try_downcast_column(col: &Column) -> Option<Self::Column> {
+        col.as_string().cloned()
+    }
+
+    fn try_downcast_domain(domain: &Domain) -> Option<Self::Domain> {
+        domain.as_string().cloned()
+    }
+
+    fn column_len(col: &Self::Column) -> usize {
+        col.len()
+    }
+
+    fn index_column(col: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
+        col.index(index).map(str::to_string)
+    }
+
+    #[inline]
+    unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_> {
+        col.value_unchecked(index).to_string()
+    }
+
+    fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column {
+        col.clone().sliced(range.start, range.end - range.start)
+    }
+
+    fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_> {
+        col.iter().map(str::to_string)
+    }
+
+    fn scalar_memory_size(scalar: &Self::ScalarRef<'_>) -> usize {
+        scalar.len()
+    }
+
+    fn column_memory_size(col: &Self::Column) -> usize {
+        col.memory_size()
+    }
+
+    #[inline(always)]
+    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
+        left.cmp(&right)
+    }
+
+    #[inline(always)]
+    fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left == right
+    }
+
+    #[inline(always)]
+    fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left != right
+    }
+
+    #[inline(always)]
+    fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left > right
+    }
+
+    #[inline(always)]
+    fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left >= right
+    }
+
+    #[inline(always)]
+    fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left < right
+    }
+
+    #[inline(always)]
+    fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
+        left <= right
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StringConvert;
+
+impl Compute<AnyType, OwnedStringType> for StringConvert {
+    fn compute<'a>(
+        value: <AnyType as AccessType>::ScalarRef<'a>,
+    ) -> <OwnedStringType as AccessType>::ScalarRef<'a> {
+        scalar_ref_to_string(&value)
+    }
+
+    fn compute_domain(_: &<AnyType as AccessType>::Domain) -> StringDomain {
+        StringType::full_domain()
     }
 }

@@ -149,6 +149,8 @@ pub struct QueryConfig {
     pub tenant_id: Tenant,
     /// ID for construct the cluster.
     pub cluster_id: String,
+    /// ID for construct the warehouse.
+    pub warehouse_id: String,
     // ID for the query node.
     // This only initialized when InnerConfig::load().
     pub node_id: String,
@@ -259,6 +261,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: Tenant::new_or_err("admin", "default()").unwrap(),
             cluster_id: "".to_string(),
+            warehouse_id: "".to_string(),
             node_id: "".to_string(),
             node_secret: "".to_string(),
             num_cpus: 0,
@@ -757,8 +760,8 @@ impl Default for CacheConfig {
             inverted_index_meta_count: 3000,
             inverted_index_filter_size: 2147483648,
             inverted_index_filter_memory_ratio: 0,
-            vector_index_meta_count: 3000,
-            vector_index_filter_size: 2147483648,
+            vector_index_meta_count: 30000,
+            vector_index_filter_size: 64424509440,
             vector_index_filter_memory_ratio: 0,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),

@@ -357,6 +357,11 @@ impl CreateTableInterpreter {
                     data_bytes: snapshot.summary.uncompressed_byte_size,
                     compressed_data_bytes: snapshot.summary.compressed_byte_size,
                     index_data_bytes: snapshot.summary.index_size,
+                    bloom_index_size: snapshot.summary.bloom_index_size,
+                    ngram_index_size: snapshot.summary.ngram_index_size,
+                    inverted_index_size: snapshot.summary.inverted_index_size,
+                    vector_index_size: snapshot.summary.vector_index_size,
+                    virtual_column_size: snapshot.summary.virtual_column_size,
                     number_of_segments: Some(snapshot.segments.len() as u64),
                     number_of_blocks: Some(snapshot.summary.block_count),
                 });

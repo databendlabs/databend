@@ -2233,6 +2233,11 @@ Functions overloads:
 1 inet_aton(String NULL) :: UInt32 NULL
 0 inet_ntoa(Int64) :: String
 1 inet_ntoa(Int64 NULL) :: String NULL
+0 inner_product(Array(Float32), Array(Float32)) :: Float32
+1 inner_product(Array(Float32) NULL, Array(Float32) NULL) :: Float32 NULL
+2 inner_product(Array(Float64), Array(Float64)) :: Float64
+3 inner_product(Array(Float64) NULL, Array(Float64) NULL) :: Float64 NULL
+4 inner_product FACTORY
 0 insert(String, Int64, Int64, String) :: String
 1 insert(String NULL, Int64 NULL, Int64 NULL, String NULL) :: String NULL
 0 instr(String, String) :: UInt64
@@ -4967,6 +4972,8 @@ Functions overloads:
 0 unnest FACTORY
 0 upper(String) :: String
 1 upper(String NULL) :: String NULL
+0 vector_dims FACTORY
+0 vector_norm FACTORY
 0 xor(Boolean, Boolean) :: Boolean
 1 xor(Boolean NULL, Boolean NULL) :: Boolean NULL
 0 xxhash32(Variant) :: UInt32

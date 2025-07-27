@@ -35,22 +35,53 @@ use orc_rust::projection::ProjectionMask;
 use orc_rust::ArrowReaderBuilder;
 
 use crate::chunk_reader_impl::OrcChunkReader;
+use crate::hashable_schema::HashableSchema;
 use crate::strip::StripeInMemory;
 use crate::utils::map_orc_error;
 
-pub struct ORCSource {
-    table_ctx: Arc<dyn TableContext>,
-    op_registry: Arc<dyn OperatorRegistry>,
-    pub(crate) reader: Option<(String, Box<StripeFactory<OrcChunkReader>>, usize)>,
-    scan_progress: Arc<Progress>,
-
+pub struct InferredSchema {
     arrow_schema: arrow_schema::SchemaRef,
     schema_from: Option<String>,
     projection: Projection,
 }
 
+impl InferredSchema {
+    fn check_file_schema(&self, arrow_schema: arrow_schema::SchemaRef, path: &str) -> Result<()> {
+        if self.arrow_schema.fields != arrow_schema.fields {
+            return Err(ErrorCode::TableSchemaMismatch(format!(
+                "{} get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
+                self.schema_from
+                    .as_ref()
+                    .map_or(String::new(), |schema_from| {
+                        format!("infer schema from '{}', but ", schema_from)
+                    }),
+                path,
+                self.arrow_schema,
+                arrow_schema
+            )));
+        }
+        Ok(())
+    }
+}
+
+pub struct ReadingFile {
+    pub path: String,
+    pub stripe_factory: Box<StripeFactory<OrcChunkReader>>,
+    pub size: usize,
+    pub schema: Option<HashableSchema>,
+    pub rows: u64,
+}
+
+pub struct ORCSource {
+    table_ctx: Arc<dyn TableContext>,
+    op_registry: Arc<dyn OperatorRegistry>,
+    pub reader: Option<ReadingFile>,
+    scan_progress: Arc<Progress>,
+    inferred_schema: Option<InferredSchema>,
+}
+
 impl ORCSource {
-    pub fn try_create(
+    pub fn try_create_with_schema(
         output: Arc<OutputPort>,
         table_ctx: Arc<dyn TableContext>,
         op_registry: Arc<dyn OperatorRegistry>,
@@ -65,27 +96,29 @@ impl ORCSource {
             op_registry,
             scan_progress,
             reader: None,
-            arrow_schema,
-            schema_from,
-            projection,
+            inferred_schema: Some(InferredSchema {
+                arrow_schema,
+                schema_from,
+                projection,
+            }),
         })
     }
 
-    fn check_file_schema(&self, arrow_schema: arrow_schema::SchemaRef, path: &str) -> Result<()> {
-        if self.arrow_schema.fields != arrow_schema.fields {
-            return Err(ErrorCode::TableSchemaMismatch(format!(
-                "{}get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
-                self.schema_from
-                    .as_ref()
-                    .map_or(String::new(), |schema_from| {
-                        format!("infer schema from '{}', but ", schema_from)
-                    }),
-                path,
-                self.arrow_schema,
-                arrow_schema
-            )));
-        }
-        Ok(())
+    pub fn try_create(
+        output: Arc<OutputPort>,
+        table_ctx: Arc<dyn TableContext>,
+        op_registry: Arc<dyn OperatorRegistry>,
+        inferred_schema: Option<InferredSchema>,
+    ) -> Result<ProcessorPtr> {
+        let scan_progress = table_ctx.get_scan_progress();
+
+        AsyncSourcer::create(table_ctx.clone(), output, ORCSource {
+            table_ctx,
+            op_registry,
+            scan_progress,
+            reader: None,
+            inferred_schema,
+        })
     }
 
     async fn next_part(&mut self) -> Result<bool> {
@@ -105,20 +138,33 @@ impl ORCSource {
         let builder = ArrowReaderBuilder::try_new_async(file)
             .await
             .map_err(|e| map_orc_error(e, path))?;
-        let projection = if let Projection::Columns(projection) = &self.projection {
-            ProjectionMask::roots(
-                builder.file_metadata().root_data_type(),
-                projection.iter().map(|index| index + 1),
-            )
-        } else {
-            ProjectionMask::all()
-        };
+        let mut projection = ProjectionMask::all();
+        if let Some(schema) = &self.inferred_schema {
+            if let Projection::Columns(p) = &schema.projection {
+                projection = ProjectionMask::roots(
+                    builder.file_metadata().root_data_type(),
+                    p.iter().map(|index| index + 1),
+                );
+            }
+        }
+
         let reader = builder.with_projection(projection).build_async();
         let (factory, schema) = reader.into_parts();
-        let factory = factory.unwrap();
-        self.check_file_schema(schema, path)?;
+        let stripe_factory = factory.unwrap();
+        let schema = if let Some(inferred_schema) = &self.inferred_schema {
+            inferred_schema.check_file_schema(schema, path)?;
+            None
+        } else {
+            Some(HashableSchema::try_create(schema)?)
+        };
 
-        self.reader = Some((path.to_string(), factory, size));
+        self.reader = Some(ReadingFile {
+            path: path.to_string(),
+            stripe_factory,
+            size,
+            schema,
+            rows: 0,
+        });
         Ok(true)
     }
 }
@@ -134,8 +180,9 @@ impl AsyncSource for ORCSource {
             if self.reader.is_none() && !self.next_part().await? {
                 return Ok(None);
             }
-            if let Some((path, factory, size)) = mem::take(&mut self.reader) {
-                let (factory, stripe) = factory
+            if let Some(file) = mem::take(&mut self.reader) {
+                let (factory, stripe) = file
+                    .stripe_factory
                     .read_next_stripe()
                     .await
                     .map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
@@ -144,24 +191,30 @@ impl AsyncSource for ORCSource {
                         self.reader = None;
                         let progress_values = ProgressValues {
                             rows: 0,
-                            bytes: size,
+                            bytes: file.size,
                         };
                         self.scan_progress.incr(&progress_values);
-                        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, size);
+                        Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, file.size);
                         Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
                         continue;
                     }
                     Some(stripe) => {
-                        let progress_values = ProgressValues {
-                            rows: stripe.number_of_rows(),
-                            bytes: 0,
-                        };
+                        let rows = stripe.number_of_rows();
+                        let progress_values = ProgressValues { rows, bytes: 0 };
                         self.scan_progress.incr(&progress_values);
-                        self.reader = Some((path.clone(), Box::new(factory), size));
+
                         let meta = Box::new(StripeInMemory {
-                            path,
+                            path: file.path.clone(),
                             stripe,
-                            schema: None,
+                            schema: file.schema.clone(),
+                            start_row: file.rows,
+                        });
+                        self.reader = Some(ReadingFile {
+                            path: file.path.clone(),
+                            stripe_factory: Box::new(factory),
+                            size: file.size,
+                            schema: file.schema.clone(),
+                            rows: (rows as u64) + file.rows,
                         });
                         return Ok(Some(DataBlock::empty_with_meta(meta)));
                     }

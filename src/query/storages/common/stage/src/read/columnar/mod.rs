@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod arrow_to_variant;
+mod internal_columns;
 mod projection;
 
+pub use arrow_to_variant::read_record_batch_to_variant_column;
+pub use arrow_to_variant::record_batch_to_variant_block;
+pub use internal_columns::add_internal_columns;
 pub use projection::project_columnar;

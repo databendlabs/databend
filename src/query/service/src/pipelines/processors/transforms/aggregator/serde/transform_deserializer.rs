@@ -79,94 +79,77 @@ impl TransformDeserializer {
             return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
-        let data_block = match &meta {
-            None => {
-                deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?
-            }
-            Some(meta) => match AggregateSerdeMeta::downcast_ref_from(meta) {
-                None => {
-                    deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?
-                }
-                Some(meta) => {
-                    return match meta.typ == BUCKET_TYPE {
-                        true => {
-                            let mut block = deserialize_block(
-                                dict,
-                                fragment_data,
-                                &self.schema,
-                                self.arrow_schema.clone(),
-                            )?;
-
-                            if meta.is_empty {
-                                block = block.slice(0..0);
-                            }
-
-                            Ok(DataBlock::empty_with_meta(
-                                AggregateMeta::create_serialized(
-                                    meta.bucket,
-                                    block,
-                                    meta.max_partition_count,
-                                ),
-                            ))
-                        }
-                        false => {
-                            let data_schema = Arc::new(exchange_defines::spilled_schema());
-                            let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
-                            let data_block = deserialize_block(
-                                dict,
-                                fragment_data,
-                                &data_schema,
-                                arrow_schema.clone(),
-                            )?;
-
-                            let columns = data_block
-                                .columns()
-                                .iter()
-                                .map(|c| c.as_column().unwrap().clone())
-                                .collect::<Vec<_>>();
-
-                            let buckets =
-                                NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
-                            let data_range_start =
-                                NumberType::<u64>::try_downcast_column(&columns[1]).unwrap();
-                            let data_range_end =
-                                NumberType::<u64>::try_downcast_column(&columns[2]).unwrap();
-                            let columns_layout =
-                                ArrayType::<UInt64Type>::try_downcast_column(&columns[3]).unwrap();
-
-                            let columns_layout_data = columns_layout.values().as_slice();
-                            let columns_layout_offsets = columns_layout.offsets();
-
-                            let mut buckets_payload = Vec::with_capacity(data_block.num_rows());
-                            for index in 0..data_block.num_rows() {
-                                unsafe {
-                                    buckets_payload.push(BucketSpilledPayload {
-                                        bucket: *buckets.get_unchecked(index) as isize,
-                                        location: meta.location.clone().unwrap(),
-                                        data_range: *data_range_start.get_unchecked(index)
-                                            ..*data_range_end.get_unchecked(index),
-                                        columns_layout: columns_layout_data[columns_layout_offsets
-                                            [index]
-                                            as usize
-                                            ..columns_layout_offsets[index + 1] as usize]
-                                            .to_vec(),
-                                        max_partition_count: meta.max_partition_count,
-                                    });
-                                }
-                            }
-
-                            Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
-                                buckets_payload,
-                            )))
-                        }
-                    };
-                }
-            },
+        let Some(meta) = meta
+            .as_ref()
+            .and_then(AggregateSerdeMeta::downcast_ref_from)
+        else {
+            let data_block =
+                deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?;
+            return match data_block.num_columns() == 0 {
+                true => Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta)),
+                false => data_block.add_meta(meta),
+            };
         };
 
-        match data_block.num_columns() == 0 {
-            true => Ok(DataBlock::new_with_meta(vec![], row_count as usize, meta)),
-            false => data_block.add_meta(meta),
+        match meta.typ {
+            BUCKET_TYPE => {
+                let mut block = deserialize_block(
+                    dict,
+                    fragment_data,
+                    &self.schema,
+                    self.arrow_schema.clone(),
+                )?;
+
+                if meta.is_empty {
+                    block = block.slice(0..0);
+                }
+
+                Ok(DataBlock::empty_with_meta(
+                    AggregateMeta::create_serialized(meta.bucket, block, meta.max_partition_count),
+                ))
+            }
+            _ => {
+                let data_schema = Arc::new(exchange_defines::spilled_schema());
+                let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
+                let data_block =
+                    deserialize_block(dict, fragment_data, &data_schema, arrow_schema.clone())?;
+
+                let columns = data_block
+                    .columns()
+                    .iter()
+                    .map(|c| c.as_column().unwrap().clone())
+                    .collect::<Vec<_>>();
+
+                let buckets = NumberType::<i64>::try_downcast_column(&columns[0]).unwrap();
+                let data_range_start = NumberType::<u64>::try_downcast_column(&columns[1]).unwrap();
+                let data_range_end = NumberType::<u64>::try_downcast_column(&columns[2]).unwrap();
+                let columns_layout =
+                    ArrayType::<UInt64Type>::try_downcast_column(&columns[3]).unwrap();
+
+                let columns_layout_data = columns_layout.values().as_slice();
+                let columns_layout_offsets = columns_layout.offsets();
+
+                let mut buckets_payload = Vec::with_capacity(data_block.num_rows());
+                for index in 0..data_block.num_rows() {
+                    unsafe {
+                        buckets_payload.push(BucketSpilledPayload {
+                            bucket: *buckets.get_unchecked(index) as isize,
+                            location: meta.location.clone().unwrap(),
+                            data_range: *data_range_start.get_unchecked(index)
+                                ..*data_range_end.get_unchecked(index),
+                            columns_layout: columns_layout_data[columns_layout_offsets[index]
+                                as usize
+                                ..columns_layout_offsets[index + 1] as usize]
+                                .to_vec(),
+                            max_partition_count: meta.max_partition_count,
+                        });
+                    }
+                }
+
+                Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+                    buckets_payload,
+                )))
+            }
         }
     }
 }
@@ -177,15 +160,9 @@ impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer {
 
     fn transform(&mut self, mut meta: ExchangeDeserializeMeta) -> Result<Vec<DataBlock>> {
         match meta.packet.pop().unwrap() {
-            DataPacket::ErrorCode(v) => Err(v),
-            DataPacket::Dictionary(_) => unreachable!(),
-            DataPacket::QueryProfiles(_) => unreachable!(),
-            DataPacket::SerializeProgress { .. } => unreachable!(),
-            DataPacket::CopyStatus { .. } => unreachable!(),
-            DataPacket::MutationStatus { .. } => unreachable!(),
-            DataPacket::DataCacheMetrics(_) => unreachable!(),
             DataPacket::FragmentData(v) => Ok(vec![self.recv_data(meta.packet, v)?]),
-            DataPacket::QueryPerf(_) => unreachable!(),
+            DataPacket::ErrorCode(err) => Err(err),
+            _ => unreachable!(),
         }
     }
 }

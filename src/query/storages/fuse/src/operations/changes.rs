@@ -471,6 +471,42 @@ impl FuseTable {
             .compressed_byte_size
             .abs_diff(base_summary.compressed_byte_size);
         let index_size = latest_summary.index_size.abs_diff(base_summary.index_size);
+
+        let bloom_index_size = match (
+            latest_summary.bloom_index_size,
+            base_summary.bloom_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let ngram_index_size = match (
+            latest_summary.ngram_index_size,
+            base_summary.ngram_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let inverted_index_size = match (
+            latest_summary.inverted_index_size,
+            base_summary.inverted_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let vector_index_size = match (
+            latest_summary.vector_index_size,
+            base_summary.vector_index_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
+        let virtual_column_size = match (
+            latest_summary.virtual_column_size,
+            base_summary.virtual_column_size,
+        ) {
+            (Some(latest_size), base_size) => Some(latest_size.abs_diff(base_size.unwrap_or(0))),
+            (None, base) => base,
+        };
         let number_of_blocks = latest_summary
             .block_count
             .abs_diff(base_summary.block_count);
@@ -480,6 +516,11 @@ impl FuseTable {
                 data_size: Some(data_size),
                 data_size_compressed: Some(data_size_compressed),
                 index_size: Some(index_size),
+                bloom_index_size,
+                ngram_index_size,
+                inverted_index_size,
+                vector_index_size,
+                virtual_column_size,
                 number_of_blocks: Some(number_of_blocks),
                 number_of_segments: None,
             })
@@ -492,6 +533,11 @@ impl FuseTable {
                 data_size: Some(data_size / 2),
                 data_size_compressed: Some(data_size_compressed / 2),
                 index_size: Some(index_size / 2),
+                bloom_index_size: bloom_index_size.map(|size| size / 2),
+                ngram_index_size: ngram_index_size.map(|size| size / 2),
+                inverted_index_size: inverted_index_size.map(|size| size / 2),
+                vector_index_size: vector_index_size.map(|size| size / 2),
+                virtual_column_size: virtual_column_size.map(|size| size / 2),
                 number_of_blocks: Some(number_of_blocks / 2),
                 number_of_segments: None,
             })

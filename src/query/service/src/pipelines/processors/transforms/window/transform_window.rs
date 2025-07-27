@@ -225,6 +225,7 @@ impl<T: Number> TransformWindow<T> {
 
         let partition_by_columns = self.partition_indices.len();
         if partition_by_columns == 0 {
+            self.partition_size += self.block_rows(&self.partition_end);
             self.partition_end = end;
             return;
         }

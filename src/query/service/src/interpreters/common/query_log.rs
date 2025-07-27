@@ -88,10 +88,12 @@ impl InterpreterQueryLog {
     }
 
     pub fn log_start(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+        let cluster = ctx.get_cluster();
+
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = ctx.get_tenant();
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
         let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;
@@ -247,6 +249,8 @@ impl InterpreterQueryLog {
         has_profiles: bool,
     ) -> Result<()> {
         ctx.set_finish_time(now);
+        let cluster = ctx.get_cluster();
+
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = GlobalConfig::instance()
@@ -254,7 +258,7 @@ impl InterpreterQueryLog {
             .tenant_id
             .tenant_name()
             .to_string();
-        let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
+        let cluster_id = cluster.get_cluster_id().unwrap_or_default();
         let node_id = ctx.get_cluster().local_id.clone();
         let user = ctx.get_current_user()?;
         let sql_user = user.name;

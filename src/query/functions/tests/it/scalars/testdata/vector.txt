@@ -61,6 +61,31 @@ output domain  : {1..=1}
 output         : 1
 
 
+ast            : cosine_distance([a, b]::vector(2), [c, d]::vector(2))
+raw expr       : cosine_distance(CAST(array(a::Float32, b::Float32) AS Vector(2)), CAST(array(c::Float32, d::Float32) AS Vector(2)))
+checked expr   : cosine_distance<Vector(2), Vector(2)>(CAST<Array(Float32)>(array<T0=Float32><T0, T0>(a, b) AS Vector(2)), CAST<Array(Float32)>(array<T0=Float32><T0, T0>(c, d) AS Vector(2)))
+evaluation:
++--------+-----------+------------+------------+------------+--------------+
+|        | a         | b          | c          | d          | Output       |
++--------+-----------+------------+------------+------------+--------------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32      |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown      |
+| Row 0  | 1         | 2          | 3          | 4          | 0.01613009   |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 0.0003668666 |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 0.0000377297 |
++--------+-----------+------------+------------+------------+--------------+
+evaluation (internal):
++--------+---------------------------------------------------+
+| Column | Data                                              |
++--------+---------------------------------------------------+
+| a      | Float32([1, 5.1, 9.4])                            |
+| b      | Float32([2, 6.2, 10.6])                           |
+| c      | Float32([3, 7.3, 11.1])                           |
+| d      | Float32([4, 8.4, 12.3])                           |
+| Output | Float32([0.01613009, 0.0003668666, 0.0000377297]) |
++--------+---------------------------------------------------+
+
+
 ast            : l1_distance([1,2,3], [1,2,3])
 raw expr       : l1_distance(array(1, 2, 3), array(1, 2, 3))
 checked expr   : l1_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
@@ -115,6 +140,31 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : l1_distance([a, b]::vector(2), [c, d]::vector(2))
+raw expr       : l1_distance(CAST(array(a::Float32, b::Float32) AS Vector(2)), CAST(array(c::Float32, d::Float32) AS Vector(2)))
+checked expr   : l1_distance<Vector(2), Vector(2)>(CAST<Array(Float32)>(array<T0=Float32><T0, T0>(a, b) AS Vector(2)), CAST<Array(Float32)>(array<T0=Float32><T0, T0>(c, d) AS Vector(2)))
+evaluation:
++--------+-----------+------------+------------+------------+----------+
+|        | a         | b          | c          | d          | Output   |
++--------+-----------+------------+------------+------------+----------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32  |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown  |
+| Row 0  | 1         | 2          | 3          | 4          | 4        |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 4.4      |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 3.400001 |
++--------+-----------+------------+------------+------------+----------+
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Float32([1, 5.1, 9.4])      |
+| b      | Float32([2, 6.2, 10.6])     |
+| c      | Float32([3, 7.3, 11.1])     |
+| d      | Float32([4, 8.4, 12.3])     |
+| Output | Float32([4, 4.4, 3.400001]) |
++--------+-----------------------------+
+
+
 ast            : l2_distance([1,2,3], [1,2,3])
 raw expr       : l2_distance(array(1, 2, 3), array(1, 2, 3))
 checked expr   : l2_distance<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
@@ -167,5 +217,202 @@ optimized expr : 2.828427_f32
 output type    : Float32
 output domain  : {2.828427..=2.828427}
 output         : 2.828427
+
+
+ast            : l2_distance([a, b]::vector(2), [c, d]::vector(2))
+raw expr       : l2_distance(CAST(array(a::Float32, b::Float32) AS Vector(2)), CAST(array(c::Float32, d::Float32) AS Vector(2)))
+checked expr   : l2_distance<Vector(2), Vector(2)>(CAST<Array(Float32)>(array<T0=Float32><T0, T0>(a, b) AS Vector(2)), CAST<Array(Float32)>(array<T0=Float32><T0, T0>(c, d) AS Vector(2)))
+evaluation:
++--------+-----------+------------+------------+------------+----------+
+|        | a         | b          | c          | d          | Output   |
++--------+-----------+------------+------------+------------+----------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32  |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown  |
+| Row 0  | 1         | 2          | 3          | 4          | 2.828427 |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 3.11127  |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 2.404163 |
++--------+-----------+------------+------------+------------+----------+
+evaluation (internal):
++--------+----------------------------------------+
+| Column | Data                                   |
++--------+----------------------------------------+
+| a      | Float32([1, 5.1, 9.4])                 |
+| b      | Float32([2, 6.2, 10.6])                |
+| c      | Float32([3, 7.3, 11.1])                |
+| d      | Float32([4, 8.4, 12.3])                |
+| Output | Float32([2.828427, 3.11127, 2.404163]) |
++--------+----------------------------------------+
+
+
+ast            : inner_product([1,0,0], [1,0,0])
+raw expr       : inner_product(array(1, 0, 0), array(1, 0, 0))
+checked expr   : inner_product<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)))
+optimized expr : 1_f32
+output type    : Float32
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : inner_product([1,0,0], [-1,0,0])
+raw expr       : inner_product(array(1, 0, 0), array(minus(1), 0, 0))
+checked expr   : inner_product<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(1_u8), CAST<UInt8>(0_u8 AS Int16), CAST<UInt8>(0_u8 AS Int16)) AS Array(Float32)))
+optimized expr : -1_f32
+output type    : Float32
+output domain  : {-1..=-1}
+output         : -1
+
+
+ast            : inner_product([1,2,3], [4,5,6])
+raw expr       : inner_product(array(1, 2, 3), array(4, 5, 6))
+checked expr   : inner_product<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(4_u8, 5_u8, 6_u8) AS Array(Float32)))
+optimized expr : 32_f32
+output type    : Float32
+output domain  : {32..=32}
+output         : 32
+
+
+ast            : inner_product([0,0,0], [1,2,3])
+raw expr       : inner_product(array(0, 0, 0), array(1, 2, 3))
+checked expr   : inner_product<Array(Float32), Array(Float32)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(0_u8, 0_u8, 0_u8) AS Array(Float32)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8) AS Array(Float32)))
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : inner_product([1,-2,3]::vector(3), [-4,5,-6]::vector(3))
+raw expr       : inner_product(CAST(array(1, minus(2), 3) AS Vector(3)), CAST(array(minus(4), 5, minus(6)) AS Vector(3)))
+checked expr   : inner_product<Vector(3), Vector(3)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8), CAST<UInt8>(3_u8 AS Int16)) AS Vector(3)), CAST<Array(Int16)>(array<T0=Int16><T0, T0, T0>(minus<UInt8>(4_u8), CAST<UInt8>(5_u8 AS Int16), minus<UInt8>(6_u8)) AS Vector(3)))
+optimized expr : -32_f32
+output type    : Float32
+output domain  : {-32..=-32}
+output         : -32
+
+
+ast            : inner_product([0.1,0.2,0.3]::vector(3), [0.4,0.5,0.6]::vector(3))
+raw expr       : inner_product(CAST(array(0.1, 0.2, 0.3) AS Vector(3)), CAST(array(0.4, 0.5, 0.6) AS Vector(3)))
+checked expr   : inner_product<Vector(3), Vector(3)>(CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.1_d64(1,1), 0.2_d64(1,1), 0.3_d64(1,1)) AS Vector(3)), CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.4_d64(1,1), 0.5_d64(1,1), 0.6_d64(1,1)) AS Vector(3)))
+optimized expr : 0.32_f32
+output type    : Float32
+output domain  : {0.32..=0.32}
+output         : 0.32
+
+
+ast            : inner_product([1,0]::vector(2), [0,1]::vector(2))
+raw expr       : inner_product(CAST(array(1, 0) AS Vector(2)), CAST(array(0, 1) AS Vector(2)))
+checked expr   : inner_product<Vector(2), Vector(2)>(CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(1_u8, 0_u8) AS Vector(2)), CAST<Array(UInt8)>(array<T0=UInt8><T0, T0>(0_u8, 1_u8) AS Vector(2)))
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : inner_product([a, b]::vector(2), [c, d]::vector(2))
+raw expr       : inner_product(CAST(array(a::Float32, b::Float32) AS Vector(2)), CAST(array(c::Float32, d::Float32) AS Vector(2)))
+checked expr   : inner_product<Vector(2), Vector(2)>(CAST<Array(Float32)>(array<T0=Float32><T0, T0>(a, b) AS Vector(2)), CAST<Array(Float32)>(array<T0=Float32><T0, T0>(c, d) AS Vector(2)))
+evaluation:
++--------+-----------+------------+------------+------------+---------+
+|        | a         | b          | c          | d          | Output  |
++--------+-----------+------------+------------+------------+---------+
+| Type   | Float32   | Float32    | Float32    | Float32    | Float32 |
+| Domain | {1..=9.4} | {2..=10.6} | {3..=11.1} | {4..=12.3} | Unknown |
+| Row 0  | 1         | 2          | 3          | 4          | 11      |
+| Row 1  | 5.1       | 6.2        | 7.3        | 8.4        | 89.31   |
+| Row 2  | 9.4       | 10.6       | 11.1       | 12.3       | 234.72  |
++--------+-----------+------------+------------+------------+---------+
+evaluation (internal):
++--------+------------------------------+
+| Column | Data                         |
++--------+------------------------------+
+| a      | Float32([1, 5.1, 9.4])       |
+| b      | Float32([2, 6.2, 10.6])      |
+| c      | Float32([3, 7.3, 11.1])      |
+| d      | Float32([4, 8.4, 12.3])      |
+| Output | Float32([11, 89.31, 234.72]) |
++--------+------------------------------+
+
+
+ast            : vector_dims([1,-2]::vector(2))
+raw expr       : vector_dims(CAST(array(1, minus(2)) AS Vector(2)))
+checked expr   : vector_dims<Vector(2)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8)) AS Vector(2)))
+optimized expr : 2_i32
+output type    : Int32
+output domain  : {2..=2}
+output         : 2
+
+
+ast            : vector_dims([0.1,0.2,0.3]::vector(3))
+raw expr       : vector_dims(CAST(array(0.1, 0.2, 0.3) AS Vector(3)))
+checked expr   : vector_dims<Vector(3)>(CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.1_d64(1,1), 0.2_d64(1,1), 0.3_d64(1,1)) AS Vector(3)))
+optimized expr : 3_i32
+output type    : Int32
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : vector_dims([a, b, c]::vector(3))
+raw expr       : vector_dims(CAST(array(a::Float32, b::Float32, c::Float32) AS Vector(3)))
+checked expr   : vector_dims<Vector(3)>(CAST<Array(Float32)>(array<T0=Float32><T0, T0, T0>(a, b, c) AS Vector(3)))
+evaluation:
++--------+---------+---------+---------+---------+
+|        | a       | b       | c       | Output  |
++--------+---------+---------+---------+---------+
+| Type   | Float32 | Float32 | Float32 | Int32   |
+| Domain | {1..=7} | {2..=8} | {3..=9} | Unknown |
+| Row 0  | 1       | 2       | 3       | 3       |
+| Row 1  | 4       | 5       | 6       | 3       |
+| Row 2  | 7       | 8       | 9       | 3       |
++--------+---------+---------+---------+---------+
+evaluation (internal):
++--------+--------------------+
+| Column | Data               |
++--------+--------------------+
+| a      | Float32([1, 4, 7]) |
+| b      | Float32([2, 5, 8]) |
+| c      | Float32([3, 6, 9]) |
+| Output | Int32([3, 3, 3])   |
++--------+--------------------+
+
+
+ast            : vector_norm([1,-2]::vector(2))
+raw expr       : vector_norm(CAST(array(1, minus(2)) AS Vector(2)))
+checked expr   : vector_norm<Vector(2)>(CAST<Array(Int16)>(array<T0=Int16><T0, T0>(CAST<UInt8>(1_u8 AS Int16), minus<UInt8>(2_u8)) AS Vector(2)))
+optimized expr : 2.236068_f32
+output type    : Float32
+output domain  : {2.236068..=2.236068}
+output         : 2.236068
+
+
+ast            : vector_norm([0.1,0.2,0.3]::vector(3))
+raw expr       : vector_norm(CAST(array(0.1, 0.2, 0.3) AS Vector(3)))
+checked expr   : vector_norm<Vector(3)>(CAST<Array(Decimal(1, 1))>(array<T0=Decimal(1, 1)><T0, T0, T0>(0.1_d64(1,1), 0.2_d64(1,1), 0.3_d64(1,1)) AS Vector(3)))
+optimized expr : 0.3741658_f32
+output type    : Float32
+output domain  : {0.3741658..=0.3741658}
+output         : 0.3741658
+
+
+ast            : vector_norm([a, b, c]::vector(3))
+raw expr       : vector_norm(CAST(array(a::Float32, b::Float32, c::Float32) AS Vector(3)))
+checked expr   : vector_norm<Vector(3)>(CAST<Array(Float32)>(array<T0=Float32><T0, T0, T0>(a, b, c) AS Vector(3)))
+evaluation:
++--------+---------+---------+---------+-----------+
+|        | a       | b       | c       | Output    |
++--------+---------+---------+---------+-----------+
+| Type   | Float32 | Float32 | Float32 | Float32   |
+| Domain | {1..=7} | {2..=8} | {3..=9} | Unknown   |
+| Row 0  | 1       | 2       | 3       | 3.741658  |
+| Row 1  | 4       | 5       | 6       | 8.774964  |
+| Row 2  | 7       | 8       | 9       | 13.928389 |
++--------+---------+---------+---------+-----------+
+evaluation (internal):
++--------+------------------------------------------+
+| Column | Data                                     |
++--------+------------------------------------------+
+| a      | Float32([1, 4, 7])                       |
+| b      | Float32([2, 5, 8])                       |
+| c      | Float32([3, 6, 9])                       |
+| Output | Float32([3.741658, 8.774964, 13.928389]) |
++--------+------------------------------------------+
 
 

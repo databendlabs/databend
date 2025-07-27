@@ -210,10 +210,11 @@ pub(crate) async fn load_vector_index_files<'a>(
         vector_columns.push(column);
     }
 
+    let elapsed = start.elapsed().as_millis() as u64;
     // Perf.
     {
         metrics_inc_block_vector_index_read_bytes(vector_bytes_len as u64);
-        metrics_inc_block_vector_index_read_milliseconds(start.elapsed().as_millis() as u64);
+        metrics_inc_block_vector_index_read_milliseconds(elapsed);
     }
 
     Ok(vector_columns)

@@ -20,7 +20,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct CopyStatus {
     /// Key is file path.
     pub files: DashMap<String, FileStatus>,
@@ -45,7 +45,7 @@ impl CopyStatus {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct FileStatus {
     pub num_rows_loaded: usize,
     pub error: Option<FileErrorsInfo>,
@@ -79,7 +79,7 @@ impl FileStatus {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileErrorsInfo {
     pub num_errors: usize,
     pub first_error: FileParseErrorAtLine,
@@ -156,7 +156,7 @@ impl FileParseError {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileParseErrorAtLine {
     pub error: FileParseError,
     pub line: usize,

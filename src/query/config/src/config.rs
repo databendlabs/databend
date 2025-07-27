@@ -1581,6 +1581,10 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub cluster_id: String,
 
+    /// ID for construct the warehouse.
+    #[clap(long, value_name = "VALUE", default_value_t)]
+    pub warehouse_id: String,
+
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub num_cpus: u64,
 
@@ -1930,7 +1934,14 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerQueryConfig> {
+        let mut warehouse_id = self.warehouse_id;
+
+        if warehouse_id.is_empty() {
+            warehouse_id = self.cluster_id.clone();
+        }
+
         Ok(InnerQueryConfig {
+            warehouse_id,
             tenant_id: Tenant::new_or_err(self.tenant_id, "")
                 .map_err(|_e| ErrorCode::InvalidConfig("tenant-id can not be empty"))?,
             cluster_id: self.cluster_id,
@@ -2030,6 +2041,7 @@ impl From<InnerQueryConfig> for QueryConfig {
         Self {
             tenant_id: inner.tenant_id.tenant_name().to_string(),
             cluster_id: inner.cluster_id,
+            warehouse_id: inner.warehouse_id,
             num_cpus: inner.num_cpus,
             mysql_handler_host: inner.mysql_handler_host,
             mysql_handler_port: inner.mysql_handler_port,
@@ -3292,7 +3304,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-meta-count",
         value_name = "VALUE",
-        default_value = "3000"
+        default_value = "30000"
     )]
     pub vector_index_meta_count: u64,
 
@@ -3300,7 +3312,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-filter-size",
         value_name = "VALUE",
-        default_value = "2147483648"
+        default_value = "64424509440"
     )]
     pub vector_index_filter_size: u64,
 

@@ -2989,9 +2989,9 @@ pub fn insert_source_file(i: Input) -> IResult<InsertSource> {
     );
     map(
         rule! {
-           (VALUES ~ #value?)? ~ FROM ~ #at_string ~  #file_format_clause
+           (VALUES ~ #value?)? ~ FROM ~ #at_string ~  #file_format_clause ~ ";"? ~ &EOI
         },
-        |(values, _, location, format_options)| InsertSource::LoadFile {
+        |(values, _, location, format_options, _, _)| InsertSource::LoadFile {
             value: values.map(|(_, value)| value).unwrap_or_default(),
             location,
             format_options,
@@ -3398,11 +3398,33 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let connection_privs = map(
+        rule! {
+            ACCESS ~ CONNECTION ~ ON ~ CONNECTION ~ #ident
+        },
+        |(_, _, _, _, c)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessConnection],
+            level: AccountMgrLevel::Connection(c.to_string()),
+        },
+    );
+
+    let connection_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ CONNECTION ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::AccessConnection],
+            level: AccountMgrLevel::Connection(w.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
         | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
+        | #connection_all_privs: "ALL [ PRIVILEGES ] ON CONNECTION <warehouse_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
         | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
+        | #connection_privs: "USAGE ON CONNECTION <warehouse_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3411,31 +3433,64 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
 }
 
 pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    let usage = value(UserPrivilegeType::Usage, rule! { USAGE });
+    let select = value(UserPrivilegeType::Select, rule! { SELECT });
+    let insert = value(UserPrivilegeType::Insert, rule! { INSERT });
+    let update = value(UserPrivilegeType::Update, rule! { UPDATE });
+    let delete = value(UserPrivilegeType::Delete, rule! { DELETE });
+    let alter = value(UserPrivilegeType::Alter, rule! { ALTER });
+    let super_priv = value(UserPrivilegeType::Super, rule! { SUPER });
+    let create_user = value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER });
+    let create_database = value(
+        UserPrivilegeType::CreateDatabase,
+        rule! { CREATE ~ DATABASE },
+    );
+    let create_warehouse = value(
+        UserPrivilegeType::CreateWarehouse,
+        rule! { CREATE ~ WAREHOUSE },
+    );
+    let create_connection = value(
+        UserPrivilegeType::CreateConnection,
+        rule! { CREATE ~ CONNECTION },
+    );
+    let access_connection = value(
+        UserPrivilegeType::AccessConnection,
+        rule! { ACCESS ~ CONNECTION },
+    );
+    let drop_user = value(UserPrivilegeType::DropUser, rule! { DROP ~ USER });
+    let create_role = value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE });
+    let drop_role = value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE });
+    let grant = value(UserPrivilegeType::Grant, rule! { GRANT });
+    let create_stage = value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE });
+    let set = value(UserPrivilegeType::Set, rule! { SET });
+    let drop = value(UserPrivilegeType::Drop, rule! { DROP });
+    let create = value(UserPrivilegeType::Create, rule! { CREATE });
+
     alt((
-        value(UserPrivilegeType::Usage, rule! { USAGE }),
-        value(UserPrivilegeType::Select, rule! { SELECT }),
-        value(UserPrivilegeType::Insert, rule! { INSERT }),
-        value(UserPrivilegeType::Update, rule! { UPDATE }),
-        value(UserPrivilegeType::Delete, rule! { DELETE }),
-        value(UserPrivilegeType::Alter, rule! { ALTER }),
-        value(UserPrivilegeType::Super, rule! { SUPER }),
-        value(UserPrivilegeType::CreateUser, rule! { CREATE ~ USER }),
-        value(
-            UserPrivilegeType::CreateDatabase,
-            rule! { CREATE ~ DATABASE },
+        rule!(
+            #usage
+            | #select
+            | #insert
+            | #update
+            | #delete
+            | #alter
+            | #super_priv
+            | #create_user
+            | #create_database
+            | #create_warehouse
         ),
-        value(
-            UserPrivilegeType::CreateWarehouse,
-            rule! { CREATE ~ WAREHOUSE },
+        rule!(
+            #create_connection
+            | #access_connection
+            | #drop_user
+            | #create_role
+            | #drop_role
+            | #grant
+            | #create_stage
+            | #set
+            | #drop
+            | #create
         ),
-        value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
-        value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
-        value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
-        value(UserPrivilegeType::Grant, rule! { GRANT }),
-        value(UserPrivilegeType::CreateStage, rule! { CREATE ~ STAGE }),
-        value(UserPrivilegeType::Set, rule! { SET }),
-        value(UserPrivilegeType::Drop, rule! { DROP }),
-        value(UserPrivilegeType::Create, rule! { CREATE }),
     ))(i)
 }
 
@@ -3491,12 +3546,17 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::Warehouse(w.to_string())
     });
 
+    let connection = map(rule! { CONNECTION ~ #ident}, |(_, w)| {
+        GrantObjectName::Connection(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #udf : "UDF <udf_name>"
         | #warehouse : "WAREHOUSE <warehouse_name>"
+        | #connection : "CONNECTION <connection_name>"
     )(i)
 }
 
@@ -3592,11 +3652,13 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         Stage,
         Udf,
         Warehouse,
+        Connection,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
         value(Object::Warehouse, rule! { WAREHOUSE }),
+        value(Object::Connection, rule! { CONNECTION }),
     ));
 
     // Object object_name
@@ -3606,13 +3668,14 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
             Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
+            Object::Connection => AccountMgrLevel::Connection(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF | WAREHOUSE <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE | CONNECTION <object_name>"
     )(i)
 }
 

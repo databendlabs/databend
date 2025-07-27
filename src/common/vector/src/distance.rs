@@ -66,6 +66,21 @@ pub fn l2_distance(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
         .sqrt())
 }
 
+pub fn inner_product(lhs: &[f32], rhs: &[f32]) -> Result<f32> {
+    if lhs.len() != rhs.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            lhs.len(),
+            rhs.len(),
+        )));
+    }
+
+    let a = ArrayView::from(lhs);
+    let b = ArrayView::from(rhs);
+
+    Ok((&a * &b).sum())
+}
+
 pub fn cosine_distance_64(lhs: &[f64], rhs: &[f64]) -> Result<f64> {
     if lhs.len() != rhs.len() {
         return Err(ErrorCode::InvalidArgument(format!(
@@ -114,4 +129,24 @@ pub fn l2_distance_64(lhs: &[f64], rhs: &[f64]) -> Result<f64> {
         .map(|(a, b)| (a - b).powi(2))
         .sum::<f64>()
         .sqrt())
+}
+
+pub fn inner_product_64(lhs: &[f64], rhs: &[f64]) -> Result<f64> {
+    if lhs.len() != rhs.len() {
+        return Err(ErrorCode::InvalidArgument(format!(
+            "Vector length not equal: {:} != {:}",
+            lhs.len(),
+            rhs.len(),
+        )));
+    }
+
+    let a = ArrayView::from(lhs);
+    let b = ArrayView::from(rhs);
+
+    Ok((&a * &b).sum())
+}
+
+pub fn vector_norm(vector: &[f32]) -> f32 {
+    let a = ArrayView::from(vector);
+    (&a * &a).sum().sqrt()
 }

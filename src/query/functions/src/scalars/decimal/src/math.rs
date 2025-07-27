@@ -169,7 +169,7 @@ where
         } else {
             (a + addition) / power_of_ten
         };
-        C::compute(&res)
+        C::compute(res)
     })(value, ctx)
 }
 
@@ -201,7 +201,7 @@ where
             a + addition
         };
         let res = a / divide_power_of_ten * multiply_power_of_ten;
-        C::compute(&res)
+        C::compute(res)
     })(value, ctx)
 }
 
@@ -220,7 +220,7 @@ where
     let power_of_ten = T::e((source_scale - target_scale) as u8);
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = a / power_of_ten;
-        C::compute(&res)
+        C::compute(res)
     })(value, ctx)
 }
 
@@ -246,7 +246,7 @@ where
 
     vectorize_1_arg::<DecimalType<T>, DecimalType<U>>(|a, _| {
         let res = a / divide_power_of_ten * multiply_power_of_ten;
-        C::compute(&res)
+        C::compute(res)
     })(value, ctx)
 }
 
@@ -275,7 +275,7 @@ where
         } else {
             a / power_of_ten
         };
-        C::compute(&res)
+        C::compute(res)
     })(value, ctx)
 }
 
@@ -303,7 +303,7 @@ where
         } else {
             ((a - T::one()) / power_of_ten) + T::one()
         };
-        C::compute(&res)
+        C::compute(res)
     })(value, ctx)
 }
 

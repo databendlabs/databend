@@ -42,7 +42,7 @@ impl MaterializedCTE {
         channel_size: Option<usize>,
     ) -> Self {
         Self {
-            cte_name: cte_name.into(),
+            cte_name,
             cte_output_columns: output_columns,
             // ref_count is set to 0 by default, will be updated by CleanupUnusedCTEOptimizer
             ref_count: 0,

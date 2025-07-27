@@ -20,10 +20,12 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
-use databend_common_io::prelude::BinaryWrite;
+use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
 use super::AggrStateLoc;
@@ -130,10 +132,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         self.0.init_state(place);
     }
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.0.serialize_size_per_row()
-    }
-
     fn register_state(&self, registry: &mut AggrStateRegistry) {
         self.0.register_state(registry);
     }
@@ -183,12 +181,27 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
             .accumulate_row(place, not_null_columns, validity, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.0.serialize(place, writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.0.serialize_type()
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.0.merge(place, reader)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.0.batch_serialize(places, loc, builders)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.0.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -205,10 +218,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
 
     unsafe fn drop_state(&self, place: AggrState) {
         self.0.drop_state(place);
-    }
-
-    fn convert_const_to_full(&self) -> bool {
-        self.0.nested.convert_const_to_full()
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
@@ -233,6 +242,20 @@ impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> 
     }
 }
 
+impl<const NULLABLE_RESULT: bool> AggregateNullVariadicAdaptor<NULLABLE_RESULT> {
+    fn merge_validity(
+        columns: ProjectedBlock,
+        mut validity: Option<Bitmap>,
+    ) -> (Vec<BlockEntry>, Option<Bitmap>) {
+        let mut not_null_columns = Vec::with_capacity(columns.len());
+        for entry in columns.iter() {
+            validity = column_merge_validity(&entry.clone(), validity);
+            not_null_columns.push(entry.clone().remove_nullable());
+        }
+        (not_null_columns, validity)
+    }
+}
+
 impl<const NULLABLE_RESULT: bool> AggregateFunction
     for AggregateNullVariadicAdaptor<NULLABLE_RESULT>
 {
@@ -248,10 +271,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.0.init_state(place);
     }
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.0.serialize_size_per_row()
-    }
-
     fn register_state(&self, registry: &mut AggrStateRegistry) {
         self.0.register_state(registry);
     }
@@ -264,14 +283,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let mut not_null_columns = Vec::with_capacity(columns.len());
-        let mut validity = validity.cloned();
-        for entry in columns.iter() {
-            validity = column_merge_validity(&entry.clone(), validity);
-            not_null_columns.push(entry.clone().remove_nullable());
-        }
+        let (not_null_columns, validity) = Self::merge_validity(columns, validity.cloned());
         let not_null_columns = (&not_null_columns).into();
-
         self.0
             .accumulate(place, not_null_columns, validity, input_rows)
     }
@@ -283,37 +296,40 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         columns: ProjectedBlock,
         input_rows: usize,
     ) -> Result<()> {
-        let mut not_null_columns = Vec::with_capacity(columns.len());
-        let mut validity = None;
-        for entry in columns.iter() {
-            validity = column_merge_validity(&entry.clone(), validity);
-            not_null_columns.push(entry.clone().remove_nullable());
-        }
+        let (not_null_columns, validity) = Self::merge_validity(columns, None);
         let not_null_columns = (&not_null_columns).into();
-
         self.0
             .accumulate_keys(addrs, loc, not_null_columns, validity, input_rows)
     }
 
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()> {
-        let mut not_null_columns = Vec::with_capacity(columns.len());
-        let mut validity = None;
-        for entry in columns.iter() {
-            validity = column_merge_validity(&entry.clone(), validity);
-            not_null_columns.push(entry.clone().remove_nullable());
-        }
+        let (not_null_columns, validity) = Self::merge_validity(columns, None);
         let not_null_columns = (&not_null_columns).into();
-
         self.0
             .accumulate_row(place, not_null_columns, validity, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.0.serialize(place, writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        self.0.serialize_type()
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.0.merge(place, reader)
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        self.0.batch_serialize(places, loc, builders)
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        self.0.batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -330,10 +346,6 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
     unsafe fn drop_state(&self, place: AggrState) {
         self.0.drop_state(place);
-    }
-
-    fn convert_const_to_full(&self) -> bool {
-        self.0.nested.convert_const_to_full()
     }
 
     fn get_if_condition(&self, columns: ProjectedBlock) -> Option<Bitmap> {
@@ -369,12 +381,6 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
 
         set_flag(place, false);
         self.nested.init_state(place.remove_last_loc());
-    }
-
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        self.nested
-            .serialize_size_per_row()
-            .map(|row| if NULLABLE_RESULT { row + 1 } else { row })
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
@@ -496,33 +502,109 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             .accumulate_row(place.remove_last_loc(), not_null_columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
         if !NULLABLE_RESULT {
-            return self.nested.serialize(place, writer);
+            return self.nested.serialize_type();
         }
-
-        self.nested.serialize(place.remove_last_loc(), writer)?;
-        let flag = get_flag(place);
-        writer.write_scalar(&flag)
+        self.nested
+            .serialize_type()
+            .into_iter()
+            .chain(Some(StateSerdeItem::DataType(DataType::Boolean)))
+            .collect()
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
         if !NULLABLE_RESULT {
-            return self.nested.merge(place, reader);
+            return self.nested.batch_serialize(places, loc, builders);
         }
-
-        let flag = reader[reader.len() - 1];
-        if flag == 0 {
-            return Ok(());
+        let n = builders.len();
+        debug_assert_eq!(self.nested.serialize_type().len() + 1, n);
+        let flag_builder = builders
+            .last_mut()
+            .and_then(ColumnBuilder::as_boolean_mut)
+            .unwrap();
+        for place in places {
+            let place = AggrState::new(*place, loc);
+            flag_builder.push(get_flag(place));
         }
-
-        if !get_flag(place) {
-            // initial the state to remove the dirty stats
-            self.init_state(place);
-        }
-        set_flag(place, true);
         self.nested
-            .merge(place.remove_last_loc(), &mut &reader[..reader.len() - 1])
+            .batch_serialize(places, &loc[..loc.len() - 1], &mut builders[..(n - 1)])
+    }
+
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        if !NULLABLE_RESULT {
+            return self.nested.batch_merge(places, loc, state, filter);
+        }
+
+        match state {
+            BlockEntry::Column(Column::Tuple(tuple)) => {
+                let nested_state = Column::Tuple(tuple[0..tuple.len() - 1].to_vec());
+                let flag = tuple.last().unwrap().as_boolean().unwrap();
+                let flag = match filter {
+                    Some(filter) => filter & flag,
+                    None => flag.clone(),
+                };
+                let filter = if flag.null_count() == 0 {
+                    for place in places.iter() {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    None
+                } else {
+                    for place in places
+                        .iter()
+                        .zip(flag.iter())
+                        .filter_map(|(place, flag)| flag.then_some(place))
+                    {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    Some(&flag)
+                };
+                self.nested
+                    .batch_merge(places, &loc[..loc.len() - 1], &nested_state.into(), filter)
+            }
+            BlockEntry::Const(Scalar::Tuple(tuple), DataType::Tuple(data_type), num_rows) => {
+                let flag = *tuple.last().and_then(Scalar::as_boolean).unwrap();
+                let flag = Bitmap::new_constant(flag, *num_rows);
+                let flag = match filter {
+                    Some(filter) => filter & &flag,
+                    None => flag,
+                };
+                let filter = if flag.null_count() == 0 {
+                    for place in places.iter() {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    None
+                } else {
+                    for place in places
+                        .iter()
+                        .zip(flag.iter())
+                        .filter_map(|(place, flag)| flag.then_some(place))
+                    {
+                        self.update_flag(AggrState::new(*place, loc));
+                    }
+                    Some(&flag)
+                };
+                let nested_state = BlockEntry::new_const_column(
+                    DataType::Tuple(data_type[0..data_type.len() - 1].to_vec()),
+                    Scalar::Tuple(tuple[0..tuple.len() - 1].to_vec()),
+                    *num_rows,
+                );
+                self.nested
+                    .batch_merge(places, &loc[..loc.len() - 1], &nested_state, filter)
+            }
+            _ => unreachable!(),
+        }
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -568,6 +650,14 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         } else {
             self.nested.drop_state(place.remove_last_loc())
         }
+    }
+
+    fn update_flag(&self, place: AggrState) {
+        if !get_flag(place) {
+            // initial the state to remove the dirty stats
+            self.init_state(place);
+        }
+        set_flag(place, true);
     }
 }
 
