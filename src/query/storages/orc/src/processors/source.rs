@@ -65,10 +65,11 @@ impl InferredSchema {
 }
 
 pub struct ReadingFile {
-    path: String,
-    stripe_factory: Box<StripeFactory<OrcChunkReader>>,
-    size: usize,
-    schema: Option<HashableSchema>,
+    pub path: String,
+    pub stripe_factory: Box<StripeFactory<OrcChunkReader>>,
+    pub size: usize,
+    pub schema: Option<HashableSchema>,
+    pub rows: u64,
 }
 
 pub struct ORCSource {
@@ -162,6 +163,7 @@ impl ORCSource {
             stripe_factory,
             size,
             schema,
+            rows: 0,
         });
         Ok(true)
     }
@@ -197,22 +199,22 @@ impl AsyncSource for ORCSource {
                         continue;
                     }
                     Some(stripe) => {
-                        let progress_values = ProgressValues {
-                            rows: stripe.number_of_rows(),
-                            bytes: 0,
-                        };
+                        let rows = stripe.number_of_rows();
+                        let progress_values = ProgressValues { rows, bytes: 0 };
                         self.scan_progress.incr(&progress_values);
 
                         let meta = Box::new(StripeInMemory {
                             path: file.path.clone(),
                             stripe,
                             schema: file.schema.clone(),
+                            start_row: file.rows,
                         });
                         self.reader = Some(ReadingFile {
                             path: file.path.clone(),
                             stripe_factory: Box::new(factory),
                             size: file.size,
                             schema: file.schema.clone(),
+                            rows: (rows as u64) + file.rows,
                         });
                         return Ok(Some(DataBlock::empty_with_meta(meta)));
                     }

@@ -136,7 +136,7 @@ async fn streaming_load_handler_inner(
         .headers()
         .get(HEADER_SQL)
         .ok_or(poem::Error::from_string(
-            "[HTTP-STREAMING-LOAD] Missing required 'sql' header in request",
+            format!("[HTTP-STREAMING-LOAD] Missing required header {HEADER_SQL} in request"),
             StatusCode::BAD_REQUEST,
         ))?;
     let sql = sql.to_str().map_err(|e| {
