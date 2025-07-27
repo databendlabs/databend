@@ -127,7 +127,7 @@ Sequence
     │   │   │   │   │   │               ├── group by: [a]
     │   │   │   │   │   │               ├── aggregate functions: []
     │   │   │   │   │   │               ├── estimated rows: 1.00
-    │   │   │   │   │   │               └── CTEConsumer
+    │   │   │   │   │   │               └── MaterializeCTERef
     │   │   │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
     │   │   │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
     │   │   │   │   │   └── EvalScalar
@@ -143,7 +143,7 @@ Sequence
     │   │   │   │   │               ├── group by: [b]
     │   │   │   │   │               ├── aggregate functions: []
     │   │   │   │   │               ├── estimated rows: 1.00
-    │   │   │   │   │               └── CTEConsumer
+    │   │   │   │   │               └── MaterializeCTERef
     │   │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
     │   │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
     │   │   │   │   └── EvalScalar
@@ -159,7 +159,7 @@ Sequence
     │   │   │   │               ├── group by: [c]
     │   │   │   │               ├── aggregate functions: []
     │   │   │   │               ├── estimated rows: 1.00
-    │   │   │   │               └── CTEConsumer
+    │   │   │   │               └── MaterializeCTERef
     │   │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
     │   │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
     │   │   │   └── EvalScalar
@@ -175,7 +175,7 @@ Sequence
     │   │   │               ├── group by: [a, b]
     │   │   │               ├── aggregate functions: []
     │   │   │               ├── estimated rows: 1.00
-    │   │   │               └── CTEConsumer
+    │   │   │               └── MaterializeCTERef
     │   │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
     │   │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
     │   │   └── EvalScalar
@@ -191,7 +191,7 @@ Sequence
     │   │               ├── group by: [a, c]
     │   │               ├── aggregate functions: []
     │   │               ├── estimated rows: 1.00
-    │   │               └── CTEConsumer
+    │   │               └── MaterializeCTERef
     │   │                   ├── cte_name: cte_groupingsets_16366510952463710337
     │   │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
     │   └── EvalScalar
@@ -207,7 +207,7 @@ Sequence
     │               ├── group by: [b, c]
     │               ├── aggregate functions: []
     │               ├── estimated rows: 1.00
-    │               └── CTEConsumer
+    │               └── MaterializeCTERef
     │                   ├── cte_name: cte_groupingsets_16366510952463710337
     │                   └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]
     └── EvalScalar
@@ -223,6 +223,6 @@ Sequence
                 ├── group by: [a, b, c]
                 ├── aggregate functions: []
                 ├── estimated rows: 1.00
-                └── CTEConsumer
+                └── MaterializeCTERef
                     ├── cte_name: cte_groupingsets_16366510952463710337
                     └── cte_schema: [number (#0), a (#1), b (#2), c (#3)]

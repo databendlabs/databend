@@ -30,10 +30,10 @@ use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
-use crate::plans::CTEConsumer;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::MaterializeCTERef;
 use crate::plans::MaterializedCTE;
 use crate::plans::RelOp;
 use crate::plans::Sequence;
@@ -117,7 +117,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     agg_input.clone(),
                 );
 
-                let cte_consumer = SExpr::create_leaf(CTEConsumer {
+                let cte_consumer = SExpr::create_leaf(MaterializeCTERef {
                     cte_name: temp_cte_name,
                     output_columns: agg_input_columns.clone(),
                     def: agg_input.clone(),
