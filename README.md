@@ -1,5 +1,5 @@
 <h1 align="center">Databend: The Next-Gen Cloud [Data+AI] Analytics</h1>
-<h2 align="center">One SQL for All Data: structured, semi-structured & unstructured multimodal data</h2>
+<h2 align="center">SQL for All Data: structured, semi-structured & unstructured multimodal data</h2>
 
 <div align="center">
 
