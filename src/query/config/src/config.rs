@@ -3304,7 +3304,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-meta-count",
         value_name = "VALUE",
-        default_value = "3000"
+        default_value = "30000"
     )]
     pub vector_index_meta_count: u64,
 
@@ -3312,7 +3312,7 @@ pub struct CacheConfig {
     #[clap(
         long = "cache-vector-index-filter-size",
         value_name = "VALUE",
-        default_value = "2147483648"
+        default_value = "64424509440"
     )]
     pub vector_index_filter_size: u64,
 

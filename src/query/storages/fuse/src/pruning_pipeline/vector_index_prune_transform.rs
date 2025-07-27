@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,6 +26,7 @@ use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
 use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use log::info;
 
 use crate::pruning::VectorIndexPruner;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
@@ -74,7 +76,11 @@ impl VectorIndexPruneTransform {
     }
 
     async fn do_vector_index_prune(&self) -> Result<Option<DataBlock>> {
+        let start = Instant::now();
         let pruned = self.vector_index_pruner.prune(self.metas.clone()).await?;
+        let elapsed = start.elapsed().as_millis() as u64;
+        info!("[PROCESSOR-ASYNC-TASK] Vector index prune transform elapsed: {elapsed}");
+
         if pruned.is_empty() {
             Ok(None)
         } else {
