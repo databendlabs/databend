@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use databend_common_sql::MetadataRef;
 
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;
@@ -77,11 +78,14 @@ impl Display for QueryFragmentActionsWrap<'_> {
 
         if !self.inner.fragment_actions.is_empty() {
             let fragment_action = &self.inner.fragment_actions[0];
-            let plan_display_string = fragment_action
-                .physical_plan
-                .format(self.metadata.clone(), Default::default())
-                .and_then(|node| Ok(node.format_pretty_with_prefix("    ")?))
-                .unwrap();
+            let plan_display_string = {
+                let metadata = self.metadata.read();
+                fragment_action
+                    .physical_plan
+                    .format(&metadata, Default::default())
+                    .and_then(|node| Ok(node.format_pretty_with_prefix("    ")?))
+                    .unwrap()
+            };
             write!(f, "{}", plan_display_string)?;
         }
 

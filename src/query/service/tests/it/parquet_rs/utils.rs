@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
+use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 

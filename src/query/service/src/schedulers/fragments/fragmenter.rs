@@ -12,28 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
-use databend_common_sql::executor::physical_plans::CompactSource;
-use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CopyIntoTable;
-use databend_common_sql::executor::physical_plans::CopyIntoTableSource;
-use databend_common_sql::executor::physical_plans::Exchange;
-use databend_common_sql::executor::physical_plans::ExchangeSink;
-use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
-use databend_common_sql::executor::physical_plans::HashJoin;
-use databend_common_sql::executor::physical_plans::MutationSource;
-use databend_common_sql::executor::physical_plans::Recluster;
-use databend_common_sql::executor::physical_plans::ReplaceInto;
-use databend_common_sql::executor::physical_plans::TableScan;
-use databend_common_sql::executor::physical_plans::UnionAll;
-use databend_common_sql::executor::PhysicalPlanReplacer;
 
 use crate::clusters::ClusterHelper;
+use crate::physical_plans::BroadcastSink;
+use crate::physical_plans::CompactSource;
+use crate::physical_plans::ConstantTableScan;
+use crate::physical_plans::DeriveHandle;
+use crate::physical_plans::Exchange;
+use crate::physical_plans::ExchangeSink;
+use crate::physical_plans::ExchangeSource;
+use crate::physical_plans::MutationSource;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanDynExt;
+use crate::physical_plans::PhysicalPlanMeta;
+use crate::physical_plans::PhysicalPlanVisitor;
+use crate::physical_plans::Recluster;
+use crate::physical_plans::ReplaceInto;
+use crate::physical_plans::TableScan;
 use crate::schedulers::fragments::plan_fragment::FragmentType;
 use crate::schedulers::PlanFragment;
 use crate::servers::flight::v1::exchange::BroadcastExchange;
@@ -41,15 +45,12 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::ShuffleDataExchange;
 use crate::sessions::QueryContext;
-use crate::sql::executor::physical_plans::Mutation;
-use crate::sql::executor::PhysicalPlan;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
 pub struct Fragmenter {
     ctx: Arc<QueryContext>,
-    fragments: Vec<PlanFragment>,
     query_id: String,
-    state: State,
+    fragments: Vec<PlanFragment>,
 }
 
 /// A state to track if is visiting a source fragment, useful when building fragments.
@@ -76,7 +77,6 @@ impl Fragmenter {
         Ok(Self {
             ctx,
             fragments: vec![],
-            state: State::Other,
             query_id,
         })
     }
@@ -97,248 +97,234 @@ impl Fragmenter {
         ctx.get_cluster().local_id()
     }
 
-    pub fn get_exchange(
-        ctx: Arc<QueryContext>,
-        plan: &PhysicalPlan,
-    ) -> Result<Option<DataExchange>> {
-        match plan {
-            PhysicalPlan::ExchangeSink(plan) => match plan.kind {
-                FragmentKind::Normal => Ok(Some(ShuffleDataExchange::create(
-                    Self::get_executors(ctx),
-                    plan.keys.clone(),
-                ))),
-                FragmentKind::Merge => Ok(Some(MergeExchange::create(
-                    Self::get_local_executor(ctx),
-                    plan.ignore_exchange,
-                    plan.allow_adjust_parallelism,
-                ))),
-                FragmentKind::Expansive => {
-                    Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
-                }
-                _ => Ok(None),
-            },
-            _ => Ok(None),
-        }
-    }
-
-    pub fn build_fragment(mut self, plan: &PhysicalPlan) -> Result<PlanFragment> {
-        let root = self.replace(plan)?;
-        let fragment_type = match plan {
-            PhysicalPlan::BroadcastSink(_) => FragmentType::Intermediate,
-            _ => FragmentType::Root,
+    pub fn build_fragment(self, plan: &PhysicalPlan) -> Result<Vec<PlanFragment>> {
+        let mut handle = FragmentDeriveHandle::create(self.query_id.clone(), self.ctx.clone());
+        let root = plan.derive_with(&mut handle);
+        let mut fragments = {
+            let handle = handle
+                .as_any()
+                .downcast_mut::<FragmentDeriveHandle>()
+                .unwrap();
+            handle.take_fragments()
         };
-        let mut root_fragment = PlanFragment {
+
+        let mut fragment_type = FragmentType::Root;
+        if let Some(_broadcast_sink) = plan.downcast_ref::<BroadcastSink>() {
+            fragment_type = FragmentType::Intermediate;
+        }
+
+        fragments.insert(self.ctx.get_fragment_id(), PlanFragment {
             plan: root,
             fragment_type,
             fragment_id: self.ctx.get_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
             source_fragments: self.fragments,
-        };
-        Self::resolve_fragment_connection(&mut root_fragment);
+        });
 
-        Ok(root_fragment)
-    }
+        let edges = Self::collect_fragments_edge(fragments.values());
 
-    fn resolve_fragment_connection(fragment: &mut PlanFragment) {
-        for source_fragment in fragment.source_fragments.iter_mut() {
-            if let PhysicalPlan::ExchangeSink(ExchangeSink {
-                destination_fragment_id,
-                ..
-            }) = &mut source_fragment.plan
-            {
-                // Fill the destination_fragment_id with parent fragment id.
-                *destination_fragment_id = fragment.fragment_id;
+        for (source, target) in edges {
+            let Some(fragment) = fragments.get_mut(&source) else {
+                continue;
+            };
+
+            if let Some(exchange_sink) = fragment.plan.downcast_mut_ref::<ExchangeSink>() {
+                exchange_sink.destination_fragment_id = target;
             }
         }
+
+        Ok(fragments.into_values().collect::<Vec<_>>())
+    }
+
+    fn collect_fragments_edge<'a>(
+        iter: impl Iterator<Item = &'a PlanFragment>,
+    ) -> HashMap<usize, usize> {
+        struct EdgeVisitor {
+            target_fragment_id: usize,
+            map: HashMap<usize, usize>,
+        }
+
+        impl EdgeVisitor {
+            pub fn create(target_fragment_id: usize) -> Box<dyn PhysicalPlanVisitor> {
+                Box::new(EdgeVisitor {
+                    target_fragment_id,
+                    map: Default::default(),
+                })
+            }
+
+            pub fn take(&mut self) -> HashMap<usize, usize> {
+                std::mem::take(&mut self.map)
+            }
+        }
+
+        impl PhysicalPlanVisitor for EdgeVisitor {
+            fn as_any(&mut self) -> &mut dyn Any {
+                self
+            }
+
+            fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+                if let Some(v) = plan.downcast_ref::<ExchangeSource>() {
+                    if let Some(v) = self
+                        .map
+                        .insert(v.source_fragment_id, self.target_fragment_id)
+                    {
+                        assert_eq!(v, self.target_fragment_id);
+                    }
+                }
+
+                Ok(())
+            }
+        }
+
+        let mut edges = HashMap::new();
+        for fragment in iter {
+            let mut visitor = EdgeVisitor::create(fragment.fragment_id);
+            fragment.plan.visit(&mut visitor).unwrap();
+            if let Some(v) = visitor.as_any().downcast_mut::<EdgeVisitor>() {
+                edges.extend(v.take().into_iter())
+            }
+        }
+
+        edges
     }
 }
 
-impl PhysicalPlanReplacer for Fragmenter {
-    fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
-        self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::TableScan(plan.clone()))
+struct FragmentDeriveHandle {
+    state: State,
+    query_id: String,
+    ctx: Arc<QueryContext>,
+    fragments: HashMap<usize, PlanFragment>,
+}
+
+impl FragmentDeriveHandle {
+    pub fn create(query_id: String, ctx: Arc<QueryContext>) -> Box<dyn DeriveHandle> {
+        Box::new(FragmentDeriveHandle {
+            ctx,
+            query_id,
+            state: State::Other,
+            fragments: HashMap::new(),
+        })
     }
 
-    fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
-        self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::ConstantTableScan(plan.clone()))
+    pub fn take_fragments(&mut self) -> HashMap<usize, PlanFragment> {
+        std::mem::take(&mut self.fragments)
     }
 
-    fn replace_mutation_source(&mut self, plan: &MutationSource) -> Result<PhysicalPlan> {
-        self.state = State::MutationSource;
-        Ok(PhysicalPlan::MutationSource(plan.clone()))
+    pub fn get_exchange(
+        cluster: Arc<Cluster>,
+        plan: &PhysicalPlan,
+    ) -> Result<Option<DataExchange>> {
+        let Some(exchange_sink) = plan.downcast_ref::<ExchangeSink>() else {
+            return Ok(None);
+        };
+
+        let get_executors = |cluster: Arc<Cluster>| {
+            let cluster_nodes = cluster.get_nodes();
+
+            cluster_nodes
+                .iter()
+                .map(|node| &node.id)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        Ok(match exchange_sink.kind {
+            FragmentKind::Normal => Some(ShuffleDataExchange::create(
+                get_executors(cluster),
+                exchange_sink.keys.clone(),
+            )),
+            FragmentKind::Merge => Some(MergeExchange::create(
+                cluster.local_id(),
+                exchange_sink.ignore_exchange,
+                exchange_sink.allow_adjust_parallelism,
+            )),
+            FragmentKind::Expansive => Some(BroadcastExchange::create(get_executors(cluster))),
+            FragmentKind::Init => None,
+        })
+    }
+}
+
+impl DeriveHandle for FragmentDeriveHandle {
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
     }
 
-    fn replace_mutation(&mut self, plan: &Mutation) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Mutation(Box::new(Mutation {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
-    fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        self.state = State::ReplaceInto;
-        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
-    //  TODO(Sky): remove redundant code
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
-        match &plan.source {
-            CopyIntoTableSource::Stage(_) => {
-                self.state = State::SelectLeaf;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
-            }
-            CopyIntoTableSource::Query(query_physical_plan) => {
-                let input = self.replace(query_physical_plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(input)),
-                    ..plan.clone()
-                })))
-            }
-        }
-    }
-
-    fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
-        self.state = State::Recluster;
-        Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
-    }
-
-    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
-        self.state = State::Compact;
-        Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
-    }
-
-    fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {
-        let mut fragments = vec![];
-        let build_input = self.replace(plan.build.as_ref())?;
-
-        // Consume current fragments to prevent them being consumed by `probe_input`.
-        fragments.append(&mut self.fragments);
-        let probe_input = self.replace(plan.probe.as_ref())?;
-        fragments.append(&mut self.fragments);
-
-        self.fragments = fragments;
-
-        Ok(PhysicalPlan::HashJoin(HashJoin {
-            plan_id: plan.plan_id,
-            projections: plan.projections.clone(),
-            probe_projections: plan.probe_projections.clone(),
-            build_projections: plan.build_projections.clone(),
-            build: Box::new(build_input),
-            probe: Box::new(probe_input),
-            build_keys: plan.build_keys.clone(),
-            probe_keys: plan.probe_keys.clone(),
-            is_null_equal: plan.is_null_equal.clone(),
-            non_equi_conditions: plan.non_equi_conditions.clone(),
-            join_type: plan.join_type.clone(),
-            marker_index: plan.marker_index,
-            from_correlated_subquery: plan.from_correlated_subquery,
-            probe_to_build: plan.probe_to_build.clone(),
-            output_schema: plan.output_schema.clone(),
-            need_hold_hash_table: plan.need_hold_hash_table,
-            stat_info: plan.stat_info.clone(),
-            single_to_inner: plan.single_to_inner.clone(),
-            build_side_cache_info: plan.build_side_cache_info.clone(),
-            runtime_filter: plan.runtime_filter.clone(),
-            broadcast_id: plan.broadcast_id,
-        }))
-    }
-
-    fn replace_union(&mut self, plan: &UnionAll) -> Result<PhysicalPlan> {
-        let mut fragments = vec![];
-        let left_input = self.replace(plan.left.as_ref())?;
-        let left_state = self.state.clone();
-
-        // Consume current fragments to prevent them being consumed by `right_input`.
-        fragments.append(&mut self.fragments);
-        let right_input = self.replace(plan.right.as_ref())?;
-        let right_state = self.state.clone();
-
-        fragments.append(&mut self.fragments);
-        self.fragments = fragments;
-
-        // If any of the input is a source fragment, the union all is a source fragment.
-        if left_state == State::SelectLeaf || right_state == State::SelectLeaf {
+    fn derive(
+        &mut self,
+        v: &PhysicalPlan,
+        mut children: Vec<PhysicalPlan>,
+    ) -> std::result::Result<PhysicalPlan, Vec<PhysicalPlan>> {
+        if let Some(_recluster) = v.downcast_ref::<Recluster>() {
+            self.state = State::Recluster;
+        } else if let Some(_table_scan) = v.downcast_ref::<TableScan>() {
             self.state = State::SelectLeaf;
-        } else {
-            self.state = State::Other;
+        } else if let Some(_const_table_scan) = v.downcast_ref::<ConstantTableScan>() {
+            self.state = State::SelectLeaf;
+        } else if let Some(_compact_source) = v.downcast_ref::<CompactSource>() {
+            self.state = State::Compact;
+        } else if let Some(_replace_into) = v.downcast_ref::<ReplaceInto>() {
+            self.state = State::ReplaceInto;
+        } else if let Some(_mutation_source) = v.downcast_ref::<MutationSource>() {
+            self.state = State::MutationSource;
         }
 
-        Ok(PhysicalPlan::UnionAll(UnionAll {
-            left: Box::new(left_input),
-            right: Box::new(right_input),
-            ..plan.clone()
-        }))
-    }
+        if let Some(exchange) = v.downcast_ref::<Exchange>() {
+            let input = children.remove(0);
+            let input_schema = input.output_schema().unwrap();
 
-    fn replace_exchange(&mut self, plan: &Exchange) -> Result<PhysicalPlan> {
-        // Recursively rewrite input
-        let input = self.replace(plan.input.as_ref())?;
-        let input_schema = input.output_schema()?;
+            let plan_id = v.get_id();
+            let source_fragment_id = self.ctx.get_fragment_id();
 
-        let plan_id = plan.plan_id;
+            let plan: PhysicalPlan = Box::new(ExchangeSink {
+                input,
+                schema: input_schema.clone(),
+                kind: exchange.kind.clone(),
+                keys: exchange.keys.clone(),
 
-        let source_fragment_id = self.ctx.get_fragment_id();
-        let plan = PhysicalPlan::ExchangeSink(ExchangeSink {
-            // TODO(leiysky): we reuse the plan id here,
-            // should generate a new one for the sink.
-            plan_id,
+                query_id: self.query_id.clone(),
 
-            input: Box::new(input),
-            schema: input_schema.clone(),
-            kind: plan.kind.clone(),
-            keys: plan.keys.clone(),
+                // We will connect the fragments later, so we just
+                // set the fragment id to a invalid value here.
+                destination_fragment_id: usize::MAX,
+                ignore_exchange: exchange.ignore_exchange,
+                allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                meta: PhysicalPlanMeta::with_plan_id("ExchangeSink", plan_id),
+            });
 
-            query_id: self.query_id.clone(),
+            let fragment_type = match self.state {
+                State::SelectLeaf => FragmentType::Source,
+                State::MutationSource => FragmentType::MutationSource,
+                State::Other => FragmentType::Intermediate,
+                State::ReplaceInto => FragmentType::ReplaceInto,
+                State::Compact => FragmentType::Compact,
+                State::Recluster => FragmentType::Recluster,
+            };
 
-            // We will connect the fragments later, so we just
-            // set the fragment id to a invalid value here.
-            destination_fragment_id: usize::MAX,
-            ignore_exchange: plan.ignore_exchange,
-            allow_adjust_parallelism: plan.allow_adjust_parallelism,
-        });
-        let fragment_type = match self.state {
-            State::SelectLeaf => FragmentType::Source,
-            State::MutationSource => FragmentType::MutationSource,
-            State::Other => FragmentType::Intermediate,
-            State::ReplaceInto => FragmentType::ReplaceInto,
-            State::Compact => FragmentType::Compact,
-            State::Recluster => FragmentType::Recluster,
-        };
-        self.state = State::Other;
-        let exchange = Self::get_exchange(self.ctx.clone(), &plan)?;
+            self.state = State::Other;
+            let cluster = self.ctx.get_cluster();
+            let exchange = Self::get_exchange(cluster, &plan).unwrap();
 
-        let mut source_fragment = PlanFragment {
-            plan,
-            fragment_type,
+            let source_fragment = PlanFragment {
+                plan,
+                exchange,
+                fragment_type,
+                source_fragments: vec![],
+                fragment_id: source_fragment_id,
+                query_id: self.query_id.clone(),
+            };
 
-            fragment_id: source_fragment_id,
-            exchange,
-            query_id: self.query_id.clone(),
+            self.fragments.insert(source_fragment_id, source_fragment);
 
-            source_fragments: self.fragments.drain(..).collect(),
-        };
+            return Ok(Box::new(ExchangeSource {
+                schema: input_schema,
+                query_id: self.query_id.clone(),
 
-        // Fill the destination_fragment_id for source fragments of `source_fragment`.
-        Self::resolve_fragment_connection(&mut source_fragment);
+                source_fragment_id,
+                meta: PhysicalPlanMeta::with_plan_id("ExchangeSource", plan_id),
+            }));
+        }
 
-        self.fragments.push(source_fragment);
-
-        Ok(PhysicalPlan::ExchangeSource(ExchangeSource {
-            // TODO(leiysky): we reuse the plan id here,
-            // should generate a new one for the source.
-            plan_id,
-
-            schema: input_schema,
-            query_id: self.query_id.clone(),
-
-            source_fragment_id,
-        }))
+        Err(children)
     }
 }

@@ -16,12 +16,7 @@ use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
-use crate::executor::PhysicalPlan;
-
 #[async_trait]
 pub trait QueryExecutor: Send + Sync {
-    async fn execute_query_with_physical_plan(&self, plan: &PhysicalPlan)
-        -> Result<Vec<DataBlock>>;
-
     async fn execute_query_with_sql_string(&self, sql: &str) -> Result<Vec<DataBlock>>;
 }

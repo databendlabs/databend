@@ -34,8 +34,6 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::ExplainConfig;
-use databend_common_sql::executor::format_partial_tree;
-use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnSet;
@@ -55,6 +53,10 @@ use crate::interpreters::interpreter::on_execution_finished;
 use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
+use crate::physical_plans::MutationBuildInfo;
+use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanBuilder;
+use crate::physical_plans::PhysicalPlanDynExt;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -64,8 +66,6 @@ use crate::schedulers::build_query_pipeline;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
-use crate::sql::executor::PhysicalPlan;
-use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 
@@ -73,7 +73,6 @@ pub struct ExplainInterpreter {
     ctx: Arc<QueryContext>,
     config: ExplainConfig,
     kind: ExplainKind,
-    partial: bool,
     graphical: bool,
     plan: Plan,
 }
@@ -164,22 +163,11 @@ impl Interpreter for ExplainInterpreter {
                 _ => self.explain_plan(&self.plan)?,
             },
 
-            ExplainKind::Join => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } => {
-                    let ctx = self.ctx.clone();
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
-                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
-                    self.explain_join_order(&plan, metadata)?
-                }
-                _ => Err(ErrorCode::Unimplemented(
+            ExplainKind::Join => {
+                return Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN JOIN statement",
-                ))?,
-            },
+                ));
+            }
 
             ExplainKind::AnalyzePlan | ExplainKind::Graphical => match &self.plan {
                 Plan::Query {
@@ -299,7 +287,6 @@ impl ExplainInterpreter {
         plan: Plan,
         kind: ExplainKind,
         config: ExplainConfig,
-        partial: bool,
         graphical: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
@@ -307,7 +294,6 @@ impl ExplainInterpreter {
             plan,
             kind,
             config,
-            partial,
             graphical,
         })
     }
@@ -360,20 +346,10 @@ impl ExplainInterpreter {
             }
         }
 
+        let metadata = metadata.read();
         let result = plan
-            .format(metadata.clone(), Default::default())?
+            .format(&metadata, Default::default())?
             .format_pretty()?;
-        let line_split_result: Vec<&str> = result.lines().collect();
-        let formatted_plan = StringType::from_data(line_split_result);
-        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
-    }
-
-    pub fn explain_join_order(
-        &self,
-        plan: &PhysicalPlan,
-        metadata: &MetadataRef,
-    ) -> Result<Vec<DataBlock>> {
-        let result = plan.format_join(metadata)?.format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
@@ -412,10 +388,13 @@ impl ExplainInterpreter {
             .build(&s_expr, required)
             .await?;
 
-        let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
+        let fragments = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
-        root_fragment.get_actions(ctx, &mut fragments_actions)?;
+
+        for fragment in fragments {
+            fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+        }
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
         let line_split_result = display_string.lines().collect::<Vec<_>>();
@@ -479,10 +458,9 @@ impl ExplainInterpreter {
         if !pruned_partitions_stats.is_empty() {
             plan.set_pruning_stats(&mut pruned_partitions_stats);
         }
-        let result = if self.partial {
-            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
-        } else {
-            plan.format(metadata.clone(), query_profiles.clone())?
+        let result = {
+            let metadata = metadata.read();
+            plan.format(&metadata, query_profiles.clone())?
                 .format_pretty()?
         };
         let line_split_result: Vec<&str> = result.lines().collect();
@@ -570,10 +548,13 @@ impl ExplainInterpreter {
             mutation.metadata.clone(),
         )?;
         let plan = interpreter.build_physical_plan(&mutation, true).await?;
-        let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
+        let fragments = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());
-        root_fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+
+        for fragment in fragments {
+            fragment.get_actions(self.ctx.clone(), &mut fragments_actions)?;
+        }
 
         let display_string = fragments_actions
             .display_indent(&mutation.metadata)

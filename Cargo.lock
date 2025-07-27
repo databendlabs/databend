@@ -4211,7 +4211,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "pretty_assertions",
  "prqlc",
- "rand 0.8.5",
  "recursive",
  "regex",
  "roaring",
