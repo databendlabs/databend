@@ -590,11 +590,16 @@ impl QueryContext {
         &self,
         cte_name: &str,
         cte_ref_count: usize,
+        channel_size: Option<usize>,
     ) -> Vec<Sender<DataBlock>> {
         let mut senders = vec![];
         let mut receivers = vec![];
         for _ in 0..cte_ref_count {
-            let (sender, receiver) = async_channel::unbounded();
+            let (sender, receiver) = if let Some(channel_size) = channel_size {
+                async_channel::bounded(channel_size)
+            } else {
+                async_channel::unbounded()
+            };
             senders.push(sender);
             receivers.push(receiver);
         }

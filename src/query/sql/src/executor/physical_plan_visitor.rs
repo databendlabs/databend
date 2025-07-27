@@ -659,6 +659,7 @@ pub trait PhysicalPlanReplacer {
             cte_name: plan.cte_name.clone(),
             cte_output_columns: plan.cte_output_columns.clone(),
             ref_count: plan.ref_count,
+            channel_size: plan.channel_size,
         })))
     }
 

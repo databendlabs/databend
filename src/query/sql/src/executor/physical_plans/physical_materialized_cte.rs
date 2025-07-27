@@ -32,6 +32,7 @@ pub struct MaterializedCTE {
     pub cte_name: String,
     pub cte_output_columns: Option<Vec<ColumnBinding>>,
     pub ref_count: usize,
+    pub channel_size: Option<usize>,
 }
 
 impl MaterializedCTE {
@@ -62,6 +63,7 @@ impl PhysicalPlanBuilder {
             cte_name: materialized_cte.cte_name.clone(),
             cte_output_columns: materialized_cte.cte_output_columns.clone(),
             ref_count: materialized_cte.ref_count,
+            channel_size: materialized_cte.channel_size,
         })))
     }
 }
