@@ -31,11 +31,10 @@ impl PipelineBuilder {
             )?;
         }
         self.main_pipeline.try_resize(1)?;
-        let tx = self
-            .ctx
-            .get_materialized_cte_senders(&cte.cte_name, cte.ref_count);
+        let tx =
+            self.ctx
+                .get_materialized_cte_senders(&cte.cte_name, cte.ref_count, cte.channel_size);
         self.main_pipeline
-            .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))?;
-        Ok(())
+            .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))
     }
 }

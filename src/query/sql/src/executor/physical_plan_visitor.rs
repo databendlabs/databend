@@ -29,7 +29,6 @@ use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
 use crate::executor::physical_plans::AggregatePartial;
 use crate::executor::physical_plans::AsyncFunction;
-use crate::executor::physical_plans::CTEConsumer;
 use crate::executor::physical_plans::ChunkAppendData;
 use crate::executor::physical_plans::ChunkCastSchema;
 use crate::executor::physical_plans::ChunkCommitInsert;
@@ -53,6 +52,7 @@ use crate::executor::physical_plans::ExchangeSource;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
+use crate::executor::physical_plans::MaterializeCTERef;
 use crate::executor::physical_plans::MaterializedCTE;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::MutationSource;
@@ -128,7 +128,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::BroadcastSource(plan) => self.replace_runtime_filter_source(plan),
             PhysicalPlan::BroadcastSink(plan) => self.replace_runtime_filter_sink(plan),
             PhysicalPlan::MaterializedCTE(plan) => self.replace_materialized_cte(plan),
-            PhysicalPlan::CTEConsumer(plan) => self.replace_cte_consumer(plan),
+            PhysicalPlan::MaterializeCTERef(plan) => self.replace_cte_consumer(plan),
             PhysicalPlan::Sequence(plan) => self.replace_sequence(plan),
         }
     }
@@ -659,11 +659,12 @@ pub trait PhysicalPlanReplacer {
             cte_name: plan.cte_name.clone(),
             cte_output_columns: plan.cte_output_columns.clone(),
             ref_count: plan.ref_count,
+            channel_size: plan.channel_size,
         })))
     }
 
-    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
+    fn replace_cte_consumer(&mut self, plan: &MaterializeCTERef) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::MaterializeCTERef(Box::new(plan.clone())))
     }
 
     fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
@@ -699,7 +700,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_)
-                | PhysicalPlan::CTEConsumer(_)
+                | PhysicalPlan::MaterializeCTERef(_)
                 | PhysicalPlan::BroadcastSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);

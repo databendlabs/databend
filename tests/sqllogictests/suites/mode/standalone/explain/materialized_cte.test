@@ -22,10 +22,10 @@ Sequence
     ├── build join filters:
     │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:bloom,inlist,min_max
     ├── estimated rows: 0.00
-    ├── CTEConsumer(Build)
+    ├── MaterializeCTERef(Build)
     │   ├── cte_name: t1
     │   └── cte_schema: [number (#1)]
-    └── CTEConsumer(Probe)
+    └── MaterializeCTERef(Probe)
         ├── cte_name: t1
         └── cte_schema: [number (#0)]
 
@@ -45,7 +45,7 @@ Sequence
 │       └── estimated rows: 10.00
 └── Sequence
     ├── MaterializedCTE: t2
-    │   └── CTEConsumer
+    │   └── MaterializeCTERef
     │       ├── cte_name: t1
     │       └── cte_schema: [number (#2)]
     └── HashJoin
@@ -58,9 +58,9 @@ Sequence
         ├── build join filters:
         │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:bloom,inlist,min_max
         ├── estimated rows: 0.00
-        ├── CTEConsumer(Build)
+        ├── MaterializeCTERef(Build)
         │   ├── cte_name: t2
         │   └── cte_schema: [number (#1)]
-        └── CTEConsumer(Probe)
+        └── MaterializeCTERef(Probe)
             ├── cte_name: t1
             └── cte_schema: [number (#0)]

@@ -113,7 +113,7 @@ impl Rule for RuleGroupingSetsToUnion {
                 let hash = hasher.finish();
                 let temp_cte_name = format!("cte_groupingsets_{hash}");
                 let cte_materialized_sexpr = SExpr::create_unary(
-                    MaterializedCTE::new(temp_cte_name.clone(), None),
+                    MaterializedCTE::new(temp_cte_name.clone(), None, Some(1)),
                     agg_input.clone(),
                 );
 

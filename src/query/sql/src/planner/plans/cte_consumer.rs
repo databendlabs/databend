@@ -31,21 +31,21 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CTEConsumer {
+pub struct MaterializeCTERef {
     pub cte_name: String,
     pub output_columns: Vec<usize>,
     pub def: SExpr,
 }
 
-impl Hash for CTEConsumer {
+impl Hash for MaterializeCTERef {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.cte_name.hash(state);
     }
 }
 
-impl Operator for CTEConsumer {
+impl Operator for MaterializeCTERef {
     fn rel_op(&self) -> RelOp {
-        RelOp::CTEConsumer
+        RelOp::MaterializeCTERef
     }
 
     /// Get arity of this operator

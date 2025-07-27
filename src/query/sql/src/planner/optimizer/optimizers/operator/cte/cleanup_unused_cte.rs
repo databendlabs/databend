@@ -23,24 +23,25 @@ use crate::plans::RelOperator;
 
 /// Optimizer that removes unused CTEs from the query plan.
 /// This optimizer should be applied at the end of the optimization pipeline
-/// to clean up any CTEs that are not referenced by any CTEConsumer.
+/// to clean up any CTEs that are not referenced by any MaterializeCTERef.
 pub struct CleanupUnusedCTEOptimizer;
 
 impl CleanupUnusedCTEOptimizer {
-    /// Collect all CTE names that are referenced by CTEConsumer nodes and count their references
+    /// Collect all CTE names that are referenced by MaterializeCTERef nodes and count their references
     fn collect_referenced_ctes(s_expr: &SExpr) -> Result<HashMap<String, usize>> {
         let mut referenced_ctes = HashMap::new();
         Self::collect_referenced_ctes_recursive(s_expr, &mut referenced_ctes)?;
         Ok(referenced_ctes)
     }
 
-    /// Recursively traverse the expression tree to find CTEConsumer nodes and count references
+    /// Recursively traverse the expression tree to find MaterializeCTERef nodes and count references
+    #[recursive::recursive]
     fn collect_referenced_ctes_recursive(
         s_expr: &SExpr,
         referenced_ctes: &mut HashMap<String, usize>,
     ) -> Result<()> {
-        // Check if current node is a CTEConsumer
-        if let RelOperator::CTEConsumer(consumer) = s_expr.plan() {
+        // Check if current node is a MaterializeCTERef
+        if let RelOperator::MaterializeCTERef(consumer) = s_expr.plan() {
             *referenced_ctes
                 .entry(consumer.cte_name.clone())
                 .or_insert(0) += 1;

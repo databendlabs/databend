@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
-use databend_common_sql::executor::physical_plans::CTEConsumer;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
@@ -27,6 +26,7 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MaterializeCTERef;
 use databend_common_sql::executor::physical_plans::MaterializedCTE;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::executor::physical_plans::RangeJoin;
@@ -164,9 +164,9 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    fn replace_cte_consumer(&mut self, plan: &CTEConsumer) -> Result<PhysicalPlan> {
+    fn replace_cte_consumer(&mut self, plan: &MaterializeCTERef) -> Result<PhysicalPlan> {
         self.state = State::Other;
-        Ok(PhysicalPlan::CTEConsumer(Box::new(plan.clone())))
+        Ok(PhysicalPlan::MaterializeCTERef(Box::new(plan.clone())))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
