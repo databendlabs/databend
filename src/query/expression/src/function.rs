@@ -161,6 +161,7 @@ pub struct FunctionContext {
     pub now: Zoned,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
+    pub enable_selector_executor: bool,
 
     pub openai_api_chat_base_url: String,
     pub openai_api_embedding_base_url: String,
@@ -184,6 +185,7 @@ impl Default for FunctionContext {
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,
+            enable_selector_executor: true,
             openai_api_chat_base_url: "".to_string(),
             openai_api_embedding_base_url: "".to_string(),
             openai_api_key: "".to_string(),
