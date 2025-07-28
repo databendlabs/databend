@@ -215,29 +215,21 @@ impl InputPort {
     pub fn pull_partial_data(&self, limit: &DataBlockLimit) -> Option<Result<DataBlock>> {
         unsafe {
             UpdateTrigger::update_input(&self.update_trigger);
+
             // retrieve data without changing flags to prevent concurrent modifications
-            match self.shared.swap(std::ptr::null_mut(), 0, 0) {
-                address if address.is_null() => None,
-                address => {
-                    let data_block = (*Box::from_raw(address)).0;
-                    if let Ok(data_block) = &data_block {
-                        let total_rows = data_block.num_rows();
-                        let total_bytes = data_block.memory_size();
-                        let rows_to_take = limit.rows_to_take(total_rows, total_bytes);
-                        // dbg!(rows_to_take, total_rows);
-                        // check if we need to split based on either rows or bytes limit
-                        if rows_to_take < total_rows {
-                            let (need, remain) = data_block.split_at(rows_to_take);
-                            let remain_data = Box::into_raw(Box::new(SharedData(Ok(remain))));
-                            // put back the remainder without changing flags
-                            // this keeps HAS_DATA set so we will have next pull to retrieve it
-                            self.shared.swap(remain_data, 0, 0);
-                            return Some(Ok(need));
-                        }
-                    }
-                    // take entire datablock and unset the flags to signal ready for next loop
+            let address = self.shared.swap(std::ptr::null_mut(), 0, 0);
+            if address.is_null() {
+                self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+                return None;
+            }
+
+            let shared_data = Box::from_raw(address);
+            match shared_data.0 {
+                Ok(data_block) => self.handle_data_block_with_limit(data_block, limit),
+                Err(e) => {
+                    // for error cases, unset flags and return the error
                     self.shared.set_flags(0, HAS_DATA | NEED_DATA);
-                    Some(data_block)
+                    Some(Err(e))
                 }
             }
         }
@@ -255,6 +247,40 @@ impl InputPort {
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn set_trigger(&self, update_trigger: *mut UpdateTrigger) {
         self.update_trigger.set_value(update_trigger)
+    }
+
+    /// Process datablock with size limit, potentially splitting it
+    fn handle_data_block_with_limit(
+        &self,
+        data_block: DataBlock,
+        limit: &DataBlockLimit,
+    ) -> Option<Result<DataBlock>> {
+        let total_rows = data_block.num_rows();
+
+        // empty datablock - consume entirely
+        if total_rows == 0 {
+            self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+            return Some(Ok(data_block));
+        }
+
+        let total_bytes = data_block.memory_size();
+        let rows_to_take = limit.rows_to_take(total_rows, total_bytes);
+
+        // no splitting needed - consume entire datablock
+        if rows_to_take >= total_rows {
+            self.shared.set_flags(0, HAS_DATA | NEED_DATA);
+            return Some(Ok(data_block));
+        }
+
+        // split datablock and store remainder
+        let (taken, remainder) = data_block.split_at(rows_to_take);
+        let remainder_ptr = Box::into_raw(Box::new(SharedData(Ok(remainder))));
+
+        // put back the remainder without changing flags
+        // this keeps HAS_DATA set so we will have next pull to retrieve it
+        self.shared.swap(remainder_ptr, 0, 0);
+
+        Some(Ok(taken))
     }
 }
 
