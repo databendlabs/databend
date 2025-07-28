@@ -29,7 +29,6 @@ mod builtin;
 /// - `TryInto<inner::InnerConfig> for config::Config`
 /// - `From<inner::InnerConfig> for config::Config`
 mod config;
-mod env;
 mod global;
 mod inner;
 mod mask;

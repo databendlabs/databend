@@ -59,10 +59,10 @@ use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
+use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 
-use super::env::from_env;
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
 use super::inner::CatalogHiveConfig as InnerCatalogHiveConfig;
@@ -3839,5 +3839,20 @@ mod test {
             setting_default, config_default,
             "default setting is different from default config, please check again"
         )
+    }
+
+    #[test]
+    fn test_env() {
+        unsafe {
+            std::env::set_var("LOG_TRACING_OTLP_ENDPOINT", "http://127.0.2.1:1111");
+            std::env::set_var("LOG_TRACING_CAPTURE_LOG_LEVEL", "DebuG");
+        }
+
+        let cfg = Config::load_with_config_file("").unwrap();
+        assert_eq!(
+            cfg.log.tracing.tracing_otlp.endpoint,
+            "http://127.0.2.1:1111"
+        );
+        assert_eq!(cfg.log.tracing.tracing_capture_log_level, "DebuG");
     }
 }
