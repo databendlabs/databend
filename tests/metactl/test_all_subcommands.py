@@ -28,6 +28,7 @@ from subcommands import cmd_export_from_raft_dir
 from subcommands import cmd_import
 from subcommands import cmd_transfer_leader
 from subcommands import cmd_lua
+from subcommands import cmd_lua_grpc
 
 
 def cleanup_environment():
@@ -61,6 +62,7 @@ def main():
         ("import", cmd_import.main),
         ("transfer_leader", cmd_transfer_leader.main),
         ("lua", cmd_lua.main),
+        ("lua_grpc", cmd_lua_grpc.main),
     ]
 
     # Filter tests based on command line arguments

@@ -10284,11 +10284,15 @@ checksum = "de25fc513588ac1273aa8c6dc0fffee6d32c12f38dc75f5cdc74547121a107ef"
 dependencies = [
  "bstr",
  "either",
+ "erased-serde",
+ "futures-util",
  "mlua-sys",
  "num-traits",
  "parking_lot 0.12.3",
  "rustc-hash 2.1.1",
  "rustversion",
+ "serde",
+ "serde-value",
 ]
 
 [[package]]
@@ -13712,6 +13716,16 @@ checksum = "c68119a0846249fd6f4b38561b4b4727dbc4fd9fea074f1253bca7d50440ce58"
 dependencies = [
  "anyhow",
  "log",
+ "serde",
+]
+
+[[package]]
+name = "serde-value"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3a1a3341211875ef120e117ea7fd5228530ae7e7036a779fdc9117be6b3282c"
+dependencies = [
+ "ordered-float 2.10.1",
  "serde",
 ]
 
