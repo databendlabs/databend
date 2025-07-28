@@ -87,7 +87,9 @@ pub async fn plan_hilbert_sql(
 
     let opt_ctx = OptimizerContext::new(ctx.clone(), metadata)
         .with_settings(&settings)?
-        .set_enable_distributed_optimization(!ctx.get_cluster().is_empty())
+        .set_enable_distributed_optimization(
+            !ctx.get_cluster().is_empty() && !settings.get_enforce_local()?,
+        )
         .clone();
     optimize(opt_ctx, plan).await
 }

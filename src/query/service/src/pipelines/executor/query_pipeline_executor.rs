@@ -19,6 +19,7 @@ use std::time::Instant;
 use databend_common_base::base::tokio;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::error_info::NodeErrorType;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::LimitMemGuard;
 use databend_common_base::runtime::Runtime;
@@ -33,7 +34,6 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
-use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
@@ -266,6 +266,7 @@ impl QueryPipelineExecutor {
         Ok(())
     }
 
+    #[fastrace::trace(name = "QueryPipelineExecutor::init")]
     fn init(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
         unsafe {
             // TODO: the on init callback cannot be killed.
@@ -286,10 +287,8 @@ impl QueryPipelineExecutor {
                     }
                 }
 
-                info!(
-                    "[PIPELINE-EXECUTOR] Pipeline initialized successfully for query {}, elapsed: {:?}",
-                    self.settings.query_id,
-                    instant.elapsed()
+                info!(query_id = self.settings.query_id, elapsed:? = instant.elapsed();
+                    "[PIPELINE-EXECUTOR] Pipeline initialized successfully",
                 );
             }
 
@@ -358,7 +357,7 @@ impl QueryPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent(func_path!())
+            let span = Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
@@ -367,6 +366,12 @@ impl QueryPipelineExecutor {
 
                 // finish the pipeline executor when has error or panic
                 if let Err(cause) = try_result.flatten() {
+                    span.with_property(|| ("error", "true")).add_properties(|| {
+                        [
+                            ("error.type", cause.code().to_string()),
+                            ("error.message", cause.display_text()),
+                        ]
+                    });
                     this.finish(Some(cause));
                 }
 
@@ -444,6 +449,10 @@ impl QueryPipelineExecutor {
                 .fetch_profiling(Some(self.settings.executor_node_id.clone())),
             false => self.graph.fetch_profiling(None),
         }
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        self.graph.get_query_execution_stats()
     }
 }
 

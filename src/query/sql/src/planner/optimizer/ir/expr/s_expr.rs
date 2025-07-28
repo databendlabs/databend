@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -227,6 +228,21 @@ impl SExpr {
             })
         }
         Ok(udfs)
+    }
+
+    #[recursive::recursive]
+    pub fn get_udfs_col_ids(&self) -> Result<BTreeSet<IndexType>> {
+        let mut udf_ids = BTreeSet::new();
+        if let RelOperator::Udf(udf) = self.plan.as_ref() {
+            for item in udf.items.iter() {
+                udf_ids.insert(item.index);
+            }
+        }
+        for child in &self.children {
+            let udfs = child.get_udfs_col_ids()?;
+            udf_ids.extend(udfs);
+        }
+        Ok(udf_ids)
     }
 
     // Add column index to Scan nodes that match the given table index

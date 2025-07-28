@@ -140,7 +140,7 @@ impl DBBuilder {
         lm.freeze_writable();
 
         let mut compacter = lm.acquire_compactor().await;
-        let (sys_data, strm) = compacter.compact().await?;
+        let (sys_data, strm) = compacter.compact_into_stream().await?;
 
         self.append_kv_stream(strm).await?;
 

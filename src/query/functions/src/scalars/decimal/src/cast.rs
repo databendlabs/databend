@@ -811,7 +811,7 @@ where
         Ordering::Equal => vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
             |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| {
                 if x <= max && x >= min {
-                    builder.push(C::compute(&x));
+                    builder.push(C::compute(x));
                 } else {
                     ctx.set_error(
                         builder.len(),
@@ -827,7 +827,7 @@ where
             vectorize_with_builder_1_arg::<DecimalType<F>, DecimalType<T>>(
                 |x: F, builder: &mut Vec<T>, ctx: &mut EvalContext| match x.checked_mul(factor) {
                     Some(x) if x <= max && x >= min => {
-                        builder.push(C::compute(&x));
+                        builder.push(C::compute(x));
                     }
                     _ => {
                         ctx.set_error(
@@ -854,7 +854,7 @@ where
                     scale_diff,
                     ctx.func_ctx.rounding_mode,
                 ) {
-                    Some(y) => builder.push(C::compute(&y)),
+                    Some(y) => builder.push(C::compute(y)),
                     None => {
                         ctx.set_error(
                             builder.len(),

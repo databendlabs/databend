@@ -398,6 +398,8 @@ const fn binary_affix(op: &BinaryOperator) -> Affix {
         BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
         BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
         BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
+        BinaryOperator::CosineDistance => Affix::Infix(Precedence(22), Associativity::Left),
+        BinaryOperator::L1Distance => Affix::Infix(Precedence(22), Associativity::Left),
         BinaryOperator::L2Distance => Affix::Infix(Precedence(22), Associativity::Left),
         BinaryOperator::BitwiseShiftLeft => Affix::Infix(Precedence(23), Associativity::Left),
         BinaryOperator::BitwiseShiftRight => Affix::Infix(Precedence(23), Associativity::Left),
@@ -1541,6 +1543,8 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::Div, rule! { DIV }),
             value(BinaryOperator::Modulo, rule! { "%" }),
             value(BinaryOperator::StringConcat, rule! { "||" }),
+            value(BinaryOperator::CosineDistance, rule! { "<=>" }),
+            value(BinaryOperator::L1Distance, rule! { "<+>" }),
             value(BinaryOperator::L2Distance, rule! { "<->" }),
             value(BinaryOperator::Gt, rule! { ">" }),
             value(BinaryOperator::Lt, rule! { "<" }),
@@ -2236,62 +2240,117 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
             window: Option<WindowDesc>,
         },
     }
-    let function_call_with_lambda_body = map(
+    let function_call_body = map_res(
         rule! {
-            "(" ~ #subexpr(0) ~ "," ~ #lambda_params ~ "->" ~ #subexpr(0) ~ ")"
-        },
-        |(_, arg, _, params, _, expr, _)| FunctionCallSuffix::Lambda {
-            arg,
-            params,
-            expr: Box::new(expr),
-        },
-    );
-    let function_call_with_within_group_window_body = map(
-        rule! {
-            "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            "(" ~ DISTINCT? ~ #subexpr(0)? ~ ","? ~ (#lambda_params ~ "->" ~ #subexpr(0))? ~ #comma_separated_list1(subexpr(0))? ~ ")"
+            ~ ("(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")")?
             ~ #within_group?
             ~ #window_function?
         },
-        |(_, opt_distinct, opt_args, _, order_by, window)| match (order_by, window) {
-            (Some(order_by), window) => FunctionCallSuffix::WithInGroupWindow {
-                distinct: opt_distinct.is_some(),
-                args: opt_args.unwrap_or_default(),
+        |(
+            _,
+            opt_distinct_0,
+            first_param,
+            _,
+            opt_lambda,
+            params_0,
+            _,
+            params_1,
+            order_by,
+            window,
+        )| {
+            match (
+                first_param,
+                opt_lambda,
+                opt_distinct_0,
+                params_0,
+                params_1,
                 order_by,
                 window,
-            },
-            (None, Some(window)) => FunctionCallSuffix::Window {
-                distinct: opt_distinct.is_some(),
-                args: opt_args.unwrap_or_default(),
-                window,
-            },
-            (None, None) => FunctionCallSuffix::Simple {
-                distinct: opt_distinct.is_some(),
-                args: opt_args.unwrap_or_default(),
-            },
-        },
-    );
-    let function_call_with_params_window_body = map(
-        rule! {
-            "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #window_function?
-        },
-        |(_, params, _, _, opt_distinct, opt_args, _, window)| FunctionCallSuffix::ParamsWindow {
-            distinct: opt_distinct.is_some(),
-            params,
-            args: opt_args.unwrap_or_default(),
-            window,
+            ) {
+                (
+                    Some(first_param),
+                    Some((lambda_params, _, arg_1)),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                ) => Ok(FunctionCallSuffix::Lambda {
+                    arg: first_param,
+                    params: lambda_params,
+                    expr: Box::new(arg_1),
+                }),
+                (
+                    Some(first_param),
+                    None,
+                    None,
+                    params_0,
+                    Some((_, opt_distinct_1, params_1, _)),
+                    None,
+                    window,
+                ) => {
+                    let params = params_0
+                        .map(|mut params| {
+                            params.insert(0, first_param.clone());
+                            params
+                        })
+                        .unwrap_or_else(|| vec![first_param]);
+
+                    Ok(FunctionCallSuffix::ParamsWindow {
+                        distinct: opt_distinct_1.is_some(),
+                        params,
+                        args: params_1.unwrap_or_default(),
+                        window,
+                    })
+                }
+                (first_param, None, opt_distinct, params, None, Some(order_by), window) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::WithInGroupWindow {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                        order_by,
+                        window,
+                    })
+                }
+                (first_param, None, opt_distinct, params, None, None, Some(window)) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::Window {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                        window,
+                    })
+                }
+                (first_param, None, opt_distinct, params, None, None, None) => {
+                    let mut args = params.unwrap_or_default();
+                    if let Some(first_param) = first_param {
+                        args.insert(0, first_param)
+                    }
+
+                    Ok(FunctionCallSuffix::Simple {
+                        distinct: opt_distinct.is_some(),
+                        args,
+                    })
+                }
+                _ => Err(nom::Err::Error(ErrorKind::Other(
+                    "Unsupported function format",
+                ))),
+            }
         },
     );
 
     map(
         rule!(
             #function_name
-            ~ (
-                    #function_call_with_lambda_body : "`function(..., x -> ...)`"
-                    | #function_call_with_params_window_body : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                    | #function_call_with_within_group_window_body : "`function(...) [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
-                )
+            ~ #function_call_body : "`function(... [ , x -> ... ] ) [ (...) ] [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] [ OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ]) ]`"
         ),
         |(name, suffix)| match suffix {
             FunctionCallSuffix::Simple { distinct, args } => ExprElement::FunctionCall {

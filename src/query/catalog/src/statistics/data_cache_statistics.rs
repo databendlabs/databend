@@ -24,7 +24,7 @@ pub struct DataCacheMetrics {
     bytes_from_memory: AtomicUsize,
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct DataCacheMetricValues {
     pub bytes_from_remote_disk: usize,
     pub bytes_from_local_disk: usize,

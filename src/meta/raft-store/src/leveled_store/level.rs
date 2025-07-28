@@ -24,14 +24,14 @@ use map_api::map_api_ro::MapApiRO;
 use map_api::map_key::MapKey;
 use map_api::BeforeAfter;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::SeqMarkedOf;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 /// A single level of state machine data.
 ///

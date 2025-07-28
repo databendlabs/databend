@@ -38,6 +38,7 @@ impl PipelineBuilder {
                 column_mutation.field_id_to_schema_index.clone(),
                 column_mutation.input_num_columns,
                 column_mutation.has_filter_column,
+                column_mutation.udf_col_num,
             )?;
         }
 
@@ -79,6 +80,7 @@ impl PipelineBuilder {
         mut field_id_to_schema_index: HashMap<usize, usize>,
         num_input_columns: usize,
         has_filter_column: bool,
+        udf_col_num: usize,
     ) -> Result<()> {
         let mut block_operators = Vec::new();
         let mut next_column_offset = num_input_columns;
@@ -129,7 +131,7 @@ impl PipelineBuilder {
         }
 
         // Keep the original order of the columns.
-        let num_output_columns = num_input_columns - has_filter_column as usize;
+        let num_output_columns = num_input_columns - has_filter_column as usize - udf_col_num;
         let mut projection = Vec::with_capacity(num_output_columns);
         for idx in 0..num_output_columns {
             if let Some(index) = schema_offset_to_new_offset.get(&idx) {

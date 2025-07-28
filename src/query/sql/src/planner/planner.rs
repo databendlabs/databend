@@ -278,7 +278,9 @@ impl Planner {
         let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
             .with_settings(&settings)?
             .set_enable_distributed_optimization(
-                !force_disable_distributed_optimization && !self.ctx.get_cluster().is_empty(),
+                !force_disable_distributed_optimization
+                    && !self.ctx.get_cluster().is_empty()
+                    && !settings.get_enforce_local()?,
             )
             .set_sample_executor(self.query_executor.clone())
             .clone();

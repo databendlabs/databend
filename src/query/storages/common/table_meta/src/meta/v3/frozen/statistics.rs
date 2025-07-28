@@ -42,6 +42,11 @@ impl From<Statistics> for crate::meta::Statistics {
             uncompressed_byte_size: value.uncompressed_byte_size,
             compressed_byte_size: value.compressed_byte_size,
             index_size: value.index_size,
+            bloom_index_size: None,
+            ngram_index_size: None,
+            inverted_index_size: None,
+            vector_index_size: None,
+            virtual_column_size: None,
             col_stats: value
                 .col_stats
                 .into_iter()

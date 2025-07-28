@@ -61,7 +61,7 @@ statement ok
 SHOW INDEXES
 
 query TTT
-SELECT name, type, definition FROM system.indexes
+SELECT name, type, definition FROM system.indexes WHERE type = 'AGGREGATING'
 ----
 idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b
 idx2 AGGREGATING SELECT b FROM test_index_db.t1 WHERE a < 10
@@ -71,7 +71,7 @@ statement ok
 DROP AGGREGATING INDEX idx2
 
 query TTT
-SELECT name, type, definition FROM system.indexes
+SELECT name, type, definition FROM system.indexes WHERE type = 'AGGREGATING'
 ----
 idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b
 idx3 AGGREGATING SELECT COUNT(), COUNT(b), MAX(a), SUM(b) FROM test_index_db.t2
@@ -148,3 +148,10 @@ idx1 INVERTED test_show_indexes_0 t1
 idx2 NGRAM test_show_indexes_0 t1
 idx1 INVERTED test_show_indexes_1 t1
 idx2 NGRAM test_show_indexes_1 t1
+
+statement ok
+DROP DATABASE test_show_indexes_0
+
+statement ok
+DROP DATABASE test_show_indexes_1
+

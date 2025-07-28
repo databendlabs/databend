@@ -3265,7 +3265,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-storage",
  "databend-common-tracing",
- "databend-common-version",
  "log",
  "pretty_assertions",
  "serde",
@@ -3581,6 +3580,10 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
+ "chrono",
+ "chrono-tz 0.8.6",
+ "cron",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-expression",
@@ -3599,9 +3602,11 @@ dependencies = [
  "futures",
  "log",
  "prost",
+ "seq-marked",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -3629,6 +3634,7 @@ dependencies = [
  "maplit",
  "prost",
  "rand 0.8.5",
+ "seq-marked",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -3789,6 +3795,7 @@ dependencies = [
  "display-more",
  "fastrace",
  "log",
+ "state-machine-api",
  "tokio",
 ]
 
@@ -3819,8 +3826,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bincode 2.0.1",
- "byteorder",
- "chrono",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-grpc",
@@ -3851,6 +3856,7 @@ dependencies = [
  "seq-marked",
  "serde",
  "serde_json",
+ "state-machine-api",
  "stream-more",
  "strum 0.24.1",
  "strum_macros 0.24.3",
@@ -3874,6 +3880,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "pretty_assertions",
+ "seq-marked",
  "thiserror 1.0.69",
  "tokio",
  "tonic",
@@ -3884,6 +3891,7 @@ name = "databend-common-meta-sled-store"
 version = "0.1.0"
 dependencies = [
  "anyerror",
+ "anyhow",
  "byteorder",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
@@ -3893,6 +3901,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sled",
+ "state-machine-api",
  "tempfile",
  "thiserror 1.0.69",
 ]
@@ -3953,6 +3962,7 @@ dependencies = [
  "rotbl",
  "serde",
  "serde_json",
+ "state-machine-api",
  "thiserror 1.0.69",
  "tonic",
  "tonic-build",
@@ -4086,6 +4096,7 @@ dependencies = [
  "databend-common-protos",
  "enumflags2",
  "fastrace",
+ "log",
  "maplit",
  "num",
  "pretty_assertions",
@@ -4514,6 +4525,7 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "futures-util",
+ "jiff 0.2.13",
  "log",
  "opendal",
  "orc-rust",
@@ -5158,6 +5170,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
+ "state-machine-api",
  "temp-env",
  "tempfile",
  "test-harness",
@@ -5231,6 +5244,7 @@ dependencies = [
  "chrono",
  "chrono-tz 0.8.6",
  "concurrent-queue",
+ "cron",
  "ctor",
  "dashmap 6.1.0",
  "databend-common-ast",
@@ -5366,6 +5380,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tokio-util",
  "toml 0.8.22",
  "tonic",
  "tower 0.5.2",
@@ -5570,12 +5585,14 @@ dependencies = [
 name = "databend-storages-common-stage"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "databend-common-ast",
  "databend-common-catalog",
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-functions",
  "databend-common-meta-app",
+ "jiff 0.2.13",
  "serde",
  "typetag",
 ]
@@ -10028,8 +10045,8 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.2.6"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.6#015e10b3d22a0bf217ddc31f98b76a864ae60a4e"
+version = "0.2.7"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.2.7#f9b7ee4594f39e9e54e5afca9160e0bbb19d96aa"
 dependencies = [
  "async-trait",
  "deepsize",
@@ -13072,9 +13089,9 @@ checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
 name = "rotbl"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f6e7717a92f1a74cd17a166a7e3972016b306dfea7d43186728d982838c5f32"
+checksum = "068a45a83c2ce7d6bdad6ba83719ff08ba9818d210b613af13647ea33ab7d23c"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
@@ -14448,6 +14465,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b8c4a4445d81357df8b1a650d0d0d6fbbbfe99d064aa5e02f3e4022061476d8"
 dependencies = [
  "loom 0.5.6",
+]
+
+[[package]]
+name = "state-machine-api"
+version = "0.1.0"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.0#3c4eb15cb42620f7cdaf331b0fd0a75c6a31f498"
+dependencies = [
+ "display-more",
+ "map-api",
+ "serde",
 ]
 
 [[package]]

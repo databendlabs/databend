@@ -24,8 +24,7 @@ use databend_common_meta_types::protobuf::FetchAddU64;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::txn_op::Request;
 use databend_common_meta_types::AppliedState;
@@ -36,6 +35,7 @@ use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::Interval;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnCondition;
 use databend_common_meta_types::TxnDeleteByPrefixRequest;
 use databend_common_meta_types::TxnDeleteByPrefixResponse;
@@ -59,13 +59,14 @@ use log::error;
 use log::info;
 use log::warn;
 use num::FromPrimitive;
+use seq_marked::SeqValue;
+use state_machine_api::StateMachineApi;
 
-use crate::state_machine_api::StateMachineApi;
 use crate::state_machine_api_ext::StateMachineApiExt;
 
 /// A helper that applies raft log `Entry` to the state machine.
 pub struct Applier<'a, SM>
-where SM: StateMachineApi + 'static
+where SM: StateMachineApi<SysData> + 'static
 {
     sm: &'a mut SM,
 
@@ -78,7 +79,7 @@ where SM: StateMachineApi + 'static
 }
 
 impl<'a, SM> Applier<'a, SM>
-where SM: StateMachineApi + 'static
+where SM: StateMachineApi<SysData> + 'static
 {
     pub fn new(sm: &'a mut SM) -> Self {
         Self {
@@ -88,7 +89,7 @@ where SM: StateMachineApi + 'static
         }
     }
 
-    /// Apply an log entry to state machine.
+    /// Apply a log entry to state machine.
     ///
     /// And publish kv change events to subscriber.
     #[fastrace::trace]
@@ -116,7 +117,6 @@ where SM: StateMachineApi + 'static
             }
             EntryPayload::Normal(ref data) => {
                 info!("apply: normal: {} {}", log_id, data);
-                assert!(data.txid.is_none(), "txid is disabled");
 
                 self.apply_cmd(&data.cmd).await?
             }

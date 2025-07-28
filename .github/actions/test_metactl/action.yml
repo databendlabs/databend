@@ -16,4 +16,5 @@ runs:
       shell: bash
       run: |
         python -m pip install -r ./tests/metactl/requirements.txt
+        python ./tests/metactl/test_all_subcommands.py
         python ./tests/metactl/test-metactl-restore-new-cluster.py

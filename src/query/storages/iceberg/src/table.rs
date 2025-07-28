@@ -320,7 +320,7 @@ impl IcebergTable {
             let data_schema = Arc::new(data_schema);
             pipeline.add_source(
                 |output| {
-                    ORCSource::try_create(
+                    ORCSource::try_create_with_schema(
                         output,
                         ctx.clone(),
                         Arc::new(op.clone()),
@@ -333,7 +333,12 @@ impl IcebergTable {
             )?;
             pipeline.try_resize(max_threads)?;
             pipeline.add_accumulating_transformer(|| {
-                StripeDecoder::new(ctx.clone(), data_schema.clone(), arrow_schema.clone())
+                StripeDecoder::new(
+                    ctx.clone(),
+                    data_schema.clone(),
+                    arrow_schema.clone(),
+                    vec![],
+                )
             });
         } else {
             let arrow_schema: Schema = table_schema.as_ref().into();

@@ -15,7 +15,6 @@
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
@@ -25,14 +24,15 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v003::sm_v003::SMV003;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 #[tokio::test]
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
@@ -149,7 +149,7 @@ async fn test_compact_3_level() -> anyhow::Result<()> {
 
     let mut compactor = lm.acquire_compactor().await;
 
-    let (sys_data, strm) = compactor.compact().await?;
+    let (sys_data, strm) = compactor.compact_into_stream().await?;
     assert_eq!(
         r#"{"last_applied":{"leader_id":{"term":3,"node_id":3},"index":3},"last_membership":{"log_id":{"leader_id":{"term":3,"node_id":3},"index":3},"membership":{"configs":[],"nodes":{}}},"nodes":{"3":{"name":"3","endpoint":{"addr":"3","port":3},"grpc_api_advertise_address":null}},"sequence":7}"#,
         serde_json::to_string(&sys_data).unwrap()
@@ -176,7 +176,7 @@ async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
 
     let mut compactor = sm.acquire_compactor().await;
 
-    let (sys_data, strm) = compactor.compact().await?;
+    let (sys_data, strm) = compactor.compact_into_stream().await?;
     let got = strm
         .map_ok(|x| serde_json::to_string(&x).unwrap())
         .try_collect::<Vec<_>>()

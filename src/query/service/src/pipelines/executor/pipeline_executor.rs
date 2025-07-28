@@ -20,6 +20,7 @@ use std::time::Instant;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -146,6 +147,7 @@ impl PipelineExecutor {
         }
     }
 
+    #[fastrace::trace(name = "PipelineExecutor::init")]
     fn init(on_init_callback: &Mutex<Option<InitCallback>>, query_id: &Arc<String>) -> Result<()> {
         // TODO: the on init callback cannot be killed.
         {
@@ -158,10 +160,8 @@ impl PipelineExecutor {
                 }
             }
 
-            info!(
-                "[PIPELINE-EXECUTOR] Pipeline initialized successfully for query {}, elapsed: {:?}",
-                query_id,
-                instant.elapsed()
+            info!(query_id, elapsed:? = instant.elapsed();
+                "[PIPELINE-EXECUTOR] Pipeline initialized successfully",
             );
         }
         Ok(())
@@ -293,6 +293,17 @@ impl PipelineExecutor {
             }
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
                 query_wrapper.graph.change_priority(priority as u64);
+            }
+        }
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => {
+                executor.get_query_execution_stats()
+            }
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.get_query_execution_stats()
             }
         }
     }

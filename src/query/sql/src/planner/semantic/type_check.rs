@@ -4438,10 +4438,11 @@ impl<'a> TypeChecker<'a> {
                     ..
                 })] => {
                     let col_data_type = data_type.remove_nullable();
+                    let target_type = target_type.remove_nullable();
                     if table_index.is_some()
                         && matches!(col_data_type, DataType::Vector(_))
                         && matches!(&**argument, ScalarExpr::ConstantExpr(_))
-                        && matches!(&**target_type, DataType::Vector(_))
+                        && matches!(&target_type, DataType::Vector(_))
                         && LicenseManagerSwitch::instance()
                             .check_enterprise_enabled(
                                 self.ctx.get_license_key(),
@@ -4514,6 +4515,7 @@ impl<'a> TypeChecker<'a> {
                                 let Scalar::Array(arg_col) = arg.value else {
                                     return None;
                                 };
+                                let arg_col = arg_col.remove_nullable();
 
                                 let col_vector_type = col_data_type.as_vector().unwrap();
                                 let col_dimension = col_vector_type.dimension() as usize;
@@ -5211,7 +5213,7 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let sequence_name = if let Expr::ColumnRef { column, .. } = arguments[0] {
+        let (sequence_name, display_name) = if let Expr::ColumnRef { column, .. } = arguments[0] {
             if column.database.is_some() || column.table.is_some() {
                 return Err(ErrorCode::SemanticError(
                     "nextval function argument identifier should only contain one part".to_string(),
@@ -5219,7 +5221,10 @@ impl<'a> TypeChecker<'a> {
                 .set_span(span));
             }
             match &column.column {
-                ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
+                ColumnID::Name(ident) => {
+                    let ident = normalize_identifier(ident, self.name_resolution_ctx);
+                    (ident.name.to_string(), format!("{}({})", func_name, ident))
+                }
                 ColumnID::Position(pos) => {
                     return Err(ErrorCode::SemanticError(format!(
                         "nextval function argument don't support identifier {}",
@@ -5243,7 +5248,6 @@ impl<'a> TypeChecker<'a> {
 
         databend_common_base::runtime::block_on(catalog.get_sequence(req))?;
 
-        let display_name = format!("{}({})", func_name, sequence_name);
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
 

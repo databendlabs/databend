@@ -44,6 +44,7 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }
+cron = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
@@ -170,6 +171,7 @@ sysinfo = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
+tokio-util = { workspace = true }
 toml = { workspace = true, features = ["parse"] }
 tonic = { workspace = true }
 typetag = { workspace = true }

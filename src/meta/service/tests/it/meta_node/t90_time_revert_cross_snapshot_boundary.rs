@@ -52,7 +52,6 @@ async fn test_meta_node_log_time_revert_cross_snapshot_boundary() -> anyhow::Res
 
     // Log with later timestamp (T+180s) - will be included in snapshot
     let log_later = LogEntry {
-        txid: None,
         time_ms: Some(now_ms + 180_000),
         cmd: Cmd::Transaction(TxnRequest::new(vec![], vec![TxnOp::put(
             "k1",
@@ -62,7 +61,6 @@ async fn test_meta_node_log_time_revert_cross_snapshot_boundary() -> anyhow::Res
 
     // Log with earlier timestamp (T+60s) but expires at T+120s - not in snapshot
     let log_earlier = LogEntry {
-        txid: None,
         time_ms: Some(now_ms + 60_000),
         cmd: Cmd::Transaction(TxnRequest::new(vec![], vec![TxnOp::put(
             "k1",

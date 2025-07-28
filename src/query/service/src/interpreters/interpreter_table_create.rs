@@ -74,7 +74,6 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
-use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::InsertInterpreter;
@@ -283,7 +282,6 @@ impl CreateTableInterpreter {
         pipeline
             .main_pipeline
             .set_on_finished(always_callback(move |_: &ExecutionInfo| {
-                hook_clear_m_cte_temp_table(&query_ctx)?;
                 hook_vacuum_temp_files(&query_ctx)?;
                 hook_disk_temp_dir(&query_ctx)?;
                 Ok(())
@@ -359,6 +357,11 @@ impl CreateTableInterpreter {
                     data_bytes: snapshot.summary.uncompressed_byte_size,
                     compressed_data_bytes: snapshot.summary.compressed_byte_size,
                     index_data_bytes: snapshot.summary.index_size,
+                    bloom_index_size: snapshot.summary.bloom_index_size,
+                    ngram_index_size: snapshot.summary.ngram_index_size,
+                    inverted_index_size: snapshot.summary.inverted_index_size,
+                    vector_index_size: snapshot.summary.vector_index_size,
+                    virtual_column_size: snapshot.summary.virtual_column_size,
                     number_of_segments: Some(snapshot.segments.len() as u64),
                     number_of_blocks: Some(snapshot.summary.block_count),
                 });

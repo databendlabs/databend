@@ -803,7 +803,9 @@ pub enum TokenKind {
     SECONDARY,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
-    /// L2DISTANCE op, from https://github.com/pgvector/pgvector
+    /// L1DISTANCE and L2DISTANCE op, from https://github.com/pgvector/pgvector
+    #[token("<+>")]
+    L1DISTANCE,
     #[token("<->")]
     L2DISTANCE,
     #[token("LEADING", ignore(ascii_case))]
@@ -1136,6 +1138,8 @@ pub enum TokenKind {
     SYNTAX,
     #[token("USAGE", ignore(ascii_case))]
     USAGE,
+    #[token("ACCESS", ignore(ascii_case))]
+    ACCESS,
     #[token("USE_LOGIC_TYPE", ignore(ascii_case))]
     USE_LOGIC_TYPE,
     #[token("USE_RAW_PATH", ignore(ascii_case))]
@@ -1535,6 +1539,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | L1DISTANCE
                 | L2DISTANCE
                 | Placeholder
                 | QuestionOr

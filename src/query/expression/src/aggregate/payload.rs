@@ -421,11 +421,15 @@ impl Payload {
         true
     }
 
-    pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
-        let fake_rows = fake_rows.unwrap_or(0);
-        let entries = (0..self.aggrs.len())
-            .map(|_| {
-                ColumnBuilder::repeat_default(&DataType::Binary, fake_rows)
+    pub fn empty_block(&self, fake_rows: usize) -> DataBlock {
+        assert_eq!(self.aggrs.is_empty(), self.states_layout.is_none());
+        let entries = self
+            .states_layout
+            .as_ref()
+            .iter()
+            .flat_map(|layout| layout.serialize_type.iter())
+            .map(|serde_type| {
+                ColumnBuilder::repeat_default(&serde_type.data_type(), fake_rows)
                     .build()
                     .into()
             })

@@ -17,7 +17,6 @@ use std::io;
 use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
-use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
@@ -27,6 +26,9 @@ use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 use seq_marked::SeqMarked;
+use state_machine_api::ExpireKey;
+use state_machine_api::KVMeta;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
@@ -35,8 +37,6 @@ use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::leveled_store::MapView;
 use crate::sm_v003::sm_v003::SMV003;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn test_leveled_query_with_db() -> anyhow::Result<()> {
@@ -269,7 +269,7 @@ async fn test_compact_output_3_level() -> anyhow::Result<()> {
 
     let mut compactor = lm.acquire_compactor().await;
 
-    let (sys_data, strm) = compactor.compact().await?;
+    let (sys_data, strm) = compactor.compact_into_stream().await?;
 
     assert_eq!(sys_data.curr_seq(), 7);
     assert_eq!(

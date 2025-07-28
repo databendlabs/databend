@@ -23,11 +23,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::PoisonError;
+use std::time::SystemTime;
 
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_base::runtime::ExecutorStats;
+use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::QueryTimeSeriesProfileBuilder;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TimeSeriesProfiles;
@@ -40,6 +43,7 @@ use databend_common_pipeline_core::processors::EventCause;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_storages_system::QueryExecutionStatsQueue;
 use fastrace::prelude::*;
 use log::debug;
 use log::trace;
@@ -178,6 +182,7 @@ struct ExecutingGraph {
     finished_notify: Arc<WatchNotify>,
     finish_condvar_notify: Option<Arc<(Mutex<bool>, Condvar)>>,
     finished_error: Mutex<Option<ErrorCode>>,
+    executor_stats: ExecutorStats,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -193,6 +198,7 @@ impl ExecutingGraph {
         let mut time_series_profile_builder =
             QueryTimeSeriesProfileBuilder::new(query_id.to_string());
         Self::init_graph(&mut pipeline, &mut graph, &mut time_series_profile_builder);
+        let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             graph,
             finished_nodes: AtomicUsize::new(0),
@@ -203,6 +209,7 @@ impl ExecutingGraph {
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
+            executor_stats,
         })
     }
 
@@ -218,7 +225,7 @@ impl ExecutingGraph {
         for pipeline in &mut pipelines {
             Self::init_graph(pipeline, &mut graph, &mut time_series_profile_builder);
         }
-
+        let executor_stats = ExecutorStats::new();
         Ok(ExecutingGraph {
             finished_nodes: AtomicUsize::new(0),
             graph,
@@ -229,6 +236,7 @@ impl ExecutingGraph {
             finished_notify: Arc::new(WatchNotify::new()),
             finish_condvar_notify,
             finished_error: Mutex::new(None),
+            executor_stats,
         })
     }
 
@@ -383,18 +391,19 @@ impl ExecutingGraph {
 
             if let Some(schedule_index) = need_schedule_nodes.pop_front() {
                 let node = &locker.graph[schedule_index];
-
-                let event = {
-                    let guard = ThreadTracker::tracking(node.tracking_payload.clone());
+                let (event, process_rows) = {
+                    let mut payload = node.tracking_payload.clone();
+                    payload.process_rows = AtomicUsize::new(0);
+                    let guard = ThreadTracker::tracking(payload);
 
                     if state_guard_cache.is_none() {
                         state_guard_cache = Some(node.state.lock().unwrap());
                     }
 
                     let event = node.processor.event(event_cause)?;
-
+                    let process_rows = ThreadTracker::process_rows();
                     match guard.flush() {
-                        Ok(_) => Ok(event),
+                        Ok(_) => Ok((event, process_rows)),
                         Err(out_of_limit) => {
                             Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
                         }
@@ -420,6 +429,7 @@ impl ExecutingGraph {
                         schedule_queue.push_sync(ProcessorWrapper {
                             processor: node.processor.clone(),
                             graph: graph.clone(),
+                            process_rows,
                         });
                         State::Processing
                     }
@@ -427,6 +437,7 @@ impl ExecutingGraph {
                         schedule_queue.push_async(ProcessorWrapper {
                             processor: node.processor.clone(),
                             graph: graph.clone(),
+                            process_rows,
                         });
                         State::Processing
                     }
@@ -481,6 +492,7 @@ impl ExecutingGraph {
 pub struct ProcessorWrapper {
     pub processor: ProcessorPtr,
     pub graph: Arc<RunningGraph>,
+    pub process_rows: usize,
 }
 
 pub struct ScheduleQueue {
@@ -616,37 +628,25 @@ impl ScheduleQueue {
             }
         }
 
-        if !self.sync_queue.is_empty() {
-            while let Some(processor) = self.sync_queue.pop_front() {
-                if processor
-                    .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
-                {
-                    context.set_task(ExecutorTask::Sync(processor));
-                    break;
-                } else {
-                    let mut tasks = VecDeque::with_capacity(1);
-                    tasks.push_back(ExecutorTask::Sync(processor));
-                    global.push_tasks(context.get_worker_id(), None, tasks);
-                }
+        let mut tasks_to_global = VecDeque::with_capacity(self.sync_queue.len());
+
+        if let Some(processor) = self.sync_queue.pop_front() {
+            if processor
+                .graph
+                .can_perform_task(executor.epoch.load(Ordering::SeqCst))
+            {
+                context.set_task(ExecutorTask::Sync(processor));
+            } else {
+                tasks_to_global.push_back(ExecutorTask::Sync(processor));
             }
         }
 
-        if !self.sync_queue.is_empty() {
-            let mut current_tasks = VecDeque::with_capacity(self.sync_queue.len());
-            let mut next_tasks = VecDeque::with_capacity(self.sync_queue.len());
-            while let Some(processor) = self.sync_queue.pop_front() {
-                if processor
-                    .graph
-                    .can_perform_task(executor.epoch.load(Ordering::SeqCst))
-                {
-                    current_tasks.push_back(ExecutorTask::Sync(processor));
-                } else {
-                    next_tasks.push_back(ExecutorTask::Sync(processor));
-                }
-            }
-            let worker_id = context.get_worker_id();
-            global.push_tasks(worker_id, Some(current_tasks), next_tasks);
+        // Add remaining tasks from sync queue to global queue
+        while let Some(processor) = self.sync_queue.pop_front() {
+            tasks_to_global.push_back(ExecutorTask::Sync(processor));
+        }
+        if !tasks_to_global.is_empty() {
+            global.push_tasks(context.get_worker_id(), None, tasks_to_global);
         }
     }
 
@@ -973,6 +973,25 @@ impl RunningGraph {
     /// Change the priority
     pub fn change_priority(&self, priority: u64) {
         self.0.max_points.store(priority, Ordering::SeqCst);
+    }
+
+    pub fn record_process(&self, begin: SystemTime, elapsed_micros: usize, rows: usize) {
+        self.0
+            .executor_stats
+            .record_process(begin, elapsed_micros, rows);
+    }
+
+    pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
+        self.0.executor_stats.dump_snapshot()
+    }
+}
+
+impl Drop for RunningGraph {
+    fn drop(&mut self) {
+        let execution_stats = self.get_query_execution_stats();
+        if let Ok(queue) = QueryExecutionStatsQueue::instance() {
+            let _ = queue.append_data((self.get_query_id().to_string(), execution_stats));
+        }
     }
 }
 

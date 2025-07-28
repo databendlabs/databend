@@ -77,6 +77,27 @@ INSERT INTO t VALUES
 (15, [0.13230447, 0.630588, 0.10812326, 0.21558228, 0.83768057, 0.48870546, 0.65021806, 0.31626541]),
 (16, [0.2667851, 0.01529589, 0.98994706, 0.31870983, 0.31783372, 0.34863699, 0.30254189, 0.84441678])
 
+query TB
+select name, vector_index_size > 13000 from system.tables where name='t' and database='test_vector_index';
+----
+t 1
+
+query IIB
+select block_count, row_count, vector_index_size > 3000 from fuse_segment('test_vector_index', 't');
+----
+1 4 1
+1 4 1
+1 4 1
+1 4 1
+
+query IIB
+select block_count, row_count, vector_index_size is not null from fuse_snapshot('test_vector_index', 't');
+----
+4 16 1
+3 12 1
+2 8 1
+1 4 1
+
 statement ok
 CREATE TABLE IF NOT EXISTS t1(id Int, embedding Vector(8)) Engine = Fuse
 

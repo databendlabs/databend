@@ -1,65 +1,66 @@
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
-HashJoin
-├── output columns: [t1.a (#0)]
-├── join type: INNER
-├── build keys: [t2.b (#1)]
-├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
-├── filters: []
-├── build join filters:
-│   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
-├── estimated rows: 100.00
-├── TableScan(Build)
-│   ├── table: default.default.t1
-│   ├── output columns: [a (#1)]
-│   ├── read rows: 10
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 10.00
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [a (#0)]
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 10.00
+Sequence
+├── MaterializedCTE: t1
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#2)]
+│       ├── read rows: 10
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
+└── HashJoin
+    ├── output columns: [numbers.number (#0)]
+    ├── join type: INNER
+    ├── build keys: [t2.b (#1)]
+    ├── probe keys: [t1.a (#0)]
+    ├── keys is null equal: [false]
+    ├── filters: []
+    ├── build join filters:
+    │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+    ├── estimated rows: 0.00
+    ├── MaterializeCTERef(Build)
+    │   ├── cte_name: t1
+    │   └── cte_schema: [number (#1)]
+    └── MaterializeCTERef(Probe)
+        ├── cte_name: t1
+        └── cte_schema: [number (#0)]
 
 query T
 explain with t1 as materialized (select number as a from numbers(10)), t2 as materialized (select a as b from t1) select t1.a from t1 join t2 on t1.a = t2.b;
 ----
-HashJoin
-├── output columns: [t1.a (#0)]
-├── join type: INNER
-├── build keys: [t2.b (#1)]
-├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
-├── filters: []
-├── build join filters:
-│   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:inlist,min_max
-├── estimated rows: 100.00
-├── TableScan(Build)
-│   ├── table: default.default.t2
-│   ├── output columns: [b (#1)]
-│   ├── read rows: 10
-│   ├── read size: < 1 KiB
-│   ├── partitions total: 0
-│   ├── partitions scanned: 0
-│   ├── push downs: [filters: [], limit: NONE]
-│   └── estimated rows: 10.00
-└── TableScan(Probe)
-    ├── table: default.default.t1
-    ├── output columns: [a (#0)]
-    ├── read rows: 10
-    ├── read size: < 1 KiB
-    ├── partitions total: 0
-    ├── partitions scanned: 0
-    ├── push downs: [filters: [], limit: NONE]
-    ├── apply join filters: [#0]
-    └── estimated rows: 10.00
+Sequence
+├── MaterializedCTE: t1
+│   └── TableScan
+│       ├── table: default.system.numbers
+│       ├── output columns: [number (#3)]
+│       ├── read rows: 10
+│       ├── read size: < 1 KiB
+│       ├── partitions total: 1
+│       ├── partitions scanned: 1
+│       ├── push downs: [filters: [], limit: NONE]
+│       └── estimated rows: 10.00
+└── Sequence
+    ├── MaterializedCTE: t2
+    │   └── MaterializeCTERef
+    │       ├── cte_name: t1
+    │       └── cte_schema: [number (#2)]
+    └── HashJoin
+        ├── output columns: [numbers.number (#0)]
+        ├── join type: INNER
+        ├── build keys: [t2.b (#1)]
+        ├── probe keys: [t1.a (#0)]
+        ├── keys is null equal: [false]
+        ├── filters: []
+        ├── build join filters:
+        │   └── filter id:0, build key:t2.b (#1), probe key:t1.a (#0), filter type:bloom,inlist,min_max
+        ├── estimated rows: 0.00
+        ├── MaterializeCTERef(Build)
+        │   ├── cte_name: t2
+        │   └── cte_schema: [number (#1)]
+        └── MaterializeCTERef(Probe)
+            ├── cte_name: t1
+            └── cte_schema: [number (#0)]

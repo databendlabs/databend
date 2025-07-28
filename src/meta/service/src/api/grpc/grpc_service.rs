@@ -28,7 +28,6 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::state_machine::UserKey;
 use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
@@ -64,6 +63,7 @@ use log::debug;
 use log::error;
 use log::info;
 use prost::Message;
+use state_machine_api::UserKey;
 use tokio_stream;
 use tokio_stream::Stream;
 use tonic::codegen::BoxStream;
@@ -577,7 +577,8 @@ impl MetaService for MetaServiceImpl {
                 wal_closed_chunk_sizes: status.raft_log.wal_closed_chunk_sizes,
             }),
 
-            snapshot_key_count: status.snapshot_key_count as u64,
+            snapshot_key_count: status.snapshot_key_count,
+
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,

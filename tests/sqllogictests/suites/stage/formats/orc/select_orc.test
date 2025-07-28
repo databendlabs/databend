@@ -51,3 +51,5 @@ select * from @data/orc/nested_struct.orc  (file_format=>'orc')
 (NULL,NULL)
 NULL
 (-3.0,NULL)
+
+

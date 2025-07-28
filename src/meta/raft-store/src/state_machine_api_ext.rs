@@ -17,12 +17,11 @@ use std::io;
 use std::ops::RangeBounds;
 use std::time::Duration;
 
+use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use display_more::DisplayUnixTimeStampExt;
 use futures_util::StreamExt;
@@ -33,18 +32,20 @@ use map_api::map_api::MapApi;
 use map_api::map_api_ro::MapApiRO;
 use map_api::IOResultStream;
 use seq_marked::SeqMarked;
+use seq_marked::SeqValue;
+use state_machine_api::ExpireKey;
+use state_machine_api::MetaValue;
+use state_machine_api::SeqV;
+use state_machine_api::StateMachineApi;
+use state_machine_api::UserKey;
 
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiHelper;
-use crate::marked::MetaValue;
-use crate::state_machine::ExpireKey;
-use crate::state_machine::UserKey;
-use crate::state_machine_api::StateMachineApi;
 use crate::utils::add_cooperative_yielding;
 use crate::utils::prefix_right_bound;
 
 #[async_trait::async_trait]
-pub trait StateMachineApiExt: StateMachineApi {
+pub trait StateMachineApiExt: StateMachineApi<SysData> {
     /// It returns 2 entries: the previous one and the new one after upsert.
     async fn upsert_kv_primary_index(
         &mut self,
@@ -127,10 +128,6 @@ pub trait StateMachineApiExt: StateMachineApi {
         } else {
             self.user_map().range(UserKey::new(&p)..).await?
         };
-
-        let strm = strm
-            // Return only keys with the expected prefix
-            .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))));
 
         let strm = add_cooperative_yielding(strm, format!("list_kv: {prefix}"))
             // Skip tombstone
@@ -220,7 +217,7 @@ pub trait StateMachineApiExt: StateMachineApi {
     }
 }
 
-impl<T> StateMachineApiExt for T where T: StateMachineApi {}
+impl<T> StateMachineApiExt for T where T: StateMachineApi<SysData> {}
 
 /// Convert internal data format [`SeqMarked<T>`] containing tombstone to a public API format [`SeqV`] without tombstone.
 ///

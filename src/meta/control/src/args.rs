@@ -247,3 +247,19 @@ pub struct UpsertArgs {
     #[clap(long)]
     pub value: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct GetArgs {
+    #[clap(long, default_value = "127.0.0.1:9191")]
+    pub grpc_api_address: String,
+
+    /// The key to get
+    #[clap(long)]
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct TriggerSnapshotArgs {
+    #[clap(long, default_value = "127.0.0.1:28101")]
+    pub admin_api_address: String,
+}
