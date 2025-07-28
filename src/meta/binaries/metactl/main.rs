@@ -15,6 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 
 use std::collections::BTreeMap;
+use std::io::Read;
+use std::io::{self};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -32,6 +34,7 @@ use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::ListFeatures;
+use databend_common_meta_control::args::LuaArgs;
 use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
@@ -50,6 +53,7 @@ use databend_common_tracing::FileConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
+use mlua::Lua;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Parser)]
@@ -226,6 +230,24 @@ impl App {
         Ok(())
     }
 
+    async fn run_lua(&self, args: &LuaArgs) -> anyhow::Result<()> {
+        let lua = Lua::new();
+
+        let script = match &args.file {
+            Some(path) => std::fs::read_to_string(path)?,
+            None => {
+                let mut buffer = String::new();
+                io::stdin().read_to_string(&mut buffer)?;
+                buffer
+            }
+        };
+
+        if let Err(e) = lua.load(&script).exec() {
+            return Err(anyhow::anyhow!("Lua execution error: {}", e));
+        }
+        Ok(())
+    }
+
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
         eprintln!(
             "Using gRPC API address: {}",
@@ -255,6 +277,7 @@ enum CtlCommand {
     Watch(WatchArgs),
     Upsert(UpsertArgs),
     Get(GetArgs),
+    Lua(LuaArgs),
 }
 
 /// Usage:
@@ -325,6 +348,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Get(args) => {
                 app.get(args).await?;
+            }
+            CtlCommand::Lua(args) => {
+                app.run_lua(args).await?;
             }
         },
         // for backward compatibility
