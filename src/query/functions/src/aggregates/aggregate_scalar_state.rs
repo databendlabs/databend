@@ -81,7 +81,7 @@ macro_rules! with_compare_mapped_type {
     }
 }
 
-pub trait ChangeIf<T: ValueType>: Send + Sync + 'static {
+pub trait ChangeIf<T: AccessType>: Send + Sync + 'static {
     fn change_if(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool;
     fn change_if_ordering(ordering: Ordering) -> bool;
 }
