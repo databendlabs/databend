@@ -30,6 +30,7 @@ databend-functions-scalar-geo = { workspace = true }
 databend-functions-scalar-integer-basic-arithmetic = { workspace = true }
 databend-functions-scalar-math = { workspace = true }
 databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
+databend-workspace-hack = { workspace = true }
 geo = { workspace = true }
 geohash = { workspace = true }
 geozero = { workspace = true }
@@ -66,7 +67,6 @@ strength_reduce = { workspace = true }
 stringslice = { workspace = true }
 twox-hash = { workspace = true }
 unicase = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 comfy-table = { workspace = true }
@@ -74,12 +74,12 @@ databend-common-ast = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 
+[package.metadata.cargo-machete]
+ignored = ["md-5", "databend-workspace-hack"]
+
 [[bench]]
 name = "bench"
 harness = false
 
 [lints]
 workspace = true
-
-[package.metadata.cargo-machete]
-ignored = ["md-5"]

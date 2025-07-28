@@ -18,11 +18,14 @@ databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 databend-common-protos = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-workspace-hack = { workspace = true }
 openraft = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

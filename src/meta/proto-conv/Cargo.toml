@@ -14,12 +14,15 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-app-types = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-protos = { workspace = true }
+databend-workspace-hack = { workspace = true }
 enumflags2 = { workspace = true }
 fastrace = { workspace = true }
 num = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [build-dependencies]
 

@@ -22,6 +22,7 @@ databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-version = { workspace = true }
+databend-workspace-hack = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
@@ -49,13 +50,15 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -24,6 +24,7 @@ databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-native = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-workspace-hack = { workspace = true }
 enum-as-inner = { workspace = true }
 log = { workspace = true }
 parquet = { workspace = true }
@@ -34,7 +35,9 @@ simple_hll = { workspace = true, features = ["serde_borsh"] }
 snap = { workspace = true, optional = true }
 typetag = { workspace = true }
 zstd = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -12,17 +12,20 @@ async-compression = { workspace = true }
 brotli = { workspace = true, features = ["std"] }
 bytes = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 pin-project = { workspace = true }
 serde = { workspace = true }
 zip = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 env_logger = { workspace = true }
 rand = { workspace = true }
 tokio = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

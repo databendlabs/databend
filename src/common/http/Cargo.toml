@@ -13,6 +13,7 @@ memory-profiling = ["tempfile"]
 anyerror = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
@@ -20,10 +21,12 @@ poem = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

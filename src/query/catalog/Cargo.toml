@@ -29,6 +29,7 @@ databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 dyn-clone = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
@@ -40,11 +41,13 @@ sha2 = { workspace = true }
 thrift = { workspace = true }
 typetag = { workspace = true }
 xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 goldenfile = { workspace = true }
 maplit = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -25,6 +25,7 @@ arrow-buffer = { workspace = true }
 arrow-data = { workspace = true }
 arrow-schema = { workspace = true }
 bytemuck = { workspace = true }
+databend-workspace-hack = { workspace = true }
 either = { workspace = true }
 ethnum = { workspace = true }
 foreign_vec = { workspace = true }
@@ -36,10 +37,12 @@ serde = { workspace = true, features = ["rc"], optional = true }
 serde_derive = { workspace = true, optional = true }
 serde_json = { workspace = true }
 simdutf8 = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 proptest = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

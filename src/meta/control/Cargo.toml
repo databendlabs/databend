@@ -19,6 +19,7 @@ databend-meta = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 raft-log = { workspace = true }
 reqwest = { workspace = true }
@@ -27,13 +28,15 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 url = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 
 [build-dependencies]
 databend-common-building = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

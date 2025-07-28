@@ -12,11 +12,11 @@ databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }
 chrono = { workspace = true }
+databend-workspace-hack = { workspace = true }
 hyper-util = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 lenient_semver = { workspace = true }
@@ -26,6 +26,9 @@ tonic-build = { workspace = true }
 
 [dev-dependencies]
 tower = { workspace = true, features = ["util"] }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

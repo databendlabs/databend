@@ -43,6 +43,7 @@ anyerror = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
+databend-workspace-hack = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -51,7 +52,9 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [[bin]]
 name = "databend-meta"

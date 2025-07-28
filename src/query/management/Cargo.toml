@@ -21,6 +21,7 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
 databend-common-version = { workspace = true }
+databend-workspace-hack = { workspace = true }
 enumflags2 = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -30,10 +31,12 @@ seq-marked = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

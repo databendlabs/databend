@@ -27,6 +27,7 @@ databend-common-storages-parquet = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 educe = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -39,7 +40,9 @@ log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

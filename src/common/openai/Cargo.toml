@@ -11,11 +11,12 @@ edition = { workspace = true }
 [dependencies]
 databend-common-exception = { workspace = true }
 databend-common-metrics = { workspace = true }
+databend-workspace-hack = { workspace = true }
 log = { workspace = true }
 openai_api_rust = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
-[dev-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -53,6 +53,7 @@ databend-storages-common-cache = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
@@ -61,11 +62,13 @@ log = { workspace = true }
 opendal = { workspace = true }
 tempfile = { workspace = true }
 uuid = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 jsonb = { workspace = true }
 tantivy = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

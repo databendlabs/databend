@@ -29,6 +29,7 @@ chrono = { workspace = true }
 concurrent-queue = { workspace = true }
 crc32fast = { workspace = true }
 ctrlc = { workspace = true }
+databend-workspace-hack = { workspace = true }
 enquote = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -59,7 +60,6 @@ tikv-jemalloc-sys = { workspace = true, optional = true }
 tokio = { workspace = true }
 unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = { workspace = true }
@@ -70,6 +70,9 @@ anyhow = { workspace = true }
 quickcheck = { workspace = true }
 rand = { workspace = true }
 serde_test = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

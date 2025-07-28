@@ -22,6 +22,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
+databend-workspace-hack = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
@@ -37,13 +38,15 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 databend-common-exception = { workspace = true }
 pretty_assertions = { workspace = true }
 rand = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

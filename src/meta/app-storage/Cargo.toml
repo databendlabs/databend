@@ -9,9 +9,12 @@ edition.workspace = true
 [dependencies]
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-workspace-hack = { workspace = true }
 opendal = { workspace = true }
 serde = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

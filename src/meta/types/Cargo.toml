@@ -11,6 +11,7 @@ anyerror = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-workspace-hack = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
@@ -28,7 +29,6 @@ serde_json = { workspace = true }
 state-machine-api = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 prost-build = { workspace = true }
@@ -38,7 +38,7 @@ tonic-build = { workspace = true }
 anyhow = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["num-derive", "prost"]
+ignored = ["num-derive", "prost", "databend-workspace-hack"]
 
 [lints]
 workspace = true

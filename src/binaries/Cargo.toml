@@ -34,6 +34,7 @@ databend-common-version = { workspace = true }
 databend-enterprise-query = { workspace = true }
 databend-query = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 limits-rs = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
@@ -41,7 +42,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
 tokio = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [[bin]]
 name = "databend-query"

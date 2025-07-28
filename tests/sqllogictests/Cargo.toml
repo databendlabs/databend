@@ -19,6 +19,7 @@ async-trait = { workspace = true }
 bollard = { workspace = true }
 clap = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-workspace-hack = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
@@ -35,7 +36,9 @@ testcontainers-modules = { workspace = true, features = ["mysql", "redis"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 walkdir = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

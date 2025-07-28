@@ -21,6 +21,7 @@ databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-proto-conv = { workspace = true }
+databend-workspace-hack = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -36,9 +37,9 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
-[dev-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -14,9 +14,12 @@ databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

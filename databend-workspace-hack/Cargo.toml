@@ -28,7 +28,11 @@ arrow-cast = { version = "55", default-features = false, features = ["prettyprin
 arrow-data = { version = "55", default-features = false, features = ["ffi"] }
 arrow-ipc = { version = "55", features = ["lz4", "zstd"] }
 arrow-schema = { version = "55", default-features = false, features = ["ffi", "serde"] }
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343", default-features = false, features = ["javascript", "python", "wasm"] }
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343", default-features = false, features = [
+    "javascript",
+    "python",
+    "wasm",
+] }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = ["serialize-serde"] }
 base64 = { version = "0.22" }
 bigdecimal = { version = "0.4", features = ["serde"] }
@@ -42,7 +46,14 @@ bzip2 = { version = "0.4", default-features = false, features = ["static"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "env", "std", "suggestions", "usage", "wrap_help"] }
+clap_builder = { version = "4", default-features = false, features = [
+    "color",
+    "env",
+    "std",
+    "suggestions",
+    "usage",
+    "wrap_help",
+] }
 comfy-table = { version = "7" }
 concurrent-queue = { version = "2" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
@@ -68,7 +79,10 @@ futures-task = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 geo-types = { version = "0.7", features = ["serde", "use-rstar_0_12"] }
-getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std", "wasm_js"] }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = [
+    "std",
+    "wasm_js",
+] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 gimli = { version = "0.31" }
 hashbrown-3575ec1268b04181 = { package = "hashbrown", version = "0.15" }
@@ -85,7 +99,13 @@ jiff = { version = "0.2", features = ["serde", "tzdb-bundle-always"] }
 lexical-core = { version = "1" }
 lexical-parse-float = { version = "1", default-features = false, features = ["std"] }
 lexical-parse-integer = { version = "1", default-features = false, features = ["std"] }
-lexical-util = { version = "1", default-features = false, features = ["parse-floats", "parse-integers", "std", "write-floats", "write-integers"] }
+lexical-util = { version = "1", default-features = false, features = [
+    "parse-floats",
+    "parse-integers",
+    "std",
+    "write-floats",
+    "write-integers",
+] }
 lexical-write-float = { version = "1", default-features = false, features = ["std"] }
 lexical-write-integer = { version = "1", default-features = false, features = ["std"] }
 libc = { version = "0.2", features = ["extra_traits", "use_std"] }
@@ -120,16 +140,48 @@ pyo3-ffi = { version = "0.24", features = ["abi3-py312", "generate-import-lib"] 
 rand = { version = "0.8", features = ["serde1", "small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["serde1", "std"] }
 regex = { version = "1" }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa-backtrack", "perf-inline", "perf-literal", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = [
+    "dfa-onepass",
+    "dfa-search",
+    "hybrid",
+    "meta",
+    "nfa-backtrack",
+    "perf-inline",
+    "perf-literal",
+    "unicode",
+] }
 regex-lite = { version = "0.1" }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.12", features = ["blocking", "cookies", "json", "native-tls-alpn", "native-tls-vendored", "rustls-tls", "rustls-tls-native-roots", "stream"] }
+reqwest = { version = "0.12", features = [
+    "blocking",
+    "cookies",
+    "json",
+    "native-tls-alpn",
+    "native-tls-vendored",
+    "rustls-tls",
+    "rustls-tls-native-roots",
+    "stream",
+] }
 ring = { version = "0.17", features = ["std"] }
-rquickjs-core = { version = "0.6", features = ["array-buffer", "classes", "futures", "loader", "parallel", "properties"] }
+rquickjs-core = { version = "0.6", features = [
+    "array-buffer",
+    "classes",
+    "futures",
+    "loader",
+    "parallel",
+    "properties",
+] }
 rsa = { version = "0.9", features = ["pkcs5", "sha2"] }
 rust_decimal = { version = "1" }
 rustc-hash = { version = "2", features = ["rand"] }
-rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "ring", "std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "aws-lc-rs",
+    "aws_lc_rs",
+    "logging",
+    "ring",
+    "std",
+    "tls12",
+] }
 rustls-pemfile = { version = "2" }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 scopeguard = { version = "1" }
@@ -150,13 +202,22 @@ strum = { version = "0.26", features = ["derive"] }
 subtle = { version = "2" }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 thrift = { version = "0.17" }
-tikv-jemalloc-sys = { version = "0.6", features = ["disable_initial_exec_tls", "profiling", "stats", "unprefixed_malloc_on_supported_platforms"] }
+tikv-jemalloc-sys = { version = "0.6", features = [
+    "disable_initial_exec_tls",
+    "profiling",
+    "stats",
+    "unprefixed_malloc_on_supported_platforms",
+] }
 time = { version = "0.3", features = ["local-offset", "macros", "serde-well-known"] }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net"] }
 toml_datetime = { version = "0.6", default-features = false, features = ["serde"] }
-toml_edit-3c51e837cfc5589a = { package = "toml_edit", version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
+toml_edit-3c51e837cfc5589a = { package = "toml_edit", version = "0.22", default-features = false, features = [
+    "display",
+    "parse",
+    "serde",
+] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1", features = ["valuable"] }
@@ -164,13 +225,30 @@ twox-hash = { version = "1" }
 unicode-normalization = { version = "0.1" }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v7"] }
-wasmparser = { version = "0.219", default-features = false, features = ["component-model", "features", "serde", "std", "validate"] }
+wasmparser = { version = "0.219", default-features = false, features = [
+    "component-model",
+    "features",
+    "serde",
+    "std",
+    "validate",
+] }
 xz2 = { version = "0.1", default-features = false, features = ["static"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 zstd-594e8ee84c453af0 = { package = "zstd", version = "0.13", features = ["experimental"] }
 zstd-5ef9efb8ec2df382 = { package = "zstd", version = "0.12" }
-zstd-safe-15128469a54ed75a = { package = "zstd-safe", version = "7", default-features = false, features = ["arrays", "experimental", "legacy", "std", "zdict_builder"] }
-zstd-safe-a490c3000a992113 = { package = "zstd-safe", version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-safe-15128469a54ed75a = { package = "zstd-safe", version = "7", default-features = false, features = [
+    "arrays",
+    "experimental",
+    "legacy",
+    "std",
+    "zdict_builder",
+] }
+zstd-safe-a490c3000a992113 = { package = "zstd-safe", version = "6", default-features = false, features = [
+    "arrays",
+    "legacy",
+    "std",
+    "zdict_builder",
+] }
 zstd-sys = { version = "2", default-features = false, features = ["experimental", "legacy", "std", "zdict_builder"] }
 
 [build-dependencies]
@@ -187,7 +265,11 @@ arrow-cast = { version = "55", default-features = false, features = ["prettyprin
 arrow-data = { version = "55", default-features = false, features = ["ffi"] }
 arrow-ipc = { version = "55", features = ["lz4", "zstd"] }
 arrow-schema = { version = "55", default-features = false, features = ["ffi", "serde"] }
-arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343", default-features = false, features = ["javascript", "python", "wasm"] }
+arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "a442343", default-features = false, features = [
+    "javascript",
+    "python",
+    "wasm",
+] }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = ["serialize-serde"] }
 base64 = { version = "0.22" }
 bigdecimal = { version = "0.4", features = ["serde"] }
@@ -202,7 +284,14 @@ bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
-clap_builder = { version = "4", default-features = false, features = ["color", "env", "std", "suggestions", "usage", "wrap_help"] }
+clap_builder = { version = "4", default-features = false, features = [
+    "color",
+    "env",
+    "std",
+    "suggestions",
+    "usage",
+    "wrap_help",
+] }
 comfy-table = { version = "7" }
 concurrent-queue = { version = "2" }
 console = { version = "0.15", default-features = false, features = ["ansi-parsing", "unicode-width"] }
@@ -228,7 +317,10 @@ futures-task = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", features = ["channel", "io", "sink"] }
 generic-array = { version = "0.14", default-features = false, features = ["more_lengths", "zeroize"] }
 geo-types = { version = "0.7", features = ["serde", "use-rstar_0_12"] }
-getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std", "wasm_js"] }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = [
+    "std",
+    "wasm_js",
+] }
 getrandom-6f8ce4dd05d13bba = { package = "getrandom", version = "0.2", default-features = false, features = ["std"] }
 gimli = { version = "0.31" }
 hashbrown-3575ec1268b04181 = { package = "hashbrown", version = "0.15" }
@@ -245,7 +337,13 @@ jiff = { version = "0.2", features = ["serde", "tzdb-bundle-always"] }
 lexical-core = { version = "1" }
 lexical-parse-float = { version = "1", default-features = false, features = ["std"] }
 lexical-parse-integer = { version = "1", default-features = false, features = ["std"] }
-lexical-util = { version = "1", default-features = false, features = ["parse-floats", "parse-integers", "std", "write-floats", "write-integers"] }
+lexical-util = { version = "1", default-features = false, features = [
+    "parse-floats",
+    "parse-integers",
+    "std",
+    "write-floats",
+    "write-integers",
+] }
 lexical-write-float = { version = "1", default-features = false, features = ["std"] }
 lexical-write-integer = { version = "1", default-features = false, features = ["std"] }
 libc = { version = "0.2", features = ["extra_traits", "use_std"] }
@@ -282,16 +380,48 @@ pyo3-ffi = { version = "0.24", features = ["abi3-py312", "generate-import-lib"] 
 rand = { version = "0.8", features = ["serde1", "small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["serde1", "std"] }
 regex = { version = "1" }
-regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa-backtrack", "perf-inline", "perf-literal", "unicode"] }
+regex-automata = { version = "0.4", default-features = false, features = [
+    "dfa-onepass",
+    "dfa-search",
+    "hybrid",
+    "meta",
+    "nfa-backtrack",
+    "perf-inline",
+    "perf-literal",
+    "unicode",
+] }
 regex-lite = { version = "0.1" }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.12", features = ["blocking", "cookies", "json", "native-tls-alpn", "native-tls-vendored", "rustls-tls", "rustls-tls-native-roots", "stream"] }
+reqwest = { version = "0.12", features = [
+    "blocking",
+    "cookies",
+    "json",
+    "native-tls-alpn",
+    "native-tls-vendored",
+    "rustls-tls",
+    "rustls-tls-native-roots",
+    "stream",
+] }
 ring = { version = "0.17", features = ["std"] }
-rquickjs-core = { version = "0.6", features = ["array-buffer", "classes", "futures", "loader", "parallel", "properties"] }
+rquickjs-core = { version = "0.6", features = [
+    "array-buffer",
+    "classes",
+    "futures",
+    "loader",
+    "parallel",
+    "properties",
+] }
 rsa = { version = "0.9", features = ["pkcs5", "sha2"] }
 rust_decimal = { version = "1" }
 rustc-hash = { version = "2", features = ["rand"] }
-rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs", "aws_lc_rs", "logging", "ring", "std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = [
+    "aws-lc-rs",
+    "aws_lc_rs",
+    "logging",
+    "ring",
+    "std",
+    "tls12",
+] }
 rustls-pemfile = { version = "2" }
 rustls-webpki = { version = "0.103", default-features = false, features = ["aws-lc-rs", "ring", "std"] }
 scopeguard = { version = "1" }
@@ -310,18 +440,39 @@ sqlx-mysql = { version = "0.8", default-features = false, features = ["any", "js
 stable_deref_trait = { version = "1" }
 strum = { version = "0.26", features = ["derive"] }
 subtle = { version = "2" }
-syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
+syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = [
+    "extra-traits",
+    "fold",
+    "full",
+    "visit",
+    "visit-mut",
+] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = [
+    "extra-traits",
+    "fold",
+    "full",
+    "visit",
+    "visit-mut",
+] }
 sync_wrapper = { version = "1", default-features = false, features = ["futures"] }
 thrift = { version = "0.17" }
-tikv-jemalloc-sys = { version = "0.6", features = ["disable_initial_exec_tls", "profiling", "stats", "unprefixed_malloc_on_supported_platforms"] }
+tikv-jemalloc-sys = { version = "0.6", features = [
+    "disable_initial_exec_tls",
+    "profiling",
+    "stats",
+    "unprefixed_malloc_on_supported_platforms",
+] }
 time = { version = "0.3", features = ["local-offset", "macros", "serde-well-known"] }
 time-macros = { version = "0.2", default-features = false, features = ["formatting", "parsing", "serde"] }
 tokio = { version = "1", features = ["full", "test-util", "tracing"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "ring", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net"] }
 toml_datetime = { version = "0.6", default-features = false, features = ["serde"] }
-toml_edit-3c51e837cfc5589a = { package = "toml_edit", version = "0.22", default-features = false, features = ["display", "parse", "serde"] }
+toml_edit-3c51e837cfc5589a = { package = "toml_edit", version = "0.22", default-features = false, features = [
+    "display",
+    "parse",
+    "serde",
+] }
 toml_edit-cdcf2f9584511fe6 = { package = "toml_edit", version = "0.19", features = ["serde"] }
 tracing = { version = "0.1", features = ["log"] }
 tracing-core = { version = "0.1", features = ["valuable"] }
@@ -329,13 +480,191 @@ twox-hash = { version = "1" }
 unicode-normalization = { version = "0.1" }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v7"] }
-wasmparser = { version = "0.219", default-features = false, features = ["component-model", "features", "serde", "std", "validate"] }
+wasmparser = { version = "0.219", default-features = false, features = [
+    "component-model",
+    "features",
+    "serde",
+    "std",
+    "validate",
+] }
 xz2 = { version = "0.1", default-features = false, features = ["static"] }
 zeroize = { version = "1", features = ["zeroize_derive"] }
 zstd-594e8ee84c453af0 = { package = "zstd", version = "0.13", features = ["experimental"] }
 zstd-5ef9efb8ec2df382 = { package = "zstd", version = "0.12" }
-zstd-safe-15128469a54ed75a = { package = "zstd-safe", version = "7", default-features = false, features = ["arrays", "experimental", "legacy", "std", "zdict_builder"] }
-zstd-safe-a490c3000a992113 = { package = "zstd-safe", version = "6", default-features = false, features = ["arrays", "legacy", "std", "zdict_builder"] }
+zstd-safe-15128469a54ed75a = { package = "zstd-safe", version = "7", default-features = false, features = [
+    "arrays",
+    "experimental",
+    "legacy",
+    "std",
+    "zdict_builder",
+] }
+zstd-safe-a490c3000a992113 = { package = "zstd-safe", version = "6", default-features = false, features = [
+    "arrays",
+    "legacy",
+    "std",
+    "zdict_builder",
+] }
 zstd-sys = { version = "2", default-features = false, features = ["experimental", "legacy", "std", "zdict_builder"] }
 
 ### END HAKARI SECTION
+
+[package.metadata.cargo-machete]
+ignored = [
+    "ahash",
+    "aho-corasick",
+    "anstream",
+    "anyhow",
+    "apache-avro",
+    "approx",
+    "arrayvec",
+    "arrow",
+    "arrow-array",
+    "arrow-cast",
+    "arrow-data",
+    "arrow-ipc",
+    "arrow-schema",
+    "arrow-udf-runtime",
+    "backtrace",
+    "base64",
+    "bigdecimal",
+    "bitflags",
+    "brotli",
+    "bstr",
+    "bytemuck",
+    "byteorder",
+    "bytes",
+    "bzip2",
+    "bzip2-sys",
+    "chrono",
+    "clap",
+    "clap_builder",
+    "comfy-table",
+    "concurrent-queue",
+    "console",
+    "crossbeam-epoch",
+    "crossbeam-queue",
+    "crossbeam-utils",
+    "crypto-common",
+    "dashmap",
+    "deranged",
+    "either",
+    "env_filter",
+    "ethnum",
+    "event-listener-strategy",
+    "fastrace",
+    "flatbuffers",
+    "flate2",
+    "form_urlencoded",
+    "frunk_core",
+    "futures-channel",
+    "futures-executor",
+    "futures-sink",
+    "futures-task",
+    "futures-util",
+    "generic-array",
+    "geo-types",
+    "getrandom-468e82937335b1c9",
+    "getrandom-6f8ce4dd05d13bba",
+    "gimli",
+    "hashbrown-3575ec1268b04181",
+    "hashbrown-582f2526e08bb6a0",
+    "hmac",
+    "hyper",
+    "hyper-rustls",
+    "hyper-util",
+    "indexmap",
+    "instant",
+    "ipnet",
+    "itertools",
+    "jiff",
+    "lexical-core",
+    "lexical-parse-float",
+    "lexical-parse-integer",
+    "lexical-util",
+    "lexical-write-float",
+    "lexical-write-integer",
+    "libc",
+    "libflate",
+    "log",
+    "lz4_flex",
+    "lzma-sys",
+    "md-5",
+    "memchr",
+    "mysql_common",
+    "nom",
+    "num",
+    "num-bigint",
+    "num-format",
+    "num-integer",
+    "num-iter",
+    "num-traits",
+    "object",
+    "object_store",
+    "once_cell",
+    "ordered-float",
+    "parquet",
+    "percent-encoding",
+    "phf",
+    "phf_shared",
+    "pkcs8",
+    "portable-atomic",
+    "prost",
+    "prost-types",
+    "pyo3",
+    "pyo3-ffi",
+    "rand",
+    "rand_core",
+    "regex",
+    "regex-automata",
+    "regex-lite",
+    "regex-syntax",
+    "reqwest",
+    "ring",
+    "rquickjs-core",
+    "rsa",
+    "rust_decimal",
+    "rustc-hash",
+    "rustls",
+    "rustls-pemfile",
+    "rustls-webpki",
+    "scopeguard",
+    "semver",
+    "serde",
+    "serde_bytes",
+    "serde_json",
+    "sha1",
+    "sha2",
+    "simdutf8",
+    "similar",
+    "smallvec",
+    "spin",
+    "sqlx-core",
+    "sqlx-mysql",
+    "stable_deref_trait",
+    "strum",
+    "subtle",
+    "sync_wrapper",
+    "thrift",
+    "tikv-jemalloc-sys",
+    "time",
+    "tokio",
+    "tokio-rustls",
+    "tokio-stream",
+    "toml_datetime",
+    "toml_edit-3c51e837cfc5589a",
+    "toml_edit-cdcf2f9584511fe6",
+    "tracing",
+    "tracing-core",
+    "twox-hash",
+    "unicode-normalization",
+    "url",
+    "uuid",
+    "wasmparser",
+    "xz2",
+    "zeroize",
+    "zstd-594e8ee84c453af0",
+    "zstd-5ef9efb8ec2df382",
+    "zstd-safe-15128469a54ed75a",
+    "zstd-safe-a490c3000a992113",
+    "zstd-sys",
+]

@@ -7,19 +7,21 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+chrono = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-
-chrono = { workspace = true }
+databend-workspace-hack = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

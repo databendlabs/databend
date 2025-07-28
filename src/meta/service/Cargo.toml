@@ -35,6 +35,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-common-version = { workspace = true }
+databend-workspace-hack = { workspace = true }
 deepsize = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
@@ -62,7 +63,6 @@ tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }
 watcher = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 databend-common-meta-cache = { workspace = true }
@@ -76,6 +76,9 @@ reqwest = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 test-harness = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

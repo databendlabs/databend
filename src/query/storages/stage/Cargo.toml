@@ -34,6 +34,7 @@ databend-common-storages-parquet = { workspace = true }
 databend-common-version = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 enum-as-inner = { workspace = true }
 futures = { workspace = true }
 jsonb = { workspace = true }
@@ -48,10 +49,9 @@ parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "databend-workspace-hack"]

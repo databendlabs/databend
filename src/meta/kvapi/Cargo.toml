@@ -13,12 +13,15 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 databend-common-meta-app-types = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-workspace-hack = { workspace = true }
 display-more = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

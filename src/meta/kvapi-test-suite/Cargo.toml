@@ -12,12 +12,15 @@ edition = { workspace = true }
 anyhow = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-workspace-hack = { workspace = true }
 display-more = { workspace = true }
 fastrace = { workspace = true }
 log = { workspace = true }
 state-machine-api = { workspace = true }
 tokio = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

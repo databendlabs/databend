@@ -24,6 +24,7 @@ databend-query = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
+databend-workspace-hack = { workspace = true }
 form_urlencoded = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
@@ -32,7 +33,9 @@ logforth = { workspace = true }
 opendal = { workspace = true, features = ["services-s3", "services-fs"] }
 tokio = { workspace = true }
 toml = { workspace = true, features = ["parse"] }
-databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

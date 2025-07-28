@@ -18,9 +18,10 @@ databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+databend-workspace-hack = { workspace = true }
 
-[build-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

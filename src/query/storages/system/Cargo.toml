@@ -36,6 +36,7 @@ databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
@@ -51,7 +52,9 @@ serde_repr = { workspace = true }
 snailquote = { workspace = true }
 tikv-jemalloc-ctl = { workspace = true, optional = true }
 typetag = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

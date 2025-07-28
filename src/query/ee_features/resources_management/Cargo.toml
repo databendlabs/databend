@@ -13,9 +13,10 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+databend-workspace-hack = { workspace = true }
 
-[build-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

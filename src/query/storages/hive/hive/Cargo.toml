@@ -25,6 +25,7 @@ databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 fastrace = { workspace = true }
 faststr = { workspace = true }
 futures = { workspace = true }
@@ -36,7 +37,9 @@ recursive = { workspace = true }
 serde = { workspace = true }
 typetag = { workspace = true }
 volo-thrift = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

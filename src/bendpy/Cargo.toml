@@ -29,11 +29,14 @@ databend-query = { workspace = true, features = [
     "simd",
     "disable_initial_exec_tls",
 ] }
+databend-workspace-hack = { workspace = true }
 pyo3 = { version = "0.24", features = ["generate-import-lib", "abi3-py312"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync"] }
 tokio-stream = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

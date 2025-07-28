@@ -8,11 +8,14 @@ edition = { workspace = true }
 
 [dependencies]
 databend-common-exception = { workspace = true }
+databend-workspace-hack = { workspace = true }
 ndarray = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 approx = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -7,7 +7,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["serde"]
+ignored = ["serde", "databend-workspace-hack"]
 
 [dependencies]
 databend-common-base = { workspace = true }
@@ -30,6 +30,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
@@ -37,7 +38,6 @@ orc-rust = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [lints]
 workspace = true

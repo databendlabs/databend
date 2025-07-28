@@ -21,7 +21,10 @@ databend-common-storages-random = { workspace = true }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-storages-common-index = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+databend-workspace-hack = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

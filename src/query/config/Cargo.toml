@@ -12,9 +12,6 @@ edition = { workspace = true }
 default = []
 storage-hdfs = ["databend-common-storage/storage-hdfs"]
 
-[package.metadata.cargo-machete]
-ignored = ["strum"]
-
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
@@ -24,17 +21,20 @@ databend-common-grpc = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-tracing = { workspace = true }
+databend-workspace-hack = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }
 toml = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["strum", "databend-workspace-hack"]
 
 [lints]
 workspace = true

@@ -7,13 +7,14 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+databend-workspace-hack = { workspace = true }
 enum-as-inner = { workspace = true }
 enum_dispatch = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
-[dev-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

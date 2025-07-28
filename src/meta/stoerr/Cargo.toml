@@ -9,10 +9,13 @@ edition = { workspace = true }
 [dependencies]
 anyerror = { workspace = true }
 databend-common-exception = { workspace = true }
+databend-workspace-hack = { workspace = true }
 serde_json = { workspace = true }
 sled = { workspace = true }
 thiserror = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

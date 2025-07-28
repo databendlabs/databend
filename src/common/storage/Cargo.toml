@@ -24,6 +24,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-native = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 iceberg = { workspace = true }
@@ -37,9 +38,9 @@ reqwest = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
-[dev-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

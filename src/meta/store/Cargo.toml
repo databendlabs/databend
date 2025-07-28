@@ -21,12 +21,15 @@ databend-common-meta-kvapi-test-suite = { workspace = true }
 databend-common-meta-semaphore = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 log = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

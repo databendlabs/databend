@@ -19,12 +19,13 @@ databend-common-pipeline-sources = { workspace = true }
 databend-common-sql = { workspace = true }
 databend-common-storages-fuse = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
-[build-dependencies]
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

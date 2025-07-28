@@ -16,6 +16,7 @@ arrow-schema = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
 cidr = { workspace = true }
+databend-workspace-hack = { workspace = true }
 geozero = { workspace = true }
 gimli = { workspace = true }
 http = { workspace = true }
@@ -36,7 +37,9 @@ sqlx = { workspace = true }
 tantivy = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

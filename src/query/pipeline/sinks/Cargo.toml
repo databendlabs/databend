@@ -13,10 +13,13 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
+databend-workspace-hack = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

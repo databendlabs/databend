@@ -13,13 +13,13 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-workspace-hack = { workspace = true }
 jsonb = { workspace = true }
 log = { workspace = true }
 match-template = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../databend-workspace-hack" }
 
 [dev-dependencies]
 itertools = { workspace = true }
@@ -29,4 +29,4 @@ rand = { workspace = true }
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["match-template"]
+ignored = ["match-template", "databend-workspace-hack"]

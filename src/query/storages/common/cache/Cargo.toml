@@ -22,6 +22,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 crc32fast = { workspace = true }
 crossbeam-channel = { workspace = true }
+databend-workspace-hack = { workspace = true }
 hex = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
@@ -29,12 +30,14 @@ parquet = { workspace = true }
 rayon = { workspace = true }
 rustix = { workspace = true }
 siphasher = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../../../databend-workspace-hack" }
 
 [dev-dependencies]
 divan = { workspace = true }
 mockall = { workspace = true }
 tempfile = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [[bench]]
 name = "read_cache_content"

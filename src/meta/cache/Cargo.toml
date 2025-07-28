@@ -25,15 +25,18 @@ async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-workspace-hack = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 sub-cache = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 pretty_assertions = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["databend-workspace-hack"]
 
 [lints]
 workspace = true

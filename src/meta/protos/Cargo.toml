@@ -7,11 +7,11 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [dependencies]
+databend-workspace-hack = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 prost = { workspace = true }
 tonic = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [build-dependencies]
 lenient_semver = { workspace = true }
@@ -19,10 +19,8 @@ prost-build = { workspace = true }
 semver = { workspace = true }
 tonic-build = { workspace = true }
 
-[dev-dependencies]
-
 [package.metadata.cargo-machete]
-ignored = ["num-derive", "num-traits"]
+ignored = ["num-derive", "num-traits", "databend-workspace-hack"]
 
 [lints]
 workspace = true

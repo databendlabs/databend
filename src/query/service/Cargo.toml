@@ -115,6 +115,7 @@ databend-storages-common-io = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-workspace-hack = { workspace = true }
 derive-visitor = { workspace = true }
 ethnum = { workspace = true }
 fastrace = { workspace = true }
@@ -176,7 +177,6 @@ url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
@@ -200,8 +200,8 @@ wiremock = { workspace = true }
 [build-dependencies]
 databend-common-building = { workspace = true }
 
+[package.metadata.cargo-machete]
+ignored = ["match-template", "md-5", "databend-workspace-hack"]
+
 [lints]
 workspace = true
-
-[package.metadata.cargo-machete]
-ignored = ["match-template", "md-5"]

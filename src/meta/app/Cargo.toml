@@ -20,6 +20,7 @@ databend-common-meta-app-storage = { workspace = true }
 databend-common-meta-app-types = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-types = { workspace = true }
+databend-workspace-hack = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
 enumflags2 = { workspace = true }
@@ -35,13 +36,12 @@ serde_json = { workspace = true }
 sha1 = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
-databend-workspace-hack = { version = "0.1", path = "../../../databend-workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["num-traits"]
+ignored = ["num-traits", "databend-workspace-hack"]
 
 [lints]
 workspace = true
