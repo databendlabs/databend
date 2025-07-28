@@ -547,6 +547,18 @@ impl DataBlock {
         }
     }
 
+    pub fn split_at(&self, mid: usize) -> (Self, Self) {
+        assert!(
+            mid <= self.num_rows,
+            "split point {} out of len {}",
+            mid,
+            self.num_rows
+        );
+        let first = self.slice(0..mid);
+        let second = self.slice(mid..self.num_rows);
+        (first, second)
+    }
+
     pub fn split_by_rows(&self, max_rows_per_block: usize) -> (Vec<Self>, Option<Self>) {
         let mut res = Vec::with_capacity(self.num_rows / max_rows_per_block);
         let mut offset = 0;

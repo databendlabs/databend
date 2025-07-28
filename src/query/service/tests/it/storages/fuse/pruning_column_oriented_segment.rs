@@ -123,6 +123,7 @@ async fn apply_snapshot_pruning(
         enable_queries_executor: false,
         max_threads: 8,
         executor_node_id: "".to_string(),
+        datablock_limit: None,
     };
     let executor = QueryPipelineExecutor::create(prune_pipeline, settings)?;
 

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use databend_common_base::runtime::DataBlockLimit;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -26,6 +27,7 @@ pub struct ExecutorSettings {
     pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
     pub executor_node_id: String,
+    pub datablock_limit: Option<DataBlockLimit>,
 }
 
 impl ExecutorSettings {
@@ -45,12 +47,24 @@ impl ExecutorSettings {
             config_enable_queries_executor
         };
 
+        let max_process_rows = settings.get_max_process_rows()?;
+        let max_process_bytes = settings.get_max_process_bytes()?;
+        let datablock_limit = if max_process_bytes == 0 && max_process_rows == 0 {
+            None
+        } else {
+            Some(DataBlockLimit::new(
+                max_process_rows as usize,
+                max_process_bytes as usize,
+            ))
+        };
+
         Ok(ExecutorSettings {
             enable_queries_executor,
             query_id: Arc::new(query_id),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
             executor_node_id: ctx.get_cluster().local_id.clone(),
+            datablock_limit,
         })
     }
 }
