@@ -513,6 +513,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("grouping_sets_to_union", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables grouping sets to union.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",

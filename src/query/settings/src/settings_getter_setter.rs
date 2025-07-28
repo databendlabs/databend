@@ -516,6 +516,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
+        Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
+    }
+
     pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
