@@ -361,14 +361,14 @@ impl crate::app_error::UpdateStreamMetasFailed {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("DuplicatedUpsertFiles: {table_id} , in operation `{context}`")]
+#[error("DuplicatedUpsertFiles: {table_id:?} , in operation `{context}`")]
 pub struct DuplicatedUpsertFiles {
-    table_id: u64,
+    table_id: Vec<u64>,
     context: String,
 }
 
 impl DuplicatedUpsertFiles {
-    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+    pub fn new(table_id: Vec<u64>, context: impl Into<String>) -> Self {
         DuplicatedUpsertFiles {
             table_id,
             context: context.into(),
