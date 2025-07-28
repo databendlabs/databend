@@ -33,6 +33,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::UserInfo;
 use databend_common_metrics::session::*;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
@@ -102,7 +103,7 @@ impl SessionManager {
         let settings = Settings::create(tenant);
         settings.load_changes().await?;
 
-        let session = self.create_with_settings(typ, settings)?;
+        let session = self.create_with_settings(typ, settings, None)?;
 
         Ok(session)
     }
@@ -131,6 +132,7 @@ impl SessionManager {
         &self,
         typ: SessionType,
         settings: Arc<Settings>,
+        user: Option<UserInfo>,
     ) -> Result<Session> {
         let id = uuid::Uuid::new_v4().to_string();
         let mysql_conn_id = match typ {
@@ -138,7 +140,7 @@ impl SessionManager {
             _ => None,
         };
 
-        let session_ctx = SessionContext::try_create(settings, typ.clone())?;
+        let session_ctx = SessionContext::try_create(settings, typ.clone(), user)?;
         let session = Session::try_create(
             id.clone(),
             typ.clone(),

@@ -202,6 +202,7 @@ impl QueryFragmentsActions {
                 .get_settings()
                 .get_create_query_flight_client_with_current_rt()?,
             perf_flag,
+            user: self.ctx.get_current_user()?,
         })
     }
 
