@@ -39,6 +39,7 @@ use databend_common_meta_app::app_error::DatabaseAlreadyExists;
 use databend_common_meta_app::app_error::DropDbWithDropTime;
 use databend_common_meta_app::app_error::DropTableWithDropTime;
 use databend_common_meta_app::app_error::DuplicatedIndexColumnId;
+use databend_common_meta_app::app_error::DuplicatedUpsertFiles;
 use databend_common_meta_app::app_error::IndexColumnIdNotFound;
 use databend_common_meta_app::app_error::MultiStmtTxnCommitFailed;
 use databend_common_meta_app::app_error::StreamAlreadyExists;
@@ -2205,6 +2206,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         // in each function. In this case there is chance that some `TableCopiedFileInfo` may not be
         // removed in `remove_table_copied_files`, but these data can be purged in case of expire time.
 
+        let insert_if_not_exists_table_ids = copied_files
+            .iter()
+            .filter(|(_, req)| req.insert_if_not_exists)
+            .map(|(table_id, _)| *table_id)
+            .collect::<Vec<_>>();
+
         for (table_id, req) in copied_files {
             let tbid = TableId { table_id };
 
@@ -2300,10 +2307,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         if mismatched_tbs.is_empty() {
-            // if all table version does match, but tx failed, we don't know why, just return error
-            Err(KVAppError::AppError(AppError::from(
-                MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
-            )))
+            if !insert_if_not_exists_table_ids.is_empty() {
+                // If insert_if_not_exists is true and transaction failed, it's likely due to duplicated files
+                Err(KVAppError::AppError(AppError::from(
+                    DuplicatedUpsertFiles::new(
+                        insert_if_not_exists_table_ids,
+                        "update_multi_table_meta",
+                    ),
+                )))
+            } else {
+                // if all table version does match, but tx failed, we don't know why, just return error
+                Err(KVAppError::AppError(AppError::from(
+                    MultiStmtTxnCommitFailed::new("update_multi_table_meta"),
+                )))
+            }
         } else {
             // up layer will retry
             Ok(Err(mismatched_tbs))
