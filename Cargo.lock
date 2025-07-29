@@ -14536,8 +14536,8 @@ dependencies = [
 
 [[package]]
 name = "state-machine-api"
-version = "0.1.0"
-source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.0#3c4eb15cb42620f7cdaf331b0fd0a75c6a31f498"
+version = "0.1.1"
+source = "git+https://github.com/databendlabs/state-machine-api.git?tag=v0.1.1#637437b7a78b07bf39adff8bebef270f17c678dc"
 dependencies = [
  "display-more",
  "map-api",

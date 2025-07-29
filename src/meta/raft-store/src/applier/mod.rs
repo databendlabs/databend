@@ -660,6 +660,11 @@ where SM: StateMachineApi<SysData> + 'static
         let mut to_clean = vec![];
         let mut strm = self.sm.list_expire_index(log_time_ms).await?;
 
+        // Save the log time for next cleaning.
+        // Avoid listing tombstone records.
+        self.sm
+            .set_cleanup_start_timestamp(Duration::from_millis(log_time_ms));
+
         {
             let mut strm = std::pin::pin!(strm);
             while let Some((expire_key, key)) = strm.try_next().await? {
@@ -672,19 +677,9 @@ where SM: StateMachineApi<SysData> + 'static
         }
 
         for (expire_key, key) in to_clean {
-            let curr = self.sm.get_maybe_expired_kv(&key).await?;
-
-            if let Some(seq_v) = &curr {
-                assert_eq!(expire_key.seq, seq_v.seq);
-                info!("clean expired: {}, {}", key, expire_key);
-
-                self.upsert_kv(&UpsertKV::delete(key.clone())).await?;
-            } else {
-                unreachable!(
-                    "trying to remove un-cleanable: {}, {}, kv-entry: {:?}",
-                    key, expire_key, curr
-                );
-            }
+            let upsert = UpsertKV::delete(key);
+            self.upsert_kv(&upsert).await?;
+            info!("clean expired: {} {expire_key}", upsert.key);
         }
 
         Ok(())
