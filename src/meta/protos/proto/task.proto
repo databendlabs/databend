@@ -45,7 +45,7 @@ message TaskMessage {
   oneof message {
     Task execute_task = 1;
     Task schedule_task = 2;
-    DeleteTask delete_task = 3;
+    string delete_task = 3;
     Task after_task = 4;
     DeleteTask delete_task_v2 = 5;
   }
