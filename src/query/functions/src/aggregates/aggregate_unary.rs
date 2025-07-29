@@ -35,8 +35,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
+use super::AggrState;
+use super::AggrStateLoc;
 
 pub trait UnaryState<T, R>: Send + Sync + Default
 where

@@ -32,8 +32,6 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ChangeIf;
 use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
@@ -47,7 +45,9 @@ use super::batch_serialize3;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_mapped_type;

@@ -36,11 +36,11 @@ use databend_common_expression::StateAddr;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::assert_variadic_arguments;
 use super::batch_merge1;
 use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -264,7 +264,7 @@ pub fn try_create_aggregate_histogram_function(
 }
 
 pub fn aggregate_histogram_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: false,
         ..Default::default()
     };

@@ -38,16 +38,16 @@ use super::aggregate_distinct_state::AggregateDistinctState;
 use super::aggregate_distinct_state::AggregateDistinctStringState;
 use super::aggregate_distinct_state::AggregateUniqStringState;
 use super::aggregate_distinct_state::DistinctStateFunc;
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function_factory::AggregateFunctionCreator;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
-use super::aggregate_function_factory::CombinatorDescription;
-use super::aggregator_common::assert_variadic_arguments;
+use super::assert_variadic_arguments;
+use super::AggrState;
+use super::AggrStateLoc;
 use super::AggregateCountFunction;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::StateAddr;
+use super::AggregateFunction;
+use super::AggregateFunctionCreator;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
+use super::CombinatorDescription;
+use super::StateAddr;
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
@@ -220,7 +220,7 @@ pub fn aggregate_combinator_distinct_desc() -> CombinatorDescription {
 }
 
 pub fn aggregate_combinator_uniq_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         returns_default_when_only_null: true,
         ..Default::default()
     };

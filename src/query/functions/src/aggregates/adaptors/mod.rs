@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::aggregate_function_factory::*;
 use super::*;
 
 mod aggregate_null_adaptor;

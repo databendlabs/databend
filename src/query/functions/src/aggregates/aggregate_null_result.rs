@@ -28,10 +28,10 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function::AggregateFunction;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
 use super::StateAddr;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateNullResultFunction {

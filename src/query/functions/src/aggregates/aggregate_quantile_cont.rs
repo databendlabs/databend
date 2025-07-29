@@ -35,13 +35,13 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::StateAddr;
 use num_traits::AsPrimitive;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::get_levels;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;

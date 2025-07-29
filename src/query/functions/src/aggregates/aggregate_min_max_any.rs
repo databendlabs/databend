@@ -31,8 +31,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_min_max_any_decimal::MinMaxAnyDecimalState;
 use super::aggregate_scalar_state::need_manual_drop_state;
 use super::aggregate_scalar_state::ChangeIf;
@@ -46,6 +44,9 @@ use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
 use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionFeatures;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -410,7 +411,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
 }
 
 pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -421,7 +422,7 @@ pub fn aggregate_min_function_desc() -> AggregateFunctionDescription {
 }
 
 pub fn aggregate_max_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

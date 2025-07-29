@@ -28,13 +28,13 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::get_levels;
 use super::AggrState;
+use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::QuantileData;

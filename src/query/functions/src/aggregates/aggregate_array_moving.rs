@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -50,17 +51,43 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function::AggregateFunctionRef;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::aggregate_sum::SumState;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::assert_variadic_params;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
+
+trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
+    fn merge(&mut self, other: &Self) -> Result<()>;
+
+    fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
+
+    fn accumulate_row(&mut self, column: &BlockEntry, row: usize) -> Result<()>;
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        entry: &BlockEntry,
+    ) -> Result<()>;
+
+    fn merge_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        window_size: &Option<usize>,
+    ) -> Result<()>;
+
+    fn merge_avg_result(
+        &mut self,
+        builder: &mut ColumnBuilder,
+        count: u64,
+        scale_add: u8,
+        window_size: &Option<usize>,
+    ) -> Result<()>;
+}
 
 #[derive(Default, Debug, BorshDeserialize, BorshSerialize)]
 pub struct NumberArrayMovingSumState<T, TSum> {
@@ -215,7 +242,7 @@ where T: Decimal
         + BorshDeserialize
         + Copy
         + Clone
-        + std::fmt::Debug
+        + Debug
         + std::cmp::PartialOrd
 {
     #[inline]
@@ -397,12 +424,12 @@ where T: Decimal
 }
 
 #[derive(Clone)]
-pub struct AggregateArrayMovingAvgFunction<State> {
+struct AggregateArrayMovingAvgFunction<State> {
     display_name: String,
     window_size: Option<usize>,
-    sum_t: PhantomData<State>,
     return_type: DataType,
     scale_add: u8,
+    _s: PhantomData<State>,
 }
 
 impl<State> AggregateFunction for AggregateArrayMovingAvgFunction<State>
@@ -541,7 +568,7 @@ where State: SumState
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             window_size,
-            sum_t: PhantomData,
+            _s: PhantomData,
             return_type,
             scale_add,
         }))
@@ -600,7 +627,7 @@ pub fn aggregate_array_moving_avg_function_desc() -> AggregateFunctionDescriptio
 }
 
 #[derive(Clone)]
-pub struct AggregateArrayMovingSumFunction<State> {
+struct AggregateArrayMovingSumFunction<State> {
     display_name: String,
     window_size: Option<usize>,
     sum_t: PhantomData<State>,
@@ -727,7 +754,7 @@ impl<State> fmt::Display for AggregateArrayMovingSumFunction<State> {
 impl<State> AggregateArrayMovingSumFunction<State>
 where State: SumState
 {
-    pub fn try_create(
+    fn try_create(
         display_name: &str,
         params: Vec<Scalar>,
         return_type: DataType,

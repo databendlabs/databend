@@ -40,12 +40,12 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregator_common::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
 use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;

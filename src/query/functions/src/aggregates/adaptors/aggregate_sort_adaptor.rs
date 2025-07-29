@@ -42,7 +42,7 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use itertools::Itertools;
 
-use crate::aggregates::AggregateFunctionSortDesc;
+use super::AggregateFunctionSortDesc;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct SortAggState {

@@ -25,9 +25,9 @@ use databend_common_expression::Scalar;
 
 use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionOrNullAdaptor;
+use super::AggregateFunctionRef;
 use super::AggregateFunctionSortAdaptor;
-use crate::aggregates::AggregateFunctionRef;
-use crate::aggregates::Aggregators;
+use super::Aggregators;
 
 // The NULL value in the those function needs to be handled separately.
 const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 7] = [
@@ -166,7 +166,7 @@ pub struct AggregateFunctionFactory {
 }
 
 impl AggregateFunctionFactory {
-    pub(in crate::aggregates::aggregate_function_factory) fn create() -> AggregateFunctionFactory {
+    pub(in super::aggregate_function_factory) fn create() -> AggregateFunctionFactory {
         AggregateFunctionFactory {
             case_insensitive_desc: Default::default(),
             case_insensitive_combinator_desc: Default::default(),

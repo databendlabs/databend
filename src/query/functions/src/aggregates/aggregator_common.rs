@@ -42,8 +42,8 @@ use super::get_states_layout;
 use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::StatesLayout;
+use super::AggregateFunctionSortDesc;
+use super::StatesLayout;
 use crate::BUILTIN_FUNCTIONS;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {

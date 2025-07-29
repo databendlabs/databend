@@ -31,13 +31,13 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_unary::AggregateUnaryFunction;
 use super::aggregate_unary::UnaryState;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::FunctionData;
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]

@@ -35,13 +35,13 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_variadic_arguments;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
-use crate::aggregates::aggregator_common::assert_variadic_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
 struct AggregateCountState {
     count: u64,
@@ -66,7 +66,7 @@ impl AggregateCountFunction {
     }
 
     pub fn desc() -> AggregateFunctionDescription {
-        let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        let features = super::AggregateFunctionFeatures {
             returns_default_when_only_null: true,
             is_decomposable: true,
             ..Default::default()

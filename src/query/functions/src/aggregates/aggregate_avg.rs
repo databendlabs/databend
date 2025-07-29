@@ -33,15 +33,15 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::assert_unary_arguments;
 use super::batch_merge2;
 use super::batch_serialize2;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionRef;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregator_common::assert_unary_arguments;
-use crate::aggregates::AggregateFunctionRef;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct NumberAvgState<T, TSum>
@@ -347,7 +347,7 @@ pub fn try_create_aggregate_avg_function(
 }
 
 pub fn aggregate_avg_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

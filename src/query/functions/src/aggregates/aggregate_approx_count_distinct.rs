@@ -18,19 +18,7 @@ use std::sync::Arc;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::BuilderMut;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::DateType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::TimestampType;
-use databend_common_expression::types::UInt64Type;
-use databend_common_expression::types::ValueType;
-use databend_common_expression::types::F64;
+use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
@@ -40,13 +28,13 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use simple_hll::HyperLogLog;
 
-use super::aggregate_function::AggregateFunction;
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::extract_number_param;
 use super::AggrState;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -215,7 +203,7 @@ fn create_templated<const P: usize>(
 }
 
 pub fn aggregate_approx_count_distinct_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         returns_default_when_only_null: true,
         ..Default::default()
     };

@@ -41,17 +41,17 @@ use databend_common_expression::StateSerdeItem;
 use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_arguments;
+use super::assert_unary_arguments;
+use super::assert_variadic_params;
 use super::extract_number_param;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateAddrs;
-use crate::aggregates::assert_arguments;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::assert_variadic_params;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 
 #[derive(Clone)]
@@ -694,7 +694,7 @@ fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
 }
 
 pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -705,7 +705,7 @@ pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -716,7 +716,7 @@ pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -727,7 +727,7 @@ pub fn aggregate_bitmap_or_count_function_desc() -> AggregateFunctionDescription
 }
 
 pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -738,7 +738,7 @@ pub fn aggregate_bitmap_xor_count_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -749,7 +749,7 @@ pub fn aggregate_bitmap_union_function_desc() -> AggregateFunctionDescription {
 }
 
 pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };
@@ -760,7 +760,7 @@ pub fn aggregate_bitmap_intersect_function_desc() -> AggregateFunctionDescriptio
 }
 
 pub fn aggregate_bitmap_intersect_count_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

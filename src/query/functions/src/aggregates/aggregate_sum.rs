@@ -37,48 +37,17 @@ use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_unary::UnaryState;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
 use super::AggrState;
 use super::AggrStateLoc;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 
-pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
-    fn merge(&mut self, other: &Self) -> Result<()>;
-    fn mem_size() -> Option<usize> {
-        None
-    }
-
-    fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
-
-    fn accumulate_row(&mut self, column: &BlockEntry, row: usize) -> Result<()>;
-    fn accumulate_keys(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        entry: &BlockEntry,
-    ) -> Result<()>;
-
-    fn merge_result(
-        &mut self,
-        builder: &mut ColumnBuilder,
-        window_size: &Option<usize>,
-    ) -> Result<()>;
-
-    fn merge_avg_result(
-        &mut self,
-        builder: &mut ColumnBuilder,
-        count: u64,
-        scale_add: u8,
-        window_size: &Option<usize>,
-    ) -> Result<()>;
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
 pub struct NumberSumState<N>
 where N: ArgType
 {
@@ -88,7 +57,7 @@ where N: ArgType
 impl<N> Default for NumberSumState<N>
 where
     N: ArgType,
-    N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    N::Scalar: Number,
 {
     fn default() -> Self {
         NumberSumState::<N> {
@@ -136,7 +105,7 @@ where
     T: ArgType + Sync + Send,
     N: ArgType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
-    N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
     for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
 {
     fn add(
@@ -324,7 +293,7 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Default)]
+#[derive(Default)]
 pub struct IntervalSumState {
     pub value: months_days_micros,
 }
@@ -478,7 +447,7 @@ pub fn try_create_aggregate_sum_function(
 }
 
 pub fn aggregate_sum_function_desc() -> AggregateFunctionDescription {
-    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+    let features = super::AggregateFunctionFeatures {
         is_decomposable: true,
         ..Default::default()
     };

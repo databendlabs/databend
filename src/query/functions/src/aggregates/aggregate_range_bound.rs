@@ -38,11 +38,11 @@ use rand::thread_rng;
 use rand::Rng;
 use rand::SeedableRng;
 
-use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
+use super::AggregateFunctionDescription;
+use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -352,7 +352,7 @@ pub fn try_create_aggregate_range_bound_function(
 /// partition boundaries based on the distribution of the data. The boundaries might be `[1, 6]`.
 pub fn aggregate_range_bound_function_desc() -> AggregateFunctionDescription {
     AggregateFunctionDescription::creator(Box::new(
-        crate::aggregates::try_create_aggregate_range_bound_function,
+        super::try_create_aggregate_range_bound_function,
     ))
 }
 
