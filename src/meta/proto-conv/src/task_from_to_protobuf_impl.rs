@@ -156,7 +156,8 @@ impl FromToProto for mt::TaskMessage {
                 Message::ScheduleTask(task) => {
                     mt::TaskMessage::ScheduleTask(mt::Task::from_pb(task)?)
                 }
-                Message::DeleteTask(DeleteTask {
+                Message::DeleteTask(task_name) => mt::TaskMessage::DeleteTask(task_name, None),
+                Message::DeleteTaskV2(DeleteTask {
                     task_name,
                     warehouse_options,
                 }) => {
@@ -176,7 +177,7 @@ impl FromToProto for mt::TaskMessage {
             mt::TaskMessage::ExecuteTask(task) => Message::ExecuteTask(task.to_pb()?),
             mt::TaskMessage::ScheduleTask(task) => Message::ScheduleTask(task.to_pb()?),
             mt::TaskMessage::DeleteTask(task_name, warehouse_options) => {
-                Message::DeleteTask(DeleteTask {
+                Message::DeleteTaskV2(DeleteTask {
                     task_name: task_name.clone(),
                     warehouse_options: warehouse_options.as_ref().map(|w| pb::WarehouseOptions {
                         warehouse: w.warehouse.clone(),
