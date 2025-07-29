@@ -110,7 +110,7 @@ pub enum TaskMessage {
     //  Schedule Task will try to spawn a thread in Query to continue running according to the time set in schedule
     ScheduleTask(Task),
     // Delete the task information and try to cancel the scheduled task in the query.
-    DeleteTask(String),
+    DeleteTask(String, Option<WarehouseOptions>),
     //  After Task will bind Task to the tasks in Task.afters.
     // When Execute Task is executed, after all the after tasks of Task are completed,
     // the execution will continue.
@@ -123,7 +123,7 @@ impl TaskMessage {
             TaskMessage::ExecuteTask(task)
             | TaskMessage::ScheduleTask(task)
             | TaskMessage::AfterTask(task) => task.task_name.as_str(),
-            TaskMessage::DeleteTask(task_name) => task_name.as_str(),
+            TaskMessage::DeleteTask(task_name, _) => task_name.as_str(),
         }
     }
 
@@ -131,7 +131,7 @@ impl TaskMessage {
         match self {
             TaskMessage::ExecuteTask(_) => TaskMessageType::Execute,
             TaskMessage::ScheduleTask(_) => TaskMessageType::Schedule,
-            TaskMessage::DeleteTask(_) => TaskMessageType::Delete,
+            TaskMessage::DeleteTask(_, _) => TaskMessageType::Delete,
             TaskMessage::AfterTask(_) => TaskMessageType::After,
         }
     }
@@ -161,5 +161,14 @@ impl TaskMessage {
     /// (as produced by `TaskMessage::prefix()`), and excludes any other unrelated prefixes.
     pub fn prefix_range() -> (i64, i64) {
         (0, 1)
+    }
+
+    pub fn warehouse_options(&self) -> Option<&WarehouseOptions> {
+        match self {
+            TaskMessage::ExecuteTask(task)
+            | TaskMessage::ScheduleTask(task)
+            | TaskMessage::AfterTask(task) => task.warehouse_options.as_ref(),
+            TaskMessage::DeleteTask(_, warehouse_options) => warehouse_options.as_ref(),
+        }
     }
 }
