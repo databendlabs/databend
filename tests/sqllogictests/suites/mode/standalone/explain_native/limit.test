@@ -24,11 +24,11 @@ Limit
 query T
 explain select * from (select t.number from numbers(10) as t order by number desc) order by number asc
 ----
-Sort
+Sort(Single)
 ├── output columns: [t.number (#0)]
 ├── sort keys: [number ASC NULLS LAST]
 ├── estimated rows: 10.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number DESC NULLS LAST]
     ├── estimated rows: 10.00
@@ -50,7 +50,7 @@ Limit
 ├── limit: 9
 ├── offset: 0
 ├── estimated rows: 8.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 8.00
@@ -59,7 +59,7 @@ Limit
         ├── limit: 8
         ├── offset: 0
         ├── estimated rows: 8.00
-        └── Sort
+        └── Sort(Single)
             ├── output columns: [t.number (#0)]
             ├── sort keys: [number DESC NULLS LAST]
             ├── estimated rows: 10.00
@@ -81,7 +81,7 @@ Limit
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 0.20
-└── Sort
+└── Sort(Single)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number DESC NULLS LAST]
     ├── estimated rows: 0.20
@@ -177,7 +177,7 @@ Limit
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [c (#4), count(t1.number) (#1)]
     ├── sort keys: [count(t1.number) ASC NULLS LAST]
     ├── estimated rows: 2.00

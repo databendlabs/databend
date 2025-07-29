@@ -58,6 +58,17 @@ impl Rows for BinaryColumn {
     fn slice(&self, range: Range<usize>) -> Self {
         self.slice(range)
     }
+
+    fn scalar_as_item<'a>(s: &'a Scalar) -> Self::Item<'a> {
+        match s {
+            Scalar::Binary(s) => s,
+            _ => unreachable!(),
+        }
+    }
+
+    fn owned_item(item: Self::Item<'_>) -> Scalar {
+        Scalar::Binary(Vec::from(item))
+    }
 }
 
 impl RowConverter<BinaryColumn> for CommonRowConverter {

@@ -443,12 +443,10 @@ async fn optimize_plan(ctx: Arc<QueryContext>, plan: Plan) -> Result<Plan> {
         _ => Arc::new(parking_lot::RwLock::new(Metadata::default())),
     };
 
+    let settings = ctx.get_settings();
     let opt_ctx = OptimizerContext::new(ctx, metadata)
+        .with_settings(&settings)?
         .set_enable_distributed_optimization(true)
-        .set_enable_join_reorder(true)
-        .set_enable_dphyp(true)
-        .set_max_push_down_limit(10000)
-        .set_enable_trace(true)
         .clone();
 
     optimize(opt_ctx, plan).await
@@ -609,6 +607,12 @@ async fn run_test_case(
 
 fn configure_optimizer(ctx: &Arc<QueryContext>, auto_stats: bool) -> Result<()> {
     let settings = ctx.get_settings();
+
+    settings.set_setting("enable_dphyp".to_string(), "1".to_string())?;
+    settings.set_setting("max_push_down_limit".to_string(), "10000".to_string())?;
+    settings.set_setting("enable_optimizer_trace".to_string(), "1".to_string())?;
+    settings.set_setting("enable_shuffle_sort".to_string(), "0".to_string())?;
+
     if auto_stats {
         settings.set_optimizer_skip_list("".to_string())
     } else {

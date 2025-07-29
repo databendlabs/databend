@@ -34,8 +34,6 @@ pub struct Sort {
     pub items: Vec<SortItem>,
     pub limit: Option<usize>,
 
-    /// If the sort plan is after the exchange plan.
-    /// It's [None] if the sorting plan is in single node mode.
     pub after_exchange: Option<bool>,
 
     /// The columns needed by the plan after the sort plan.

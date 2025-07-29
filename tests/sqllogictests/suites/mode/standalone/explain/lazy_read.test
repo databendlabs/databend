@@ -19,7 +19,7 @@ RowFetch
     ├── limit: 2
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── sort keys: [a DESC NULLS LAST]
         ├── estimated rows: 0.00
@@ -94,7 +94,7 @@ RowFetch
     ├── limit: 10
     ├── offset: 0
     ├── estimated rows: 0.00
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
         ├── sort keys: [time DESC NULLS LAST]
         ├── estimated rows: 0.00
@@ -126,7 +126,7 @@ Limit
 ├── limit: 2
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── sort keys: [a DESC NULLS LAST]
     ├── estimated rows: 0.00
@@ -194,7 +194,7 @@ Limit
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t_lazy.a (#0), x (#7), y (#8)]
     ├── sort keys: [x ASC NULLS LAST]
     ├── estimated rows: 0.00
@@ -221,7 +221,7 @@ Limit
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 0.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8), t_lazy.b (#1)]
     ├── sort keys: [x ASC NULLS LAST]
     ├── estimated rows: 0.00
@@ -234,7 +234,7 @@ Limit
             ├── limit: 2
             ├── offset: 0
             ├── estimated rows: 0.00
-            └── Sort
+            └── Sort(Single)
                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9), x (#7), y (#8)]
                 ├── sort keys: [y ASC NULLS LAST]
                 ├── estimated rows: 0.00
@@ -251,7 +251,7 @@ Limit
                             ├── limit: 3
                             ├── offset: 0
                             ├── estimated rows: 0.00
-                            └── Sort
+                            └── Sort(Single)
                                 ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#9)]
                                 ├── sort keys: [a ASC NULLS LAST]
                                 ├── estimated rows: 0.00

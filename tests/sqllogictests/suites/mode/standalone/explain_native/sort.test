@@ -4,7 +4,7 @@ create or replace table t1(a int, b int);
 query T
 explain select a from (select * from t1 order by a) as t2 where a > 1;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.a (#0)]
 ├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -21,7 +21,7 @@ Sort
 query T
 explain select a from (select * from t1) where a > 1 order by a;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.a (#0)]
 ├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00
@@ -38,7 +38,7 @@ Sort
 query T
 explain select a from (select * from t1) as t2 where t2.a > 1 order by a;
 ----
-Sort
+Sort(Single)
 ├── output columns: [t1.a (#0)]
 ├── sort keys: [a ASC NULLS LAST]
 ├── estimated rows: 0.00

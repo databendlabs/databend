@@ -35,15 +35,13 @@ use databend_common_pipeline_transforms::MergeSort;
 use databend_common_pipeline_transforms::SortSpillParams;
 use databend_common_pipeline_transforms::TransformSortMergeLimit;
 
+use super::sort_spill::create_memory_merger;
+use super::sort_spill::MemoryMerger;
+use super::sort_spill::OutputData;
+use super::sort_spill::SortSpill;
+use super::Base;
+use super::MemoryRows;
 use crate::spillers::Spiller;
-
-mod sort_spill;
-use sort_spill::create_memory_merger;
-use sort_spill::MemoryMerger;
-use sort_spill::SortSpill;
-
-mod builder;
-pub use builder::TransformSortBuilder;
 
 #[derive(Debug)]
 enum State {
@@ -53,14 +51,6 @@ enum State {
     Sort,
     /// Finish the process.
     Finish,
-}
-
-#[derive(Clone)]
-struct Base {
-    schema: DataSchemaRef,
-    spiller: Arc<Spiller>,
-    sort_row_offset: usize,
-    limit: Option<usize>,
 }
 
 enum Inner<A: SortAlgorithm> {
@@ -102,8 +92,7 @@ where
     A: SortAlgorithm,
     C: RowConverter<A::Rows>,
 {
-    #[allow(clippy::too_many_arguments)]
-    fn new(
+    pub(super) fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: DataSchemaRef,
@@ -150,20 +139,15 @@ where
     }
 
     fn generate_order_column(&self, mut block: DataBlock) -> Result<(A::Rows, DataBlock)> {
-        let order_by_cols = self
-            .sort_desc
-            .iter()
-            .map(|desc| block.get_by_offset(desc.offset).clone())
-            .collect::<Vec<_>>();
         let rows = self
             .row_converter
-            .convert(&order_by_cols, block.num_rows())?;
+            .convert_data_block(&self.sort_desc, &block)?;
         let order_col = rows.to_column();
         block.add_column(order_col);
         Ok((rows, block))
     }
 
-    fn prepare_spill_limit(&mut self) -> Result<()> {
+    fn limit_trans_to_spill(&mut self) -> Result<()> {
         let Inner::Limit(merger) = &self.inner else {
             unreachable!()
         };
@@ -177,7 +161,7 @@ where
         Ok(())
     }
 
-    fn prepare_spill(&mut self, input_data: Vec<DataBlock>) {
+    fn collect_trans_to_spill(&mut self, input_data: Vec<DataBlock>) {
         let (num_rows, num_bytes) = input_data
             .iter()
             .map(|block| (block.num_rows(), block.memory_size()))
@@ -187,6 +171,19 @@ where
         let params = self.determine_params(num_bytes, num_rows);
         let spill_sort = SortSpill::new(self.base.clone(), params);
         self.inner = Inner::Spill(input_data, spill_sort);
+    }
+
+    fn trans_to_spill(&mut self) -> Result<()> {
+        match &mut self.inner {
+            Inner::Limit(_) => self.limit_trans_to_spill(),
+            Inner::Collect(input_data) => {
+                let input_data = std::mem::take(input_data);
+                self.collect_trans_to_spill(input_data);
+                Ok(())
+            }
+            Inner::Spill(_, _) => Ok(()),
+            Inner::Memory(_) => unreachable!(),
+        }
     }
 
     fn determine_params(&self, bytes: usize, rows: usize) -> SortSpillParams {
@@ -306,16 +303,6 @@ where
     }
 }
 
-trait MemoryRows {
-    fn in_memory_rows(&self) -> usize;
-}
-
-impl MemoryRows for Vec<DataBlock> {
-    fn in_memory_rows(&self) -> usize {
-        self.iter().map(|s| s.num_rows()).sum::<usize>()
-    }
-}
-
 #[async_trait::async_trait]
 impl<A, C> Processor for TransformSort<A, C>
 where
@@ -362,6 +349,7 @@ where
             return match self.state {
                 State::Collect => {
                     if self.check_spill() {
+                        // delay the handle of input until the next call.
                         Ok(Event::Async)
                     } else {
                         Ok(Event::Sync)
@@ -432,18 +420,7 @@ where
         match &self.state {
             State::Collect => {
                 let finished = self.input.is_finished();
-                match &mut self.inner {
-                    Inner::Limit(_) => {
-                        self.prepare_spill_limit()?;
-                    }
-                    Inner::Collect(input_data) => {
-                        debug_assert!(!finished);
-                        let input_data = std::mem::take(input_data);
-                        self.prepare_spill(input_data);
-                    }
-                    Inner::Spill(_, _) => (),
-                    Inner::Memory(_) => unreachable!(),
-                };
+                self.trans_to_spill()?;
 
                 let input = self.input_rows();
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
@@ -454,12 +431,13 @@ where
 
                 if memory_rows > 0 && memory_rows + input > max {
                     spill_sort
-                        .subsequent_spill_last(memory_rows + input - max)
+                        .collect_spill_last(memory_rows + input - max)
                         .await?;
                 }
-                if input > max || finished && input > 0 {
+                let need_spill = input > max;
+                if need_spill || finished && input > 0 {
                     spill_sort
-                        .sort_input_data(std::mem::take(input_data), &self.aborting)
+                        .sort_input_data(std::mem::take(input_data), need_spill, &self.aborting)
                         .await?;
                 }
                 if finished {
@@ -471,8 +449,8 @@ where
                 let Inner::Spill(input_data, spill_sort) = &mut self.inner else {
                     unreachable!()
                 };
-                debug_assert!(input_data.is_empty());
-                let (block, finish) = spill_sort.on_restore().await?;
+                assert!(input_data.is_empty());
+                let OutputData { block, finish, .. } = spill_sort.on_restore().await?;
                 self.output_data.extend(block);
                 if finish {
                     self.state = State::Finish

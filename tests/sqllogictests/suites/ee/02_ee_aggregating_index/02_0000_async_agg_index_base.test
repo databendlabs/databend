@@ -414,7 +414,7 @@ Logout 2 2 5.0
 query T
 explain select event_name, user_id, max(user_id), avg(id) from t where user_id > 1 group by event_name, user_id order by event_name, user_id desc
 ----
-Sort
+Sort(Single)
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
 ├── sort keys: [event_name ASC NULLS LAST, user_id DESC NULLS LAST]
 ├── estimated rows: 6.00

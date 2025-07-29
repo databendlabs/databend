@@ -19,13 +19,6 @@ use chrono::Utc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_sql::executor::physical_plans::AggregateExpand;
-use databend_common_sql::executor::physical_plans::AggregateFinal;
-use databend_common_sql::executor::physical_plans::AggregatePartial;
-use databend_common_sql::executor::physical_plans::EvalScalar;
-use databend_common_sql::executor::physical_plans::Filter;
-use databend_common_sql::executor::physical_plans::Sort;
-use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::plans::AnalyzeTablePlan;
@@ -60,9 +53,17 @@ impl AnalyzeTableInterpreter {
         Ok(AnalyzeTableInterpreter { ctx, plan })
     }
 
-    async fn plan_sql(&self, sql: String) -> Result<(PhysicalPlan, BindContext)> {
+    async fn plan_sql(
+        &self,
+        sql: String,
+        force_disable_distributed_optimization: bool,
+    ) -> Result<(PhysicalPlan, BindContext)> {
         let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(&sql).await?;
+        let extras = planner.parse_sql(&sql)?;
+        let plan = planner
+            .plan_stmt(&extras.statement, force_disable_distributed_optimization)
+            .await?;
+
         let (select_plan, bind_context) = match &plan {
             Plan::Query {
                 s_expr,
@@ -201,7 +202,7 @@ impl Interpreter for AnalyzeTableInterpreter {
 
         info!("Analyze via sql: {sql}");
 
-        let (physical_plan, bind_context) = self.plan_sql(sql).await?;
+        let (physical_plan, bind_context) = self.plan_sql(sql, false).await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         // After profiling, computing histogram is heavy and the bottleneck is window function(90%).
@@ -236,10 +237,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                     .collect::<Vec<_>>();
             for (sql, col_id) in histogram_sqls.into_iter() {
                 info!("Analyze histogram via sql: {sql}");
-                let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
-                if !self.ctx.get_cluster().is_empty() {
-                    histogram_plan = remove_exchange(histogram_plan);
-                }
+                let (histogram_plan, bind_context) = self.plan_sql(sql, true).await?;
                 let mut histogram_build_res = build_query_pipeline(
                     &QueryContext::create_from(self.ctx.as_ref()),
                     &bind_context.columns,
@@ -276,78 +274,4 @@ impl Interpreter for AnalyzeTableInterpreter {
         )?;
         Ok(build_res)
     }
-}
-
-fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
-    #[recursive::recursive]
-    fn traverse(plan: PhysicalPlan) -> PhysicalPlan {
-        match plan {
-            PhysicalPlan::Filter(plan) => PhysicalPlan::Filter(Filter {
-                plan_id: plan.plan_id,
-                projections: plan.projections,
-                input: Box::new(traverse(*plan.input)),
-                predicates: plan.predicates,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::EvalScalar(plan) => PhysicalPlan::EvalScalar(EvalScalar {
-                plan_id: plan.plan_id,
-                projections: plan.projections,
-                input: Box::new(traverse(*plan.input)),
-                exprs: plan.exprs,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::AggregateExpand(plan) => PhysicalPlan::AggregateExpand(AggregateExpand {
-                plan_id: plan.plan_id,
-                input: Box::new(traverse(*plan.input)),
-                group_bys: plan.group_bys,
-                grouping_sets: plan.grouping_sets,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::AggregatePartial(plan) => {
-                PhysicalPlan::AggregatePartial(AggregatePartial {
-                    plan_id: plan.plan_id,
-                    input: Box::new(traverse(*plan.input)),
-                    group_by: plan.group_by,
-                    agg_funcs: plan.agg_funcs,
-                    rank_limit: plan.rank_limit,
-                    enable_experimental_aggregate_hashtable: plan
-                        .enable_experimental_aggregate_hashtable,
-                    group_by_display: plan.group_by_display,
-                    stat_info: plan.stat_info,
-                })
-            }
-            PhysicalPlan::AggregateFinal(plan) => PhysicalPlan::AggregateFinal(AggregateFinal {
-                plan_id: plan.plan_id,
-                input: Box::new(traverse(*plan.input)),
-                group_by: plan.group_by,
-                agg_funcs: plan.agg_funcs,
-                before_group_by_schema: plan.before_group_by_schema,
-                group_by_display: plan.group_by_display,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::Window(plan) => PhysicalPlan::Window(Window {
-                plan_id: plan.plan_id,
-                index: plan.index,
-                input: Box::new(traverse(*plan.input)),
-                func: plan.func,
-                partition_by: plan.partition_by,
-                order_by: plan.order_by,
-                window_frame: plan.window_frame,
-                limit: plan.limit,
-            }),
-            PhysicalPlan::Sort(plan) => PhysicalPlan::Sort(Sort {
-                plan_id: plan.plan_id,
-                input: Box::new(traverse(*plan.input)),
-                order_by: plan.order_by,
-                limit: plan.limit,
-                after_exchange: plan.after_exchange,
-                pre_projection: plan.pre_projection,
-                stat_info: plan.stat_info,
-            }),
-            PhysicalPlan::Exchange(plan) => traverse(*plan.input),
-            _ => plan,
-        }
-    }
-
-    traverse(plan)
 }
