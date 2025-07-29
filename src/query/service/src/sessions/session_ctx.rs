@@ -88,11 +88,15 @@ pub struct SessionContext {
 }
 
 impl SessionContext {
-    pub fn try_create(settings: Arc<Settings>, typ: SessionType) -> Result<Self> {
+    pub fn try_create(
+        settings: Arc<Settings>,
+        typ: SessionType,
+        current_user: Option<UserInfo>,
+    ) -> Result<Self> {
         Ok(SessionContext {
             settings,
             abort: Default::default(),
-            current_user: Default::default(),
+            current_user: RwLock::new(current_user),
             current_role: Default::default(),
             auth_role: Default::default(),
             secondary_roles: Default::default(),

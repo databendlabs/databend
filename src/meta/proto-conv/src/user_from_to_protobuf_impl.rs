@@ -197,6 +197,9 @@ impl FromToProto for mt::principal::GrantObject {
             pb::grant_object::Object::Connection(pb::grant_object::GrantConnectionObject {
                 connection,
             }) => Ok(mt::principal::GrantObject::Connection(connection)),
+            pb::grant_object::Object::Sequence(pb::grant_object::GrantSequenceObject {
+                sequence,
+            }) => Ok(mt::principal::GrantObject::Sequence(sequence)),
         }
     }
 
@@ -249,6 +252,11 @@ impl FromToProto for mt::principal::GrantObject {
                     connection: c.clone(),
                 }),
             ),
+            mt::principal::GrantObject::Sequence(s) => Some(pb::grant_object::Object::Sequence(
+                pb::grant_object::GrantSequenceObject {
+                    sequence: s.clone(),
+                },
+            )),
         };
         Ok(pb::GrantObject {
             ver: VER,
