@@ -25,9 +25,16 @@ use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::batch_merge2;
+use super::batch_serialize2;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
@@ -66,7 +73,7 @@ where
 impl<T, TSum> UnaryState<T, Float64Type> for NumberAvgState<T, TSum>
 where
     T: ValueType + Sync + Send,
-    TSum: ValueType,
+    TSum: ArgType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
     TSum::Scalar:
         Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
@@ -97,6 +104,49 @@ where
         builder.push(F64::from(value));
         Ok(())
     }
+
+    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        std::vec![
+            StateSerdeItem::DataType(TSum::data_type()),
+            StateSerdeItem::DataType(UInt64Type::data_type())
+        ]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize2::<TSum, UInt64Type, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, (sum, count)| {
+                sum.push_item(TSum::to_scalar_ref(&state.value));
+                count.push_item(state.count);
+                Ok(())
+            },
+        )
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge2::<TSum, UInt64Type, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, (sum, count)| {
+                state.value += TSum::to_owned_scalar(sum);
+                state.count += count;
+                Ok(())
+            },
+        )
+    }
 }
 
 struct DecimalAvgData {
@@ -113,68 +163,56 @@ impl FunctionData for DecimalAvgData {
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct DecimalAvgState<const OVERFLOW: bool, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal,
+where T: BorshSerialize + BorshDeserialize
 {
-    pub value: T::Scalar,
+    pub value: T,
     pub count: u64,
 }
 
 impl<const OVERFLOW: bool, T> Default for DecimalAvgState<OVERFLOW, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+where T: Default + BorshSerialize + BorshDeserialize
 {
     fn default() -> Self {
         Self {
-            value: T::Scalar::default(),
+            value: T::default(),
             count: 0,
         }
     }
 }
 
 impl<const OVERFLOW: bool, T> DecimalAvgState<OVERFLOW, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign,
+where T: BorshSerialize + BorshDeserialize + Decimal + std::ops::AddAssign
 {
-    fn add_internal(&mut self, count: u64, value: T::ScalarRef<'_>) -> Result<()> {
+    fn add_internal(&mut self, count: u64, value: T) -> Result<()> {
         self.count += count;
-        self.value += T::to_owned_scalar(value);
-        if OVERFLOW && (self.value > T::Scalar::DECIMAL_MAX || self.value < T::Scalar::DECIMAL_MIN)
-        {
+        self.value += value;
+        if OVERFLOW && (self.value > T::DECIMAL_MAX || self.value < T::DECIMAL_MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 self.value,
-                T::Scalar::DECIMAL_MIN,
-                T::Scalar::DECIMAL_MAX,
+                T::DECIMAL_MIN,
+                T::DECIMAL_MAX,
             )));
         }
         Ok(())
     }
 }
 
-impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalAvgState<OVERFLOW, T>
-where
-    T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+impl<const OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
+    for DecimalAvgState<OVERFLOW, T>
+where T: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize
 {
-    fn add(
-        &mut self,
-        other: T::ScalarRef<'_>,
-        _function_data: Option<&dyn FunctionData>,
-    ) -> Result<()> {
+    fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         self.add_internal(1, other)
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.add_internal(rhs.count, T::to_scalar_ref(&rhs.value))
+        self.add_internal(rhs.count, rhs.value)
     }
 
     fn merge_result(
         &mut self,
-        mut builder: T::ColumnBuilderMut<'_>,
+        mut builder: <DecimalType<T> as ValueType>::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         // # Safety
@@ -187,19 +225,58 @@ where
         };
         match self
             .value
-            .checked_mul(T::Scalar::e(decimal_avg_data.scale_add))
-            .and_then(|v| v.checked_div(T::Scalar::from_i128(self.count)))
+            .checked_mul(T::e(decimal_avg_data.scale_add))
+            .and_then(|v| v.checked_div(T::from_i128(self.count)))
         {
             Some(value) => {
-                builder.push_item(T::to_scalar_ref(&value));
+                builder.push_item(value);
                 Ok(())
             }
             None => Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {} mul {}",
                 self.value,
-                T::Scalar::e(decimal_avg_data.scale_add)
+                T::e(decimal_avg_data.scale_add)
             ))),
         }
+    }
+
+    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        std::vec![
+            DataType::Decimal(T::default_decimal_size()).into(),
+            UInt64Type::data_type().into()
+        ]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize2::<DecimalType<T>, UInt64Type, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, (sum, count)| {
+                sum.push_item(state.value);
+                count.push_item(state.count);
+                Ok(())
+            },
+        )
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge2::<DecimalType<T>, UInt64Type, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, (sum, count)| state.add_internal(count, sum),
+        )
     }
 }
 
@@ -240,7 +317,7 @@ pub fn try_create_aggregate_avg_function(
 
                     if overflow {
                         let func = AggregateUnaryFunction::<
-                            DecimalAvgState<true, DecimalType<DECIMAL>>,
+                            DecimalAvgState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
                         >::try_create(
@@ -250,7 +327,7 @@ pub fn try_create_aggregate_avg_function(
                         Ok(Arc::new(func))
                     } else {
                         let func = AggregateUnaryFunction::<
-                            DecimalAvgState<false, DecimalType<DECIMAL>>,
+                            DecimalAvgState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
                         >::try_create(
@@ -263,8 +340,8 @@ pub fn try_create_aggregate_avg_function(
             })
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
-            display_name, arguments[0]
+            "{display_name} does not support type '{:?}'",
+            arguments[0]
         ))),
     })
 }

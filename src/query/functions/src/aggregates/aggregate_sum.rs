@@ -172,8 +172,8 @@ where
         Ok(())
     }
 
-    fn serialize_type() -> Vec<StateSerdeItem> {
-        std::vec![StateSerdeItem::DataType(N::data_type())]
+    fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        std::vec![N::data_type().into()]
     }
 
     fn batch_serialize(

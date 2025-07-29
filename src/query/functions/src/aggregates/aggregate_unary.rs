@@ -83,7 +83,7 @@ where
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
 
-    fn serialize_type() -> Vec<StateSerdeItem> {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
 
@@ -137,8 +137,6 @@ where
     R: ValueType,
 {
     display_name: String,
-    _params: Vec<Scalar>,
-    _argument: DataType,
     return_type: DataType,
     function_data: Option<Box<dyn FunctionData>>,
     need_drop: bool,
@@ -185,8 +183,6 @@ where
         AggregateUnaryFunction {
             display_name: display_name.to_string(),
             return_type,
-            _params,
-            _argument,
             function_data: None,
             need_drop: false,
             _phantom: Default::default(),
@@ -274,7 +270,7 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        S::serialize_type()
+        S::serialize_type(self.function_data.as_deref())
     }
 
     fn batch_serialize(

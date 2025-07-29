@@ -199,6 +199,12 @@ pub enum StateSerdeItem {
     Binary(Option<usize>),
 }
 
+impl From<DataType> for StateSerdeItem {
+    fn from(value: DataType) -> Self {
+        Self::DataType(value)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StateSerdeType(Box<[StateSerdeItem]>);
 
