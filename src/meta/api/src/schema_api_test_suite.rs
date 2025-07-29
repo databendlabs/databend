@@ -2792,7 +2792,7 @@ impl SchemaApiTestSuite {
                     .await;
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
-                assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
+                assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
             }
 
             info!("--- update table meta: virtual column too many");
@@ -7762,7 +7762,7 @@ impl SchemaApiTestSuite {
             let result = mt.update_multi_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
-            assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
+            assert_eq!(ErrorCode::DUPLICATED_UPSERT_FILES, err.code());
 
             let req = GetTableCopiedFileReq {
                 table_id,

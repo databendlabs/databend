@@ -144,16 +144,18 @@ impl Pipeline {
             return self;
         }
 
+        let root_scope = root_scope.unwrap();
+
         for node in self.graph.node_weights_mut() {
             let Some(scope) = node.scope.as_mut() else {
-                node.scope = root_scope.clone();
+                node.scope = Some(root_scope.clone());
                 continue;
             };
 
-            if scope.parent_id.is_none() {
+            if scope.parent_id.is_none() && scope.id != root_scope.id {
                 unsafe {
                     let scope = Arc::get_mut_unchecked(scope);
-                    scope.parent_id = root_scope.as_ref().map(|x| x.id);
+                    scope.parent_id = Some(root_scope.id);
                 }
             }
         }

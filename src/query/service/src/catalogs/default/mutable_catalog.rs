@@ -697,9 +697,24 @@ impl Catalog for MutableCatalog {
             }
         }
 
+        let table_updates: Vec<String> = req
+            .update_table_metas
+            .iter()
+            .map(|(update_req, _)| {
+                format!("table_id={}, seq={}", update_req.table_id, update_req.seq)
+            })
+            .collect();
+
+        let stream_updates: Vec<String> = req
+            .update_stream_metas
+            .iter()
+            .map(|stream_req| format!("stream_id={}, seq={}", stream_req.stream_id, stream_req.seq))
+            .collect();
+
         info!(
-            "[CATALOG] Updating multiple table metadata: table_count={}",
-            req.update_table_metas.len()
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}]",
+            table_updates.join("; "),
+            stream_updates.join("; ")
         );
         let begin = Instant::now();
         let res = self.ctx.meta.update_multi_table_meta(req).await;
