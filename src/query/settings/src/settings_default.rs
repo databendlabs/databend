@@ -145,10 +145,17 @@ impl DefaultSettings {
                 }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
-                    desc: "Sets the maximum byte size of a single data block that can be read.",
+                    desc: "Sets the maximum rows size of a single data block that can be read.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("max_block_bytes", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(50 * 1024 * 1024),
+                    desc: "Sets the maximum byte size of a single data block that can be read.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
                 }),
                 ("sequence_step_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),

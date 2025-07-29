@@ -30,6 +30,9 @@ use databend_common_expression::BlockRowIndex;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
+use databend_storages_common_cache::BlockMetaCache;
+use databend_storages_common_cache::CompactSegmentInfoCache;
+use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -37,6 +40,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures_util::future;
 use itertools::Itertools;
 
+use super::fuse_rows_fetcher::RowsFetchMetadata;
 use super::fuse_rows_fetcher::RowsFetcher;
 use crate::io::BlockReader;
 use crate::io::CompactSegmentInfoReader;
@@ -45,17 +49,27 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseTable;
 
+pub struct ParquetRowFetchMetadata {
+    row_bytes: usize,
+}
+
+impl RowsFetchMetadata for ParquetRowFetchMetadata {
+    fn row_bytes(&self) -> usize {
+        self.row_bytes
+    }
+}
+
 pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
     snapshot: Option<Arc<TableSnapshot>>,
     table: Arc<FuseTable>,
-    segment_reader: CompactSegmentInfoReader,
     projection: Projection,
     schema: TableSchemaRef,
-
     settings: ReadSettings,
+
     reader: Arc<BlockReader>,
-    part_map: HashMap<u64, PartInfoPtr>,
-    segment_blocks_cache: HashMap<u64, Vec<Arc<BlockMeta>>>,
+
+    segment_reader: CompactSegmentInfoReader,
+    block_meta_lru_cache: InMemoryLruCache<Arc<BlockMeta>>,
 
     semaphore: Arc<Semaphore>,
     runtime: Arc<Runtime>,
@@ -63,31 +77,37 @@ pub(super) struct ParquetRowsFetcher<const BLOCKING_IO: bool> {
 
 #[async_trait::async_trait]
 impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
+    type Metadata = ParquetRowFetchMetadata;
+
     #[async_backtrace::framed]
-    async fn on_start(&mut self) -> Result<()> {
+    async fn initialize(&mut self) -> Result<()> {
         self.snapshot = self.table.read_table_snapshot().await?;
         Ok(())
     }
 
-    fn clear_cache(&mut self) {
-        self.part_map.clear();
-        self.segment_blocks_cache.clear();
+    // fn clear_cache(&mut self) {
+    //     self.part_map.clear();
+    //     self.segment_blocks_cache.clear();
+    async fn fetch_metadata(&mut self, _block_id: u64) -> Result<Self::Metadata> {
+        todo!()
     }
 
     #[async_backtrace::framed]
-    async fn fetch(&mut self, row_ids: &[u64]) -> Result<DataBlock> {
-        self.prepare_part_map(row_ids).await?;
-
+    async fn fetch(
+        &mut self,
+        row_ids: &[u64],
+        metadata: HashMap<u64, Self::Metadata>,
+    ) -> Result<DataBlock> {
         let num_rows = row_ids.len();
         let mut part_set = HashSet::new();
         let mut row_set = Vec::with_capacity(num_rows);
         let mut block_row_indices = HashMap::new();
         for row_id in row_ids {
-            let (prefix, idx) = split_row_id(*row_id);
-            part_set.insert(prefix);
-            row_set.push((prefix, idx));
+            let (block_id, idx) = split_row_id(*row_id);
+            part_set.insert(block_id);
+            row_set.push((block_id, idx));
             block_row_indices
-                .entry(prefix)
+                .entry(block_id)
                 .or_insert(Vec::new())
                 .push((0u32, idx as u32, 1usize));
         }
@@ -150,6 +170,8 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
 
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
+
+    // }
 }
 
 impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
@@ -162,8 +184,8 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
         runtime: Arc<Runtime>,
     ) -> Self {
         let schema = table.schema();
-        let segment_reader =
-            MetaReaders::segment_info_reader(table.operator.clone(), schema.clone());
+        let operator = table.operator.clone();
+        let segment_reader = MetaReaders::segment_info_reader(operator, schema.clone());
         Self {
             table,
             snapshot: None,
@@ -193,9 +215,12 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             }
 
             let (segment, block) = split_prefix(prefix);
+
             if let std::collections::hash_map::Entry::Vacant(e) =
                 self.segment_blocks_cache.entry(segment)
             {
+                // SegmentCache
+
                 let (location, ver) = snapshot.segments[segment as usize].clone();
                 let compact_segment_info = self
                     .segment_reader

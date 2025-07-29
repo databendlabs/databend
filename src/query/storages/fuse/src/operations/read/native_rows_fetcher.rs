@@ -59,7 +59,7 @@ pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
 #[async_trait::async_trait]
 impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
     #[async_backtrace::framed]
-    async fn on_start(&mut self) -> Result<()> {
+    async fn initialize(&mut self) -> Result<()> {
         self.snapshot = self.table.read_table_snapshot().await?;
         Ok(())
     }
