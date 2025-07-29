@@ -13701,23 +13701,19 @@ dependencies = [
 
 [[package]]
 name = "serde-bridge"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f68e451f87e0f0a51c565c907017f033ecce23a1aef9eb3faee0dfd6e578d84"
+version = "0.1.0"
+source = "git+https://github.com/datafuse-extras/serde-bridge?rev=4f0e99a#4f0e99abc82de8a82046415c90f01f9739bad630"
 dependencies = [
  "anyhow",
- "indexmap 1.9.3",
+ "indexmap 2.9.0",
  "serde",
 ]
 
 [[package]]
 name = "serde-env"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c68119a0846249fd6f4b38561b4b4727dbc4fd9fea074f1253bca7d50440ce58"
+version = "0.2.0"
+source = "git+https://github.com/datafuse-extras/serde-env?rev=085d4b1#085d4b1846ad16e3b7062bf11bf40a1c38d746e1"
 dependencies = [
- "anyhow",
- "log",
  "serde",
 ]
 
@@ -13879,11 +13875,10 @@ dependencies = [
 [[package]]
 name = "serfig"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f40f8bc5badc980cedcab554e3a630a5657ee53a94b274e4c937394e19186af8"
+source = "git+https://github.com/datafuse-extras/serfig?rev=610ac6d#610ac6dfa251206d3667d169b772de7b0f05d151"
 dependencies = [
  "anyhow",
- "indexmap 1.9.3",
+ "indexmap 2.9.0",
  "log",
  "serde",
  "serde-bridge",
