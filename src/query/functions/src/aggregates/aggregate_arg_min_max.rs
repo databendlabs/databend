@@ -41,12 +41,14 @@ use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
+use super::assert_binary_arguments;
+use super::batch_merge3;
+use super::batch_serialize3;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
 use super::AggregateFunctionRef;
 use super::StateAddr;
-use crate::aggregates::assert_binary_arguments;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_mapped_type;
 
@@ -260,31 +262,26 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let [flag_builder, value_builder, arg_builder] = builders else {
-            unreachable!()
-        };
-
-        let flag_builder = flag_builder.as_boolean_mut().unwrap();
-        let mut value_builder = V::downcast_builder(value_builder);
-        let mut arg_builder = A::downcast_builder(arg_builder);
-
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<ArgMinMaxState<A, V, C>>();
-
-            match &state.data {
-                Some((value, arg)) => {
-                    flag_builder.push(true);
-                    value_builder.push_item(V::to_scalar_ref(value));
-                    arg_builder.push_item(A::to_scalar_ref(arg));
+        batch_serialize3::<BooleanType, V, A, ArgMinMaxState<A, V, C>, _>(
+            places,
+            loc,
+            builders,
+            |state, (flag_builder, value_builder, arg_builder)| {
+                match &state.data {
+                    Some((value, arg)) => {
+                        flag_builder.push_item(true);
+                        value_builder.push_item(V::to_scalar_ref(value));
+                        arg_builder.push_item(A::to_scalar_ref(arg));
+                    }
+                    None => {
+                        flag_builder.push_item(false);
+                        value_builder.push_default();
+                        arg_builder.push_default();
+                    }
                 }
-                None => {
-                    flag_builder.push(false);
-                    value_builder.push_default();
-                    arg_builder.push_default();
-                }
-            }
-        }
-        Ok(())
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -294,29 +291,18 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<TernaryType<BooleanType, V, A>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, (flag, value, arg)) in
-                iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
-            {
-                let state = AggrState::new(*place, loc).get::<ArgMinMaxState<A, V, C>>();
+        batch_merge3::<BooleanType, V, A, ArgMinMaxState<A, V, C>, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, (flag, value, arg)| {
                 state.merge_from(ArgMinMaxState::<A, V, C> {
                     data: flag.then_some((V::to_owned_scalar(value), A::to_owned_scalar(arg))),
                     _c: Default::default(),
-                })?;
-            }
-        } else {
-            for (place, (flag, value, arg)) in iter {
-                let state = AggrState::new(*place, loc).get::<ArgMinMaxState<A, V, C>>();
-                state.merge_from(ArgMinMaxState::<A, V, C> {
-                    data: flag.then_some((V::to_owned_scalar(value), A::to_owned_scalar(arg))),
-                    _c: Default::default(),
-                })?;
-            }
-        }
-        Ok(())
+                })
+            },
+        )
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

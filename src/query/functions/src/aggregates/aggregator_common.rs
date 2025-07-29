@@ -17,12 +17,18 @@ use std::fmt::Display;
 use borsh::BorshDeserialize;
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Number;
+use databend_common_expression::types::TernaryType;
+use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -247,4 +253,66 @@ pub(crate) fn get_levels(params: &[Scalar]) -> Result<Vec<f64>> {
         }
     };
     Ok(levels)
+}
+
+pub(super) fn batch_serialize3<A, B, C, S, F>(
+    places: &[StateAddr],
+    loc: &[AggrStateLoc],
+    builders: &mut [ColumnBuilder],
+    serialize: F,
+) -> Result<()>
+where
+    A: ValueType,
+    B: ValueType,
+    C: ValueType,
+    for<'a> F: Fn(
+        &S,
+        (
+            &mut A::ColumnBuilderMut<'a>,
+            &mut B::ColumnBuilderMut<'a>,
+            &mut C::ColumnBuilderMut<'a>,
+        ),
+    ) -> Result<()>,
+{
+    let [a, b, c] = builders else { unreachable!() };
+    let mut a = A::downcast_builder(a);
+    let mut b = B::downcast_builder(b);
+    let mut c = C::downcast_builder(c);
+
+    for place in places {
+        let state = AggrState::new(*place, loc).get::<S>();
+        serialize(state, (&mut a, &mut b, &mut c))?;
+    }
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert_eq!(b.len(), c.len());
+    Ok(())
+}
+
+pub(super) fn batch_merge3<A, B, C, S, F>(
+    places: &[StateAddr],
+    loc: &[AggrStateLoc],
+    state: &BlockEntry,
+    filter: Option<&Bitmap>,
+    merge: F,
+) -> Result<()>
+where
+    A: AccessType,
+    B: AccessType,
+    C: AccessType,
+    for<'a> F: Fn(&mut S, (A::ScalarRef<'a>, B::ScalarRef<'a>, C::ScalarRef<'a>)) -> Result<()>,
+{
+    let view = state.downcast::<TernaryType<A, B, C>>().unwrap();
+    let iter = places.iter().zip(view.iter());
+    if let Some(filter) = filter {
+        for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+            let state = AggrState::new(*place, loc).get::<S>();
+            merge(state, data)?;
+        }
+    } else {
+        for (place, data) in iter {
+            let state = AggrState::new(*place, loc).get::<S>();
+            merge(state, data)?;
+        }
+    }
+    Ok(())
 }
