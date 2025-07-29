@@ -34,8 +34,6 @@ pub const COMPRESSION: &str = "compression";
 pub const CREATE_ON: &str = "create_on";
 pub const LOCATION_PATH: &str = "path";
 pub const LOCATION_FORMAT_VERSION: &str = "format_version";
-pub const BLOCK_STATS_LOCATION: &str = "block_stats_location";
-pub const BLOCK_STATS_SIZE: &str = "block_stats_size";
 
 pub fn block_level_field_names() -> HashSet<String> {
     let mut set = HashSet::new();
@@ -47,8 +45,6 @@ pub fn block_level_field_names() -> HashSet<String> {
     set.insert(BLOOM_FILTER_INDEX_LOCATION.to_string());
     set.insert(BLOOM_FILTER_INDEX_SIZE.to_string());
     set.insert(INVERTED_INDEX_SIZE.to_string());
-    set.insert(BLOCK_STATS_LOCATION.to_string());
-    set.insert(BLOCK_STATS_SIZE.to_string());
     set.insert(COMPRESSION.to_string());
     set.insert(CREATE_ON.to_string());
     set
@@ -134,8 +130,6 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
         TableField::new(BLOOM_FILTER_INDEX_LOCATION, nullable_location_type()),
         TableField::new(BLOOM_FILTER_INDEX_SIZE, u64_t.clone()),
         TableField::new(INVERTED_INDEX_SIZE, nullable_u64_t.clone()),
-        TableField::new(BLOCK_STATS_LOCATION, nullable_location_type()),
-        TableField::new(BLOCK_STATS_SIZE, u64_t.clone()),
         TableField::new(COMPRESSION, u8_t.clone()),
         TableField::new(CREATE_ON, i64_t.clone()),
     ];

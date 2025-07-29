@@ -130,11 +130,6 @@ insert into t2 values(1, 'a'), (2, 'b');
 ----
 2
 
-query I
-select block_stats_size > 0 from fuse_block('db_09_0006', 't2');
-----
-1
-
 statement ok
 alter table t2 set options(approx_distinct_columns = '');
 
@@ -142,12 +137,6 @@ query I
 insert into t2 values(3, 'c'), (4, 'd');
 ----
 2
-
-query I
-select block_stats_size > 0 from fuse_block('db_09_0006', 't2') order by block_location;
-----
-1
-0
 
 statement ok
 DROP TABLE t

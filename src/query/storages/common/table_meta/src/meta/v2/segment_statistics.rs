@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::io::Cursor;
 use std::io::Read;
 
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
@@ -25,25 +22,33 @@ use serde::Serialize;
 use crate::meta::format::compress;
 use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
-use crate::meta::versions::Versioned;
 use crate::meta::FormatVersion;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
-use crate::meta::MetaHLL;
+use crate::meta::RawColumnHLL;
+use crate::meta::Versioned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct BlockStatistics {
+pub struct SegmentStatistics {
     pub format_version: FormatVersion,
 
-    pub hll: HashMap<ColumnId, MetaHLL>,
+    pub blocks: Vec<RawColumnHLL>,
 }
 
-impl BlockStatistics {
-    pub fn new(hll: HashMap<ColumnId, MetaHLL>) -> Self {
+impl SegmentStatistics {
+    pub fn new(blocks: Vec<RawColumnHLL>) -> Self {
         Self {
-            format_version: BlockStatistics::VERSION,
-            hll,
+            format_version: SegmentStatistics::VERSION,
+            blocks,
         }
+    }
+
+    pub fn encoding() -> MetaEncoding {
+        MetaEncoding::MessagePack
+    }
+
+    pub fn compression() -> MetaCompression {
+        MetaCompression::Zstd
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
@@ -69,13 +74,9 @@ impl BlockStatistics {
         Ok(buf)
     }
 
-    pub fn from_slice(buffer: &[u8]) -> Result<BlockStatistics> {
-        Self::from_read(Cursor::new(buffer))
-    }
-
-    pub fn from_read(mut r: impl Read) -> Result<BlockStatistics> {
+    pub fn from_read(mut r: impl Read) -> Result<SegmentStatistics> {
         let version = r.read_scalar::<u64>()?;
-        assert_eq!(version, BlockStatistics::VERSION);
+        assert_eq!(version, SegmentStatistics::VERSION);
         let encoding = MetaEncoding::try_from(r.read_scalar::<u8>()?)?;
         let compression = MetaCompression::try_from(r.read_scalar::<u8>()?)?;
         let statistics_size: u64 = r.read_scalar::<u64>()?;

@@ -81,8 +81,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             None,
             None,
             None,
-            None,
-            0,
             meta::Compression::Lz4Raw,
             Some(Utc::now()),
         ));
@@ -154,6 +152,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let column_ids = snapshot.schema.to_leaf_column_id_set();
     let mutator = ReclusterMutator::new(
         ctx,
+        data_accessor,
         schema,
         vec![DataType::Number(NumberDataType::Int64)],
         1.0,
@@ -278,6 +277,7 @@ async fn test_safety_for_recluster() -> Result<()> {
         let mut parts = ReclusterParts::new_recluster_parts();
         let mutator = Arc::new(ReclusterMutator::new(
             ctx.clone(),
+            data_accessor.clone(),
             schema.clone(),
             vec![DataType::Number(NumberDataType::Int32)],
             1.0,
@@ -331,7 +331,7 @@ async fn test_safety_for_recluster() -> Result<()> {
                         remained_blocks.len()
                     );
                     for remain in remained_blocks {
-                        blocks.push(remain.location.0.clone());
+                        blocks.push(remain.0.location.0.clone());
                     }
 
                     let block_ids_after_target = HashSet::from_iter(blocks.into_iter());

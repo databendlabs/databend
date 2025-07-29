@@ -21,8 +21,8 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_fuse::io::build_column_hlls;
 use databend_common_storages_fuse::io::serialize_block;
-use databend_common_storages_fuse::io::BlockStatisticsState;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -30,10 +30,12 @@ use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::RawColumnHLL;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -71,7 +73,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<FileMetaData>)> {
+    ) -> Result<(BlockMeta, Option<FileMetaData>, RawColumnHLL)> {
         let (location, block_id) = if !self.is_greater_than_v5 {
             let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
                 self.location_generator.prefix().to_string(),
@@ -88,9 +90,12 @@ impl<'a> BlockWriter<'a> {
         let (bloom_filter_index_size, bloom_filter_index_location, meta) = self
             .build_block_index(data_accessor, schema.clone(), &block, block_id)
             .await?;
-        let (block_stats_size, block_stats_location) = self
-            .build_block_stats(data_accessor, schema.clone(), &block, block_id)
-            .await?;
+
+        let hll_columns = ApproxDistinctColumns::All;
+        let ndv_columns_map =
+            hll_columns.distinct_column_fields(schema.clone(), RangeIndex::supported_table_type)?;
+        let column_hlls = build_column_hlls(&block, &ndv_columns_map)?.unwrap();
+        let column_hlls = encode_column_hll(&column_hlls)?;
 
         let write_settings = WriteSettings {
             storage_format,
@@ -118,12 +123,10 @@ impl<'a> BlockWriter<'a> {
             None,
             None,
             None,
-            block_stats_location,
-            block_stats_size,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );
-        Ok((block_meta, meta))
+        Ok((block_meta, meta, column_hlls))
     }
 
     pub async fn build_block_index(
@@ -160,31 +163,6 @@ impl<'a> BlockWriter<'a> {
             Ok((size, Some(location), Some(meta)))
         } else {
             Ok((0u64, None, None))
-        }
-    }
-
-    pub async fn build_block_stats(
-        &self,
-        data_accessor: &Operator,
-        schema: TableSchemaRef,
-        block: &DataBlock,
-        block_id: Uuid,
-    ) -> Result<(u64, Option<Location>)> {
-        let location = self.location_generator.block_stats_location(&block_id);
-
-        let hll_columns = ApproxDistinctColumns::All;
-        let ndv_columns_map =
-            hll_columns.distinct_column_fields(schema.clone(), RangeIndex::supported_table_type)?;
-        let maybe_block_stats =
-            BlockStatisticsState::from_data_block(location, block, &ndv_columns_map)?;
-        if let Some(block_stats) = maybe_block_stats {
-            let size = block_stats.block_stats_size();
-            data_accessor
-                .write(&block_stats.location.0, block_stats.data)
-                .await?;
-            Ok((size, Some(block_stats.location)))
-        } else {
-            Ok((0u64, None))
         }
     }
 }

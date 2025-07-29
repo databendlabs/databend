@@ -10,9 +10,11 @@ edition = { workspace = true }
 storage-hdfs = ["databend-common-meta-app/storage-hdfs"]
 
 [dependencies]
+ahash = { workspace = true }
 anyhow = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
+borsh = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true, features = ["serde"] }
 databend-common-ast = { workspace = true }

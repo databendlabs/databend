@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod segment;
-mod snapshot;
+mod segment_stats;
 
-pub use segment::CompactSegmentInfo;
-pub use segment::RawBlockMeta;
-pub use segment::SegmentInfo;
-pub use snapshot::TableSnapshot;
-pub use snapshot::TableSnapshotLite;
+pub use segment_stats::read_segment_stats;
+pub use segment_stats::read_segment_stats_in_parallel;

@@ -58,6 +58,7 @@ pub trait SegmentBuilder: Send + Sync + 'static {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        hlls: Option<Location>,
     ) -> Result<Self::Segment>;
     fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self;
 }
@@ -72,8 +73,6 @@ pub struct ColumnOrientedSegmentBuilder {
     bloom_filter_index_size: Vec<u64>,
     inverted_index_size: Vec<Option<u64>>,
     virtual_block_meta: Vec<Option<VirtualBlockMeta>>,
-    block_stats_location: LocationsWithOption,
-    block_stats_size: Vec<u64>,
     compression: Vec<u8>,
     create_on: Vec<Option<i64>>,
     column_stats: HashMap<ColumnId, ColStatBuilder>,
@@ -137,9 +136,6 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         self.inverted_index_size
             .push(block_meta.inverted_index_size);
         self.virtual_block_meta.push(block_meta.virtual_block_meta);
-        self.block_stats_location
-            .add_location(block_meta.block_stats_location.as_ref());
-        self.block_stats_size.push(block_meta.block_stats_size);
         self.compression.push(block_meta.compression.to_u8());
         self.create_on
             .push(block_meta.create_on.map(|t| t.timestamp()));
@@ -164,12 +160,13 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        hlls: Option<Location>,
     ) -> Result<Self::Segment> {
         let mut this = std::mem::replace(
             self,
             ColumnOrientedSegmentBuilder::new(self.table_schema.clone(), self.block_per_segment),
         );
-        let summary = this.build_summary(thresholds, default_cluster_key_id)?;
+        let summary = this.build_summary(thresholds, default_cluster_key_id, hlls)?;
         let cluster_stats = this.cluster_stats;
         let mut cluster_stats_binary = Vec::with_capacity(cluster_stats.len());
         for stats in cluster_stats {
@@ -197,14 +194,6 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             ))),
             UInt64Type::from_data(this.bloom_filter_index_size),
             UInt64Type::from_opt_data(this.inverted_index_size),
-            Column::Nullable(Box::new(NullableColumn::new(
-                Column::Tuple(vec![
-                    StringType::from_data(this.block_stats_location.locations),
-                    UInt64Type::from_data(this.block_stats_location.versions),
-                ]),
-                this.block_stats_location.validity.into(),
-            ))),
-            UInt64Type::from_data(this.block_stats_size),
             UInt8Type::from_data(this.compression),
             Int64Type::from_opt_data(this.create_on),
         ];
@@ -267,8 +256,6 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             bloom_filter_index_size: Vec::with_capacity(block_per_segment),
             inverted_index_size: Vec::with_capacity(block_per_segment),
             virtual_block_meta: Vec::with_capacity(block_per_segment),
-            block_stats_location: LocationsWithOption::new_with_capacity(block_per_segment),
-            block_stats_size: Vec::with_capacity(block_per_segment),
             compression: Vec::with_capacity(block_per_segment),
             create_on: Vec::with_capacity(block_per_segment),
             column_stats,
@@ -285,6 +272,7 @@ impl ColumnOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        hlls: Option<Location>,
     ) -> Result<Statistics> {
         let row_count = self.row_count.iter().sum();
         let block_count = self.row_count.len() as u64;
@@ -377,6 +365,7 @@ impl ColumnOrientedSegmentBuilder {
             col_stats,
             cluster_stats,
             virtual_block_count: Some(virtual_block_count),
+            hlls,
         })
     }
 }

@@ -340,8 +340,6 @@ fn build_test_segment_info(
         vector_index_size: None,
         vector_index_location: None,
         virtual_block_meta: None,
-        block_stats_location: None,
-        block_stats_size: 0,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
     };
@@ -365,6 +363,7 @@ fn build_test_segment_info(
         col_stats: col_stats.clone(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     Ok(SegmentInfo::new(block_metas, statistics))
@@ -404,7 +403,7 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
         TestFixture::default_table_meta_timestamps(),
         true,
     );
-    let (_block_meta, thrift_file_meta) = block_writer
+    let (_block_meta, thrift_file_meta, _) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
         .await?;
 

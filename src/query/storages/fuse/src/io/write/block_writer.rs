@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -34,9 +35,6 @@ use databend_common_metrics::storage::metrics_inc_block_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
-use databend_common_metrics::storage::metrics_inc_block_stats_write_bytes;
-use databend_common_metrics::storage::metrics_inc_block_stats_write_milliseconds;
-use databend_common_metrics::storage::metrics_inc_block_stats_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_vector_index_write_nums;
@@ -48,17 +46,19 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
+use databend_storages_common_table_meta::meta::RawColumnHLL;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
+use crate::io::build_column_hlls;
 use crate::io::write::virtual_column_builder::VirtualColumnBuilder;
 use crate::io::write::virtual_column_builder::VirtualColumnState;
-use crate::io::write::BlockStatisticsState;
 use crate::io::write::InvertedIndexBuilder;
 use crate::io::write::InvertedIndexState;
 use crate::io::write::VectorIndexBuilder;
@@ -143,7 +143,7 @@ pub struct BlockSerialization {
     pub inverted_index_states: Vec<InvertedIndexState>,
     pub virtual_column_state: Option<VirtualColumnState>,
     pub vector_index_state: Option<VectorIndexState>,
-    pub block_stats_state: Option<BlockStatisticsState>,
+    pub column_hlls: Option<RawColumnHLL>,
 }
 
 local_block_meta_serde!(BlockSerialization);
@@ -189,15 +189,12 @@ impl BlockBuilder {
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
 
-        let block_stats_location = self.meta_locations.block_stats_location(&block_id);
-        let block_stats_state = BlockStatisticsState::from_data_block(
-            block_stats_location,
-            &data_block,
-            &self.ndv_columns_map,
-        )?;
-        if let Some(block_stats_state) = &block_stats_state {
-            for (key, val) in &block_stats_state.column_distinct_count {
-                column_distinct_count.entry(*key).or_insert(*val);
+        let column_hlls = build_column_hlls(&data_block, &self.ndv_columns_map)?;
+        if let Some(hlls) = &column_hlls {
+            for (key, val) in hlls {
+                if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
+                    entry.insert(val.count());
+                }
             }
         }
 
@@ -276,10 +273,6 @@ impl BlockBuilder {
             compression: self.write_settings.table_compression.into(),
             inverted_index_size,
             virtual_block_meta: None,
-            block_stats_location: block_stats_state.as_ref().map(|v| v.location.clone()),
-            block_stats_size: block_stats_state
-                .as_ref()
-                .map_or(0, |v| v.block_stats_size()),
             create_on: Some(Utc::now()),
         };
 
@@ -290,7 +283,7 @@ impl BlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
-            block_stats_state,
+            column_hlls: column_hlls.map(|v| encode_column_hll(&v)).transpose()?,
         };
         Ok(serialized)
     }
@@ -304,28 +297,31 @@ impl BlockWriter {
         serialized: BlockSerialization,
     ) -> Result<ExtendedBlockMeta> {
         let block_meta = serialized.block_meta;
+        let column_hlls = serialized.column_hlls;
+        let block_location = block_meta.location.0.clone();
 
         let extended_block_meta =
             if let Some(virtual_column_state) = &serialized.virtual_column_state {
                 ExtendedBlockMeta {
-                    block_meta: block_meta.clone(),
+                    block_meta,
                     draft_virtual_block_meta: Some(
                         virtual_column_state.draft_virtual_block_meta.clone(),
                     ),
+                    column_hlls,
                 }
             } else {
                 ExtendedBlockMeta {
-                    block_meta: block_meta.clone(),
+                    block_meta,
                     draft_virtual_block_meta: None,
+                    column_hlls,
                 }
             };
 
-        Self::write_down_data_block(dal, serialized.block_raw_data, &block_meta.location.0).await?;
+        Self::write_down_data_block(dal, serialized.block_raw_data, &block_location).await?;
         Self::write_down_bloom_index_state(dal, serialized.bloom_index_state).await?;
         Self::write_down_vector_index_state(dal, serialized.vector_index_state).await?;
         Self::write_down_inverted_index_state(dal, serialized.inverted_index_states).await?;
         Self::write_down_virtual_column_state(dal, serialized.virtual_column_state).await?;
-        Self::write_down_block_stats_state(dal, serialized.block_stats_state).await?;
 
         Ok(extended_block_meta)
     }
@@ -424,24 +420,6 @@ impl BlockWriter {
             metrics_inc_block_virtual_column_write_nums(1);
             metrics_inc_block_virtual_column_write_bytes(index_size);
             metrics_inc_block_virtual_column_write_milliseconds(start.elapsed().as_millis() as u64);
-        }
-        Ok(())
-    }
-
-    pub async fn write_down_block_stats_state(
-        dal: &Operator,
-        block_stats_state: Option<BlockStatisticsState>,
-    ) -> Result<()> {
-        if let Some(block_stats_state) = block_stats_state {
-            let start = Instant::now();
-
-            let stats_size = block_stats_state.block_stats_size();
-            let location = &block_stats_state.location.0;
-            write_data(block_stats_state.data, dal, location).await?;
-
-            metrics_inc_block_stats_write_nums(1);
-            metrics_inc_block_stats_write_bytes(stats_size);
-            metrics_inc_block_stats_write_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(())
     }

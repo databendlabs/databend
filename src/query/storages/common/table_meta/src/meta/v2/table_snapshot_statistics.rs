@@ -23,7 +23,7 @@ use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
 
-pub type MetaHLL = simple_hll::HyperLogLog<12>;
+pub type MetaHLL12 = simple_hll::HyperLogLog<12>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshotStatistics {
@@ -32,11 +32,11 @@ pub struct TableSnapshotStatistics {
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,
-    pub hll: HashMap<ColumnId, MetaHLL>,
+    pub hll: HashMap<ColumnId, MetaHLL12>,
 }
 
 impl TableSnapshotStatistics {
-    pub fn new(hll: HashMap<ColumnId, MetaHLL>, snapshot_id: SnapshotId) -> Self {
+    pub fn new(hll: HashMap<ColumnId, MetaHLL12>, snapshot_id: SnapshotId) -> Self {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
             snapshot_id,

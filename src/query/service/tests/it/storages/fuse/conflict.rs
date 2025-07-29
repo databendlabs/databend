@@ -106,6 +106,7 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
@@ -130,6 +131,7 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let removed_statistics = Statistics {
@@ -147,6 +149,7 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let merged_statistics = Statistics {
@@ -164,6 +167,7 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -207,6 +211,7 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
     assert_eq!(actual, expected);
 }
@@ -244,6 +249,7 @@ fn test_resolvable_replace_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let mut latest_snapshot = new_empty_snapshot(TableSchema::default(), None);
@@ -268,6 +274,7 @@ fn test_resolvable_replace_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let removed_statistics = Statistics {
@@ -285,6 +292,7 @@ fn test_resolvable_replace_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let merged_statistics = Statistics {
@@ -302,6 +310,7 @@ fn test_resolvable_replace_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
@@ -350,6 +359,7 @@ fn test_resolvable_replace_conflict() {
         col_stats: HashMap::new(),
         cluster_stats: None,
         virtual_block_count: None,
+        hlls: None,
     };
     assert_eq!(actual, expected);
 }

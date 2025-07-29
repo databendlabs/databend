@@ -27,6 +27,7 @@ pub use databend_storages_common_table_meta::meta::column_oriented_segment::Colu
 pub use databend_storages_common_table_meta::meta::BlockMeta;
 pub use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 pub use databend_storages_common_table_meta::meta::SegmentInfo;
+pub use databend_storages_common_table_meta::meta::SegmentStatistics;
 pub use databend_storages_common_table_meta::meta::TableSnapshot;
 pub use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 pub use parquet::file::metadata::ParquetMetaData;

@@ -39,7 +39,7 @@ use databend_common_expression::with_number_type;
 use databend_common_expression::Column;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
-use databend_storages_common_table_meta::meta::MetaHLL;
+use databend_common_storage::MetaHLL;
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]

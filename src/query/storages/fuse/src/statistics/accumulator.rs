@@ -30,7 +30,10 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::DraftVirtualColumnMeta;
+use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::RawColumnHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SegmentStatistics;
 use databend_storages_common_table_meta::meta::VirtualColumnMeta;
 
 #[derive(Default)]
@@ -53,10 +56,12 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
+        hlls: Option<Location>,
     ) -> Result<Self::Segment> {
         let builder = std::mem::take(self);
-        let stat =
+        let mut stat =
             super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id);
+        stat.hlls = hlls;
         Ok(SegmentInfo::new(builder.blocks_metas, stat))
     }
 
@@ -177,5 +182,24 @@ impl VirtualColumnAccumulator {
         } else {
             None
         }
+    }
+}
+
+#[derive(Default)]
+pub struct ColumnHLLAccumulator {
+    pub hlls: Vec<RawColumnHLL>,
+}
+
+impl ColumnHLLAccumulator {
+    pub fn add_hll(&mut self, hll: RawColumnHLL) {
+        self.hlls.push(hll);
+    }
+
+    pub fn build(&mut self) -> SegmentStatistics {
+        SegmentStatistics::new(std::mem::take(&mut self.hlls))
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.hlls.is_empty()
     }
 }

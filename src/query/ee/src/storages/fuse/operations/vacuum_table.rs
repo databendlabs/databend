@@ -40,7 +40,7 @@ pub struct SnapshotReferencedFiles {
     pub segments: HashSet<String>,
     pub blocks: HashSet<String>,
     pub blocks_index: HashSet<String>,
-    pub blocks_stats: HashSet<String>,
+    pub segments_stats: HashSet<String>,
 }
 
 impl SnapshotReferencedFiles {
@@ -55,7 +55,7 @@ impl SnapshotReferencedFiles {
         for file in &self.blocks_index {
             files.push(file.clone());
         }
-        for file in &self.blocks_stats {
+        for file in &self.segments_stats {
             files.push(file.clone());
         }
         files
@@ -136,7 +136,7 @@ pub async fn get_snapshot_referenced_files(
         segments,
         blocks: locations_referenced.block_location,
         blocks_index: locations_referenced.bloom_location,
-        blocks_stats: locations_referenced.stats_location,
+        segments_stats: locations_referenced.hll_location,
     }))
 }
 
@@ -173,7 +173,7 @@ pub async fn do_gc_orphan_files(
         referenced_files.segments.len(),
         referenced_files.blocks.len(),
         referenced_files.blocks_index.len(),
-        referenced_files.blocks_stats.len(),
+        referenced_files.segments_stats.len(),
         start.elapsed()
     );
     ctx.set_status_info(&status);
@@ -274,12 +274,12 @@ pub async fn do_gc_orphan_files(
     );
     ctx.set_status_info(&status);
 
-    // 5. Purge orphan block stats files.
-    // 5.1 Get orphan block stats files to be purged
+    // 5. Purge orphan segment stats files.
+    // 5.1 Get orphan segment stats files to be purged
     let stats_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
-        location_gen.block_statistics_location_prefix(),
-        referenced_files.blocks_stats,
+        location_gen.segment_statistics_location_prefix(),
+        referenced_files.segments_stats,
         retention_time,
     )
     .await?;
@@ -290,7 +290,7 @@ pub async fn do_gc_orphan_files(
     );
     ctx.set_status_info(&status);
 
-    // 5.2 Delete all the orphan block stats files to be purged
+    // 5.2 Delete all the orphan segment stats files to be purged
     let purged_file_num = stats_locations_to_be_purged.len();
     fuse_table
         .try_purge_location_files(
@@ -299,7 +299,7 @@ pub async fn do_gc_orphan_files(
         )
         .await?;
     let status = format!(
-        "gc orphan: purged block stats files:{}, cost:{:?}",
+        "gc orphan: purged segment stats files:{}, cost:{:?}",
         purged_file_num,
         start.elapsed()
     );
@@ -326,7 +326,7 @@ pub async fn do_dry_run_orphan_files(
         referenced_files.segments.len(),
         referenced_files.blocks.len(),
         referenced_files.blocks_index.len(),
-        referenced_files.blocks_stats.len(),
+        referenced_files.segments_stats.len(),
         start.elapsed()
     );
     ctx.set_status_info(&status);
@@ -388,11 +388,11 @@ pub async fn do_dry_run_orphan_files(
 
     purge_files.extend(index_locations_to_be_purged);
 
-    // 5. Get purge orphan block stats files.
+    // 5. Get purge orphan segment stats files.
     let stats_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
-        location_gen.block_statistics_location_prefix(),
-        referenced_files.blocks_stats,
+        location_gen.segment_statistics_location_prefix(),
+        referenced_files.segments_stats,
         retention_time,
     )
     .await?;

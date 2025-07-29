@@ -128,16 +128,16 @@ impl TableSnapshotStatisticsVersion {
     }
 }
 
-impl Versioned<0> for v4::BlockStatistics {}
+impl Versioned<0> for v2::SegmentStatistics {}
 
-pub enum BlockStatisticsVersion {
-    V0(PhantomData<v4::BlockStatistics>),
+pub enum SegmentStatisticsVersion {
+    V0(PhantomData<v2::SegmentStatistics>),
 }
 
-impl BlockStatisticsVersion {
+impl SegmentStatisticsVersion {
     pub fn version(&self) -> u64 {
         match self {
-            BlockStatisticsVersion::V0(a) => Self::ver(a),
+            SegmentStatisticsVersion::V0(a) => Self::ver(a),
         }
     }
 
@@ -213,15 +213,15 @@ mod converters {
         }
     }
 
-    impl TryFrom<u64> for BlockStatisticsVersion {
+    impl TryFrom<u64> for SegmentStatisticsVersion {
         type Error = ErrorCode;
         fn try_from(value: u64) -> Result<Self, Self::Error> {
             match value {
-                0 => Ok(BlockStatisticsVersion::V0(testify_version::<_, 0>(
+                0 => Ok(SegmentStatisticsVersion::V0(testify_version::<_, 0>(
                     PhantomData,
                 ))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown block statistics version {value}, versions supported: 0"
+                    "unknown segment statistics version {value}, versions supported: 0"
                 ))),
             }
         }

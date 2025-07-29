@@ -4231,9 +4231,11 @@ dependencies = [
 name = "databend-common-storage"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.12",
  "anyhow",
  "arrow-schema",
  "async-backtrace",
+ "borsh",
  "chrono",
  "dashmap 6.1.0",
  "databend-common-ast",

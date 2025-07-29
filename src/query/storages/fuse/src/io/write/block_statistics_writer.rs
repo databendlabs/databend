@@ -17,38 +17,22 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
-use databend_storages_common_table_meta::meta::BlockStatistics;
-use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::ColumnHLL;
 
 use crate::io::write::stream::create_column_ndv_estimator;
 use crate::io::write::stream::ColumnNDVEstimator;
 use crate::io::write::stream::ColumnNDVEstimatorOps;
 
-#[derive(Debug)]
-pub struct BlockStatisticsState {
-    pub data: Vec<u8>,
-    pub location: Location,
-    pub column_distinct_count: HashMap<ColumnId, usize>,
-}
-
-impl BlockStatisticsState {
-    pub fn from_data_block(
-        location: Location,
-        block: &DataBlock,
-        ndv_columns_map: &BTreeMap<FieldIndex, TableField>,
-    ) -> Result<Option<Self>> {
-        let mut builder = BlockStatsBuilder::new(ndv_columns_map);
-        builder.add_block(block)?;
-        builder.finalize(location)
-    }
-
-    pub fn block_stats_size(&self) -> u64 {
-        self.data.len() as u64
-    }
+pub fn build_column_hlls(
+    block: &DataBlock,
+    ndv_columns_map: &BTreeMap<FieldIndex, TableField>,
+) -> Result<Option<ColumnHLL>> {
+    let mut builder = BlockStatsBuilder::new(ndv_columns_map);
+    builder.add_block(block)?;
+    builder.finalize()
 }
 
 pub struct BlockStatsBuilder {
@@ -101,27 +85,18 @@ impl BlockStatsBuilder {
         Ok(())
     }
 
-    pub fn finalize(self, location: Location) -> Result<Option<BlockStatisticsState>> {
+    pub fn finalize(self) -> Result<Option<ColumnHLL>> {
         if self.builders.is_empty() {
             return Ok(None);
         }
 
-        let mut hlls = HashMap::with_capacity(self.builders.len());
-        let mut column_distinct_count = HashMap::with_capacity(self.builders.len());
+        let mut column_hlls = HashMap::with_capacity(self.builders.len());
         for column_builder in self.builders {
             let column_id = column_builder.field.column_id();
-            let distinct_count = column_builder.builder.finalize();
             let hll = column_builder.builder.hll();
-            hlls.insert(column_id, hll);
-            column_distinct_count.insert(column_id, distinct_count);
+            column_hlls.insert(column_id, hll);
         }
 
-        let block_stats = BlockStatistics::new(hlls);
-        let data = block_stats.to_bytes()?;
-        Ok(Some(BlockStatisticsState {
-            data,
-            location,
-            column_distinct_count,
-        }))
+        Ok(Some(column_hlls))
     }
 }

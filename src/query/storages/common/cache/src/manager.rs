@@ -50,6 +50,7 @@ use crate::CacheAccessor;
 use crate::DiskCacheAccessor;
 use crate::DiskCacheBuilder;
 use crate::InMemoryLruCache;
+use crate::SegmentStatisticsCache;
 use crate::Unit;
 
 static DEFAULT_PARQUET_META_DATA_CACHE_ITEMS: usize = 3000;
@@ -100,6 +101,7 @@ pub enum CacheClearanceLevel {
 pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
+    segment_statistics_cache: CacheSlot<SegmentStatisticsCache>,
     compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
     column_oriented_segment_info_cache: CacheSlot<ColumnOrientedSegmentInfoCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
@@ -232,6 +234,7 @@ impl CacheManager {
                 prune_partitions_cache: CacheSlot::new(None),
                 parquet_meta_data_cache: CacheSlot::new(None),
                 table_statistic_cache: CacheSlot::new(None),
+                segment_statistics_cache: CacheSlot::new(None),
                 in_memory_table_data_cache,
                 segment_block_metas_cache: CacheSlot::new(None),
                 block_meta_cache: CacheSlot::new(None),
@@ -246,6 +249,10 @@ impl CacheManager {
             );
             let table_statistic_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_TABLE_STATISTICS,
+                config.table_meta_statistic_count as usize,
+            );
+            let segment_statistics_cache = Self::new_items_cache_slot(
+                MEMORY_CACHE_SEGMENT_STATISTICS,
                 config.table_meta_statistic_count as usize,
             );
             let compact_segment_info_cache = Self::new_bytes_cache_slot(
@@ -364,6 +371,7 @@ impl CacheManager {
                 vector_index_file_cache,
                 prune_partitions_cache,
                 table_statistic_cache,
+                segment_statistics_cache,
                 in_memory_table_data_cache,
                 segment_block_metas_cache,
                 parquet_meta_data_cache,
@@ -597,6 +605,10 @@ impl CacheManager {
         self.table_statistic_cache.get()
     }
 
+    pub fn get_segment_statistics_cache(&self) -> Option<SegmentStatisticsCache> {
+        self.segment_statistics_cache.get()
+    }
+
     pub fn get_table_segment_cache(&self) -> Option<CompactSegmentInfoCache> {
         self.compact_segment_info_cache.get()
     }
@@ -792,6 +804,7 @@ const IN_MEMORY_HYBRID_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_inde
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
 const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT_INFO: &str = "memory_cache_column_oriented_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
+const MEMORY_CACHE_SEGMENT_STATISTICS: &str = "memory_cache_segment_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
 const MEMORY_CACHE_ICEBERG_TABLE: &str = "memory_cache_iceberg_table";
@@ -1033,8 +1046,6 @@ mod tests {
             vector_index_location: None,
             vector_index_size: None,
             virtual_block_meta: None,
-            block_stats_location: None,
-            block_stats_size: 0,
             compression: Compression::Lz4,
             create_on: None,
         });

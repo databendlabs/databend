@@ -327,7 +327,7 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
             TestFixture::default_table_meta_timestamps(),
             true,
         );
-        let (block_meta, _index_meta) = block_writer
+        let (block_meta, _index_meta, _) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
         stats_acc.add_block(block_meta).unwrap();
@@ -637,8 +637,6 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
             None,
             None,
             None,
-            None,
-            0,
             Compression::Lz4Raw,
             Some(Utc::now()),
         );

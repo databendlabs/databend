@@ -28,6 +28,7 @@ use serde::de::Error;
 
 use crate::meta::supported_stat_type;
 use crate::meta::v0;
+use crate::meta::Location;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ColumnStatistics {
@@ -88,6 +89,8 @@ pub struct Statistics {
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
     pub cluster_stats: Option<ClusterStatistics>,
     pub virtual_block_count: Option<u64>,
+
+    pub hlls: Option<Location>,
 }
 
 // conversions from old meta data
@@ -253,6 +256,7 @@ impl Statistics {
             col_stats,
             cluster_stats: None,
             virtual_block_count: None,
+            hlls: None,
         }
     }
 }

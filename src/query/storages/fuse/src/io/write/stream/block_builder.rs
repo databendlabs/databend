@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -42,6 +43,7 @@ use databend_storages_common_index::BloomIndexBuilder;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::RangeIndex;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -312,14 +314,12 @@ impl StreamBlockBuilder {
             .as_ref()
             .map(|i| i.column_distinct_count.clone())
             .unwrap_or_default();
-        let block_stats_location = self
-            .properties
-            .meta_locations
-            .block_stats_location(&block_id);
-        let block_stats_state = self.block_stats_builder.finalize(block_stats_location)?;
-        if let Some(state) = &block_stats_state {
-            for (key, val) in &state.column_distinct_count {
-                column_distinct_count.entry(*key).or_insert(*val);
+        let column_hlls = self.block_stats_builder.finalize()?;
+        if let Some(hlls) = &column_hlls {
+            for (key, val) in hlls {
+                if let Entry::Vacant(entry) = column_distinct_count.entry(*key) {
+                    entry.insert(val.count());
+                }
             }
         }
         let col_stats = self.column_stats_state.finalize(column_distinct_count)?;
@@ -393,10 +393,6 @@ impl StreamBlockBuilder {
                 .map(|v| v.ngram_size)
                 .unwrap_or_default(),
             virtual_block_meta: None,
-            block_stats_location: block_stats_state.as_ref().map(|v| v.location.clone()),
-            block_stats_size: block_stats_state
-                .as_ref()
-                .map_or(0, |v| v.block_stats_size()),
         };
         let serialized = BlockSerialization {
             block_raw_data,
@@ -405,7 +401,7 @@ impl StreamBlockBuilder {
             inverted_index_states,
             virtual_column_state,
             vector_index_state,
-            block_stats_state,
+            column_hlls: column_hlls.map(|v| encode_column_hll(&v)).transpose()?,
         };
         Ok(serialized)
     }

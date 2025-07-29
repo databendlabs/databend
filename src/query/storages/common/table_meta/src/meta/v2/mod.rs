@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod segment;
+mod segment_statistics;
 mod snapshot;
 pub mod statistics;
 mod table_snapshot_statistics;
@@ -25,9 +26,10 @@ pub use segment::ExtendedBlockMeta;
 pub use segment::SegmentInfo;
 pub use segment::VirtualBlockMeta;
 pub use segment::VirtualColumnMeta;
+pub use segment_statistics::SegmentStatistics;
 pub use snapshot::TableSnapshot;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
 pub use statistics::Statistics;
-pub use table_snapshot_statistics::MetaHLL;
+pub use table_snapshot_statistics::MetaHLL12;
 pub use table_snapshot_statistics::TableSnapshotStatistics;
