@@ -256,6 +256,26 @@ pub(crate) fn get_levels(params: &[Scalar]) -> Result<Vec<f64>> {
     Ok(levels)
 }
 
+pub(super) fn batch_serialize1<A, S, F>(
+    places: &[StateAddr],
+    loc: &[AggrStateLoc],
+    builders: &mut [ColumnBuilder],
+    serialize: F,
+) -> Result<()>
+where
+    A: ValueType,
+    for<'a> F: Fn(&S, &mut A::ColumnBuilderMut<'a>) -> Result<()>,
+{
+    let [a] = builders else { unreachable!() };
+    let mut a = A::downcast_builder(a);
+
+    for place in places {
+        let state = AggrState::new(*place, loc).get::<S>();
+        serialize(state, &mut a)?;
+    }
+    Ok(())
+}
+
 pub(super) fn batch_serialize2<A, B, S, F>(
     places: &[StateAddr],
     loc: &[AggrStateLoc],
@@ -309,6 +329,33 @@ where
     }
     debug_assert_eq!(a.len(), b.len());
     debug_assert_eq!(b.len(), c.len());
+    Ok(())
+}
+
+pub(super) fn batch_merge1<A, S, F>(
+    places: &[StateAddr],
+    loc: &[AggrStateLoc],
+    state: &BlockEntry,
+    filter: Option<&Bitmap>,
+    merge: F,
+) -> Result<()>
+where
+    A: AccessType,
+    for<'a> F: Fn(&mut S, A::ScalarRef<'a>) -> Result<()>,
+{
+    let view = state.downcast::<A>().unwrap();
+    let iter = places.iter().zip(view.iter());
+    if let Some(filter) = filter {
+        for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+            let state = AggrState::new(*place, loc).get::<S>();
+            merge(state, data)?;
+        }
+    } else {
+        for (place, data) in iter {
+            let state = AggrState::new(*place, loc).get::<S>();
+            merge(state, data)?;
+        }
+    }
     Ok(())
 }
 

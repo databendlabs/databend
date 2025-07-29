@@ -20,8 +20,14 @@ use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
+use databend_common_expression::StateAddr;
 
 use super::aggregate_scalar_state::ChangeIf;
+use super::batch_merge1;
+use super::AggrState;
 use super::FunctionData;
 use super::UnaryState;
 
@@ -136,5 +142,31 @@ where
             builder.push_default();
         }
         Ok(())
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            <Self as UnaryState<T, T>>::merge(state, &rhs)
+        })
     }
 }

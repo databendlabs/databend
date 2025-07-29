@@ -21,16 +21,23 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateFunctionRef;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::assert_unary_arguments;
-use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
 struct KurtosisState {
@@ -112,6 +119,36 @@ where
         }
         Ok(())
     }
+
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(Some(40))]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            <Self as UnaryState<T, _>>::merge(state, &rhs)
+        })
+    }
 }
 
 pub fn try_create_aggregate_kurtosis_function(
@@ -146,8 +183,8 @@ pub fn try_create_aggregate_kurtosis_function(
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
-            display_name, arguments[0]
+            "{display_name} does not support type '{:?}'",
+            arguments[0]
         ))),
     })
 }

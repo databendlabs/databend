@@ -28,7 +28,6 @@ use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::AggrState;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
@@ -38,13 +37,16 @@ use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
+use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::aggregate_unary::UnaryState;
 use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::batch_serialize1;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateUnaryFunction;
 use super::FunctionData;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_unary::UnaryState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateUnaryFunction;
 
 pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;
@@ -181,12 +183,10 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let mut builder = N::downcast_builder(&mut builders[0]);
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
+        batch_serialize1::<N, Self, _>(places, loc, builders, |state, builder| {
             builder.push_item(N::to_scalar_ref(&state.value));
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     fn batch_merge(
@@ -195,26 +195,10 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<N>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-        if let Some(filter) = filter {
-            for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let rhs = Self {
-                    value: N::to_owned_scalar(data),
-                };
-                let state: &mut Self = AggrState::new(*place, loc).get();
-                <Self as UnaryState<T, N>>::merge(state, &rhs)?;
-            }
-        } else {
-            for (place, data) in iter {
-                let rhs = Self {
-                    value: N::to_owned_scalar(data),
-                };
-                let state: &mut Self = AggrState::new(*place, loc).get();
-                <Self as UnaryState<T, N>>::merge(state, &rhs)?;
-            }
-        }
-        Ok(())
+        batch_merge1::<N, Self, _>(places, loc, state, filter, |state, data| {
+            state.value += N::to_owned_scalar(data);
+            Ok(())
+        })
     }
 }
 
@@ -312,6 +296,32 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
         builder.push(v);
         Ok(())
     }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            <Self as UnaryState<_, _>>::merge(state, &rhs)
+        })
+    }
 }
 
 #[derive(BorshSerialize, BorshDeserialize, Default)]
@@ -368,6 +378,33 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
     ) -> Result<()> {
         builder.push_item(IntervalType::to_scalar_ref(&self.value));
         Ok(())
+    }
+
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::Interval.into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        batch_serialize1::<IntervalType, Self, _>(places, loc, builders, |state, builder| {
+            builder.push(state.value);
+            Ok(())
+        })
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<IntervalType, Self, _>(places, loc, state, filter, |state, value| {
+            let rhs = IntervalSumState { value };
+            <Self as UnaryState<_, _>>::merge(state, &rhs)
+        })
     }
 }
 

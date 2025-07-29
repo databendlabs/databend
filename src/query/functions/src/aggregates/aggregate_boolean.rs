@@ -13,25 +13,29 @@
 // limitations under the License.
 
 use boolean::TrueIdxIter;
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::*;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggregateFunctionRef;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 
+use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::assert_unary_arguments;
+use super::batch_merge1;
+use super::AggrState;
+use super::AggregateUnaryFunction;
 use super::FunctionData;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
-use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
-use crate::aggregates::aggregate_unary::UnaryState;
-use crate::aggregates::AggregateUnaryFunction;
+use super::UnaryState;
 
-#[derive(BorshSerialize, BorshDeserialize)]
 pub struct BooleanState<const IS_AND: bool> {
     pub value: bool,
 }
@@ -118,6 +122,34 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
     ) -> Result<()> {
         builder.push(self.value);
         Ok(())
+    }
+
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![DataType::Boolean.into()]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let builder = builders[0].as_boolean_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            builder.push(state.value);
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BooleanType, Self, _>(places, loc, state, filter, |state, value| {
+            state.merge(&Self { value })
+        })
     }
 }
 

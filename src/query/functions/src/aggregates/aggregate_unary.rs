@@ -21,10 +21,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -40,8 +38,7 @@ use databend_common_expression::StateSerdeItem;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 
-pub trait UnaryState<T, R>:
-    Send + Sync + Default + borsh::BorshSerialize + borsh::BorshDeserialize
+pub trait UnaryState<T, R>: Send + Sync + Default
 where
     T: AccessType,
     R: ValueType,
@@ -91,39 +88,14 @@ where
         places: &[StateAddr],
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
-    }
+    ) -> Result<()>;
 
     fn batch_merge(
         places: &[StateAddr],
         loc: &[AggrStateLoc],
         state: &BlockEntry,
         filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let rhs = Self::deserialize_reader(&mut data)?;
-                let state: &mut Self = AggrState::new(*place, loc).get();
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, mut data) in iter {
-                let rhs = Self::deserialize_reader(&mut data)?;
-                let state: &mut Self = AggrState::new(*place, loc).get();
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
-    }
+    ) -> Result<()>;
 }
 
 pub trait FunctionData: Send + Sync {

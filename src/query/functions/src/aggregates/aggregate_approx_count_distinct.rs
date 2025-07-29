@@ -15,8 +15,12 @@
 use std::hash::Hash;
 use std::sync::Arc;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BuilderMut;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -28,17 +32,24 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateLoc;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use simple_hll::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
+use super::assert_unary_arguments;
+use super::batch_merge1;
 use super::extract_number_param;
+use super::AggrState;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
-use crate::aggregates::aggregator_common::assert_unary_arguments;
 
 /// Use Hyperloglog to estimate distinct of values
 type AggregateApproxCountDistinctState<const HLL_P: usize> = HyperLogLog<HLL_P>;
@@ -69,6 +80,37 @@ where
     ) -> Result<()> {
         builder.push(self.count() as u64);
         Ok(())
+    }
+
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs);
+            Ok(())
+        })
     }
 }
 
