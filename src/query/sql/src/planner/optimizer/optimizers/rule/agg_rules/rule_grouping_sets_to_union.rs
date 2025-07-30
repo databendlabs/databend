@@ -42,7 +42,6 @@ use crate::plans::VisitorMut;
 use crate::IndexType;
 use crate::ScalarExpr;
 
-// TODO
 const ID: RuleID = RuleID::GroupingSetsToUnion;
 // Split `Grouping Sets` into `Union All` of `Group by`
 // Eg:
