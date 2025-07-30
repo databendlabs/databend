@@ -53,6 +53,8 @@ mod aggregate_window_funnel;
 mod aggregator;
 mod aggregator_common;
 
+use std::any::Any;
+
 pub use adaptors::*;
 pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
 pub use aggregate_array_agg::*;
@@ -87,6 +89,7 @@ pub use aggregator_common::*;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 pub use databend_common_expression::aggregate as aggregate_function;
+use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 
@@ -105,4 +108,10 @@ trait StateSerde {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()>;
+}
+
+impl FunctionData for DataType {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

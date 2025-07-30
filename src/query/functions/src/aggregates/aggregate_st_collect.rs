@@ -18,12 +18,10 @@ use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
-use databend_common_expression::types::BinaryType;
+use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GeometryType;
@@ -52,6 +50,7 @@ use geozero::wkb::Ewkb;
 use super::aggregate_scalar_state::ScalarStateFunc;
 use super::assert_unary_arguments;
 use super::batch_merge1;
+use super::batch_serialize1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -60,20 +59,12 @@ use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateSerde;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
-pub struct StCollectState<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
-{
+#[derive(Debug)]
+pub struct StCollectState<T: ValueType> {
     values: Vec<T::Scalar>,
 }
 
-impl<T> Default for StCollectState<T>
-where
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
-{
+impl<T: ValueType> Default for StCollectState<T> {
     fn default() -> Self {
         Self { values: Vec::new() }
     }
@@ -82,7 +73,7 @@ where
 impl<T> ScalarStateFunc<T> for StCollectState<T>
 where
     T: ArgType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T::Scalar: Send + Sync,
 {
     fn new() -> Self {
         Self::default()
@@ -198,12 +189,11 @@ where
 
 impl<T> StateSerde for StCollectState<T>
 where
-    Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
-    T: ValueType,
-    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    T: ArgType,
+    T::Scalar: Send + Sync,
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Array(Box::new(T::data_type())).into()]
     }
 
     fn batch_serialize(
@@ -211,13 +201,13 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<Self>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<ArrayType<T>, Self, _>(places, loc, builders, |state, builder| {
+            for v in &state.values {
+                builder.put_item(T::to_scalar_ref(v));
+            }
+            builder.commit_row();
+            Ok(())
+        })
     }
 
     fn batch_merge(
@@ -226,9 +216,11 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
+        batch_merge1::<ArrayType<T>, Self, _>(places, loc, state, filter, |state, values| {
+            state
+                .values
+                .extend(T::iter_column(&values).map(T::to_owned_scalar));
+            Ok(())
         })
     }
 }
@@ -420,8 +412,7 @@ pub fn try_create_aggregate_st_collect_function(
         && argument_types[0] != DataType::Null
     {
         return Err(ErrorCode::BadDataValueType(format!(
-            "The argument of aggregate function {} must be Geometry",
-            display_name
+            "The argument of aggregate function {display_name} must be Geometry",
         )));
     }
     let return_type = DataType::Nullable(Box::new(DataType::Geometry));
