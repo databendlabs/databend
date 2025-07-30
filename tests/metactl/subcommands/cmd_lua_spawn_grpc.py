@@ -2,7 +2,7 @@
 
 import subprocess
 import shutil
-from metactl_utils import metactl_bin, load_lua_util
+from metactl_utils import metactl_bin
 from utils import print_title, kill_databend_meta, start_meta_node
 
 
@@ -19,39 +19,36 @@ def test_grpc_cross_task_access():
     print_title("Test gRPC cross-task key access")
 
     grpc_addr = setup_test_environment()
-    lua_util_str = load_lua_util()
 
     lua_script = f'''
-{lua_util_str}
-
-local task1 = spawn(function()
-    local client = new_grpc_client("{grpc_addr}")
+local task1 = metactl.spawn(function()
+    local client = metactl.new_grpc_client("{grpc_addr}")
     
     client:upsert("k1", "v1")
     print("Task 1: Upserted k1")
     
-    sleep(0.5)
+    metactl.sleep(0.5)
     
     local result, err = client:get("k2")
     if not err then
-        print("Task 1: Got k2:", to_string(result))
+        print("Task 1: Got k2:", metactl.to_string(result))
     end
 end)
 
-local task2 = spawn(function()
-    local client = new_grpc_client("{grpc_addr}")
+local task2 = metactl.spawn(function()
+    local client = metactl.new_grpc_client("{grpc_addr}")
 
     -- Let task1 run first
-    sleep(0.2)
+    metactl.sleep(0.2)
     
     client:upsert("k2", "v2")
     print("Task 2: Upserted k2")
     
-    sleep(0.5)
+    metactl.sleep(0.5)
     
     local result, err = client:get("k1")
     if not err then
-        print("Task 2: Got k1:", to_string(result))
+        print("Task 2: Got k1:", metactl.to_string(result))
     end
 end)
 

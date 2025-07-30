@@ -29,6 +29,8 @@ use mlua::UserDataMethods;
 use mlua::Value;
 use tokio::time;
 
+const LUA_UTIL: &str = include_str!("../lua_util.lua");
+
 pub struct LuaGrpcClient {
     client: Arc<ClientHandle>,
 }
@@ -93,6 +95,10 @@ impl UserData for LuaTask {
 }
 
 pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
+    // Create metactl table to namespace all functions
+    let metactl_table = lua.create_table()
+        .map_err(|e| anyhow::anyhow!("Failed to create metactl table: {}", e))?;
+
     // Register new_grpc_client function
     let new_grpc_client = lua
         .create_function(|_lua, address: String| {
@@ -110,12 +116,12 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
         })
         .map_err(|e| anyhow::anyhow!("Failed to create new_grpc_client function: {}", e))?;
 
-    lua.globals()
+    metactl_table
         .set("new_grpc_client", new_grpc_client)
         .map_err(|e| anyhow::anyhow!("Failed to register new_grpc_client: {}", e))?;
 
-    // Export NULL constant to Lua environment
-    lua.globals()
+    // Export NULL constant to metactl namespace
+    metactl_table
         .set("NULL", Value::NULL)
         .map_err(|e| anyhow::anyhow!("Failed to register NULL constant: {}", e))?;
 
@@ -139,7 +145,7 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
         })
         .map_err(|e| anyhow::anyhow!("Failed to create spawn function: {}", e))?;
 
-    lua.globals()
+    metactl_table
         .set("spawn", spawn_fn)
         .map_err(|e| anyhow::anyhow!("Failed to register spawn function: {}", e))?;
 
@@ -152,9 +158,19 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
         })
         .map_err(|e| anyhow::anyhow!("Failed to create sleep function: {}", e))?;
 
-    lua.globals()
+    metactl_table
         .set("sleep", sleep_fn)
         .map_err(|e| anyhow::anyhow!("Failed to register sleep function: {}", e))?;
+
+    // Set the metactl table as a global
+    lua.globals()
+        .set("metactl", metactl_table)
+        .map_err(|e| anyhow::anyhow!("Failed to register metactl namespace: {}", e))?;
+
+    // Load lua_util functions (which registers to_string in metactl namespace)
+    lua.load(LUA_UTIL)
+        .exec()
+        .map_err(|e| anyhow::anyhow!("Failed to load lua_util functions: {}", e))?;
 
     Ok(())
 }
