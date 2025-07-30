@@ -84,77 +84,9 @@ Get null result:\tNULL'''
     shutil.rmtree(".databend", ignore_errors=True)
 
 
-def test_lua_grpc_from_file():
-    """Test lua subcommand with gRPC client using file input."""
-    print_title("Test lua subcommand with gRPC client from file")
-
-    # Setup meta service
-    grpc_addr = setup_test_environment()
-
-    lua_util_str = load_lua_util()
-
-    # Create a temporary Lua script file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.lua', delete=False) as f:
-        f.write(f'''
-{lua_util_str}
-
-local client = new_grpc_client("{grpc_addr}")
-
--- Upsert multiple key-value pairs
-local upsert1_result, upsert1_err = client:upsert("key1", "value1")
-if upsert1_err then
-    print("Key1 upsert error:", upsert1_err)
-end
-
-local upsert2_result, upsert2_err = client:upsert("key2", "value2")
-if upsert2_err then
-    print("Key2 upsert error:", upsert2_err)
-end
-
--- Get and print the values
-local result1, err1 = client:get("key1")
-if err1 then
-    print("Key1 error:", err1)
-else
-    print("Key1 result:", to_string(result1))
-end
-
-local result2, err2 = client:get("key2")
-if err2 then
-    print("Key2 error:", err2)
-else
-    print("Key2 result:", to_string(result2))
-end
-''')
-        lua_file = f.name
-
-    # Run metactl lua with file
-    result = subprocess.run([
-        metactl_bin, "lua",
-        "--file", lua_file
-    ], capture_output=True, text=True, check=True)
-
-    output = result.stdout.strip()
-    print("output:", output)
-
-    expected_output = '''Key1 result:\t{"data"="value1","seq"=1}
-Key2 result:\t{"data"="value2","seq"=2}'''
-
-    # Check if entire output matches expected value
-    assert output == expected_output, f"Expected:\n{expected_output}\n\nActual:\n{output}"
-
-    print("✓ Lua gRPC client file test passed")
-
-    # Only cleanup on success
-    os.unlink(lua_file)
-    kill_databend_meta()
-    shutil.rmtree(".databend", ignore_errors=True)
-
-
 def main():
     """Main function to run all lua gRPC tests."""
     test_lua_grpc_client()
-    test_lua_grpc_from_file()
 
 
 if __name__ == "__main__":

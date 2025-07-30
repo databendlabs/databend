@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 import json
 import subprocess
 import time
@@ -9,6 +10,34 @@ from pathlib import Path
 from utils import print_step, BUILD_PROFILE, run_command
 
 metactl_bin = f"./target/{BUILD_PROFILE}/databend-metactl"
+
+
+def load_lua_util():
+    """Load lua utility functions from lua_util.lua file."""
+    with open("tests/metactl/lua_util.lua", 'r') as f:
+        return f.read()
+
+
+def metactl_run_lua(lua_script=None, lua_filename=None):
+    cmds = [
+        metactl_bin, "lua"
+    ]
+
+    if lua_filename:
+        cmds += [lua_filename]
+        print("metactl_run_lua from_file:", lua_filename, file=sys.stderr)
+    else:
+        print("metactl_run_lua from_stdin:", lua_script, file=sys.stderr)
+
+    result = subprocess.run(cmds, input=lua_script, capture_output=True, text=True)
+
+    print("metactl_run_lua result:", result, file=sys.stderr)
+
+    if result.returncode != 0:
+        raise Exception(result)
+
+    output = result.stdout.strip()
+    return output
 
 
 def metactl_upsert(grpc_addr, key, value):
