@@ -231,7 +231,7 @@ jobs:
       - Linux
       - 2c8g
       - aws
-    needs: [create_release, build_docker]
+    needs: [create_release, build_default, build_docker]
     strategy:
       fail-fast: false
       matrix:
