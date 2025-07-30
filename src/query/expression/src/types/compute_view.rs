@@ -168,9 +168,10 @@ where
     }
 
     fn compute_domain(domain: &SimpleDomain<F>) -> SimpleDomain<T> {
-        let min = domain.min.as_();
-        let max = domain.max.as_();
-        SimpleDomain { min, max }
+        SimpleDomain {
+            min: domain.min.as_(),
+            max: domain.max.as_(),
+        }
     }
 }
 
