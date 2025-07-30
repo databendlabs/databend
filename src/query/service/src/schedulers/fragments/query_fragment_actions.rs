@@ -130,6 +130,13 @@ impl QueryFragmentsActions {
     pub fn get_root_fragment_ids(&self) -> Result<Vec<usize>> {
         let mut fragment_ids = Vec::new();
         for fragment_actions in &self.fragments_actions {
+            if fragment_actions.fragment_actions.is_empty() {
+                return Err(ErrorCode::Internal(format!(
+                    "Fragment actions is empty for fragment_id: {}",
+                    fragment_actions.fragment_id
+                )));
+            }
+
             let plan = &fragment_actions.fragment_actions[0].physical_plan;
             if !matches!(plan, PhysicalPlan::ExchangeSink(_)) {
                 fragment_ids.push(fragment_actions.fragment_id);
@@ -202,6 +209,7 @@ impl QueryFragmentsActions {
                 .get_settings()
                 .get_create_query_flight_client_with_current_rt()?,
             perf_flag,
+            user: self.ctx.get_current_user()?,
         })
     }
 

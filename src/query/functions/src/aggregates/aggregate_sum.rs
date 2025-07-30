@@ -28,11 +28,13 @@ use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrState;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
@@ -76,14 +78,14 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct NumberSumState<N>
-where N: ValueType
+where N: ArgType
 {
     pub value: N::Scalar,
 }
 
 impl<N> Default for NumberSumState<N>
 where
-    N: ValueType,
+    N: ArgType,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
 {
     fn default() -> Self {
@@ -130,7 +132,7 @@ where
 impl<T, N> UnaryState<T, N> for NumberSumState<N>
 where
     T: ArgType + Sync + Send,
-    N: ValueType,
+    N: ArgType,
     T::Scalar: Number + AsPrimitive<N::Scalar>,
     N::Scalar: Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
     for<'a> T::ScalarRef<'a>: Number + AsPrimitive<N::Scalar>,
@@ -167,6 +169,51 @@ where
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         builder.push_item(N::to_scalar_ref(&self.value));
+        Ok(())
+    }
+
+    fn serialize_type() -> Vec<StateSerdeItem> {
+        std::vec![StateSerdeItem::DataType(N::data_type())]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let mut builder = N::downcast_builder(&mut builders[0]);
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            builder.push_item(N::to_scalar_ref(&state.value));
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<N>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+        if let Some(filter) = filter {
+            for (place, data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let rhs = Self {
+                    value: N::to_owned_scalar(data),
+                };
+                let state: &mut Self = AggrState::new(*place, loc).get();
+                <Self as UnaryState<T, N>>::merge(state, &rhs)?;
+            }
+        } else {
+            for (place, data) in iter {
+                let rhs = Self {
+                    value: N::to_owned_scalar(data),
+                };
+                let state: &mut Self = AggrState::new(*place, loc).get();
+                <Self as UnaryState<T, N>>::merge(state, &rhs)?;
+            }
+        }
         Ok(())
     }
 }

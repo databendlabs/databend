@@ -49,7 +49,6 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
-use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
@@ -290,7 +289,7 @@ async fn plan_sql(
     auto_commit_if_not_allowed_in_transaction(ctx.clone(), &extras.statement).await?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
         return Ok((plan, extras, AcquireQueueGuard::create(vec![])));
     }
 
@@ -301,11 +300,11 @@ async fn plan_sql(
         // See PR https://github.com/databendlabs/databend/pull/16632
         let query_entry = QueryEntry::create_entry(&ctx, &extras, true)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras, guard))
     } else {
         // No lock is needed, plan the statement first, then acquire the queue guard.
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, false).await?;
         let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         Ok((plan, extras, guard))
@@ -363,7 +362,6 @@ pub fn on_execution_finished(info: &ExecutionInfo, query_ctx: Arc<QueryContext>)
         );
     }
 
-    hook_clear_m_cte_temp_table(&query_ctx)?;
     hook_vacuum_temp_files(&query_ctx)?;
     hook_disk_temp_dir(&query_ctx)?;
 

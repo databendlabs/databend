@@ -37,11 +37,17 @@ message TaskMessage {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
   
+  message DeleteTask {
+    string task_name = 1;
+    WarehouseOptions warehouse_options = 2;
+  }
+  
   oneof message {
     Task execute_task = 1;
     Task schedule_task = 2;
     string delete_task = 3;
     Task after_task = 4;
+    DeleteTask delete_task_v2 = 5;
   }
 }
 

@@ -86,7 +86,7 @@ impl Planner {
     #[fastrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let extras = self.parse_sql(sql)?;
-        let plan = self.plan_stmt(&extras.statement).await?;
+        let plan = self.plan_stmt(&extras.statement, false).await?;
         Ok((plan, extras))
     }
 
@@ -224,7 +224,11 @@ impl Planner {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn plan_stmt(&mut self, stmt: &Statement) -> Result<Plan> {
+    pub async fn plan_stmt(
+        &mut self,
+        stmt: &Statement,
+        force_disable_distributed_optimization: bool,
+    ) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
         let settings = self.ctx.get_settings();
@@ -272,14 +276,13 @@ impl Planner {
 
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
         let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
+            .with_settings(&settings)?
             .set_enable_distributed_optimization(
-                !self.ctx.get_cluster().is_empty() && !settings.get_enforce_local()?,
+                !force_disable_distributed_optimization
+                    && !self.ctx.get_cluster().is_empty()
+                    && !settings.get_enforce_local()?,
             )
-            .set_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
-            .set_enable_dphyp(settings.get_enable_dphyp()?)
-            .set_max_push_down_limit(settings.get_max_push_down_limit()?)
             .set_sample_executor(self.query_executor.clone())
-            .set_enable_trace(settings.get_enable_optimizer_trace()?)
             .clone();
 
         let optimized_plan = optimize(opt_ctx, plan).await?;

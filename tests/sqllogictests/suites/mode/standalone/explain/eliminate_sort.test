@@ -1,7 +1,7 @@
 query T
 explain select * from numbers(10) t order by t.number desc
 ----
-Sort
+Sort(Single)
 ├── output columns: [t.number (#0)]
 ├── sort keys: [number DESC NULLS LAST]
 ├── estimated rows: 10.00
@@ -18,7 +18,7 @@ Sort
 query T
 explain select * from (select * from numbers(10) t order by t.number desc) order by number desc
 ----
-Sort
+Sort(Single)
 ├── output columns: [t.number (#0)]
 ├── sort keys: [number DESC NULLS LAST]
 ├── estimated rows: 10.00
@@ -35,11 +35,11 @@ Sort
 query T
 explain select * from (select * from numbers(10) t order by t.number desc) order by t.number asc
 ----
-Sort
+Sort(Single)
 ├── output columns: [t.number (#0)]
 ├── sort keys: [number ASC NULLS LAST]
 ├── estimated rows: 10.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number DESC NULLS LAST]
     ├── estimated rows: 10.00
@@ -56,11 +56,11 @@ Sort
 query T
 explain select * from (select * from numbers(10) t order by t.number desc) order by t.number desc, t.number desc
 ----
-Sort
+Sort(Single)
 ├── output columns: [t.number (#0)]
 ├── sort keys: [number DESC NULLS LAST, number DESC NULLS LAST]
 ├── estimated rows: 10.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [t.number (#0)]
     ├── sort keys: [number DESC NULLS LAST]
     ├── estimated rows: 10.00
@@ -77,7 +77,7 @@ Sort
 query T
 explain select * from (select * from numbers(10) t order by t.number desc) order by t.number+1 desc
 ----
-Sort
+Sort(Single)
 ├── output columns: [t.number (#0), number + 1 (#1)]
 ├── sort keys: [number + 1 DESC NULLS LAST]
 ├── estimated rows: 10.00
@@ -85,7 +85,7 @@ Sort
     ├── output columns: [t.number (#0), number + 1 (#1)]
     ├── expressions: [t.number (#0) + 1]
     ├── estimated rows: 10.00
-    └── Sort
+    └── Sort(Single)
         ├── output columns: [t.number (#0)]
         ├── sort keys: [number DESC NULLS LAST]
         ├── estimated rows: 10.00

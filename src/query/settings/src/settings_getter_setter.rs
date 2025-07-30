@@ -512,8 +512,16 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
+    pub fn get_enable_shuffle_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_shuffle_sort")? == 1)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
+    }
+
+    pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
+        Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
 
     pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
@@ -550,6 +558,10 @@ impl Settings {
 
     pub fn get_enable_experimental_connection_privilege_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_connection_privilege_check")? != 0)
+    }
+
+    pub fn get_enable_experimental_sequence_privilege_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_sequence_privilege_check")? != 0)
     }
 
     pub fn get_enable_collect_column_statistics(&self) -> Result<bool> {

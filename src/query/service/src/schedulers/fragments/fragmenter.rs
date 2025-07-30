@@ -26,9 +26,13 @@ use databend_common_sql::executor::physical_plans::ExchangeSink;
 use databend_common_sql::executor::physical_plans::ExchangeSource;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::HashJoin;
+use databend_common_sql::executor::physical_plans::MaterializeCTERef;
+use databend_common_sql::executor::physical_plans::MaterializedCTE;
 use databend_common_sql::executor::physical_plans::MutationSource;
+use databend_common_sql::executor::physical_plans::RangeJoin;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::physical_plans::ReplaceInto;
+use databend_common_sql::executor::physical_plans::Sequence;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::executor::physical_plans::UnionAll;
 use databend_common_sql::executor::PhysicalPlanReplacer;
@@ -101,23 +105,26 @@ impl Fragmenter {
         ctx: Arc<QueryContext>,
         plan: &PhysicalPlan,
     ) -> Result<Option<DataExchange>> {
-        match plan {
-            PhysicalPlan::ExchangeSink(plan) => match plan.kind {
-                FragmentKind::Normal => Ok(Some(ShuffleDataExchange::create(
-                    Self::get_executors(ctx),
-                    plan.keys.clone(),
-                ))),
-                FragmentKind::Merge => Ok(Some(MergeExchange::create(
-                    Self::get_local_executor(ctx),
-                    plan.ignore_exchange,
-                    plan.allow_adjust_parallelism,
-                ))),
-                FragmentKind::Expansive => {
-                    Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
-                }
-                _ => Ok(None),
-            },
-            _ => Ok(None),
+        let PhysicalPlan::ExchangeSink(exchange) = plan else {
+            return Ok(None);
+        };
+        match exchange.kind {
+            FragmentKind::Init => Ok(None),
+            FragmentKind::Normal => Ok(Some(DataExchange::ShuffleDataExchange(
+                ShuffleDataExchange {
+                    destination_ids: Self::get_executors(ctx),
+                    shuffle_keys: exchange.keys.clone(),
+                    allow_adjust_parallelism: exchange.allow_adjust_parallelism,
+                },
+            ))),
+            FragmentKind::Merge => Ok(Some(MergeExchange::create(
+                Self::get_local_executor(ctx),
+                exchange.ignore_exchange,
+                exchange.allow_adjust_parallelism,
+            ))),
+            FragmentKind::Expansive => {
+                Ok(Some(BroadcastExchange::create(Self::get_executors(ctx))))
+            }
         }
     }
 
@@ -158,6 +165,11 @@ impl PhysicalPlanReplacer for Fragmenter {
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_cte_consumer(&mut self, plan: &MaterializeCTERef) -> Result<PhysicalPlan> {
+        self.state = State::Other;
+        Ok(PhysicalPlan::MaterializeCTERef(Box::new(plan.clone())))
     }
 
     fn replace_constant_table_scan(&mut self, plan: &ConstantTableScan) -> Result<PhysicalPlan> {
@@ -247,6 +259,28 @@ impl PhysicalPlanReplacer for Fragmenter {
             build_side_cache_info: plan.build_side_cache_info.clone(),
             runtime_filter: plan.runtime_filter.clone(),
             broadcast_id: plan.broadcast_id,
+        }))
+    }
+
+    fn replace_range_join(&mut self, plan: &RangeJoin) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let left = self.replace(&plan.left)?;
+        fragments.append(&mut self.fragments);
+        let right = self.replace(&plan.right)?;
+        fragments.append(&mut self.fragments);
+
+        self.fragments = fragments;
+
+        Ok(PhysicalPlan::RangeJoin(RangeJoin {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
+            conditions: plan.conditions.clone(),
+            other_conditions: plan.other_conditions.clone(),
+            join_type: plan.join_type.clone(),
+            range_join_type: plan.range_join_type.clone(),
+            output_schema: plan.output_schema.clone(),
+            stat_info: plan.stat_info.clone(),
         }))
     }
 
@@ -340,5 +374,54 @@ impl PhysicalPlanReplacer for Fragmenter {
 
             source_fragment_id,
         }))
+    }
+
+    fn replace_sequence(&mut self, plan: &Sequence) -> Result<PhysicalPlan> {
+        let mut fragments = vec![];
+        let _left = self.replace(plan.left.as_ref())?;
+
+        fragments.append(&mut self.fragments);
+        let right = self.replace(plan.right.as_ref())?;
+        fragments.append(&mut self.fragments);
+
+        self.fragments = fragments;
+        Ok(right)
+    }
+
+    fn replace_materialized_cte(&mut self, plan: &MaterializedCTE) -> Result<PhysicalPlan> {
+        let input = self.replace(plan.input.as_ref())?;
+        let plan = PhysicalPlan::MaterializedCTE(Box::new(MaterializedCTE {
+            input: Box::new(input),
+            ..plan.clone()
+        }));
+
+        let fragment_type = match self.state {
+            State::SelectLeaf => FragmentType::Source,
+            State::MutationSource => FragmentType::MutationSource,
+            State::Other => FragmentType::Intermediate,
+            State::ReplaceInto => FragmentType::ReplaceInto,
+            State::Compact => FragmentType::Compact,
+            State::Recluster => FragmentType::Recluster,
+        };
+        self.state = State::Other;
+
+        let fragment_id = self.ctx.get_fragment_id();
+
+        let mut fragment = PlanFragment {
+            plan: plan.clone(),
+            fragment_type,
+
+            fragment_id,
+            exchange: None,
+            query_id: self.query_id.clone(),
+
+            source_fragments: self.fragments.drain(..).collect(),
+        };
+
+        // Fill the destination_fragment_id for source fragments of `fragment`.
+        Self::resolve_fragment_connection(&mut fragment);
+
+        self.fragments.push(fragment);
+        Ok(plan)
     }
 }

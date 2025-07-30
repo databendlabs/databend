@@ -513,6 +513,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("grouping_sets_to_union", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables grouping sets to union.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
@@ -660,6 +667,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
+                }),
+                ("enable_shuffle_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable shuffle sort.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
@@ -962,14 +976,21 @@ impl DefaultSettings {
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "experiment setting disables stage and udf privilege check(enable by default).",
+                    desc: "experiment setting enable stage and udf privilege check(enable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_connection_privilege_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "experiment setting disables connection object privilege check(disable by default).",
+                    desc: "experiment setting enable connection object privilege check(disable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_experimental_sequence_privilege_check", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "experiment setting enable sequence object privilege check(disable by default).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

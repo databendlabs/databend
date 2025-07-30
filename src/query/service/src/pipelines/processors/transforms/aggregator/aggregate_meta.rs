@@ -45,6 +45,7 @@ impl SerializedPayload {
         entry.as_column().unwrap()
     }
 
+    #[fastrace::trace(name = "SerializedPayload::convert_to_aggregate_table")]
     pub fn convert_to_aggregate_table(
         &self,
         group_types: Vec<DataType>,

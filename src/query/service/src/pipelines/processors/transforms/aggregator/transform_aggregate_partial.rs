@@ -150,7 +150,7 @@ impl TransformPartialAggregate {
                             .params
                             .states_layout
                             .as_ref()
-                            .map(|layout| layout.states_loc.len())
+                            .map(|layout| layout.num_aggr_func())
                             .unwrap_or(0);
                         (
                             vec![],

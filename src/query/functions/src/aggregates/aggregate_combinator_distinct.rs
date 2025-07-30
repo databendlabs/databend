@@ -19,15 +19,19 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberColumnBuilder;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::UnaryType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateSerdeItem;
 
 use super::aggregate_distinct_state::AggregateDistinctNumberState;
 use super::aggregate_distinct_state::AggregateDistinctState;
@@ -42,6 +46,8 @@ use super::aggregate_function_factory::CombinatorDescription;
 use super::aggregator_common::assert_variadic_arguments;
 use super::AggregateCountFunction;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
+use crate::aggregates::StateAddr;
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
@@ -106,16 +112,49 @@ where State: DistinctStateFunc
         state.add(columns, row)
     }
 
-    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = Self::get_state(place);
-        state.serialize(writer)
+    fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
-    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = Self::get_state(place);
-        let rhs = State::deserialize(reader)?;
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = Self::get_state(AggrState::new(*place, loc));
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
 
-        state.merge(&rhs)
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+        let iter = places.iter().zip(view.iter());
+
+        if let Some(filter) = filter {
+            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
+                let state = Self::get_state(AggrState::new(*place, loc));
+                let rhs = State::deserialize(&mut data)?;
+                state.merge(&rhs)?;
+            }
+        } else {
+            for (place, mut data) in iter {
+                let state = Self::get_state(AggrState::new(*place, loc));
+                let rhs = State::deserialize(&mut data)?;
+                state.merge(&rhs)?;
+            }
+        }
+        Ok(())
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

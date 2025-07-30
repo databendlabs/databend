@@ -15,6 +15,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::io;
+use std::time::Duration;
 
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::StorageError;
@@ -39,6 +40,9 @@ type OnChange = Box<dyn Fn((String, Option<SeqV>, Option<SeqV>)) + Send + Sync>;
 #[derive(Default)]
 pub struct SMV003 {
     levels: LeveledMap,
+
+    /// Since when to start cleaning expired keys.
+    cleanup_start_time_ms: Duration,
 
     /// Callback when a change is applied to state machine
     pub(crate) on_change_applied: Option<OnChange>,
@@ -75,6 +79,14 @@ impl StateMachineApi<SysData> for SMV003 {
 
     fn expire_map_mut(&mut self) -> &mut Self::ExpireMap {
         &mut self.levels
+    }
+
+    fn cleanup_start_timestamp(&self) -> Duration {
+        self.cleanup_start_time_ms
+    }
+
+    fn set_cleanup_start_timestamp(&mut self, timestamp: Duration) {
+        self.cleanup_start_time_ms = timestamp;
     }
 
     fn sys_data_mut(&mut self) -> &mut SysData {

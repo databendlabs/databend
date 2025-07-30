@@ -11,6 +11,7 @@ edition = { workspace = true }
 
 [dependencies]
 databend-common-meta-client = { workspace = true }
+databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -20,6 +21,7 @@ databend-meta = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
+mlua = { workspace = true }
 raft-log = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

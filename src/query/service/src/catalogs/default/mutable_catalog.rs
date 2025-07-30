@@ -120,6 +120,7 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
+use databend_common_users::GrantObjectVisibilityChecker;
 use fastrace::func_name;
 use log::info;
 use log::warn;
@@ -697,9 +698,24 @@ impl Catalog for MutableCatalog {
             }
         }
 
+        let table_updates: Vec<String> = req
+            .update_table_metas
+            .iter()
+            .map(|(update_req, _)| {
+                format!("table_id={}, seq={}", update_req.table_id, update_req.seq)
+            })
+            .collect();
+
+        let stream_updates: Vec<String> = req
+            .update_stream_metas
+            .iter()
+            .map(|stream_req| format!("stream_id={}, seq={}", stream_req.stream_id, stream_req.seq))
+            .collect();
+
         info!(
-            "[CATALOG] Updating multiple table metadata: table_count={}",
-            req.update_table_metas.len()
+            "[CATALOG] Updating multiple table metadata: table_updates=[{}], stream_updates=[{}]",
+            table_updates.join("; "),
+            stream_updates.join("; ")
         );
         let begin = Instant::now();
         let res = self.ctx.meta.update_multi_table_meta(req).await;
@@ -782,7 +798,20 @@ impl Catalog for MutableCatalog {
         Ok(self.ctx.meta.create_sequence(req).await?)
     }
 
-    async fn get_sequence(&self, req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        req: GetSequenceReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
+        if let Some(vi) = visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
+
         let seq_meta = self.ctx.meta.get_sequence(&req.ident).await?;
 
         let Some(seq_meta) = seq_meta else {
@@ -805,7 +834,16 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
+        visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
+        if let Some(vi) = visibility_checker {
+            if !vi.check_seq_visibility(req.ident.name()) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege ACCESS SEQUENCE is required on sequence {}",
+                    req.ident.name()
+                )));
+            }
+        }
         Ok(self.ctx.meta.get_sequence_next_value(req).await?)
     }
 

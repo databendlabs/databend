@@ -872,13 +872,6 @@ impl TableContext for CtxDelegation {
     fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
         false
     }
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
-    }
 
     fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()
@@ -1133,7 +1126,11 @@ impl Catalog for FakedCatalog {
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
         unimplemented!()
     }
-    async fn get_sequence(&self, _req: GetSequenceReq) -> Result<GetSequenceReply> {
+    async fn get_sequence(
+        &self,
+        _req: GetSequenceReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
+    ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
     async fn list_sequences(&self, _req: ListSequencesReq) -> Result<ListSequencesReply> {
@@ -1142,6 +1139,7 @@ impl Catalog for FakedCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
+        _visibility_checker: Option<GrantObjectVisibilityChecker>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

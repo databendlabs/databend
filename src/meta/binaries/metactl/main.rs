@@ -15,8 +15,9 @@
 #![allow(clippy::uninlined_format_args)]
 
 use std::collections::BTreeMap;
+use std::io::Read;
+use std::io::{self};
 use std::sync::Arc;
-use std::time::Duration;
 
 use clap::CommandFactory;
 use clap::Parser;
@@ -28,17 +29,21 @@ use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::ExportArgs;
+use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::args::ListFeatures;
+use databend_common_meta_control::args::LuaArgs;
 use databend_common_meta_control::args::SetFeature;
 use databend_common_meta_control::args::StatusArgs;
 use databend_common_meta_control::args::TransferLeaderArgs;
+use databend_common_meta_control::args::TriggerSnapshotArgs;
 use databend_common_meta_control::args::UpsertArgs;
 use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
 use databend_common_meta_control::import;
+use databend_common_meta_control::lua_support;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::UpsertKV;
@@ -48,6 +53,7 @@ use databend_common_tracing::FileConfig;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use display_more::DisplayOptionExt;
 use futures::stream::TryStreamExt;
+use mlua::Lua;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Parser)]
@@ -162,6 +168,13 @@ impl App {
         Ok(())
     }
 
+    async fn trigger_snapshot(&self, args: &TriggerSnapshotArgs) -> anyhow::Result<()> {
+        let client = MetaAdminClient::new(args.admin_api_address.as_str());
+        client.trigger_snapshot().await?;
+        println!("triggered snapshot successfully.");
+        Ok(())
+    }
+
     async fn export(&self, args: &ExportArgs) -> anyhow::Result<()> {
         match args.raft_dir {
             None => {
@@ -208,15 +221,38 @@ impl App {
         Ok(())
     }
 
+    async fn get(&self, args: &GetArgs) -> anyhow::Result<()> {
+        let addresses = vec![args.grpc_api_address.clone()];
+        let client = self.new_grpc_client(addresses)?;
+
+        let res = client.get_kv(&args.key).await?;
+        println!("{}", serde_json::to_string(&res)?);
+        Ok(())
+    }
+
+    async fn run_lua(&self, args: &LuaArgs) -> anyhow::Result<()> {
+        let lua = Lua::new();
+
+        // Setup Lua environment with gRPC client support
+        lua_support::setup_lua_environment(&lua)?;
+
+        let script = match &args.file {
+            Some(path) => std::fs::read_to_string(path)?,
+            None => {
+                let mut buffer = String::new();
+                io::stdin().read_to_string(&mut buffer)?;
+                buffer
+            }
+        };
+
+        if let Err(e) = lua.load(&script).exec_async().await {
+            return Err(anyhow::anyhow!("Lua execution error: {}", e));
+        }
+        Ok(())
+    }
+
     fn new_grpc_client(&self, addresses: Vec<String>) -> Result<Arc<ClientHandle>, CreationError> {
-        MetaGrpcClient::try_create(
-            addresses,
-            "root",
-            "xxx",
-            Some(Duration::from_secs(2)),
-            Some(Duration::from_secs(1)),
-            None,
-        )
+        lua_support::new_grpc_client(addresses)
     }
 }
 
@@ -226,11 +262,14 @@ enum CtlCommand {
     Export(ExportArgs),
     Import(ImportArgs),
     TransferLeader(TransferLeaderArgs),
+    TriggerSnapshot(TriggerSnapshotArgs),
     SetFeature(SetFeature),
     ListFeatures(ListFeatures),
     BenchClientNumConn(BenchArgs),
     Watch(WatchArgs),
     Upsert(UpsertArgs),
+    Get(GetArgs),
+    Lua(LuaArgs),
 }
 
 /// Usage:
@@ -271,6 +310,9 @@ async fn main() -> anyhow::Result<()> {
             CtlCommand::TransferLeader(args) => {
                 app.transfer_leader(args).await?;
             }
+            CtlCommand::TriggerSnapshot(args) => {
+                app.trigger_snapshot(args).await?;
+            }
             CtlCommand::SetFeature(args) => {
                 let client = MetaAdminClient::new(args.admin_api_address.as_str());
                 let res = client.set_feature(&args.feature, args.enable).await?;
@@ -295,6 +337,12 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Upsert(args) => {
                 app.upsert(args).await?;
+            }
+            CtlCommand::Get(args) => {
+                app.get(args).await?;
+            }
+            CtlCommand::Lua(args) => {
+                app.run_lua(args).await?;
             }
         },
         // for backward compatibility

@@ -23,7 +23,7 @@ runs:
           default)
             publish_name="databend-${{ inputs.version }}-${{ inputs.target }}"
             ;;
-          hdfs|udf|testsuite|dbg)
+          hdfs|udf|testsuite)
             publish_name="databend-${{ inputs.category }}-${{ inputs.version }}-${{ inputs.target }}"
             ;;
           *)

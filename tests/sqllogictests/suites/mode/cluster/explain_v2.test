@@ -8,6 +8,9 @@ statement ok
 set max_threads = 1;
 
 statement ok
+set enable_shuffle_sort = 0;
+
+statement ok
 create table t1(a int not null, b int not null) as select number as a, number+1 as b from numbers(100);
 
 statement ok
@@ -180,7 +183,7 @@ Limit
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
-└── Sort
+└── Sort(Single)
     ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
     ├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
     ├── estimated rows: 1.00
@@ -206,14 +209,14 @@ Limit
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 10.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [c (#4), d (#5), e (#6)]
     ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
     ├── estimated rows: 100.00
     └── Exchange
         ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [c (#4), d (#5), e (#6), #_order_col]
             ├── sort keys: [c ASC NULLS LAST, d ASC NULLS LAST, e ASC NULLS LAST]
             ├── estimated rows: 100.00
@@ -311,14 +314,14 @@ Limit
 ├── limit: 3
 ├── offset: 0
 ├── estimated rows: 3.00
-└── Sort
+└── Sort(Final)
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 10.00
     └── Exchange
         ├── output columns: [numbers.number (#0), #_order_col]
         ├── exchange type: Merge
-        └── Sort
+        └── Sort(Partial)
             ├── output columns: [numbers.number (#0), #_order_col]
             ├── sort keys: [number ASC NULLS LAST]
             ├── estimated rows: 10.00
