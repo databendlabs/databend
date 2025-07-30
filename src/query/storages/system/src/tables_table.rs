@@ -56,6 +56,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_null::NullTable;
 use databend_common_storages_view::view_table::QUERY;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use log::warn;
@@ -331,7 +332,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let visibility_checker = if catalog_impl.is_external() {
             None
         } else {
-            Some(ctx.get_visibility_checker(false).await?)
+            Some(ctx.get_visibility_checker(false, Object::All).await?)
         };
 
         let mut catalogs = vec![];

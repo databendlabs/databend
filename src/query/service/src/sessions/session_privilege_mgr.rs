@@ -26,6 +26,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
@@ -84,6 +85,7 @@ pub trait SessionPrivilegeManager {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
@@ -378,6 +380,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         // TODO(liyz): is it check the visibility according onwerships?
         let roles = self.get_all_effective_roles().await?;
@@ -388,14 +391,50 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
                 vec![]
             } else {
                 let user_api = UserApiProvider::instance();
-                let ownerships = user_api
-                    .role_api(&self.session_ctx.get_current_tenant())
-                    .list_ownerships()
-                    .await?;
+                let ownerships = match object {
+                    Object::All => user_api
+                        .role_api(&self.session_ctx.get_current_tenant())
+                        .list_ownerships()
+                        .await?
+                        .into_iter()
+                        .map(|item| item.data)
+                        .collect(),
+                    Object::UDF => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_udf_ownerships()
+                            .await?
+                    }
+                    Object::Stage => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_stage_ownerships()
+                            .await?
+                    }
+                    Object::Sequence => {
+                        let res = user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_seq_ownerships()
+                            .await?;
+                        res
+                    }
+                    Object::Connection => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_connection_ownerships()
+                            .await?
+                    }
+                    Object::Warehouse => {
+                        user_api
+                            .role_api(&self.session_ctx.get_current_tenant())
+                            .list_warehouse_ownerships()
+                            .await?
+                    }
+                };
                 let mut ownership_objects = vec![];
                 for ownership in ownerships {
-                    if roles_name.contains(&ownership.data.role) {
-                        ownership_objects.push(ownership.data.object);
+                    if roles_name.contains(&ownership.role) {
+                        ownership_objects.push(ownership.object);
                     }
                 }
                 ownership_objects

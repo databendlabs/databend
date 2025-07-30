@@ -120,6 +120,7 @@ use databend_common_storages_result_cache::ResultScan;
 use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_version::DATABEND_COMMIT_VERSION;
 use databend_storages_common_session::SessionState;
@@ -941,10 +942,11 @@ impl TableContext for QueryContext {
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         self.shared
             .session
-            .get_visibility_checker(ignore_ownership)
+            .get_visibility_checker(ignore_ownership, object)
             .await
     }
 
@@ -1199,7 +1201,9 @@ impl TableContext for QueryContext {
             .get_settings()
             .get_enable_experimental_connection_privilege_check()?
         {
-            let visibility_checker = self.get_visibility_checker(false).await?;
+            let visibility_checker = self
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
             if !visibility_checker.check_connection_visibility(name) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: privilege AccessConnection is required on connection {name} for user {}",

@@ -45,6 +45,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_fuse::operations::acquire_task_permit;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -86,7 +87,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             .await?;
         let ctl_name = ctl.name();
 
-        let visibility_checker = ctx.get_visibility_checker(false).await?;
+        let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
         let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];
