@@ -630,8 +630,8 @@ pub fn aggregate_array_moving_avg_function_desc() -> AggregateFunctionDescriptio
 struct AggregateArrayMovingSumFunction<State> {
     display_name: String,
     window_size: Option<usize>,
-    sum_t: PhantomData<State>,
     return_type: DataType,
+    _s: PhantomData<State>,
 }
 
 impl<State> AggregateFunction for AggregateArrayMovingSumFunction<State>
@@ -769,7 +769,7 @@ where State: SumState
         Ok(Arc::new(Self {
             display_name: display_name.to_owned(),
             window_size,
-            sum_t: PhantomData,
+            _s: PhantomData,
             return_type,
         }))
     }

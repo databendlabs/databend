@@ -66,7 +66,7 @@ where
     T: ValueType,
     T::Scalar: Decimal,
     <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn add(
         &mut self,
@@ -152,7 +152,7 @@ where
     T: ValueType,
     T::Scalar: Decimal,
     <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]

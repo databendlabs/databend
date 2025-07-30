@@ -286,11 +286,11 @@ pub struct AggregateQuantileTDigestFunction<T> {
     return_type: DataType,
     levels: Vec<f64>,
     _arguments: Vec<DataType>,
-    _t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> Display for AggregateQuantileTDigestFunction<T>
-where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
+where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{}", self.display_name)
@@ -298,7 +298,7 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
 }
 
 impl<T> AggregateFunction for AggregateQuantileTDigestFunction<T>
-where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
+where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     fn name(&self) -> &str {
         "AggregateQuantileDiscFunction"
@@ -432,7 +432,7 @@ where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
 }
 
 impl<T> AggregateQuantileTDigestFunction<T>
-where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64> + Send + Sync
+where for<'a> T: AccessType<Scalar = F64, ScalarRef<'a> = F64>
 {
     fn try_create(
         display_name: &str,

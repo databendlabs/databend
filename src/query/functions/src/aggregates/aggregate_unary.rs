@@ -141,7 +141,7 @@ where
             return_type,
             function_data: None,
             need_drop: false,
-            _p: Default::default(),
+            _p: PhantomData,
         }
     }
 

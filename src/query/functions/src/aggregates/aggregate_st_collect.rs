@@ -391,7 +391,7 @@ where
         let func = AggregateStCollectFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: Default::default(),
+            _t: PhantomData,
         };
         Ok(Arc::new(func))
     }

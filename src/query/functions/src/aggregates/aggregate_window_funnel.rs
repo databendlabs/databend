@@ -159,12 +159,12 @@ pub struct AggregateWindowFunnelFunction<T> {
     _arguments: Vec<DataType>,
     event_size: usize,
     window: u64,
-    t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateFunction for AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -371,7 +371,7 @@ impl<T> fmt::Display for AggregateWindowFunnelFunction<T> {
 
 impl<T> AggregateWindowFunnelFunction<T>
 where
-    T: ArgType + Send + Sync,
+    T: ArgType,
     T::Scalar: Number
         + Ord
         + Sub<Output = T::Scalar>
@@ -393,7 +393,7 @@ where
             _arguments: arguments,
             event_size,
             window,
-            t: PhantomData,
+            _t: PhantomData,
         }))
     }
 

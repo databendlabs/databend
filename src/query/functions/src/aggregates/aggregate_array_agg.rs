@@ -621,7 +621,7 @@ impl<T, State> fmt::Display for AggregateArrayAggFunction<T, State> {
 
 impl<T, State> AggregateArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
@@ -652,7 +652,7 @@ fn try_create_aggregate_array_agg_function(
         nullable: bool,
     ) -> Result<Arc<dyn AggregateFunction>>
     where
-        V: SimpleType + Send + Sync,
+        V: SimpleType,
         V::Scalar: BorshSerialize + BorshDeserialize,
     {
         if nullable {

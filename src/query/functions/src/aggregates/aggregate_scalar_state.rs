@@ -81,7 +81,7 @@ macro_rules! with_compare_mapped_type {
     }
 }
 
-pub trait ChangeIf<T: AccessType>: Send + Sync + 'static {
+pub trait ChangeIf<T: AccessType>: Default + Send + Sync + 'static {
     fn change_if(l: &T::ScalarRef<'_>, r: &T::ScalarRef<'_>) -> bool;
     fn change_if_ordering(ordering: Ordering) -> bool;
 }
@@ -180,7 +180,7 @@ impl<T, C> ScalarStateFunc<T> for ScalarState<T, C>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn new() -> Self {
         Self::default()

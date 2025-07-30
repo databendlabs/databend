@@ -68,7 +68,7 @@ impl<A, V, C> ArgMinMaxState<A, V, C>
 where
     A: ValueType,
     V: ValueType,
-    C: ChangeIf<V> + Default,
+    C: ChangeIf<V>,
 {
     fn new() -> Self {
         Self {
@@ -178,7 +178,7 @@ impl<A, V, C> AggregateFunction for AggregateArgMinMaxFunction<A, V, C>
 where
     A: ValueType,
     V: ValueType,
-    C: ChangeIf<V> + Default,
+    C: ChangeIf<V>,
 {
     fn name(&self) -> &str {
         "AggregateArgMinMaxFunction"
@@ -297,7 +297,7 @@ where
             |state, (flag, value, arg)| {
                 state.merge_from(ArgMinMaxState::<A, V, C> {
                     data: flag.then_some((V::to_owned_scalar(value), A::to_owned_scalar(arg))),
-                    _c: Default::default(),
+                    _c: PhantomData,
                 })
             },
         )
@@ -334,7 +334,7 @@ impl<A, V, C> AggregateArgMinMaxFunction<A, V, C>
 where
     A: ValueType,
     V: ValueType,
-    C: ChangeIf<V> + Default,
+    C: ChangeIf<V>,
 {
     pub fn try_create(
         display_name: &str,

@@ -65,7 +65,7 @@ where C: ChangeIf<StringType>
 }
 
 impl<C> Default for MinMaxStringState<C>
-where C: ChangeIf<StringType> + Default
+where C: ChangeIf<StringType>
 {
     fn default() -> Self {
         Self {
@@ -76,7 +76,7 @@ where C: ChangeIf<StringType> + Default
 }
 
 impl<C> UnaryState<StringType, StringType> for MinMaxStringState<C>
-where C: ChangeIf<StringType> + Default
+where C: ChangeIf<StringType>
 {
     fn add(&mut self, other: &str, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         match &self.value {
@@ -159,7 +159,7 @@ where C: ChangeIf<StringType> + Default
 }
 
 impl<C> StateSerde for MinMaxStringState<C>
-where C: ChangeIf<StringType> + Default
+where C: ChangeIf<StringType>
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
@@ -205,9 +205,9 @@ where
 
 impl<T, C> Default for MinMaxAnyState<T, C>
 where
-    T: Send + Sync + ValueType,
+    T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn default() -> Self {
         Self {
@@ -219,9 +219,9 @@ where
 
 impl<T, C> UnaryState<T, T> for MinMaxAnyState<T, C>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn add(
         &mut self,
@@ -303,9 +303,9 @@ where
 
 impl<T, C> StateSerde for MinMaxAnyState<T, C>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
-    C: ChangeIf<T> + Default,
+    C: ChangeIf<T>,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]

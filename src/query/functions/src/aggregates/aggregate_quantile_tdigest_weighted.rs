@@ -56,8 +56,7 @@ pub struct AggregateQuantileTDigestWeightedFunction<T0, T1> {
     return_type: DataType,
     levels: Vec<f64>,
     _arguments: Vec<DataType>,
-    _t0: PhantomData<T0>,
-    _t1: PhantomData<T1>,
+    _p: PhantomData<fn(T0, T1)>,
 }
 
 impl<T0, T1> Display for AggregateQuantileTDigestWeightedFunction<T0, T1>
@@ -229,8 +228,7 @@ where
             return_type,
             levels,
             _arguments: arguments,
-            _t0: PhantomData,
-            _t1: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }

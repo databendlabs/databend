@@ -137,7 +137,7 @@ where
 pub struct AggregateJsonArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<(T, State)>,
+    _t: PhantomData<fn(T, State)>,
 }
 
 unsafe impl<T, State> Send for AggregateJsonArrayAggFunction<T, State> {}
@@ -145,7 +145,7 @@ unsafe impl<T, State> Sync for AggregateJsonArrayAggFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
@@ -316,14 +316,14 @@ impl<T, State> fmt::Display for AggregateJsonArrayAggFunction<T, State> {
 
 impl<T, State> AggregateJsonArrayAggFunction<T, State>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     State: ScalarStateFunc<T>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateJsonArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: Default::default(),
+            _t: PhantomData,
         };
         Ok(Arc::new(func))
     }

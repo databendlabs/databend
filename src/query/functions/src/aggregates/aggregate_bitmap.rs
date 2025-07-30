@@ -57,8 +57,7 @@ use crate::with_simple_no_number_mapped_type;
 #[derive(Clone)]
 struct AggregateBitmapFunction<OP, AGG> {
     display_name: String,
-    _op: PhantomData<OP>,
-    _agg: PhantomData<AGG>,
+    _p: PhantomData<(OP, AGG)>,
 }
 
 impl<OP, AGG> AggregateBitmapFunction<OP, AGG>
@@ -69,8 +68,7 @@ where
     fn try_create(display_name: &str) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateBitmapFunction::<OP, AGG> {
             display_name: display_name.to_string(),
-            _op: PhantomData,
-            _agg: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }
@@ -380,18 +378,18 @@ impl<OP, AGG> fmt::Display for AggregateBitmapFunction<OP, AGG> {
 
 struct AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: Send + Sync,
 {
     display_name: String,
     inner: AggregateBitmapFunction<BitmapAndOp, BitmapCountResult>,
     filter_values: Vec<T::Scalar>,
-    _t: PhantomData<T>,
+    _t: PhantomData<fn(T)>,
 }
 
 impl<T> AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: Send + Sync,
 {
     fn try_create(
@@ -402,8 +400,7 @@ where
             display_name: display_name.to_string(),
             inner: AggregateBitmapFunction {
                 display_name: "".to_string(),
-                _op: PhantomData,
-                _agg: PhantomData,
+                _p: PhantomData,
             },
             filter_values,
             _t: PhantomData,
@@ -459,7 +456,7 @@ where
 
 impl<T> AggregateFunction for AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: Send + Sync,
 {
     fn name(&self) -> &str {
@@ -554,7 +551,7 @@ where
 
 impl<T> fmt::Display for AggregateBitmapIntersectCountFunction<T>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: Send + Sync,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

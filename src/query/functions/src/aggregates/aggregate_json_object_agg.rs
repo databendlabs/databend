@@ -204,13 +204,12 @@ where
 pub struct AggregateJsonObjectAggFunction<V, State> {
     display_name: String,
     return_type: DataType,
-    _v: PhantomData<V>,
-    _state: PhantomData<State>,
+    _p: PhantomData<fn(V, State)>,
 }
 
 impl<V, State> AggregateFunction for AggregateJsonObjectAggFunction<V, State>
 where
-    V: ValueType + Send + Sync,
+    V: ValueType,
     State: BinaryScalarStateFunc<V>,
 {
     fn name(&self) -> &str {
@@ -369,15 +368,14 @@ impl<V, State> fmt::Display for AggregateJsonObjectAggFunction<V, State> {
 
 impl<V, State> AggregateJsonObjectAggFunction<V, State>
 where
-    V: ValueType + Send + Sync,
+    V: ValueType,
     State: BinaryScalarStateFunc<V>,
 {
     fn try_create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateJsonObjectAggFunction::<V, State> {
             display_name: display_name.to_string(),
             return_type,
-            _v: PhantomData,
-            _state: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }

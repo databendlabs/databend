@@ -138,9 +138,7 @@ fn large_and_comparable(a: u64, b: u64) -> bool {
 #[derive(Clone)]
 pub struct AggregateCovarianceFunction<T0, T1, R> {
     display_name: String,
-    _t0: PhantomData<T0>,
-    _t1: PhantomData<T1>,
-    _r: PhantomData<R>,
+    _p: PhantomData<(T0, T1, R)>,
 }
 
 impl<T0, T1, R> AggregateFunction for AggregateCovarianceFunction<T0, T1, R>
@@ -314,9 +312,7 @@ where
     ) -> Result<AggregateFunctionRef> {
         Ok(Arc::new(Self {
             display_name: display_name.to_string(),
-            _t0: PhantomData,
-            _t1: PhantomData,
-            _r: PhantomData,
+            _p: PhantomData,
         }))
     }
 }
