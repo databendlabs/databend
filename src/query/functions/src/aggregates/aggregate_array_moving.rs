@@ -18,24 +18,9 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::decimal::*;
-use databend_common_expression::types::i256;
-use databend_common_expression::types::number::Number;
-use databend_common_expression::types::AccessType;
-use databend_common_expression::types::ArgType;
-use databend_common_expression::types::BinaryType;
-use databend_common_expression::types::Bitmap;
-use databend_common_expression::types::Buffer;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::Float64Type;
-use databend_common_expression::types::Int8Type;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberType;
-use databend_common_expression::types::F64;
+use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
@@ -53,6 +38,7 @@ use num_traits::AsPrimitive;
 use super::assert_unary_arguments;
 use super::assert_variadic_params;
 use super::batch_merge1;
+use super::batch_serialize1;
 use super::extract_number_param;
 use super::AggrState;
 use super::AggrStateLoc;
@@ -90,16 +76,15 @@ trait SumState: StateSerde + Send + Sync + Default + 'static {
     ) -> Result<()>;
 }
 
-#[derive(Default, Debug, BorshDeserialize, BorshSerialize)]
+#[derive(Default, Debug)]
 pub struct NumberArrayMovingSumState<T, TSum> {
     values: Vec<T>,
-    #[borsh(skip)]
     _t: PhantomData<TSum>,
 }
 
 impl<T, TSum> SumState for NumberArrayMovingSumState<T, TSum>
 where
-    T: Number + AsPrimitive<TSum> + BorshSerialize + BorshDeserialize,
+    T: Number + AsPrimitive<TSum>,
     TSum: Number + AsPrimitive<f64> + std::ops::AddAssign + std::ops::SubAssign,
 {
     fn accumulate_row(&mut self, entry: &BlockEntry, row: usize) -> Result<()> {
@@ -234,10 +219,10 @@ where
 impl<T, TSum> StateSerde for NumberArrayMovingSumState<T, TSum>
 where
     Self: SumState,
-    T: BorshSerialize + BorshDeserialize,
+    T: Number,
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![ArrayType::<NumberType<T>>::data_type().into()]
     }
 
     fn batch_serialize(
@@ -245,13 +230,18 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<ArrayType<NumberType<T>>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                for v in &state.values {
+                    builder.put_item(*v);
+                }
+                builder.commit_row();
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -260,27 +250,26 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
-        })
+        batch_merge1::<ArrayType<NumberType<T>>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, values| {
+                state.values.extend_from_slice(&values);
+                Ok(())
+            },
+        )
     }
 }
 
-#[derive(Default, BorshDeserialize, BorshSerialize)]
+#[derive(Default)]
 pub struct DecimalArrayMovingSumState<T> {
     pub values: Vec<T>,
 }
 
 impl<T> DecimalArrayMovingSumState<T>
-where T: Decimal
-        + std::ops::AddAssign
-        + BorshSerialize
-        + BorshDeserialize
-        + Copy
-        + Clone
-        + Debug
-        + std::cmp::PartialOrd
+where T: Decimal + Debug + Clone + Copy + std::cmp::PartialOrd + std::ops::AddAssign
 {
     #[inline]
     pub fn check_over_flow(&self, value: T) -> Result<()> {
@@ -298,14 +287,12 @@ where T: Decimal
 
 impl<T> SumState for DecimalArrayMovingSumState<T>
 where T: Decimal
+        + Debug
+        + Clone
+        + Copy
+        + std::cmp::PartialOrd
         + std::ops::AddAssign
         + std::ops::SubAssign
-        + BorshSerialize
-        + BorshDeserialize
-        + Copy
-        + Clone
-        + std::fmt::Debug
-        + std::cmp::PartialOrd
 {
     fn accumulate_row(&mut self, entry: &BlockEntry, row: usize) -> Result<()> {
         let column = &entry.to_column();
@@ -463,10 +450,10 @@ where T: Decimal
 impl<T> StateSerde for DecimalArrayMovingSumState<T>
 where
     Self: SumState,
-    T: BorshSerialize + BorshDeserialize,
+    T: Decimal,
 {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Array(Box::new(DataType::Decimal(T::default_decimal_size()))).into()]
     }
 
     fn batch_serialize(
@@ -474,13 +461,18 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<ArrayType<DecimalType<T>>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                for v in &state.values {
+                    builder.put_item(*v);
+                }
+                builder.commit_row();
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -489,10 +481,16 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
-        })
+        batch_merge1::<ArrayType<DecimalType<T>>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, values| {
+                state.values.extend_from_slice(&values);
+                Ok(())
+            },
+        )
     }
 }
 
