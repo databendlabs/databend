@@ -56,7 +56,7 @@ def kill_databend_meta():
     print_step("Kill databend-meta processes")
     try:
         run_command("killall databend-meta", check=False)
-        time.sleep(2)
+        time.sleep(0.5)
     except subprocess.CalledProcessError:
         pass  # It's okay if there are no processes to kill
 
