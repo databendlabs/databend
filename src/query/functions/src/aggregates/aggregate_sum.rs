@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use boolean::TrueIdxIter;
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,7 +39,6 @@ use super::aggregate_unary::UnaryState;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
-use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
@@ -178,15 +175,14 @@ where
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
 pub struct DecimalSumState<const SHOULD_CHECK_OVERFLOW: bool, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
+where T: Decimal
 {
     pub value: T::U64Array,
 }
 
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> Default for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
+where T: Decimal
 {
     fn default() -> Self {
         Self {
@@ -197,7 +193,7 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize>
 
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
     for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAssign
+where T: Decimal + std::ops::AddAssign
 {
     fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         let mut value = T::from_u64_array(self.value);
@@ -275,10 +271,10 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
 }
 
 impl<const SHOULD_CHECK_OVERFLOW: bool, T> StateSerde for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
-where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAssign
+where T: Decimal + std::ops::AddAssign
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Decimal(T::default_decimal_size()).into()]
     }
 
     fn batch_serialize(
@@ -286,13 +282,10 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<DecimalType<T>, Self, _>(places, loc, builders, |state, builder| {
+            builder.push_item(T::from_u64_array(state.value));
+            Ok(())
+        })
     }
 
     fn batch_merge(
@@ -301,8 +294,10 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
+        batch_merge1::<DecimalType<T>, Self, _>(places, loc, state, filter, |state, value| {
+            let rhs = Self {
+                value: value.to_u64_array(),
+            };
             <Self as UnaryState<_, _>>::merge(state, &rhs)
         })
     }

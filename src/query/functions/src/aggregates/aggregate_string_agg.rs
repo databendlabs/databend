@@ -16,17 +16,13 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::compute_view::StringConvertView;
 use databend_common_expression::types::AccessType;
-use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
@@ -41,7 +37,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
 use super::assert_variadic_arguments;
-use super::borsh_partial_deserialize;
+use super::batch_merge1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
@@ -50,7 +46,7 @@ use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Debug)]
 pub struct StringAggState {
     values: String,
 }
@@ -154,7 +150,7 @@ impl AggregateFunction for AggregateStringAggFunction {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::String.into()]
     }
 
     fn batch_serialize(
@@ -163,11 +159,11 @@ impl AggregateFunction for AggregateStringAggFunction {
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
+        let builder = builders[0].as_string_mut().unwrap();
         for place in places {
             let state = AggrState::new(*place, loc).get::<StringAggState>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
+            builder.put_str(&state.values);
+            builder.commit_row();
         }
         Ok(())
     }
@@ -179,23 +175,16 @@ impl AggregateFunction for AggregateStringAggFunction {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<StringAggState>();
-                let rhs: StringAggState = borsh_partial_deserialize(&mut data)?;
-                state.values.push_str(&rhs.values);
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = AggrState::new(*place, loc).get::<StringAggState>();
-                let rhs: StringAggState = borsh_partial_deserialize(&mut data)?;
-                state.values.push_str(&rhs.values);
-            }
-        }
-        Ok(())
+        batch_merge1::<StringType, StringAggState, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, values| {
+                state.values.push_str(values);
+                Ok(())
+            },
+        )
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

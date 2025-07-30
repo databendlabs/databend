@@ -35,7 +35,6 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int8Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::UnaryType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_decimal_mapped_type;
@@ -53,6 +52,7 @@ use num_traits::AsPrimitive;
 
 use super::assert_unary_arguments;
 use super::assert_variadic_params;
+use super::batch_merge1;
 use super::extract_number_param;
 use super::AggrState;
 use super::AggrStateLoc;
@@ -61,8 +61,9 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::StateSerde;
 
-trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
+trait SumState: StateSerde + Send + Sync + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;
 
     fn accumulate(&mut self, column: &BlockEntry, validity: Option<&Bitmap>) -> Result<()>;
@@ -227,6 +228,42 @@ where
         builder.push(array_value);
 
         Ok(())
+    }
+}
+
+impl<T, TSum> StateSerde for NumberArrayMovingSumState<T, TSum>
+where
+    Self: SumState,
+    T: BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
     }
 }
 
@@ -423,6 +460,42 @@ where T: Decimal
     }
 }
 
+impl<T> StateSerde for DecimalArrayMovingSumState<T>
+where
+    Self: SumState,
+    T: BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state: &mut Self = AggrState::new(*place, loc).get();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
+    }
+}
+
 #[derive(Clone)]
 struct AggregateArrayMovingAvgFunction<State> {
     display_name: String,
@@ -478,7 +551,7 @@ where State: SumState
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        State::serialize_type(None)
     }
 
     fn batch_serialize(
@@ -487,13 +560,7 @@ where State: SumState
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<State>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        State::batch_serialize(places, loc, builders)
     }
 
     fn batch_merge(
@@ -503,23 +570,7 @@ where State: SumState
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs = State::deserialize_reader(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs = State::deserialize_reader(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
+        State::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
@@ -689,13 +740,7 @@ where State: SumState
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<State>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        State::batch_serialize(places, loc, builders)
     }
 
     fn batch_merge(
@@ -705,23 +750,7 @@ where State: SumState
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs = State::deserialize_reader(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs = State::deserialize_reader(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
+        State::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {

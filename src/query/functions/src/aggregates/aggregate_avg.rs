@@ -16,8 +16,6 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
@@ -44,13 +42,11 @@ use super::FunctionData;
 use super::StateSerde;
 use super::UnaryState;
 
-#[derive(BorshSerialize, BorshDeserialize)]
 struct NumberAvgState<T, TSum>
 where TSum: ValueType
 {
     pub value: TSum::Scalar,
     pub count: u64,
-    #[borsh(skip)]
     _t: PhantomData<T>,
 }
 
@@ -59,8 +55,7 @@ where
     T: ValueType + Sync + Send,
     TSum: ValueType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
-    TSum::Scalar:
-        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
     fn default() -> Self {
         Self {
@@ -76,8 +71,7 @@ where
     T: ValueType + Sync + Send,
     TSum: ArgType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
-    TSum::Scalar:
-        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
     fn add(
         &mut self,
@@ -112,8 +106,7 @@ where
     T: ValueType + Sync + Send,
     TSum: ArgType,
     T::Scalar: Number + AsPrimitive<TSum::Scalar>,
-    TSum::Scalar:
-        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+    TSum::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
 {
     fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         std::vec![
@@ -171,16 +164,13 @@ impl FunctionData for DecimalAvgData {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
-struct DecimalAvgState<const OVERFLOW: bool, T>
-where T: BorshSerialize + BorshDeserialize
-{
+struct DecimalAvgState<const OVERFLOW: bool, T> {
     pub value: T,
     pub count: u64,
 }
 
 impl<const OVERFLOW: bool, T> Default for DecimalAvgState<OVERFLOW, T>
-where T: Default + BorshSerialize + BorshDeserialize
+where T: Default
 {
     fn default() -> Self {
         Self {
@@ -191,7 +181,7 @@ where T: Default + BorshSerialize + BorshDeserialize
 }
 
 impl<const OVERFLOW: bool, T> DecimalAvgState<OVERFLOW, T>
-where T: BorshSerialize + BorshDeserialize + Decimal + std::ops::AddAssign
+where T: Decimal + std::ops::AddAssign
 {
     fn add_internal(&mut self, count: u64, value: T) -> Result<()> {
         self.count += count;
@@ -210,7 +200,7 @@ where T: BorshSerialize + BorshDeserialize + Decimal + std::ops::AddAssign
 
 impl<const OVERFLOW: bool, T> UnaryState<DecimalType<T>, DecimalType<T>>
     for DecimalAvgState<OVERFLOW, T>
-where T: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize
+where T: Decimal + std::ops::AddAssign
 {
     fn add(&mut self, other: T, _function_data: Option<&dyn FunctionData>) -> Result<()> {
         self.add_internal(1, other)
@@ -252,7 +242,7 @@ where T: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize
 }
 
 impl<const OVERFLOW: bool, T> StateSerde for DecimalAvgState<OVERFLOW, T>
-where T: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize
+where T: Decimal + std::ops::AddAssign
 {
     fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         std::vec![
