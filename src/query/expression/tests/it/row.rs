@@ -28,7 +28,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::RowConverter;
 use databend_common_expression::SortField;
 use itertools::Itertools;
-use jsonb::parse_value;
+use jsonb::parse_owned_jsonb;
 use jsonb::RawJsonb;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Standard;
@@ -386,9 +386,8 @@ fn test_variant() {
     for value in values {
         if let Some(value) = value {
             validity.push(true);
-            let val = parse_value(value.as_bytes()).unwrap();
-            let buf = val.to_vec();
-            let raw_jsonb = RawJsonb::new(&buf);
+            let owned_jsonb = parse_owned_jsonb(value.as_bytes()).unwrap();
+            let raw_jsonb = owned_jsonb.as_raw();
             let compare_buf = raw_jsonb.convert_to_comparable();
             builder.put_slice(&compare_buf);
         } else {
