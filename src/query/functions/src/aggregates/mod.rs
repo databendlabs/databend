@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod aggregate_count;
-
-mod aggregate_function_factory;
-
 mod adaptors;
 mod aggregate_approx_count_distinct;
 mod aggregate_arg_min_max;
@@ -27,8 +23,10 @@ mod aggregate_boolean;
 mod aggregate_combinator_distinct;
 mod aggregate_combinator_if;
 mod aggregate_combinator_state;
+mod aggregate_count;
 mod aggregate_covariance;
 mod aggregate_distinct_state;
+mod aggregate_function_factory;
 mod aggregate_histogram;
 mod aggregate_json_array_agg;
 mod aggregate_json_object_agg;
@@ -86,4 +84,25 @@ pub use aggregate_sum::*;
 pub use aggregate_unary::*;
 pub use aggregator::Aggregators;
 pub use aggregator_common::*;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_exception::Result;
 pub use databend_common_expression::aggregate as aggregate_function;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::ColumnBuilder;
+
+trait StateSerde {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem>;
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()>;
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()>;
+}

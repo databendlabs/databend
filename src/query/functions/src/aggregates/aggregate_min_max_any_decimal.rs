@@ -29,6 +29,8 @@ use super::aggregate_scalar_state::ChangeIf;
 use super::batch_merge1;
 use super::AggrState;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -142,6 +144,18 @@ where
             builder.push_default();
         }
         Ok(())
+    }
+}
+
+impl<T, C> StateSerde for MinMaxAnyDecimalState<T, C>
+where
+    T: ValueType,
+    T::Scalar: Decimal,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
+    C: ChangeIf<T> + Default,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn batch_serialize(

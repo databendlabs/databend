@@ -49,6 +49,8 @@ use super::AggregateFunctionFeatures;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_no_string_mapped_type;
@@ -153,6 +155,14 @@ where C: ChangeIf<StringType> + Default
             builder.push_default();
         }
         Ok(())
+    }
+}
+
+impl<C> StateSerde for MinMaxStringState<C>
+where C: ChangeIf<StringType> + Default
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn batch_serialize(
@@ -288,6 +298,17 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<T, C> StateSerde for MinMaxAnyState<T, C>
+where
+    T: ValueType + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    C: ChangeIf<T> + Default,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn batch_serialize(

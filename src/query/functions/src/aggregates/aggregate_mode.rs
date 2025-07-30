@@ -38,6 +38,8 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -112,6 +114,16 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<T> StateSerde for ModeState<T>
+where
+    T: ValueType + Sync + Send,
+    T::Scalar: Ord + Hash + BorshSerialize + BorshDeserialize + Sync + Send,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn batch_serialize(

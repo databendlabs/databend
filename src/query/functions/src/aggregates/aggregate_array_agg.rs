@@ -445,12 +445,8 @@ where
 pub struct AggregateArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
-    _t: PhantomData<T>,
-    _state: PhantomData<State>,
+    _p: PhantomData<fn(T, State)>,
 }
-
-unsafe impl<T, State> Send for AggregateArrayAggFunction<T, State> {}
-unsafe impl<T, State> Sync for AggregateArrayAggFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateArrayAggFunction<T, State>
 where
@@ -632,8 +628,7 @@ where
         let func = AggregateArrayAggFunction::<T, State> {
             display_name: display_name.to_string(),
             return_type,
-            _t: PhantomData,
-            _state: PhantomData,
+            _p: PhantomData,
         };
         Ok(Arc::new(func))
     }

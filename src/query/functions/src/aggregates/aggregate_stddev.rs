@@ -48,6 +48,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
 
 const STD_POP: u8 = 0;
@@ -148,7 +149,9 @@ where
     ) -> Result<()> {
         self.state_merge_result(builder)
     }
+}
 
+impl<const TYPE: u8> StateSerde for StddevState<TYPE> {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(Some(24))]
     }
@@ -175,7 +178,7 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, _>>::merge(state, &rhs)
+            <Self as UnaryState<Float64Type, NullableType<Float64Type>>>::merge(state, &rhs)
         })
     }
 }

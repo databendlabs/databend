@@ -45,6 +45,8 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 use crate::with_simple_no_number_mapped_type;
 
@@ -239,6 +241,16 @@ where
         let col = T::column_from_vec(bounds, &[]);
         builder.push(col);
         Ok(())
+    }
+}
+
+impl<T> StateSerde for RangeBoundState<T>
+where
+    T: ReturnType + Send + Sync,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync + Ord,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn batch_serialize(

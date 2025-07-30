@@ -89,7 +89,7 @@ impl AggregateFunction for AggregateNullResultFunction {
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Null.into()]
     }
 
     fn batch_serialize(
@@ -98,10 +98,8 @@ impl AggregateFunction for AggregateNullResultFunction {
         _loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for _ in places {
-            binary_builder.commit_row();
-        }
+        let builder = builders[0].as_null_mut().unwrap();
+        *builder += places.len();
         Ok(())
     }
 

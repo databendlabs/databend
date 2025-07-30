@@ -171,15 +171,13 @@ pub struct AggregateArgMinMaxFunction<A, V, C> {
     display_name: String,
     arg: DataType,
     value: DataType,
-    _a: PhantomData<(A, V, C)>,
+    _p: PhantomData<fn(A, V, C)>,
 }
 
 impl<A, V, C> AggregateFunction for AggregateArgMinMaxFunction<A, V, C>
 where
-    A: ValueType + Send + Sync,
-    A::Scalar: Send + Sync,
-    V: ValueType + Send + Sync,
-    V::Scalar: Send + Sync,
+    A: ValueType,
+    V: ValueType,
     C: ChangeIf<V> + Default,
 {
     fn name(&self) -> &str {
@@ -250,9 +248,9 @@ where
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
         vec![
-            StateSerdeItem::DataType(DataType::Boolean),
-            StateSerdeItem::DataType(self.value.clone()),
-            StateSerdeItem::DataType(self.arg.clone()),
+            DataType::Boolean.into(),
+            self.value.clone().into(),
+            self.arg.clone().into(),
         ]
     }
 
@@ -334,10 +332,8 @@ impl<A, V, C> fmt::Display for AggregateArgMinMaxFunction<A, V, C> {
 
 impl<A, V, C> AggregateArgMinMaxFunction<A, V, C>
 where
-    A: ValueType + Send + Sync,
-    A::Scalar: Send + Sync,
-    V: ValueType + Send + Sync,
-    V::Scalar: Send + Sync,
+    A: ValueType,
+    V: ValueType,
     C: ChangeIf<V> + Default,
 {
     pub fn try_create(
@@ -349,7 +345,7 @@ where
             display_name: display_name.to_owned(),
             arg,
             value,
-            _a: PhantomData,
+            _p: PhantomData,
         }))
     }
 }

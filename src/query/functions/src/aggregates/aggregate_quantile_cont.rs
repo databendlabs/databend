@@ -44,6 +44,8 @@ use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 
 const MEDIAN: u8 = 0;
@@ -149,6 +151,12 @@ where
         }
         Ok(())
     }
+}
+
+impl StateSerde for QuantileContState {
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
 
     fn batch_serialize(
         places: &[StateAddr],
@@ -172,7 +180,7 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, R>>::merge(state, &rhs)
+            <Self as UnaryState<Float64Type, ArrayType<Float64Type>>>::merge(state, &rhs)
         })
     }
 }
@@ -280,32 +288,6 @@ where
 
         Ok(())
     }
-
-    fn batch_serialize(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
-    }
-
-    fn batch_merge(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, ArrayType<T>>>::merge(state, &rhs)
-        })
-    }
 }
 
 impl<T> UnaryState<T, T> for DecimalQuantileContState<T>
@@ -354,6 +336,16 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<T> StateSerde for DecimalQuantileContState<T>
+where
+    T: ValueType,
+    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
     }
 
     fn batch_serialize(

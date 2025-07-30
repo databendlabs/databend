@@ -37,8 +37,9 @@ use databend_common_expression::StateSerdeItem;
 
 use super::AggrState;
 use super::AggrStateLoc;
+use super::StateSerde;
 
-pub trait UnaryState<T, R>: Send + Sync + Default
+pub(super) trait UnaryState<T, R>: StateSerde + Send + Sync + Default
 where
     T: AccessType,
     R: ValueType,
@@ -79,30 +80,13 @@ where
         builder: R::ColumnBuilderMut<'_>,
         function_data: Option<&dyn FunctionData>,
     ) -> Result<()>;
-
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
-    }
-
-    fn batch_serialize(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()>;
-
-    fn batch_merge(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()>;
 }
 
 pub trait FunctionData: Send + Sync {
     fn as_any(&self) -> &dyn Any;
 }
 
-pub struct AggregateUnaryFunction<S, T, R>
+pub(super) struct AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R>,
     T: AccessType,
@@ -112,7 +96,7 @@ where
     return_type: DataType,
     function_data: Option<Box<dyn FunctionData>>,
     need_drop: bool,
-    _phantom: PhantomData<(S, T, R)>,
+    _p: PhantomData<fn(S, T, R)>,
 }
 
 impl<S, T, R> Display for AggregateUnaryFunction<S, T, R>
@@ -129,8 +113,8 @@ where
 impl<S, T, R> AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R> + 'static,
-    T: Send + Sync + AccessType,
-    R: Send + Sync + ValueType,
+    T: AccessType,
+    R: ValueType,
 {
     pub(crate) fn try_create_unary(
         display_name: &str,
@@ -157,7 +141,7 @@ where
             return_type,
             function_data: None,
             need_drop: false,
-            _phantom: Default::default(),
+            _p: Default::default(),
         }
     }
 
@@ -183,8 +167,8 @@ where
 impl<S, T, R> AggregateFunction for AggregateUnaryFunction<S, T, R>
 where
     S: UnaryState<T, R> + 'static,
-    T: Send + Sync + AccessType,
-    R: Send + Sync + ValueType,
+    T: AccessType,
+    R: ValueType,
 {
     fn name(&self) -> &str {
         &self.display_name

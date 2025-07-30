@@ -47,6 +47,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 
 pub struct NumberSumState<N>
 where N: ArgType
@@ -142,7 +143,13 @@ where
         builder.push_item(N::to_scalar_ref(&self.value));
         Ok(())
     }
+}
 
+impl<N> StateSerde for NumberSumState<N>
+where
+    N: ArgType,
+    N::Scalar: Number + AsPrimitive<f64> + std::ops::AddAssign,
+{
     fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         std::vec![N::data_type().into()]
     }
@@ -265,6 +272,14 @@ where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAss
         builder.push(v);
         Ok(())
     }
+}
+
+impl<const SHOULD_CHECK_OVERFLOW: bool, T> StateSerde for DecimalSumState<SHOULD_CHECK_OVERFLOW, T>
+where T: Decimal<U64Array: BorshSerialize + BorshDeserialize> + std::ops::AddAssign
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
 
     fn batch_serialize(
         places: &[StateAddr],
@@ -348,7 +363,9 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
         builder.push_item(IntervalType::to_scalar_ref(&self.value));
         Ok(())
     }
+}
 
+impl StateSerde for IntervalSumState {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![DataType::Interval.into()]
     }

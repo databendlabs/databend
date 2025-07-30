@@ -41,6 +41,7 @@ use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -104,7 +105,16 @@ where
         builder.push(F64::from(value));
         Ok(())
     }
+}
 
+impl<T, TSum> StateSerde for NumberAvgState<T, TSum>
+where
+    T: ValueType + Sync + Send,
+    TSum: ArgType,
+    T::Scalar: Number + AsPrimitive<TSum::Scalar>,
+    TSum::Scalar:
+        Number + AsPrimitive<f64> + BorshSerialize + BorshDeserialize + std::ops::AddAssign,
+{
     fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         std::vec![
             StateSerdeItem::DataType(TSum::data_type()),
@@ -239,7 +249,11 @@ where T: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize
             ))),
         }
     }
+}
 
+impl<const OVERFLOW: bool, T> StateSerde for DecimalAvgState<OVERFLOW, T>
+where T: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize
+{
     fn serialize_type(_: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         std::vec![
             DataType::Decimal(T::default_decimal_size()).into(),

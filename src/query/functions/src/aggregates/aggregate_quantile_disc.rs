@@ -38,6 +38,8 @@ use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::QuantileData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 use crate::with_simple_no_number_mapped_type;
 
@@ -114,6 +116,16 @@ where
         }
         Ok(())
     }
+}
+
+impl<T> StateSerde for QuantileState<T>
+where
+    T: ValueType + Sync + Send,
+    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Ord,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
 
     fn batch_serialize(
         places: &[StateAddr],
@@ -188,32 +200,6 @@ where
         }
 
         Ok(())
-    }
-
-    fn batch_serialize(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        builders: &mut [ColumnBuilder],
-    ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
-    }
-
-    fn batch_merge(
-        places: &[StateAddr],
-        loc: &[AggrStateLoc],
-        state: &BlockEntry,
-        filter: Option<&Bitmap>,
-    ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, T>>::merge(state, &rhs)
-        })
     }
 }
 

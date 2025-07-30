@@ -39,6 +39,7 @@ use super::AggrState;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::FunctionData;
+use super::StateSerde;
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
 pub struct SkewnessStateV2 {
@@ -106,7 +107,9 @@ where
         }
         Ok(())
     }
+}
 
+impl StateSerde for SkewnessStateV2 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(Some(32))]
     }
@@ -133,7 +136,7 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, _>>::merge(state, &rhs)
+            <Self as UnaryState<Float64Type, Float64Type>>::merge(state, &rhs)
         })
     }
 }

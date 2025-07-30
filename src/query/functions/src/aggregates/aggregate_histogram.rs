@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::btree_map::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::fmt::Display;
 use std::ops::AddAssign;
 use std::sync::Arc;
 
@@ -43,6 +44,8 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
+use super::StateSerdeItem;
 use super::UnaryState;
 
 struct HistogramData {
@@ -80,7 +83,7 @@ where
 impl<T> UnaryState<T, StringType> for HistogramState<T>
 where
     T: ValueType + Sync + Send,
-    T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Sync + Send,
+    T::Scalar: Ord + BorshSerialize + BorshDeserialize + Serialize + Sync + Send + Display,
 {
     fn add(
         &mut self,
@@ -145,6 +148,16 @@ where
 
         Ok(())
     }
+}
+
+impl<T> StateSerde for HistogramState<T>
+where
+    T: ValueType + Sync + Send,
+    T::Scalar: BorshSerialize + BorshDeserialize + Sync + Send + Clone + Ord + Display + Serialize,
+{
+    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
 
     fn batch_serialize(
         places: &[StateAddr],
@@ -168,7 +181,7 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, _>>::merge(state, &rhs)
+            <Self as UnaryState<T, StringType>>::merge(state, &rhs)
         })
     }
 }

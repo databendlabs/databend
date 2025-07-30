@@ -37,6 +37,7 @@ use super::AggregateFunctionRef;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
@@ -119,7 +120,9 @@ where
         }
         Ok(())
     }
+}
 
+impl StateSerde for KurtosisState {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(Some(40))]
     }
@@ -146,7 +149,7 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, _>>::merge(state, &rhs)
+            <Self as UnaryState<Float64Type, Float64Type>>::merge(state, &rhs)
         })
     }
 }

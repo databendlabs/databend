@@ -37,6 +37,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
 
 /// Use Hyperloglog to estimate distinct of values
@@ -44,7 +45,7 @@ type AggregateApproxCountDistinctState<const HLL_P: usize> = HyperLogLog<HLL_P>;
 
 impl<const HLL_P: usize, T> UnaryState<T, UInt64Type> for AggregateApproxCountDistinctState<HLL_P>
 where
-    T: ValueType + Send + Sync,
+    T: ValueType,
     T::Scalar: Hash,
 {
     fn add(
@@ -69,7 +70,9 @@ where
         builder.push(self.count() as u64);
         Ok(())
     }
+}
 
+impl<const HLL_P: usize> StateSerde for AggregateApproxCountDistinctState<HLL_P> {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }

@@ -34,6 +34,7 @@ use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
+use super::StateSerde;
 use super::UnaryState;
 
 pub struct BooleanState<const IS_AND: bool> {
@@ -123,7 +124,9 @@ impl<const IS_AND: bool> UnaryState<BooleanType, BooleanType> for BooleanState<I
         builder.push(self.value);
         Ok(())
     }
+}
 
+impl<const IS_AND: bool> StateSerde for BooleanState<IS_AND> {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
         vec![DataType::Boolean.into()]
     }
