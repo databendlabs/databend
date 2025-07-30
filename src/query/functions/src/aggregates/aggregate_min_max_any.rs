@@ -42,6 +42,7 @@ use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
 use super::assert_unary_arguments;
 use super::batch_merge1;
+use super::batch_serialize1;
 use super::AggrState;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
@@ -55,24 +56,12 @@ use super::UnaryState;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_no_string_mapped_type;
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[derive(Default)]
 pub struct MinMaxStringState<C>
 where C: ChangeIf<StringType>
 {
     pub value: Option<String>,
-    #[borsh(skip)]
     _c: PhantomData<C>,
-}
-
-impl<C> Default for MinMaxStringState<C>
-where C: ChangeIf<StringType>
-{
-    fn default() -> Self {
-        Self {
-            value: None,
-            _c: PhantomData,
-        }
-    }
 }
 
 impl<C> UnaryState<StringType, StringType> for MinMaxStringState<C>
@@ -162,7 +151,7 @@ impl<C> StateSerde for MinMaxStringState<C>
 where C: ChangeIf<StringType>
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::String.wrap_nullable().into()]
     }
 
     fn batch_serialize(
@@ -170,13 +159,15 @@ where C: ChangeIf<StringType>
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<NullableType<StringType>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                builder.push_item(state.value.as_deref());
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -185,10 +176,19 @@ where C: ChangeIf<StringType>
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
-        })
+        batch_merge1::<NullableType<StringType>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, value| {
+                let rhs = Self {
+                    value: value.map(String::from),
+                    _c: PhantomData,
+                };
+                state.merge(&rhs)
+            },
+        )
     }
 }
 
