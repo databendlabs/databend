@@ -18,7 +18,7 @@ use databend_common_meta_app::principal as mt;
 use databend_common_meta_app::principal::task::Status;
 use databend_common_meta_app::principal::DependentType;
 use databend_common_protos::pb;
-use databend_common_protos::pb::task_message::Message;
+use databend_common_protos::pb::task_message::{DeleteTask, Message};
 
 use crate::reader_check_msg;
 use crate::FromToProto;
