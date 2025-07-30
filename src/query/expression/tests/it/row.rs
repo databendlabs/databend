@@ -29,7 +29,6 @@ use databend_common_expression::RowConverter;
 use databend_common_expression::SortField;
 use itertools::Itertools;
 use jsonb::parse_owned_jsonb;
-use jsonb::RawJsonb;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;

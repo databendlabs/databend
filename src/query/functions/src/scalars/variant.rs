@@ -154,8 +154,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             // Variant value may be an invalid JSON, convert them to string and then parse.
             let val = RawJsonb::new(s).to_string();
-            match parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.data) {
-                Ok(value) => {
+            match parse_owned_jsonb_with_buf(val.as_bytes(), &mut output.builder.data) {
+                Ok(_) => {
                     output.validity.push(true);
                     output.builder.commit_row();
                 }
@@ -174,8 +174,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            match parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.data) {
-                Ok(value) => {
+            match parse_owned_jsonb_with_buf(s.as_bytes(), &mut output.builder.data) {
+                Ok(_) => {
                     output.validity.push(true);
                     output.builder.commit_row();
                 }
@@ -620,42 +620,40 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_owned_jsonb(s.as_bytes()) {
-                    Ok(owned_jsonb) => {
-                        match parse_json_path(path.as_bytes()) {
-                            Ok(json_path) => {
-                                let raw_jsonb = val.as_raw();
-                                match RawJsonb::new(&buf).select_value_by_path(&json_path) {
-                                    Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                        Some(v) => {
-                                            let raw_jsonb = v.as_raw();
-                                            if let Ok(Some(s)) = raw_jsonb.as_str() {
-                                                output.push(&s);
-                                            } else if raw_jsonb.is_null().unwrap_or_default() {
-                                                output.push_null();
-                                            } else {
-                                                let json_str = raw_jsonb.to_string();
-                                                output.push(&json_str);
-                                            }
-                                        }
-                                        None => {
+                    Ok(owned_jsonb) => match parse_json_path(path.as_bytes()) {
+                        Ok(json_path) => {
+                            let raw_jsonb = owned_jsonb.as_raw();
+                            match raw_jsonb.select_value_by_path(&json_path) {
+                                Ok(owned_jsonb_opt) => match owned_jsonb_opt {
+                                    Some(v) => {
+                                        let raw_jsonb = v.as_raw();
+                                        if let Ok(Some(s)) = raw_jsonb.as_str() {
+                                            output.push(&s);
+                                        } else if raw_jsonb.is_null().unwrap_or_default() {
                                             output.push_null();
+                                        } else {
+                                            let json_str = raw_jsonb.to_string();
+                                            output.push(&json_str);
                                         }
-                                    },
-                                    Err(err) => {
-                                        ctx.set_error(
-                                            output.len(),
-                                            format!("Select json path text failed err: {}", err),
-                                        );
+                                    }
+                                    None => {
                                         output.push_null();
                                     }
+                                },
+                                Err(err) => {
+                                    ctx.set_error(
+                                        output.len(),
+                                        format!("Select json path text failed err: {}", err),
+                                    );
+                                    output.push_null();
                                 }
                             }
-                            Err(_) => {
-                                ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
-                                output.push_null();
-                            }
                         }
-                    }
+                        Err(_) => {
+                            ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
+                            output.push_null();
+                        }
+                    },
                     Err(err) => {
                         ctx.set_error(output.len(), err.to_string());
                         output.push_null();
@@ -1173,11 +1171,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             _ => None,
                         };
-                        let new_col = cast_scalars_to_variants(
-                            col.iter(),
-                            &ctx.func_ctx.tz,
-                            None,
-                        );
+                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
                         if let Some(validity) = validity {
                             Value::Column(NullableColumn::new_column(
                                 Column::Variant(new_col),
@@ -1210,12 +1204,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Scalar::Null => Value::Scalar(None),
                 _ => {
                     let mut buf = Vec::new();
-                    cast_scalar_to_variant(
-                        scalar.as_ref(),
-                        &ctx.func_ctx.tz,
-                        &mut buf,
-                        None,
-                    );
+                    cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.tz, &mut buf, None);
                     Value::Scalar(Some(buf))
                 }
             },
@@ -1225,11 +1214,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
                     _ => Bitmap::new_constant(true, col.len()),
                 };
-                let new_col = cast_scalars_to_variants(
-                    col.iter(),
-                    &ctx.func_ctx.tz,
-                    None,
-                );
+                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz, None);
                 Value::Column(NullableColumn::new_unchecked(new_col, validity))
             }
         },
@@ -1852,12 +1837,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let array_val = RawJsonb::new(val);
                 let mut item_buf = vec![];
-                cast_scalar_to_variant(
-                    item.clone(),
-                    &ctx.func_ctx.tz,
-                    &mut item_buf,
-                    None,
-                );
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
                 let item_val = OwnedJsonb::new(item_buf);
                 match array_val.array_values() {
                     Ok(vals_opt) => {
@@ -2015,12 +1995,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let array_val = RawJsonb::new(val);
                 let mut item_buf = vec![];
-                cast_scalar_to_variant(
-                    item.clone(),
-                    &ctx.func_ctx.tz,
-                    &mut item_buf,
-                    None,
-                );
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
                 let item_val = OwnedJsonb::new(item_buf);
                 match array_val.array_values() {
                     Ok(Some(vals)) => {
@@ -2054,12 +2029,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let array_val = RawJsonb::new(val);
                 let mut item_buf = vec![];
-                cast_scalar_to_variant(
-                    item.clone(),
-                    &ctx.func_ctx.tz,
-                    &mut item_buf,
-                    None,
-                );
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
                 let item_val = OwnedJsonb::new(item_buf);
                 match array_val.array_values() {
                     Ok(vals_opt) => {
@@ -2157,12 +2127,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<GenericType<0>, NullableType<VariantType>, VariantType>(
             |item, arr, output, ctx| {
                 let mut item_buf = vec![];
-                cast_scalar_to_variant(
-                    item.clone(),
-                    &ctx.func_ctx.tz,
-                    &mut item_buf,
-                    None,
-                );
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
                 let item_val = OwnedJsonb::new(item_buf);
                 let new_vals = if let Some(arr) = arr {
                     let array_val = RawJsonb::new(arr);
@@ -2203,12 +2168,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<NullableType<VariantType>, GenericType<0>, VariantType>(
             |arr, item, output, ctx| {
                 let mut item_buf = vec![];
-                cast_scalar_to_variant(
-                    item.clone(),
-                    &ctx.func_ctx.tz,
-                    &mut item_buf,
-                    None,
-                );
+                cast_scalar_to_variant(item.clone(), &ctx.func_ctx.tz, &mut item_buf, None);
                 let item_val = OwnedJsonb::new(item_buf);
                 let new_vals = if let Some(arr) = arr {
                     let array_val = RawJsonb::new(arr);
@@ -2787,12 +2747,7 @@ fn array_construct_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<A
         for column in &columns {
             let v = unsafe { column.index_unchecked(idx) };
             let mut val = vec![];
-            cast_scalar_to_variant(
-                v,
-                &ctx.func_ctx.tz,
-                &mut val,
-                None,
-            );
+            cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val, None);
             items.push(val);
         }
         match OwnedJsonb::build_array(items.iter().map(|v| RawJsonb::new(v))) {
@@ -2863,12 +2818,7 @@ fn object_construct_impl_fn(
                 }
                 set.insert(key);
                 let mut val = vec![];
-                cast_scalar_to_variant(
-                    v,
-                    &ctx.func_ctx.tz,
-                    &mut val,
-                    None,
-                );
+                cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val, None);
                 kvs.push((key, val));
             }
             if !has_err {
@@ -3269,12 +3219,7 @@ fn object_insert_fn(
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
-                cast_scalar_to_variant(
-                    new_val.clone(),
-                    &ctx.func_ctx.tz,
-                    &mut new_val_buf,
-                    None,
-                );
+                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf, None);
                 let new_val = RawJsonb::new(new_val_buf.as_bytes());
                 value.object_insert(&new_key_str, &new_val, update_flag)
             }

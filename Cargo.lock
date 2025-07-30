@@ -1966,6 +1966,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "castaway"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "cbc"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2373,6 +2382,20 @@ dependencies = [
  "crossterm",
  "unicode-segmentation",
  "unicode-width 0.2.0",
+]
+
+[[package]]
+name = "compact_str"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fdb1325a1cece981e8a296ab8f0f9b63ae357bd0784a9faaf548cc7b480707a"
+dependencies = [
+ "castaway",
+ "cfg-if",
+ "itoa",
+ "rustversion",
+ "ryu",
+ "static_assertions",
 ]
 
 [[package]]
@@ -9442,10 +9465,11 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "153dfebb6ad4484c84a5ae765a18976bf476b8a3f5165ce987aedd59d1f1e6c8"
+source = "git+https://github.com/b41sh/jsonb?rev=cec0ae38d42fdf3b4d4422110754aff193bf1f02#cec0ae38d42fdf3b4d4422110754aff193bf1f02"
 dependencies = [
  "byteorder",
+ "compact_str",
+ "enum-as-inner",
  "ethnum",
  "fast-float2",
  "itoa",

@@ -135,10 +135,10 @@ pub fn register(registry: &mut FunctionRegistry) {
 
             match ewkb_to_geo(&mut Ewkb(ewkb)).and_then(|(geo, _)| geo_to_json(geo)) {
                 Ok(json) => {
-                    if let Err(e) = match parse_owned_jsonb_with_buf(json.as_bytes(), &mut builder.data) {
+                    if let Err(e) = parse_owned_jsonb_with_buf(json.as_bytes(), &mut builder.data) {
                         ctx.set_error(builder.len(), e.to_string());
                     }
-                },
+                }
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
                 }
