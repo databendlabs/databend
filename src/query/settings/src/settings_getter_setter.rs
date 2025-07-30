@@ -865,6 +865,10 @@ impl Settings {
         Ok(self.try_get_u64("random_function_seed")? == 1)
     }
 
+    pub fn get_enable_selector_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_selector_executor")? == 1)
+    }
+
     pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {
         self.try_get_u64("dynamic_sample_time_budget_ms")
     }
