@@ -19,7 +19,7 @@ use crate::common;
 
 #[test]
 fn test_decode_v141_task_state() -> anyhow::Result<()> {
-    let task_state_v141 = vec![];
+    let task_state_v141 = vec![8, 1, 160, 6, 141, 1, 168, 6, 24];
 
     let want = || mt::TaskState { is_succeeded: true };
     common::test_pb_from_to(func_name!(), want())?;
@@ -30,7 +30,7 @@ fn test_decode_v141_task_state() -> anyhow::Result<()> {
 
 #[test]
 fn test_decode_v141_task_dependent() -> anyhow::Result<()> {
-    let task_dependent_v141 = vec![];
+    let task_dependent_v141 = vec![10, 1, 97, 18, 1, 99, 160, 6, 141, 1, 168, 6, 24];
 
     let want = || mt::TaskDependent {
         ty: mt::DependentType::After,
