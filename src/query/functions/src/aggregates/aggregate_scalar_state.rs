@@ -19,11 +19,20 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::Result;
 use databend_common_expression::types::AccessType;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BuilderExt;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::StateSerdeItem;
+
+use super::batch_merge1;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::StateAddr;
+use super::StateSerde;
 
 // These types can downcast their builders successfully.
 // TODO(@b41sh):  Variant => VariantType can't be used because it will use Scalar::String to compare
@@ -139,13 +148,8 @@ impl<T: ValueType> ChangeIf<T> for CmpAny {
     }
 }
 
-pub trait ScalarStateFunc<T: AccessType>:
-    BorshSerialize + BorshDeserialize + Send + 'static
-{
+pub(super) trait ScalarStateFunc<T: AccessType>: StateSerde + Send + 'static {
     fn new() -> Self;
-    fn mem_size() -> Option<usize> {
-        None
-    }
     fn add(&mut self, other: Option<T::ScalarRef<'_>>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
@@ -239,6 +243,44 @@ where
             inner.push_default();
         }
         Ok(())
+    }
+}
+
+impl<T, C> StateSerde for ScalarState<T, C>
+where
+    Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+    C: ChangeIf<T>,
+{
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<Self>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
     }
 }
 

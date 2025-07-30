@@ -23,6 +23,7 @@ use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
@@ -42,13 +43,14 @@ use jsonb::RawJsonb;
 
 use super::aggregate_scalar_state::ScalarStateFunc;
 use super::assert_unary_arguments;
-use super::borsh_partial_deserialize;
+use super::batch_merge1;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
 use super::StateAddr;
+use super::StateSerde;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct JsonArrayAggState<T>
@@ -133,15 +135,49 @@ where
     }
 }
 
+impl<T> StateSerde for JsonArrayAggState<T>
+where
+    Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
+    T: ValueType,
+    T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
+{
+    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggrState::new(*place, loc).get::<Self>();
+            state.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let rhs = Self::deserialize_reader(&mut data)?;
+            state.merge(&rhs)
+        })
+    }
+}
+
 #[derive(Clone)]
-pub struct AggregateJsonArrayAggFunction<T, State> {
+struct AggregateJsonArrayAggFunction<T, State> {
     display_name: String,
     return_type: DataType,
     _t: PhantomData<fn(T, State)>,
 }
-
-unsafe impl<T, State> Send for AggregateJsonArrayAggFunction<T, State> {}
-unsafe impl<T, State> Sync for AggregateJsonArrayAggFunction<T, State> {}
 
 impl<T, State> AggregateFunction for AggregateJsonArrayAggFunction<T, State>
 where
@@ -243,7 +279,7 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        State::serialize_type(None)
     }
 
     fn batch_serialize(
@@ -252,13 +288,7 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<State>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        State::batch_serialize(places, loc, builders)
     }
 
     fn batch_merge(
@@ -268,23 +298,7 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs: State = borsh_partial_deserialize(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = AggrState::new(*place, loc).get::<State>();
-                let rhs: State = borsh_partial_deserialize(&mut data)?;
-                state.merge(&rhs)?;
-            }
-        }
-        Ok(())
+        State::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
