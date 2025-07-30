@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::principal as mt;
 use databend_common_meta_app::principal::task::Status;
+use databend_common_meta_app::principal::DependentType;
 use databend_common_protos::pb;
 use databend_common_protos::pb::task_message::Message;
 
@@ -191,6 +192,61 @@ impl FromToProto for mt::TaskMessage {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             message: Some(message),
+        })
+    }
+}
+
+impl FromToProto for mt::TaskDependent {
+    type PB = pb::TaskDependent;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self {
+            ty: match p.ty {
+                0 => DependentType::After,
+                1 => DependentType::Before,
+                _ => return Err(Incompatible::new(format!("invalid task type {}", p.ty))),
+            },
+            source: p.source,
+            target: p.target,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::TaskDependent {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+
+            source: self.source.clone(),
+            target: self.target.clone(),
+            ty: self.ty as i32,
+        })
+    }
+}
+
+impl FromToProto for mt::TaskState {
+    type PB = pb::TaskState;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self {
+            is_succeeded: p.is_succeeded,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::TaskState {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            is_succeeded: self.is_succeeded,
         })
     }
 }
