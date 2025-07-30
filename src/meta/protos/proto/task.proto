@@ -78,3 +78,23 @@ message Task {
   optional string error_integration = 20;
   string owner_user = 21;
 }
+
+message TaskState {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  bool is_succeeded = 1;
+}
+
+message TaskDependent {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  enum DependentType {
+    After = 0;
+    Before = 1;
+  }
+  string source = 1;
+  string target = 2;
+  DependentType ty = 3;
+}

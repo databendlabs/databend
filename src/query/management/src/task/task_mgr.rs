@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -24,19 +25,33 @@ use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
 use databend_common_meta_app::principal::task;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskState;
+use databend_common_meta_app::principal::task_dependent_ident::TaskDependentIdent;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
+use databend_common_meta_app::principal::task_state_ident::TaskStateIdent;
+use databend_common_meta_app::principal::DependentType;
 use databend_common_meta_app::principal::ScheduleType;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
+use databend_common_meta_app::principal::TaskDependent;
 use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
+use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::txn_condition::Target;
+use databend_common_meta_types::ConditionResult;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::TxnCondition;
+use databend_common_meta_types::TxnOp;
+use databend_common_meta_types::TxnRequest;
 use databend_common_meta_types::With;
+use databend_common_proto_conv::FromToProto;
+use futures::StreamExt;
 use futures::TryStreamExt;
+use prost::Message;
 
 use crate::task::errors::TaskApiError;
 use crate::task::errors::TaskError;
@@ -251,6 +266,157 @@ impl TaskMgr {
         Ok(change.is_changed())
     }
 
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn update_after(
+        &self,
+        task_name: &str,
+        task_after: &[String],
+    ) -> Result<Result<(), TaskError>, TaskApiError> {
+        let task_after_ident = DirName::new(TaskDependentIdent::new_generic(
+            &self.tenant,
+            TaskDependent::new(DependentType::After, task_name.to_string(), "".to_string()),
+        ));
+
+        let mut update_ops = Vec::new();
+
+        let mut new_afters: HashSet<&String> = task_after.iter().collect();
+        let mut remove_afters: Vec<String> = Vec::new();
+        let mut task_after_stream = self.kv_api.list_pb_values(&task_after_ident).await?;
+
+        while let Some(after_task_dependent) = task_after_stream.next().await {
+            let after_task_dependent = after_task_dependent?;
+
+            debug_assert_eq!(after_task_dependent.ty, DependentType::After);
+
+            if !new_afters.remove(&after_task_dependent.target) {
+                remove_afters.push(after_task_dependent.target.clone());
+            }
+        }
+        let mut check_ops = Vec::with_capacity(new_afters.len());
+        for after in new_afters {
+            let after_dependent =
+                TaskDependent::new(DependentType::After, task_name.to_string(), after.clone());
+            let after_dependent_ident =
+                TaskDependentIdent::new_generic(&self.tenant, after_dependent.clone());
+
+            let before_dependent =
+                TaskDependent::new(DependentType::Before, after.clone(), task_name.to_string());
+            let before_dependent_ident =
+                TaskDependentIdent::new_generic(&self.tenant, before_dependent.clone());
+
+            update_ops.push(TxnOp::put(
+                after_dependent_ident.to_string_key(),
+                after_dependent.to_pb()?.encode_to_vec(),
+            ));
+            update_ops.push(TxnOp::put(
+                before_dependent_ident.to_string_key(),
+                before_dependent.to_pb()?.encode_to_vec(),
+            ));
+            // Ensure that the related tasks still exist
+            check_ops.push(TxnCondition {
+                key: TaskStateIdent::new(&self.tenant, after).to_string_key(),
+                expected: ConditionResult::Ge as i32,
+                target: Some(Target::Seq(0)),
+            });
+        }
+        for after in remove_afters {
+            let before_dependent_ident = TaskDependentIdent::new_generic(
+                &self.tenant,
+                TaskDependent::new(DependentType::Before, after.clone(), task_name.to_string()),
+            );
+
+            update_ops.push(TxnOp::delete(before_dependent_ident.to_string_key()));
+        }
+        let request = TxnRequest::new(check_ops, update_ops);
+        let reply = self.kv_api.transaction(request).await?;
+
+        if reply.success {
+            return Err(TaskApiError::SimultaneousUpdateTaskAfter {
+                task_name: task_name.to_string(),
+                after: task_after.join(","),
+            });
+        }
+
+        Ok(Ok(()))
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn task_succeeded(
+        &self,
+        task_name: &str,
+    ) -> Result<Result<Vec<String>, TaskError>, TaskApiError> {
+        let task_before_ident = DirName::new(TaskDependentIdent::new_generic(
+            &self.tenant,
+            TaskDependent::new(DependentType::Before, task_name.to_string(), "".to_string()),
+        ));
+        let task_state_key = TaskStateIdent::new(&self.tenant, task_name);
+        let succeeded_value = TaskState { is_succeeded: true }.to_pb()?.encode_to_vec();
+        let not_succeeded_value = TaskState {
+            is_succeeded: false,
+        }
+        .to_pb()?
+        .encode_to_vec();
+
+        let mut ready_tasks = Vec::new();
+        let mut task_before_stream = self.kv_api.list_pb_values(&task_before_ident).await?;
+
+        while let Some(task_before_dependent) = task_before_stream.next().await {
+            let task_before_dependent = task_before_dependent?;
+
+            let before_task_after_ident = DirName::new(TaskDependentIdent::new_generic(
+                &self.tenant,
+                TaskDependent::new(
+                    DependentType::After,
+                    task_before_dependent.target.to_string(),
+                    "".to_string(),
+                ),
+            ));
+            let mut before_task_after_stream =
+                self.kv_api.list_pb_values(&before_task_after_ident).await?;
+
+            let mut conditions = Vec::new();
+            let mut if_ops = Vec::new();
+            while let Some(before_task_after_dependent) = before_task_after_stream.next().await {
+                let before_task_after_dependent = before_task_after_dependent?;
+                let task_ident =
+                    TaskStateIdent::new(&self.tenant, &before_task_after_dependent.target);
+                // Only care about the predecessors of this task's successor tasks, excluding this task itself.
+                if before_task_after_dependent.target != task_name {
+                    conditions.push(TxnCondition::eq_value(
+                        task_ident.to_string_key(),
+                        succeeded_value.clone(),
+                    ));
+                }
+                if_ops.push(TxnOp::put(
+                    task_ident.to_string_key(),
+                    not_succeeded_value.clone(),
+                ));
+            }
+
+            let request = TxnRequest::new(conditions, if_ops).with_else(vec![TxnOp::put(
+                task_state_key.to_string_key(),
+                succeeded_value.clone(),
+            )]);
+            let reply = self.kv_api.transaction(request).await?;
+
+            if reply.success {
+                ready_tasks.push(task_before_dependent.target.clone())
+            }
+        }
+        Ok(Ok(ready_tasks))
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn clean_task_state(&self, task_name: &str) -> Result<(), TaskApiError> {
+        let key = TaskStateIdent::new(&self.tenant, task_name);
+        let req = UpsertPB::delete(key).with(MatchSeq::GE(1));
+        let _ = self.kv_api.upsert_pb(&req).await?;
+        Ok(())
+    }
+
     async fn create_task_inner(
         &self,
         task: Task,
@@ -300,7 +466,9 @@ impl TaskMgr {
             }
         }
         if !task.after.is_empty() {
-            self.send(TaskMessage::AfterTask(task)).await?;
+            if let Err(err) = self.update_after(&task.task_name, &task.after).await? {
+                return Ok(Err(err));
+            }
         } else if task.schedule_options.is_some() && !without_schedule {
             self.send(TaskMessage::ScheduleTask(task)).await?;
         }
