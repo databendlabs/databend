@@ -257,8 +257,8 @@ jobs:
         id: prepare
         run: |
           publish_name="databend-query-${{ matrix.category }}-${{ needs.create_release.outputs.version }}-${{ matrix.target }}.debug.gz"
-          gzip query.debug
-          mv query.debug.gz ${publish_name}
+          gzip databend-query.debug
+          mv databend-query.debug.gz ${publish_name}
           echo "publish_name=${publish_name}" >> $GITHUB_OUTPUT
       - name: Upload to Release
         env:
@@ -499,7 +499,7 @@ jobs:
     uses: ./.github/workflows/bindings.python.yml
     secrets: inherit
     with:
-      tag: ${{ needs.create_release.outputs.version }}
+      version: ${{ needs.create_release.outputs.version }}
 
   notify:
     runs-on: ubuntu-latest
