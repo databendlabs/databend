@@ -245,7 +245,11 @@ impl App {
             }
         };
 
-        if let Err(e) = lua.load(&script).exec_async().await {
+        #[allow(clippy::disallowed_types)]
+        let local = tokio::task::LocalSet::new();
+        let res = local.run_until(lua.load(&script).exec_async()).await;
+
+        if let Err(e) = res {
             return Err(anyhow::anyhow!("Lua execution error: {}", e));
         }
         Ok(())

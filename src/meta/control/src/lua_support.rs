@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,6 +27,7 @@ use mlua::LuaSerdeExt;
 use mlua::UserData;
 use mlua::UserDataMethods;
 use mlua::Value;
+use tokio::time;
 
 pub struct LuaGrpcClient {
     client: Arc<ClientHandle>,
@@ -64,6 +67,31 @@ impl UserData for LuaGrpcClient {
     }
 }
 
+pub struct LuaTask {
+    handle: Rc<RefCell<Option<tokio::task::JoinHandle<mlua::Value>>>>,
+}
+
+impl UserData for LuaTask {
+    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_async_method("join", |_lua, this, ()| async move {
+            let handle_opt = this.handle.borrow_mut().take();
+            match handle_opt {
+                Some(handle) => match handle.await {
+                    Ok(result) => Ok(result),
+                    Err(e) => {
+                        eprintln!("Join error: {}", e);
+                        Ok(mlua::Value::Nil)
+                    }
+                },
+                None => {
+                    eprintln!("Handle already consumed - task was already awaited");
+                    Ok(mlua::Value::Nil)
+                }
+            }
+        });
+    }
+}
+
 pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
     // Register new_grpc_client function
     let new_grpc_client = lua
@@ -90,6 +118,43 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
     lua.globals()
         .set("NULL", Value::NULL)
         .map_err(|e| anyhow::anyhow!("Failed to register NULL constant: {}", e))?;
+
+    // Register spawn function that delegates to tokio::task::spawn_local
+    let spawn_fn = lua
+        .create_function(|_lua, func: mlua::Function| {
+            #[allow(clippy::disallowed_methods)]
+            let handle = tokio::task::spawn_local(async move {
+                match func.call_async::<mlua::Value>(()).await {
+                    Ok(result) => result,
+                    Err(e) => {
+                        eprintln!("Spawned task error: {}", e);
+                        mlua::Value::Nil
+                    }
+                }
+            });
+
+            Ok(LuaTask {
+                handle: Rc::new(RefCell::new(Some(handle))),
+            })
+        })
+        .map_err(|e| anyhow::anyhow!("Failed to create spawn function: {}", e))?;
+
+    lua.globals()
+        .set("spawn", spawn_fn)
+        .map_err(|e| anyhow::anyhow!("Failed to register spawn function: {}", e))?;
+
+    // Register async sleep function
+    let sleep_fn = lua
+        .create_async_function(|_lua, seconds: f64| async move {
+            let duration = Duration::from_secs_f64(seconds);
+            time::sleep(duration).await;
+            Ok(())
+        })
+        .map_err(|e| anyhow::anyhow!("Failed to create sleep function: {}", e))?;
+
+    lua.globals()
+        .set("sleep", sleep_fn)
+        .map_err(|e| anyhow::anyhow!("Failed to register sleep function: {}", e))?;
 
     Ok(())
 }
