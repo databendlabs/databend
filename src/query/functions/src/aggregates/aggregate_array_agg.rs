@@ -303,49 +303,6 @@ where T: SimpleType
     validity: MutableBitmap,
 }
 
-impl<T, const NULLABLE: bool> BorshSerialize for ArrayAggStateSimple<T, NULLABLE>
-where
-    T: SimpleType,
-    T::Scalar: Debug + BorshSerialize,
-{
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        if NULLABLE {
-            (
-                &self.values,
-                Column::Boolean(self.validity.clone().freeze()),
-            )
-                .serialize(writer)
-        } else {
-            self.values.serialize(writer)
-        }
-    }
-}
-
-impl<T, const NULLABLE: bool> BorshDeserialize for ArrayAggStateSimple<T, NULLABLE>
-where
-    T: SimpleType,
-    T::Scalar: Debug + BorshDeserialize,
-{
-    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        if NULLABLE {
-            let (values, Column::Boolean(validity)) = BorshDeserialize::deserialize_reader(reader)?
-            else {
-                unreachable!()
-            };
-            Ok(Self {
-                values,
-                validity: validity.make_mut(),
-            })
-        } else {
-            let values = BorshDeserialize::deserialize_reader(reader)?;
-            Ok(Self {
-                values,
-                ..Default::default()
-            })
-        }
-    }
-}
-
 impl<T: Debug + SimpleType, const NULLABLE: bool> Default for ArrayAggStateSimple<T, NULLABLE> {
     fn default() -> Self {
         Self {
@@ -438,6 +395,49 @@ where
     }
 }
 
+impl<T, const NULLABLE: bool> BorshSerialize for ArrayAggStateSimple<T, NULLABLE>
+where
+    T: SimpleType,
+    T::Scalar: Debug + BorshSerialize,
+{
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        if NULLABLE {
+            (
+                &self.values,
+                Column::Boolean(self.validity.clone().freeze()),
+            )
+                .serialize(writer)
+        } else {
+            self.values.serialize(writer)
+        }
+    }
+}
+
+impl<T, const NULLABLE: bool> BorshDeserialize for ArrayAggStateSimple<T, NULLABLE>
+where
+    T: SimpleType,
+    T::Scalar: Debug + BorshDeserialize,
+{
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        if NULLABLE {
+            let (values, Column::Boolean(validity)) = BorshDeserialize::deserialize_reader(reader)?
+            else {
+                unreachable!()
+            };
+            Ok(Self {
+                values,
+                validity: validity.make_mut(),
+            })
+        } else {
+            let values = BorshDeserialize::deserialize_reader(reader)?;
+            Ok(Self {
+                values,
+                ..Default::default()
+            })
+        }
+    }
+}
+
 impl<T, const NULLABLE: bool> StateSerde for ArrayAggStateSimple<T, NULLABLE>
 where
     T: SimpleType,
@@ -479,27 +479,8 @@ struct ArrayAggStateZST<const NULLABLE: bool> {
     validity: MutableBitmap,
 }
 
-impl<const NULLABLE: bool> BorshSerialize for ArrayAggStateZST<NULLABLE> {
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        Column::Boolean(self.validity.clone().freeze()).serialize(writer)
-    }
-}
-
-impl<const NULLABLE: bool> BorshDeserialize for ArrayAggStateZST<NULLABLE> {
-    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        let Column::Boolean(validity) = BorshDeserialize::deserialize_reader(reader)? else {
-            unreachable!()
-        };
-        Ok(Self {
-            validity: validity.make_mut(),
-        })
-    }
-}
-
 impl<V, const NULLABLE: bool> ScalarStateFunc<ZeroSizeValueType<V>> for ArrayAggStateZST<NULLABLE>
-where
-    V: ZeroSizeType,
-    Self: BorshSerialize + BorshDeserialize,
+where V: ZeroSizeType
 {
     fn new() -> Self {
         Self {
@@ -562,7 +543,7 @@ where
 
 impl<const NULLABLE: bool> StateSerde for ArrayAggStateZST<NULLABLE> {
     fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![ArrayType::<BooleanType>::data_type().into()]
     }
 
     fn batch_serialize(
@@ -570,13 +551,15 @@ impl<const NULLABLE: bool> StateSerde for ArrayAggStateZST<NULLABLE> {
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<Self>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<ArrayType<BooleanType>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                builder.push_item(state.validity.clone().freeze());
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -585,12 +568,16 @@ impl<const NULLABLE: bool> StateSerde for ArrayAggStateZST<NULLABLE> {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            // Merge validity bitmaps
-            state.validity.extend_from_bitmap(&rhs.validity.freeze());
-            Ok(())
-        })
+        batch_merge1::<ArrayType<BooleanType>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, data| {
+                state.validity.extend_from_bitmap(&data);
+                Ok(())
+            },
+        )
     }
 }
 
