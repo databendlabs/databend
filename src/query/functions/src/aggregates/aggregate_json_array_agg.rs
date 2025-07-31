@@ -138,7 +138,6 @@ where
 
 impl<T> StateSerde for JsonArrayAggState<T>
 where
-    Self: BorshSerialize + BorshDeserialize + ScalarStateFunc<T>,
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize + Send + Sync,
 {
@@ -168,7 +167,8 @@ where
     ) -> Result<()> {
         batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
             let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
+            state.values.extend_from_slice(&rhs.values);
+            Ok(())
         })
     }
 }
