@@ -325,16 +325,21 @@ impl<F: RowsFetcher + Send + Sync + 'static> TransformRowsFetcher<F> {
 impl<F: RowsFetcher + Sync + Send + 'static> TransformRowsFetcher<F> {
     async fn fetch_columns(&mut self) -> Result<Option<DataBlock>> {
         let blocks = std::mem::take(&mut self.blocks);
-        assert!(!blocks.is_empty());
+        let row_ids = std::mem::take(&mut self.fetch_row_ids);
+        let metadata = std::mem::take(&mut self.metadata);
+
+        if blocks.is_empty() {
+            return Ok(None);
+        }
 
         let start_time = std::time::Instant::now();
         let num_blocks = blocks.len();
         let mut data = DataBlock::concat(&blocks)?;
         let num_rows = data.num_rows();
 
-        assert_ne!(num_rows, 0);
-        let row_ids = std::mem::take(&mut self.fetch_row_ids);
-        let metadata = std::mem::take(&mut self.metadata);
+        if num_rows == 0 {
+            return Ok(None);
+        }
 
         let fetched_block = self.fetcher.fetch(&row_ids, metadata).await?;
 
