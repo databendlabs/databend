@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import os
 import shutil
-from metactl_utils import metactl_bin, load_lua_util, metactl_run_lua
+from metactl_utils import metactl_bin, metactl_run_lua
 from utils import print_title, kill_databend_meta, start_meta_node
 
 
@@ -12,22 +12,18 @@ def test_spawn_basic():
     """Test basic spawn functionality without gRPC."""
     print_title("Test basic spawn functionality")
 
-    lua_util_str = load_lua_util()
-
     lua_script = f'''
-{lua_util_str}
-
 print("Testing basic spawn functionality...")
 
-local task1 = spawn(function()
+local task1 = metactl.spawn(function()
     print("Task 1: Starting")
-    sleep(0.1)
+    metactl.sleep(0.1)
     print("Task 1: Finished")
 end)
 
-local task2 = spawn(function()
+local task2 = metactl.spawn(function()
     print("Task 2: Starting")
-    sleep(0.2)
+    metactl.sleep(0.2)
     print("Task 2: Finished")
 end)
 
