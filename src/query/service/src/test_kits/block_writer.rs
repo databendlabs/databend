@@ -35,7 +35,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::RawColumnHLL;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -73,7 +73,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<FileMetaData>, RawColumnHLL)> {
+    ) -> Result<(BlockMeta, Option<FileMetaData>, RawBlockHLL)> {
         let (location, block_id) = if !self.is_greater_than_v5 {
             let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
                 self.location_generator.prefix().to_string(),

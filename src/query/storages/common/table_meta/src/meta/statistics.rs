@@ -32,8 +32,8 @@ pub type SnapshotId = Uuid;
 pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
-pub type ColumnHLL = HashMap<ColumnId, MetaHLL>;
-pub type RawColumnHLL = Vec<u8>;
+pub type BlockHLL = HashMap<ColumnId, MetaHLL>;
+pub type RawBlockHLL = Vec<u8>;
 
 // Assigned to executors, describes that which blocks of given segment, an executor should take care of
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
@@ -59,7 +59,7 @@ pub fn supported_stat_type(data_type: &DataType) -> bool {
     )
 }
 
-pub fn encode_column_hll(hll: &ColumnHLL) -> Result<RawColumnHLL> {
+pub fn encode_column_hll(hll: &BlockHLL) -> Result<RawBlockHLL> {
     let encoding = SegmentStatistics::encoding();
     let compression = SegmentStatistics::compression();
 
@@ -68,7 +68,7 @@ pub fn encode_column_hll(hll: &ColumnHLL) -> Result<RawColumnHLL> {
     Ok(data_compress)
 }
 
-pub fn decode_column_hll(data: &RawColumnHLL) -> Result<Option<ColumnHLL>> {
+pub fn decode_column_hll(data: &RawBlockHLL) -> Result<Option<BlockHLL>> {
     if data.is_empty() {
         return Ok(None);
     }

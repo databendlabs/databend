@@ -41,6 +41,7 @@ use databend_storages_common_cache::SegmentStatistics;
 use databend_storages_common_table_meta::meta::testing::SegmentInfoV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV2;
 use databend_storages_common_table_meta::meta::testing::TableSnapshotV4;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -125,10 +126,14 @@ pub async fn generate_segments_v2(
             uuid,
             SegmentInfoV2::VERSION,
         );
-        let hll_location =
+        let stats_location =
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
-        stats.write_meta(dal, &hll_location).await?;
-        summary.hlls = Some((hll_location, SegmentStatistics::VERSION));
+        let additional_stats_meta = AdditionalStatsMeta {
+            size: stats.len() as u64,
+            location: (stats_location.clone(), SegmentStatistics::VERSION),
+        };
+        dal.write(&stats_location, stats).await?;
+        summary.additional_stats_meta = Some(additional_stats_meta);
         let segment_info = SegmentInfoV2::new(block_metas, summary);
         write_v2_to_storage(dal, &location, &segment_info).await?;
         segs.push(((location, SegmentInfoV2::VERSION), segment_info))
@@ -163,10 +168,14 @@ pub async fn generate_segments(
             );
             location_generator.gen_segment_info_location(table_meta_timestamps)
         };
-        let hll_location =
+        let stats_location =
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(&location);
-        stats.write_meta(dal, &hll_location).await?;
-        summary.hlls = Some((hll_location, SegmentStatistics::VERSION));
+        let additional_stats_meta = AdditionalStatsMeta {
+            size: stats.len() as u64,
+            location: (stats_location.clone(), SegmentStatistics::VERSION),
+        };
+        dal.write(&stats_location, stats).await?;
+        summary.additional_stats_meta = Some(additional_stats_meta);
         let segment_info = SegmentInfo::new(block_metas, summary);
         segment_info.write_meta(dal, location.as_str()).await?;
         segs.push(((location, SegmentInfo::VERSION), segment_info))
@@ -179,7 +188,7 @@ async fn generate_blocks(
     num_blocks: usize,
     is_greater_than_v5: bool,
     table_meta_timestamps: TableMetaTimestamps,
-) -> Result<(Vec<Arc<BlockMeta>>, SegmentStatistics)> {
+) -> Result<(Vec<Arc<BlockMeta>>, Vec<u8>)> {
     let dal = fuse_table.get_operator_ref();
     let schema = fuse_table.schema();
     let location_generator = fuse_table.meta_location_generator();
@@ -208,7 +217,7 @@ async fn generate_blocks(
         block_metas.push(Arc::new(block_meta));
         hlls.push(hll);
     }
-    let stats = SegmentStatistics::new(hlls);
+    let stats = SegmentStatistics::new(hlls).to_bytes()?;
     Ok((block_metas, stats))
 }
 

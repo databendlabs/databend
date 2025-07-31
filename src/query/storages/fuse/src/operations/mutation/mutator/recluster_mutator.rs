@@ -39,7 +39,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::RawColumnHLL;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use fastrace::func_path;
@@ -183,7 +183,13 @@ impl ReclusterMutator {
             .map(|(loc, info)| {
                 selected_statistics.push(info.summary.clone());
                 selected_segs_idx.push(loc.segment_idx);
-                selected_seg_stats.push((loc.segment_idx, info.summary.hlls.clone()));
+                selected_seg_stats.push((
+                    loc.segment_idx,
+                    info.summary
+                        .additional_stats_meta
+                        .as_ref()
+                        .map(|v| v.location.clone()),
+                ));
                 (loc.segment_idx, info)
             })
             .collect::<Vec<_>>();
@@ -630,7 +636,7 @@ impl ReclusterMutator {
     async fn gather_hlls(
         &self,
         hlls: Vec<(usize, Option<Location>)>,
-    ) -> Result<HashMap<BlockIndex, Option<RawColumnHLL>>> {
+    ) -> Result<HashMap<BlockIndex, Option<RawBlockHLL>>> {
         // combine all the tasks.
         let mut iter = hlls.into_iter();
         let tasks = std::iter::from_fn(|| {
@@ -647,7 +653,7 @@ impl ReclusterMutator {
                         };
                         let stats = reader.read(&load_params).await?;
                         let res = stats
-                            .blocks
+                            .block_hlls
                             .iter()
                             .enumerate()
                             .map(|(block_idx, hll)| {

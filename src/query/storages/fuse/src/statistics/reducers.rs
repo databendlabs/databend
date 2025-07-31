@@ -155,7 +155,7 @@ pub fn merge_statistics_mut(
     r: &Statistics,
     default_cluster_key_id: Option<u32>,
 ) {
-    l.hlls = None;
+    l.additional_stats_meta = None;
     if l.row_count == 0 {
         l.col_stats = r.col_stats.clone();
         l.cluster_stats = r.cluster_stats.clone();
@@ -332,6 +332,6 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         col_stats: merged_col_stats,
         cluster_stats: merged_cluster_stats,
         virtual_block_count: merged_virtual_block_count,
-        hlls: None,
+        additional_stats_meta: None,
     }
 }

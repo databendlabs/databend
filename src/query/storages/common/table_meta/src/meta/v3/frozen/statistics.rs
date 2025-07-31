@@ -54,7 +54,7 @@ impl From<Statistics> for crate::meta::Statistics {
                 .collect(),
             cluster_stats: None,
             virtual_block_count: None,
-            hlls: None,
+            additional_stats_meta: None,
         }
     }
 }

@@ -130,6 +130,11 @@ insert into t2 values(1, 'a'), (2, 'b');
 ----
 2
 
+query B
+select segment_stats_size is null from fuse_segment('db_09_0006','t2');
+----
+0
+
 statement ok
 alter table t2 set options(approx_distinct_columns = '');
 
@@ -137,6 +142,20 @@ query I
 insert into t2 values(3, 'c'), (4, 'd');
 ----
 2
+
+query B
+select segment_stats_size is null from fuse_segment('db_09_0006','t2');
+----
+1
+0
+
+statement ok
+optimize table t2 compact segment;
+
+query B
+select segment_stats_size is null from fuse_segment('db_09_0006','t2');
+----
+1
 
 statement ok
 DROP TABLE t

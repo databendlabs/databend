@@ -25,21 +25,23 @@ use crate::meta::format::read_and_deserialize;
 use crate::meta::FormatVersion;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
-use crate::meta::RawColumnHLL;
+use crate::meta::RawBlockHLL;
 use crate::meta::Versioned;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SegmentStatistics {
     pub format_version: FormatVersion,
 
-    pub blocks: Vec<RawColumnHLL>,
+    /// HLL data for blocks within the segment.
+    /// This stores the HyperLogLog statistics for each block in the segment.
+    pub block_hlls: Vec<RawBlockHLL>,
 }
 
 impl SegmentStatistics {
-    pub fn new(blocks: Vec<RawColumnHLL>) -> Self {
+    pub fn new(block_hlls: Vec<RawBlockHLL>) -> Self {
         Self {
             format_version: SegmentStatistics::VERSION,
-            blocks,
+            block_hlls,
         }
     }
 

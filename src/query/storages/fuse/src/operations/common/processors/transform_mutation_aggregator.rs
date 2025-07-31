@@ -31,11 +31,12 @@ use databend_common_expression::VirtualDataSchema;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::RawColumnHLL;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -50,7 +51,6 @@ use opendal::Operator;
 
 use crate::io::read::read_segment_stats;
 use crate::io::CachedMetaWriter;
-use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::CommitMeta;
@@ -333,7 +333,7 @@ impl TableMutationAggregator {
         let set_hilbert_level = self.set_hilbert_level;
         let kind = self.kind;
         for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
-            let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawColumnHLL>>) =
+            let (new_blocks, new_hlls): (Vec<Arc<BlockMeta>>, Vec<Option<RawBlockHLL>>) =
                 chunk.unzip();
             let new_hlls = if new_hlls.iter().all(|v| v.is_none()) {
                 None
@@ -342,7 +342,7 @@ impl TableMutationAggregator {
                     .into_iter()
                     .map(|x| x.unwrap_or_default())
                     .collect::<Vec<_>>();
-                Some(SegmentStatistics::new(hlls))
+                Some(SegmentStatistics::new(hlls).to_bytes()?)
             };
             let all_perfect = new_blocks.len() > 1;
 
@@ -493,8 +493,8 @@ impl TableMutationAggregator {
                         SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
                     let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
-                    let stats = if let Some(loc) = &segment_info.summary.hlls {
-                        let stats = read_segment_stats(op.clone(), loc.clone()).await?;
+                    let stats = if let Some(meta) = &segment_info.summary.additional_stats_meta {
+                        let stats = read_segment_stats(op.clone(), meta.location.clone()).await?;
                         Some(stats)
                     } else {
                         None
@@ -507,7 +507,7 @@ impl TableMutationAggregator {
                         .map(|(block_idx, block_meta)| {
                             let hll = stats
                                 .as_ref()
-                                .and_then(|v| v.blocks.get(block_idx))
+                                .and_then(|v| v.block_hlls.get(block_idx))
                                 .cloned();
                             (block_idx, (block_meta, hll))
                         })
@@ -536,7 +536,7 @@ impl TableMutationAggregator {
                             .cluster_stats
                             .as_ref()
                             .is_some_and(|v| v.cluster_key_id == default_cluster_key_id.unwrap());
-                    let stats = generate_segment_stats(new_hlls);
+                    let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, Some(segment_info.summary))
                 } else {
                     // use by compact.
@@ -550,7 +550,7 @@ impl TableMutationAggregator {
                         .sorted_by(|a, b| a.0.cmp(&b.0))
                         .map(|(_, meta)| meta)
                         .unzip();
-                    let stats = generate_segment_stats(new_hlls);
+                    let stats = generate_segment_stats(new_hlls)?;
                     (new_blocks, stats, None)
                 };
 
@@ -761,7 +761,7 @@ impl BlockMutations {
     fn new_replacement(
         block_idx: BlockIndex,
         block_meta: Arc<BlockMeta>,
-        column_hlls: Option<RawColumnHLL>,
+        column_hlls: Option<RawBlockHLL>,
     ) -> Self {
         BlockMutations {
             replaced_blocks: vec![(block_idx, (block_meta, column_hlls))],
@@ -780,7 +780,7 @@ impl BlockMutations {
         &mut self,
         block_idx: BlockIndex,
         block_meta: Arc<BlockMeta>,
-        column_hlls: Option<RawColumnHLL>,
+        column_hlls: Option<RawBlockHLL>,
     ) {
         self.replaced_blocks
             .push((block_idx, (block_meta, column_hlls)));
@@ -804,7 +804,7 @@ async fn write_segment(
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
     blocks: Vec<Arc<BlockMeta>>,
-    stats: Option<SegmentStatistics>,
+    stats: Option<Vec<u8>>,
     thresholds: BlockThresholds,
     default_cluster_key: Option<u32>,
     all_perfect: bool,
@@ -850,8 +850,12 @@ async fn write_segment(
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
                 location.as_str(),
             );
-        stats.write_meta(&dal, &segment_stats_location).await?;
-        new_summary.hlls = Some((segment_stats_location, SegmentStatistics::VERSION));
+        let additional_stats_meta = AdditionalStatsMeta {
+            size: stats.len() as u64,
+            location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+        };
+        dal.write(&segment_stats_location, stats).await?;
+        new_summary.additional_stats_meta = Some(additional_stats_meta);
     }
 
     // create new segment info
@@ -862,11 +866,12 @@ async fn write_segment(
     Ok((location, new_summary))
 }
 
-fn generate_segment_stats(hlls: Vec<Option<RawColumnHLL>>) -> Option<SegmentStatistics> {
+fn generate_segment_stats(hlls: Vec<Option<RawBlockHLL>>) -> Result<Option<Vec<u8>>> {
     if hlls.iter().all(|v| v.is_none()) {
-        None
+        Ok(None)
     } else {
         let blocks = hlls.into_iter().map(|x| x.unwrap_or_default()).collect();
-        Some(SegmentStatistics::new(blocks))
+        let data = SegmentStatistics::new(blocks).to_bytes()?;
+        Ok(Some(data))
     }
 }

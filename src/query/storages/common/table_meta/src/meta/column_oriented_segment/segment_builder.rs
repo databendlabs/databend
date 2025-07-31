@@ -42,6 +42,7 @@ use super::segment::ColumnOrientedSegment;
 use super::AbstractSegment;
 use crate::meta::format::encode;
 use crate::meta::supported_stat_type;
+use crate::meta::AdditionalStatsMeta;
 use crate::meta::BlockMeta;
 use crate::meta::ClusterStatistics;
 use crate::meta::ColumnStatistics;
@@ -58,7 +59,7 @@ pub trait SegmentBuilder: Send + Sync + 'static {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
-        hlls: Option<Location>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment>;
     fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self;
 }
@@ -160,13 +161,14 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
-        hlls: Option<Location>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Self::Segment> {
         let mut this = std::mem::replace(
             self,
             ColumnOrientedSegmentBuilder::new(self.table_schema.clone(), self.block_per_segment),
         );
-        let summary = this.build_summary(thresholds, default_cluster_key_id, hlls)?;
+        let summary =
+            this.build_summary(thresholds, default_cluster_key_id, additional_stats_meta)?;
         let cluster_stats = this.cluster_stats;
         let mut cluster_stats_binary = Vec::with_capacity(cluster_stats.len());
         for stats in cluster_stats {
@@ -272,7 +274,7 @@ impl ColumnOrientedSegmentBuilder {
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
-        hlls: Option<Location>,
+        additional_stats_meta: Option<AdditionalStatsMeta>,
     ) -> Result<Statistics> {
         let row_count = self.row_count.iter().sum();
         let block_count = self.row_count.len() as u64;
@@ -365,7 +367,7 @@ impl ColumnOrientedSegmentBuilder {
             col_stats,
             cluster_stats,
             virtual_block_count: Some(virtual_block_count),
-            hlls,
+            additional_stats_meta,
         })
     }
 }

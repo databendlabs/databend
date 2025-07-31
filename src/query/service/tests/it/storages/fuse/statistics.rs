@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::tokio;
+use databend_common_exception::Result;
 use databend_common_expression::type_check::check;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::number::NumberScalar;
@@ -38,6 +39,8 @@ use databend_common_expression::TableSchema;
 use databend_common_functions::aggregates::eval_aggr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::ApproxDistinctColumns;
+use databend_common_storages_fuse::io::build_column_hlls;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_common_storages_fuse::statistics::Trim;
 use databend_common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
@@ -49,7 +52,10 @@ use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
 use databend_query::test_kits::*;
+use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
+use databend_storages_common_table_meta::meta::decode_column_hll;
+use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -57,8 +63,9 @@ use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
 use rand::Rng;
+
 #[test]
-fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
+fn test_ft_stats_block_stats() -> Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
         TableField::new("b", TableDataType::String),
@@ -82,7 +89,7 @@ fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
 }
 
 #[test]
-fn test_ft_stats_block_stats_with_column_distinct_count() -> databend_common_exception::Result<()> {
+fn test_ft_stats_block_stats_with_column_distinct_count() -> Result<()> {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new_from_column_id("a", TableDataType::Number(NumberDataType::Int32), 0),
         TableField::new_from_column_id("b", TableDataType::String, 1),
@@ -109,7 +116,7 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> databend_common_exc
 }
 
 #[test]
-fn test_ft_tuple_stats_block_stats() -> databend_common_exception::Result<()> {
+fn test_ft_tuple_stats_block_stats() -> Result<()> {
     let schema = Arc::new(TableSchema::new(vec![TableField::new(
         "a",
         TableDataType::Tuple {
@@ -142,7 +149,7 @@ fn test_ft_tuple_stats_block_stats() -> databend_common_exception::Result<()> {
 }
 
 #[test]
-fn test_ft_stats_col_stats_reduce() -> databend_common_exception::Result<()> {
+fn test_ft_stats_col_stats_reduce() -> Result<()> {
     let num_of_blocks = 10;
     let rows_per_block = 3;
     let val_start_with = 1;
@@ -188,7 +195,7 @@ fn test_ft_stats_col_stats_reduce() -> databend_common_exception::Result<()> {
 }
 
 #[test]
-fn test_reduce_block_statistics_in_memory_size() -> databend_common_exception::Result<()> {
+fn test_reduce_block_statistics_in_memory_size() -> Result<()> {
     let iter = |mut idx| {
         std::iter::from_fn(move || {
             idx += 1;
@@ -219,7 +226,7 @@ fn test_reduce_block_statistics_in_memory_size() -> databend_common_exception::R
 }
 
 #[test]
-fn test_reduce_cluster_statistics() -> databend_common_exception::Result<()> {
+fn test_reduce_cluster_statistics() -> Result<()> {
     let default_cluster_key_id = Some(0);
     let cluster_stats_0 = Some(ClusterStatistics::new(
         0,
@@ -312,7 +319,7 @@ fn test_reduce_cluster_statistics() -> databend_common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_accumulator() -> databend_common_exception::Result<()> {
+async fn test_accumulator() -> Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
     let mut stats_acc = RowOrientedSegmentBuilder::default();
 
@@ -339,7 +346,7 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result<()> {
+async fn test_ft_cluster_stats_with_stats() -> Result<()> {
     let schema = DataSchemaRefExt::create(vec![DataField::new(
         "a",
         DataType::Number(NumberDataType::Int32),
@@ -436,8 +443,8 @@ async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming() -> databend_common_exception::Result<()> {
-    let suite = || -> databend_common_exception::Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming() -> Result<()> {
+    let suite = || -> Result<()> {
         // prepare random strings
         // 100 string, length ranges from 0 to 100 (chars)
         let mut rand_strings: Vec<String> = vec![];
@@ -489,8 +496,7 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> databend_common_except
 }
 
 #[test]
-fn test_ft_stats_block_stats_string_columns_trimming_using_eval(
-) -> databend_common_exception::Result<()> {
+fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> Result<()> {
     // verifies (randomly) the following assumptions:
     //
     // https://github.com/datafuselabs/databend/issues/7829
@@ -499,7 +505,7 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval(
     // > the trimmed max should be larger than the non-trimmed one, and the trimmed min
     // > should be lesser than the non-trimmed one.
 
-    let suite = || -> databend_common_exception::Result<()> {
+    let suite = || -> Result<()> {
         // prepare random strings
         // 100 string, length ranges from 0 to 100 (chars)
         let mut rand_strings: Vec<String> = vec![];
@@ -597,7 +603,7 @@ fn char_len(value: &str) -> usize {
 }
 
 #[test]
-fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
+fn test_reduce_block_meta() -> Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
     let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
@@ -650,5 +656,28 @@ fn test_reduce_block_meta() -> databend_common_exception::Result<()> {
     assert_eq!(acc_file_size, stats.compressed_byte_size);
     assert_eq!(acc_bloom_filter_index_size, stats.index_size);
 
+    Ok(())
+}
+
+#[test]
+fn test_encode_column_hll() -> Result<()> {
+    let schema = Arc::new(TableSchema::new(vec![
+        TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
+        TableField::new("b", TableDataType::String),
+    ]));
+    let block = DataBlock::new_from_columns(vec![
+        Int32Type::from_data(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 9]),
+        StringType::from_data(vec![
+            "aa", "aa", "bb", "bb", "cc", "dd", "dd", "dd", "ee", "ff",
+        ]),
+    ]);
+
+    let hll_columns = ApproxDistinctColumns::All;
+    let ndv_columns_map =
+        hll_columns.distinct_column_fields(schema.clone(), RangeIndex::supported_table_type)?;
+    let column_hlls = build_column_hlls(&block, &ndv_columns_map)?.unwrap();
+    let encoded = encode_column_hll(&column_hlls)?;
+    let decoded = decode_column_hll(&encoded)?.unwrap();
+    assert_eq!(column_hlls, decoded);
     Ok(())
 }

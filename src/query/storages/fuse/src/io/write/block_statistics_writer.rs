@@ -20,7 +20,7 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
-use databend_storages_common_table_meta::meta::ColumnHLL;
+use databend_storages_common_table_meta::meta::BlockHLL;
 
 use crate::io::write::stream::create_column_ndv_estimator;
 use crate::io::write::stream::ColumnNDVEstimator;
@@ -29,7 +29,7 @@ use crate::io::write::stream::ColumnNDVEstimatorOps;
 pub fn build_column_hlls(
     block: &DataBlock,
     ndv_columns_map: &BTreeMap<FieldIndex, TableField>,
-) -> Result<Option<ColumnHLL>> {
+) -> Result<Option<BlockHLL>> {
     let mut builder = BlockStatsBuilder::new(ndv_columns_map);
     builder.add_block(block)?;
     builder.finalize()
@@ -85,7 +85,7 @@ impl BlockStatsBuilder {
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<Option<ColumnHLL>> {
+    pub fn finalize(self) -> Result<Option<BlockHLL>> {
         if self.builders.is_empty() {
             return Ok(None);
         }

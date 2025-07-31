@@ -18,6 +18,7 @@ use std::time::Instant;
 use databend_common_exception::Result;
 use databend_common_metrics::storage::metrics_set_compact_segments_select_duration_second;
 use databend_storages_common_cache::SegmentStatistics;
+use databend_storages_common_table_meta::meta::AdditionalStatsMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -28,7 +29,6 @@ use opendal::Operator;
 
 use crate::io::read::read_segment_stats_in_parallel;
 use crate::io::CachedMetaWriter;
-use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::CompactOptions;
@@ -352,7 +352,7 @@ impl<'a> SegmentCompactor<'a> {
         // 2.1 merge fragmented segments into new segment, and update the statistics
         let mut blocks = Vec::with_capacity(self.threshold as usize);
         let mut new_statistics = Statistics::default();
-        let mut hlls = Vec::with_capacity(fragments.len());
+        let mut stats_locations = Vec::with_capacity(fragments.len());
         let mut hlls_has_none = false;
 
         self.compacted_state.num_fragments_compacted += fragments.len();
@@ -363,8 +363,8 @@ impl<'a> SegmentCompactor<'a> {
                 self.default_cluster_key_id,
             );
             blocks.append(&mut segment.blocks.clone());
-            if let Some(val) = segment.summary.hlls {
-                hlls.push(val);
+            if let Some(meta) = segment.summary.additional_stats_meta {
+                stats_locations.push(meta.location);
             } else {
                 hlls_has_none = true;
             }
@@ -377,20 +377,28 @@ impl<'a> SegmentCompactor<'a> {
         let mut block_hlls = Vec::with_capacity(blocks.len());
         if !hlls_has_none {
             let max_threads = (self.chunk_size / 4).max(10);
-            let segment_stats =
-                read_segment_stats_in_parallel(self.operator.clone(), &hlls, max_threads).await?;
+            let segment_stats = read_segment_stats_in_parallel(
+                self.operator.clone(),
+                &stats_locations,
+                max_threads,
+            )
+            .await?;
             for stats in segment_stats {
-                block_hlls.append(&mut stats.blocks.clone());
+                block_hlls.append(&mut stats.block_hlls.clone());
             }
-            let stats = SegmentStatistics::new(block_hlls);
+            let stats_data = SegmentStatistics::new(block_hlls).to_bytes()?;
             let segment_stats_location =
                 TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(
                     location.as_str(),
                 );
-            stats
-                .write_meta(self.operator, &segment_stats_location)
+            let additional_stats_meta = AdditionalStatsMeta {
+                size: stats_data.len() as u64,
+                location: (segment_stats_location.clone(), SegmentStatistics::VERSION),
+            };
+            self.operator
+                .write(&segment_stats_location, stats_data)
                 .await?;
-            new_statistics.hlls = Some((segment_stats_location, SegmentStatistics::VERSION));
+            new_statistics.additional_stats_meta = Some(additional_stats_meta);
         }
 
         // 2.3 write down new segment

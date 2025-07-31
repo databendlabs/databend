@@ -243,12 +243,12 @@ async fn set_segment_format(
                     for block in segment.blocks {
                         segment_builder.add_block(block.as_ref().clone())?;
                     }
-                    let hlls = segment.summary.hlls;
+                    let additional_stats_meta = segment.summary.additional_stats_meta;
                     let segment = segment_builder
                         .build(
                             fuse_table.get_block_thresholds(),
                             fuse_table.cluster_key_id(),
-                            hlls,
+                            additional_stats_meta,
                         )?
                         .serialize()?;
                     let location_gen = fuse_table.meta_location_generator();

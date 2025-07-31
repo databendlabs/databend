@@ -70,6 +70,14 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AdditionalStatsMeta {
+    /// The size of the stats data in bytes.
+    pub size: u64,
+    /// The file location of the stats data.
+    pub location: Location,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Statistics {
     pub row_count: u64,
@@ -90,7 +98,7 @@ pub struct Statistics {
     pub cluster_stats: Option<ClusterStatistics>,
     pub virtual_block_count: Option<u64>,
 
-    pub hlls: Option<Location>,
+    pub additional_stats_meta: Option<AdditionalStatsMeta>,
 }
 
 // conversions from old meta data
@@ -256,7 +264,7 @@ impl Statistics {
             col_stats,
             cluster_stats: None,
             virtual_block_count: None,
-            hlls: None,
+            additional_stats_meta: None,
         }
     }
 }

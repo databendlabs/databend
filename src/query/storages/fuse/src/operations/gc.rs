@@ -847,8 +847,8 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
                 bloom_location.insert(bloom_loc.0.clone());
             }
         }
-        if let Some(hlls) = &value.as_ref().summary.hlls {
-            hll_location.insert(hlls.0.clone());
+        if let Some(meta) = &value.as_ref().summary.additional_stats_meta {
+            hll_location.insert(meta.location.0.clone());
         }
         Ok(Self {
             block_location,
@@ -882,8 +882,8 @@ impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
             }
         }
 
-        if let Some(hlls) = &value.as_ref().summary.hlls {
-            hll_location.insert(hlls.0.clone());
+        if let Some(meta) = &value.as_ref().summary.additional_stats_meta {
+            hll_location.insert(meta.location.0.clone());
         }
         Ok(Self {
             block_location,

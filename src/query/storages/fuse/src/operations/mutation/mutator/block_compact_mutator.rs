@@ -33,7 +33,7 @@ use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
-use databend_storages_common_table_meta::meta::RawColumnHLL;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use opendal::Operator;
@@ -469,7 +469,7 @@ impl CompactTaskBuilder {
         std::mem::take(&mut self.blocks)
     }
 
-    fn add(&mut self, block_meta: &Arc<BlockMeta>, hlls: &Option<RawColumnHLL>) -> (bool, bool) {
+    fn add(&mut self, block_meta: &Arc<BlockMeta>, hlls: &Option<RawBlockHLL>) -> (bool, bool) {
         let total_rows = self.total_rows + block_meta.row_count as usize;
         let total_size = self.total_size + block_meta.block_size as usize;
         let total_compressed = self.total_compressed + block_meta.file_size as usize;
@@ -570,8 +570,8 @@ impl CompactTaskBuilder {
             let permit = acquire_task_permit(semaphore.clone()).await?;
             let op = self.dal.clone();
             let handler = runtime.spawn(async move {
-                let stats = if let Some(loc) = &segment.summary.hlls {
-                    let stats = read_segment_stats(op.clone(), loc.clone()).await?;
+                let stats = if let Some(meta) = &segment.summary.additional_stats_meta {
+                    let stats = read_segment_stats(op.clone(), meta.location.clone()).await?;
                     Some(stats)
                 } else {
                     None
@@ -598,7 +598,7 @@ impl CompactTaskBuilder {
                 merge_statistics_mut(&mut removed_segment_summary, &summary, self.cluster_key_id);
 
                 blocks.into_iter().enumerate().map(move |(idx, v)| {
-                    let column_hlls = hlls.as_ref().and_then(|v| v.blocks.get(idx)).cloned();
+                    let column_hlls = hlls.as_ref().and_then(|v| v.block_hlls.get(idx)).cloned();
                     (v, column_hlls)
                 })
             })

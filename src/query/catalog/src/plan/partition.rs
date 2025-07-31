@@ -26,7 +26,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::RawColumnHLL;
+use databend_storages_common_table_meta::meta::RawBlockHLL;
 use databend_storages_common_table_meta::meta::Statistics;
 use parking_lot::RwLock;
 use rand::prelude::SliceRandom;
@@ -347,7 +347,7 @@ pub struct ReclusterTask {
     pub level: i32,
 }
 
-pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawColumnHLL>);
+pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
 
 #[derive(Clone)]
 pub enum ReclusterParts {
