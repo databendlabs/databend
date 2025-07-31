@@ -1,5 +1,5 @@
 local GRPC_ADDR = "127.0.0.1:9191"
-local UPSERT_WORKERS = 4
+local UPSERT_WORKERS = 64
 local GET_WORKERS = 4
 local OPERATIONS_PER_WORKER = 10000
 local KEY_PREFIX = "bench_key_"
