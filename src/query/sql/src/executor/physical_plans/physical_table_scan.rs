@@ -148,13 +148,15 @@ impl PhysicalPlanBuilder {
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
 
-            let metadata = self.metadata.read();
-            if scan.is_lazy_table
-                && metadata
+            let supported_lazy_materialize = {
+                let metadata = self.metadata.read();
+                metadata
                     .table(scan.table_index)
                     .table()
                     .supported_lazy_materialize()
-            {
+            };
+
+            if scan.is_lazy_table && supported_lazy_materialize {
                 let lazy_columns = columns.difference(&used).cloned().collect();
                 let mut metadata = self.metadata.write();
                 metadata.set_table_lazy_columns(scan.table_index, lazy_columns);
