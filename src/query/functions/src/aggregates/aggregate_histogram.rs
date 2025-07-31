@@ -202,7 +202,7 @@ pub fn try_create_aggregate_histogram_function(
                 HistogramState<NumberType<NUM>>,
                 NumberType<NUM>,
                 StringType,
-            >::create(display_name, DataType::String, params, data_type.clone())
+            >::create(display_name, DataType::String)
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
                 data_type,
@@ -217,9 +217,7 @@ pub fn try_create_aggregate_histogram_function(
                         HistogramState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         StringType,
-                    >::create(
-                        display_name, DataType::String, params, data_type.clone()
-                    )
+                    >::create(display_name, DataType::String)
                     .with_function_data(Box::new(HistogramData {
                         max_num_buckets,
                         data_type,
@@ -233,8 +231,6 @@ pub fn try_create_aggregate_histogram_function(
             AggregateUnaryFunction::<HistogramState<StringType>, StringType, StringType>::create(
                 display_name,
                 DataType::String,
-                params,
-                data_type.clone(),
             )
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
@@ -249,7 +245,7 @@ pub fn try_create_aggregate_histogram_function(
                 TimestampType,
                 StringType,
             >::create(
-                display_name, DataType::String, params, data_type.clone()
+                display_name, DataType::String
             )
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
@@ -262,8 +258,6 @@ pub fn try_create_aggregate_histogram_function(
             AggregateUnaryFunction::<HistogramState<DateType>, DateType, StringType>::create(
                 display_name,
                 DataType::String,
-                params,
-                data_type.clone(),
             )
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,

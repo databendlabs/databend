@@ -40,6 +40,7 @@ use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
 use super::assert_binary_arguments;
+use super::assert_params;
 use super::batch_merge3;
 use super::batch_serialize3;
 use super::AggrState;
@@ -352,10 +353,11 @@ where
 
 pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_binary_arguments(display_name, arguments.len())?;
     let arg_type = arguments[0].clone();
     let val_type = arguments[1].clone();

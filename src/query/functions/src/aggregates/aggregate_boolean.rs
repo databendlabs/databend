@@ -27,6 +27,7 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use databend_common_expression::SELECTIVITY_THRESHOLD;
 
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
@@ -162,6 +163,7 @@ pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let mut data_type = arguments[0].clone();
@@ -176,8 +178,6 @@ pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
             AggregateUnaryFunction::<BooleanState<IS_AND>, BooleanType, BooleanType>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .finish()
         }

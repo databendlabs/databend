@@ -35,6 +35,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
+use super::assert_params;
 use super::assert_variadic_arguments;
 use super::AggrState;
 use super::AggrStateLoc;
@@ -55,10 +56,11 @@ pub struct AggregateCountFunction {
 impl AggregateCountFunction {
     pub fn try_create(
         display_name: &str,
-        _params: Vec<Scalar>,
+        params: Vec<Scalar>,
         arguments: Vec<DataType>,
         _sort_descs: Vec<AggregateFunctionSortDesc>,
     ) -> Result<Arc<dyn AggregateFunction>> {
+        assert_params(display_name, params.len(), 0)?;
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Arc::new(AggregateCountFunction {
             display_name: display_name.to_string(),

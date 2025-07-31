@@ -122,24 +122,23 @@ pub fn try_create_aggregate_approx_count_distinct_function(
     }
 
     match p {
-        4 => create_templated::<4>(display_name, params, arguments),
-        5 => create_templated::<5>(display_name, params, arguments),
-        6 => create_templated::<6>(display_name, params, arguments),
-        7 => create_templated::<7>(display_name, params, arguments),
-        8 => create_templated::<8>(display_name, params, arguments),
-        9 => create_templated::<9>(display_name, params, arguments),
-        10 => create_templated::<10>(display_name, params, arguments),
-        11 => create_templated::<11>(display_name, params, arguments),
-        12 => create_templated::<12>(display_name, params, arguments),
-        13 => create_templated::<13>(display_name, params, arguments),
-        14 => create_templated::<14>(display_name, params, arguments),
+        4 => create_templated::<4>(display_name, arguments),
+        5 => create_templated::<5>(display_name, arguments),
+        6 => create_templated::<6>(display_name, arguments),
+        7 => create_templated::<7>(display_name, arguments),
+        8 => create_templated::<8>(display_name, arguments),
+        9 => create_templated::<9>(display_name, arguments),
+        10 => create_templated::<10>(display_name, arguments),
+        11 => create_templated::<11>(display_name, arguments),
+        12 => create_templated::<12>(display_name, arguments),
+        13 => create_templated::<13>(display_name, arguments),
+        14 => create_templated::<14>(display_name, arguments),
         _ => unreachable!(),
     }
 }
 
 fn create_templated<const P: usize>(
     display_name: &str,
-    params: Vec<Scalar>,
     arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let return_type = DataType::Number(NumberDataType::UInt64);
@@ -148,8 +147,6 @@ fn create_templated<const P: usize>(
             AggregateUnaryFunction::<HyperLogLog<P>, NumberType<NUM_TYPE>, UInt64Type>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_need_drop(true)
             .finish()
@@ -158,8 +155,6 @@ fn create_templated<const P: usize>(
             AggregateUnaryFunction::<HyperLogLog<P>, StringType, UInt64Type>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_need_drop(true)
             .finish()
@@ -168,8 +163,6 @@ fn create_templated<const P: usize>(
             AggregateUnaryFunction::<HyperLogLog<P>, DateType, UInt64Type>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_need_drop(true)
             .finish()
@@ -178,8 +171,6 @@ fn create_templated<const P: usize>(
             AggregateUnaryFunction::<HyperLogLog<P>, TimestampType, UInt64Type>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_need_drop(true)
             .finish()
@@ -188,8 +179,6 @@ fn create_templated<const P: usize>(
             AggregateUnaryFunction::<HyperLogLog<P>, AnyType, UInt64Type>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_need_drop(true)
             .finish()

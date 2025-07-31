@@ -31,6 +31,7 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggregateFunctionDescription;
@@ -158,6 +159,7 @@ pub fn try_create_aggregate_mode_function(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let data_type = arguments[0].clone();
@@ -168,7 +170,7 @@ pub fn try_create_aggregate_mode_function(
                 NumberType<NUM>,
                 NumberType<NUM>,
             >::create(
-                display_name, data_type.clone(), params, data_type.clone()
+                display_name, data_type.clone()
             )
             .with_need_drop(true)
             .finish()
@@ -180,9 +182,7 @@ pub fn try_create_aggregate_mode_function(
                         ModeState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         DecimalType<DECIMAL>,
-                    >::create(
-                        display_name, data_type.clone(), params, data_type.clone()
-                    )
+                    >::create(display_name, data_type.clone())
                     .with_need_drop(true)
                     .finish()
                 }
@@ -191,8 +191,6 @@ pub fn try_create_aggregate_mode_function(
         _ => {
             AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::create(
                 display_name,
-                data_type.clone(),
-                params,
                 data_type.clone(),
             )
             .with_need_drop(true)

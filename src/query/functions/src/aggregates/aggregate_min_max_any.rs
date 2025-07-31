@@ -40,6 +40,7 @@ use super::aggregate_scalar_state::CmpMin;
 use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
@@ -344,6 +345,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let mut data_type = argument_types[0].clone();
     let need_drop = need_manual_drop_state(&data_type);
@@ -361,8 +363,6 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::create(
                         display_name,
                         return_type,
-                        params,
-                        data_type.clone(),
                     )
                     .with_need_drop(need_drop)
                     .with_function_data(Box::new(data_type))
@@ -375,7 +375,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         StringType,
                         StringType,
                     >::create(
-                        display_name, return_type, params, data_type
+                        display_name, return_type
                     )
                     .with_need_drop(need_drop)
                     .finish()
@@ -388,9 +388,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 MinMaxAnyState<NumberType<NUM>, CMP>,
                                 NumberType<NUM>,
                                 NumberType<NUM>,
-                            >::create(
-                                display_name, return_type, params, data_type
-                            )
+                            >::create(display_name, return_type)
                             .finish()
                         }
                     })
@@ -403,9 +401,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 MinMaxAnyDecimalState<DecimalType<DECIMAL>, CMP>,
                                 DecimalType<DECIMAL>,
                                 DecimalType<DECIMAL>,
-                            >::create(
-                                display_name, return_type, params, data_type
-                            )
+                            >::create(display_name, return_type)
                             .finish()
                         }
                     })
@@ -417,7 +413,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         AnyType,
                         AnyType,
                     >::create(
-                        display_name, return_type, params, data_type
+                        display_name, return_type
                     )
                     .with_need_drop(need_drop)
                     .finish()

@@ -33,6 +33,7 @@ use databend_common_expression::ProjectedBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateSerdeItem;
 
+use super::assert_params;
 use super::assert_variadic_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
@@ -245,10 +246,11 @@ impl AggregateRetentionFunction {
 
 pub fn try_create_aggregate_retention_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
     for argument in arguments.iter() {

@@ -33,6 +33,7 @@ use num_traits::AsPrimitive;
 
 use super::aggregate_unary::AggregateUnaryFunction;
 use super::aggregate_unary::UnaryState;
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
@@ -147,6 +148,7 @@ pub fn try_create_aggregate_skewness_function(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let return_type = DataType::Number(NumberDataType::Float64);
@@ -156,7 +158,7 @@ pub fn try_create_aggregate_skewness_function(
                 SkewnessStateV2,
                 NumberConvertView<NUM_TYPE, F64>,
                 Float64Type,
-            >::create(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
             .finish()
         }
 
@@ -168,7 +170,7 @@ pub fn try_create_aggregate_skewness_function(
                         DecimalF64View<DECIMAL>,
                         Float64Type,
                     >::create(
-                        display_name, return_type, params, arguments[0].clone()
+                        display_name, return_type
                     )
                     .finish()
                 }

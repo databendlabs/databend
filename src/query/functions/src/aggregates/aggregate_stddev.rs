@@ -40,6 +40,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 
+use super::aggregator_common::assert_params;
 use super::aggregator_common::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
@@ -189,6 +190,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let return_type = DataType::Number(NumberDataType::Float64).wrap_nullable();
@@ -198,7 +200,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 StddevState<TYPE>,
                 NumberConvertView<NUM_TYPE, F64>,
                 NullableType<Float64Type>,
-            >::create(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
             .finish()
         }
         DataType::Decimal(s) => {
@@ -208,9 +210,7 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                         StddevState<TYPE>,
                         DecimalF64View<DECIMAL>,
                         NullableType<Float64Type>,
-                    >::create(
-                        display_name, return_type, params, arguments[0].clone()
-                    )
+                    >::create(display_name, return_type)
                     .finish()
                 }
             })

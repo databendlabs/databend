@@ -31,7 +31,6 @@ use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 
@@ -119,8 +118,6 @@ where
     pub(crate) fn create(
         display_name: &str,
         return_type: DataType,
-        _params: Vec<Scalar>,
-        _argument: DataType,
     ) -> AggregateUnaryFunction<S, T, R> {
         AggregateUnaryFunction {
             display_name: display_name.to_string(),

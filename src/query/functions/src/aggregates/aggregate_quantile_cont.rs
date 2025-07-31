@@ -397,7 +397,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                     QuantileContState,
                     NumberType<NUM_TYPE>,
                     ArrayType<Float64Type>,
-                >::create(display_name, return_type, params, arguments[0].clone())
+                >::create(display_name, return_type)
                 .with_function_data(Box::new(QuantileData { levels }))
                 .with_need_drop(true)
                 .finish()
@@ -408,7 +408,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                     NumberType<NUM_TYPE>,
                     Float64Type,
                 >::create(
-                    display_name, return_type, params, arguments[0].clone()
+                    display_name, return_type
                 )
                 .with_function_data(Box::new(QuantileData { levels }))
                 .with_need_drop(true)
@@ -426,10 +426,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                             DecimalType<DECIMAL>,
                             ArrayType<DecimalType<DECIMAL>>,
                         >::create(
-                            display_name,
-                            DataType::Array(Box::new(data_type)),
-                            params,
-                            arguments[0].clone(),
+                            display_name, DataType::Array(Box::new(data_type))
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
@@ -439,9 +436,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                             DecimalQuantileContState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(
-                            display_name, data_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, data_type)
                         .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
                         .finish()

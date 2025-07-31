@@ -42,6 +42,7 @@ use databend_common_io::prelude::BinaryWrite;
 use roaring::RoaringTreemap;
 
 use super::assert_arguments;
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::assert_variadic_params;
 use super::extract_number_param;
@@ -561,10 +562,11 @@ where
 
 pub fn try_create_aggregate_bitmap_function<const OP_TYPE: u8, const AGG_TYPE: u8>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
     with_bitmap_op_mapped_type!(|OP| match OP_TYPE {

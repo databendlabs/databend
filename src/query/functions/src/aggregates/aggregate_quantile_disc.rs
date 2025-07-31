@@ -220,10 +220,7 @@ pub fn try_create_aggregate_quantile_disc_function(
                             NumberType<NUM_TYPE>,
                             ArrayType<NumberType<NUM_TYPE>>,
                         >::create(
-                            display_name,
-                            DataType::Array(Box::new(data_type)),
-                            params,
-                            arguments[0].clone(),
+                            display_name, DataType::Array(Box::new(data_type))
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
@@ -233,9 +230,7 @@ pub fn try_create_aggregate_quantile_disc_function(
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             NumberType<NUM_TYPE>,
-                        >::create(
-                            display_name, data_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, data_type)
                         .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
                         .finish()
@@ -253,10 +248,7 @@ pub fn try_create_aggregate_quantile_disc_function(
                             DecimalType<DECIMAL>,
                             ArrayType<DecimalType<DECIMAL>>,
                         >::create(
-                            display_name,
-                            DataType::Array(Box::new(data_type)),
-                            params,
-                            arguments[0].clone(),
+                            display_name, DataType::Array(Box::new(data_type))
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
@@ -266,9 +258,7 @@ pub fn try_create_aggregate_quantile_disc_function(
                             QuantileState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(
-                            display_name, data_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, data_type)
                         .with_function_data(Box::new(QuantileData { levels }))
                         .with_need_drop(true)
                         .finish()

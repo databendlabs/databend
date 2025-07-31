@@ -42,6 +42,7 @@ use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
 use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
@@ -345,10 +346,11 @@ where
 
 pub fn try_create_aggregate_json_array_agg_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     let return_type = DataType::Variant;
 

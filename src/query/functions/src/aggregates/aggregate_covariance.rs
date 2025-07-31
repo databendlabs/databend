@@ -41,6 +41,7 @@ use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
 use super::aggregator_common::assert_binary_arguments;
+use super::aggregator_common::assert_params;
 use super::borsh_partial_deserialize;
 use super::AggrState;
 use super::AggrStateLoc;
@@ -320,10 +321,11 @@ where
 
 pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_binary_arguments(display_name, arguments.len())?;
 
     with_number_mapped_type!(|NUM_TYPE0| match &arguments[0] {

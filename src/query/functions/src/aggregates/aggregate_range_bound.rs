@@ -295,8 +295,6 @@ pub fn try_create_aggregate_range_bound_function(
             AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .with_function_data(Box::new(function_data))
             .with_need_drop(true)
@@ -309,9 +307,7 @@ pub fn try_create_aggregate_range_bound_function(
                         RangeBoundState<NumberType<NUM>>,
                         NumberType<NUM>,
                         ArrayType<NumberType<NUM>>,
-                    >::create(
-                        display_name, return_type, params, arguments[0].clone()
-                    )
+                    >::create(display_name, return_type)
                     .with_function_data(Box::new(function_data))
                     .with_need_drop(true)
                     .finish()
@@ -325,9 +321,7 @@ pub fn try_create_aggregate_range_bound_function(
                         RangeBoundState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         ArrayType<DecimalType<DECIMAL>>,
-                    >::create(
-                        display_name, return_type, params, arguments[0].clone()
-                    )
+                    >::create(display_name, return_type)
                     .with_function_data(Box::new(function_data))
                     .with_need_drop(true)
                     .finish()
@@ -339,7 +333,7 @@ pub fn try_create_aggregate_range_bound_function(
                 RangeBoundState<BinaryType>,
                 BinaryType,
                 ArrayType<BinaryType>,
-            >::create(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
             .with_function_data(Box::new(function_data))
             .with_need_drop(true)
             .finish()

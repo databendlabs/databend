@@ -48,6 +48,7 @@ use geo::Polygon;
 use geozero::wkb::Ewkb;
 
 use super::aggregate_scalar_state::ScalarStateFunc;
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
@@ -403,10 +404,11 @@ where
 
 pub fn try_create_aggregate_st_collect_function(
     display_name: &str,
-    _params: Vec<Scalar>,
+    params: Vec<Scalar>,
     argument_types: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, argument_types.len())?;
     if argument_types[0].remove_nullable() != DataType::Geometry
         && argument_types[0] != DataType::Null

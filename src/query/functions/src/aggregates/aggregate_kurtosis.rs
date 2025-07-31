@@ -29,6 +29,7 @@ use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use num_traits::AsPrimitive;
 
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::AggrState;
@@ -160,6 +161,7 @@ pub fn try_create_aggregate_kurtosis_function(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
     let return_type = DataType::Number(NumberDataType::Float64);
 
@@ -169,7 +171,7 @@ pub fn try_create_aggregate_kurtosis_function(
                 KurtosisState,
                 NumberConvertView<NUM_TYPE, F64>,
                 Float64Type,
-            >::create(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
             .finish()
         }
         DataType::Decimal(s) => {
@@ -180,7 +182,7 @@ pub fn try_create_aggregate_kurtosis_function(
                         DecimalF64View<DECIMAL>,
                         Float64Type,
                     >::create(
-                        display_name, return_type, params, arguments[0].clone()
+                        display_name, return_type
                     )
                     .finish()
                 }

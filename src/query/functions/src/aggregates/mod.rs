@@ -12,49 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod adaptors;
-mod aggregate_approx_count_distinct;
-mod aggregate_arg_min_max;
-mod aggregate_array_agg;
-mod aggregate_array_moving;
-mod aggregate_avg;
-mod aggregate_bitmap;
-mod aggregate_boolean;
-mod aggregate_combinator_distinct;
-mod aggregate_combinator_if;
-mod aggregate_combinator_state;
-mod aggregate_count;
-mod aggregate_covariance;
-mod aggregate_distinct_state;
-mod aggregate_function_factory;
-mod aggregate_histogram;
-mod aggregate_json_array_agg;
-mod aggregate_json_object_agg;
-mod aggregate_kurtosis;
-mod aggregate_markov_tarin;
-mod aggregate_min_max_any;
-mod aggregate_min_max_any_decimal;
-mod aggregate_mode;
-mod aggregate_null_result;
-mod aggregate_quantile_cont;
-mod aggregate_quantile_disc;
-mod aggregate_quantile_tdigest;
-mod aggregate_quantile_tdigest_weighted;
-mod aggregate_range_bound;
-mod aggregate_retention;
-mod aggregate_scalar_state;
-mod aggregate_skewness;
-mod aggregate_st_collect;
-mod aggregate_stddev;
-mod aggregate_string_agg;
-mod aggregate_sum;
-mod aggregate_unary;
-mod aggregate_window_funnel;
-mod aggregator;
-mod aggregator_common;
-
-use std::any::Any;
-
 pub use adaptors::*;
 pub use aggregate_arg_min_max::AggregateArgMinMaxFunction;
 pub use aggregate_array_agg::*;
@@ -111,7 +68,48 @@ trait StateSerde {
 }
 
 impl FunctionData for DataType {
-    fn as_any(&self) -> &dyn Any {
+    fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
+
+mod adaptors;
+mod aggregate_approx_count_distinct;
+mod aggregate_arg_min_max;
+mod aggregate_array_agg;
+mod aggregate_array_moving;
+mod aggregate_avg;
+mod aggregate_bitmap;
+mod aggregate_boolean;
+mod aggregate_combinator_distinct;
+mod aggregate_combinator_if;
+mod aggregate_combinator_state;
+mod aggregate_count;
+mod aggregate_covariance;
+mod aggregate_distinct_state;
+mod aggregate_function_factory;
+mod aggregate_histogram;
+mod aggregate_json_array_agg;
+mod aggregate_json_object_agg;
+mod aggregate_kurtosis;
+mod aggregate_markov_tarin;
+mod aggregate_min_max_any;
+mod aggregate_min_max_any_decimal;
+mod aggregate_mode;
+mod aggregate_null_result;
+mod aggregate_quantile_cont;
+mod aggregate_quantile_disc;
+mod aggregate_quantile_tdigest;
+mod aggregate_quantile_tdigest_weighted;
+mod aggregate_range_bound;
+mod aggregate_retention;
+mod aggregate_scalar_state;
+mod aggregate_skewness;
+mod aggregate_st_collect;
+mod aggregate_stddev;
+mod aggregate_string_agg;
+mod aggregate_sum;
+mod aggregate_unary;
+mod aggregate_window_funnel;
+mod aggregator;
+mod aggregator_common;

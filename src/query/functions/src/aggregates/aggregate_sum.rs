@@ -36,6 +36,7 @@ use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
 use super::aggregate_unary::UnaryState;
+use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
@@ -395,6 +396,7 @@ pub fn try_create_aggregate_sum_function(
     arguments: Vec<DataType>,
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
+    assert_params(display_name, params.len(), 0)?;
     assert_unary_arguments(display_name, arguments.len())?;
 
     let mut data_type = arguments[0].clone();
@@ -411,7 +413,7 @@ pub fn try_create_aggregate_sum_function(
                 NumberSumState<NumberType<TSum>>,
                 NumberType<NUM>,
                 NumberType<TSum>,
-            >::create(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type)
             .finish()
         }
         DataType::Interval => {
@@ -419,8 +421,6 @@ pub fn try_create_aggregate_sum_function(
             AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::create(
                 display_name,
                 return_type,
-                params,
-                arguments[0].clone(),
             )
             .finish()
         }
@@ -438,18 +438,14 @@ pub fn try_create_aggregate_sum_function(
                             DecimalSumState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(
-                            display_name, return_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, return_type)
                         .finish()
                     } else {
                         AggregateUnaryFunction::<
                             DecimalSumState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::create(
-                            display_name, return_type, params, arguments[0].clone()
-                        )
+                        >::create(display_name, return_type)
                         .finish()
                     }
                 }
