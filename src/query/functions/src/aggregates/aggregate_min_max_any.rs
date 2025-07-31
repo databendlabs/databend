@@ -42,8 +42,9 @@ use super::aggregate_scalar_state::TYPE_MIN;
 use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
+use super::batch_merge2;
 use super::batch_serialize1;
-use super::AggrState;
+use super::batch_serialize2;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionFeatures;
@@ -193,7 +194,7 @@ where C: ChangeIf<StringType>
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
-pub struct MinMaxAnyState<T, C>
+struct MinMaxAnyState<T, C>
 where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
@@ -307,8 +308,12 @@ where
     T::Scalar: BorshSerialize + BorshDeserialize,
     C: ChangeIf<T>,
 {
-    fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        let data_type = function_data
+            .and_then(|data| data.as_any().downcast_ref::<DataType>())
+            .cloned()
+            .unwrap();
+        vec![DataType::Boolean.into(), data_type.into()]
     }
 
     fn batch_serialize(
@@ -316,13 +321,24 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize2::<BooleanType, T, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, (flag_builder, value_builder)| {
+                match &state.value {
+                    Some(v) => {
+                        flag_builder.push_item(true);
+                        value_builder.push_item(T::to_scalar_ref(v));
+                    }
+                    None => {
+                        flag_builder.push_item(false);
+                        value_builder.push_default();
+                    }
+                }
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -331,10 +347,19 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            state.merge(&rhs)
-        })
+        batch_merge2::<BooleanType, T, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, (flag, value)| {
+                let rhs = Self {
+                    value: flag.then_some(T::to_owned_scalar(value)),
+                    _c: PhantomData,
+                };
+                state.merge(&rhs)
+            },
+        )
     }
 }
 
@@ -397,6 +422,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 NumberType<NUM>,
                                 NumberType<NUM>,
                             >::create(display_name, return_type)
+                            .with_function_data(Box::new(data_type))
                             .finish()
                         }
                     })
@@ -410,6 +436,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 DecimalType<DECIMAL>,
                                 DecimalType<DECIMAL>,
                             >::create(display_name, return_type)
+                            .with_function_data(Box::new(data_type))
                             .finish()
                         }
                     })
@@ -424,6 +451,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         display_name, return_type
                     )
                     .with_need_drop(need_drop)
+                    .with_function_data(Box::new(data_type))
                     .finish()
                 }
             })

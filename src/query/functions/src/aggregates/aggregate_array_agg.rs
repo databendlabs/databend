@@ -61,9 +61,9 @@ use super::AggrStateLoc;
 use super::AggregateFunction;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionSortDesc;
+use super::FunctionData;
 use super::StateAddr;
 use super::StateSerde;
-use crate::aggregates::FunctionData;
 
 #[derive(Debug)]
 struct ArrayAggStateAny<T>
