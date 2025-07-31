@@ -40,7 +40,8 @@ use tokio::time;
 
 use crate::admin::MetaAdminClient;
 
-const LUA_UTIL: &str = include_str!("../lua_util.lua");
+const LUA_UTIL: &str = include_str!("../lua/lua_util.lua");
+const ZIPF_LOAD_GENERATOR: &str = include_str!("../lua/zipf_load_generator.lua");
 
 fn invalid_input(path: &str, message: impl std::fmt::Display) -> Error {
     Error::RuntimeError(format!("{path}: {message}"))
@@ -460,6 +461,18 @@ pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
         .set("sleep", sleep_fn)
         .map_err(|e| anyhow::anyhow!("Failed to register sleep function: {}", e))?;
 
+    // Register the Zipf load generator. The module returns the `ZipfGenerator`
+    // table, exposed as `metactl.ZipfGenerator` so any script can call
+    // `metactl.ZipfGenerator:new(num_keys, alpha)` directly.
+    let zipf_generator = lua
+        .load(ZIPF_LOAD_GENERATOR)
+        .eval::<Table>()
+        .map_err(|e| anyhow::anyhow!("Failed to load zipf_load_generator: {}", e))?;
+
+    metactl_table
+        .set("ZipfGenerator", zipf_generator)
+        .map_err(|e| anyhow::anyhow!("Failed to register ZipfGenerator: {}", e))?;
+
     // Set the metactl table as a global
     lua.globals()
         .set("metactl", metactl_table)
@@ -760,5 +773,21 @@ mod tests {
         assert_eq!(r#""a\n\"\\\x00\x7F\x80\xFF""#, string);
         assert_eq!(r#""a\n\"\\\x00\x7F\x80\xFF""#, bytes);
         assert_eq!(r#"{"a\n"=1}"#, key);
+    }
+
+    #[test]
+    fn test_zipf_generator_registered() {
+        let lua = Lua::new();
+        setup_lua_environment(&lua).unwrap();
+        let index = lua
+            .load(
+                r#"
+                local zipf = metactl.ZipfGenerator:new(1000000, 1.2)
+                return zipf:generate_key_index(0.5)
+                "#,
+            )
+            .eval::<i64>()
+            .unwrap();
+        assert_eq!(24, index);
     }
 }

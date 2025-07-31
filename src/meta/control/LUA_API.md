@@ -242,6 +242,47 @@ local result = task:join()
 print(result)  -- Output: task result
 ```
 
+## Load Generation
+
+### metactl.ZipfGenerator:new(num_keys, alpha)
+
+Creates a Zipf-distribution load generator. A Zipf distribution models realistic key-access skew, where a small set of keys receives most of the traffic (see [Zipf's law](https://en.wikipedia.org/wiki/Zipf%27s_law)).
+
+**Parameters:**
+- `num_keys` (integer): Number of distinct keys in the dataset. Defaults to `1000`.
+- `alpha` (number): Zipf exponent; higher values skew the distribution more toward low indices. Defaults to `1.0`.
+
+**Returns:**
+- A generator object exposing the `generate_key_index` method, plus the readable fields `num_keys` and `alpha`.
+
+**Example:**
+```lua
+local zipf = metactl.ZipfGenerator:new(1000000, 1.2)
+```
+
+### zipf:generate_key_index(x)
+
+Maps a uniform sample to a Zipf-distributed key index using an O(1) transformation (no lookup table).
+
+**Parameters:**
+- `x` (number): A uniform sample in `[0, 1)`, typically from `math.random()`.
+
+**Returns:**
+- An integer key index, biased toward low values. `x = 0` returns `1`, and the index increases monotonically with `x`.
+
+For `x` close to `1` the result can exceed `num_keys`. Clamp with `math.min` when a strict upper bound is required.
+
+**Example:**
+```lua
+local zipf = metactl.ZipfGenerator:new(1000000, 1.2)
+
+-- Generate a Zipf-distributed access sequence
+for i = 1, 10 do
+    local index = math.min(zipf.num_keys, zipf:generate_key_index(math.random()))
+    print(index)
+end
+```
+
 ## Usage Patterns
 
 ### Basic Key-Value Operations
