@@ -37,7 +37,6 @@ use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_storages_common_io::ReadSettings;
 
-// use super::native_rows_fetcher::NativeRowsFetcher;
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
