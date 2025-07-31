@@ -19,16 +19,21 @@ def run_command(cmd, check=True, shell=False):
     print(f"Running: {cmd}")
     result = subprocess.run(
         cmd,
-        check=check,
+        check=False,
         shell=shell,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
+    print(result)
+
+    if check:
+        if result.returncode != 0:
+            raise Exception(result)
+
     if result.stderr:
         print(f"STDERR: {result.stderr}")
-    if result.returncode != 0:
-        print(f"Exit code: {result.returncode}")
     return result.stdout
 
 

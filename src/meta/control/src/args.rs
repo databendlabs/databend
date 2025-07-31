@@ -270,3 +270,9 @@ pub struct LuaArgs {
     #[clap(long)]
     pub file: Option<String>,
 }
+
+#[derive(Debug, Clone, Deserialize, Args)]
+pub struct MetricsArgs {
+    #[clap(long, default_value = "127.0.0.1:28002")]
+    pub admin_api_address: String,
+}
