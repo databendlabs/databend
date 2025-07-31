@@ -314,10 +314,7 @@ impl<T: Debug + SimpleType, const NULLABLE: bool> Default for ArrayAggStateSimpl
 
 impl<T, const NULLABLE: bool> ScalarStateFunc<SimpleValueType<T>>
     for ArrayAggStateSimple<T, NULLABLE>
-where
-    T: SimpleType + Debug,
-    T::Scalar: BorshSerialize + BorshDeserialize,
-    Self: BorshSerialize + BorshDeserialize,
+where T: SimpleType + Debug
 {
     fn new() -> Self {
         Self::default()
@@ -395,56 +392,25 @@ where
     }
 }
 
-impl<T, const NULLABLE: bool> BorshSerialize for ArrayAggStateSimple<T, NULLABLE>
-where
-    T: SimpleType,
-    T::Scalar: Debug + BorshSerialize,
-{
-    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        if NULLABLE {
-            (
-                &self.values,
-                Column::Boolean(self.validity.clone().freeze()),
-            )
-                .serialize(writer)
-        } else {
-            self.values.serialize(writer)
-        }
-    }
-}
-
-impl<T, const NULLABLE: bool> BorshDeserialize for ArrayAggStateSimple<T, NULLABLE>
-where
-    T: SimpleType,
-    T::Scalar: Debug + BorshDeserialize,
-{
-    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
-        if NULLABLE {
-            let (values, Column::Boolean(validity)) = BorshDeserialize::deserialize_reader(reader)?
-            else {
-                unreachable!()
-            };
-            Ok(Self {
-                values,
-                validity: validity.make_mut(),
-            })
-        } else {
-            let values = BorshDeserialize::deserialize_reader(reader)?;
-            Ok(Self {
-                values,
-                ..Default::default()
-            })
-        }
-    }
-}
-
 impl<T, const NULLABLE: bool> StateSerde for ArrayAggStateSimple<T, NULLABLE>
-where
-    T: SimpleType,
-    T::Scalar: BorshSerialize + BorshDeserialize,
+where T: SimpleType
 {
-    fn serialize_type(_function_data: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+    fn serialize_type(function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
+        let data_type = function_data
+            .and_then(|data| data.as_any().downcast_ref::<DataType>())
+            .and_then(|ty| ty.as_array())
+            .unwrap()
+            .remove_nullable();
+
+        if NULLABLE {
+            vec![DataType::Array(Box::new(DataType::Tuple(vec![
+                DataType::Boolean,
+                data_type,
+            ])))
+            .into()]
+        } else {
+            vec![DataType::Array(Box::new(data_type)).into()]
+        }
     }
 
     fn batch_serialize(
@@ -452,13 +418,40 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = AggrState::new(*place, loc).get::<Self>();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
+        if NULLABLE {
+            // ArrayType<PairType<BooleanType, SimpleValueType<T>>>
+            let [builder] = builders else { unreachable!() };
+            let array_builder = builder.as_array_mut().unwrap();
+            let [bool_builder, value_builder] =
+                array_builder.builder.as_tuple_mut().unwrap().as_mut_slice()
+            else {
+                unreachable!()
+            };
+
+            let bool_builder = bool_builder.as_boolean_mut().unwrap();
+            let mut value_builder = SimpleValueType::<T>::downcast_builder(value_builder);
+
+            for place in places {
+                let state = AggrState::new(*place, loc).get::<Self>();
+                bool_builder.extend_from_slice(state.validity.as_slice(), 0, state.validity.len());
+                value_builder.extend_from_slice(&state.values);
+                array_builder.offsets.push(value_builder.len() as u64);
+            }
+            Ok(())
+        } else {
+            batch_serialize1::<ArrayType<SimpleValueType<T>>, Self, _>(
+                places,
+                loc,
+                builders,
+                |state, builder| {
+                    for value in &state.values {
+                        builder.put_item(*value)
+                    }
+                    builder.commit_row();
+                    Ok(())
+                },
+            )
         }
-        Ok(())
     }
 
     fn batch_merge(
@@ -467,10 +460,35 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
-        })
+        if NULLABLE {
+            batch_merge1::<ArrayType<PairType<BooleanType, SimpleValueType<T>>>, Self, _>(
+                places,
+                loc,
+                state,
+                filter,
+                |state, (validity, values)| {
+                    let rhs = Self {
+                        values: SimpleValueType::<T>::column_to_builder(values),
+                        validity: validity.make_mut(),
+                    };
+                    <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
+                },
+            )
+        } else {
+            batch_merge1::<ArrayType<SimpleValueType<T>>, Self, _>(
+                places,
+                loc,
+                state,
+                filter,
+                |state, data| {
+                    let rhs = Self {
+                        values: SimpleValueType::<T>::column_to_builder(data),
+                        validity: MutableBitmap::new(),
+                    };
+                    <Self as ScalarStateFunc<SimpleValueType<T>>>::merge(state, &rhs)
+                },
+            )
+        }
     }
 }
 
