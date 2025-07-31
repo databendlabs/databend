@@ -14,9 +14,6 @@
 
 use std::any::Any;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
-use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::array::ArrayColumnBuilderMut;
@@ -24,7 +21,6 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::*;
 use databend_common_expression::with_decimal_mapped_type;
 use databend_common_expression::with_number_mapped_type;
-use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -37,6 +33,7 @@ use num_traits::AsPrimitive;
 use super::assert_params;
 use super::assert_unary_arguments;
 use super::batch_merge1;
+use super::batch_serialize1;
 use super::get_levels;
 use super::AggregateFunctionDescription;
 use super::AggregateFunctionRef;
@@ -59,9 +56,9 @@ impl FunctionData for QuantileData {
         self
     }
 }
-#[derive(Default, BorshSerialize, BorshDeserialize)]
+#[derive(Default)]
 struct QuantileContState {
-    pub value: Vec<OrderedFloat<f64>>,
+    pub value: Vec<F64>,
 }
 
 impl QuantileContState {
@@ -154,7 +151,7 @@ where
 
 impl StateSerde for QuantileContState {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Array(Box::new(Float64Type::data_type())).into()]
     }
 
     fn batch_serialize(
@@ -162,13 +159,18 @@ impl StateSerde for QuantileContState {
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<ArrayType<Float64Type>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                for v in &state.value {
+                    builder.put_item(*v);
+                }
+                builder.commit_row();
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -177,18 +179,23 @@ impl StateSerde for QuantileContState {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<Float64Type, ArrayType<Float64Type>>>::merge(state, &rhs)
-        })
+        batch_merge1::<ArrayType<Float64Type>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, values| {
+                state.value.extend(values.iter());
+                Ok(())
+            },
+        )
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
 pub struct DecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal,
 {
     pub value: Vec<T::Scalar>,
 }
@@ -196,7 +203,7 @@ where
 impl<T> Default for DecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: BorshDeserialize + BorshSerialize + Decimal,
+    T::Scalar: Decimal,
 {
     fn default() -> Self {
         Self { value: vec![] }
@@ -206,7 +213,7 @@ where
 impl<T> DecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal,
 {
     fn compute_result(&mut self, whole: usize, frac: f64, value_len: usize) -> Result<T::Scalar> {
         self.value.as_mut_slice().select_nth_unstable(whole);
@@ -233,7 +240,7 @@ where
 impl<T> UnaryState<T, ArrayType<T>> for DecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal,
 {
     fn add(
         &mut self,
@@ -292,7 +299,7 @@ where
 impl<T> UnaryState<T, T> for DecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal,
 {
     fn add(
         &mut self,
@@ -341,10 +348,13 @@ where
 impl<T> StateSerde for DecimalQuantileContState<T>
 where
     T: ValueType,
-    T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal,
 {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        vec![DataType::Array(Box::new(DataType::Decimal(
+            T::Scalar::default_decimal_size(),
+        )))
+        .into()]
     }
 
     fn batch_serialize(
@@ -352,13 +362,18 @@ where
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state: &mut Self = AggrState::new(*place, loc).get();
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        batch_serialize1::<ArrayType<DecimalType<T::Scalar>>, Self, _>(
+            places,
+            loc,
+            builders,
+            |state, builder| {
+                for v in &state.value {
+                    builder.put_item(*v);
+                }
+                builder.commit_row();
+                Ok(())
+            },
+        )
     }
 
     fn batch_merge(
@@ -367,10 +382,16 @@ where
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
-            let rhs = Self::deserialize_reader(&mut data)?;
-            <Self as UnaryState<T, T>>::merge(state, &rhs)
-        })
+        batch_merge1::<ArrayType<DecimalType<T::Scalar>>, Self, _>(
+            places,
+            loc,
+            state,
+            filter,
+            |state, values| {
+                state.value.extend(values.iter());
+                Ok(())
+            },
+        )
     }
 }
 
