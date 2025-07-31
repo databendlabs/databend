@@ -96,7 +96,8 @@ impl UserData for LuaTask {
 
 pub fn setup_lua_environment(lua: &Lua) -> anyhow::Result<()> {
     // Create metactl table to namespace all functions
-    let metactl_table = lua.create_table()
+    let metactl_table = lua
+        .create_table()
         .map_err(|e| anyhow::anyhow!("Failed to create metactl table: {}", e))?;
 
     // Register new_grpc_client function
