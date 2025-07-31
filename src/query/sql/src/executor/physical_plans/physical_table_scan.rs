@@ -149,8 +149,8 @@ impl PhysicalPlanBuilder {
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
 
             let supported_lazy_materialize = {
-                let metadata = self.metadata.read();
-                metadata
+                self.metadata
+                    .read()
                     .table(scan.table_index)
                     .table()
                     .supported_lazy_materialize()
