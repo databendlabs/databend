@@ -41,12 +41,10 @@ def wait_for_port(port, timeout=10):
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 sock.connect(("0.0.0.0", port))
                 print("OK :{} is listening".format(port))
-                sys.stdout.flush()
                 return
         except Exception:
             print("... connecting to :{}".format(port))
-            sys.stdout.flush()
-            time.sleep(1)
+            time.sleep(0.3)
 
     raise Exception("fail to connect to :{}".format(port))
 
@@ -56,7 +54,7 @@ def kill_databend_meta():
     print_step("Kill databend-meta processes")
     try:
         run_command("killall databend-meta", check=False)
-        time.sleep(2)
+        time.sleep(0.5)
     except subprocess.CalledProcessError:
         pass  # It's okay if there are no processes to kill
 
@@ -87,7 +85,7 @@ def start_meta_node(node_id, is_new: bool):
     )
 
     wait_for_port(port)
-    time.sleep(1)
+    time.sleep(0.3)
 
 
 def print_title(title):

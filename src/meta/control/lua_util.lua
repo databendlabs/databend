@@ -1,10 +1,24 @@
+-- Copyright 2021 Datafuse Labs
+--
+-- Licensed under the Apache License, Version 2.0 (the "License");
+-- you may not use this file except in compliance with the License.
+-- You may obtain a copy of the License at
+--
+--     http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing, software
+-- distributed under the License is distributed on an "AS IS" BASIS,
+-- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-- See the License for the specific language governing permissions and
+-- limitations under the License.
+
 -- Function to check if a value is NULL (mlua NULL constant)
-function is_null(value)
-    return value == NULL
+local function is_null(value)
+    return value == metactl.NULL
 end
 
 -- Function to normalize NULL values to nil for easier handling
-function normalize_value(value)
+local function normalize_value(value)
     if is_null(value) then
         return nil
     end
@@ -12,11 +26,11 @@ function normalize_value(value)
 end
 
 -- Function to check if a table represents a bytes vector and convert it to string
-function bytes_vector_to_string(value)
+local function bytes_vector_to_string(value)
     -- Check if table represents a bytes vector (integer indices starting from 1, u8 values)
     local max_index = 0
     local min_index = math.huge
-    
+
     -- First pass: check if all keys are integers and find range
     for k, v in pairs(value) do
         if type(k) ~= "number" or k ~= math.floor(k) or k < 1 then
@@ -28,7 +42,7 @@ function bytes_vector_to_string(value)
         max_index = math.max(max_index, k)
         min_index = math.min(min_index, k)
     end
-    
+
     -- Check if indices are consecutive starting from 1
     if min_index == 1 then
         local expected_length = max_index
@@ -41,7 +55,7 @@ function bytes_vector_to_string(value)
             if max_index > 1048576 then
                 return '"<bytes vector too large: ' .. max_index .. ' bytes>"'
             end
-            
+
             -- Convert bytes vector to string
             local chars = {}
             for i = 1, max_index do
@@ -50,16 +64,16 @@ function bytes_vector_to_string(value)
             return '"' .. table.concat(chars) .. '"'
         end
     end
-    
+
     return nil -- Not a valid bytes vector
 end
 
 -- Function to convert a value or table into a single-line string recursively
-function to_string(value)
+local function to_string(value)
     if value == nil then
         return "nil"
     end
-    
+
     if is_null(value) then
         return "NULL"
     end
@@ -83,7 +97,7 @@ function to_string(value)
         if bytes_string then
             return bytes_string
         end
-        
+
         -- Regular table processing
         local result = "{"
         local keys = {}
@@ -117,7 +131,7 @@ function to_string(value)
         local first = true
         for _, k in ipairs(keys) do
             local v = value[k]
-            
+
             -- Skip nil and NULL values
             if v ~= nil and not is_null(v) then
                 if not first then
@@ -143,3 +157,6 @@ function to_string(value)
     -- Handle function, userdata, thread
     return "<" .. type(value) .. ">"
 end
+
+-- Register to_string function in metactl namespace
+metactl.to_string = to_string
