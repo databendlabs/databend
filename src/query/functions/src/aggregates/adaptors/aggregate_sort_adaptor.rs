@@ -25,7 +25,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::UnaryType;
 use databend_common_expression::AggrState;
 use databend_common_expression::AggrStateLoc;
 use databend_common_expression::AggrStateRegistry;
@@ -33,21 +32,64 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ProjectedBlock;
-use databend_common_expression::Scalar;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::StateAddr;
 use databend_common_expression::StateSerdeItem;
 use itertools::Itertools;
 
+use super::batch_merge1;
 use super::AggregateFunctionSortDesc;
+use super::StateSerde;
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Debug, Clone)]
 pub struct SortAggState {
-    columns: Vec<Vec<Scalar>>,
-    data_types: Vec<DataType>,
+    columns: Vec<ColumnBuilder>,
+}
+
+impl StateSerde for SortAggState {
+    fn serialize_type(_: Option<&dyn super::FunctionData>) -> Vec<StateSerdeItem> {
+        vec![StateSerdeItem::Binary(None)]
+    }
+
+    fn batch_serialize(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        builders: &mut [ColumnBuilder],
+    ) -> Result<()> {
+        let binary_builder = builders[0].as_binary_mut().unwrap();
+        for place in places {
+            let state = AggregateFunctionSortAdaptor::get_state(AggrState::new(*place, loc));
+            let columns = state
+                .columns
+                .iter()
+                .map(|builder| builder.clone().build())
+                .collect::<Vec<_>>();
+            columns.serialize(&mut binary_builder.data)?;
+            binary_builder.commit_row();
+        }
+        Ok(())
+    }
+
+    fn batch_merge(
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        state: &BlockEntry,
+        filter: Option<&Bitmap>,
+    ) -> Result<()> {
+        batch_merge1::<BinaryType, Self, _>(places, loc, state, filter, |state, mut data| {
+            let columns: Vec<Column> = BorshDeserialize::deserialize(&mut data)?;
+            let rhs: Vec<_> = columns
+                .into_iter()
+                .map(ColumnBuilder::from_column)
+                .collect();
+            AggregateFunctionSortAdaptor::merge_states_inner(state, &rhs);
+            Ok(())
+        })
+    }
 }
 
 pub struct AggregateFunctionSortAdaptor {
@@ -66,10 +108,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
 
     #[inline]
     fn init_state(&self, place: AggrState) {
-        Self::set_state(place, SortAggState {
-            columns: vec![],
-            data_types: vec![],
-        });
+        Self::set_state(place, SortAggState { columns: vec![] });
         self.inner.init_state(place.remove_first_loc());
     }
 
@@ -98,7 +137,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
                         .zip(validity.iter())
                         .for_each(|(v, b)| {
                             if b {
-                                state.columns[i].push(v.to_owned());
+                                state.columns[i].push(v);
                             }
                         });
                 }
@@ -106,7 +145,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
             None => {
                 for (i, entry) in entries.iter().enumerate() {
                     entry.downcast::<AnyType>().unwrap().iter().for_each(|v| {
-                        state.columns[i].push(v.to_owned());
+                        state.columns[i].push(v);
                     });
                 }
             }
@@ -121,14 +160,14 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
 
         for (i, column) in columns.iter().enumerate() {
             if let Some(v) = column.index(row) {
-                state.columns[i].push(v.to_owned())
+                state.columns[i].push(v)
             }
         }
         Ok(())
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
-        vec![StateSerdeItem::Binary(None)]
+        SortAggState::serialize_type(None)
     }
 
     fn batch_serialize(
@@ -137,13 +176,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         loc: &[AggrStateLoc],
         builders: &mut [ColumnBuilder],
     ) -> Result<()> {
-        let binary_builder = builders[0].as_binary_mut().unwrap();
-        for place in places {
-            let state = Self::get_state(AggrState::new(*place, loc));
-            state.serialize(&mut binary_builder.data)?;
-            binary_builder.commit_row();
-        }
-        Ok(())
+        SortAggState::batch_serialize(places, loc, builders)
     }
 
     fn batch_merge(
@@ -153,30 +186,14 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         state: &BlockEntry,
         filter: Option<&Bitmap>,
     ) -> Result<()> {
-        let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
-        let iter = places.iter().zip(view.iter());
-
-        if let Some(filter) = filter {
-            for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = Self::get_state(AggrState::new(*place, loc));
-                let rhs = SortAggState::deserialize(&mut data)?;
-                Self::merge_states_inner(state, &rhs);
-            }
-        } else {
-            for (place, mut data) in iter {
-                let state = Self::get_state(AggrState::new(*place, loc));
-                let rhs = SortAggState::deserialize(&mut data)?;
-                Self::merge_states_inner(state, &rhs);
-            }
-        }
-        Ok(())
+        SortAggState::batch_merge(places, loc, state, filter)
     }
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = Self::get_state(place);
         let other = Self::get_state(rhs);
 
-        Self::merge_states_inner(state, other);
+        Self::merge_states_inner(state, &other.columns);
         Ok(())
     }
 
@@ -184,7 +201,7 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         let state = Self::get_state(place);
         let inner_place = place.remove_first_loc();
 
-        if state.columns.is_empty() || state.columns[0].is_empty() {
+        if state.columns.is_empty() || state.columns[0].len() == 0 {
             return Ok(());
         }
         let num_rows = state.columns[0].len();
@@ -192,16 +209,9 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
         let mut block = DataBlock::new(
             state
                 .columns
-                .iter()
-                .zip(state.data_types.iter())
-                .map(|(values, data_type)| {
-                    let mut builder = ColumnBuilder::with_capacity(data_type, values.len());
-                    for value in values {
-                        builder.push(value.as_ref());
-                    }
-                    builder.build().into()
-                })
-                .collect_vec(),
+                .drain(..)
+                .map(|builder| builder.build().into())
+                .collect(),
             num_rows,
         );
         let mut not_arg_indexes = HashSet::with_capacity(self.sort_descs.len());
@@ -277,32 +287,25 @@ impl AggregateFunctionSortAdaptor {
             .write_state(state);
     }
 
-    fn init_columns(columns: ProjectedBlock, state: &mut SortAggState, num_rows: Option<usize>) {
-        if state.columns.is_empty() && state.data_types.is_empty() {
-            state.columns = Vec::with_capacity(columns.len());
-            state.data_types = Vec::with_capacity(columns.len());
-
-            for column in columns.iter() {
-                state.data_types.push(column.data_type());
-                state.columns.push(
-                    num_rows
-                        .map(|num| Vec::with_capacity(num))
-                        .unwrap_or_default(),
-                );
-            }
+    fn init_columns(entries: ProjectedBlock, state: &mut SortAggState, num_rows: Option<usize>) {
+        if !state.columns.is_empty() {
+            return;
         }
+        state.columns = entries
+            .iter()
+            .map(|entry| {
+                ColumnBuilder::with_capacity(&entry.data_type(), num_rows.unwrap_or_default())
+            })
+            .collect();
     }
 
-    fn merge_states_inner(state: &mut SortAggState, other: &SortAggState) {
-        if state.columns.is_empty() && state.data_types.is_empty() {
-            state.columns = other.columns.clone();
-            state.data_types = other.data_types.clone();
+    fn merge_states_inner(state: &mut SortAggState, other: &[ColumnBuilder]) {
+        if state.columns.is_empty() {
+            state.columns = other.to_vec();
         } else {
-            state
-                .columns
-                .iter_mut()
-                .zip(other.columns.iter())
-                .for_each(|(l, r)| l.extend_from_slice(r));
+            for (l, r) in state.columns.iter_mut().zip(other) {
+                l.append_column(&r.clone().build())
+            }
         }
     }
 }

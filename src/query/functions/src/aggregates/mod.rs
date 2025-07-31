@@ -50,7 +50,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 
-pub(crate) trait StateSerde {
+trait StateSerde {
     fn serialize_type(_function_data: Option<&dyn FunctionData>) -> Vec<StateSerdeItem>;
 
     fn batch_serialize(

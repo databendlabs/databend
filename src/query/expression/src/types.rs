@@ -45,8 +45,6 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::ops::Range;
 
-use borsh::BorshDeserialize;
-use borsh::BorshSerialize;
 use databend_common_ast::ast::TypeName;
 pub use databend_common_base::base::OrderedFloat;
 pub use databend_common_io::deserialize_bitmap;
@@ -105,18 +103,7 @@ use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
-#[derive(
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    Serialize,
-    Deserialize,
-    BorshSerialize,
-    BorshDeserialize,
-    EnumAsInner,
-)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
 pub enum DataType {
     Null,
     EmptyArray,
