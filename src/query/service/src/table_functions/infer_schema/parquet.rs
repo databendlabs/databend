@@ -123,8 +123,9 @@ impl AsyncSource for ParquetInferSchemaSource {
             Some(f) => self.ctx.get_file_format(f).await?,
             None => stage_info.file_format_params.clone(),
         };
-        let schema = match file_format_params.get_type() {
-            StageFileFormatType::Parquet => {
+        let schema = match (first_file.as_ref(), file_format_params.get_type()) {
+            (None, _) => return Ok(None),
+            (Some(first_file), StageFileFormatType::Parquet) => {
                 let arrow_schema = read_parquet_schema_async_rs(
                     &operator,
                     &first_file.path,
