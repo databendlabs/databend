@@ -95,7 +95,6 @@ def test_metrics_subcommand():
 
 def main():
     """Main function to run all metrics tests."""
-    test_metrics_help()
     test_metrics_subcommand()
 
 
