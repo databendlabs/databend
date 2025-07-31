@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::Result;
+use databend_common_settings::Settings;
 use educe::Educe;
 use parking_lot::RwLock;
 
@@ -65,93 +67,87 @@ impl OptimizerContext {
         })
     }
 
-    pub fn get_table_ctx(self: &Arc<Self>) -> Arc<dyn TableContext> {
+    pub fn with_settings(self: Arc<Self>, settings: &Settings) -> Result<Arc<Self>> {
+        self.set_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? });
+        *self.enable_dphyp.write() = settings.get_enable_dphyp()?;
+        *self.max_push_down_limit.write() = settings.get_max_push_down_limit()?;
+        *self.enable_trace.write() = settings.get_enable_optimizer_trace()?;
+
+        Ok(self)
+    }
+
+    pub fn get_table_ctx(&self) -> Arc<dyn TableContext> {
         self.table_ctx.clone()
     }
 
-    pub fn get_metadata(self: &Arc<Self>) -> MetadataRef {
+    pub fn get_metadata(&self) -> MetadataRef {
         self.metadata.clone()
     }
 
-    pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> Arc<Self> {
+    pub fn set_enable_distributed_optimization(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
         *self.enable_distributed_optimization.write() = enable;
-        self.clone()
+        self
     }
 
-    pub fn get_enable_distributed_optimization(self: &Arc<Self>) -> bool {
+    pub fn get_enable_distributed_optimization(&self) -> bool {
         *self.enable_distributed_optimization.read()
     }
 
-    pub fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> Arc<Self> {
+    fn set_enable_join_reorder(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
         *self.enable_join_reorder.write() = enable;
-        self.clone()
+        self
     }
 
-    pub fn get_enable_join_reorder(self: &Arc<Self>) -> bool {
+    pub fn get_enable_join_reorder(&self) -> bool {
         *self.enable_join_reorder.read()
     }
 
-    pub fn set_enable_dphyp(self: &Arc<Self>, enable: bool) -> Arc<Self> {
-        *self.enable_dphyp.write() = enable;
-        self.clone()
-    }
-
-    pub fn get_enable_dphyp(self: &Arc<Self>) -> bool {
+    pub fn get_enable_dphyp(&self) -> bool {
         *self.enable_dphyp.read()
     }
 
     pub fn set_sample_executor(
         self: &Arc<Self>,
         sample_executor: Option<Arc<dyn QueryExecutor>>,
-    ) -> Arc<Self> {
+    ) -> &Arc<Self> {
         *self.sample_executor.write() = sample_executor;
-        self.clone()
+        self
     }
 
-    pub fn get_sample_executor(self: &Arc<Self>) -> Option<Arc<dyn QueryExecutor>> {
+    pub fn get_sample_executor(&self) -> Option<Arc<dyn QueryExecutor>> {
         self.sample_executor.read().clone()
     }
 
-    pub fn set_planning_agg_index(self: &Arc<Self>, enable: bool) -> Arc<Self> {
+    pub fn set_planning_agg_index(self: &Arc<Self>, enable: bool) -> &Arc<Self> {
         *self.planning_agg_index.write() = enable;
-        self.clone()
+        self
     }
 
-    pub fn get_planning_agg_index(self: &Arc<Self>) -> bool {
+    pub fn get_planning_agg_index(&self) -> bool {
         *self.planning_agg_index.read()
     }
 
-    pub fn set_max_push_down_limit(self: &Arc<Self>, max_push_down_limit: usize) -> Arc<Self> {
-        *self.max_push_down_limit.write() = max_push_down_limit;
-        self.clone()
-    }
-
-    pub fn get_max_push_down_limit(self: &Arc<Self>) -> usize {
+    pub fn get_max_push_down_limit(&self) -> usize {
         *self.max_push_down_limit.read()
     }
 
-    pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> Arc<Self> {
+    pub fn set_flag(self: &Arc<Self>, name: &str, value: bool) -> &Arc<Self> {
         let mut flags = self.flags.write();
         flags.insert(name.to_string(), value);
-        self.clone()
+        self
     }
 
-    pub fn get_flag(self: &Arc<Self>, name: &str) -> bool {
+    pub fn get_flag(&self, name: &str) -> bool {
         let flags = self.flags.read();
         *flags.get(name).unwrap_or(&false)
     }
 
-    pub fn set_enable_trace(self: &Arc<Self>, enable: bool) -> Arc<Self> {
-        *self.enable_trace.write() = enable;
-        self.clone()
-    }
-
-    pub fn get_enable_trace(self: &Arc<Self>) -> bool {
+    pub fn get_enable_trace(&self) -> bool {
         *self.enable_trace.read()
     }
 
     /// Check if an optimizer or rule is disabled based on optimizer_skip_list setting
-    pub fn is_optimizer_disabled(self: &Arc<Self>, name: &str) -> bool {
+    pub fn is_optimizer_disabled(&self, name: &str) -> bool {
         let settings = self.get_table_ctx().get_settings();
 
         if !settings.get_grouping_sets_to_union().unwrap_or_default()

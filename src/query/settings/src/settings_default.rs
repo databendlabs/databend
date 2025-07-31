@@ -675,6 +675,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
                 }),
+                ("enable_shuffle_sort", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable shuffle sort.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
@@ -1188,6 +1195,13 @@ impl DefaultSettings {
                 ("random_function_seed", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Seed for random function",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_selector_executor", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables selector executor for filter expression",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

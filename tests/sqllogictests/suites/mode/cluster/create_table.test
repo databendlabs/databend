@@ -1,3 +1,6 @@
+statement ok
+set enable_shuffle_sort = 0;
+
 query T
 explain create or replace table t2  as select number % 400 d, max(number) from numbers(10000000) group by number  limit 3;
 ----
@@ -12,14 +15,14 @@ EvalScalar
     ├── limit: 3
     ├── offset: 0
     ├── estimated rows: 3.00
-    └── Sort
+    └── Sort(Final)
         ├── output columns: [max(number) (#1), numbers.number (#0)]
         ├── sort keys: [number ASC NULLS LAST]
         ├── estimated rows: 10000000.00
         └── Exchange
             ├── output columns: [max(number) (#1), numbers.number (#0), #_order_col]
             ├── exchange type: Merge
-            └── Sort
+            └── Sort(Partial)
                 ├── output columns: [max(number) (#1), numbers.number (#0), #_order_col]
                 ├── sort keys: [number ASC NULLS LAST]
                 ├── estimated rows: 10000000.00

@@ -1014,6 +1014,7 @@ impl TableContext for QueryContext {
             tz,
             rounding_mode,
             disable_variant_check,
+            enable_selector_executor: settings.get_enable_selector_executor()?,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),

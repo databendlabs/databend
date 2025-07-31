@@ -516,6 +516,10 @@ impl Settings {
         Ok(self.try_get_u64("sort_spilling_to_disk_bytes_limit")? as usize)
     }
 
+    pub fn get_enable_shuffle_sort(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_shuffle_sort")? == 1)
+    }
+
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
     }
@@ -863,6 +867,10 @@ impl Settings {
 
     pub fn get_random_function_seed(&self) -> Result<bool> {
         Ok(self.try_get_u64("random_function_seed")? == 1)
+    }
+
+    pub fn get_enable_selector_executor(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_selector_executor")? == 1)
     }
 
     pub fn get_dynamic_sample_time_budget_ms(&self) -> Result<u64> {

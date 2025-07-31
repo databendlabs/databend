@@ -204,10 +204,17 @@ impl TaskMgr {
         let req = UpsertPB::delete(key).with(MatchSeq::GE(1));
         let res = self.kv_api.upsert_pb(&req).await?;
 
-        self.send(TaskMessage::DeleteTask(task_name.to_string()))
-            .await?;
         if res.is_changed() {
-            Ok(res.prev.as_ref().map(|prev| Task::clone(prev)))
+            let Some(task) = res.prev.as_ref().map(|prev| Task::clone(prev)) else {
+                return Ok(None);
+            };
+            self.send(TaskMessage::DeleteTask(
+                task_name.to_string(),
+                task.warehouse_options.clone(),
+            ))
+            .await?;
+
+            Ok(Some(task))
         } else {
             Ok(None)
         }

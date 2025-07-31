@@ -1390,6 +1390,10 @@ fn sort_to_format_tree(
         FormatTreeNode::new(format!("sort keys: [{sort_keys}]")),
     ];
 
+    if let Some(id) = plan.broadcast_id {
+        children.push(FormatTreeNode::new(format!("broadcast id: {id}")));
+    }
+
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
@@ -1404,7 +1408,10 @@ fn sort_to_format_tree(
         context,
     )?);
 
-    Ok(FormatTreeNode::with_children("Sort".to_string(), children))
+    Ok(FormatTreeNode::with_children(
+        format!("Sort({})", plan.step),
+        children,
+    ))
 }
 
 fn window_partition_to_format_tree(
