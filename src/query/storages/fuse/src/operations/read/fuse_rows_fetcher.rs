@@ -13,13 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::base::tokio::sync::Semaphore;
-use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
@@ -39,11 +35,9 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
-use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
 use databend_storages_common_io::ReadSettings;
 
-use super::native_rows_fetcher::NativeRowsFetcher;
+// use super::native_rows_fetcher::NativeRowsFetcher;
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -56,8 +50,6 @@ pub fn row_fetch_processor(
     source: &DataSourcePlan,
     projection: Projection,
     need_wrap_nullable: bool,
-    semaphore: Arc<Semaphore>,
-    runtime: Arc<Runtime>,
 ) -> Result<RowFetcher> {
     let table = ctx.build_table_from_source_plan(source)?;
     let fuse_table = table
@@ -68,83 +60,62 @@ pub fn row_fetch_processor(
     let fuse_table = Arc::new(fuse_table);
     let block_reader =
         fuse_table.create_block_reader(ctx.clone(), projection.clone(), false, false, true)?;
-    let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     match &fuse_table.storage_format {
-        FuseStorageFormat::Native => Ok(Box::new(move |input, output| {
-            Ok(if block_reader.support_blocking_api() {
-                TransformRowsFetcher::create(
-                    input,
-                    output,
-                    row_id_col_offset,
-                    max_threads,
-                    NativeRowsFetcher::<true>::create(
-                        fuse_table.clone(),
-                        projection.clone(),
-                        block_reader.clone(),
-                        max_threads,
-                    ),
-                    need_wrap_nullable,
-                )
-            } else {
-                TransformRowsFetcher::create(
-                    input,
-                    output,
-                    row_id_col_offset,
-                    max_threads,
-                    NativeRowsFetcher::<false>::create(
-                        fuse_table.clone(),
-                        projection.clone(),
-                        block_reader.clone(),
-                        max_threads,
-                    ),
-                    need_wrap_nullable,
-                )
-            })
-        })),
+        FuseStorageFormat::Native => unreachable!(),
         FuseStorageFormat::Parquet => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
-            Ok(Box::new(move |input, output| {
-                Ok(if block_reader.support_blocking_api() {
-                    TransformRowsFetcher::create(
+            let block_threshold = BlockThreshold {
+                max_rows: ctx.get_settings().get_max_block_size()? as usize,
+                max_bytes: ctx.get_settings().get_max_block_bytes()? as usize,
+                cur_rows: 0,
+                cur_bytes: 0,
+            };
+
+            Ok(match block_reader.support_blocking_api() {
+                true => Box::new(move |input, output| {
+                    Ok(TransformRowsFetcher::create(
                         input,
                         output,
                         row_id_col_offset,
-                        max_threads,
                         ParquetRowsFetcher::<true>::create(
                             fuse_table.clone(),
                             projection.clone(),
                             block_reader.clone(),
                             read_settings,
-                            semaphore.clone(),
-                            runtime.clone(),
                         ),
                         need_wrap_nullable,
-                    )
-                } else {
-                    TransformRowsFetcher::create(
+                        block_threshold,
+                    ))
+                }),
+                false => Box::new(move |input, output| {
+                    Ok(TransformRowsFetcher::create(
                         input,
                         output,
                         row_id_col_offset,
-                        max_threads,
                         ParquetRowsFetcher::<false>::create(
                             fuse_table.clone(),
                             projection.clone(),
                             block_reader.clone(),
                             read_settings,
-                            semaphore.clone(),
-                            runtime.clone(),
                         ),
                         need_wrap_nullable,
-                    )
-                })
-            }))
+                        block_threshold,
+                    ))
+                }),
+            })
         }
     }
 }
 
-pub trait RowsFetchMetadata {
+pub trait RowsFetchMetadata: Send + Sync + 'static {
     fn row_bytes(&self) -> usize;
+}
+
+impl<T: RowsFetchMetadata> RowsFetchMetadata for Arc<T> {
+    fn row_bytes(&self) -> usize {
+        self.as_ref().row_bytes()
+    }
 }
 
 #[async_trait::async_trait]
@@ -161,6 +132,7 @@ pub trait RowsFetcher {
     ) -> Result<DataBlock>;
 }
 
+#[derive(Clone, Copy)]
 pub struct BlockThreshold {
     max_rows: usize,
     max_bytes: usize,
@@ -189,6 +161,8 @@ impl BlockThreshold {
 pub struct TransformRowsFetcher<F: RowsFetcher> {
     fetcher: F,
 
+    initialize: bool,
+    finished: bool,
     row_id_col_offset: usize,
     need_wrap_nullable: bool,
     fetch_row_ids: Vec<u64>,
@@ -240,6 +214,11 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
         }
 
         if self.input_port.is_finished() {
+            if !self.finished {
+                self.finished = true;
+                return Ok(Event::Async);
+            }
+
             self.output_port.finish();
             return Ok(Event::Finished);
         }
@@ -249,47 +228,48 @@ impl<F: RowsFetcher + Send + Sync + 'static> Processor for TransformRowsFetcher<
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        let Some(data) = self.input_data.take() else {
-            return Ok(());
-        };
+        if !self.initialize {
+            self.initialize = true;
+            self.fetcher.initialize().await?;
+        }
 
-        let num_rows = data.num_rows();
-        let fetched_columns_bytes = data.memory_size() / data.num_rows();
-        let row_id_column = self.get_row_id_column(&data);
+        if let Some(data) = self.input_data.take() {
+            let num_rows = data.num_rows();
+            let fetched_columns_bytes = data.memory_size() / data.num_rows();
+            let row_id_column = self.get_row_id_column(&data);
 
-        // Process the row id column in block batch
-        // Ensure that the same block would be processed in the same batch and threads
-        let mut consumed_len = num_rows;
-        for (idx, row_id) in row_id_column.iter().enumerate() {
-            let (prefix, _) = split_row_id(*row_id);
+            // Process the row id column in block batch
+            // Ensure that the same block would be processed in the same batch and threads
+            let mut consumed_len = num_rows;
+            for (idx, row_id) in row_id_column.iter().enumerate() {
+                let (prefix, _) = split_row_id(*row_id);
 
-            if !self.metadata.contains_key(&prefix) {
-                let metadata = self.fetcher.fetch_metadata(prefix).await?;
-                self.metadata.insert(prefix, metadata);
+                if !self.metadata.contains_key(&prefix) {
+                    let metadata = self.fetcher.fetch_metadata(prefix).await?;
+                    self.metadata.insert(prefix, metadata);
+                }
+
+                let fetch_columns_bytes = self.metadata[&prefix].row_bytes();
+                let bytes = fetched_columns_bytes + fetch_columns_bytes;
+                if self.block_threshold.acc(1, bytes) {
+                    consumed_len = idx + 1;
+                    break;
+                }
             }
 
-            let fetch_columns_bytes = self.metadata[&prefix].row_bytes();
-            if self
-                .block_threshold
-                .acc(1, fetched_columns_bytes + fetch_columns_bytes)
-            {
-                consumed_len = idx + 1;
-                break;
+            self.blocks.push(data.slice(0..consumed_len));
+            self.fetch_row_ids
+                .extend_from_slice(&row_id_column.as_slice()[0..consumed_len]);
+
+            let remain_rows = data.slice(consumed_len..num_rows);
+
+            if !remain_rows.is_empty() {
+                self.input_data = Some(remain_rows);
             }
         }
 
-        self.blocks.push(data.slice(0..consumed_len));
-        self.fetch_row_ids
-            .extend_from_slice(&row_id_column.as_slice()[0..consumed_len]);
-
-        if !self.block_threshold.check_threshold() {
+        if !self.finished && !self.block_threshold.check_threshold() {
             return Ok(());
-        }
-
-        let remain_rows = data.slice(consumed_len..num_rows);
-
-        if !remain_rows.is_empty() {
-            self.input_data = Some(remain_rows);
         }
 
         self.block_threshold.reset();
@@ -320,17 +300,25 @@ impl<F: RowsFetcher + Send + Sync + 'static> TransformRowsFetcher<F> {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         row_id_col_offset: usize,
-        max_threads: usize,
         fetcher: F,
         need_wrap_nullable: bool,
+        block_threshold: BlockThreshold,
     ) -> ProcessorPtr {
-        ProcessorPtr::create(AsyncAccumulatingTransformer::create(input, output, Self {
-            row_id_col_offset,
-            max_threads,
+        ProcessorPtr::create(Box::new(TransformRowsFetcher {
             fetcher,
+            block_threshold,
+            row_id_col_offset,
             need_wrap_nullable,
+
+            input_port: input,
+            output_port: output,
             blocks: vec![],
+            input_data: None,
+            output_data: None,
             fetch_row_ids: vec![],
+            metadata: HashMap::new(),
+            finished: false,
+            initialize: false,
         }))
     }
 }
