@@ -198,7 +198,8 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                 StddevState<TYPE>,
                 NumberConvertView<NUM_TYPE, F64>,
                 NullableType<Float64Type>,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type, params, arguments[0].clone())
+            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -207,9 +208,10 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
                         StddevState<TYPE>,
                         DecimalF64View<DECIMAL>,
                         NullableType<Float64Type>,
-                    >::try_create_unary(
+                    >::create(
                         display_name, return_type, params, arguments[0].clone()
                     )
+                    .finish()
                 }
             })
         }

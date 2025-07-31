@@ -358,28 +358,27 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
             with_simple_no_number_no_string_mapped_type!(|T| match data_type {
                 DataType::T => {
                     let return_type = data_type.clone();
-                    let func = AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::try_create(
+                    AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::create(
                         display_name,
                         return_type,
                         params,
-                        data_type,
+                        data_type.clone(),
                     )
-                    .with_need_drop(need_drop);
-
-                    Ok(Arc::new(func))
+                    .with_need_drop(need_drop)
+                    .with_function_data(Box::new(data_type))
+                    .finish()
                 }
                 DataType::String => {
                     let return_type = data_type.clone();
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         MinMaxStringState<CMP>,
                         StringType,
                         StringType,
-                    >::try_create(
+                    >::create(
                         display_name, return_type, params, data_type
                     )
-                    .with_need_drop(need_drop);
-
-                    Ok(Arc::new(func))
+                    .with_need_drop(need_drop)
+                    .finish()
                 }
                 DataType::Number(num_type) => {
                     with_number_mapped_type!(|NUM| match num_type {
@@ -389,9 +388,10 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 MinMaxAnyState<NumberType<NUM>, CMP>,
                                 NumberType<NUM>,
                                 NumberType<NUM>,
-                            >::try_create_unary(
+                            >::create(
                                 display_name, return_type, params, data_type
                             )
+                            .finish()
                         }
                     })
                 }
@@ -403,24 +403,24 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                                 MinMaxAnyDecimalState<DecimalType<DECIMAL>, CMP>,
                                 DecimalType<DECIMAL>,
                                 DecimalType<DECIMAL>,
-                            >::try_create_unary(
+                            >::create(
                                 display_name, return_type, params, data_type
                             )
+                            .finish()
                         }
                     })
                 }
                 _ => {
                     let return_type = data_type.clone();
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         MinMaxAnyState<AnyType, CMP>,
                         AnyType,
                         AnyType,
-                    >::try_create(
+                    >::create(
                         display_name, return_type, params, data_type
                     )
-                    .with_need_drop(need_drop);
-
-                    Ok(Arc::new(func))
+                    .with_need_drop(need_drop)
+                    .finish()
                 }
             })
         }

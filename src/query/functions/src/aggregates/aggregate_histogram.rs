@@ -17,7 +17,6 @@ use std::collections::btree_map::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::fmt::Display;
 use std::ops::AddAssign;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -199,75 +198,79 @@ pub fn try_create_aggregate_histogram_function(
 
     with_number_mapped_type!(|NUM| match &data_type {
         DataType::Number(NumberDataType::NUM) => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 HistogramState<NumberType<NUM>>,
                 NumberType<NUM>,
                 StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
-            )
+            >::create(display_name, DataType::String, params, data_type.clone())
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
                 data_type,
             }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         HistogramState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         StringType,
-                    >::try_create(
+                    >::create(
                         display_name, DataType::String, params, data_type.clone()
                     )
                     .with_function_data(Box::new(HistogramData {
                         max_num_buckets,
                         data_type,
                     }))
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         DataType::String => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<StringType>,
-                StringType,
-                StringType,
-            >::try_create(
-                display_name, DataType::String, params, data_type.clone()
+            AggregateUnaryFunction::<HistogramState<StringType>, StringType, StringType>::create(
+                display_name,
+                DataType::String,
+                params,
+                data_type.clone(),
             )
-            .with_function_data(Box::new(HistogramData { max_num_buckets, data_type }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_function_data(Box::new(HistogramData {
+                max_num_buckets,
+                data_type,
+            }))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Timestamp => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 HistogramState<TimestampType>,
                 TimestampType,
                 StringType,
-            >::try_create(
+            >::create(
                 display_name, DataType::String, params, data_type.clone()
             )
             .with_function_data(Box::new(HistogramData {
                 max_num_buckets,
                 data_type,
             }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Date => {
-            let func = AggregateUnaryFunction::<
-                HistogramState<DateType>,
-                DateType,
-                StringType,
-            >::try_create(display_name, DataType::String, params, data_type.clone())
-            .with_function_data(Box::new(HistogramData { max_num_buckets, data_type }))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            AggregateUnaryFunction::<HistogramState<DateType>, DateType, StringType>::create(
+                display_name,
+                DataType::String,
+                params,
+                data_type.clone(),
+            )
+            .with_function_data(Box::new(HistogramData {
+                max_num_buckets,
+                data_type,
+            }))
+            .with_need_drop(true)
+            .finish()
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "{} does not support type '{:?}'",

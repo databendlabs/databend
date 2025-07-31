@@ -656,11 +656,11 @@ pub fn try_create_aggregate_array_moving_avg_function(
                         DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, s.scale().max(4));
 
                     AggregateArrayMovingAvgFunction::<DecimalArrayMovingSumState<DECIMAL>>::try_create(
-                    display_name,
-                    params,
-                    DataType::Array(Box::new(DataType::Decimal(decimal_size))),
-                    decimal_size.scale() - s.scale(),
-                )
+                        display_name,
+                        params,
+                        DataType::Array(Box::new(DataType::Decimal(decimal_size))),
+                        decimal_size.scale() - s.scale(),
+                    )
                 }
             })
         }
@@ -833,10 +833,10 @@ pub fn try_create_aggregate_array_moving_sum_function(
                         DecimalSize::new_unchecked(DECIMAL::MAX_PRECISION, s.scale());
 
                     AggregateArrayMovingSumFunction::<DecimalArrayMovingSumState<DECIMAL>>::try_create(
-                    display_name,
-                    params,
-                    DataType::Array(Box::new(DataType::Decimal(decimal_size))),
-                )
+                        display_name,
+                        params,
+                        DataType::Array(Box::new(DataType::Decimal(decimal_size))),
+                    )
                 }
             })
         }

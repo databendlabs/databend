@@ -234,6 +234,7 @@ where
     }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
+        // If we had a fixed length array, which would be better, but for now, Borsh is already good enough
         vec![StateSerdeItem::Binary(None)]
     }
 

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
@@ -217,30 +215,30 @@ pub fn try_create_aggregate_quantile_disc_function(
             with_number_mapped_type!(|NUM_TYPE| match num_type {
                 NumberDataType::NUM_TYPE => {
                     if params.len() > 1 {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             ArrayType<NumberType<NUM_TYPE>>,
-                        >::try_create(
+                        >::create(
                             display_name,
                             DataType::Array(Box::new(data_type)),
                             params,
                             arguments[0].clone(),
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     } else {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             QuantileState<NumberType<NUM_TYPE>>,
                             NumberType<NUM_TYPE>,
                             NumberType<NUM_TYPE>,
-                        >::try_create(
+                        >::create(
                             display_name, data_type, params, arguments[0].clone()
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     }
                 }
             })
@@ -250,30 +248,30 @@ pub fn try_create_aggregate_quantile_disc_function(
                 DecimalDataKind::DECIMAL => {
                     let data_type = DataType::Decimal(size);
                     if params.len() > 1 {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             QuantileState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             ArrayType<DecimalType<DECIMAL>>,
-                        >::try_create(
+                        >::create(
                             display_name,
                             DataType::Array(Box::new(data_type)),
                             params,
                             arguments[0].clone(),
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     } else {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             QuantileState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create(
+                        >::create(
                             display_name, data_type, params, arguments[0].clone()
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     }
                 }
             })

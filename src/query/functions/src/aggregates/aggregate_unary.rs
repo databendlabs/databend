@@ -116,21 +116,7 @@ where
     T: AccessType,
     R: ValueType,
 {
-    pub(crate) fn try_create_unary(
-        display_name: &str,
-        return_type: DataType,
-        _params: Vec<Scalar>,
-        _argument: DataType,
-    ) -> Result<AggregateFunctionRef> {
-        Ok(Arc::new(Self::try_create(
-            display_name,
-            return_type,
-            _params,
-            _argument,
-        )))
-    }
-
-    pub(crate) fn try_create(
+    pub(crate) fn create(
         display_name: &str,
         return_type: DataType,
         _params: Vec<Scalar>,
@@ -156,6 +142,10 @@ where
     pub(crate) fn with_need_drop(mut self, need_drop: bool) -> AggregateUnaryFunction<S, T, R> {
         self.need_drop = need_drop;
         self
+    }
+
+    pub(crate) fn finish(self) -> Result<AggregateFunctionRef> {
+        Ok(Arc::new(self))
     }
 
     fn do_merge_result(&self, state: &mut S, builder: &mut ColumnBuilder) -> Result<()> {

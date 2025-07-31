@@ -156,7 +156,8 @@ pub fn try_create_aggregate_skewness_function(
                 SkewnessStateV2,
                 NumberConvertView<NUM_TYPE, F64>,
                 Float64Type,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type, params, arguments[0].clone())
+            .finish()
         }
 
         DataType::Decimal(s) => {
@@ -166,9 +167,10 @@ pub fn try_create_aggregate_skewness_function(
                         SkewnessStateV2,
                         DecimalF64View<DECIMAL>,
                         Float64Type,
-                    >::try_create_unary(
+                    >::create(
                         display_name, return_type, params, arguments[0].clone()
                     )
+                    .finish()
                 }
             })
         }

@@ -145,62 +145,54 @@ fn create_templated<const P: usize>(
     let return_type = DataType::Number(NumberDataType::UInt64);
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            let func =
-                AggregateUnaryFunction::<HyperLogLog<P>, NumberType<NUM_TYPE>, UInt64Type>::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_need_drop(true);
-
-            Ok(Arc::new(func))
+            AggregateUnaryFunction::<HyperLogLog<P>, NumberType<NUM_TYPE>, UInt64Type>::create(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
+            )
+            .with_need_drop(true)
+            .finish()
         }
         DataType::String => {
-            let func =
-                AggregateUnaryFunction::<HyperLogLog<P>, StringType, UInt64Type>::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_need_drop(true);
-
-            Ok(Arc::new(func))
+            AggregateUnaryFunction::<HyperLogLog<P>, StringType, UInt64Type>::create(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
+            )
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Date => {
-            let func = AggregateUnaryFunction::<HyperLogLog<P>, DateType, UInt64Type>::try_create(
+            AggregateUnaryFunction::<HyperLogLog<P>, DateType, UInt64Type>::create(
                 display_name,
                 return_type,
                 params,
                 arguments[0].clone(),
             )
-            .with_need_drop(true);
-
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Timestamp => {
-            let func =
-                AggregateUnaryFunction::<HyperLogLog<P>, TimestampType, UInt64Type>::try_create(
-                    display_name,
-                    return_type,
-                    params,
-                    arguments[0].clone(),
-                )
-                .with_need_drop(true);
-
-            Ok(Arc::new(func))
-        }
-        _ => {
-            let func = AggregateUnaryFunction::<HyperLogLog<P>, AnyType, UInt64Type>::try_create(
+            AggregateUnaryFunction::<HyperLogLog<P>, TimestampType, UInt64Type>::create(
                 display_name,
                 return_type,
                 params,
                 arguments[0].clone(),
             )
-            .with_need_drop(true);
-
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
+        }
+        _ => {
+            AggregateUnaryFunction::<HyperLogLog<P>, AnyType, UInt64Type>::create(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
+            )
+            .with_need_drop(true)
+            .finish()
         }
     })
 }

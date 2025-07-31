@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -394,30 +393,26 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
             if params.len() > 1 {
                 let return_type =
                     DataType::Array(Box::new(DataType::Number(NumberDataType::Float64)));
-                let func = AggregateUnaryFunction::<
+                AggregateUnaryFunction::<
                     QuantileContState,
                     NumberType<NUM_TYPE>,
                     ArrayType<Float64Type>,
-                >::try_create(
-                    display_name, return_type, params, arguments[0].clone()
-                )
+                >::create(display_name, return_type, params, arguments[0].clone())
                 .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-
-                Ok(Arc::new(func))
+                .with_need_drop(true)
+                .finish()
             } else {
                 let return_type = DataType::Number(NumberDataType::Float64);
-                let func = AggregateUnaryFunction::<
+                AggregateUnaryFunction::<
                     QuantileContState,
                     NumberType<NUM_TYPE>,
                     Float64Type,
-                >::try_create(
+                >::create(
                     display_name, return_type, params, arguments[0].clone()
                 )
                 .with_function_data(Box::new(QuantileData { levels }))
-                .with_need_drop(true);
-
-                Ok(Arc::new(func))
+                .with_need_drop(true)
+                .finish()
             }
         }
 
@@ -426,30 +421,30 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
                 DecimalDataKind::DECIMAL => {
                     let data_type = DataType::Decimal(*size);
                     if params.len() > 1 {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             DecimalQuantileContState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             ArrayType<DecimalType<DECIMAL>>,
-                        >::try_create(
+                        >::create(
                             display_name,
                             DataType::Array(Box::new(data_type)),
                             params,
                             arguments[0].clone(),
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     } else {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             DecimalQuantileContState<DecimalType<DECIMAL>>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create(
+                        >::create(
                             display_name, data_type, params, arguments[0].clone()
                         )
                         .with_function_data(Box::new(QuantileData { levels }))
-                        .with_need_drop(true);
-                        Ok(Arc::new(func))
+                        .with_need_drop(true)
+                        .finish()
                     }
                 }
             })

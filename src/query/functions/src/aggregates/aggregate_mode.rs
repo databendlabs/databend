@@ -16,7 +16,6 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::AddAssign;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -164,40 +163,40 @@ pub fn try_create_aggregate_mode_function(
     let data_type = arguments[0].clone();
     with_number_mapped_type!(|NUM| match &data_type {
         DataType::Number(NumberDataType::NUM) => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 ModeState<NumberType<NUM>>,
                 NumberType<NUM>,
                 NumberType<NUM>,
-            >::try_create(
+            >::create(
                 display_name, data_type.clone(), params, data_type.clone()
             )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         ModeState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         DecimalType<DECIMAL>,
-                    >::try_create(
+                    >::create(
                         display_name, data_type.clone(), params, data_type.clone()
                     )
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         _ => {
-            let func = AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::try_create(
+            AggregateUnaryFunction::<ModeState<AnyType>, AnyType, AnyType>::create(
                 display_name,
                 data_type.clone(),
                 params,
                 data_type.clone(),
             )
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
     })
 }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
@@ -293,63 +292,60 @@ pub fn try_create_aggregate_range_bound_function(
 
     with_simple_no_number_mapped_type!(|T| match data_type {
         DataType::T => {
-            let func = AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::try_create(
+            AggregateUnaryFunction::<RangeBoundState<T>, T, ArrayType<T>>::create(
                 display_name,
                 return_type,
                 params,
                 arguments[0].clone(),
             )
             .with_function_data(Box::new(function_data))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         RangeBoundState<NumberType<NUM>>,
                         NumberType<NUM>,
                         ArrayType<NumberType<NUM>>,
-                    >::try_create(
+                    >::create(
                         display_name, return_type, params, arguments[0].clone()
                     )
                     .with_function_data(Box::new(function_data))
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         DataType::Decimal(size) => {
             with_decimal_mapped_type!(|DECIMAL| match size.data_kind() {
                 DecimalDataKind::DECIMAL => {
-                    let func = AggregateUnaryFunction::<
+                    AggregateUnaryFunction::<
                         RangeBoundState<DecimalType<DECIMAL>>,
                         DecimalType<DECIMAL>,
                         ArrayType<DecimalType<DECIMAL>>,
-                    >::try_create(
+                    >::create(
                         display_name, return_type, params, arguments[0].clone()
                     )
                     .with_function_data(Box::new(function_data))
-                    .with_need_drop(true);
-                    Ok(Arc::new(func))
+                    .with_need_drop(true)
+                    .finish()
                 }
             })
         }
         DataType::Binary => {
-            let func = AggregateUnaryFunction::<
+            AggregateUnaryFunction::<
                 RangeBoundState<BinaryType>,
                 BinaryType,
                 ArrayType<BinaryType>,
-            >::try_create(
-                display_name, return_type, params, arguments[0].clone()
-            )
+            >::create(display_name, return_type, params, arguments[0].clone())
             .with_function_data(Box::new(function_data))
-            .with_need_drop(true);
-            Ok(Arc::new(func))
+            .with_need_drop(true)
+            .finish()
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
-            "{} does not support type '{:?}'",
-            display_name, data_type
+            "{display_name} does not support type '{data_type:?}'",
         ))),
     })
 }

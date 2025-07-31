@@ -173,12 +173,13 @@ pub fn try_create_aggregate_boolean_function<const IS_AND: bool>(
     match &data_type {
         DataType::Boolean => {
             let return_type = DataType::Boolean;
-            AggregateUnaryFunction::<BooleanState<IS_AND>, BooleanType, BooleanType>::try_create_unary(
+            AggregateUnaryFunction::<BooleanState<IS_AND>, BooleanType, BooleanType>::create(
                 display_name,
                 return_type,
                 params,
                 arguments[0].clone(),
             )
+            .finish()
         }
 
         _ => Err(ErrorCode::BadDataValueType(format!(

@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -306,7 +305,8 @@ pub fn try_create_aggregate_avg_function(
                 NumberAvgState<NumberType<NUM>, NumberType<TSum>>,
                 NumberType<NUM>,
                 Float64Type,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type, params, arguments[0].clone())
+            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -320,25 +320,25 @@ pub fn try_create_aggregate_avg_function(
                     let return_type = DataType::Decimal(decimal_size);
 
                     if overflow {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             DecimalAvgState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create(
+                        >::create(
                             display_name, return_type, params, arguments[0].clone()
                         )
-                        .with_function_data(Box::new(DecimalAvgData { scale_add }));
-                        Ok(Arc::new(func))
+                        .with_function_data(Box::new(DecimalAvgData { scale_add }))
+                        .finish()
                     } else {
-                        let func = AggregateUnaryFunction::<
+                        AggregateUnaryFunction::<
                             DecimalAvgState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create(
+                        >::create(
                             display_name, return_type, params, arguments[0].clone()
                         )
-                        .with_function_data(Box::new(DecimalAvgData { scale_add }));
-                        Ok(Arc::new(func))
+                        .with_function_data(Box::new(DecimalAvgData { scale_add }))
+                        .finish()
                     }
                 }
             })

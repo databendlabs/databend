@@ -411,16 +411,18 @@ pub fn try_create_aggregate_sum_function(
                 NumberSumState<NumberType<TSum>>,
                 NumberType<NUM>,
                 NumberType<TSum>,
-            >::try_create_unary(display_name, return_type, params, arguments[0].clone())
+            >::create(display_name, return_type, params, arguments[0].clone())
+            .finish()
         }
         DataType::Interval => {
             let return_type = DataType::Interval;
-            AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::try_create_unary(
+            AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::create(
                 display_name,
                 return_type,
                 params,
                 arguments[0].clone(),
             )
+            .finish()
         }
         DataType::Decimal(s) => {
             with_decimal_mapped_type!(|DECIMAL| match s.data_kind() {
@@ -436,17 +438,19 @@ pub fn try_create_aggregate_sum_function(
                             DecimalSumState<true, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create_unary(
+                        >::create(
                             display_name, return_type, params, arguments[0].clone()
                         )
+                        .finish()
                     } else {
                         AggregateUnaryFunction::<
                             DecimalSumState<false, DECIMAL>,
                             DecimalType<DECIMAL>,
                             DecimalType<DECIMAL>,
-                        >::try_create_unary(
+                        >::create(
                             display_name, return_type, params, arguments[0].clone()
                         )
+                        .finish()
                     }
                 }
             })
